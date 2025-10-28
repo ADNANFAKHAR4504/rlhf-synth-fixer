@@ -702,4 +702,330 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(ssmDocSection![0]).toMatch(/document_type/);
     });
   });
+
+  // Enhanced test coverage for >90% coverage requirement
+  describe('Environment Suffix Usage', () => {
+    test('KMS resources use environment suffix', () => {
+      expect(tapStackContent).toMatch(/master-kms-key-\$\{var\.environment_suffix\}/);
+      expect(tapStackContent).toMatch(/alias\/master-key-\$\{var\.environment_suffix\}/);
+    });
+
+    test('VPC resources use environment suffix', () => {
+      expect(tapStackContent).toMatch(/main-vpc-\$\{var\.environment_suffix\}/);
+      expect(tapStackContent).toMatch(/vpc-flow-logs-\$\{var\.environment_suffix\}/);
+    });
+
+    test('IAM roles use environment suffix', () => {
+      expect(tapStackContent).toMatch(/vpc-flow-log-role-\$\{var\.environment_suffix\}/);
+      expect(tapStackContent).toMatch(/ec2-instance-role-\$\{var\.environment_suffix\}/);
+      expect(tapStackContent).toMatch(/config-role-\$\{var\.environment_suffix\}/);
+    });
+
+    test('Security groups use environment suffix', () => {
+      expect(tapStackContent).toMatch(/alb-security-group-\$\{var\.environment_suffix\}/);
+      expect(tapStackContent).toMatch(/ec2-security-group-\$\{var\.environment_suffix\}/);
+      expect(tapStackContent).toMatch(/rds-security-group-\$\{var\.environment_suffix\}/);
+    });
+
+    test('RDS resources use environment suffix', () => {
+      expect(tapStackContent).toMatch(/main-database-\$\{var\.environment_suffix\}/);
+      expect(tapStackContent).toMatch(/main-db-subnet-group-\$\{var\.environment_suffix\}/);
+      expect(tapStackContent).toMatch(/main-mysql-params-\$\{var\.environment_suffix\}/);
+    });
+
+    test('ALB and networking use environment suffix', () => {
+      expect(tapStackContent).toMatch(/main-alb-\$\{var\.environment_suffix\}/);
+      expect(tapStackContent).toMatch(/main-tg-\$\{var\.environment_suffix\}/);
+      expect(tapStackContent).toMatch(/main-lt-\$\{var\.environment_suffix\}/);
+      expect(tapStackContent).toMatch(/main-asg-\$\{var\.environment_suffix\}/);
+    });
+
+    test('CloudWatch resources use environment suffix', () => {
+      expect(tapStackContent).toMatch(/high-cpu-alarm-\$\{var\.environment_suffix\}/);
+      expect(tapStackContent).toMatch(/low-cpu-alarm-\$\{var\.environment_suffix\}/);
+      expect(tapStackContent).toMatch(/rds-cpu-alarm-\$\{var\.environment_suffix\}/);
+    });
+
+    test('WAF and CloudFront use environment suffix', () => {
+      expect(tapStackContent).toMatch(/main-waf-acl-\$\{var\.environment_suffix\}/);
+      expect(tapStackContent).toMatch(/main-cloudfront-\$\{var\.environment_suffix\}/);
+    });
+
+    test('Config rules use environment suffix', () => {
+      expect(tapStackContent).toMatch(/s3-bucket-encryption-\$\{var\.environment_suffix\}/);
+      expect(tapStackContent).toMatch(/rds-encryption-enabled-\$\{var\.environment_suffix\}/);
+      expect(tapStackContent).toMatch(/cloudtrail-enabled-\$\{var\.environment_suffix\}/);
+    });
+  });
+
+  describe('Realistic Operational Values', () => {
+    test('domain name uses realistic value', () => {
+      expect(tapStackContent).toMatch(/default\s*=\s*"tapinfra\.com"/);
+    });
+
+    test('alert email uses realistic value', () => {
+      expect(tapStackContent).toMatch(/default\s*=\s*"security@tapinfra\.com"/);
+    });
+
+    test('domain references use realistic value throughout', () => {
+      expect(tapStackContent).toMatch(/domain_name\s*=\s*var\.domain_name/);
+      expect(tapStackContent).toMatch(/endpoint\s*=\s*var\.alert_email/);
+    });
+  });
+
+  describe('Resource Count and Density', () => {
+    test('contains substantial number of resources', () => {
+      const resourceMatches = tapStackContent.match(/^resource\s+"/gm) || [];
+      expect(resourceMatches.length).toBeGreaterThan(70);
+    });
+
+    test('contains comprehensive AWS service coverage', () => {
+      const services = [
+        'aws_kms_key', 'aws_vpc', 'aws_s3_bucket', 'aws_cloudtrail',
+        'aws_iam_role', 'aws_db_instance', 'aws_secretsmanager_secret',
+        'aws_acm_certificate', 'aws_lb', 'aws_autoscaling_group',
+        'aws_cloudwatch_metric_alarm', 'aws_wafv2_web_acl',
+        'aws_cloudfront_distribution', 'aws_config_configuration_recorder',
+        'aws_guardduty_detector', 'aws_sns_topic', 'aws_ssm_document'
+      ];
+      
+      services.forEach(service => {
+        expect(tapStackContent).toMatch(new RegExp(`resource\\s+"${service}"`));
+      });
+    });
+
+    test('contains all required outputs', () => {
+      const outputs = [
+        'vpc_id', 'public_subnet_ids', 'private_subnet_ids', 'database_subnet_ids',
+        'alb_dns_name', 'alb_arn', 'cloudfront_distribution_domain', 
+        'cloudfront_distribution_id', 'rds_endpoint', 'rds_arn',
+        's3_logs_bucket', 'kms_key_id', 'kms_key_arn', 'sns_topic_arn',
+        'guardduty_detector_id', 'waf_web_acl_id', 'autoscaling_group_name',
+        'launch_template_id'
+      ];
+      
+      outputs.forEach(output => {
+        expect(tapStackContent).toMatch(new RegExp(`output\\s+"${output}"`));
+      });
+    });
+  });
+
+  describe('Advanced Security Configuration', () => {
+    test('KMS policy allows CloudWatch Logs service', () => {
+      const kmsSection = tapStackContent.match(/resource\s+"aws_kms_key"\s+"master"[\s\S]*?(?=\nresource|$)/);
+      expect(kmsSection).not.toBeNull();
+      expect(kmsSection![0]).toMatch(/Allow CloudWatch Logs/);
+      expect(kmsSection![0]).toMatch(/logs\.\$\{var\.aws_region\}\.amazonaws\.com/);
+    });
+
+    test('KMS policy allows CloudTrail service', () => {
+      const kmsSection = tapStackContent.match(/resource\s+"aws_kms_key"\s+"master"[\s\S]*?(?=\nresource|$)/);
+      expect(kmsSection).not.toBeNull();
+      expect(kmsSection![0]).toMatch(/Allow CloudTrail/);
+      expect(kmsSection![0]).toMatch(/cloudtrail\.amazonaws\.com/);
+    });
+
+    test('S3 bucket policy allows CloudTrail', () => {
+      const s3PolicySection = tapStackContent.match(/resource\s+"aws_s3_bucket_policy"\s+"logs"[\s\S]*?(?=\nresource|$)/);
+      expect(s3PolicySection).not.toBeNull();
+      expect(s3PolicySection![0]).toMatch(/AWSCloudTrailAclCheck/);
+      expect(s3PolicySection![0]).toMatch(/AWSCloudTrailWrite/);
+    });
+
+    test('S3 bucket policy allows Config service', () => {
+      const s3PolicySection = tapStackContent.match(/resource\s+"aws_s3_bucket_policy"\s+"logs"[\s\S]*?(?=\nresource|$)/);
+      expect(s3PolicySection).not.toBeNull();
+      expect(s3PolicySection![0]).toMatch(/AWSConfigBucketPermissionsCheck/);
+      expect(s3PolicySection![0]).toMatch(/AWSConfigBucketDelivery/);
+    });
+
+    test('EC2 role has comprehensive permissions', () => {
+      expect(tapStackContent).toMatch(/ec2-ssm-policy/);
+      expect(tapStackContent).toMatch(/ec2-secrets-policy/);
+      expect(tapStackContent).toMatch(/ec2-cloudwatch-policy/);
+      
+      const ec2CloudWatchPolicy = tapStackContent.match(/resource\s+"aws_iam_role_policy"\s+"ec2_cloudwatch"[\s\S]*?(?=\nresource|$)/);
+      expect(ec2CloudWatchPolicy).not.toBeNull();
+      expect(ec2CloudWatchPolicy![0]).toMatch(/cloudwatch:PutMetricData/);
+      expect(ec2CloudWatchPolicy![0]).toMatch(/logs:PutLogEvents/);
+    });
+
+    test('MFA enforcement policy is comprehensive', () => {
+      const mfaPolicy = tapStackContent.match(/resource\s+"aws_iam_policy"\s+"enforce_mfa"[\s\S]*?(?=\n\n# |$)/);
+      expect(mfaPolicy).not.toBeNull();
+      expect(mfaPolicy![0]).toMatch(/AllowViewAccountInfo/);
+      expect(mfaPolicy![0]).toMatch(/DenyAllExceptListedIfNoMFA/);
+      expect(mfaPolicy![0]).toMatch(/aws:MultiFactorAuthPresent/);
+    });
+  });
+
+  describe('High Availability Configuration', () => {
+    test('resources span multiple AZs', () => {
+      expect(tapStackContent).toMatch(/count\s*=\s*2/);
+      expect(tapStackContent).toMatch(/availability_zone\s*=\s*data\.aws_availability_zones\.available\.names\[count\.index\]/);
+    });
+
+    test('RDS is configured for Multi-AZ', () => {
+      const rdsSection = tapStackContent.match(/resource\s+"aws_db_instance"\s+"main"[\s\S]*?(?=\nresource|$)/);
+      expect(rdsSection).not.toBeNull();
+      expect(rdsSection![0]).toMatch(/multi_az\s*=\s*true/);
+    });
+
+    test('Auto Scaling Group has proper capacity settings', () => {
+      const asgSection = tapStackContent.match(/resource\s+"aws_autoscaling_group"\s+"main"[\s\S]*?(?=\nresource|$)/);
+      expect(asgSection).not.toBeNull();
+      expect(asgSection![0]).toMatch(/min_size\s*=\s*2/);
+      expect(asgSection![0]).toMatch(/max_size\s*=\s*10/);
+      expect(asgSection![0]).toMatch(/desired_capacity\s*=\s*2/);
+    });
+
+    test('Load Balancer spans multiple subnets', () => {
+      const albSection = tapStackContent.match(/resource\s+"aws_lb"\s+"main"[\s\S]*?(?=\nresource|$)/);
+      expect(albSection).not.toBeNull();
+      expect(albSection![0]).toMatch(/subnets\s*=\s*aws_subnet\.public\[\*\]\.id/);
+    });
+
+    test('NAT Gateways for each AZ', () => {
+      const natSection = tapStackContent.match(/resource\s+"aws_nat_gateway"\s+"main"[\s\S]*?(?=\nresource|$)/);
+      expect(natSection).not.toBeNull();
+      expect(natSection![0]).toMatch(/count\s*=\s*2/);
+    });
+  });
+
+  describe('Performance and Cost Optimization', () => {
+    test('S3 lifecycle policies configured', () => {
+      const s3LifecycleSection = tapStackContent.match(/resource\s+"aws_s3_bucket_lifecycle_configuration"[\s\S]*?(?=\nresource|$)/);
+      expect(s3LifecycleSection).not.toBeNull();
+      expect(s3LifecycleSection![0]).toMatch(/GLACIER/);
+      expect(s3LifecycleSection![0]).toMatch(/days\s*=\s*365/);
+    });
+
+    test('RDS uses appropriate instance class', () => {
+      const rdsSection = tapStackContent.match(/resource\s+"aws_db_instance"\s+"main"[\s\S]*?(?=\nresource|$)/);
+      expect(rdsSection).not.toBeNull();
+      expect(rdsSection![0]).toMatch(/instance_class\s*=\s*"db\.t3\.micro"/);
+      expect(rdsSection![0]).toMatch(/storage_type\s*=\s*"gp3"/);
+    });
+
+    test('EC2 instances use cost-effective sizing', () => {
+      const launchTemplateSection = tapStackContent.match(/resource\s+"aws_launch_template"[\s\S]*?(?=\nresource|$)/);
+      expect(launchTemplateSection).not.toBeNull();
+      expect(launchTemplateSection![0]).toMatch(/instance_type\s*=\s*"t3\.micro"/);
+    });
+
+    test('CloudWatch log retention optimized', () => {
+      expect(tapStackContent).toMatch(/retention_in_days\s*=\s*90/);
+    });
+  });
+
+  describe('WAF Rules Coverage', () => {
+    test('has rate limiting rule', () => {
+      const wafSection = tapStackContent.match(/resource\s+"aws_wafv2_web_acl"[\s\S]*?(?=\nresource|$)/);
+      expect(wafSection).not.toBeNull();
+      expect(wafSection![0]).toMatch(/RateLimitRule/);
+      expect(wafSection![0]).toMatch(/limit\s*=\s*2000/);
+    });
+
+    test('has AWS managed common rule set', () => {
+      const wafSection = tapStackContent.match(/resource\s+"aws_wafv2_web_acl"[\s\S]*?(?=\nresource|$)/);
+      expect(wafSection).not.toBeNull();
+      expect(wafSection![0]).toMatch(/AWSManagedRulesCommonRuleSet/);
+    });
+
+    test('has AWS managed known bad inputs rule set', () => {
+      const wafSection = tapStackContent.match(/resource\s+"aws_wafv2_web_acl"[\s\S]*?(?=\nresource|$)/);
+      expect(wafSection).not.toBeNull();
+      expect(wafSection![0]).toMatch(/AWSManagedRulesKnownBadInputsRuleSet/);
+    });
+
+    test('WAF is associated with ALB', () => {
+      expect(tapStackContent).toMatch(/resource\s+"aws_wafv2_web_acl_association"/);
+      const wafAssocSection = tapStackContent.match(/resource\s+"aws_wafv2_web_acl_association"[\s\S]*?(?=\nresource|$)/);
+      expect(wafAssocSection).not.toBeNull();
+      expect(wafAssocSection![0]).toMatch(/resource_arn\s*=\s*aws_lb\.main\.arn/);
+    });
+  });
+
+  describe('Compliance Configuration', () => {
+    test('all required Config rules present', () => {
+      const requiredRules = [
+        's3-bucket-encryption',
+        's3-bucket-public-read-prohibited', 
+        'rds-encryption-enabled',
+        'mfa-enabled-for-iam-console-access',
+        'cloudtrail-enabled'
+      ];
+      
+      requiredRules.forEach(rule => {
+        expect(tapStackContent).toMatch(new RegExp(`${rule}-\\$\\{var\\.environment_suffix\\}`));
+      });
+    });
+
+    test('GuardDuty has comprehensive datasources', () => {
+      const guardDutySection = tapStackContent.match(/resource\s+"aws_guardduty_detector"[\s\S]*?(?=\nresource|$)/);
+      expect(guardDutySection).not.toBeNull();
+      expect(guardDutySection![0]).toMatch(/s3_logs/);
+      expect(guardDutySection![0]).toMatch(/kubernetes/);
+      expect(guardDutySection![0]).toMatch(/malware_protection/);
+    });
+
+    test('CloudTrail has proper event selector', () => {
+      const cloudtrailSection = tapStackContent.match(/resource\s+"aws_cloudtrail"[\s\S]*?(?=\nresource|$)/);
+      expect(cloudtrailSection).not.toBeNull();
+      expect(cloudtrailSection![0]).toMatch(/event_selector/);
+      expect(cloudtrailSection![0]).toMatch(/AWS::S3::Object/);
+    });
+  });
+
+  describe('Error Handling and Edge Cases', () => {
+    test('resources have proper dependencies', () => {
+      expect(tapStackContent).toMatch(/depends_on\s*=\s*\[/);
+      expect(tapStackContent).toMatch(/depends_on\s*=\s*\[aws_internet_gateway\.main\]/);
+      expect(tapStackContent).toMatch(/depends_on\s*=\s*\[aws_s3_bucket_policy\.logs\]/);
+    });
+
+    test('launch template has proper lifecycle', () => {
+      const launchTemplateSection = tapStackContent.match(/resource\s+"aws_launch_template"[\s\S]*?(?=\nresource|$)/);
+      expect(launchTemplateSection).not.toBeNull();
+      expect(launchTemplateSection![0]).toMatch(/name_prefix/);
+    });
+
+    test('security groups have lifecycle rules', () => {
+      const sgSections = tapStackContent.match(/resource\s+"aws_security_group"[\s\S]*?lifecycle\s*{[\s\S]*?create_before_destroy\s*=\s*true[\s\S]*?}/g);
+      expect(sgSections).not.toBeNull();
+      expect(sgSections!.length).toBeGreaterThanOrEqual(3);
+    });
+
+    test('RDS has final snapshot configuration', () => {
+      const rdsSection = tapStackContent.match(/resource\s+"aws_db_instance"[\s\S]*?(?=\nresource|$)/);
+      expect(rdsSection).not.toBeNull();
+      expect(rdsSection![0]).toMatch(/skip_final_snapshot\s*=\s*false/);
+      expect(rdsSection![0]).toMatch(/final_snapshot_identifier/);
+    });
+
+    test('ALB has access logging enabled', () => {
+      const albSection = tapStackContent.match(/resource\s+"aws_lb"[\s\S]*?(?=\nresource|$)/);
+      expect(albSection).not.toBeNull();
+      expect(albSection![0]).toMatch(/access_logs\s*{/);
+      expect(albSection![0]).toMatch(/enabled\s*=\s*true/);
+    });
+  });
+
+  describe('Variable Types and Validation', () => {
+    test('all variables have proper type definitions', () => {
+      const variables = ['aws_region', 'environment_suffix', 'vpc_cidr', 'domain_name', 'alert_email'];
+      variables.forEach(variable => {
+        const variableMatch = tapStackContent.match(new RegExp(`variable\\s+"${variable}"\\s*{[\\s\\S]*?type\\s*=\\s*string[\\s\\S]*?}`));
+        expect(variableMatch).not.toBeNull();
+      });
+    });
+
+    test('variables have descriptions', () => {
+      const variables = ['aws_region', 'environment_suffix', 'vpc_cidr', 'domain_name', 'alert_email'];
+      variables.forEach(variable => {
+        const variableMatch = tapStackContent.match(new RegExp(`variable\\s+"${variable}"\\s*{[\\s\\S]*?description[\\s\\S]*?}`));
+        expect(variableMatch).not.toBeNull();
+      });
+    });
+  });
 });

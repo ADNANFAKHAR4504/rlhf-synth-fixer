@@ -24,13 +24,13 @@ variable "vpc_cidr" {
 variable "domain_name" {
   description = "Domain name for ACM certificate"
   type        = string
-  default     = "example.com"
+  default     = "tapinfra.com"
 }
 
 variable "alert_email" {
   description = "Email for security alerts"
   type        = string
-  default     = "security@example.com"
+  default     = "security@tapinfra.com"
 }
 
 # Data sources
@@ -141,7 +141,7 @@ resource "aws_cloudwatch_log_group" "flow_log" {
 }
 
 resource "aws_iam_role" "flow_log" {
-  name = "vpc-flow-log-role"
+  name = "vpc-flow-log-role-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -165,7 +165,7 @@ resource "aws_iam_role" "flow_log" {
 }
 
 resource "aws_iam_role_policy" "flow_log" {
-  name = "vpc-flow-log-policy"
+  name = "vpc-flow-log-policy-${var.environment_suffix}"
   role = aws_iam_role.flow_log.id
 
   policy = jsonencode({
@@ -205,7 +205,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name        = "main-igw"
+    Name        = "main-igw-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -218,7 +218,7 @@ resource "aws_eip" "nat" {
   domain = "vpc"
 
   tags = {
-    Name        = "nat-eip-${count.index + 1}"
+    Name        = "nat-eip-${count.index + 1}-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -234,7 +234,7 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public[count.index].id
 
   tags = {
-    Name        = "nat-gateway-${count.index + 1}"
+    Name        = "nat-gateway-${count.index + 1}-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -252,7 +252,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name        = "public-subnet-${count.index + 1}"
+    Name        = "public-subnet-${count.index + 1}-${var.environment_suffix}"
     Type        = "public"
     CostCenter  = "IT-Security"
     Environment = "production"
@@ -268,7 +268,7 @@ resource "aws_subnet" "private" {
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = {
-    Name        = "private-subnet-${count.index + 1}"
+    Name        = "private-subnet-${count.index + 1}-${var.environment_suffix}"
     Type        = "private"
     CostCenter  = "IT-Security"
     Environment = "production"
@@ -284,7 +284,7 @@ resource "aws_subnet" "database" {
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = {
-    Name        = "database-subnet-${count.index + 1}"
+    Name        = "database-subnet-${count.index + 1}-${var.environment_suffix}"
     Type        = "database"
     CostCenter  = "IT-Security"
     Environment = "production"
@@ -302,7 +302,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name        = "public-route-table"
+    Name        = "public-route-table-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -320,7 +320,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name        = "private-route-table-${count.index + 1}"
+    Name        = "private-route-table-${count.index + 1}-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -365,7 +365,7 @@ resource "aws_network_acl" "main" {
   }
 
   tags = {
-    Name        = "main-network-acl"
+    Name        = "main-network-acl-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -657,7 +657,7 @@ resource "aws_security_group" "rds" {
 
 # IAM Role for EC2
 resource "aws_iam_role" "ec2" {
-  name = "ec2-instance-role"
+  name = "ec2-instance-role-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -681,7 +681,7 @@ resource "aws_iam_role" "ec2" {
 }
 
 resource "aws_iam_instance_profile" "ec2" {
-  name = "ec2-instance-profile"
+  name = "ec2-instance-profile-${var.environment_suffix}"
   role = aws_iam_role.ec2.name
 
   tags = {
@@ -693,7 +693,7 @@ resource "aws_iam_instance_profile" "ec2" {
 }
 
 resource "aws_iam_role_policy" "ec2_ssm" {
-  name = "ec2-ssm-policy"
+  name = "ec2-ssm-policy-${var.environment_suffix}"
   role = aws_iam_role.ec2.id
 
   policy = jsonencode({
@@ -717,7 +717,7 @@ resource "aws_iam_role_policy" "ec2_ssm" {
 }
 
 resource "aws_iam_role_policy" "ec2_secrets" {
-  name = "ec2-secrets-policy"
+  name = "ec2-secrets-policy-${var.environment_suffix}"
   role = aws_iam_role.ec2.id
 
   policy = jsonencode({
@@ -736,7 +736,7 @@ resource "aws_iam_role_policy" "ec2_secrets" {
 }
 
 resource "aws_iam_role_policy" "ec2_cloudwatch" {
-  name = "ec2-cloudwatch-policy"
+  name = "ec2-cloudwatch-policy-${var.environment_suffix}"
   role = aws_iam_role.ec2.id
 
   policy = jsonencode({
@@ -798,11 +798,11 @@ resource "aws_secretsmanager_secret_version" "rds_password" {
 
 # RDS Database
 resource "aws_db_subnet_group" "main" {
-  name       = "main-db-subnet-group"
+  name       = "main-db-subnet-group-${var.environment_suffix}"
   subnet_ids = aws_subnet.database[*].id
 
   tags = {
-    Name        = "main-db-subnet-group"
+    Name        = "main-db-subnet-group-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -810,7 +810,7 @@ resource "aws_db_subnet_group" "main" {
 }
 
 resource "aws_db_parameter_group" "main" {
-  name   = "main-mysql-params"
+  name   = "main-mysql-params-${var.environment_suffix}"
   family = "mysql8.0"
 
   parameter {
@@ -824,7 +824,7 @@ resource "aws_db_parameter_group" "main" {
   }
 
   tags = {
-    Name        = "main-db-parameter-group"
+    Name        = "main-db-parameter-group-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -865,7 +865,7 @@ resource "aws_db_instance" "main" {
   final_snapshot_identifier = "main-database-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
 
   tags = {
-    Name        = "main-rds"
+    Name        = "main-rds-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -884,7 +884,7 @@ resource "aws_acm_certificate" "main" {
   }
 
   tags = {
-    Name        = "main-certificate"
+    Name        = "main-certificate-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -909,7 +909,7 @@ resource "aws_lb" "main" {
   }
 
   tags = {
-    Name        = "main-alb"
+    Name        = "main-alb-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -917,7 +917,7 @@ resource "aws_lb" "main" {
 }
 
 resource "aws_lb_target_group" "main" {
-  name     = "main-tg"
+  name     = "main-tg-${var.environment_suffix}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -933,7 +933,7 @@ resource "aws_lb_target_group" "main" {
   }
 
   tags = {
-    Name        = "main-target-group"
+    Name        = "main-target-group-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -953,7 +953,7 @@ resource "aws_lb_listener" "https" {
   }
 
   tags = {
-    Name        = "https-listener"
+    Name        = "https-listener-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -976,7 +976,7 @@ resource "aws_lb_listener" "http" {
   }
 
   tags = {
-    Name        = "http-listener"
+    Name        = "http-listener-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -1039,7 +1039,7 @@ resource "aws_launch_template" "main" {
     resource_type = "instance"
 
     tags = {
-      Name        = "main-instance"
+      Name        = "main-instance-${var.environment_suffix}"
       CostCenter  = "IT-Security"
       Environment = "production"
       ManagedBy   = "Terraform"
@@ -1047,7 +1047,7 @@ resource "aws_launch_template" "main" {
   }
 
   tags = {
-    Name        = "main-launch-template"
+    Name        = "main-launch-template-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -1073,7 +1073,7 @@ resource "aws_autoscaling_group" "main" {
 
   tag {
     key                 = "Name"
-    value               = "main-asg-instance"
+    value               = "main-asg-instance-${var.environment_suffix}"
     propagate_at_launch = true
   }
 
@@ -1098,7 +1098,7 @@ resource "aws_autoscaling_group" "main" {
 
 # Auto Scaling Policies
 resource "aws_autoscaling_policy" "scale_up" {
-  name                   = "scale-up-policy"
+  name                   = "scale-up-policy-${var.environment_suffix}"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -1106,7 +1106,7 @@ resource "aws_autoscaling_policy" "scale_up" {
 }
 
 resource "aws_autoscaling_policy" "scale_down" {
-  name                   = "scale-down-policy"
+  name                   = "scale-down-policy-${var.environment_suffix}"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -1115,7 +1115,7 @@ resource "aws_autoscaling_policy" "scale_down" {
 
 # CloudWatch Alarms for Auto Scaling
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
-  alarm_name          = "high-cpu-alarm"
+  alarm_name          = "high-cpu-alarm-${var.environment_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -1131,7 +1131,7 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   }
 
   tags = {
-    Name        = "high-cpu-alarm"
+    Name        = "high-cpu-alarm-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -1139,7 +1139,7 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "low_cpu" {
-  alarm_name          = "low-cpu-alarm"
+  alarm_name          = "low-cpu-alarm-${var.environment_suffix}"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -1155,7 +1155,7 @@ resource "aws_cloudwatch_metric_alarm" "low_cpu" {
   }
 
   tags = {
-    Name        = "low-cpu-alarm"
+    Name        = "low-cpu-alarm-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -1163,7 +1163,7 @@ resource "aws_cloudwatch_metric_alarm" "low_cpu" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
-  alarm_name          = "rds-cpu-alarm"
+  alarm_name          = "rds-cpu-alarm-${var.environment_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -1179,7 +1179,7 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
   }
 
   tags = {
-    Name        = "rds-cpu-alarm"
+    Name        = "rds-cpu-alarm-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -1202,7 +1202,7 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
 
 # CloudWatch Metric Filter and Alarm for Root Account Usage
 resource "aws_cloudwatch_log_metric_filter" "root_usage" {
-  name           = "root-account-usage"
+  name           = "root-account-usage-${var.environment_suffix}"
   log_group_name = aws_cloudwatch_log_group.cloudtrail.name
   pattern        = "{ $.userIdentity.type = \"Root\" && $.userIdentity.invokedBy NOT EXISTS && $.eventType != \"AwsServiceEvent\" }"
 
@@ -1214,7 +1214,7 @@ resource "aws_cloudwatch_log_metric_filter" "root_usage" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "root_account_usage" {
-  alarm_name          = "root-account-usage-alarm"
+  alarm_name          = "root-account-usage-alarm-${var.environment_suffix}"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = "1"
   metric_name         = "RootAccountUsage"
@@ -1226,7 +1226,7 @@ resource "aws_cloudwatch_metric_alarm" "root_account_usage" {
   alarm_actions       = [aws_sns_topic.alerts.arn]
 
   tags = {
-    Name        = "root-account-alarm"
+    Name        = "root-account-alarm-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -1275,7 +1275,7 @@ resource "aws_guardduty_detector" "main" {
   }
 
   tags = {
-    Name        = "main-guardduty"
+    Name        = "main-guardduty-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -1284,7 +1284,7 @@ resource "aws_guardduty_detector" "main" {
 
 # AWS Config
 resource "aws_iam_role" "config" {
-  name = "config-role"
+  name = "config-role-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1313,7 +1313,7 @@ resource "aws_iam_role_policy_attachment" "config" {
 }
 
 resource "aws_iam_role_policy" "config_s3" {
-  name = "config-s3-policy"
+  name = "config-s3-policy-${var.environment_suffix}"
   role = aws_iam_role.config.id
 
   policy = jsonencode({
@@ -1336,7 +1336,7 @@ resource "aws_iam_role_policy" "config_s3" {
 }
 
 resource "aws_config_configuration_recorder" "main" {
-  name     = "main-config-recorder"
+  name     = "main-config-recorder-${var.environment_suffix}"
   role_arn = aws_iam_role.config.arn
 
   recording_group {
@@ -1346,7 +1346,7 @@ resource "aws_config_configuration_recorder" "main" {
 }
 
 resource "aws_config_delivery_channel" "main" {
-  name           = "main-config-delivery"
+  name           = "main-config-delivery-${var.environment_suffix}"
   s3_bucket_name = aws_s3_bucket.logs.bucket
 
   snapshot_delivery_properties {
@@ -1365,7 +1365,7 @@ resource "aws_config_configuration_recorder_status" "main" {
 
 # AWS Config Rules
 resource "aws_config_config_rule" "s3_bucket_encryption" {
-  name = "s3-bucket-encryption"
+  name = "s3-bucket-encryption-${var.environment_suffix}"
 
   source {
     owner             = "AWS"
@@ -1376,7 +1376,7 @@ resource "aws_config_config_rule" "s3_bucket_encryption" {
 }
 
 resource "aws_config_config_rule" "s3_bucket_public_read_prohibited" {
-  name = "s3-bucket-public-read-prohibited"
+  name = "s3-bucket-public-read-prohibited-${var.environment_suffix}"
 
   source {
     owner             = "AWS"
@@ -1387,7 +1387,7 @@ resource "aws_config_config_rule" "s3_bucket_public_read_prohibited" {
 }
 
 resource "aws_config_config_rule" "rds_encryption_enabled" {
-  name = "rds-encryption-enabled"
+  name = "rds-encryption-enabled-${var.environment_suffix}"
 
   source {
     owner             = "AWS"
@@ -1398,7 +1398,7 @@ resource "aws_config_config_rule" "rds_encryption_enabled" {
 }
 
 resource "aws_config_config_rule" "mfa_enabled_for_iam_console_access" {
-  name = "mfa-enabled-for-iam-console-access"
+  name = "mfa-enabled-for-iam-console-access-${var.environment_suffix}"
 
   source {
     owner             = "AWS"
@@ -1409,7 +1409,7 @@ resource "aws_config_config_rule" "mfa_enabled_for_iam_console_access" {
 }
 
 resource "aws_config_config_rule" "cloudtrail_enabled" {
-  name = "cloudtrail-enabled"
+  name = "cloudtrail-enabled-${var.environment_suffix}"
 
   source {
     owner             = "AWS"
@@ -1515,14 +1515,14 @@ resource "aws_wafv2_web_acl_association" "main" {
 
 # CloudFront Origin Access Identity
 resource "aws_cloudfront_origin_access_identity" "main" {
-  comment = "Origin Access Identity for CloudFront"
+  comment = "Origin Access Identity for CloudFront ${var.environment_suffix}"
 }
 
 # CloudFront Distribution
 resource "aws_cloudfront_distribution" "main" {
   enabled             = true
   is_ipv6_enabled     = true
-  comment             = "Main CloudFront Distribution"
+  comment             = "Main CloudFront Distribution ${var.environment_suffix}"
   default_root_object = "index.html"
 
   origin {
@@ -1576,7 +1576,7 @@ resource "aws_cloudfront_distribution" "main" {
   }
 
   tags = {
-    Name        = "main-cloudfront"
+    Name        = "main-cloudfront-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -1585,7 +1585,7 @@ resource "aws_cloudfront_distribution" "main" {
 
 # Systems Manager Session Manager Configuration
 resource "aws_ssm_document" "session_manager_prefs" {
-  name            = "SSM-SessionManagerRunShell"
+  name            = "SSM-SessionManagerRunShell-${var.environment_suffix}"
   document_type   = "Session"
   document_format = "JSON"
 
@@ -1604,7 +1604,7 @@ resource "aws_ssm_document" "session_manager_prefs" {
   })
 
   tags = {
-    Name        = "session-manager-config"
+    Name        = "session-manager-config-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
@@ -1626,7 +1626,7 @@ resource "aws_cloudwatch_log_group" "session_manager" {
 
 # MFA Enforcement Policy
 resource "aws_iam_policy" "enforce_mfa" {
-  name        = "enforce-mfa-policy"
+  name        = "enforce-mfa-policy-${var.environment_suffix}"
   description = "Policy to enforce MFA for all IAM users"
 
   policy = jsonencode({
@@ -1686,7 +1686,7 @@ resource "aws_iam_policy" "enforce_mfa" {
   })
 
   tags = {
-    Name        = "mfa-enforcement-policy"
+    Name        = "mfa-enforcement-policy-${var.environment_suffix}"
     CostCenter  = "IT-Security"
     Environment = "production"
     ManagedBy   = "Terraform"
