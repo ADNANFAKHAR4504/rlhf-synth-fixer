@@ -545,6 +545,8 @@ jobs:
 
             This validation is mandatory and must be completed before any other review activities.
 
+            Note : if training_quality is less than 8 then fail the job by exiting with code 1
+
             Once the above is done Follow instructions in .claude/agents/iac-code-reviewer.md
 
       - name: Upload updated metadata.json
@@ -557,7 +559,7 @@ jobs:
   cleanup:
     name: Cleanup (Destroy Resources)
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, integration-tests-live]
+    needs: [detect-metadata, integration-tests-live, claude-code-action]
     if: ${{ ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch' && !inputs.skip_cleanup)) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: qa
 
@@ -594,7 +596,7 @@ jobs:
     name: Archive Folders and Reset Repository
     runs-on: ubuntu-24.04
     needs: [detect-metadata, cleanup]
-    environment: release
+    environment: stage
     if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     permissions:
       contents: write
