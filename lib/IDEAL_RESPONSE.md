@@ -8,8 +8,8 @@ This Pulumi Python stack deploys the BrazilCart e-commerce platform infrastructu
 
 - **KMS Encryption**: Customer-managed KMS key with automatic rotation for RDS encryption
 - **VPC Infrastructure**: VPC with 3 private subnets across 3 availability zones
-- **RDS PostgreSQL**: Multi-AZ PostgreSQL 15.7 database with encryption at rest and optimized parameter group
-- **ElastiCache Redis**: Multi-AZ Redis 7.0 cluster with encryption at rest and in transit, optimized parameter group
+- **RDS PostgreSQL**: Multi-AZ PostgreSQL 15.7 database with encryption at rest
+- **ElastiCache Redis**: Multi-AZ Redis 7.0 cluster with encryption at rest and in transit
 - **Secrets Manager**: Automated database credential management
 - **CodePipeline**: CI/CD pipeline with Source, Build (CodeBuild), and Deploy stages
 - **CloudWatch Monitoring**: Alarms for RDS and ElastiCache CPU utilization, connections, and evictions
@@ -216,37 +216,6 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Create RDS parameter group for performance optimization
-        rds_parameter_group = aws.rds.ParameterGroup(
-            f"brazilcart-db-params-{self.environment_suffix}",
-            family="postgres15",
-            description="Optimized parameters for BrazilCart PostgreSQL",
-            parameters=[
-                {
-                    "name": "shared_buffers",
-                    "value": "{DBInstanceClassMemory/32768}"
-                },
-                {
-                    "name": "max_connections",
-                    "value": "100"
-                },
-                {
-                    "name": "work_mem",
-                    "value": "4096"
-                },
-                {
-                    "name": "maintenance_work_mem",
-                    "value": "65536"
-                },
-                {
-                    "name": "effective_cache_size",
-                    "value": "{DBInstanceClassMemory/16384}"
-                }
-            ],
-            tags={**self.tags, "Name": f"brazilcart-db-params-{self.environment_suffix}"},
-            opts=ResourceOptions(parent=self)
-        )
-
         # Create RDS instance
         rds_instance = aws.rds.Instance(
             f"brazilcart-db-{self.environment_suffix}",
@@ -261,35 +230,11 @@ class TapStack(pulumi.ComponentResource):
             username="brazilcart_admin",
             password=password,
             multi_az=True,
-            parameter_group_name=rds_parameter_group.name,
             db_subnet_group_name=db_subnet_group.name,
             vpc_security_group_ids=[rds_sg.id],
             skip_final_snapshot=True,
             backup_retention_period=7,
             tags={**self.tags, "Name": f"brazilcart-db-{self.environment_suffix}"},
-            opts=ResourceOptions(parent=self)
-        )
-
-        # Create ElastiCache parameter group for performance optimization
-        cache_parameter_group = aws.elasticache.ParameterGroup(
-            f"brazilcart-cache-params-{self.environment_suffix}",
-            family="redis7",
-            description="Optimized parameters for BrazilCart Redis",
-            parameters=[
-                {
-                    "name": "maxmemory-policy",
-                    "value": "allkeys-lru"
-                },
-                {
-                    "name": "timeout",
-                    "value": "300"
-                },
-                {
-                    "name": "tcp-keepalive",
-                    "value": "300"
-                }
-            ],
-            tags={**self.tags, "Name": f"brazilcart-cache-params-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
 
@@ -304,7 +249,6 @@ class TapStack(pulumi.ComponentResource):
             num_cache_clusters=2,
             automatic_failover_enabled=True,
             multi_az_enabled=True,
-            parameter_group_name=cache_parameter_group.name,
             subnet_group_name=cache_subnet_group.name,
             security_group_ids=[cache_sg.id],
             at_rest_encryption_enabled=True,
@@ -677,12 +621,7 @@ eu-south-2
 - KMS encryption at rest
 - VPC-only access (10.0.0.0/16)
 - Skip final snapshot on deletion
-- Optimized parameter group with performance tuning:
-  - shared_buffers: Dynamic based on instance memory
-  - max_connections: 100
-  - work_mem: 4096 KB
-  - maintenance_work_mem: 65536 KB
-  - effective_cache_size: Dynamic based on instance memory
+- Uses default PostgreSQL 15 parameter group
 
 **Database Credentials**
 - Username: brazilcart_admin
@@ -699,10 +638,7 @@ eu-south-2
 - Encryption at rest: Enabled
 - Encryption in transit: Enabled
 - VPC-only access (10.0.0.0/16)
-- Optimized parameter group with performance tuning:
-  - maxmemory-policy: allkeys-lru (evict oldest keys when memory is full)
-  - timeout: 300 seconds
-  - tcp-keepalive: 300 seconds
+- Uses default Redis 7 parameter group
 
 ### Security
 
@@ -822,11 +758,6 @@ The stack exports the following outputs:
 - CloudWatch alarms for ElastiCache CPU utilization and evictions
 - Proactive monitoring with configurable thresholds
 - All alarms properly tagged for management
-
-**Performance Optimization (ADDED)**
-- RDS parameter group with optimized PostgreSQL settings
-- ElastiCache parameter group with optimized Redis configuration
-- Memory and connection tuning based on workload requirements
 
 ## Deployment
 

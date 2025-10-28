@@ -196,37 +196,6 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Create RDS parameter group for performance optimization
-        rds_parameter_group = aws.rds.ParameterGroup(
-            f"brazilcart-db-params-{self.environment_suffix}",
-            family="postgres15",
-            description="Optimized parameters for BrazilCart PostgreSQL",
-            parameters=[
-                {
-                    "name": "shared_buffers",
-                    "value": "{DBInstanceClassMemory/32768}"
-                },
-                {
-                    "name": "max_connections",
-                    "value": "100"
-                },
-                {
-                    "name": "work_mem",
-                    "value": "4096"
-                },
-                {
-                    "name": "maintenance_work_mem",
-                    "value": "65536"
-                },
-                {
-                    "name": "effective_cache_size",
-                    "value": "{DBInstanceClassMemory/16384}"
-                }
-            ],
-            tags={**self.tags, "Name": f"brazilcart-db-params-{self.environment_suffix}"},
-            opts=ResourceOptions(parent=self)
-        )
-
         # Create RDS instance
         rds_instance = aws.rds.Instance(
             f"brazilcart-db-{self.environment_suffix}",
@@ -241,35 +210,11 @@ class TapStack(pulumi.ComponentResource):
             username="brazilcart_admin",
             password=password,
             multi_az=True,
-            parameter_group_name=rds_parameter_group.name,
             db_subnet_group_name=db_subnet_group.name,
             vpc_security_group_ids=[rds_sg.id],
             skip_final_snapshot=True,
             backup_retention_period=7,
             tags={**self.tags, "Name": f"brazilcart-db-{self.environment_suffix}"},
-            opts=ResourceOptions(parent=self)
-        )
-
-        # Create ElastiCache parameter group for performance optimization
-        cache_parameter_group = aws.elasticache.ParameterGroup(
-            f"brazilcart-cache-params-{self.environment_suffix}",
-            family="redis7",
-            description="Optimized parameters for BrazilCart Redis",
-            parameters=[
-                {
-                    "name": "maxmemory-policy",
-                    "value": "allkeys-lru"
-                },
-                {
-                    "name": "timeout",
-                    "value": "300"
-                },
-                {
-                    "name": "tcp-keepalive",
-                    "value": "300"
-                }
-            ],
-            tags={**self.tags, "Name": f"brazilcart-cache-params-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
 
@@ -284,7 +229,6 @@ class TapStack(pulumi.ComponentResource):
             num_cache_clusters=2,
             automatic_failover_enabled=True,
             multi_az_enabled=True,
-            parameter_group_name=cache_parameter_group.name,
             subnet_group_name=cache_subnet_group.name,
             security_group_ids=[cache_sg.id],
             at_rest_encryption_enabled=True,
