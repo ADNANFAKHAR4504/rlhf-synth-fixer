@@ -11,5 +11,11 @@
     "Cloud Environment Setup"
   ],
   "aws_services": "SageMaker, Lambda, API Gateway, Step Functions, DynamoDB, Kinesis, CloudWatch, EventBridge, SNS, S3, KMS, IAM",
-  "training_quality": 9
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
 }
