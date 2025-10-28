@@ -57,7 +57,7 @@ export class TapStack extends Stack {
       'dev';
 
     const modelRepository = new ecr.Repository(this, 'FraudDetectionRepository', {
-      repositoryName: 'fraud-detection',
+      repositoryName: `fraud-detection-${environmentSuffix}`,
       removalPolicy: RemovalPolicy.DESTROY,
       emptyOnDelete: true,
       imageScanOnPush: true
@@ -84,7 +84,20 @@ export class TapStack extends Stack {
       code: lambda.Code.fromInline(`
 import json
 import boto3
-import cfnresponse
+import urllib3
+
+def send_response(event, context, status, data, reason=None):
+    response_body = {
+        'Status': status,
+        'Reason': reason or f'See CloudWatch Log Stream: {context.log_stream_name}',
+        'PhysicalResourceId': context.log_stream_name,
+        'StackId': event['StackId'],
+        'RequestId': event['RequestId'],
+        'LogicalResourceId': event['LogicalResourceId'],
+        'Data': data
+    }
+    http = urllib3.PoolManager()
+    http.request('PUT', event['ResponseURL'], body=json.dumps(response_body).encode('utf-8'), headers={'Content-Type': ''})
 
 def handler(event, context):
     sh = boto3.client('securityhub')
@@ -92,7 +105,7 @@ def handler(event, context):
     
     try:
         if event['RequestType'] == 'Delete':
-            cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+            send_response(event, context, 'SUCCESS', {})
             return
         
         hub_arn = ''
@@ -107,11 +120,6 @@ def handler(event, context):
             print('Security Hub not enabled, enabling now...')
             try:
                 enable_response = sh.enable_security_hub(
-                    Tags={
-                        'Owner': 'FinTechMLOps',
-                        'CostCenter': 'ML-Infrastructure',
-                        'Application': 'FraudPrediction'
-                    },
                     ControlFindingGenerator='SECURITY_CONTROL'
                 )
                 hub_arn = enable_response.get('HubArn', '')
@@ -124,14 +132,10 @@ def handler(event, context):
                 else:
                     raise
         except Exception as e:
-            if 'not subscribed' in str(e).lower():
+            error_msg = str(e).lower()
+            if 'not subscribed' in error_msg or 'invalidaccess' in error_msg:
                 print('Security Hub not enabled, enabling now...')
                 enable_response = sh.enable_security_hub(
-                    Tags={
-                        'Owner': 'FinTechMLOps',
-                        'CostCenter': 'ML-Infrastructure',
-                        'Application': 'FraudPrediction'
-                    },
                     ControlFindingGenerator='SECURITY_CONTROL'
                 )
                 hub_arn = enable_response.get('HubArn', '')
@@ -182,7 +186,7 @@ def handler(event, context):
             else:
                 print(f'Warning: Could not enable AWS Foundational standard: {e}')
         
-        cfnresponse.send(event, context, cfnresponse.SUCCESS, {
+        send_response(event, context, 'SUCCESS', {
             'HubArn': hub_arn,
             'StandardsArns': ','.join(standards_arns)
         })
@@ -190,7 +194,7 @@ def handler(event, context):
         print(f'Error: {e}')
         import traceback
         traceback.print_exc()
-        cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+        send_response(event, context, 'FAILED', {'Error': str(e)}, str(e))
       `)
     });
     
@@ -201,7 +205,8 @@ def handler(event, context):
         'securityhub:GetFindings',
         'securityhub:ListEnabledProductsForImport',
         'securityhub:BatchEnableStandards',
-        'securityhub:GetEnabledStandards'
+        'securityhub:GetEnabledStandards',
+        'securityhub:TagResource'
       ],
       resources: ['*']
     }));
@@ -362,14 +367,14 @@ def output_fn(prediction, accept):
       ],
       resources: [
         modelRepository.repositoryArn,
-        `arn:aws:ecr:${this.region}:683313688378:repository/sagemaker-xgboost`
+        `arn:aws:ecr:${this.region}:763104351884:repository/*`
       ]
     }));
     
     const sagemakerModel = new sagemaker.CfnModel(this, 'FraudDetectionModel', {
       executionRoleArn: sagemakerExecutionRole.roleArn,
       primaryContainer: {
-        image: `683313688378.dkr.ecr.${this.region}.amazonaws.com/sagemaker-xgboost:1.5-1`,
+        image: `763104351884.dkr.ecr.${this.region}.amazonaws.com/pytorch-inference:2.0.0-cpu-py310`,
         modelDataUrl: `s3://${modelBucket.bucketName}/fraud-model/model.tar.gz`,
         environment: {
           MODEL_VERSION: '1.0.0',
@@ -494,6 +499,13 @@ def output_fn(prediction, accept):
               }
             }));
             
+            const isHighRisk = responseBody.confidence < 0.6;
+            const isAnomaly = Math.abs(responseBody.confidence - 0.85) > 0.3;
+            const featureSum = Object.values(payload).reduce((sum, val) => {
+              return sum + (typeof val === 'number' ? val : 0);
+            }, 0);
+            const featureMagnitude = Math.sqrt(featureSum);
+            
             await cwClient.send(new CW.PutMetricDataCommand({
               Namespace: 'FraudDetection/ModelDrift',
               MetricData: [
@@ -507,6 +519,39 @@ def output_fn(prediction, accept):
                   MetricName: 'PositivePredictions',
                   Value: responseBody.prediction === 'fraud' ? 1 : 0,
                   Unit: 'Count',
+                  Dimensions: [{ Name: 'ModelVersion', Value: '1.0.0' }]
+                },
+                {
+                  MetricName: 'ConfidenceDistribution',
+                  Value: Math.floor(responseBody.confidence * 10) / 10,
+                  Unit: 'None',
+                  Dimensions: [
+                    { Name: 'ModelVersion', Value: '1.0.0' },
+                    { Name: 'ConfidenceBin', Value: String(Math.floor(responseBody.confidence * 10) / 10) }
+                  ]
+                },
+                {
+                  MetricName: 'FeatureMagnitude',
+                  Value: featureMagnitude,
+                  Unit: 'None',
+                  Dimensions: [{ Name: 'ModelVersion', Value: '1.0.0' }]
+                },
+                {
+                  MetricName: 'HighRiskPredictions',
+                  Value: isHighRisk ? 1 : 0,
+                  Unit: 'Count',
+                  Dimensions: [{ Name: 'ModelVersion', Value: '1.0.0' }]
+                },
+                {
+                  MetricName: 'AnomalyDetections',
+                  Value: isAnomaly ? 1 : 0,
+                  Unit: 'Count',
+                  Dimensions: [{ Name: 'ModelVersion', Value: '1.0.0' }]
+                },
+                {
+                  MetricName: 'PredictionLatency',
+                  Value: endTime - startTime,
+                  Unit: 'Milliseconds',
                   Dimensions: [{ Name: 'ModelVersion', Value: '1.0.0' }]
                 }
               ]
@@ -524,9 +569,39 @@ def output_fn(prediction, accept):
             };
           } catch (error) {
             console.error('Error:', error);
+            
+            await cwClient.send(new CW.PutMetricDataCommand({
+              Namespace: 'FraudDetection/Errors',
+              MetricData: [
+                {
+                  MetricName: 'ProcessingErrors',
+                  Value: 1,
+                  Unit: 'Count',
+                  Dimensions: [{ Name: 'ModelVersion', Value: '1.0.0' }]
+                },
+                {
+                  MetricName: 'ErrorRate',
+                  Value: 1,
+                  Unit: 'Count',
+                  Dimensions: [
+                    { Name: 'ErrorType', Value: error.name || 'UnknownError' },
+                    { Name: 'ModelVersion', Value: '1.0.0' }
+                  ]
+                }
+              ]
+            })).catch(cwErr => console.error('Failed to log error metrics:', cwErr));
+            
             return {
-              statusCode: 500,
-              body: JSON.stringify({ error: error.message })
+              statusCode: error.name === 'ValidationException' ? 400 : 500,
+              headers: { 
+                'Content-Type': 'application/json',
+                'X-Request-ID': requestId
+              },
+              body: JSON.stringify({ 
+                error: error.message,
+                requestId,
+                timestamp: new Date().toISOString()
+              })
             };
           }
         };
@@ -616,14 +691,47 @@ def output_fn(prediction, accept):
       period: Duration.hours(1)
     });
     
+    const featureMagnitudeMetric = new cloudwatch.Metric({
+      namespace: 'FraudDetection/ModelDrift',
+      metricName: 'FeatureMagnitude',
+      dimensionsMap: { ModelVersion: '1.0.0' },
+      statistic: 'Average',
+      period: Duration.hours(1)
+    });
+    
+    const highRiskMetric = new cloudwatch.Metric({
+      namespace: 'FraudDetection/ModelDrift',
+      metricName: 'HighRiskPredictions',
+      dimensionsMap: { ModelVersion: '1.0.0' },
+      statistic: 'Sum',
+      period: Duration.hours(1)
+    });
+    
+    const anomalyMetric = new cloudwatch.Metric({
+      namespace: 'FraudDetection/ModelDrift',
+      metricName: 'AnomalyDetections',
+      dimensionsMap: { ModelVersion: '1.0.0' },
+      statistic: 'Sum',
+      period: Duration.hours(1)
+    });
+    
+    const errorRateMetric = new cloudwatch.Metric({
+      namespace: 'FraudDetection/Errors',
+      metricName: 'ErrorRate',
+      dimensionsMap: { ModelVersion: '1.0.0' },
+      statistic: 'Sum',
+      period: Duration.minutes(5)
+    });
+    
     const dashboard = new cloudwatch.Dashboard(this, 'FraudDetectionDashboard', {
       dashboardName: `FraudDetection-${this.region}-${environmentSuffix}`
     });
     
     dashboard.addWidgets(
       new cloudwatch.GraphWidget({
-        title: 'Endpoint Invocations',
-        left: [invocationMetric],
+        title: 'Endpoint Invocations & Errors',
+        left: [invocationMetric, invocation4xxErrorsMetric],
+        right: [errorRateMetric],
         width: 12
       }),
       new cloudwatch.GraphWidget({
@@ -632,8 +740,13 @@ def output_fn(prediction, accept):
         width: 12
       }),
       new cloudwatch.GraphWidget({
-        title: 'Model Drift Indicators',
-        left: [predictionConfidenceMetric],
+        title: 'Model Confidence & Drift',
+        left: [predictionConfidenceMetric, featureMagnitudeMetric],
+        width: 12
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'Risk & Anomaly Detection',
+        left: [highRiskMetric, anomalyMetric],
         width: 12
       })
     );
@@ -655,9 +768,33 @@ def output_fn(prediction, accept):
       evaluationPeriods: 24,
       comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD
     });
+    
+    const featureDriftAlarm = new cloudwatch.Alarm(this, 'FeatureDriftAlarm', {
+      metric: featureMagnitudeMetric,
+      threshold: 100,
+      evaluationPeriods: 6,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD
+    });
+    
+    const anomalyAlarm = new cloudwatch.Alarm(this, 'AnomalyDetectionAlarm', {
+      metric: anomalyMetric,
+      threshold: 10,
+      evaluationPeriods: 3,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD
+    });
+    
+    const errorRateAlarm = new cloudwatch.Alarm(this, 'HighErrorRateAlarm', {
+      metric: errorRateMetric,
+      threshold: 5,
+      evaluationPeriods: 2,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD
+    });
 
     latencyAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
     driftAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
+    featureDriftAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
+    anomalyAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
+    errorRateAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
     
     const driftRule = new events.Rule(this, 'ModelDriftRule', {
       eventPattern: {
@@ -666,7 +803,10 @@ def output_fn(prediction, accept):
         detail: {
           alarmName: [
             latencyAlarm.alarmName,
-            driftAlarm.alarmName
+            driftAlarm.alarmName,
+            featureDriftAlarm.alarmName,
+            anomalyAlarm.alarmName,
+            errorRateAlarm.alarmName
           ]
         }
       }
