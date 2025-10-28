@@ -103,8 +103,8 @@ locals {
 # ============================================================================
 
 resource "random_password" "db_password" {
-  length  = 32
-  special = true
+  length  = 16
+  override_characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!#$%^&*()-_=+{}[]:;,.<>?"  
 }
 
 # ============================================================================

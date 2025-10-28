@@ -80,3 +80,31 @@ Error: Terraform exited with code 1.
 ⚠️Direct apply with plan failed, trying without plan...
 
 ```
+
+3. Medium Failure: indicates that the password generated for the RDS master user includes disallowed characters. According to the AWS RDS constraint, the password may not contain '/', '@', '"', or spaces.
+
+Error
+
+```
+╷
+│ Error: creating RDS DB Instance (rds-primary-drsh): operation error RDS: CreateDBInstance, https response error StatusCode: 400, RequestID: 04c4bb0c-ae53-411c-af12-494a940f7268, api error InvalidParameterValue: The parameter MasterUserPassword is not a valid password. Only printable ASCII characters besides '/', '@', '"', ' ' may be used.
+│ 
+│   with aws_db_instance.primary,
+│   on tap_stack.tf line 635, in resource "aws_db_instance" "primary":
+│  635: resource "aws_db_instance" "primary" {
+│ 
+╵
+Error: Terraform exited with code 1.
+```
+
+Fix
+
+```
+resource "random_password" "db_password" {
+  length  = 32
+  override_characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!#$%^&*()-_=+{}[]:;,.<>?"
+}
+
+```
+
+
