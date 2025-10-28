@@ -1,0 +1,156 @@
+# variables.tf - Input variables for the Aurora Serverless infrastructure
+
+variable "environment_suffix" {
+  description = "Unique suffix for resource names (e.g., pr123, synth456)"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name (e.g., dev, staging, production)"
+  type        = string
+  default     = "dev"
+  validation {
+    condition     = contains(["dev", "staging", "production"], var.environment)
+    error_message = "Environment must be dev, staging, or production."
+  }
+}
+
+variable "project_name" {
+  description = "Name of the gaming platform project"
+  type        = string
+  default     = "gaming-platform"
+}
+
+variable "aws_region" {
+  description = "AWS region for resources"
+  type        = string
+  default     = "us-east-1"
+}
+
+# VPC Configuration
+variable "vpc_cidr" {
+  description = "CIDR block for VPC"
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "availability_zones" {
+  description = "List of availability zones to use"
+  type        = list(string)
+  default     = []
+}
+
+# Aurora Configuration
+variable "database_name" {
+  description = "Name of the default database"
+  type        = string
+  default     = "gaming_db"
+}
+
+variable "master_username" {
+  description = "Master username for Aurora cluster"
+  type        = string
+  default     = "admin"
+  sensitive   = true
+}
+
+variable "master_password" {
+  description = "Master password for Aurora cluster"
+  type        = string
+  sensitive   = true
+}
+
+variable "aurora_mysql_version" {
+  description = "Aurora MySQL engine version"
+  type        = string
+  default     = "8.0.mysql_aurora.3.07.1"
+}
+
+variable "aurora_instance_count" {
+  description = "Number of Aurora instances"
+  type        = number
+  default     = 2
+}
+
+variable "aurora_min_capacity" {
+  description = "Minimum capacity for Aurora Serverless v2"
+  type        = number
+  default     = 0.5
+}
+
+variable "aurora_max_capacity" {
+  description = "Maximum capacity for Aurora Serverless v2"
+  type        = number
+  default     = 128
+}
+
+# Backup Configuration
+variable "backup_retention_days" {
+  description = "Number of days to retain backups"
+  type        = number
+  default     = 7
+}
+
+variable "backup_window" {
+  description = "Preferred backup window"
+  type        = string
+  default     = "03:00-04:00"
+}
+
+variable "maintenance_window" {
+  description = "Preferred maintenance window"
+  type        = string
+  default     = "sun:04:00-sun:05:00"
+}
+
+variable "backtrack_window_hours" {
+  description = "Target backtrack window in hours (0-72) - disabled for compatibility"
+  type        = number
+  default     = 0
+}
+
+# Auto Scaling Configuration
+variable "cpu_scale_up_threshold" {
+  description = "CPU threshold percentage to trigger scale up"
+  type        = number
+  default     = 70
+}
+
+variable "cpu_scale_down_threshold" {
+  description = "CPU threshold percentage to trigger scale down"
+  type        = number
+  default     = 30
+}
+
+variable "connections_scale_up_threshold" {
+  description = "Database connections threshold to trigger scale up"
+  type        = number
+  default     = 12000
+}
+
+# S3 Backup Configuration
+variable "backup_lifecycle_days" {
+  description = "Days before transitioning backups to cheaper storage"
+  type        = number
+  default     = 30
+}
+
+variable "backup_expiration_days" {
+  description = "Days before deleting old backups"
+  type        = number
+  default     = 90
+}
+
+# Monitoring Configuration
+variable "alarm_email_endpoints" {
+  description = "Email addresses for CloudWatch alarm notifications"
+  type        = list(string)
+  default     = []
+}
+
+# Tagging
+variable "tags" {
+  description = "Additional tags to apply to resources"
+  type        = map(string)
+  default     = {}
+}
