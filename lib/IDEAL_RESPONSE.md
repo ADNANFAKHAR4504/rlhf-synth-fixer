@@ -1,3 +1,57 @@
+### Reasoning Trace
+---
+
+This is a comprehensive request for a production-grade CloudFormation template. Let me break down what needs to be included:
+
+1. **Networking**:
+   - VPC with 2 AZs
+   - 2 public and 2 private subnets
+   - Internet Gateway
+   - NAT Gateway with Elastic IP
+   - Route tables
+
+2. **Compute Layer**:
+   - Dynamic Key Pair creation (AWS::EC2::KeyPair)
+   - Store private key in Secrets Manager
+   - Fetch latest Amazon Linux 2 AMI from SSM
+   - Launch Template with UserData
+   - Auto Scaling Group (2-5 instances)
+   - Application Load Balancer
+   - Security Groups
+
+3. **Database Layer**:
+   - RDS instance (MySQL/PostgreSQL)
+   - Multi-AZ, encrypted
+   - DB Subnet Group
+
+4. **Monitoring & Logging**:
+   - S3 bucket for logs
+   - CloudWatch monitoring
+   - CloudTrail
+
+5. **IAM & Security**:
+   - EC2 IAM Role with least privilege
+   - Instance Profile
+
+6. **Parameters** for all configurable values
+
+7. **Outputs** for key resources
+
+Key considerations:
+- No hardcoded values
+- Cross-region/cross-account compatible
+- Use intrinsic functions
+- Follow AWS best practices
+- Dynamic naming with Environment parameter
+
+Let me create this comprehensive template:
+### Answer 
+---
+
+# CloudFormation Template: web-application-infra.yaml
+
+Here's a production-grade CloudFormation template that meets all your requirements:
+
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-grade multi-AZ web application infrastructure with auto-scaling, RDS, and monitoring'
@@ -502,7 +556,7 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     DependsOn: LogBucketPolicy
     Properties:
-      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-alb'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-alb'
       Type: application
       Scheme: internet-facing
       SecurityGroups:
@@ -519,12 +573,12 @@ Resources:
           Value: 'alb-logs'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-alb'
+          Value: !Sub '${AWS::StackName}-${EnvironmentSuffix}-alb'
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-tg'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-tg'
       Port: 80
       Protocol: HTTP
       VpcId: !Ref Vpc
@@ -538,7 +592,7 @@ Resources:
       TargetType: instance
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-tg'
+          Value: !Sub '${AWS::StackName}-${EnvironmentSuffix}-tg'
 
   AlbListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -771,7 +825,7 @@ Outputs:
     Description: 'Application Load Balancer DNS name'
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
-      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-alb-dns'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-alb-dns'
 
   AlbUrl:
     Description: 'Application URL'
@@ -867,7 +921,7 @@ Outputs:
     Description: 'Application Load Balancer Security Group ID'
     Value: !Ref AlbSecurityGroup
     Export:
-      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-alb-sg-id'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-alb-sg-id'
 
   Ec2SecurityGroupId:
     Description: 'EC2 Security Group ID'
@@ -905,25 +959,25 @@ Outputs:
     Description: 'Application Load Balancer ID'
     Value: !Ref ApplicationLoadBalancer
     Export:
-      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-alb-id'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-alb-id'
 
   ApplicationLoadBalancerArn:
     Description: 'Application Load Balancer ARN'
     Value: !Ref ApplicationLoadBalancer
     Export:
-      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-alb-arn'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-alb-arn'
 
   TargetGroupArn:
     Description: 'Target Group ARN'
     Value: !Ref TargetGroup
     Export:
-      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-target-group-arn'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-target-group-arn'
 
   AlbListenerArn:
     Description: 'ALB Listener ARN'
     Value: !Ref AlbListener
     Export:
-      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-alb-listener-arn'
+      Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-alb-listener-arn'
 
   # Auto Scaling Outputs
   LaunchTemplateId:
