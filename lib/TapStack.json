@@ -723,7 +723,6 @@
         "Role": {"Fn::GetAtt": ["LambdaExecutionRole", "Arn"]},
         "MemorySize": 3008,
         "Timeout": 300,
-        "ReservedConcurrentExecutions": 4000,
         "Environment": {
           "Variables": {
             "DYNAMODB_TABLE": {"Ref": "DynamoDBTable"},
