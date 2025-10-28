@@ -4,13 +4,7 @@ import { TapStack } from '../lib/tap-stack';
 
 const app = new App();
 
-const environmentSuffix = process.env.ENV_SUFFIX;
-
-if (!environmentSuffix) {
-  console.error('ERROR: ENV_SUFFIX environment variable is not set.');
-  console.error('Usage: ENV_SUFFIX="my-suffix" npm run build');
-  process.exit(1);
-}
+const environmentSuffix = process.env.ENV_SUFFIX || 'prod';
 
 new TapStack(app, 'MultiRegionDrStack', {
   environmentSuffix: environmentSuffix,
