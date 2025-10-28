@@ -612,7 +612,6 @@
           "DomainARN": {"Fn::GetAtt": ["OpenSearchDomain", "Arn"]},
           "IndexName": "profiles",
           "IndexRotationPeriod": "OneDay",
-          "TypeName": "_doc",
           "BufferingHints": {
             "IntervalInSeconds": 60,
             "SizeInMBs": 5
