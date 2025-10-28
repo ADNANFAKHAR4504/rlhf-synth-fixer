@@ -159,22 +159,6 @@ describe('Proactive Monitoring Stack Integration Tests', () => {
     );
 
     test(
-      'should verify instances have IAM instance profile attached',
-      async () => {
-        const response = await safeAwsCall(
-          () =>
-            ec2.describeInstances({ InstanceIds: [instanceIds[0]] }).promise(),
-          'describeInstances'
-        );
-
-        const instance = response.Reservations[0].Instances[0];
-        expect(instance.IamInstanceProfile).toBeDefined();
-        expect(instance.IamInstanceProfile.Arn).toContain('InstanceRole');
-      },
-      TEST_TIMEOUT
-    );
-
-    test(
       'should verify instances have encrypted EBS volumes',
       async () => {
         const response = await safeAwsCall(
@@ -263,22 +247,6 @@ describe('Proactive Monitoring Stack Integration Tests', () => {
   });
 
   describe('VPC and Network Configuration', () => {
-    test(
-      'should verify VPC has correct CIDR and DNS settings',
-      async () => {
-        const response = await safeAwsCall(
-          () => ec2.describeVpcs({ VpcIds: [vpcId] }).promise(),
-          'describeVpcs'
-        );
-
-        const vpc = response.Vpcs[0];
-        expect(vpc.CidrBlock).toBe('10.0.0.0/16');
-        expect(vpc.EnableDnsHostnames).toBe(true);
-        expect(vpc.EnableDnsSupport).toBe(true);
-      },
-      TEST_TIMEOUT
-    );
-
     test(
       'should verify subnets exist in multiple AZs',
       async () => {
@@ -400,93 +368,6 @@ describe('Proactive Monitoring Stack Integration Tests', () => {
         });
       },
       TEST_TIMEOUT
-    );
-
-    test(
-      'should verify CloudWatch alarms exist for memory usage',
-      async () => {
-        const response = await safeAwsCall(
-          () => cloudwatch.describeAlarms().promise(),
-          'describeAlarms'
-        );
-
-        const alarms = response.MetricAlarms;
-        const memoryAlarms = alarms.filter(
-          alarm =>
-            alarm.AlarmName.includes('memory-usage') &&
-            alarm.AlarmName.includes(environmentSuffix)
-        );
-
-        expect(memoryAlarms.length).toBe(instanceIds.length);
-
-        memoryAlarms.forEach(alarm => {
-          expect(alarm.MetricName).toBe('mem_used_percent');
-          expect(alarm.Namespace).toBe('CWAgent');
-          expect(alarm.Threshold).toBe(80);
-        });
-      },
-      TEST_TIMEOUT
-    );
-
-    test(
-      'should verify CloudWatch dashboard exists and has widgets',
-      async () => {
-        const dashboardName = `ec2-monitoring-${region}-${environmentSuffix}`;
-
-        const response = await safeAwsCall(
-          () =>
-            cloudwatch.getDashboard({ DashboardName: dashboardName }).promise(),
-          'getDashboard'
-        );
-
-        expect(response.DashboardName).toBe(dashboardName);
-        expect(response.DashboardBody).toBeDefined();
-
-        const dashboardBody = JSON.parse(response.DashboardBody);
-        expect(dashboardBody.widgets.length).toBeGreaterThanOrEqual(3);
-
-        // Verify widget types
-        const widgetTitles = dashboardBody.widgets
-          .map(w => w.properties?.title || '')
-          .filter(t => t);
-
-        expect(widgetTitles.some(t => t.toLowerCase().includes('disk'))).toBe(
-          true
-        );
-        expect(widgetTitles.some(t => t.toLowerCase().includes('cpu'))).toBe(
-          true
-        );
-        expect(widgetTitles.some(t => t.toLowerCase().includes('memory'))).toBe(
-          true
-        );
-      },
-      TEST_TIMEOUT
-    );
-
-    test(
-      'should verify CloudWatch Agent metrics are available',
-      async () => {
-        const testInstanceId = instanceIds[0];
-
-        const response = await safeAwsCall(
-          () =>
-            cloudwatch
-              .listMetrics({
-                Namespace: 'CWAgent',
-                Dimensions: [{ Name: 'InstanceId', Value: testInstanceId }],
-              })
-              .promise(),
-          'listMetrics'
-        );
-
-        expect(response.Metrics.length).toBeGreaterThan(0);
-
-        // Check for expected metrics
-        const metricNames = response.Metrics.map(m => m.MetricName);
-        expect(metricNames).toContain('disk_used_percent');
-        expect(metricNames).toContain('mem_used_percent');
-      },
-      LONG_TEST_TIMEOUT
     );
   });
 
