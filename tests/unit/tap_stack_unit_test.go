@@ -158,7 +158,7 @@ func TestTapStack(t *testing.T) {
 		// ASSERT
 		template.ResourceCountIs(jsii.String("AWS::RDS::DBCluster"), jsii.Number(1))
 		template.HasResourceProperties(jsii.String("AWS::RDS::DBCluster"), map[string]interface{}{
-			"Engine": "aurora-postgresql",
+			"Engine":           "aurora-postgresql",
 			"StorageEncrypted": true,
 		})
 
@@ -207,10 +207,10 @@ func TestTapStack(t *testing.T) {
 		// ASSERT
 		template.ResourceCountIs(jsii.String("AWS::ElastiCache::ReplicationGroup"), jsii.Number(1))
 		template.HasResourceProperties(jsii.String("AWS::ElastiCache::ReplicationGroup"), map[string]interface{}{
-			"AtRestEncryptionEnabled": true,
+			"AtRestEncryptionEnabled":  true,
 			"TransitEncryptionEnabled": true,
 			"AutomaticFailoverEnabled": true,
-			"MultiAZEnabled": true,
+			"MultiAZEnabled":           true,
 		})
 	})
 
