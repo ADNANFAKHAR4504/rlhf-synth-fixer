@@ -33,7 +33,7 @@ def get_current_aws_region():
         pass
     
     # Default fallback
-    return "us-west-1"
+    return "ap-south-1"
 
 
 class TestTapStackLiveIntegration(unittest.TestCase):
