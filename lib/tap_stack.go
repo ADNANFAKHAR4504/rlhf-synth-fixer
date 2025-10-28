@@ -21,6 +21,8 @@ import (
 type TapStackProps struct {
 	*awscdk.StackProps
 	EnvironmentSuffix *string
+	// LambdaAssetPath allows overriding the path used for Lambda code assets (useful in tests).
+	LambdaAssetPath *string
 }
 
 // TapStack represents the main CDK stack for e-commerce order processing pipeline.
@@ -107,11 +109,17 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	// ========================================
 	// Lambda Function for Order Processing
 	// ========================================
+	// Determine lambda asset path (allow override from props for tests)
+	lambdaAssetPath := "lib/lambda"
+	if props != nil && props.LambdaAssetPath != nil {
+		lambdaAssetPath = *props.LambdaAssetPath
+	}
+
 	orderProcessorLambda := awslambda.NewFunction(stack, jsii.String("OrderProcessor"), &awslambda.FunctionProps{
 		FunctionName: jsii.String(fmt.Sprintf("order-processor-%s", environmentSuffix)),
 		Runtime:      awslambda.Runtime_PYTHON_3_11(),
 		Handler:      jsii.String("order_processor.handler"),
-		Code:         awslambda.Code_FromAsset(jsii.String("lib/lambda"), nil),
+		Code:         awslambda.Code_FromAsset(jsii.String(lambdaAssetPath), nil),
 		Environment: &map[string]*string{
 			"ORDERS_TABLE":    ordersTable.TableName(),
 			"SNS_TOPIC":       orderTopic.TopicArn(),
@@ -141,7 +149,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		FunctionName: jsii.String(fmt.Sprintf("api-handler-%s", environmentSuffix)),
 		Runtime:      awslambda.Runtime_PYTHON_3_11(),
 		Handler:      jsii.String("api_handler.handler"),
-		Code:         awslambda.Code_FromAsset(jsii.String("lib/lambda"), nil),
+		Code:         awslambda.Code_FromAsset(jsii.String(lambdaAssetPath), nil),
 		Environment: &map[string]*string{
 			"ORDER_QUEUE_URL": orderQueue.QueueUrl(),
 		},
