@@ -95,6 +95,7 @@ export class TapStack extends TerraformStack {
       vpc: vpcModule.vpc,
       publicSubnets: vpcModule.publicSubnets,
       logsBucket: s3Module.bucket,
+      bucketPolicy: s3Module.bucketPolicy,
     });
 
     // 5. ECS Module - Container orchestration (pass listener as dependency)

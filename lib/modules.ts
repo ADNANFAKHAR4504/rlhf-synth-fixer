@@ -391,6 +391,7 @@ export class IamModule extends Construct {
 export class S3Module extends Construct {
   public readonly bucket: aws.s3Bucket.S3Bucket;
   public readonly bucketPublicAccess: aws.s3BucketPublicAccessBlock.S3BucketPublicAccessBlock;
+  public readonly bucketPolicy: aws.s3BucketPolicy.S3BucketPolicy;
 
   constructor(
     scope: Construct,
@@ -451,59 +452,63 @@ export class S3Module extends Construct {
     const albServiceAccount = this.getAlbServiceAccount(props.awsRegion);
 
     // Bucket policy for ALB access logs and security
-    new aws.s3BucketPolicy.S3BucketPolicy(this, 'bucket-policy', {
-      bucket: this.bucket.id,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Sid: 'ALBAccessLogWrite',
-            Effect: 'Allow',
-            Principal: {
-              AWS: `arn:aws:iam::${albServiceAccount}:root`,
+    this.bucketPolicy = new aws.s3BucketPolicy.S3BucketPolicy(
+      this,
+      'bucket-policy',
+      {
+        bucket: this.bucket.id,
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Sid: 'ALBAccessLogWrite',
+              Effect: 'Allow',
+              Principal: {
+                AWS: `arn:aws:iam::${albServiceAccount}:root`,
+              },
+              Action: 's3:PutObject',
+              Resource: `${this.bucket.arn}/alb-logs/*`,
             },
-            Action: 's3:PutObject',
-            Resource: `${this.bucket.arn}/alb-logs/*`,
-          },
-          {
-            Sid: 'AWSLogDeliveryWrite',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'delivery.logs.amazonaws.com',
-            },
-            Action: 's3:PutObject',
-            Resource: `${this.bucket.arn}/alb-logs/*`,
-            Condition: {
-              StringEquals: {
-                's3:x-acl': 'bucket-owner-full-control',
+            {
+              Sid: 'AWSLogDeliveryWrite',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'delivery.logs.amazonaws.com',
+              },
+              Action: 's3:PutObject',
+              Resource: `${this.bucket.arn}/alb-logs/*`,
+              Condition: {
+                StringEquals: {
+                  's3:x-acl': 'bucket-owner-full-control',
+                },
               },
             },
-          },
-          {
-            Sid: 'AWSLogDeliveryAclCheck',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'delivery.logs.amazonaws.com',
+            {
+              Sid: 'AWSLogDeliveryAclCheck',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'delivery.logs.amazonaws.com',
+              },
+              Action: 's3:GetBucketAcl',
+              Resource: this.bucket.arn,
             },
-            Action: 's3:GetBucketAcl',
-            Resource: this.bucket.arn,
-          },
-          {
-            Sid: 'DenyInsecureConnections',
-            Effect: 'Deny',
-            Principal: '*',
-            Action: 's3:*',
-            Resource: [this.bucket.arn, `${this.bucket.arn}/*`],
-            Condition: {
-              Bool: {
-                'aws:SecureTransport': 'false',
+            {
+              Sid: 'DenyInsecureConnections',
+              Effect: 'Deny',
+              Principal: '*',
+              Action: 's3:*',
+              Resource: [this.bucket.arn, `${this.bucket.arn}/*`],
+              Condition: {
+                Bool: {
+                  'aws:SecureTransport': false,
+                },
               },
             },
-          },
-        ],
-      }),
-      dependsOn: [this.bucketPublicAccess],
-    });
+          ],
+        }),
+        dependsOn: [this.bucketPublicAccess],
+      }
+    );
   }
 
   // Helper function to get ALB service account ID for different regions
@@ -633,6 +638,7 @@ export class AlbModule extends Construct {
       vpc: aws.vpc.Vpc;
       publicSubnets: aws.subnet.Subnet[];
       logsBucket: aws.s3Bucket.S3Bucket;
+      bucketPolicy?: aws.s3BucketPolicy.S3BucketPolicy;
     }
   ) {
     super(scope, id);
