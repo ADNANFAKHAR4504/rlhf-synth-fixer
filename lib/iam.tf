@@ -233,7 +233,7 @@ resource "aws_iam_policy" "aurora_app_access" {
         Action = [
           "rds-db:connect"
         ]
-        Resource = "arn:aws:rds-db:${var.aws_region}:${data.aws_caller_identity.current.account_id}:dbuser:${aws_rds_cluster.aurora_serverless.cluster_resource_id}/${var.master_username}"
+        Resource = "arn:aws:rds-db:${var.aws_region}:${data.aws_caller_identity.current.account_id}:dbuser:${aws_rds_cluster.aurora_serverless.cluster_resource_id}/${var.master_username != "" ? var.master_username : var.db_username}"
       }
     ]
   })

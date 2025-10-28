@@ -3,7 +3,7 @@
 variable "environment_suffix" {
   description = "Unique suffix for resource names (e.g., pr123, synth456)"
   type        = string
-  default     = "test" # Default for local testing
+  default     = "test" # Default for local testing - CI/CD sets TF_VAR_environment_suffix from ENVIRONMENT_SUFFIX
 }
 
 variable "environment" {
@@ -51,14 +51,29 @@ variable "database_name" {
 variable "master_username" {
   description = "Master username for Aurora cluster"
   type        = string
-  default     = "admin"
+  default     = ""
   sensitive   = true
 }
 
 variable "master_password" {
   description = "Master password for Aurora cluster"
   type        = string
-  default     = "TempPassword123!" # Default for local testing - override in production
+  default     = ""
+  sensitive   = true
+}
+
+# Support CI/CD variable naming convention
+variable "db_username" {
+  description = "Master username for Aurora cluster (CI/CD uses TF_VAR_db_username)"
+  type        = string
+  default     = "admin"
+  sensitive   = true
+}
+
+variable "db_password" {
+  description = "Master password for Aurora cluster (CI/CD uses TF_VAR_db_password)"
+  type        = string
+  default     = "TempPassword123!"
   sensitive   = true
 }
 

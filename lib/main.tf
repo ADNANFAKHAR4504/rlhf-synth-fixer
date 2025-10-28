@@ -45,8 +45,8 @@ resource "aws_rds_cluster" "aurora_serverless" {
   engine_mode     = "provisioned" # v2 uses provisioned mode with serverless scaling
   engine_version  = var.aurora_mysql_version
   database_name   = var.database_name
-  master_username = var.master_username
-  master_password = var.master_password # Should be from AWS Secrets Manager in production
+  master_username = var.master_username != "" ? var.master_username : var.db_username
+  master_password = var.master_password != "" ? var.master_password : var.db_password # Should be from AWS Secrets Manager in production
 
   # Networking
   db_subnet_group_name   = aws_db_subnet_group.aurora.name
