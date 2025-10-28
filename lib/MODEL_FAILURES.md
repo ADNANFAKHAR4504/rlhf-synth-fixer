@@ -107,4 +107,47 @@ resource "random_password" "db_password" {
 
 ```
 
+4. Medium Failure: wrong paramegter used with the RDS
 
+occurs because you are trying to use the apply_immediately = true setting with a parameter in the DB parameter group that is static. Static parameters require a database reboot to take effect, and cannot be applied immediately.
+
+What to do:
+Locate your aws_db_parameter_group resources for primary and secondary in your tap_stack.tf (line 569 and 601).
+
+Remove or set apply_immediately = false for these parameter groups, or remove this setting altogether since it does not apply to parameter groups but to the DB instances.
+
+Instead of applying changes immediately on the parameter group, you need a controlled reboot of the RDS instances to have static parameter changes applied
+
+```
+
+│ Error: modifying RDS DB Parameter Group (pg-primary-drsh): operation error RDS: ModifyDBParameterGroup, https response error StatusCode: 400, RequestID: 11e7025d-3d56-4b8e-8e52-f8ae1662f630, api error InvalidParameterCombination: cannot use immediate apply method for static parameter
+
+│ 
+
+│   with aws_db_parameter_group.primary,
+
+│   on tap_stack.tf line 569, in resource "aws_db_parameter_group" "primary":
+
+│  569: resource "aws_db_parameter_group" "primary" {
+
+│ 
+
+╵
+
+╷
+
+│ Error: modifying RDS DB Parameter Group (pg-secondary-drsh): operation error RDS: ModifyDBParameterGroup, https response error StatusCode: 400, RequestID: e644c362-f5b1-4889-afdf-8d7779da5969, api error InvalidParameterCombination: cannot use immediate apply method for static parameter
+
+│ 
+
+│   with aws_db_parameter_group.secondary,
+
+│   on tap_stack.tf line 601, in resource "aws_db_parameter_group" "secondary":
+
+│  601: resource "aws_db_parameter_group" "secondary" {
+
+│ 
+
+╵
+
+```
