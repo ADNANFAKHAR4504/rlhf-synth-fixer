@@ -608,7 +608,6 @@ Resources:
               VolumeSize: 20
               VolumeType: gp3
               Encrypted: true
-              KmsKeyId: !Ref NovaEncryptionKey
         UserData:
           Fn::Base64: |
             #!/bin/bash
@@ -906,7 +905,6 @@ Resources:
             VolumeSize: 8
             VolumeType: gp3
             Encrypted: true
-            KmsKeyId: !Ref NovaEncryptionKey
       Tags:
         - Key: Name
           Value: 'nova-prod-bastion'
