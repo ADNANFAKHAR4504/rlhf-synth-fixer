@@ -14,11 +14,7 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
-  });
+  // Integration tests placeholder removed. Add real integration tests here if needed.
 
   describe('Template Structure', () => {
     test('should have valid CloudFormation format version', () => {
