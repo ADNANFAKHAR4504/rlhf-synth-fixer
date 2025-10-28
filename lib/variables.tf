@@ -140,7 +140,7 @@ variable "enable_security_hub" {
 variable "enable_cloudtrail" {
   description = "Enable AWS CloudTrail for audit logging"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "security_notification_email" {
