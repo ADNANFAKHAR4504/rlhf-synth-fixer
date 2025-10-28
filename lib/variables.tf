@@ -127,3 +127,9 @@ variable "enable_route53_resolver" {
   type        = bool
   default     = true
 }
+
+variable "enable_ram_sharing" {
+  description = "Enable RAM resource sharing for Route53 Resolver (requires AWS Organizations)"
+  type        = bool
+  default     = false
+}

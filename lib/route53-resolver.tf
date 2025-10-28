@@ -85,9 +85,9 @@ resource "aws_route53_resolver_endpoint" "outbound" {
   depends_on = [aws_security_group.resolver]
 }
 
-# Share resolver rules with spoke VPCs using AWS RAM
+# Share resolver rules with spoke VPCs using AWS RAM (optional - requires AWS Organizations)
 resource "aws_ram_resource_share" "resolver_rules" {
-  count = var.enable_route53_resolver ? 1 : 0
+  count = var.enable_route53_resolver && var.enable_ram_sharing ? 1 : 0
 
   name                      = "shared-${var.region}-ram-resolver-rules-${local.name_suffix}"
   allow_external_principals = false
@@ -97,9 +97,9 @@ resource "aws_ram_resource_share" "resolver_rules" {
   })
 }
 
-# Associate VPCs with RAM share
+# Associate VPCs with RAM share (optional - requires AWS Organizations)
 resource "aws_ram_principal_association" "resolver_rules" {
-  count = var.enable_route53_resolver ? 1 : 0
+  count = var.enable_route53_resolver && var.enable_ram_sharing ? 1 : 0
 
   principal          = data.aws_caller_identity.current.account_id
   resource_share_arn = aws_ram_resource_share.resolver_rules[0].arn
