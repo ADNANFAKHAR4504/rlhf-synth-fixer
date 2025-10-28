@@ -75,7 +75,6 @@
         "NovaRDSPasswordSecret": {
             "Type": "AWS::SecretsManager::Secret",
             "Properties": {
-                "Name": "nova-prod-database-password",
                 "Description": "Master password for RDS database",
                 "GenerateSecretString": {
                     "SecretStringTemplate": "{\"username\": \"admin\"}",
@@ -131,6 +130,28 @@
                                 "kms:DescribeKey"
                             ],
                             "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow EC2 to use key for EBS encryption",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:CreateGrant",
+                                "kms:Decrypt",
+                                "kms:DescribeKey",
+                                "kms:GenerateDataKey*",
+                                "kms:ReEncrypt*"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "kms:ViaService": {
+                                        "Fn::Sub": "ec2.${AWS::Region}.amazonaws.com"
+                                    }
+                                }
+                            }
                         },
                         {
                             "Sid": "Allow CloudWatch Logs to encrypt logs",
@@ -1047,7 +1068,6 @@
         "NovaEC2InstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "InstanceProfileName": "nova-prod-ec2-instance-profile",
                 "Roles": [
                     {
                         "Ref": "NovaEC2Role"
@@ -1085,6 +1105,9 @@
                             }
                         }
                     ],
+                    "UserData": {
+                        "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\necho \"<h1>Nova Healthcare Portal - Instance $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</h1>\" > /var/www/html/index.html\n# Health check endpoint\necho \"OK\" > /var/www/html/health\n"
+                    },
                     "TagSpecifications": [
                         {
                             "ResourceType": "instance",
@@ -1235,7 +1258,7 @@
                 "HealthCheckEnabled": true,
                 "HealthCheckProtocol": "HTTP",
                 "HealthCheckPort": "80",
-                "HealthCheckPath": "/",
+                "HealthCheckPath": "/health",
                 "Matcher": {
                     "HttpCode": "200-399"
                 },
@@ -1324,9 +1347,6 @@
         "NovaWAFWebACL": {
             "Type": "AWS::WAFv2::WebACL",
             "Properties": {
-                "Name": {
-                    "Fn::Sub": "nova-prod-waf-acl-${AWS::StackName}-${AWS::AccountId}"
-                },
                 "Scope": "REGIONAL",
                 "DefaultAction": {
                     "Allow": {}
@@ -1495,6 +1515,13 @@
                         "Description": "SSH from trusted IP"
                     }
                 ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "All outbound traffic"
+                    }
+                ],
                 "Tags": [
                     {
                         "Key": "Name",
@@ -1507,17 +1534,6 @@
                     {
                         "Key": "iac-rlhf-amazon",
                         "Value": "true"
-                    }
-                ]
-            }
-        },
-        "NovaBastionInstanceProfile": {
-            "Type": "AWS::IAM::InstanceProfile",
-            "Properties": {
-                "InstanceProfileName": "nova-prod-bastion-instance-profile",
-                "Roles": [
-                    {
-                        "Ref": "NovaEC2Role"
                     }
                 ]
             }
@@ -1591,6 +1607,26 @@
                         "Description": "HTTP for redirect/health checks if needed"
                     }
                 ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "DestinationSecurityGroupId": {
+                            "Ref": "NovaApplicationSecurityGroup"
+                        },
+                        "Description": "HTTP to application instances"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 1024,
+                        "ToPort": 65535,
+                        "DestinationSecurityGroupId": {
+                            "Ref": "NovaApplicationSecurityGroup"
+                        },
+                        "Description": "Ephemeral ports for health checks"
+                    }
+                ],
                 "Tags": [
                     {
                         "Key": "Name",
@@ -1615,6 +1651,13 @@
                 "VpcId": {
                     "Ref": "NovaVPC"
                 },
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "All outbound traffic"
+                    }
+                ],
                 "Tags": [
                     {
                         "Key": "Name",
@@ -1742,7 +1785,9 @@
         "NovaRDSInstance": {
             "Type": "AWS::RDS::DBInstance",
             "Properties": {
-                "DBInstanceIdentifier": "nova-prod-patient-database",
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "nova-prod-patient-database-${AWS::Region}"
+                },
                 "AllocatedStorage": 100,
                 "DBInstanceClass": "db.t3.medium",
                 "Engine": "mysql",
@@ -1777,7 +1822,9 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "nova-prod-patient-database"
+                        "Value": {
+                            "Fn::Sub": "nova-prod-patient-database-${AWS::Region}"
+                        }
                     },
                     {
                         "Key": "team",
@@ -1927,7 +1974,6 @@
         "NovaSecurityNotificationsTopic": {
             "Type": "AWS::SNS::Topic",
             "Properties": {
-                "TopicName": "nova-prod-security-alerts",
                 "DisplayName": "Security Alerts for Healthcare Portal",
                 "KmsMasterKeyId": {
                     "Ref": "NovaEncryptionKey"

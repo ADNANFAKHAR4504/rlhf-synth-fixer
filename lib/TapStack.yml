@@ -872,6 +872,10 @@ Resources:
           ToPort: 22
           CidrIp: !Ref TrustedIP
           Description: 'SSH from trusted IP'
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: '0.0.0.0/0'
+          Description: 'All outbound traffic'
       Tags:
         - Key: Name
           Value: 'nova-prod-bastion-sg'
@@ -922,6 +926,17 @@ Resources:
           ToPort: 80
           CidrIp: '0.0.0.0/0'
           Description: 'HTTP for redirect/health checks if needed'
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          DestinationSecurityGroupId: !Ref NovaApplicationSecurityGroup
+          Description: 'HTTP to application instances'
+        - IpProtocol: tcp
+          FromPort: 1024
+          ToPort: 65535
+          DestinationSecurityGroupId: !Ref NovaApplicationSecurityGroup
+          Description: 'Ephemeral ports for health checks'
       Tags:
         - Key: Name
           Value: 'nova-prod-alb-sg'
