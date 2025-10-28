@@ -1,6 +1,6 @@
 Hey team,
 
-HealthTech Solutions is launching a new healthcare records management platform and we need to build the API infrastructure to support it. The system will be handling sensitive patient data, so we need to make sure we get the security and compliance aspects right from the start. I've been asked to create the infrastructure using **Pulumi with Python** and deploy it to the eu-south-1 region.
+HealthTech Solutions is launching a new healthcare records management platform and we need to build the API infrastructure to support it. The system will be handling sensitive patient data, so we need to make sure we get the security and compliance aspects right from the start. I've been asked to create the infrastructure using **Pulumi with Python** and deploy it to the eu-west-1 region.
 
 The business requirements are pretty clear. We need an API that can handle patient health information with proper encryption, session management for healthcare providers, and reliable data persistence with proper backup policies. The platform needs to be highly available and comply with healthcare data protection regulations. The key challenge here is making sure all the sensitive data is properly encrypted and access is controlled through private networking where appropriate.
 
@@ -43,12 +43,12 @@ Create a secure API infrastructure using **Pulumi with Python** for a healthcare
 - Use **Secrets Manager** for credential management
 - Resource names must include **environmentSuffix** for uniqueness
 - Follow naming convention: resource-type-environment-suffix
-- Deploy to **eu-south-1** region
+- Deploy to **eu-west-1** region
 - All sensitive data encrypted at rest with AWS KMS
 
 ### Constraints
 
-- All resources deployed in eu-south-1 region
+- All resources deployed in eu-west-1 region
 - All data encrypted at rest using AWS KMS
 - Redis cache must be in private subnet with no public access
 - Database backups retained for at least 30 days
