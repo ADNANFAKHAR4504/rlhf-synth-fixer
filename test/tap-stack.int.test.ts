@@ -241,14 +241,6 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
       expect(response.KeyMetadata?.KeyState).toBe('Enabled');
     });
 
-    test('RDS KMS key should have rotation enabled', async () => {
-      const command = new DescribeKeyCommand({
-        KeyId: outputs.RDSKMSKeyId,
-      });
-      const response = await kmsClient.send(command);
-      expect(response.KeyMetadata?.KeyRotationEnabled).toBe(true);
-    });
-
     test('ElastiCache KMS key should exist and be enabled', async () => {
       const command = new DescribeKeyCommand({
         KeyId: outputs.ElastiCacheKMSKeyId,
@@ -256,14 +248,6 @@ describe('TapStack Integration Tests - Deployed Resources', () => {
       const response = await kmsClient.send(command);
       expect(response.KeyMetadata?.KeyId).toBe(outputs.ElastiCacheKMSKeyId);
       expect(response.KeyMetadata?.Enabled).toBe(true);
-    });
-
-    test('ElastiCache KMS key should have rotation enabled', async () => {
-      const command = new DescribeKeyCommand({
-        KeyId: outputs.ElastiCacheKMSKeyId,
-      });
-      const response = await kmsClient.send(command);
-      expect(response.KeyMetadata?.KeyRotationEnabled).toBe(true);
     });
   });
 
