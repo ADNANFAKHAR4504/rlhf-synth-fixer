@@ -1,0 +1,31 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "9371603842",
+  "team": "synth",
+  "startedAt": "2025-10-27T21:49:34+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Failure Recovery Automation",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "Amazon VPC",
+    "Amazon ECS (Fargate)",
+    "Amazon ElastiCache (Redis)",
+    "AWS Secrets Manager",
+    "Amazon CloudWatch Logs",
+    "AWS IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

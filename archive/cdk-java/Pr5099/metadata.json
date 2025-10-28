@@ -1,0 +1,21 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "4187",
+  "team": "stf",
+  "startedAt": "2025-10-24T13:46:33.105Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": "Aurora, DynamoDB, ElastiCache, S3, CloudFront, SageMaker, API Gateway, Lambda, KMS, IAM, SNS, VPC, CloudWatch, Application Load Balancer, Auto Scaling",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "okorie-turing",
+  "dockerS3Location": ""
+}

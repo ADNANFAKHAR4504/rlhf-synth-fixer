@@ -15,6 +15,7 @@ node_modules/
 # CDK
 .cdk.staging
 cdk.out/
+cdk.out.test/
 
 # Environment files
 .env
