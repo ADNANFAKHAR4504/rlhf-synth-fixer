@@ -86,7 +86,8 @@ describe('TapStack Integration Tests - Live Resources', () => {
 
       expect(rules.length).toBeGreaterThan(0);
       const highValueRule = rules.find((r: any) => r.Name === `high-value-payments-${environmentSuffix}`);
-      expect(highValueRule).toBeDefined();
+      expect(highValueRule).toBeTruthy();
+      expect(highValueRule.Name).toBe(`high-value-payments-${environmentSuffix}`);
       expect(highValueRule.State).toBe('ENABLED');
       expect(highValueRule.EventBusName).toBe(eventBusName);
     }, 30000);
