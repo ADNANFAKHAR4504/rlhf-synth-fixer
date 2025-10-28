@@ -17,8 +17,8 @@ from lib.tap_stack import TapStack, TapStackProps
 
 app = cdk.App()
 
-# Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
-environment_suffix = app.node.try_get_context('environmentSuffix') or 'dev'
+# Get environment suffix from context (set by CI/CD pipeline) or use 'stage1' as default
+environment_suffix = app.node.try_get_context('environmentSuffix') or 'stage1'
 STACK_NAME = f"TapStack{environment_suffix}"
 
 repository_name = os.getenv('REPOSITORY', 'unknown')

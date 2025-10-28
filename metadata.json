@@ -1,5 +1,5 @@
 {
-  "platform": "CDK",
+  "platform": "cdk",
   "language": "py",
   "complexity": "hard",
   "team": "synth",

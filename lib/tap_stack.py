@@ -81,10 +81,10 @@ class TapStack(Stack):
     ):
         super().__init__(scope, construct_id, **kwargs)
 
-        # Get environment suffix from props, context, or use 'dev' as default
+        # Get environment suffix from props, context, or use 'stage1' as default
         self.environment_suffix = (
             props.environment_suffix if props else None
-        ) or self.node.try_get_context('environmentSuffix') or 'dev'
+        ) or self.node.try_get_context('environmentSuffix') or 'stage1'
 
         # Tag all resources
         Tags.of(self).add('Environment', self.environment_suffix)
@@ -175,6 +175,52 @@ class TapStack(Stack):
         )
 
         key.add_alias(f'alias/fedramp-key-{self.environment_suffix}')
+
+        # Add CloudWatch Logs permissions to the KMS key
+        key.add_to_resource_policy(
+            iam.PolicyStatement(
+                sid="AllowCloudWatchLogs",
+                effect=iam.Effect.ALLOW,
+                principals=[
+                    iam.ServicePrincipal(f"logs.{self.region}.amazonaws.com")
+                ],
+                actions=[
+                    "kms:Encrypt",
+                    "kms:Decrypt", 
+                    "kms:ReEncrypt*",
+                    "kms:GenerateDataKey*",
+                    "kms:DescribeKey"
+                ],
+                resources=["*"],
+                conditions={
+                    "ArnEquals": {
+                        "kms:EncryptionContext:aws:logs:arn": [
+                            f"arn:aws:logs:{self.region}:{self.account}:log-group:/aws/vpc/flowlogs/{self.environment_suffix}",
+                            f"arn:aws:logs:{self.region}:{self.account}:log-group:/aws/lambda/data-processor-{self.environment_suffix}"
+                        ]
+                    }
+                }
+            )
+        )
+
+        # Add CloudTrail permissions to the KMS key
+        key.add_to_resource_policy(
+            iam.PolicyStatement(
+                sid="AllowCloudTrail",
+                effect=iam.Effect.ALLOW,
+                principals=[
+                    iam.ServicePrincipal("cloudtrail.amazonaws.com")
+                ],
+                actions=[
+                    "kms:Encrypt",
+                    "kms:Decrypt",
+                    "kms:ReEncrypt*", 
+                    "kms:GenerateDataKey*",
+                    "kms:DescribeKey"
+                ],
+                resources=["*"]
+            )
+        )
 
         return key
 
@@ -430,7 +476,14 @@ class TapStack(Stack):
 
         config_bucket.grant_write(config_role)
 
-        # Create Config Recorder
+        # Create Delivery Channel first
+        delivery_channel = config.CfnDeliveryChannel(
+            self,
+            f'ConfigDeliveryChannel-{self.environment_suffix}',
+            s3_bucket_name=config_bucket.bucket_name,
+        )
+
+        # Create Config Recorder (depends on delivery channel)
         recorder = config.CfnConfigurationRecorder(
             self,
             f'ConfigRecorder-{self.environment_suffix}',
@@ -441,14 +494,7 @@ class TapStack(Stack):
             ),
         )
 
-        # Create Delivery Channel
-        delivery_channel = config.CfnDeliveryChannel(
-            self,
-            f'ConfigDeliveryChannel-{self.environment_suffix}',
-            s3_bucket_name=config_bucket.bucket_name,
-        )
-
-        delivery_channel.add_dependency(recorder)
+        recorder.add_dependency(delivery_channel)
 
         # Add Config Rules for FedRAMP compliance (depends on recorder)
         self._create_config_rules(recorder)
@@ -690,7 +736,7 @@ def handler(event, context):
             log_group=log_group,
             dead_letter_queue_enabled=True,
             dead_letter_queue=dlq,
-            reserved_concurrent_executions=10,
+            # reserved_concurrent_executions=10,  # Removed due to account concurrency limits
         )
 
         # Grant S3 bucket permission to invoke Lambda
