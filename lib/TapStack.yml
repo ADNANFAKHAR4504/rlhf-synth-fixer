@@ -302,11 +302,13 @@ Resources:
       DBName: mediadb
       MasterUsername: !If 
         - UseRDSSecrets
-        - !Sub '{{resolve:secretsmanager:media-db-credentials-${EnvironmentSuffix}:SecretString:username}}' # cfn-lint-disable W1011
+        # cfn-lint-disable-next-line W1011
+        - !Sub '{{resolve:secretsmanager:media-db-credentials-${EnvironmentSuffix}:SecretString:username}}'
         - !Ref DefaultDBUsername
       MasterUserPassword: !If 
         - UseRDSSecrets
-        - !Sub '{{resolve:secretsmanager:media-db-credentials-${EnvironmentSuffix}:SecretString:password}}' # cfn-lint-disable W1011
+        # cfn-lint-disable-next-line W1011
+        - !Sub '{{resolve:secretsmanager:media-db-credentials-${EnvironmentSuffix}:SecretString:password}}'
         - !Ref DefaultDBPassword
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
@@ -384,7 +386,8 @@ Resources:
       TransitEncryptionEnabled: !Ref EnableRedisAuth
       AuthToken: !If 
         - UseRedisAuth
-        - !Sub '{{resolve:secretsmanager:media-redis-auth-${EnvironmentSuffix}}}' # cfn-lint-disable W1011
+        # cfn-lint-disable-next-line W1011
+        - !Sub '{{resolve:secretsmanager:media-redis-auth-${EnvironmentSuffix}}}'
         - !Ref AWS::NoValue
       SecurityGroupIds:
         - !Ref ElastiCacheSecurityGroup
