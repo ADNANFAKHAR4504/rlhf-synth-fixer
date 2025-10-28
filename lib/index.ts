@@ -166,3 +166,100 @@ export function validateOutputExports(template: any): boolean {
     return template.Outputs[outputKey].Export !== undefined;
   });
 }
+
+/**
+ * Gets all CloudTrail resources configured in the template
+ * @param template The CloudFormation template
+ * @returns Object with CloudTrail resource details
+ */
+export function getCloudTrailResources(template: any): {
+  trail: any;
+  bucket: any;
+  logGroup: any;
+  metricFilters: string[];
+} {
+  const trail = template.Resources.HIPAACloudTrail || null;
+  const bucket = template.Resources.CloudTrailBucket || null;
+  const logGroup = template.Resources.CloudTrailLogGroup || null;
+
+  const metricFilters: string[] = [];
+  Object.keys(template.Resources).forEach(resourceName => {
+    const resource = template.Resources[resourceName];
+    if (resource.Type === 'AWS::Logs::MetricFilter') {
+      metricFilters.push(resourceName);
+    }
+  });
+
+  return {
+    trail,
+    bucket,
+    logGroup,
+    metricFilters
+  };
+}
+
+/**
+ * Validates CloudTrail configuration for HIPAA compliance
+ * @param template The CloudFormation template
+ * @returns Object with validation results
+ */
+export function validateCloudTrailCompliance(template: any): {
+  hasTrail: boolean;
+  isMultiRegion: boolean;
+  hasLogFileValidation: boolean;
+  hasEncryptedBucket: boolean;
+  hasCloudWatchIntegration: boolean;
+} {
+  const trail = template.Resources.HIPAACloudTrail;
+  const bucket = template.Resources.CloudTrailBucket;
+
+  if (!trail || !bucket) {
+    return {
+      hasTrail: false,
+      isMultiRegion: false,
+      hasLogFileValidation: false,
+      hasEncryptedBucket: false,
+      hasCloudWatchIntegration: false
+    };
+  }
+
+  const isMultiRegion = trail.Properties?.IsMultiRegionTrail === true;
+  const hasLogFileValidation = trail.Properties?.EnableLogFileValidation === true;
+  const hasEncryptedBucket = bucket.Properties?.BucketEncryption !== undefined;
+  const hasCloudWatchIntegration = trail.Properties?.CloudWatchLogsLogGroupArn !== undefined;
+
+  return {
+    hasTrail: true,
+    isMultiRegion,
+    hasLogFileValidation,
+    hasEncryptedBucket,
+    hasCloudWatchIntegration
+  };
+}
+
+/**
+ * Gets all metric filters configured for security monitoring
+ * @param template The CloudFormation template
+ * @returns Array of metric filter configurations
+ */
+export function getMetricFilters(template: any): Array<{
+  name: string;
+  metricName: string;
+  filterPattern: string;
+}> {
+  const filters: Array<{name: string; metricName: string; filterPattern: string}> = [];
+
+  Object.keys(template.Resources).forEach(resourceName => {
+    const resource = template.Resources[resourceName];
+
+    if (resource.Type === 'AWS::Logs::MetricFilter') {
+      filters.push({
+        name: resourceName,
+        metricName: resource.Properties.MetricTransformations[0].MetricName,
+        filterPattern: resource.Properties.FilterPattern
+      });
+    }
+  });
+
+  return filters;
+}

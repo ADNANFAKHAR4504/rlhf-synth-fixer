@@ -9,6 +9,7 @@ This CloudFormation template deploys a comprehensive monitoring and compliance i
 - **KMS Encryption**: Customer-managed KMS key with automatic rotation for all data encryption
 - **CloudWatch Log Groups**: Three separate log groups for patient data, security events, and audit trails with appropriate retention periods
 - **SNS Alerting**: Encrypted SNS topic for compliance and security alerts with email subscriptions
+- **CloudTrail Integration**: Multi-region trail with S3 storage, CloudWatch Logs integration, and metric filters for security event monitoring
 - **CloudWatch Alarms**: Real-time monitoring for unauthorized access, KMS key status, security group changes, and IAM policy modifications
 - **IAM Monitoring Role**: Least-privilege IAM role and policy for monitoring services
 
@@ -717,6 +718,41 @@ All resources are tagged with:
 - `Compliance`: "HIPAA"
 - Additional tags specific to resource type (Purpose, DataClassification, LogType, Severity)
 
+## Production Recommendations
+
+Before deploying to production, consider the following recommendations:
+
+### 1. Alert Email Configuration
+**Current**: Uses a default placeholder email (`security@example.com`)
+**Recommendation**: Update the `AlertEmail` parameter with your actual security team email address or distribution list. This ensures compliance and security alerts reach the appropriate team members immediately.
+
+```bash
+AlertEmail=hipaa-security-team@yourcompany.com
+```
+
+### 2. CloudTrail Integration
+**Current**: Alarms rely on CloudTrailMetrics namespace but CloudTrail is not configured in the template
+**Recommendation**: The template includes a comprehensive CloudTrail configuration with:
+- S3 bucket for long-term audit log storage with encryption and versioning
+- CloudWatch Logs integration for real-time monitoring
+- Metric filters for security events (unauthorized access, KMS changes, security group modifications, IAM policy changes)
+- Multi-region trail support for complete audit coverage
+- Event selectors for management and data events
+
+This integration enables the CloudWatch alarms to function properly by feeding CloudTrail events to CloudWatch Logs and creating metrics.
+
+### 3. Log Retention Review
+**Current Configuration**:
+- Patient Data Logs: 90 days
+- Security Logs: 365 days (1 year)
+- Audit Logs: 2557 days (7 years)
+
+**Recommendation**: Review these retention periods based on your organization's specific requirements:
+- HIPAA minimum requirement is 6 years (2191 days) for audit logs
+- Current configuration exceeds minimum requirements
+- Consider your organization's policies and potential state-specific requirements
+- CloudTrail logs in S3 provide additional long-term audit storage
+
 ## Deployment
 
 Deploy using AWS CLI:
@@ -727,7 +763,7 @@ aws cloudformation deploy \
   --stack-name TapStack${ENVIRONMENT_SUFFIX} \
   --parameter-overrides \
     environmentSuffix=${ENVIRONMENT_SUFFIX} \
-    AlertEmail=security@example.com \
+    AlertEmail=hipaa-security-team@yourcompany.com \
   --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
   --region eu-west-2
 ```

@@ -489,14 +489,91 @@ describe('HIPAA Compliant Healthcare Monitoring Infrastructure Template', () => 
       expect(lib.validateOutputExports(template)).toBe(true);
     });
 
-    test('template should have exactly 13 resources', () => {
+    test('template should have exactly 22 resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(13);
+      expect(resourceCount).toBe(22);
     });
 
-    test('template should have exactly 7 outputs', () => {
+    test('template should have exactly 10 outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(7);
+      expect(outputCount).toBe(10);
+    });
+  });
+
+  describe('CloudTrail Integration', () => {
+    test('should have CloudTrail resources configured', () => {
+      const cloudtrailResources = lib.getCloudTrailResources(template);
+
+      expect(cloudtrailResources.trail).toBeDefined();
+      expect(cloudtrailResources.bucket).toBeDefined();
+      expect(cloudtrailResources.logGroup).toBeDefined();
+      expect(cloudtrailResources.metricFilters.length).toBe(4);
+    });
+
+    test('should validate CloudTrail compliance configuration', () => {
+      const validation = lib.validateCloudTrailCompliance(template);
+
+      expect(validation.hasTrail).toBe(true);
+      expect(validation.isMultiRegion).toBe(true);
+      expect(validation.hasLogFileValidation).toBe(true);
+      expect(validation.hasEncryptedBucket).toBe(true);
+      expect(validation.hasCloudWatchIntegration).toBe(true);
+    });
+
+    test('should have all required metric filters', () => {
+      const filters = lib.getMetricFilters(template);
+
+      expect(filters.length).toBe(4);
+
+      const filterNames = filters.map(f => f.metricName);
+      expect(filterNames).toContain('UnauthorizedAPICallsEventCount');
+      expect(filterNames).toContain('DisableOrScheduleKeyDeletionEventCount');
+      expect(filterNames).toContain('SecurityGroupEventCount');
+      expect(filterNames).toContain('IAMPolicyEventCount');
+    });
+
+    test('should have CloudTrail bucket with encryption', () => {
+      const bucket = template.Resources.CloudTrailBucket;
+
+      expect(bucket).toBeDefined();
+      expect(bucket.Type).toBe('AWS::S3::Bucket');
+      expect(bucket.Properties.BucketEncryption).toBeDefined();
+      expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+    });
+
+    test('should have CloudTrail bucket with lifecycle policy', () => {
+      const bucket = template.Resources.CloudTrailBucket;
+
+      expect(bucket.Properties.LifecycleConfiguration).toBeDefined();
+      expect(bucket.Properties.LifecycleConfiguration.Rules.length).toBeGreaterThan(0);
+
+      const rule = bucket.Properties.LifecycleConfiguration.Rules[0];
+      expect(rule.Status).toBe('Enabled');
+      expect(rule.ExpirationInDays).toBe(2557);
+    });
+
+    test('should have CloudTrail log group with encryption', () => {
+      const logGroup = template.Resources.CloudTrailLogGroup;
+
+      expect(logGroup).toBeDefined();
+      expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
+      expect(logGroup.Properties.KmsKeyId).toBeDefined();
+      expect(logGroup.Properties.RetentionInDays).toBe(365);
+    });
+
+    test('should have CloudTrail with multi-region support', () => {
+      const trail = template.Resources.HIPAACloudTrail;
+
+      expect(trail).toBeDefined();
+      expect(trail.Type).toBe('AWS::CloudTrail::Trail');
+      expect(trail.Properties.IsMultiRegionTrail).toBe(true);
+      expect(trail.Properties.EnableLogFileValidation).toBe(true);
+    });
+
+    test('should have CloudTrail outputs', () => {
+      expect(template.Outputs.CloudTrailName).toBeDefined();
+      expect(template.Outputs.CloudTrailBucketName).toBeDefined();
+      expect(template.Outputs.CloudTrailLogGroupName).toBeDefined();
     });
   });
 });

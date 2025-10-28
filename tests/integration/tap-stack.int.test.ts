@@ -394,22 +394,22 @@ describe('HIPAA-Compliant Monitoring Infrastructure Integration Tests', () => {
   });
 
   describe('Compliance and Security Requirements', () => {
-    test('should have exactly 13 resources in template', () => {
+    test('should have exactly 22 resources in template', () => {
       const templatePath = path.join(__dirname, '..', '..', 'lib', 'TapStack.json');
       const templateContent = fs.readFileSync(templatePath, 'utf8');
       const template = JSON.parse(templateContent);
 
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(13);
+      expect(resourceCount).toBe(22);
     });
 
-    test('should have exactly 7 outputs in template', () => {
+    test('should have exactly 10 outputs in template', () => {
       const templatePath = path.join(__dirname, '..', '..', 'lib', 'TapStack.json');
       const templateContent = fs.readFileSync(templatePath, 'utf8');
       const template = JSON.parse(templateContent);
 
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(7);
+      expect(outputCount).toBe(10);
     });
 
     test('should verify no resources have Retain deletion policy', () => {
