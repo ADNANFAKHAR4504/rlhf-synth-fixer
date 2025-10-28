@@ -319,7 +319,7 @@ Resources:
   VPCFlowLogsLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/vpc/vpcflowloggroup/${EnvironmentSuffix}'
+      LogGroupName: !Sub '/aws/vpc/flowlogsgroup/${EnvironmentSuffix}'
       RetentionInDays: 7
 
   VPCFlowLog:
