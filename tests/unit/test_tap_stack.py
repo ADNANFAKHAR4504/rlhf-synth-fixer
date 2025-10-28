@@ -6,12 +6,36 @@ and Pulumi's testing utilities.
 """
 
 import unittest
+import os
 from unittest.mock import patch, MagicMock
 import pulumi
 from pulumi import ResourceOptions
 
 # Import the classes we're testing
 from lib.tap_stack import TapStack, TapStackArgs
+
+
+def get_current_aws_region():
+    """Get the current AWS region from environment or Pulumi config."""
+    # First try environment variable
+    region = os.getenv("AWS_REGION")
+    if region:
+        return region
+    
+    # Try to get from Pulumi config
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["pulumi", "config", "get", "aws:region"],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except Exception:
+        pass
+    
+    # Default fallback
+    return "us-west-1"
 
 
 class TestPulumiMocks(pulumi.runtime.Mocks):
@@ -21,19 +45,22 @@ class TestPulumiMocks(pulumi.runtime.Mocks):
         """Mock resource creation."""
         outputs = args.inputs.copy()
         
+        # Get dynamic AWS region
+        aws_region = get_current_aws_region()
+        
         # Add specific mock outputs for different resource types
         if args.typ == "aws:rds/instance:Instance":
             outputs.update({
-                "endpoint": "healthcare-db-test.abcdef123456.eu-south-1.rds.amazonaws.com:5432",
-                "address": "healthcare-db-test.abcdef123456.eu-south-1.rds.amazonaws.com",
+                "endpoint": f"healthcare-db-test.abcdef123456.{aws_region}.rds.amazonaws.com:5432",
+                "address": f"healthcare-db-test.abcdef123456.{aws_region}.rds.amazonaws.com",
                 "port": 5432,
-                "arn": f"arn:aws:rds:eu-south-1:123456789012:db:{args.inputs.get('identifier', 'test-db')}"
+                "arn": f"arn:aws:rds:{aws_region}:123456789012:db:{args.inputs.get('identifier', 'test-db')}"
             })
         elif args.typ == "aws:elasticache/replicationGroup:ReplicationGroup":
             outputs.update({
                 "configuration_endpoint_address": "healthcare-redis-test.abcdef.0001.cache.amazonaws.com",
                 "port": 6379,
-                "arn": "arn:aws:elasticache:eu-south-1:123456789012:cluster:healthcare-redis-test"
+                "arn": f"arn:aws:elasticache:{aws_region}:123456789012:cluster:healthcare-redis-test"
             })
         elif args.typ == "aws:apigateway/restApi:RestApi":
             outputs.update({
@@ -43,7 +70,7 @@ class TestPulumiMocks(pulumi.runtime.Mocks):
         elif args.typ == "aws:kms/key:Key":
             outputs.update({
                 "key_id": "12345678-1234-1234-1234-123456789012",
-                "arn": "arn:aws:kms:eu-south-1:123456789012:key/12345678-1234-1234-1234-123456789012"
+                "arn": f"arn:aws:kms:{aws_region}:123456789012:key/12345678-1234-1234-1234-123456789012"
             })
         elif args.typ == "aws:ec2/vpc:Vpc":
             outputs.update({"id": "vpc-12345678"})
@@ -61,7 +88,7 @@ class TestPulumiMocks(pulumi.runtime.Mocks):
             outputs.update({"id": f"sg-{args.name}"})
         elif args.typ == "aws:secretsmanager/secret:Secret":
             outputs.update({
-                "arn": f"arn:aws:secretsmanager:eu-south-1:123456789012:secret:{args.name}",
+                "arn": f"arn:aws:secretsmanager:{aws_region}:123456789012:secret:{args.name}",
                 "id": f"secret-{args.name}"
             })
         elif args.typ == "aws:elasticache/subnetGroup:SubnetGroup":
@@ -75,9 +102,9 @@ class TestPulumiMocks(pulumi.runtime.Mocks):
         elif args.typ == "aws:apigateway/integration:Integration":
             outputs.update({"id": f"integration-{args.name}"})
         elif args.typ == "aws:apigateway/deployment:Deployment":
-            outputs.update({"id": f"deployment-{args.name}", "invoke_url": "https://test-api.execute-api.eu-south-1.amazonaws.com/"})
+            outputs.update({"id": f"deployment-{args.name}", "invoke_url": f"https://test-api.execute-api.{aws_region}.amazonaws.com/"})
         elif args.typ == "aws:apigateway/stage:Stage":
-            outputs.update({"id": f"stage-{args.name}", "invoke_url": "https://test-api.execute-api.eu-south-1.amazonaws.com/test"})
+            outputs.update({"id": f"stage-{args.name}", "invoke_url": f"https://test-api.execute-api.{aws_region}.amazonaws.com/test"})
         else:
             outputs.update({"id": f"mock-{args.name}"})
 
@@ -164,7 +191,7 @@ class TestTapStack(unittest.TestCase):
         stack = TapStack("dev-stack", args)
         
         # Verify default region is used
-        self.assertEqual(stack.region, "eu-south-1")
+        self.assertEqual(stack.region, "us-west-1")
 
     @patch('pulumi.Config')
     def test_kms_key_creation(self, mock_config):
@@ -334,7 +361,7 @@ class TestTapStack(unittest.TestCase):
             args = TapStackArgs(environment_suffix="region-test")
             stack = TapStack("region-test-stack", args)
             
-            expected_region = region if region is not None else "eu-south-1"
+            expected_region = region if region is not None else "us-west-1"
             self.assertEqual(stack.region, expected_region)
 
 

@@ -13,11 +13,37 @@ import requests
 from botocore.exceptions import ClientError
 
 
+def get_current_aws_region():
+    """Get the current AWS region from environment or Pulumi config."""
+    # First try environment variable
+    region = os.getenv("AWS_REGION")
+    if region:
+        return region
+    
+    # Try to get from Pulumi config
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["pulumi", "config", "get", "aws:region"],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except Exception:
+        pass
+    
+    # Default fallback
+    return "us-west-1"
+
+
 class TestTapStackLiveIntegration(unittest.TestCase):
     """Integration tests against live deployed Pulumi stack."""
 
     def setUp(self):
         """Set up integration test with live stack outputs."""
+        # Get the current AWS region dynamically
+        self.aws_region = get_current_aws_region()
+        
         # Load stack outputs
         outputs_file = "pulumi-outputs.json"
         if os.path.exists(outputs_file):
@@ -26,12 +52,12 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         else:
             self.outputs = {}
 
-        # Initialize AWS clients
-        self.ec2_client = boto3.client('ec2', region_name='us-east-1')
-        self.rds_client = boto3.client('rds', region_name='us-east-1')
-        self.kms_client = boto3.client('kms', region_name='us-east-1')
-        self.apigateway_client = boto3.client('apigateway', region_name='us-east-1')
-        self.secrets_client = boto3.client('secretsmanager', region_name='us-east-1')
+        # Initialize AWS clients with dynamic region
+        self.ec2_client = boto3.client('ec2', region_name=self.aws_region)
+        self.rds_client = boto3.client('rds', region_name=self.aws_region)
+        self.kms_client = boto3.client('kms', region_name=self.aws_region)
+        self.apigateway_client = boto3.client('apigateway', region_name=self.aws_region)
+        self.secrets_client = boto3.client('secretsmanager', region_name=self.aws_region)
 
     def test_vpc_exists_and_configured(self):
         """Test that VPC exists and is properly configured."""
