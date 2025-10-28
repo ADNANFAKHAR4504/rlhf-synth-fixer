@@ -107,7 +107,7 @@ resource "random_password" "db_password" {
 
 ```
 
-4. Medium Failure: wrong paramegter used with the RDS
+4. Critical Failure: wrong paramegter used with the RDS
 
 occurs because you are trying to use the apply_immediately = true setting with a parameter in the DB parameter group that is static. Static parameters require a database reboot to take effect, and cannot be applied immediately.
 

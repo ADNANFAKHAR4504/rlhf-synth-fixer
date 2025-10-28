@@ -561,75 +561,6 @@ resource "aws_db_subnet_group" "secondary" {
   })
 }
 
-# ============================================================================
-# RDS PARAMETER GROUPS
-# ============================================================================
-
-# DB Parameter Group - Primary
-resource "aws_db_parameter_group" "primary" {
-  provider    = aws.us_east_1
-  name        = "pg-primary-${local.resource_suffix}"
-  family      = "postgres17"
-  description = "PostgreSQL parameter group for primary database"
-  
-  parameter {
-    name  = "log_connections"
-    value = "1"
-  }
-  
-  parameter {
-    name  = "log_disconnections"
-    value = "1"
-  }
-  
-  parameter {
-    name  = "log_duration"
-    value = "1"
-  }
-  
-  parameter {
-    name  = "shared_preload_libraries"
-    value = "pg_stat_statements"
-  }
-  
-  tags = merge(local.primary_tags, {
-    Name = "pg-primary-${local.resource_suffix}"
-  })
-}
-
-# DB Parameter Group - Secondary
-resource "aws_db_parameter_group" "secondary" {
-  provider    = aws.us_west_2
-  name        = "pg-secondary-${local.resource_suffix}"
-  family      = "postgres17"
-  description = "PostgreSQL parameter group for secondary database"
-  
-  parameter {
-    name  = "log_connections"
-    value = "1"
-  }
-  
-  parameter {
-    name  = "log_disconnections"
-    value = "1"
-  }
-  
-  parameter {
-    name  = "log_duration"
-    value = "1"
-  }
-  
-  parameter {
-    name  = "shared_preload_libraries"
-    value = "pg_stat_statements"
-  }
-  
-  tags = merge(local.secondary_tags, {
-    Name = "pg-secondary-${local.resource_suffix}"
-  })
-}
-
-# ============================================================================
 # RDS INSTANCES
 # ============================================================================
 
@@ -646,7 +577,7 @@ resource "aws_db_instance" "primary" {
   db_name                 = "financedb"
   username                = var.db_username
   password                = random_password.db_password.result
-  parameter_group_name    = aws_db_parameter_group.primary.name
+  parameter_group_name    = "default.postgres17"
   db_subnet_group_name    = aws_db_subnet_group.primary.name
   vpc_security_group_ids  = [aws_security_group.rds_primary.id]
   
