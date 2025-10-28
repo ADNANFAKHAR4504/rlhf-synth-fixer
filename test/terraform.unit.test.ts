@@ -296,23 +296,17 @@ describe('Terraform Aurora Serverless Infrastructure - Unit Tests', () => {
       autoscalingContent = fs.readFileSync(path.join(LIB_DIR, 'autoscaling.tf'), 'utf8');
     });
 
-    test('Auto-scaling target exists', () => {
-      expect(autoscalingContent).toMatch(/resource\s+"aws_appautoscaling_target"\s+"aurora_serverless"/);
+    test('Aurora Serverless v2 scaling is documented', () => {
+      // Aurora Serverless v2 scales automatically, no Application Auto Scaling needed
+      expect(autoscalingContent).toMatch(/Aurora Serverless v2/i);
+      expect(autoscalingContent).toMatch(/serverlessv2_scaling_configuration/i);
     });
 
-    test('CPU-based scaling policy exists', () => {
-      expect(autoscalingContent).toMatch(/resource\s+"aws_appautoscaling_policy"\s+"aurora_cpu"/);
-      expect(autoscalingContent).toContain('RDSReaderAverageCPUUtilization');
-    });
-
-    test('Connection-based scaling policy exists', () => {
-      expect(autoscalingContent).toMatch(/resource\s+"aws_appautoscaling_policy"\s+"aurora_connections"/);
-      expect(autoscalingContent).toContain('RDSReaderAverageDatabaseConnections');
-    });
-
-    test('Scheduled scaling actions exist', () => {
-      expect(autoscalingContent).toMatch(/resource\s+"aws_appautoscaling_scheduled_action"\s+"scale_up_peak"/);
-      expect(autoscalingContent).toMatch(/resource\s+"aws_appautoscaling_scheduled_action"\s+"scale_down_offpeak"/);
+    test('scaling configuration uses min and max capacity variables', () => {
+      const mainContent = fs.readFileSync(path.join(LIB_DIR, 'main.tf'), 'utf8');
+      expect(mainContent).toMatch(/serverlessv2_scaling_configuration/);
+      expect(mainContent).toMatch(/min_capacity\s*=\s*var\.aurora_min_capacity/);
+      expect(mainContent).toMatch(/max_capacity\s*=\s*var\.aurora_max_capacity/);
     });
   });
 
