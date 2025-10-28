@@ -10,5 +10,12 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "VPC, EC2, RDS, S3, Application Load Balancer, IAM, ACM, CloudWatch, Auto Scaling"
+  "aws_services": "VPC, EC2, RDS, S3, Application Load Balancer, IAM, ACM, CloudWatch, Auto Scaling",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Chandan-devs-tech",
+  "dockerS3Location": ""
 }
