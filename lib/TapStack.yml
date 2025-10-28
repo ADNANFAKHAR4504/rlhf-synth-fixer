@@ -594,7 +594,7 @@ Resources:
   NovaAppLaunchTemplate:
     Type: 'AWS::EC2::LaunchTemplate'
     Properties:
-      LaunchTemplateName: 'nova-prod-app-lt'
+      LaunchTemplateName: !Sub 'nova-prod-app-lt-${AWS::Region}'
       LaunchTemplateData:
         IamInstanceProfile:
           Name: !Ref NovaEC2InstanceProfile
@@ -670,7 +670,7 @@ Resources:
   NovaApplicationLoadBalancer:
     Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
     Properties:
-      Name: 'nova-prod-alb'
+      Name: !Sub 'nova-prod-alb-${AWS::Region}'
       Type: application
       Scheme: internet-facing
       SecurityGroups:
@@ -696,7 +696,7 @@ Resources:
   NovaALBTargetGroup:
     Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
     Properties:
-      Name: 'nova-prod-app-tg'
+      Name: !Sub 'nova-prod-app-tg-${AWS::Region}'
       TargetType: instance
       Protocol: HTTP
       Port: 80
@@ -807,7 +807,7 @@ Resources:
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
-        MetricName: 'nova-prod-waf-metric'
+        MetricName: !Sub 'nova-prod-waf-metric-${AWS::Region}'
       Tags:
         - Key: Name
           Value: 'nova-prod-waf-acl'
@@ -868,7 +868,7 @@ Resources:
   NovaBastionSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupName: 'nova-prod-bastion-sg'
+      GroupName: !Sub 'nova-prod-bastion-sg-${AWS::Region}'
       GroupDescription: 'Security group for bastion host - SSH from trusted IP only'
       VpcId: !Ref NovaVPC
       SecurityGroupIngress:
@@ -916,7 +916,7 @@ Resources:
   NovaALBSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupName: 'nova-prod-alb-sg'
+      GroupName: !Sub 'nova-prod-alb-sg-${AWS::Region}'
       GroupDescription: 'Security group for Application Load Balancer'
       VpcId: !Ref NovaVPC
       SecurityGroupIngress:
@@ -952,7 +952,7 @@ Resources:
   NovaApplicationSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupName: 'nova-prod-application-sg'
+      GroupName: !Sub 'nova-prod-application-sg-${AWS::Region}'
       GroupDescription: 'Security group for application instances'
       VpcId: !Ref NovaVPC
       SecurityGroupEgress:
@@ -1000,7 +1000,7 @@ Resources:
   NovaDatabaseSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupName: 'nova-prod-database-sg'
+      GroupName: !Sub 'nova-prod-database-sg-${AWS::Region}'
       GroupDescription: 'Security group for RDS database'
       VpcId: !Ref NovaVPC
       SecurityGroupIngress:
@@ -1164,7 +1164,7 @@ Resources:
     Type: 'AWS::CloudTrail::Trail'
     DependsOn: NovaCloudTrailBucketPolicy
     Properties:
-      TrailName: 'nova-prod-cloudtrail'
+      TrailName: !Sub 'nova-prod-cloudtrail-${AWS::Region}'
       S3BucketName: !Ref NovaCloudTrailBucket
       S3KeyPrefix: 'cloudtrail-logs'
       IncludeGlobalServiceEvents: true
