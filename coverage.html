@@ -1,0 +1,653 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>lib: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/TuringGpt/iac-test-automations/lib/tap_stack.go (98.4%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">no coverage</span>
+				<span class="cov1">low coverage</span>
+				<span class="cov2">*</span>
+				<span class="cov3">*</span>
+				<span class="cov4">*</span>
+				<span class="cov5">*</span>
+				<span class="cov6">*</span>
+				<span class="cov7">*</span>
+				<span class="cov8">*</span>
+				<span class="cov9">*</span>
+				<span class="cov10">high coverage</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package lib
+
+import (
+        "fmt"
+
+        "github.com/aws/aws-cdk-go/awscdk/v2"
+        "github.com/aws/aws-cdk-go/awscdk/v2/awsapigateway"
+        "github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
+        "github.com/aws/aws-cdk-go/awscdk/v2/awsecs"
+        "github.com/aws/aws-cdk-go/awscdk/v2/awsefs"
+        "github.com/aws/aws-cdk-go/awscdk/v2/awselasticache"
+        "github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
+        "github.com/aws/aws-cdk-go/awscdk/v2/awskinesis"
+        "github.com/aws/aws-cdk-go/awscdk/v2/awskms"
+        "github.com/aws/aws-cdk-go/awscdk/v2/awslogs"
+        "github.com/aws/aws-cdk-go/awscdk/v2/awsrds"
+        "github.com/aws/aws-cdk-go/awscdk/v2/awssecretsmanager"
+        "github.com/aws/constructs-go/constructs/v10"
+        "github.com/aws/jsii-runtime-go"
+)
+
+// TapStackProps defines the properties for the TapStack CDK stack.
+//
+// This struct extends the base awscdk.StackProps with additional
+// environment-specific configuration options.
+type TapStackProps struct {
+        *awscdk.StackProps
+        // EnvironmentSuffix is an optional suffix to identify the
+        // deployment environment (e.g., 'dev', 'prod').
+        EnvironmentSuffix *string
+}
+
+// TapStack represents the main CDK stack for the StreamSecure media processing platform.
+//
+// This stack creates a complete, production-ready secure media processing infrastructure
+// with all required AWS services properly configured with encryption, multi-AZ deployment,
+// and security best practices.
+type TapStack struct {
+        awscdk.Stack
+        // EnvironmentSuffix stores the environment suffix used for resource naming and configuration.
+        EnvironmentSuffix *string
+}
+
+// NewTapStack creates a new instance of TapStack with complete infrastructure.
+//
+// Args:
+//
+//        scope: The parent construct.
+//        id: The unique identifier for this stack.
+//        props: Optional properties for configuring the stack, including environment suffix.
+//
+// Returns:
+//
+//        A new TapStack instance with all required infrastructure components.
+func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *TapStack <span class="cov8" title="16">{
+        var sprops awscdk.StackProps
+        if props != nil </span><span class="cov8" title="16">{
+                sprops = *props.StackProps
+        }</span>
+        <span class="cov8" title="16">stack := awscdk.NewStack(scope, id, &amp;sprops)
+
+        // Get environment suffix from props, context, or use 'dev' as default
+        var environmentSuffix string
+        if props != nil &amp;&amp; props.EnvironmentSuffix != nil </span><span class="cov8" title="15">{
+                environmentSuffix = *props.EnvironmentSuffix
+        }</span> else<span class="cov1" title="1"> if suffix := stack.Node().TryGetContext(jsii.String("environmentSuffix")); suffix != nil </span><span class="cov0" title="0">{
+                environmentSuffix = *suffix.(*string)
+        }</span> else<span class="cov1" title="1"> {
+                environmentSuffix = "dev"
+        }</span>
+
+        // =====================================================================
+        // ENCRYPTION KEYS - Customer-managed KMS keys with automatic rotation
+        // =====================================================================
+
+        // KMS key for RDS encryption
+        <span class="cov8" title="16">rdsKey := awskms.NewKey(stack, jsii.String("RDSEncryptionKey"), &amp;awskms.KeyProps{
+                Description:       jsii.String(fmt.Sprintf("KMS key for RDS Aurora encryption - %s", environmentSuffix)),
+                EnableKeyRotation: jsii.Bool(true),
+                RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
+                Alias:             jsii.String(fmt.Sprintf("alias/streamsecure-rds-%s", environmentSuffix)),
+        })
+
+        // KMS key for EFS encryption
+        efsKey := awskms.NewKey(stack, jsii.String("EFSEncryptionKey"), &amp;awskms.KeyProps{
+                Description:       jsii.String(fmt.Sprintf("KMS key for EFS encryption - %s", environmentSuffix)),
+                EnableKeyRotation: jsii.Bool(true),
+                RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
+                Alias:             jsii.String(fmt.Sprintf("alias/streamsecure-efs-%s", environmentSuffix)),
+        })
+
+        // KMS key for Secrets Manager encryption
+        secretsKey := awskms.NewKey(stack, jsii.String("SecretsEncryptionKey"), &amp;awskms.KeyProps{
+                Description:       jsii.String(fmt.Sprintf("KMS key for Secrets Manager encryption - %s", environmentSuffix)),
+                EnableKeyRotation: jsii.Bool(true),
+                RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
+                Alias:             jsii.String(fmt.Sprintf("alias/streamsecure-secrets-%s", environmentSuffix)),
+        })
+
+        // KMS key for Kinesis encryption
+        kinesisKey := awskms.NewKey(stack, jsii.String("KinesisEncryptionKey"), &amp;awskms.KeyProps{
+                Description:       jsii.String(fmt.Sprintf("KMS key for Kinesis encryption - %s", environmentSuffix)),
+                EnableKeyRotation: jsii.Bool(true),
+                RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
+                Alias:             jsii.String(fmt.Sprintf("alias/streamsecure-kinesis-%s", environmentSuffix)),
+        })
+
+        // =====================================================================
+        // VPC AND NETWORKING - Multi-AZ VPC with public and private subnets
+        // =====================================================================
+
+        // Create VPC with proper subnet configuration
+        vpc := awsec2.NewVpc(stack, jsii.String("StreamSecureVPC"), &amp;awsec2.VpcProps{
+                VpcName:     jsii.String(fmt.Sprintf("streamsecure-vpc-%s", environmentSuffix)),
+                MaxAzs:      jsii.Number(2),
+                NatGateways: jsii.Number(2), // One NAT Gateway per AZ for high availability
+                SubnetConfiguration: &amp;[]*awsec2.SubnetConfiguration{
+                        {
+                                Name:       jsii.String("Public"),
+                                SubnetType: awsec2.SubnetType_PUBLIC,
+                                CidrMask:   jsii.Number(24),
+                        },
+                        {
+                                Name:       jsii.String("Private"),
+                                SubnetType: awsec2.SubnetType_PRIVATE_WITH_EGRESS,
+                                CidrMask:   jsii.Number(24),
+                        },
+                },
+        })
+
+        // =====================================================================
+        // SECURITY GROUPS - Least privilege access controls
+        // =====================================================================
+
+        // Security group for ECS tasks
+        ecsSecurityGroup := awsec2.NewSecurityGroup(stack, jsii.String("ECSSecurityGroup"), &amp;awsec2.SecurityGroupProps{
+                Vpc:               vpc,
+                Description:       jsii.String("Security group for ECS tasks"),
+                SecurityGroupName: jsii.String(fmt.Sprintf("streamsecure-ecs-sg-%s", environmentSuffix)),
+                AllowAllOutbound:  jsii.Bool(true),
+        })
+
+        // Security group for RDS
+        rdsSecurityGroup := awsec2.NewSecurityGroup(stack, jsii.String("RDSSecurityGroup"), &amp;awsec2.SecurityGroupProps{
+                Vpc:               vpc,
+                Description:       jsii.String("Security group for RDS Aurora cluster"),
+                SecurityGroupName: jsii.String(fmt.Sprintf("streamsecure-rds-sg-%s", environmentSuffix)),
+                AllowAllOutbound:  jsii.Bool(false),
+        })
+
+        // Allow ECS tasks to connect to RDS on PostgreSQL port
+        rdsSecurityGroup.AddIngressRule(
+                ecsSecurityGroup,
+                awsec2.Port_Tcp(jsii.Number(5432)),
+                jsii.String("Allow PostgreSQL access from ECS tasks"),
+                jsii.Bool(false),
+        )
+
+        // Security group for ElastiCache
+        cacheSecurityGroup := awsec2.NewSecurityGroup(stack, jsii.String("CacheSecurityGroup"), &amp;awsec2.SecurityGroupProps{
+                Vpc:               vpc,
+                Description:       jsii.String("Security group for ElastiCache Redis cluster"),
+                SecurityGroupName: jsii.String(fmt.Sprintf("streamsecure-cache-sg-%s", environmentSuffix)),
+                AllowAllOutbound:  jsii.Bool(false),
+        })
+
+        // Allow ECS tasks to connect to Redis
+        cacheSecurityGroup.AddIngressRule(
+                ecsSecurityGroup,
+                awsec2.Port_Tcp(jsii.Number(6379)),
+                jsii.String("Allow Redis access from ECS tasks"),
+                jsii.Bool(false),
+        )
+
+        // Security group for EFS
+        efsSecurityGroup := awsec2.NewSecurityGroup(stack, jsii.String("EFSSecurityGroup"), &amp;awsec2.SecurityGroupProps{
+                Vpc:               vpc,
+                Description:       jsii.String("Security group for EFS file system"),
+                SecurityGroupName: jsii.String(fmt.Sprintf("streamsecure-efs-sg-%s", environmentSuffix)),
+                AllowAllOutbound:  jsii.Bool(false),
+        })
+
+        // Allow ECS tasks to access EFS
+        efsSecurityGroup.AddIngressRule(
+                ecsSecurityGroup,
+                awsec2.Port_Tcp(jsii.Number(2049)),
+                jsii.String("Allow NFS access from ECS tasks"),
+                jsii.Bool(false),
+        )
+
+        // =====================================================================
+        // ECS CLUSTER AND EFS - Container orchestration with shared storage
+        // =====================================================================
+
+        // Create ECS Cluster
+        cluster := awsecs.NewCluster(stack, jsii.String("MediaCluster"), &amp;awsecs.ClusterProps{
+                Vpc:               vpc,
+                ClusterName:       jsii.String(fmt.Sprintf("streamsecure-cluster-%s", environmentSuffix)),
+                ContainerInsights: jsii.Bool(true), // Enable Container Insights for monitoring
+        })
+
+        // Create EFS FileSystem with encryption
+        fileSystem := awsefs.NewFileSystem(stack, jsii.String("SharedStorage"), &amp;awsefs.FileSystemProps{
+                Vpc:             vpc,
+                FileSystemName:  jsii.String(fmt.Sprintf("streamsecure-efs-%s", environmentSuffix)),
+                Encrypted:       jsii.Bool(true),
+                KmsKey:          efsKey,
+                PerformanceMode: awsefs.PerformanceMode_GENERAL_PURPOSE,
+                ThroughputMode:  awsefs.ThroughputMode_BURSTING,
+                RemovalPolicy:   awscdk.RemovalPolicy_DESTROY,
+                SecurityGroup:   efsSecurityGroup,
+                VpcSubnets: &amp;awsec2.SubnetSelection{
+                        SubnetType: awsec2.SubnetType_PRIVATE_WITH_EGRESS,
+                },
+        })
+
+        // Create IAM role for ECS task execution
+        _ = awsiam.NewRole(stack, jsii.String("ECSTaskExecutionRole"), &amp;awsiam.RoleProps{
+                AssumedBy: awsiam.NewServicePrincipal(jsii.String("ecs-tasks.amazonaws.com"), nil),
+                RoleName:  jsii.String(fmt.Sprintf("streamsecure-ecs-exec-role-%s", environmentSuffix)),
+                ManagedPolicies: &amp;[]awsiam.IManagedPolicy{
+                        awsiam.ManagedPolicy_FromAwsManagedPolicyName(jsii.String("service-role/AmazonECSTaskExecutionRolePolicy")),
+                },
+        })
+
+        // Create IAM role for ECS tasks
+        ecsTaskRole := awsiam.NewRole(stack, jsii.String("ECSTaskRole"), &amp;awsiam.RoleProps{
+                AssumedBy: awsiam.NewServicePrincipal(jsii.String("ecs-tasks.amazonaws.com"), nil),
+                RoleName:  jsii.String(fmt.Sprintf("streamsecure-ecs-task-role-%s", environmentSuffix)),
+        })
+
+        // Grant ECS task role access to Kinesis
+        ecsTaskRole.AddToPolicy(awsiam.NewPolicyStatement(&amp;awsiam.PolicyStatementProps{
+                Effect: awsiam.Effect_ALLOW,
+                Actions: jsii.Strings(
+                        "kinesis:PutRecord",
+                        "kinesis:PutRecords",
+                        "kinesis:DescribeStream",
+                ),
+                Resources: jsii.Strings(*awskinesis.NewStream(stack, jsii.String("TempStreamRef"), &amp;awskinesis.StreamProps{
+                        StreamName: jsii.String(fmt.Sprintf("streamsecure-analytics-%s", environmentSuffix)),
+                }).StreamArn()),
+        }))
+
+        // =====================================================================
+        // DATABASE - Aurora PostgreSQL with Multi-AZ and encryption
+        // =====================================================================
+
+        // Create database credentials in Secrets Manager
+        dbSecret := awssecretsmanager.NewSecret(stack, jsii.String("DBCredentials"), &amp;awssecretsmanager.SecretProps{
+                SecretName:  jsii.String(fmt.Sprintf("streamsecure-db-creds-%s", environmentSuffix)),
+                Description: jsii.String("Database credentials for Aurora PostgreSQL"),
+                GenerateSecretString: &amp;awssecretsmanager.SecretStringGenerator{
+                        SecretStringTemplate: jsii.String(`{"username": "dbadmin"}`),
+                        GenerateStringKey:    jsii.String("password"),
+                        PasswordLength:       jsii.Number(32),
+                        ExcludeCharacters:    jsii.String("\"@/\\"),
+                        ExcludePunctuation:   jsii.Bool(true),
+                },
+                EncryptionKey: secretsKey,
+                RemovalPolicy: awscdk.RemovalPolicy_DESTROY,
+        })
+
+        // Create Aurora PostgreSQL cluster with Multi-AZ
+        dbCluster := awsrds.NewDatabaseCluster(stack, jsii.String("MediaDB"), &amp;awsrds.DatabaseClusterProps{
+                Engine: awsrds.DatabaseClusterEngine_AuroraPostgres(&amp;awsrds.AuroraPostgresClusterEngineProps{
+                        Version: awsrds.AuroraPostgresEngineVersion_VER_14_6(),
+                }),
+                ClusterIdentifier:   jsii.String(fmt.Sprintf("streamsecure-db-%s", environmentSuffix)),
+                Credentials:         awsrds.Credentials_FromSecret(dbSecret, jsii.String("dbadmin")),
+                DefaultDatabaseName: jsii.String("streamsecure"),
+                Instances:           jsii.Number(2), // Multi-AZ deployment with 2 instances
+                InstanceProps: &amp;awsrds.InstanceProps{
+                        InstanceType: awsec2.InstanceType_Of(
+                                awsec2.InstanceClass_BURSTABLE3,
+                                awsec2.InstanceSize_MEDIUM,
+                        ),
+                        Vpc: vpc,
+                        VpcSubnets: &amp;awsec2.SubnetSelection{
+                                SubnetType: awsec2.SubnetType_PRIVATE_WITH_EGRESS,
+                        },
+                        SecurityGroups: &amp;[]awsec2.ISecurityGroup{rdsSecurityGroup},
+                },
+                StorageEncrypted:     jsii.Bool(true),
+                StorageEncryptionKey: rdsKey,
+                Backup: &amp;awsrds.BackupProps{
+                        Retention:       awscdk.Duration_Days(jsii.Number(7)),
+                        PreferredWindow: jsii.String("03:00-04:00"),
+                },
+                PreferredMaintenanceWindow: jsii.String("sun:04:00-sun:05:00"),
+                CloudwatchLogsExports:      jsii.Strings("postgresql"),
+                CloudwatchLogsRetention:    awslogs.RetentionDays_ONE_MONTH,
+                RemovalPolicy:              awscdk.RemovalPolicy_DESTROY,
+        })
+
+        // Grant ECS task role access to database secret
+        dbSecret.GrantRead(ecsTaskRole, nil)
+
+        // =====================================================================
+        // ELASTICACHE REDIS - Session management and caching
+        // =====================================================================
+
+        // Create subnet group for ElastiCache
+        privateSubnetIds := make([]*string, 0)
+        for _, subnet := range *vpc.PrivateSubnets() </span><span class="cov10" title="32">{
+                privateSubnetIds = append(privateSubnetIds, subnet.SubnetId())
+        }</span>
+
+        <span class="cov8" title="16">cacheSubnetGroup := awselasticache.NewCfnSubnetGroup(stack, jsii.String("RedisSubnetGroup"), &amp;awselasticache.CfnSubnetGroupProps{
+                Description:          jsii.String("Subnet group for ElastiCache Redis cluster"),
+                SubnetIds:            &amp;privateSubnetIds,
+                CacheSubnetGroupName: jsii.String(fmt.Sprintf("streamsecure-redis-subnet-%s", environmentSuffix)),
+        })
+
+        // Create ElastiCache Redis replication group with encryption
+        redis := awselasticache.NewCfnReplicationGroup(stack, jsii.String("SessionCache"), &amp;awselasticache.CfnReplicationGroupProps{
+                ReplicationGroupId:          jsii.String(fmt.Sprintf("streamsecure-redis-%s", environmentSuffix)),
+                ReplicationGroupDescription: jsii.String("Redis cluster for session management and caching"),
+                Engine:                      jsii.String("redis"),
+                EngineVersion:               jsii.String("7.0"),
+                CacheNodeType:               jsii.String("cache.t3.micro"),
+                NumCacheClusters:            jsii.Number(2), // Multi-node for high availability
+                AutomaticFailoverEnabled:    jsii.Bool(true),
+                MultiAzEnabled:              jsii.Bool(true),
+                AtRestEncryptionEnabled:     jsii.Bool(true),
+                TransitEncryptionEnabled:    jsii.Bool(true),
+                CacheSubnetGroupName:        cacheSubnetGroup.CacheSubnetGroupName(),
+                SecurityGroupIds:            jsii.Strings(*cacheSecurityGroup.SecurityGroupId()),
+                Port:                        jsii.Number(6379),
+                SnapshotRetentionLimit:      jsii.Number(5),
+                SnapshotWindow:              jsii.String("03:00-05:00"),
+                PreferredMaintenanceWindow:  jsii.String("sun:05:00-sun:07:00"),
+        })
+        redis.AddDependency(cacheSubnetGroup)
+
+        // =====================================================================
+        // KINESIS DATA STREAMS - Real-time analytics pipeline
+        // =====================================================================
+
+        // Create Kinesis Data Stream with encryption
+        stream := awskinesis.NewStream(stack, jsii.String("AnalyticsStream"), &amp;awskinesis.StreamProps{
+                StreamName:      jsii.String(fmt.Sprintf("streamsecure-analytics-%s", environmentSuffix)),
+                ShardCount:      jsii.Number(2),
+                Encryption:      awskinesis.StreamEncryption_KMS,
+                EncryptionKey:   kinesisKey,
+                RetentionPeriod: awscdk.Duration_Hours(jsii.Number(24)),
+        })
+
+        // Create IAM role for Kinesis producers
+        kinesisProducerRole := awsiam.NewRole(stack, jsii.String("KinesisProducerRole"), &amp;awsiam.RoleProps{
+                AssumedBy: awsiam.NewServicePrincipal(jsii.String("lambda.amazonaws.com"), nil),
+                RoleName:  jsii.String(fmt.Sprintf("streamsecure-kinesis-producer-%s", environmentSuffix)),
+        })
+
+        stream.GrantWrite(kinesisProducerRole)
+
+        // =====================================================================
+        // API GATEWAY - RESTful API with rate limiting
+        // =====================================================================
+
+        // Create CloudWatch log group for API Gateway
+        apiLogGroup := awslogs.NewLogGroup(stack, jsii.String("APIGatewayLogs"), &amp;awslogs.LogGroupProps{
+                LogGroupName:  jsii.String(fmt.Sprintf("/aws/apigateway/streamsecure-%s", environmentSuffix)),
+                Retention:     awslogs.RetentionDays_ONE_MONTH,
+                RemovalPolicy: awscdk.RemovalPolicy_DESTROY,
+        })
+
+        // Create API Gateway with proper configuration
+        api := awsapigateway.NewRestApi(stack, jsii.String("MediaAPI"), &amp;awsapigateway.RestApiProps{
+                RestApiName: jsii.String(fmt.Sprintf("streamsecure-api-%s", environmentSuffix)),
+                Description: jsii.String("StreamSecure media processing API"),
+                DeployOptions: &amp;awsapigateway.StageOptions{
+                        StageName:            jsii.String("prod"),
+                        ThrottlingRateLimit:  jsii.Number(1000),
+                        ThrottlingBurstLimit: jsii.Number(2000),
+                        LoggingLevel:         awsapigateway.MethodLoggingLevel_INFO,
+                        DataTraceEnabled:     jsii.Bool(true),
+                        AccessLogDestination: awsapigateway.NewLogGroupLogDestination(apiLogGroup),
+                        AccessLogFormat: awsapigateway.AccessLogFormat_JsonWithStandardFields(nil),
+                },
+                DefaultCorsPreflightOptions: &amp;awsapigateway.CorsOptions{
+                        AllowOrigins: awsapigateway.Cors_ALL_ORIGINS(),
+                        AllowMethods: awsapigateway.Cors_ALL_METHODS(),
+                },
+        })
+
+        // Create API key for authentication
+        apiKey := api.AddApiKey(jsii.String("APIKey"), &amp;awsapigateway.ApiKeyOptions{
+                ApiKeyName:  jsii.String(fmt.Sprintf("streamsecure-api-key-%s", environmentSuffix)),
+                Description: jsii.String("API key for StreamSecure API"),
+        })
+
+        // Create usage plan with throttling and quota
+        usagePlan := api.AddUsagePlan(jsii.String("UsagePlan"), &amp;awsapigateway.UsagePlanProps{
+                Name:        jsii.String(fmt.Sprintf("streamsecure-usage-plan-%s", environmentSuffix)),
+                Description: jsii.String("Usage plan for StreamSecure API"),
+                Throttle: &amp;awsapigateway.ThrottleSettings{
+                        RateLimit:  jsii.Number(500),
+                        BurstLimit: jsii.Number(1000),
+                },
+                Quota: &amp;awsapigateway.QuotaSettings{
+                        Limit:  jsii.Number(100000),
+                        Period: awsapigateway.Period_MONTH,
+                },
+        })
+
+        usagePlan.AddApiKey(apiKey, nil)
+        usagePlan.AddApiStage(&amp;awsapigateway.UsagePlanPerApiStage{
+                Api:   api,
+                Stage: api.DeploymentStage(),
+        })
+
+        // Add health check endpoint
+        health := api.Root().AddResource(jsii.String("health"), nil)
+        health.AddMethod(jsii.String("GET"), awsapigateway.NewMockIntegration(&amp;awsapigateway.IntegrationOptions{
+                IntegrationResponses: &amp;[]*awsapigateway.IntegrationResponse{
+                        {
+                                StatusCode: jsii.String("200"),
+                                ResponseTemplates: &amp;map[string]*string{
+                                        "application/json": jsii.String(`{"status": "healthy"}`),
+                                },
+                        },
+                },
+                PassthroughBehavior: awsapigateway.PassthroughBehavior_NEVER,
+                RequestTemplates: &amp;map[string]*string{
+                        "application/json": jsii.String(`{"statusCode": 200}`),
+                },
+        }), &amp;awsapigateway.MethodOptions{
+                MethodResponses: &amp;[]*awsapigateway.MethodResponse{
+                        {
+                                StatusCode: jsii.String("200"),
+                        },
+                },
+        })
+
+        // =====================================================================
+        // ADDITIONAL SECRETS - Encryption keys and API credentials
+        // =====================================================================
+
+        // Create secret for API encryption keys
+        _ = awssecretsmanager.NewSecret(stack, jsii.String("APIEncryptionKeys"), &amp;awssecretsmanager.SecretProps{
+                SecretName:  jsii.String(fmt.Sprintf("streamsecure-api-keys-%s", environmentSuffix)),
+                Description: jsii.String("Encryption keys for API data"),
+                GenerateSecretString: &amp;awssecretsmanager.SecretStringGenerator{
+                        SecretStringTemplate: jsii.String(`{"api_key": "placeholder"}`),
+                        GenerateStringKey:    jsii.String("encryption_key"),
+                        PasswordLength:       jsii.Number(64),
+                },
+                EncryptionKey: secretsKey,
+                RemovalPolicy: awscdk.RemovalPolicy_DESTROY,
+        })
+
+        // =====================================================================
+        // OUTPUTS - Export important values
+        // =====================================================================
+
+        awscdk.NewCfnOutput(stack, jsii.String("VPCId"), &amp;awscdk.CfnOutputProps{
+                Value:       vpc.VpcId(),
+                Description: jsii.String("VPC ID"),
+                ExportName:  jsii.String(fmt.Sprintf("StreamSecure-VPC-%s", environmentSuffix)),
+        })
+
+        awscdk.NewCfnOutput(stack, jsii.String("ClusterName"), &amp;awscdk.CfnOutputProps{
+                Value:       cluster.ClusterName(),
+                Description: jsii.String("ECS Cluster Name"),
+                ExportName:  jsii.String(fmt.Sprintf("StreamSecure-Cluster-%s", environmentSuffix)),
+        })
+
+        awscdk.NewCfnOutput(stack, jsii.String("FileSystemId"), &amp;awscdk.CfnOutputProps{
+                Value:       fileSystem.FileSystemId(),
+                Description: jsii.String("EFS File System ID"),
+                ExportName:  jsii.String(fmt.Sprintf("StreamSecure-EFS-%s", environmentSuffix)),
+        })
+
+        awscdk.NewCfnOutput(stack, jsii.String("DBEndpoint"), &amp;awscdk.CfnOutputProps{
+                Value:       dbCluster.ClusterEndpoint().Hostname(),
+                Description: jsii.String("Aurora Database Endpoint"),
+                ExportName:  jsii.String(fmt.Sprintf("StreamSecure-DB-Endpoint-%s", environmentSuffix)),
+        })
+
+        awscdk.NewCfnOutput(stack, jsii.String("DBSecretArn"), &amp;awscdk.CfnOutputProps{
+                Value:       dbSecret.SecretArn(),
+                Description: jsii.String("Database Credentials Secret ARN"),
+                ExportName:  jsii.String(fmt.Sprintf("StreamSecure-DB-Secret-%s", environmentSuffix)),
+        })
+
+        awscdk.NewCfnOutput(stack, jsii.String("RedisEndpoint"), &amp;awscdk.CfnOutputProps{
+                Value:       redis.AttrPrimaryEndPointAddress(),
+                Description: jsii.String("ElastiCache Redis Primary Endpoint"),
+                ExportName:  jsii.String(fmt.Sprintf("StreamSecure-Redis-Endpoint-%s", environmentSuffix)),
+        })
+
+        awscdk.NewCfnOutput(stack, jsii.String("StreamName"), &amp;awscdk.CfnOutputProps{
+                Value:       stream.StreamName(),
+                Description: jsii.String("Kinesis Data Stream Name"),
+                ExportName:  jsii.String(fmt.Sprintf("StreamSecure-Stream-%s", environmentSuffix)),
+        })
+
+        awscdk.NewCfnOutput(stack, jsii.String("StreamArn"), &amp;awscdk.CfnOutputProps{
+                Value:       stream.StreamArn(),
+                Description: jsii.String("Kinesis Data Stream ARN"),
+                ExportName:  jsii.String(fmt.Sprintf("StreamSecure-Stream-ARN-%s", environmentSuffix)),
+        })
+
+        awscdk.NewCfnOutput(stack, jsii.String("APIEndpoint"), &amp;awscdk.CfnOutputProps{
+                Value:       api.Url(),
+                Description: jsii.String("API Gateway Endpoint URL"),
+                ExportName:  jsii.String(fmt.Sprintf("StreamSecure-API-%s", environmentSuffix)),
+        })
+
+        awscdk.NewCfnOutput(stack, jsii.String("APIKeyId"), &amp;awscdk.CfnOutputProps{
+                Value:       apiKey.KeyId(),
+                Description: jsii.String("API Key ID"),
+                ExportName:  jsii.String(fmt.Sprintf("StreamSecure-APIKey-%s", environmentSuffix)),
+        })
+
+        awscdk.NewCfnOutput(stack, jsii.String("RDSKMSKeyArn"), &amp;awscdk.CfnOutputProps{
+                Value:       rdsKey.KeyArn(),
+                Description: jsii.String("RDS KMS Key ARN"),
+        })
+
+        awscdk.NewCfnOutput(stack, jsii.String("EFSKMSKeyArn"), &amp;awscdk.CfnOutputProps{
+                Value:       efsKey.KeyArn(),
+                Description: jsii.String("EFS KMS Key ARN"),
+        })
+
+        awscdk.NewCfnOutput(stack, jsii.String("SecretsKMSKeyArn"), &amp;awscdk.CfnOutputProps{
+                Value:       secretsKey.KeyArn(),
+                Description: jsii.String("Secrets Manager KMS Key ARN"),
+        })
+
+        awscdk.NewCfnOutput(stack, jsii.String("KinesisKMSKeyArn"), &amp;awscdk.CfnOutputProps{
+                Value:       kinesisKey.KeyArn(),
+                Description: jsii.String("Kinesis KMS Key ARN"),
+        })
+
+        return &amp;TapStack{
+                Stack:             stack,
+                EnvironmentSuffix: jsii.String(environmentSuffix),
+        }</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

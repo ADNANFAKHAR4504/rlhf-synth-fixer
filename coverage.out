@@ -1,0 +1,11 @@
+mode: atomic
+github.com/TuringGpt/iac-test-automations/lib/tap_stack.go:55.90,57.18 2 16
+github.com/TuringGpt/iac-test-automations/lib/tap_stack.go:57.18,59.3 1 16
+github.com/TuringGpt/iac-test-automations/lib/tap_stack.go:60.2,64.52 3 16
+github.com/TuringGpt/iac-test-automations/lib/tap_stack.go:64.52,66.3 1 15
+github.com/TuringGpt/iac-test-automations/lib/tap_stack.go:66.8,66.98 1 1
+github.com/TuringGpt/iac-test-automations/lib/tap_stack.go:66.98,68.3 1 0
+github.com/TuringGpt/iac-test-automations/lib/tap_stack.go:68.8,70.3 1 1
+github.com/TuringGpt/iac-test-automations/lib/tap_stack.go:77.2,305.47 22 16
+github.com/TuringGpt/iac-test-automations/lib/tap_stack.go:305.47,307.3 1 32
+github.com/TuringGpt/iac-test-automations/lib/tap_stack.go:309.2,540.3 30 16
