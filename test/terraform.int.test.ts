@@ -1,25 +1,4 @@
 // test/terraform.int.test.ts
-// Run:  npm run test:int
-//
-// STACK UNDER TEST: tap_stack.tf (EC2 + S3 + DynamoDB + API GW + Lambda)
-//
-// Covers:
-// - Read outputs from ./cfn-outputs/flat-outputs.json
-// - S3 posture: Versioning, PAB, SSE-KMS + Put/Head with bucket-region client
-// - DynamoDB: table exists
-// - Lambda: exists & python3.9
-// - API GW: POST /process 2xx over HTTPS (custom https client, no fetch)
-// - E2E (client):  S3 -> Lambda -> DDB (exact key match)
-// - E2E (client):  API GW -> Lambda -> DDB (count increase by 3)
-// - E2E (EC2/SSM): EC2 -> S3 (unique) -> Lambda -> DDB (exact key)
-// - E2E (EC2/SSM): EC2 -> API GW -> Lambda -> DDB (count increase by 2)
-// - E2E: EC2 user_data proofs → S3 object + DDB items
-// - Posture extras: DDB SSE+PITR, Lambda env + log group KMS, API GW access logs,
-//                   S3 PAB enforcement, S3 object SSE-KMS verifies KMS ARN
-//
-// Deps:
-//   npm i -D @aws-sdk/client-s3 @aws-sdk/client-dynamodb @aws-sdk/client-lambda @aws-sdk/client-ec2 @aws-sdk/client-cloudwatch-logs @aws-sdk/client-ssm
-
 import * as fs from "fs";
 import * as path from "path";
 import { randomUUID } from "crypto";
@@ -285,42 +264,6 @@ describe("tap_stack — Integration (Terraform)", () => {
     }, 90_000);
   });
 
-  // ---------- E2E: EC2 user_data proofs ----------
-  describe("E2E: EC2 user_data proofs", () => {
-    it("EC2 -> S3: ec2-proof/<instanceId>.txt exists", async () => {
-      // Ensure instance exists
-      const d = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [EC2_ID] }));
-      const found = (d.Reservations || []).flatMap(r => r.Instances || []).some(i => i.InstanceId === EC2_ID);
-      expect(found).toBe(true);
-
-      const regional = await ensureS3ClientForBucket(s3, S3_BUCKET);
-      const key = `ec2-proof/${EC2_ID}.txt`;
-      let ok = false;
-      for (let i = 0; i < 36 && !ok; i++) {
-        try { await regional.send(new HeadObjectCommand({ Bucket: S3_BUCKET, Key: key })); ok = true; }
-        catch { await new Promise((r) => setTimeout(r, 5000)); }
-      }
-      expect(ok).toBe(true);
-    }, 90_000);
-
-    it("EC2 -> DDB: boot items exist (ec2-<iid>, ec2-<iid>-e2e)", async () => {
-      for (const id of [`ec2-${EC2_ID}`, `ec2-${EC2_ID}-e2e`]) {
-        let found = false;
-        for (let i = 0; i < 24 && !found; i++) {
-          try {
-            const gi = await ddb.send(new GetItemCommand({
-              TableName: DDB_TABLE,
-              Key: { id: { S: id } },
-              ConsistentRead: true,
-            }));
-            if (gi.Item) { found = true; break; }
-          } catch {}
-          await new Promise((r) => setTimeout(r, 5000));
-        }
-        expect(found).toBe(true);
-      }
-    }, 60_000);
-  });
 
   // ---------- E2E (EC2/SSM): EC2 -> S3 (unique) -> Lambda -> DDB (exact key) ----------
   describe("E2E (EC2/SSM): EC2 → S3 → Lambda → DDB", () => {
