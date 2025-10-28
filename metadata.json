@@ -10,5 +10,16 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "ASG"
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "S3",
+    "SQS",
+    "SSM",
+    "IAM",
+    "CloudWatch",
+    "X-Ray"
+  ],
+  "training_quality": 9
 }
