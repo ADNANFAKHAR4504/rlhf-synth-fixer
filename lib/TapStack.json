@@ -1167,12 +1167,7 @@
         "DashboardName": {
           "Fn::Sub": "MediaProcessing-${environmentSuffix}"
         },
-        "DashboardBody": {
-          "Fn::Sub": [
-            "{\"widgets\":[{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/Lambda\",\"Invocations\",{\"stat\":\"Sum\",\"label\":\"Invocations\"}],[\".\",\"Errors\",{\"stat\":\"Sum\",\"label\":\"Errors\"}],[\".\",\"Duration\",{\"stat\":\"Average\",\"label\":\"Duration\"}]],\"view\":\"timeSeries\",\"region\":\"eu-south-2\",\"title\":\"Lambda Metrics\",\"period\":300,\"yAxis\":{\"left\":{\"min\":0}}}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/SQS\",\"ApproximateNumberOfMessagesVisible\",{\"stat\":\"Average\"}]],\"view\":\"timeSeries\",\"region\":\"eu-south-2\",\"title\":\"Queue Depth\",\"period\":300}}]}",
-            {}
-          ]
-        }
+        "DashboardBody": "{\"widgets\":[{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/Lambda\",\"Invocations\",{\"stat\":\"Sum\",\"label\":\"Invocations\"}],[\".\",\"Errors\",{\"stat\":\"Sum\",\"label\":\"Errors\"}],[\".\",\"Duration\",{\"stat\":\"Average\",\"label\":\"Duration\"}]],\"view\":\"timeSeries\",\"region\":\"eu-south-2\",\"title\":\"Lambda Metrics\",\"period\":300,\"yAxis\":{\"left\":{\"min\":0}}}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/SQS\",\"ApproximateNumberOfMessagesVisible\",{\"stat\":\"Average\"}]],\"view\":\"timeSeries\",\"region\":\"eu-south-2\",\"title\":\"Queue Depth\",\"period\":300}}]}"
       }
     },
     "EventBridgeRule": {
