@@ -813,7 +813,14 @@ export class TapStack extends pulumi.ComponentResource {
       const instance = new aws.ec2.Instance(
         `${name}-target-ec2-${i}`,
         {
-          ami: this.config.ec2Config.amiId,
+          // Dynamically fetch latest Amazon Linux 2023 AMI
+        ami: aws.ec2.getAmiOutput({
+          filters: [
+            { name: "name", values: ["al2023-ami-*-x86_64"] },
+            { name: "owner-alias", values: ["amazon"] }
+          ],
+          mostRecent: true,
+        }, { provider: this.targetProvider }).id,
           instanceType: this.config.ec2Config.instanceType,
           subnetId: subnet.id,
           vpcSecurityGroupIds: [securityGroup.id],
