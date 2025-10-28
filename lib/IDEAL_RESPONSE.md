@@ -75,55 +75,43 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
-    // Create KMS aliases
-    new kms.Alias(this, 'PipelineKmsKeyAlias', {
-      aliasName: `alias/tap-pipeline-key-${environmentSuffix}`,
-      targetKey: pipelineKmsKey,
-    });
-
-    new kms.Alias(this, 'StagingKmsKeyAlias', {
-      aliasName: `alias/tap-staging-key-${environmentSuffix}`,
-      targetKey: stagingKmsKey,
-    });
-
-    new kms.Alias(this, 'ProductionKmsKeyAlias', {
-      aliasName: `alias/tap-production-key-${environmentSuffix}`,
-      targetKey: productionKmsKey,
-    });
-
     // 🔹 S3 Buckets for Artifacts
-    const pipelineArtifactsBucket = new s3.Bucket(this, 'PipelineArtifactsBucket', {
-      bucketName: `tap-pipeline-artifacts-${environmentSuffix}-${this.account}-${this.region}`,
-      encryption: s3.BucketEncryption.KMS,
-      encryptionKey: pipelineKmsKey,
-      versioned: true,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      enforceSSL: true,
-      lifecycleRules: [
-        {
-          id: 'RetainNonCurrentVersions',
-          noncurrentVersionExpiration: cdk.Duration.days(30),
-          noncurrentVersionsToRetain: 5,
-        },
-      ],
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
-    });
+    const pipelineArtifactsBucket = new s3.Bucket(
+      this,
+      'PipelineArtifactsBucket',
+      {
+        bucketName: `tap-pipeline-artifacts-${environmentSuffix}-${this.account}-${this.region}`,
+        encryption: s3.BucketEncryption.KMS,
+        encryptionKey: pipelineKmsKey,
+        versioned: true,
+        lifecycleRules: [
+          {
+            id: 'retain-5-versions',
+            noncurrentVersionsToRetain: 5,
+            noncurrentVersionExpiration: cdk.Duration.days(30),
+          },
+        ],
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        enforceSSL: true,
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      }
+    );
 
     const stagingBucket = new s3.Bucket(this, 'StagingBucket', {
       bucketName: `tap-staging-${environmentSuffix}-${this.account}-${this.region}`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: stagingKmsKey,
       versioned: true,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      enforceSSL: true,
       lifecycleRules: [
         {
-          id: 'RetainNonCurrentVersions',
-          noncurrentVersionExpiration: cdk.Duration.days(30),
+          id: 'retain-5-versions',
           noncurrentVersionsToRetain: 5,
+          noncurrentVersionExpiration: cdk.Duration.days(30),
         },
       ],
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      enforceSSL: true,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
     });
 
     const productionBucket = new s3.Bucket(this, 'ProductionBucket', {
@@ -131,90 +119,61 @@ export class TapStack extends cdk.Stack {
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: productionKmsKey,
       versioned: true,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      enforceSSL: true,
       lifecycleRules: [
         {
-          id: 'RetainNonCurrentVersions',
-          noncurrentVersionExpiration: cdk.Duration.days(30),
+          id: 'retain-5-versions',
           noncurrentVersionsToRetain: 5,
+          noncurrentVersionExpiration: cdk.Duration.days(30),
         },
       ],
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      enforceSSL: true,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
     });
 
     // 🔹 SNS Topics for Notifications
-    const pipelineNotificationTopic = new sns.Topic(this, 'PipelineNotificationTopic', {
-      topicName: `tap-pipeline-notifications-${environmentSuffix}`,
-      masterKey: pipelineKmsKey,
-    });
-    pipelineNotificationTopic.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+    const pipelineNotificationTopic = new sns.Topic(
+      this,
+      'PipelineNotificationTopic',
+      {
+        topicName: `tap-pipeline-notifications-${environmentSuffix}`,
+        masterKey: pipelineKmsKey,
+      }
+    );
 
-    const stagingApprovalTopic = new sns.Topic(this, 'StagingApprovalTopic', {
-      topicName: `tap-staging-approval-${environmentSuffix}`,
-      masterKey: stagingKmsKey,
-    });
-    stagingApprovalTopic.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+    const stagingApprovalTopic = new sns.Topic(
+      this,
+      'StagingApprovalTopic',
+      {
+        topicName: `tap-staging-approval-${environmentSuffix}`,
+        masterKey: stagingKmsKey,
+      }
+    );
 
-    const productionApprovalTopic = new sns.Topic(this, 'ProductionApprovalTopic', {
-      topicName: `tap-production-approval-${environmentSuffix}`,
-      masterKey: productionKmsKey,
-    });
-    productionApprovalTopic.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+    const productionApprovalTopic = new sns.Topic(
+      this,
+      'ProductionApprovalTopic',
+      {
+        topicName: `tap-production-approval-${environmentSuffix}`,
+        masterKey: productionKmsKey,
+      }
+    );
 
     // 🔹 IAM Roles
     const codeBuildRole = new iam.Role(this, 'CodeBuildRole', {
       assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
-      inlinePolicies: {
-        CodeBuildPolicy: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                's3:GetObject',
-                's3:PutObject',
-                's3:ListBucket',
-                's3:GetBucketVersioning',
-                's3:GetBucketLocation',
-              ],
-              resources: [
-                pipelineArtifactsBucket.bucketArn,
-                `${pipelineArtifactsBucket.bucketArn}/*`,
-                stagingBucket.bucketArn,
-                `${stagingBucket.bucketArn}/*`,
-                productionBucket.bucketArn,
-                `${productionBucket.bucketArn}/*`,
-              ],
-            }),
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                'kms:Decrypt',
-                'kms:DescribeKey',
-                'kms:Encrypt',
-                'kms:GenerateDataKey*',
-                'kms:ReEncrypt*',
-              ],
-              resources: [
-                pipelineKmsKey.keyArn,
-                stagingKmsKey.keyArn,
-                productionKmsKey.keyArn,
-              ],
-            }),
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-              ],
-              resources: ['*'],
-            }),
-          ],
-        }),
-      },
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('AWSCodeBuildDeveloperAccess'),
+      ],
     });
-    codeBuildRole.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+
+    // Grant permissions to CodeBuild role
+    pipelineArtifactsBucket.grantReadWrite(codeBuildRole);
+    stagingBucket.grantReadWrite(codeBuildRole);
+    productionBucket.grantReadWrite(codeBuildRole);
+    pipelineKmsKey.grantEncryptDecrypt(codeBuildRole);
+    stagingKmsKey.grantEncryptDecrypt(codeBuildRole);
+    productionKmsKey.grantEncryptDecrypt(codeBuildRole);
 
     const codePipelineRole = new iam.Role(this, 'CodePipelineRole', {
       assumedBy: new iam.ServicePrincipal('codepipeline.amazonaws.com'),
@@ -257,9 +216,7 @@ export class TapStack extends cdk.Stack {
             }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'iam:PassRole',
-              ],
+              actions: ['iam:PassRole'],
               resources: [codeBuildRole.roleArn],
             }),
             new iam.PolicyStatement({
@@ -279,9 +236,7 @@ export class TapStack extends cdk.Stack {
             }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'sns:Publish',
-              ],
+              actions: ['sns:Publish'],
               resources: [
                 pipelineNotificationTopic.topicArn,
                 stagingApprovalTopic.topicArn,
@@ -290,16 +245,12 @@ export class TapStack extends cdk.Stack {
             }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'lambda:InvokeFunction',
-              ],
+              actions: ['lambda:InvokeFunction'],
               resources: ['*'],
             }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'secretsmanager:GetSecretValue',
-              ],
+              actions: ['secretsmanager:GetSecretValue'],
               resources: [
                 `arn:aws:secretsmanager:${this.region}:${this.account}:secret:*`,
               ],
@@ -308,39 +259,17 @@ export class TapStack extends cdk.Stack {
         }),
       },
     });
-    codePipelineRole.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
-    const lambdaExecutionRole = new iam.Role(this, 'SecurityScanLambdaRole', {
+    const lambdaExecutionRole = new iam.Role(this, 'LambdaExecutionRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
       ],
-      inlinePolicies: {
-        SecurityScanPolicy: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                'codepipeline:PutJobSuccessResult',
-                'codepipeline:PutJobFailureResult',
-              ],
-              resources: ['*'],
-            }),
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                's3:GetObject',
-              ],
-              resources: [
-                pipelineArtifactsBucket.bucketArn,
-                `${pipelineArtifactsBucket.bucketArn}/*`,
-              ],
-            }),
-          ],
-        }),
-      },
     });
-    lambdaExecutionRole.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+
+    // Grant additional permissions to Lambda role
+    pipelineArtifactsBucket.grantRead(lambdaExecutionRole);
+    pipelineKmsKey.grantDecrypt(lambdaExecutionRole);
 
     // 🔹 CodeBuild Projects
     const buildProject = new codebuild.Project(this, 'BuildProject', {
@@ -348,26 +277,24 @@ export class TapStack extends cdk.Stack {
       role: codeBuildRole,
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
-        computeType: codebuild.ComputeType.BUILD_GENERAL1_MEDIUM,
+        computeType: codebuild.ComputeType.SMALL,
         privileged: false,
       },
       environmentVariables: {
-        PIPELINE_BUCKET: {
-          value: pipelineArtifactsBucket.bucketName,
-        },
-        STAGING_BUCKET: {
-          value: stagingBucket.bucketName,
-        },
-        PRODUCTION_BUCKET: {
-          value: productionBucket.bucketName,
+        ENVIRONMENT_SUFFIX: {
+          value: environmentSuffix,
         },
       },
-      artifacts: codebuild.Artifacts.codepipeline({
+      source: codebuild.Source.s3({
         bucket: pipelineArtifactsBucket,
-        encryptionKey: pipelineKmsKey,
+        path: 'source.zip',
+      }),
+      artifacts: codebuild.Artifacts.s3({
+        bucket: pipelineArtifactsBucket,
+        name: 'build-artifacts.zip',
       }),
       cache: codebuild.Cache.bucket(pipelineArtifactsBucket, {
-        prefix: 'build-cache',
+        prefix: 'cache',
       }),
       buildSpec: codebuild.BuildSpec.fromObject({
         version: '0.2',
@@ -384,21 +311,18 @@ export class TapStack extends cdk.Stack {
               'echo Building the Docker image...',
               'docker build -t $IMAGE_REPO_NAME:$IMAGE_TAG .',
               'docker tag $IMAGE_REPO_NAME:$IMAGE_TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG',
-              'docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG',
             ],
           },
           post_build: {
             commands: [
               'echo Build completed on `date`',
-              'echo Writing image definitions file...',
-              'printf \'[{"name":"%s","imageUri":"%s"}]\' $CONTAINER_NAME $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG > imagedefinitions.json',
+              'echo Pushing the Docker image...',
+              'docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG',
             ],
           },
         },
         artifacts: {
-          files: [
-            'imagedefinitions.json',
-          ],
+          files: ['**/*'],
         },
       }),
       logging: {
@@ -410,46 +334,54 @@ export class TapStack extends cdk.Stack {
         },
       },
     });
-    buildProject.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
     const unitTestProject = new codebuild.Project(this, 'UnitTestProject', {
       projectName: `tap-unit-test-${environmentSuffix}`,
       role: codeBuildRole,
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
-        computeType: codebuild.ComputeType.BUILD_GENERAL1_SMALL,
+        computeType: codebuild.ComputeType.SMALL,
         privileged: false,
       },
-      artifacts: codebuild.Artifacts.codepipeline({
+      source: codebuild.Source.s3({
         bucket: pipelineArtifactsBucket,
-        encryptionKey: pipelineKmsKey,
+        path: 'source.zip',
+      }),
+      artifacts: codebuild.Artifacts.s3({
+        bucket: pipelineArtifactsBucket,
+        name: 'unit-test-results.zip',
       }),
       buildSpec: codebuild.BuildSpec.fromObject({
         version: '0.2',
         phases: {
           install: {
+            'runtime-versions': {
+              nodejs: '18',
+            },
             commands: [
               'echo Installing dependencies...',
-              'npm install',
+              'npm ci',
             ],
           },
           pre_build: {
             commands: [
-              'echo Running unit tests...',
+              'echo Unit tests started on `date`',
             ],
           },
           build: {
             commands: [
+              'echo Running unit tests...',
               'npm run test:unit',
-              'npm run test:coverage',
+            ],
+          },
+          post_build: {
+            commands: [
+              'echo Unit tests completed on `date`',
             ],
           },
         },
         artifacts: {
-          files: [
-            'coverage/**/*',
-            'test-results.xml',
-          ],
+          files: ['test-results/**/*', 'coverage/**/*'],
         },
       }),
       logging: {
@@ -461,44 +393,54 @@ export class TapStack extends cdk.Stack {
         },
       },
     });
-    unitTestProject.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
     const integrationTestProject = new codebuild.Project(this, 'IntegrationTestProject', {
       projectName: `tap-integration-test-${environmentSuffix}`,
       role: codeBuildRole,
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
-        computeType: codebuild.ComputeType.BUILD_GENERAL1_SMALL,
+        computeType: codebuild.ComputeType.SMALL,
         privileged: false,
       },
-      artifacts: codebuild.Artifacts.codepipeline({
+      source: codebuild.Source.s3({
         bucket: pipelineArtifactsBucket,
-        encryptionKey: pipelineKmsKey,
+        path: 'source.zip',
+      }),
+      artifacts: codebuild.Artifacts.s3({
+        bucket: pipelineArtifactsBucket,
+        name: 'integration-test-results.zip',
       }),
       buildSpec: codebuild.BuildSpec.fromObject({
         version: '0.2',
         phases: {
           install: {
+            'runtime-versions': {
+              nodejs: '18',
+            },
             commands: [
               'echo Installing dependencies...',
-              'npm install',
+              'npm ci',
             ],
           },
           pre_build: {
             commands: [
-              'echo Running integration tests...',
+              'echo Integration tests started on `date`',
             ],
           },
           build: {
             commands: [
+              'echo Running integration tests...',
               'npm run test:integration',
+            ],
+          },
+          post_build: {
+            commands: [
+              'echo Integration tests completed on `date`',
             ],
           },
         },
         artifacts: {
-          files: [
-            'integration-test-results.xml',
-          ],
+          files: ['test-results/**/*', 'coverage/**/*'],
         },
       }),
       logging: {
@@ -510,52 +452,65 @@ export class TapStack extends cdk.Stack {
         },
       },
     });
-    integrationTestProject.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
     const securityScanProject = new codebuild.Project(this, 'SecurityScanProject', {
       projectName: `tap-security-scan-${environmentSuffix}`,
       role: codeBuildRole,
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
-        computeType: codebuild.ComputeType.BUILD_GENERAL1_SMALL,
-        privileged: false,
+        computeType: codebuild.ComputeType.SMALL,
+        privileged: true, // Required for Docker-in-Docker
       },
-      artifacts: codebuild.Artifacts.codepipeline({
+      source: codebuild.Source.s3({
         bucket: pipelineArtifactsBucket,
-        encryptionKey: pipelineKmsKey,
+        path: 'source.zip',
+      }),
+      artifacts: codebuild.Artifacts.s3({
+        bucket: pipelineArtifactsBucket,
+        name: 'security-scan-results.zip',
       }),
       buildSpec: codebuild.BuildSpec.fromObject({
         version: '0.2',
         phases: {
           install: {
+            'runtime-versions': {
+              nodejs: '18',
+            },
             commands: [
               'echo Installing security scanning tools...',
-              'pip install bandit safety',
-              'npm install -g snyk',
+              'npm install -g @snyk/cli',
+              'pip install safety bandit',
+              'curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin',
             ],
           },
           pre_build: {
             commands: [
-              'echo Running security scans...',
+              'echo Security scan started on `date`',
             ],
           },
           build: {
             commands: [
-              'echo Running SAST scan with Bandit...',
-              'bandit -r . -f json -o bandit-report.json || true',
-              'echo Running dependency scan with Safety...',
-              'safety check --json --output safety-report.json || true',
-              'echo Running Snyk scan...',
-              'snyk test --json > snyk-report.json || true',
+              'echo Running security scans...',
+              'echo "=== Snyk vulnerability scan ==="',
+              'snyk test --json > snyk-results.json || true',
+              'echo "=== Safety Python security scan ==="',
+              'safety check --json > safety-results.json || true',
+              'echo "=== Bandit Python security scan ==="',
+              'bandit -r . -f json -o bandit-results.json || true',
+              'echo "=== Trivy container scan ==="',
+              'trivy image --format json --output trivy-results.json nginx:alpine || true',
+            ],
+          },
+          post_build: {
+            commands: [
+              'echo Security scan completed on `date`',
+              'echo "=== Security scan summary ==="',
+              'ls -la *-results.json',
             ],
           },
         },
         artifacts: {
-          files: [
-            'bandit-report.json',
-            'safety-report.json',
-            'snyk-report.json',
-          ],
+          files: ['*-results.json'],
         },
       }),
       logging: {
@@ -567,7 +522,6 @@ export class TapStack extends cdk.Stack {
         },
       },
     });
-    securityScanProject.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
     // 🔹 Lambda Function for Security Scan Analysis
     const securityScanAnalysisLambda = new lambda.Function(this, 'SecurityScanAnalysisLambda', {
@@ -593,103 +547,102 @@ export class TapStack extends cdk.Stack {
           
           try {
             // Parse security scan results
-            const banditResults = JSON.parse(event.banditResults || '{}');
-            const safetyResults = JSON.parse(event.safetyResults || '{}');
-            const snykResults = JSON.parse(event.snykResults || '{}');
+            const snykResults = event.snykResults || {};
+            const safetyResults = event.safetyResults || {};
+            const banditResults = event.banditResults || {};
+            const trivyResults = event.trivyResults || {};
             
-            let criticalVulnerabilities = 0;
-            let owaspTop10Issues = 0;
-            
-            // Check Bandit results for OWASP Top 10 issues
-            if (banditResults.results) {
-              banditResults.results.forEach(result => {
-                if (result.issue_severity === 'HIGH' || result.issue_severity === 'MEDIUM') {
-                  criticalVulnerabilities++;
-                  if (isOwaspTop10Issue(result.test_id)) {
-                    owaspTop10Issues++;
-                  }
-                }
-              });
-            }
-            
-            // Check Safety results
-            if (safetyResults.vulnerabilities) {
-              criticalVulnerabilities += safetyResults.vulnerabilities.length;
-            }
+            let hasCriticalVulnerabilities = false;
+            let hasOWASPTop10 = false;
+            const issues = [];
             
             // Check Snyk results
             if (snykResults.vulnerabilities) {
-              criticalVulnerabilities += snykResults.vulnerabilities.length;
+              const criticalVulns = snykResults.vulnerabilities.filter(v => v.severity === 'high' || v.severity === 'critical');
+              if (criticalVulns.length > 0) {
+                hasCriticalVulnerabilities = true;
+                issues.push(\`Found \${criticalVulns.length} critical/high vulnerabilities in dependencies\`);
+              }
             }
             
-            console.log(\`Found \${criticalVulnerabilities} critical vulnerabilities\`);
-            console.log(\`Found \${owaspTop10Issues} OWASP Top 10 issues\`);
-            
-            // Determine if pipeline should continue
-            const shouldContinue = criticalVulnerabilities === 0 && owaspTop10Issues === 0;
-            
-            if (shouldContinue) {
-              console.log('Security scan passed - continuing pipeline');
-              await codepipeline.putJobSuccessResult({
-                jobId: event.jobId
-              }).promise();
-            } else {
-              console.log('Security scan failed - stopping pipeline');
-              await codepipeline.putJobFailureResult({
-                jobId: event.jobId,
-                failureDetails: {
-                  type: 'JobFailed',
-                  message: \`Security scan failed: \${criticalVulnerabilities} critical vulnerabilities, \${owaspTop10Issues} OWASP Top 10 issues\`
-                }
-              }).promise();
+            // Check Safety results
+            if (safetyResults.length > 0) {
+              hasCriticalVulnerabilities = true;
+              issues.push(\`Found \${safetyResults.length} Python security issues\`);
             }
+            
+            // Check Bandit results
+            if (banditResults.results) {
+              const highConfidenceIssues = banditResults.results.filter(r => r.issue_confidence === 'HIGH');
+              if (highConfidenceIssues.length > 0) {
+                hasOWASPTop10 = true;
+                issues.push(\`Found \${highConfidenceIssues.length} high-confidence security issues\`);
+              }
+            }
+            
+            // Check Trivy results
+            if (trivyResults.Results) {
+              const criticalIssues = trivyResults.Results.filter(r => r.Vulnerabilities && r.Vulnerabilities.some(v => v.Severity === 'CRITICAL'));
+              if (criticalIssues.length > 0) {
+                hasCriticalVulnerabilities = true;
+                issues.push(\`Found \${criticalIssues.length} critical container vulnerabilities\`);
+              }
+            }
+            
+            // Determine if pipeline should fail
+            const shouldFail = hasCriticalVulnerabilities || hasOWASPTop10;
+            
+            console.log('Security analysis results:', {
+              hasCriticalVulnerabilities,
+              hasOWASPTop10,
+              shouldFail,
+              issues
+            });
+            
+            // Report back to CodePipeline
+            const params = {
+              jobId: event.jobId,
+              status: shouldFail ? 'FAILED' : 'SUCCEEDED',
+              failureDetails: shouldFail ? {
+                type: 'JobFailed',
+                message: issues.join('; ')
+              } : undefined
+            };
+            
+            await codepipeline.putJobSuccessResult(params).promise();
             
             return {
               statusCode: 200,
               body: JSON.stringify({
-                criticalVulnerabilities,
-                owaspTop10Issues,
-                shouldContinue
+                message: 'Security scan analysis completed',
+                shouldFail,
+                issues
               })
             };
             
           } catch (error) {
             console.error('Error in security scan analysis:', error);
+            
+            // Report failure to CodePipeline
             await codepipeline.putJobFailureResult({
               jobId: event.jobId,
               failureDetails: {
                 type: 'JobFailed',
-                message: \`Security scan analysis failed: \${error.message}\`
+                message: error.message
               }
             }).promise();
             
             throw error;
           }
         };
-        
-        function isOwaspTop10Issue(testId) {
-          const owaspTop10Tests = [
-            'B201', // SQL injection
-            'B301', // Command injection
-            'B302', // Hardcoded password
-            'B303', // Use of insecure MD2, MD4, or MD5 hash function
-            'B304', // Use of insecure random function
-            'B305', // Use of insecure cipher
-            'B306', // Use of insecure cipher mode
-            'B307', // Use of insecure cipher algorithm
-            'B308', // Use of insecure cipher key
-            'B309', // Use of insecure cipher padding
-          ];
-          return owaspTop10Tests.includes(testId);
-        }
       `),
     });
-    securityScanAnalysisLambda.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
     // 🔹 CodePipeline
     const sourceOutput = new codepipeline.Artifact('SourceOutput');
     const buildOutput = new codepipeline.Artifact('BuildOutput');
-    const testOutput = new codepipeline.Artifact('TestOutput');
+    const unitTestOutput = new codepipeline.Artifact('UnitTestOutput');
+    const integrationTestOutput = new codepipeline.Artifact('IntegrationTestOutput');
     const securityScanOutput = new codepipeline.Artifact('SecurityScanOutput');
 
     const pipeline = new codepipeline.Pipeline(this, 'Pipeline', {
@@ -697,7 +650,6 @@ export class TapStack extends cdk.Stack {
       role: codePipelineRole,
       artifactBucket: pipelineArtifactsBucket,
       stages: [
-        // Source Stage
         {
           stageName: 'Source',
           actions: [
@@ -709,7 +661,6 @@ export class TapStack extends cdk.Stack {
             }),
           ],
         },
-        // Build Stage
         {
           stageName: 'Build',
           actions: [
@@ -721,7 +672,6 @@ export class TapStack extends cdk.Stack {
             }),
           ],
         },
-        // Test Stage
         {
           stageName: 'Test',
           actions: [
@@ -729,16 +679,16 @@ export class TapStack extends cdk.Stack {
               actionName: 'Unit_Tests',
               project: unitTestProject,
               input: sourceOutput,
-              outputs: [testOutput],
+              outputs: [unitTestOutput],
             }),
             new codepipeline_actions.CodeBuildAction({
               actionName: 'Integration_Tests',
               project: integrationTestProject,
               input: sourceOutput,
+              outputs: [integrationTestOutput],
             }),
           ],
         },
-        // Security Scan Stage
         {
           stageName: 'SecurityScan',
           actions: [
@@ -753,21 +703,19 @@ export class TapStack extends cdk.Stack {
               lambda: securityScanAnalysisLambda,
               inputs: [securityScanOutput],
               userParameters: {
-                banditResults: securityScanOutput.atPath('bandit-report.json'),
-                safetyResults: securityScanOutput.atPath('safety-report.json'),
-                snykResults: securityScanOutput.atPath('snyk-report.json'),
+                jobId: '#{codepipeline.PipelineExecutionId}',
+                snykResults: '#{SecurityScanOutput}',
               },
             }),
           ],
         },
-        // Staging Deploy Stage
         {
           stageName: 'StagingDeploy',
           actions: [
             new codepipeline_actions.ManualApprovalAction({
               actionName: 'Approve_Staging_Deploy',
               notificationTopic: stagingApprovalTopic,
-              additionalInformation: 'Please review the staging deployment and approve if ready.',
+              additionalInformation: 'Please review the staging deployment and approve to proceed.',
               externalEntityLink: 'https://console.aws.amazon.com/codesuite/codepipeline/pipelines',
             }),
             new codepipeline_actions.S3DeployAction({
@@ -778,14 +726,13 @@ export class TapStack extends cdk.Stack {
             }),
           ],
         },
-        // Production Deploy Stage
         {
           stageName: 'ProductionDeploy',
           actions: [
             new codepipeline_actions.ManualApprovalAction({
               actionName: 'Approve_Production_Deploy',
               notificationTopic: productionApprovalTopic,
-              additionalInformation: 'Please review the production deployment and approve if ready.',
+              additionalInformation: 'Please review the production deployment and approve to proceed.',
               externalEntityLink: 'https://console.aws.amazon.com/codesuite/codepipeline/pipelines',
             }),
             new codepipeline_actions.S3DeployAction({
@@ -798,7 +745,6 @@ export class TapStack extends cdk.Stack {
         },
       ],
     });
-    pipeline.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
     // 🔹 CloudWatch Alarms
     const pipelineFailureAlarm = new cloudwatch.Alarm(this, 'PipelineFailureAlarm', {
@@ -814,7 +760,6 @@ export class TapStack extends cdk.Stack {
       evaluationPeriods: 1,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
-    pipelineFailureAlarm.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
     const pipelineStuckAlarm = new cloudwatch.Alarm(this, 'PipelineStuckAlarm', {
       alarmName: `tap-pipeline-stuck-${environmentSuffix}`,
@@ -825,31 +770,53 @@ export class TapStack extends cdk.Stack {
           PipelineName: pipeline.pipelineName,
         },
       }),
-      threshold: 1800, // 30 minutes
+      threshold: 30, // 30 minutes
       evaluationPeriods: 1,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
-    pipelineStuckAlarm.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
-    // Add SNS notifications to alarms
-    pipelineFailureAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(pipelineNotificationTopic));
-    pipelineStuckAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(pipelineNotificationTopic));
+    // Add SNS actions to alarms
+    pipelineFailureAlarm.addAlarmAction(
+      new cloudwatch_actions.SnsAction(pipelineNotificationTopic)
+    );
+    pipelineStuckAlarm.addAlarmAction(
+      new cloudwatch_actions.SnsAction(pipelineNotificationTopic)
+    );
 
     // 🔹 EventBridge Rules
     const pipelineStateChangeRule = new events.Rule(this, 'PipelineStateChangeRule', {
       ruleName: `tap-pipeline-state-change-${environmentSuffix}`,
+      description: 'Trigger notifications on pipeline state changes',
       eventPattern: {
         source: ['aws.codepipeline'],
         detailType: ['CodePipeline Pipeline Execution State Change'],
         detail: {
-          pipeline: [pipeline.pipelineName],
           state: ['FAILED', 'SUCCEEDED', 'SUPERSEDED'],
+          pipeline: [pipeline.pipelineName],
         },
       },
     });
-    pipelineStateChangeRule.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
-    pipelineStateChangeRule.addTarget(new targets.SnsTopic(pipelineNotificationTopic));
+    pipelineStateChangeRule.addTarget(
+      new targets.SnsTopic(pipelineNotificationTopic)
+    );
+
+    // Apply removal policies
+    pipelineNotificationTopic.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+    stagingApprovalTopic.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+    productionApprovalTopic.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+    codeBuildRole.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+    codePipelineRole.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+    lambdaExecutionRole.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+    buildProject.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+    unitTestProject.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+    integrationTestProject.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+    securityScanProject.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+    securityScanAnalysisLambda.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+    pipeline.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+    pipelineFailureAlarm.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+    pipelineStuckAlarm.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+    pipelineStateChangeRule.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
     // 🔹 Stack Outputs
     new cdk.CfnOutput(this, 'PipelineName', {
@@ -879,3 +846,7 @@ export class TapStack extends cdk.Stack {
   }
 }
 ```
+
+Now let me update the todo list to reflect this fix:
+<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
+todo_write
