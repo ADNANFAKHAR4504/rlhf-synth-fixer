@@ -384,7 +384,13 @@ async function main(): Promise<void> {
 
       // Copy optimize.py if IaC Optimization subtask is selected
       if (taskSubCategory === 'IaC Optimization') {
-        const optimizePath = path.join(__dirname, '..', 'templates', 'optimize', 'optimize.py');
+        const optimizePath = path.join(
+          __dirname,
+          '..',
+          'templates',
+          'optimize',
+          'optimize.py'
+        );
         const destPath = path.join(__dirname, '..', 'lib', 'optimize.py');
         try {
           if (await fs.pathExists(optimizePath)) {
