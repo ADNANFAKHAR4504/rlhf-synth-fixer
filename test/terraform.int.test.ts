@@ -7,7 +7,7 @@
 // - Read outputs from ./cfn-outputs/flat-outputs.json
 // - S3 posture: Versioning, PAB, SSE-KMS + Put/Head with bucket-region client
 // - DynamoDB: table exists
-// - Lambda: exists & python3.9 (if RUN_LAMBDA_INT=1)
+// - Lambda: exists & python3.9
 // - API GW: POST /process 2xx over HTTPS (custom https client, no fetch)
 // - E2E (client):  S3 -> Lambda -> DDB (exact key match)
 // - E2E (client):  API GW -> Lambda -> DDB (count increase by 3)
@@ -17,17 +17,8 @@
 // - Posture extras: DDB SSE+PITR, Lambda env + log group KMS, API GW access logs,
 //                   S3 PAB enforcement, S3 object SSE-KMS verifies KMS ARN
 //
-// Env flags:
-//   AWS_REGION=us-east-1
-//   STRICT_INT=1
-//   RUN_LAMBDA_INT=1
-//   RUN_E2E=1
-//   RUN_E2E_SSM=1
-//
 // Deps:
-//   npm i -D @aws-sdk/client-s3 @aws-sdk/client-dynamodb @aws-sdk/client-lambda @aws-sdk/client-ec2 @aws-sdk/client-cloudwatch-logs
-//   # Optional if RUN_E2E_SSM=1
-//   npm i -D @aws-sdk/client-ssm
+//   npm i -D @aws-sdk/client-s3 @aws-sdk/client-dynamodb @aws-sdk/client-lambda @aws-sdk/client-ec2 @aws-sdk/client-cloudwatch-logs @aws-sdk/client-ssm
 
 import * as fs from "fs";
 import * as path from "path";
@@ -70,24 +61,14 @@ import {
   DescribeLogGroupsCommand,
 } from "@aws-sdk/client-cloudwatch-logs";
 
-// Optional SSM
-let SSMClientCtor: any;
-let SendCommandCommandCtor: any;
-let ListCommandInvocationsCommandCtor: any;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const ssmPkg = require("@aws-sdk/client-ssm");
-  SSMClientCtor = ssmPkg.SSMClient;
-  SendCommandCommandCtor = ssmPkg.SendCommandCommand;
-  ListCommandInvocationsCommandCtor = ssmPkg.ListCommandInvocationsCommand;
-} catch { /* optional */ }
+import {
+  SSMClient,
+  SendCommandCommand,
+  ListCommandInvocationsCommand, // kept for parity if you use it later
+} from "@aws-sdk/client-ssm";
 
 // ---------------- Helpers ----------------
 const REGION = process.env.AWS_REGION || "us-east-1";
-const STRICT = process.env.STRICT_INT === "1";
-const RUN_LAMBDA = process.env.RUN_LAMBDA_INT === "1";
-const RUN_E2E = process.env.RUN_E2E === "1";
-const RUN_E2E_SSM = process.env.RUN_E2E_SSM === "1";
 
 // non-keepalive agent avoids TLSWRAP lingering handles
 const HTTPS_AGENT = new https.Agent({ keepAlive: false, maxSockets: 1 });
@@ -98,12 +79,6 @@ function loadOutputs(): Record<string, any> {
   const obj = JSON.parse(raw);
   console.log(`Found outputs (${Object.keys(obj).length} keys) at ${p}`);
   return obj;
-}
-
-function softSkip(message: string, err?: unknown) {
-  if (STRICT) throw err || new Error(message);
-  // silent pass to keep logs clean
-  expect(true).toBe(true);
 }
 
 async function ensureS3ClientForBucket(base: S3Client, bucket: string): Promise<S3Client> {
@@ -183,6 +158,7 @@ const ddb = new DynamoDBClient({ region: REGION });
 const lambda = new LambdaClient({ region: REGION });
 const ec2 = new EC2Client({ region: REGION });
 const logs = new CloudWatchLogsClient({ region: REGION });
+const ssm = new SSMClient({ region: REGION });
 
 // ---- Shared outputs (module scope) ----
 const OUT = loadOutputs();
@@ -228,7 +204,6 @@ describe("tap_stack — Integration (Terraform)", () => {
   // ---------- S3 posture + basic IO ----------
   describe("S3 (posture + IO)", () => {
     it("Put + Head roundtrip (bucket-region client)", async () => {
-      if (!S3_BUCKET) return softSkip("No S3 bucket in outputs.");
       const regional = await ensureS3ClientForBucket(s3, S3_BUCKET);
       const key = `int-test/${randomUUID()}.txt`;
       await regional.send(new PutObjectCommand({ Bucket: S3_BUCKET, Key: key, Body: `hello-${Date.now()}` }));
@@ -237,7 +212,6 @@ describe("tap_stack — Integration (Terraform)", () => {
     }, 12_000);
 
     it("Versioning + PublicAccessBlock + SSE-KMS enabled", async () => {
-      if (!S3_BUCKET) return softSkip("No S3 bucket in outputs.");
       const regional = await ensureS3ClientForBucket(s3, S3_BUCKET);
 
       const ver = await regional.send(new GetBucketVersioningCommand({ Bucket: S3_BUCKET }));
@@ -256,17 +230,14 @@ describe("tap_stack — Integration (Terraform)", () => {
   // ---------- DynamoDB existence ----------
   describe("DynamoDB", () => {
     it("table exists", async () => {
-      if (!DDB_TABLE) return softSkip("No DynamoDB table in outputs.");
       const desc = await ddb.send(new DescribeTableCommand({ TableName: DDB_TABLE }));
       expect(desc.Table?.TableName).toBe(DDB_TABLE);
     }, 10_000);
   });
 
-  // ---------- Lambda existence (optional) ----------
+  // ---------- Lambda existence ----------
   describe("Lambda", () => {
     it("function exists and runtime is python3.9", async () => {
-      if (!RUN_LAMBDA) return softSkip("Lambda check skipped (set RUN_LAMBDA_INT=1).");
-      if (!LAMBDA_NAME) return softSkip("LambdaFunctionName not present.");
       const cfg = await lambda.send(new GetFunctionConfigurationCommand({ FunctionName: LAMBDA_NAME }));
       expect(cfg.FunctionName).toBe(LAMBDA_NAME);
       expect(cfg.Runtime).toBe("python3.9");
@@ -276,7 +247,6 @@ describe("tap_stack — Integration (Terraform)", () => {
   // ---------- API Gateway reachability ----------
   describe("API Gateway (client)", () => {
     it("POST /process responds 2xx", async () => {
-      if (!API_URL) return softSkip("No ApiGatewayUrl output.");
       const res = await httpsPostJson(API_URL, { e2e: "client->api->lambda->ddb", uuid: randomUUID() }, 8000);
       expect(res.status).toBeGreaterThanOrEqual(200);
       expect(res.status).toBeLessThan(300);
@@ -286,8 +256,6 @@ describe("tap_stack — Integration (Terraform)", () => {
   // ---------- E2E: Client -> API -> Lambda -> DDB (count increase) ----------
   describe("E2E (client): API → Lambda → DynamoDB (count +3)", () => {
     it("3 POSTs increase 'api_request' items by ≥ 3", async () => {
-      if (!RUN_E2E) return softSkip("E2E disabled (set RUN_E2E=1).");
-      if (!API_URL) return softSkip("No ApiGatewayUrl output.");
       const before = await countApiRequestItems(ddb, DDB_TABLE);
 
       for (let i = 0; i < 3; i++) {
@@ -308,7 +276,6 @@ describe("tap_stack — Integration (Terraform)", () => {
   // ---------- E2E: Client -> S3 (unique key) -> Lambda -> DDB (exact key) ----------
   describe("E2E (client): S3 → Lambda → DynamoDB (exact key)", () => {
     it("upload unique key → exact DDB item (event_type=s3_event, key match)", async () => {
-      if (!RUN_E2E) return softSkip("E2E disabled (set RUN_E2E=1).");
       const regional = await ensureS3ClientForBucket(s3, S3_BUCKET);
       const key = `e2e-client/${Date.now()}-${randomUUID()}.txt`;
 
@@ -321,17 +288,10 @@ describe("tap_stack — Integration (Terraform)", () => {
   // ---------- E2E: EC2 user_data proofs ----------
   describe("E2E: EC2 user_data proofs", () => {
     it("EC2 -> S3: ec2-proof/<instanceId>.txt exists", async () => {
-      if (!RUN_E2E) return softSkip("E2E disabled (set RUN_E2E=1).");
-      if (!EC2_ID) return softSkip("EC2InstanceId not present.");
-
       // Ensure instance exists
-      try {
-        const d = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [EC2_ID] }));
-        const found = (d.Reservations || []).flatMap(r => r.Instances || []).some(i => i.InstanceId === EC2_ID);
-        if (!found) return softSkip(`EC2 ${EC2_ID} not found.`);
-      } catch (err) {
-        return softSkip(`DescribeInstances failed: ${(err as any)?.name || err}`, err);
-      }
+      const d = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [EC2_ID] }));
+      const found = (d.Reservations || []).flatMap(r => r.Instances || []).some(i => i.InstanceId === EC2_ID);
+      expect(found).toBe(true);
 
       const regional = await ensureS3ClientForBucket(s3, S3_BUCKET);
       const key = `ec2-proof/${EC2_ID}.txt`;
@@ -344,9 +304,6 @@ describe("tap_stack — Integration (Terraform)", () => {
     }, 90_000);
 
     it("EC2 -> DDB: boot items exist (ec2-<iid>, ec2-<iid>-e2e)", async () => {
-      if (!RUN_E2E) return softSkip("E2E disabled (set RUN_E2E=1).");
-      if (!EC2_ID) return softSkip("EC2InstanceId not present.");
-
       for (const id of [`ec2-${EC2_ID}`, `ec2-${EC2_ID}-e2e`]) {
         let found = false;
         for (let i = 0; i < 24 && !found; i++) {
@@ -368,11 +325,6 @@ describe("tap_stack — Integration (Terraform)", () => {
   // ---------- E2E (EC2/SSM): EC2 -> S3 (unique) -> Lambda -> DDB (exact key) ----------
   describe("E2E (EC2/SSM): EC2 → S3 → Lambda → DDB", () => {
     it("EC2 uploads unique key → DDB has s3_event with that key", async () => {
-      if (!RUN_E2E_SSM) return softSkip("Set RUN_E2E_SSM=1 to enable.");
-      if (!EC2_ID) return softSkip("EC2InstanceId not present.");
-      if (!SSMClientCtor) return softSkip("@aws-sdk/client-ssm not installed.");
-      const ssm = new SSMClientCtor({ region: REGION });
-
       const key = `e2e-ec2/${Date.now()}-${randomUUID()}.txt`;
       const cmd = [
         "set -euo pipefail",
@@ -380,14 +332,14 @@ describe("tap_stack — Integration (Terraform)", () => {
         `echo "DONE"`,
       ].join("\n");
 
-      const send = await ssm.send(new SendCommandCommandCtor({
+      const send = await ssm.send(new SendCommandCommand({
         InstanceIds: [EC2_ID],
         DocumentName: "AWS-RunShellScript",
         Parameters: { commands: [cmd] },
         TimeoutSeconds: 120,
       }));
       const commandId = send.Command?.CommandId;
-      if (!commandId) return softSkip("SSM command not started.");
+      expect(commandId).toBeDefined();
 
       // quick settle before scanning DDB
       await new Promise((r) => setTimeout(r, 5000));
@@ -399,12 +351,6 @@ describe("tap_stack — Integration (Terraform)", () => {
   // ---------- E2E (EC2/SSM): EC2 -> API GW -> Lambda -> DDB (count increase) ----------
   describe("E2E (EC2/SSM): EC2 → API Gateway → Lambda → DDB (count +2)", () => {
     it("2 POSTs from EC2 increase 'api_request' items by ≥ 2", async () => {
-      if (!RUN_E2E_SSM) return softSkip("Set RUN_E2E_SSM=1 to enable.");
-      if (!EC2_ID) return softSkip("EC2InstanceId not present.");
-      if (!API_URL) return softSkip("ApiGatewayUrl not present.");
-      if (!SSMClientCtor) return softSkip("@aws-sdk/client-ssm not installed.");
-      const ssm = new SSMClientCtor({ region: REGION });
-
       const before = await countApiRequestItems(ddb, DDB_TABLE);
       const payloadA = JSON.stringify({ ec2_ssm: "okA", uuid: randomUUID() });
       const payloadB = JSON.stringify({ ec2_ssm: "okB", uuid: randomUUID() });
@@ -415,14 +361,14 @@ describe("tap_stack — Integration (Terraform)", () => {
         "echo DONE",
       ].join("\n");
 
-      const send = await ssm.send(new SendCommandCommandCtor({
+      const send = await ssm.send(new SendCommandCommand({
         InstanceIds: [EC2_ID],
         DocumentName: "AWS-RunShellScript",
         Parameters: { commands: [cmd] },
         TimeoutSeconds: 120,
       }));
       const commandId = send.Command?.CommandId;
-      if (!commandId) return softSkip("SSM command not started.");
+      expect(commandId).toBeDefined();
 
       // allow eventual consistency; then compare count
       let after = before;
@@ -455,7 +401,6 @@ describe("tap_stack — Integration (Terraform)", () => {
   // ---------- Posture: Lambda env + log group KMS ----------
   describe("Lambda integration posture", () => {
     it("env vars wired (DYNAMODB_TABLE, S3_BUCKET, KMS_KEY_ID)", async () => {
-      if (!LAMBDA_NAME) return softSkip("LambdaFunctionName not present.");
       const cfg = await lambda.send(new GetFunctionConfigurationCommand({ FunctionName: LAMBDA_NAME }));
       const env = cfg.Environment?.Variables || {};
       expect(env["DYNAMODB_TABLE"]).toBe(DDB_TABLE);
@@ -464,7 +409,6 @@ describe("tap_stack — Integration (Terraform)", () => {
     }, 10_000);
 
     it("lambda log group is KMS-encrypted with our key", async () => {
-      if (!LAMBDA_NAME) return softSkip("LambdaFunctionName not present.");
       const lgName = `/aws/lambda/${LAMBDA_NAME}`;
       const d = await logs.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: lgName, limit: 1 }));
       const lg = (d.logGroups || []).find(g => g.logGroupName === lgName);
@@ -473,40 +417,38 @@ describe("tap_stack — Integration (Terraform)", () => {
     }, 10_000);
   });
 
+  // ---------- Posture: API Gateway access logs ----------
+  describe("API Gateway access logs", () => {
+    it("POST creates a fresh log event in /aws/apigateway/<StackName>-api", async () => {
+      const lgName = `/aws/apigateway/${STACK_NAME}-api`;
 
-// ---------- Posture: API Gateway access logs ----------
-describe("API Gateway access logs", () => {
-  it("POST creates a fresh log event in /aws/apigateway/<StackName>-api", async () => {
-    const lgName = `/aws/apigateway/${STACK_NAME}-api`;
+      // 1) Fire a request to generate an access log line
+      const res = await httpsPostJson(API_URL, { log_probe: true, uuid: randomUUID() }, 8000);
+      expect(res.status).toBeGreaterThanOrEqual(200);
 
-    // 1) Fire a request to generate an access log line
-    const res = await httpsPostJson(API_URL, { log_probe: true, uuid: randomUUID() }, 8000);
-    expect(res.status).toBeGreaterThanOrEqual(200);
+      const started = Date.now();
+      const startTime = started - 10_000;
+      let seen = false;
+      let attempts = 0;
 
-    const started = Date.now();
-    const startTime = started - 10_000;
-    let seen = false;
-    let attempts = 0;
+      while (!seen && attempts < 24) { // ~2 minutes max (24 * 5s)
+        attempts += 1;
+        const fe = await logs.send(new FilterLogEventsCommand({
+          logGroupName: lgName,
+          startTime,
+          interleaved: true,
+        }));
 
-    while (!seen && attempts < 24) { // ~2 minutes max (24 * 5s)
-      attempts += 1;
-      const fe = await logs.send(new FilterLogEventsCommand({
-        logGroupName: lgName,
-        startTime,
-        interleaved: true,
-      }));
-
-      if ((fe.events || []).length > 0) {
-        seen = true;
-        break;
+        if ((fe.events || []).length > 0) {
+          seen = true;
+          break;
+        }
+        await new Promise(r => setTimeout(r, 5000));
       }
-      await new Promise(r => setTimeout(r, 5000));
-    }
 
-    expect(seen).toBe(true);
-  }, 120_000); // allow up to 2 minutes
-});
-
+      expect(seen).toBe(true);
+    }, 120_000); // allow up to 2 minutes
+  });
 
   // ---------- Posture: S3 PAB enforcement ----------
   describe("S3 public ACLs are blocked by PAB", () => {
@@ -546,5 +488,6 @@ afterAll(async () => {
   try { lambda.destroy?.(); } catch {}
   try { ec2.destroy?.(); } catch {}
   try { logs.destroy?.(); } catch {}
+  try { ssm.destroy?.(); } catch {}
   try { (HTTPS_AGENT as any).destroy?.(); } catch {}
 });
