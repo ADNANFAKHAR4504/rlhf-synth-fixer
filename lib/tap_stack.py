@@ -544,7 +544,6 @@ def handler(event, context):
             description="Data Processing REST API Gateway",
             deploy_options=apigateway.StageOptions(
                 stage_name="prod",
-                logging_level=apigateway.MethodLoggingLevel.INFO,
                 data_trace_enabled=True,
                 metrics_enabled=True,
                 throttling_rate_limit=1000,
