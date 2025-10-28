@@ -418,7 +418,7 @@ resource "aws_route_table_association" "secondary_private" {
 # Security Group for RDS - Primary
 resource "aws_security_group" "rds_primary" {
   provider    = aws.us_east_1
-  name        = "sg-rds-primary-${local.resource_suffix}"
+  name        = "rds-primary-${local.resource_suffix}"
   description = "Security group for RDS database in primary region"
   vpc_id      = aws_vpc.primary.id
   
@@ -447,14 +447,14 @@ resource "aws_security_group" "rds_primary" {
   }
   
   tags = merge(local.primary_tags, {
-    Name = "sg-rds-primary-${local.resource_suffix}"
+    Name = "rds-primary-${local.resource_suffix}"
   })
 }
 
 # Security Group for Lambda - Primary
 resource "aws_security_group" "lambda_primary" {
   provider    = aws.us_east_1
-  name        = "sg-lambda-primary-${local.resource_suffix}"
+  name        = "lambda-primary-${local.resource_suffix}"
   description = "Security group for Lambda functions in primary region"
   vpc_id      = aws_vpc.primary.id
   
@@ -467,7 +467,7 @@ resource "aws_security_group" "lambda_primary" {
   }
   
   tags = merge(local.primary_tags, {
-    Name = "sg-lambda-primary-${local.resource_suffix}"
+    Name = "lambda-primary-${local.resource_suffix}"
   })
 }
 
@@ -478,7 +478,7 @@ resource "aws_security_group" "lambda_primary" {
 # Security Group for RDS - Secondary
 resource "aws_security_group" "rds_secondary" {
   provider    = aws.us_west_2
-  name        = "sg-rds-secondary-${local.resource_suffix}"
+  name        = "rds-secondary-${local.resource_suffix}"
   description = "Security group for RDS database in secondary region"
   vpc_id      = aws_vpc.secondary.id
   
@@ -507,14 +507,14 @@ resource "aws_security_group" "rds_secondary" {
   }
   
   tags = merge(local.secondary_tags, {
-    Name = "sg-rds-secondary-${local.resource_suffix}"
+    Name = "rds-secondary-${local.resource_suffix}"
   })
 }
 
 # Security Group for Lambda - Secondary
 resource "aws_security_group" "lambda_secondary" {
   provider    = aws.us_west_2
-  name        = "sg-lambda-secondary-${local.resource_suffix}"
+  name        = "lambda-secondary-${local.resource_suffix}"
   description = "Security group for Lambda functions in secondary region"
   vpc_id      = aws_vpc.secondary.id
   
@@ -527,7 +527,7 @@ resource "aws_security_group" "lambda_secondary" {
   }
   
   tags = merge(local.secondary_tags, {
-    Name = "sg-lambda-secondary-${local.resource_suffix}"
+    Name = "lambda-secondary-${local.resource_suffix}"
   })
 }
 
