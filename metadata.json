@@ -5,7 +5,10 @@
   "team": "synth",
   "startedAt": "2025-10-28T03:44:00+05:30",
   "subtask": "Application Deployment",
-  "subject_labels": [],
+  "subject_labels": [
+    "application",
+    "deployment"
+  ],
   "po_id": "6226190395",
   "aws_services": [
     "vpc",
