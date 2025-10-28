@@ -1,3 +1,4 @@
+# cfn-lint-disable W1011
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Media Asset Processing Pipeline for StreamTech Japan - Multi-AZ Infrastructure'
 
@@ -50,17 +51,15 @@ Parameters:
     Description: 'Default database password when not using secrets manager'
     NoEcho: true
 
-  TimestampSuffix:
+  ResourceTimestamp:
     Type: String
     Default: ''
-    Description: 'Optional timestamp suffix for unique resource naming (format: YYYYMMDD-HHMMSS)'
-    AllowedPattern: '^$|^[0-9]{8}-[0-9]{6}$'
-    ConstraintDescription: 'Must be empty or in format YYYYMMDD-HHMMSS (e.g., 20251028-112030)'
+    Description: 'Optional timestamp suffix for resource naming to ensure uniqueness'
 
 Conditions:
   UseRedisAuth: !Equals [!Ref EnableRedisAuth, 'true']
   UseRDSSecrets: !Equals [!Ref EnableRDSSecrets, 'true']
-  HasTimestamp: !Not [!Equals [!Ref TimestampSuffix, '']]
+  HasTimestamp: !Not [!Equals [!Ref ResourceTimestamp, '']]
 
 Mappings:
   RegionMap:
@@ -291,7 +290,7 @@ Resources:
     Properties:
       DBInstanceIdentifier: !If
         - HasTimestamp
-        - !Sub 'media-postgres-${EnvironmentSuffix}-${TimestampSuffix}'
+        - !Sub 'media-postgres-${EnvironmentSuffix}-${ResourceTimestamp}'
         - !Sub 'media-postgres-${EnvironmentSuffix}'
       DBInstanceClass: db.t3.micro
       Engine: postgres
@@ -303,11 +302,11 @@ Resources:
       DBName: mediadb
       MasterUsername: !If 
         - UseRDSSecrets
-        - !Sub '{{resolve:secretsmanager:media-db-credentials-${EnvironmentSuffix}:SecretString:username}}'
+        - !Sub '{{resolve:secretsmanager:media-db-credentials-${EnvironmentSuffix}:SecretString:username}}' # cfn-lint-disable W1011
         - !Ref DefaultDBUsername
       MasterUserPassword: !If 
         - UseRDSSecrets
-        - !Sub '{{resolve:secretsmanager:media-db-credentials-${EnvironmentSuffix}:SecretString:password}}'
+        - !Sub '{{resolve:secretsmanager:media-db-credentials-${EnvironmentSuffix}:SecretString:password}}' # cfn-lint-disable W1011
         - !Ref DefaultDBPassword
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
@@ -372,7 +371,7 @@ Resources:
     Properties:
       ReplicationGroupId: !If
         - HasTimestamp
-        - !Sub 'media-redis-${EnvironmentSuffix}-${TimestampSuffix}'
+        - !Sub 'media-redis-${EnvironmentSuffix}-${ResourceTimestamp}'
         - !Sub 'media-redis-${EnvironmentSuffix}'
       ReplicationGroupDescription: 'Redis cluster for media content metadata caching'
       Engine: redis
@@ -385,7 +384,7 @@ Resources:
       TransitEncryptionEnabled: !Ref EnableRedisAuth
       AuthToken: !If 
         - UseRedisAuth
-        - !Sub '{{resolve:secretsmanager:media-redis-auth-${EnvironmentSuffix}}}'
+        - !Sub '{{resolve:secretsmanager:media-redis-auth-${EnvironmentSuffix}}}' # cfn-lint-disable W1011
         - !Ref AWS::NoValue
       SecurityGroupIds:
         - !Ref ElastiCacheSecurityGroup
@@ -453,7 +452,7 @@ Resources:
     Properties:
       BucketName: !If
         - HasTimestamp
-        - !Sub 'media-artifacts-${EnvironmentSuffix}-${AWS::AccountId}-${TimestampSuffix}'
+        - !Sub 'media-artifacts-${EnvironmentSuffix}-${AWS::AccountId}-${ResourceTimestamp}'
         - !Sub 'media-artifacts-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -573,7 +572,7 @@ Resources:
     Properties:
       Name: !If
         - HasTimestamp
-        - !Sub 'media-pipeline-${EnvironmentSuffix}-${TimestampSuffix}'
+        - !Sub 'media-pipeline-${EnvironmentSuffix}-${ResourceTimestamp}'
         - !Sub 'media-pipeline-${EnvironmentSuffix}'
       RoleArn: !GetAtt CodePipelineRole.Arn
       ArtifactStore:

@@ -82,6 +82,10 @@ describe('TapStack CloudFormation Template', () => {
     test('should have UseRDSSecrets condition', () => {
       expect(template.Conditions.UseRDSSecrets).toBeDefined();
     });
+
+    test('should have HasTimestamp condition', () => {
+      expect(template.Conditions.HasTimestamp).toBeDefined();
+    });
   });
 
   describe('Resources', () => {
@@ -197,13 +201,14 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have required parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBeGreaterThanOrEqual(5); // EnvironmentSuffix, VpcCidr, EnableRedisAuth, EnableRDSSecrets, DefaultDBUsername, DefaultDBPassword
+      expect(parameterCount).toBeGreaterThanOrEqual(6); // EnvironmentSuffix, VpcCidr, EnableRedisAuth, EnableRDSSecrets, DefaultDBUsername, DefaultDBPassword, ResourceTimestamp
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
       expect(template.Parameters.VpcCidr).toBeDefined();
       expect(template.Parameters.EnableRedisAuth).toBeDefined();
       expect(template.Parameters.EnableRDSSecrets).toBeDefined();
       expect(template.Parameters.DefaultDBUsername).toBeDefined();
       expect(template.Parameters.DefaultDBPassword).toBeDefined();
+      expect(template.Parameters.ResourceTimestamp).toBeDefined();
     });
 
     test('should have comprehensive outputs', () => {
@@ -213,13 +218,15 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Resource Naming Convention', () => {
-    test('S3 bucket name should follow naming convention with environment suffix', () => {
+    test('S3 bucket name should support dynamic naming with timestamp', () => {
       const bucket = template.Resources.ArtifactBucket;
       const bucketName = bucket.Properties.BucketName;
 
-      expect(bucketName).toEqual({
-        'Fn::Sub': 'media-artifacts-${EnvironmentSuffix}-${AWS::AccountId}',
-      });
+      // Check that it uses conditional naming (Fn::If with HasTimestamp condition)
+      expect(bucketName['Fn::If']).toBeDefined();
+      expect(bucketName['Fn::If'][0]).toBe('HasTimestamp');
+      expect(bucketName['Fn::If'][1]['Fn::Sub']).toBe('media-artifacts-${EnvironmentSuffix}-${AWS::AccountId}-${ResourceTimestamp}');
+      expect(bucketName['Fn::If'][2]['Fn::Sub']).toBe('media-artifacts-${EnvironmentSuffix}-${AWS::AccountId}');
     });
 
     test('export names should follow naming convention', () => {

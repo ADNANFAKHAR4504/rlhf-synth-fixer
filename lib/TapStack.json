@@ -66,12 +66,10 @@
             "Description": "Default database password when not using secrets manager",
             "NoEcho": true
         },
-        "TimestampSuffix": {
+        "ResourceTimestamp": {
             "Type": "String",
             "Default": "",
-            "Description": "Optional timestamp suffix for unique resource naming (format: YYYYMMDD-HHMMSS)",
-            "AllowedPattern": "^$|^[0-9]{8}-[0-9]{6}$",
-            "ConstraintDescription": "Must be empty or in format YYYYMMDD-HHMMSS (e.g., 20251028-112030)"
+            "Description": "Optional timestamp suffix for resource naming to ensure uniqueness"
         }
     },
     "Conditions": {
@@ -96,7 +94,7 @@
                 {
                     "Fn::Equals": [
                         {
-                            "Ref": "TimestampSuffix"
+                            "Ref": "ResourceTimestamp"
                         },
                         ""
                     ]
@@ -603,7 +601,7 @@
                     "Fn::If": [
                         "HasTimestamp",
                         {
-                            "Fn::Sub": "media-postgres-${EnvironmentSuffix}-${TimestampSuffix}"
+                            "Fn::Sub": "media-postgres-${EnvironmentSuffix}-${ResourceTimestamp}"
                         },
                         {
                             "Fn::Sub": "media-postgres-${EnvironmentSuffix}"
@@ -744,7 +742,7 @@
                     "Fn::If": [
                         "HasTimestamp",
                         {
-                            "Fn::Sub": "media-redis-${EnvironmentSuffix}-${TimestampSuffix}"
+                            "Fn::Sub": "media-redis-${EnvironmentSuffix}-${ResourceTimestamp}"
                         },
                         {
                             "Fn::Sub": "media-redis-${EnvironmentSuffix}"
@@ -876,7 +874,7 @@
                     "Fn::If": [
                         "HasTimestamp",
                         {
-                            "Fn::Sub": "media-artifacts-${EnvironmentSuffix}-${AWS::AccountId}-${TimestampSuffix}"
+                            "Fn::Sub": "media-artifacts-${EnvironmentSuffix}-${AWS::AccountId}-${ResourceTimestamp}"
                         },
                         {
                             "Fn::Sub": "media-artifacts-${EnvironmentSuffix}-${AWS::AccountId}"
@@ -1086,7 +1084,7 @@
                     "Fn::If": [
                         "HasTimestamp",
                         {
-                            "Fn::Sub": "media-pipeline-${EnvironmentSuffix}-${TimestampSuffix}"
+                            "Fn::Sub": "media-pipeline-${EnvironmentSuffix}-${ResourceTimestamp}"
                         },
                         {
                             "Fn::Sub": "media-pipeline-${EnvironmentSuffix}"
