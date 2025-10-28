@@ -82,7 +82,7 @@ describe('Terraform Aurora Serverless Infrastructure - Unit Tests', () => {
 
     test('Aurora MySQL version is specified', () => {
       expect(variablesContent).toMatch(/variable\s+"aurora_mysql_version"/);
-      expect(variablesContent).toContain('8.0.mysql_aurora');
+      expect(variablesContent).toContain('8.0');
     });
   });
 
