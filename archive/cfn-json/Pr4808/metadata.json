@@ -1,0 +1,28 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348958",
+  "team": "4",
+  "startedAt": "2025-10-19T09:37:24.782Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "API Gateway",
+    "CloudWatch Logs",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "background": "Serverless Infrastructure with AWS CloudFormation (JSON) - File Upload Application",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
+}
