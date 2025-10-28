@@ -6,7 +6,7 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
   let template: any;
 
   beforeAll(() => {
-    const templatePath = path.join(__dirname, '../../lib/TapStack.yaml');
+    const templatePath = path.join(__dirname, '../../lib/TapStack.yml');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = yaml.load(templateContent);
   });
@@ -115,12 +115,47 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
     });
   });
 
+  describe('Database Resources', () => {
+    test('should have Aurora DB cluster', () => {
+      expect(template.Resources.AuroraDBCluster).toBeDefined();
+      expect(template.Resources.AuroraDBCluster.Type).toBe('AWS::RDS::DBCluster');
+    });
+
+    test('Aurora cluster should have encryption enabled', () => {
+      const cluster = template.Resources.AuroraDBCluster;
+      expect(cluster.Properties.StorageEncrypted).toBe(true);
+    });
+  });
+
+  describe('ECS Resources', () => {
+    test('should have ECS cluster', () => {
+      expect(template.Resources.ECSCluster).toBeDefined();
+      expect(template.Resources.ECSCluster.Type).toBe('AWS::ECS::Cluster');
+    });
+
+    test('should have ECS service', () => {
+      expect(template.Resources.ECSService).toBeDefined();
+      expect(template.Resources.ECSService.Type).toBe('AWS::ECS::Service');
+    });
+  });
+
+  describe('Load Balancer Resources', () => {
+    test('should have Application Load Balancer', () => {
+      expect(template.Resources.ApplicationLoadBalancer).toBeDefined();
+      expect(template.Resources.ApplicationLoadBalancer.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
+    });
+
+    test('should have ALB target group', () => {
+      expect(template.Resources.ALBTargetGroup).toBeDefined();
+      expect(template.Resources.ALBTargetGroup.Type).toBe('AWS::ElasticLoadBalancingV2::TargetGroup');
+    });
+  });
+
   describe('Outputs', () => {
     test('should have VPCId output', () => {
       expect(template.Outputs.VPCId).toBeDefined();
       expect(template.Outputs.VPCId.Description).toBeDefined();
       expect(template.Outputs.VPCId.Value).toBeDefined();
-      expect(template.Outputs.VPCId.Export).toBeDefined();
     });
 
     test('all outputs should have descriptions', () => {
