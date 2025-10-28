@@ -5,8 +5,8 @@ resource "aws_appautoscaling_target" "aurora_serverless" {
   service_namespace  = "rds"
   scalable_dimension = "rds:cluster:ServerlessV2ScalingConfiguration"
   resource_id        = "cluster:${aws_rds_cluster.aurora_serverless.cluster_identifier}"
-  min_capacity       = var.aurora_min_capacity
-  max_capacity       = var.aurora_max_capacity
+  min_capacity       = floor(var.aurora_min_capacity)
+  max_capacity       = floor(var.aurora_max_capacity)
 
   depends_on = [aws_rds_cluster_instance.aurora_instance]
 }
@@ -84,7 +84,7 @@ resource "aws_appautoscaling_scheduled_action" "scale_down_offpeak" {
   schedule           = "cron(0 2 * * ? *)" # 2 AM UTC daily
 
   scalable_target_action {
-    min_capacity = var.aurora_min_capacity
+    min_capacity = floor(var.aurora_min_capacity)
     max_capacity = 8
   }
 }

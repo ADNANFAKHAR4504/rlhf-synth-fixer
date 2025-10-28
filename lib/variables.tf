@@ -74,13 +74,13 @@ variable "aurora_instance_count" {
 }
 
 variable "aurora_min_capacity" {
-  description = "Minimum capacity for Aurora Serverless v2"
+  description = "Minimum capacity for Aurora Serverless v2 (must be whole number)"
   type        = number
-  default     = 0.5
+  default     = 1
 }
 
 variable "aurora_max_capacity" {
-  description = "Maximum capacity for Aurora Serverless v2"
+  description = "Maximum capacity for Aurora Serverless v2 (must be whole number)"
   type        = number
   default     = 128
 }
