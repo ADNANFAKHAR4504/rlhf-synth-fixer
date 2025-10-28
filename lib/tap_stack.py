@@ -7,6 +7,7 @@ All resources are deployed in eu-central-1 with encryption and security best pra
 """
 
 import json
+import os
 from pathlib import Path
 from typing import Optional
 import pulumi
@@ -61,16 +62,16 @@ class TapStack(pulumi.ComponentResource):
         self.environment_suffix = args.environment_suffix
 
         # Common tags for all resources
+        region = os.getenv('AWS_REGION', 'eu-central-1')
         common_tags = {
             'Environment': self.environment_suffix,
             'Application': 'FastCartOrderProcessing',
             'ManagedBy': 'Pulumi',
-            'Region': 'eu-central-1'
+            'Region': region
         }
 
         # Get current AWS account ID and region for KMS policy
         current = aws.get_caller_identity()
-        region = aws.get_region()
 
         # ========================================
         # KMS Key for Encryption
@@ -95,7 +96,8 @@ class TapStack(pulumi.ComponentResource):
                         "Sid": "Allow CloudWatch Logs",
                         "Effect": "Allow",
                         "Principal": {
-                            "Service": f"logs.eu-central-1.amazonaws.com"
+                            # Allow the CloudWatch Logs service in the current region
+                            "Service": f"logs.{region.name}.amazonaws.com"
                         },
                         "Action": [
                             "kms:Encrypt",
@@ -737,7 +739,7 @@ class TapStack(pulumi.ComponentResource):
                     },
                     {
                         "name": "AWS_REGION",
-                        "value": "eu-central-1"
+                        "value": region.name
                     }
                 ],
                 "secrets": [
