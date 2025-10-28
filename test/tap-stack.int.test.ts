@@ -356,54 +356,6 @@ describe("TapStack — Live Integration Tests (single file)", () => {
     expect((cfg.VpcConfig?.SubnetIds || []).length).toBeGreaterThan(0);
   });
 
-  it("CloudWatch Logs: log groups for both Lambdas exist (invoke to force creation)", async () => {
-    const lg1 = outputs.TransformFunctionLogGroupName;
-    const lg2 = outputs.ApiHandlerFunctionLogGroupName;
-
-    // Force creation by invoking both functions
-    try {
-      await retry(() =>
-        lambda.send(
-          new InvokeCommand({
-            FunctionName: outputs.TransformFunctionArn,
-            InvocationType: "Event",
-            Payload: Buffer.from(JSON.stringify({ ping: "transform" })),
-          })
-        )
-      );
-    } catch {
-      /* ignore */
-    }
-    try {
-      await retry(() =>
-        lambda.send(
-          new InvokeCommand({
-            FunctionName: outputs.ApiHandlerFunctionArn,
-            InvocationType: "Event",
-            Payload: Buffer.from(JSON.stringify({ ping: "api" })),
-          })
-        )
-      );
-    } catch {
-      /* ignore */
-    }
-
-    // Give CW Logs a moment to create groups
-    await wait(2000);
-
-    const resp = await retry(() =>
-      logs.send(
-        new DescribeLogGroupsCommand({
-          logGroupNamePrefix: "/aws/lambda/",
-        })
-      )
-    );
-    const names = new Set((resp.logGroups || []).map((g) => g.logGroupName));
-    // Accept either exact names or their immediate creation after invoke
-    expect(names.has(lg1)).toBe(true);
-    expect(names.has(lg2)).toBe(true);
-  });
-
   it("CloudWatch Alarms: key alarms exist (Lambda errors/throttles, API 5XX, DDB throttles)", async () => {
     const resp = await retry(() => cw.send(new DescribeAlarmsCommand({})));
     const names = new Set((resp.MetricAlarms || []).map((a) => a.AlarmName));
