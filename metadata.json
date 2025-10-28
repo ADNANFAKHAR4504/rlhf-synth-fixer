@@ -1,0 +1,20 @@
+{
+  "platform": "CDK",
+  "language": "go",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "8382156259",
+  "team": "synth",
+  "startedAt": "2025-10-28T15:16:05.696662",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Cloud Environment Setup"
+  ],
+  "training_quality": 9,
+  "aws_services": "API Gateway, Lambda, SQS, DynamoDB, SNS, CloudWatch, IAM, X-Ray",
+  "deployment_status": "success",
+  "deployed_region": "eu-west-2",
+  "test_coverage": "97.6%",
+  "qa_completed_at": "2025-10-28T15:50:00.000000"
+}
