@@ -86,40 +86,10 @@ elif [ "$PLATFORM" = "cdktf" ]; then
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
   echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
-
-  # Check if stack exists and is in DELETE_FAILED state
-  STACK_NAME="TapStack${ENVIRONMENT_SUFFIX}"
-  STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region "$AWS_REGION" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
-
-  if [ "$STACK_STATUS" = "DELETE_FAILED" ]; then
-    echo "⚠️  Stack is in DELETE_FAILED state, attempting to delete before redeployment..."
-    aws cloudformation delete-stack --stack-name "$STACK_NAME" --region "$AWS_REGION" || echo "Delete stack command issued"
-    echo "⏳ Waiting for stack deletion to complete (max 5 minutes)..."
-    aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" --region "$AWS_REGION" 2>/dev/null || echo "Stack deletion completed or timed out"
-    echo "✅ Stack cleanup completed, proceeding with deployment..."
-  elif [ "$STACK_STATUS" != "DOES_NOT_EXIST" ]; then
-    echo "ℹ️  Existing stack status: $STACK_STATUS"
-  fi
-
   npm run cfn:deploy-yaml
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
   echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
-
-  # Check if stack exists and is in DELETE_FAILED state
-  STACK_NAME="TapStack${ENVIRONMENT_SUFFIX}"
-  STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region "$AWS_REGION" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
-
-  if [ "$STACK_STATUS" = "DELETE_FAILED" ]; then
-    echo "⚠️  Stack is in DELETE_FAILED state, attempting to delete before redeployment..."
-    aws cloudformation delete-stack --stack-name "$STACK_NAME" --region "$AWS_REGION" || echo "Delete stack command issued"
-    echo "⏳ Waiting for stack deletion to complete (max 5 minutes)..."
-    aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" --region "$AWS_REGION" 2>/dev/null || echo "Stack deletion completed or timed out"
-    echo "✅ Stack cleanup completed, proceeding with deployment..."
-  elif [ "$STACK_STATUS" != "DOES_NOT_EXIST" ]; then
-    echo "ℹ️  Existing stack status: $STACK_STATUS"
-  fi
-
   npm run cfn:deploy-json
 
 elif [ "$PLATFORM" = "tf" ]; then
