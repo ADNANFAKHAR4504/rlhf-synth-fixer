@@ -575,6 +575,10 @@ Resources:
                   - 'kms:Decrypt'
                   - 'kms:GenerateDataKey'
                 Resource: !GetAtt NovaEncryptionKey.Arn
+              - Effect: Allow
+                Action:
+                  - 'secretsmanager:GetSecretValue'
+                Resource: !Ref NovaRDSPasswordSecret
       Tags:
         - Key: Name
           Value: 'nova-prod-ec2-role'
