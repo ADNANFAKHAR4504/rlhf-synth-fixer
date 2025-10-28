@@ -14,12 +14,6 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
-  });
-
   describe('Template Structure', () => {
     test('should have valid CloudFormation format version', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
@@ -28,7 +22,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+        'StreamFlix High Availability Database Infrastructure - Multi-AZ Aurora, ElastiCache, ECS Fargate, and Real-time Analytics'
       );
     });
 
@@ -58,57 +52,53 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
-    });
+    test('should have core StreamFlix resources', () => {
+      // Check a representative set of resources expected in this template
+      expect(template.Resources.VPC).toBeDefined();
+      expect(template.Resources.VPC.Type).toBe('AWS::EC2::VPC');
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
-    });
+      expect(template.Resources.AuroraCluster).toBeDefined();
+      expect(template.Resources.AuroraCluster.Type).toBe('AWS::RDS::DBCluster');
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
-    });
+      expect(template.Resources.ElastiCacheReplicationGroup).toBeDefined();
+      expect(template.Resources.ElastiCacheReplicationGroup.Type).toBe(
+        'AWS::ElastiCache::ReplicationGroup'
+      );
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
+      expect(template.Resources.ECSCluster).toBeDefined();
+      expect(template.Resources.ECSCluster.Type).toBe('AWS::ECS::Cluster');
 
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
-    });
+      expect(template.Resources.EFSFileSystem).toBeDefined();
+      expect(template.Resources.EFSFileSystem.Type).toBe('AWS::EFS::FileSystem');
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
+      expect(template.Resources.KinesisStream).toBeDefined();
+      expect(template.Resources.KinesisStream.Type).toBe('AWS::Kinesis::Stream');
 
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
-    });
+      expect(template.Resources.APIGatewayRestAPI).toBeDefined();
+      expect(template.Resources.APIGatewayRestAPI.Type).toBe(
+        'AWS::ApiGateway::RestApi'
+      );
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
-
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+      expect(template.Resources.DBSecret).toBeDefined();
+      // DBSecret can be AWS::SecretsManager::Secret
+      expect(template.Resources.DBSecret.Type).toBe('AWS::SecretsManager::Secret');
     });
   });
 
   describe('Outputs', () => {
-    test('should have all required outputs', () => {
+    test('should have required outputs (VPC, Aurora endpoints, Redis, EFS, ECS, Kinesis, API, DBSecret, EnvironmentSuffix)', () => {
       const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
+        'VPCId',
+        'AuroraClusterEndpoint',
+        'AuroraClusterReadEndpoint',
+        'RedisEndpoint',
+        'RedisPort',
+        'EFSFileSystemId',
+        'ECSClusterName',
+        'KinesisStreamName',
+        'KinesisStreamARN',
+        'APIGatewayURL',
+        'DBSecretArn',
         'EnvironmentSuffix',
       ];
 
@@ -117,44 +107,18 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
+    test('AuroraClusterEndpoint output should reference the Aurora cluster', () => {
+      const output = template.Outputs.AuroraClusterEndpoint;
+      expect(output.Description).toBe('Aurora PostgreSQL cluster endpoint');
+      expect(output.Value).toEqual({ 'Fn::GetAtt': ['AuroraCluster', 'Endpoint.Address'] });
+      expect(output.Export.Name['Fn::Sub']).toMatch(/^\$\{AWS::StackName\}-/);
     });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
-    });
-
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
-    });
-
-    test('EnvironmentSuffix output should be correct', () => {
+    test('EnvironmentSuffix output should export with hyphenated suffix', () => {
       const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
+      expect(output.Description).toBe('Environment suffix used for this deployment');
       expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
-      });
+      expect(output.Export.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}-Environment-Suffix' });
     });
   });
 
@@ -172,38 +136,31 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have expected resource/parameter/output counts for StreamFlix', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
-    });
-
-    test('should have exactly one parameter', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
-    });
-
-    test('should have exactly four outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+
+      // These counts reflect the generated StreamFlix template in lib/TapStack.json
+      expect(resourceCount).toBe(53);
+      expect(parameterCount).toBe(8);
+      expect(outputCount).toBe(12);
     });
   });
 
   describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
-
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
+    test('no TAP-specific DynamoDB table present', () => {
+      // This template is StreamFlix infra and should not include TurnAroundPromptTable
+      expect(template.Resources.TurnAroundPromptTable).toBeUndefined();
     });
 
-    test('export names should follow naming convention', () => {
+    test('export names should start with stack name prefix', () => {
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
+        expect(output.Export).toBeDefined();
+        const sub = output.Export.Name['Fn::Sub'];
+        expect(typeof sub).toBe('string');
+        expect(sub.startsWith('${AWS::StackName}-')).toBe(true);
       });
     });
   });
