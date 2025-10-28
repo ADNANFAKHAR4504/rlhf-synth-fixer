@@ -348,7 +348,7 @@ Resources:
       RestApiId: !Ref FedRAMPRestAPI
       ResourceId: !Ref DataResource
       HttpMethod: GET
-      AuthorizationType: API_KEY
+      AuthorizationType: NONE
       ApiKeyRequired: true
       RequestParameters:
         method.request.header.x-api-key: true
@@ -411,8 +411,6 @@ Resources:
   
   APIUsagePlan:
     Type: AWS::ApiGateway::UsagePlan
-    DependsOn:
-      - APIStage
     Properties:
       UsagePlanName: !Sub 'fedramp-usage-plan-${EnvironmentSuffix}'
       Description: !Sub 'Usage plan with throttling for FedRAMP API - ${EnvironmentSuffix}'
