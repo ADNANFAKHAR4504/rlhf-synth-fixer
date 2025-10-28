@@ -29,5 +29,6 @@
     "Load Balancer",
     "Route Tables",
     "KMS"
-  ]
+  ],
+  "training_quality": 10
 }
