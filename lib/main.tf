@@ -69,8 +69,8 @@ resource "aws_rds_cluster" "aurora_serverless" {
   # Initial backup configuration - Secrets Manager will manage the password
   final_snapshot_identifier = "${var.project_name}-${var.environment_suffix}-final-snapshot"
 
-  # High availability
-  availability_zones = data.aws_availability_zones.available.names
+  # High availability (limit to 3 AZs for Aurora)
+  availability_zones = slice(data.aws_availability_zones.available.names, 0, 3)
 
   # Serverless v2 scaling configuration
   serverlessv2_scaling_configuration {
