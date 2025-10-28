@@ -101,7 +101,7 @@ class TapStack(cdk.Stack):
                     "min_capacity": 5, "max_capacity": 20
                 },
                 "s3": {"versioning": False, "retention_days": 7},
-                "lambda": {"timeout": 30, "memory_size": 512, "reserved_concurrency": 10}
+                "lambda": {"timeout": 30, "memory_size": 512}
             },
             "prod": {
                 "cognito": {"self_signup": False, "password_min_length": 12},
@@ -111,7 +111,7 @@ class TapStack(cdk.Stack):
                     "min_capacity": 25, "max_capacity": 1000
                 },
                 "s3": {"versioning": True, "retention_days": 90},
-                "lambda": {"timeout": 60, "memory_size": 1024, "reserved_concurrency": 100}
+                "lambda": {"timeout": 60, "memory_size": 1024}
             }
         }
         return configs.get(self.environment_suffix, configs["dev"])
@@ -156,24 +156,14 @@ class TapStack(cdk.Stack):
             refresh_token_validity=Duration.days(30)
         )
 
-        # Add a default user for testing (only in dev) - Fixed the CfnUserPoolUser parameters
+        # For development environments, provide instructions for user creation
         if self.environment_suffix == "dev":
-            cognito.CfnUserPoolUser(
+            CfnOutput(
                 self,
-                "TestUser",
-                user_pool_id=self.user_pool.user_pool_id,
-                username="testuser@example.com",
-                user_attributes=[
-                    cognito.CfnUserPoolUser.AttributeTypeProperty(
-                        name="email",
-                        value="testuser@example.com"
-                    ),
-                    cognito.CfnUserPoolUser.AttributeTypeProperty(
-                        name="email_verified",
-                        value="true"
-                    )
-                ],
-                message_action="SUPPRESS"
+                "CreateTestUserInstructions",
+                value=f"aws cognito-idp admin-create-user --user-pool-id {self.user_pool.user_pool_id} --username testuser@example.com --user-attributes Name=email,Value=testuser@example.com Name=email_verified,Value=true --temporary-password 'TempPass123!' --message-action SUPPRESS",
+                description="Command to create a test user for development",
+                export_name=f"{self.stack_name}-CreateTestUserCommand"
             )
 
     def _create_s3_staging_bucket(self) -> None:
@@ -389,7 +379,6 @@ def lambda_handler(event, context):
             'body': json.dumps({'error': 'Internal server error'})
         }
             """),
-            reserved_concurrent_executions=self.config["lambda"]["reserved_concurrency"],
             **lambda_config
         )
 
@@ -491,7 +480,6 @@ def lambda_handler(event, context):
             'body': json.dumps({'error': 'Processing failed'})
         }
             """),
-            reserved_concurrent_executions=self.config["lambda"]["reserved_concurrency"],
             **lambda_config
         )
 
@@ -499,7 +487,7 @@ def lambda_handler(event, context):
         self.health_lambda = lambda_.Function(
             self,
             f"{self.environment_suffix}-HealthLambda",
-            function_name=f"{self.environment_suffix}-health-check",
+            function_name=f"{self.environment_suffix}-serverless-health-check",
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="index.handler",
             code=lambda_.Code.from_inline("""
