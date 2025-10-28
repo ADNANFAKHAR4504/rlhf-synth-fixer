@@ -109,12 +109,19 @@ export class TapStack extends cdk.Stack {
         runtime: lambda.Runtime.NODEJS_18_X,
         code: lambda.Code.fromInline(`
 const AWS = require('aws-sdk');
+
+// Configure AWS SDK with region
+AWS.config.update({ region: process.env.AWS_REGION || 'us-east-1' });
 const dynamoDB = new AWS.DynamoDB.DocumentClient();
 
 exports.handler = async (event) => {
+  console.log('Lambda function invoked with event:', JSON.stringify(event, null, 2));
+
   const { httpMethod, path, body, pathParameters, queryStringParameters } = event;
   const tableName = process.env.TABLE_NAME;
   const secretArn = process.env.SECRET_ARN;
+
+  console.log('Environment variables:', { tableName, secretArn });
 
   try {
     // Parse request body for POST/PUT
@@ -155,12 +162,14 @@ exports.handler = async (event) => {
           };
         } else {
           // List all items (simple scan for now)
+          console.log('Scanning table:', tableName);
           const params = {
             TableName: tableName,
             Limit: 50
           };
 
           const result = await dynamoDB.scan(params).promise();
+          console.log('Scan result:', result);
 
           return {
             statusCode: 200,
@@ -172,8 +181,10 @@ exports.handler = async (event) => {
         }
 
       case 'POST':
+        console.log('POST operation with body:', requestBody);
         // Validate required fields
         if (!requestBody.name) {
+          console.log('Missing name field');
           return {
             statusCode: 400,
             body: JSON.stringify({ error: 'Name field is required' }),
@@ -190,10 +201,19 @@ exports.handler = async (event) => {
           updatedAt: new Date().toISOString(),
         };
 
-        await dynamoDB.put({
-          TableName: tableName,
-          Item: newItem
-        }).promise();
+        console.log('Creating item:', newItem);
+        console.log('Table name:', tableName);
+
+        try {
+          await dynamoDB.put({
+            TableName: tableName,
+            Item: newItem
+          }).promise();
+          console.log('Item created successfully');
+        } catch (dbError) {
+          console.error('DynamoDB put error:', dbError);
+          throw dbError;
+        }
 
         return {
           statusCode: 201,
