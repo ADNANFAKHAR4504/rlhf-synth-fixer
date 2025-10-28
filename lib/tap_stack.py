@@ -487,7 +487,6 @@ def lambda_handler(event, context):
         self.health_lambda = lambda_.Function(
             self,
             f"{self.environment_suffix}-HealthLambda",
-            function_name=f"{self.environment_suffix}-serverless-health-check",
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="index.handler",
             code=lambda_.Code.from_inline("""
@@ -514,16 +513,6 @@ def handler(event, context):
                 "ENVIRONMENT": self.environment_suffix
             }
         )
-
-        # Create CloudWatch Log Groups with retention
-        for lambda_func in [self.validate_lambda, self.process_lambda, self.health_lambda]:
-            logs.LogGroup(
-                self,
-                f"{lambda_func.node.id}-LogGroup",
-                log_group_name=f"/aws/lambda/{lambda_func.function_name}",
-                retention=logs.RetentionDays.ONE_WEEK if self.environment_suffix == "dev" else logs.RetentionDays.ONE_MONTH,
-                removal_policy=RemovalPolicy.DESTROY if self.environment_suffix == "dev" else RemovalPolicy.RETAIN
-            )
 
         # Grant permissions
         self.staging_bucket.grant_read_write(self.validate_lambda)
