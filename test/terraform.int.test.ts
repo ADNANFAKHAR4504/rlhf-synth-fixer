@@ -1,5 +1,6 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import * as AWS from 'aws-sdk';
 
 const outputsPath = join(__dirname, '../cfn-outputs/flat-outputs.json');
 
@@ -279,8 +280,7 @@ describe('Terraform IAM Zero-Trust Security Framework - Integration Tests', () =
   describe('Application Flow - Role Assumption Workflow', () => {
     test('should verify developer role has correct trust policy with MFA condition', async () => {
       if (!outputsExist) return;
-      const { IAM } = await import('aws-sdk');
-      const iam = new IAM({ region: outputs.region || 'us-east-1' });
+      const iam = new AWS.IAM({ region: outputs.region || 'us-east-1' });
 
       const roleName = outputs.developer_role_name;
       if (!roleName) {
@@ -304,8 +304,7 @@ describe('Terraform IAM Zero-Trust Security Framework - Integration Tests', () =
 
     test('should verify administrator role has strict MFA age requirement', async () => {
       if (!outputsExist) return;
-      const { IAM } = await import('aws-sdk');
-      const iam = new IAM({ region: outputs.region || 'us-east-1' });
+      const iam = new AWS.IAM({ region: outputs.region || 'us-east-1' });
 
       const roleName = outputs.administrator_role_name;
       if (!roleName) {
@@ -326,8 +325,7 @@ describe('Terraform IAM Zero-Trust Security Framework - Integration Tests', () =
 
     test('should verify break glass role has 1 hour max session duration', async () => {
       if (!outputsExist) return;
-      const { IAM } = await import('aws-sdk');
-      const iam = new IAM({ region: outputs.region || 'us-east-1' });
+      const iam = new AWS.IAM({ region: outputs.region || 'us-east-1' });
 
       const roleName = outputs.break_glass_role_name;
       if (!roleName) {
@@ -343,8 +341,7 @@ describe('Terraform IAM Zero-Trust Security Framework - Integration Tests', () =
   describe('Application Flow - S3 Access Workflow', () => {
     test('should verify S3 bucket has VPC endpoint restriction policy', async () => {
       if (!outputsExist) return;
-      const { S3 } = await import('aws-sdk');
-      const s3 = new S3({ region: outputs.region || 'us-east-1' });
+      const s3 = new AWS.S3({ region: outputs.region || 'us-east-1' });
 
       const bucketName = outputs.financial_data_bucket_name;
       if (!bucketName) {
@@ -375,8 +372,7 @@ describe('Terraform IAM Zero-Trust Security Framework - Integration Tests', () =
 
     test('should verify S3 bucket denies unencrypted uploads', async () => {
       if (!outputsExist) return;
-      const { S3 } = await import('aws-sdk');
-      const s3 = new S3({ region: outputs.region || 'us-east-1' });
+      const s3 = new AWS.S3({ region: outputs.region || 'us-east-1' });
 
       const bucketName = outputs.financial_data_bucket_name;
       if (!bucketName) {
@@ -407,8 +403,7 @@ describe('Terraform IAM Zero-Trust Security Framework - Integration Tests', () =
 
     test('should verify S3 bucket has versioning enabled', async () => {
       if (!outputsExist) return;
-      const { S3 } = await import('aws-sdk');
-      const s3 = new S3({ region: outputs.region || 'us-east-1' });
+      const s3 = new AWS.S3({ region: outputs.region || 'us-east-1' });
 
       const bucketName = outputs.financial_data_bucket_name;
       if (!bucketName) {
@@ -422,8 +417,7 @@ describe('Terraform IAM Zero-Trust Security Framework - Integration Tests', () =
 
     test('should verify S3 bucket has default encryption enabled', async () => {
       if (!outputsExist) return;
-      const { S3 } = await import('aws-sdk');
-      const s3 = new S3({ region: outputs.region || 'us-east-1' });
+      const s3 = new AWS.S3({ region: outputs.region || 'us-east-1' });
 
       const bucketName = outputs.financial_data_bucket_name;
       if (!bucketName) {
@@ -441,8 +435,7 @@ describe('Terraform IAM Zero-Trust Security Framework - Integration Tests', () =
 
     test('should verify S3 bucket blocks public access', async () => {
       if (!outputsExist) return;
-      const { S3 } = await import('aws-sdk');
-      const s3 = new S3({ region: outputs.region || 'us-east-1' });
+      const s3 = new AWS.S3({ region: outputs.region || 'us-east-1' });
 
       const bucketName = outputs.financial_data_bucket_name;
       if (!bucketName) {
@@ -461,8 +454,7 @@ describe('Terraform IAM Zero-Trust Security Framework - Integration Tests', () =
   describe('Application Flow - IAM Monitoring Workflow', () => {
     test('should verify EventBridge rules exist for IAM monitoring', async () => {
       if (!outputsExist) return;
-      const { EventBridge } = await import('aws-sdk');
-      const eventbridge = new EventBridge({ region: outputs.region || 'us-east-1' });
+      const eventbridge = new AWS.EventBridge({ region: outputs.region || 'us-east-1' });
 
       if (!outputs.iam_events_log_group_name) {
         console.log('Skipping: IAM monitoring not deployed');
@@ -480,8 +472,7 @@ describe('Terraform IAM Zero-Trust Security Framework - Integration Tests', () =
 
     test('should verify CloudWatch log group exists for IAM events', async () => {
       if (!outputsExist) return;
-      const { CloudWatchLogs } = await import('aws-sdk');
-      const logs = new CloudWatchLogs({ region: outputs.region || 'us-east-1' });
+      const logs = new AWS.CloudWatchLogs({ region: outputs.region || 'us-east-1' });
 
       const logGroupName = outputs.iam_events_log_group_name;
       if (!logGroupName) {
@@ -502,8 +493,7 @@ describe('Terraform IAM Zero-Trust Security Framework - Integration Tests', () =
 
     test('should verify SNS topic exists for security alerts', async () => {
       if (!outputsExist) return;
-      const { SNS } = await import('aws-sdk');
-      const sns = new SNS({ region: outputs.region || 'us-east-1' });
+      const sns = new AWS.SNS({ region: outputs.region || 'us-east-1' });
 
       const topicArn = outputs.security_alerts_topic_arn;
       if (!topicArn) {
@@ -518,8 +508,7 @@ describe('Terraform IAM Zero-Trust Security Framework - Integration Tests', () =
 
     test('should verify CloudWatch metric filters exist for security events', async () => {
       if (!outputsExist) return;
-      const { CloudWatchLogs } = await import('aws-sdk');
-      const logs = new CloudWatchLogs({ region: outputs.region || 'us-east-1' });
+      const logs = new AWS.CloudWatchLogs({ region: outputs.region || 'us-east-1' });
 
       const logGroupName = outputs.iam_events_log_group_name;
       if (!logGroupName) {
@@ -537,8 +526,7 @@ describe('Terraform IAM Zero-Trust Security Framework - Integration Tests', () =
 
     test('should verify CloudWatch alarms exist for security metrics', async () => {
       if (!outputsExist) return;
-      const { CloudWatch } = await import('aws-sdk');
-      const cloudwatch = new CloudWatch({ region: outputs.region || 'us-east-1' });
+      const cloudwatch = new AWS.CloudWatch({ region: outputs.region || 'us-east-1' });
 
       if (!outputs.security_alerts_topic_arn) {
         console.log('Skipping: Security alerts not deployed');
@@ -560,8 +548,7 @@ describe('Terraform IAM Zero-Trust Security Framework - Integration Tests', () =
   describe('Application Flow - Time-Based Access Expiration', () => {
     test('should verify Lambda function exists for access expiration', async () => {
       if (!outputsExist) return;
-      const { Lambda } = await import('aws-sdk');
-      const lambda = new Lambda({ region: outputs.region || 'us-east-1' });
+      const lambda = new AWS.Lambda({ region: outputs.region || 'us-east-1' });
 
       const functionName = outputs.access_expiration_lambda_function_name;
       if (!functionName) {
@@ -577,9 +564,8 @@ describe('Terraform IAM Zero-Trust Security Framework - Integration Tests', () =
 
     test('should verify Lambda has IAM permissions to detach policies', async () => {
       if (!outputsExist) return;
-      const { IAM, Lambda } = await import('aws-sdk');
-      const iam = new IAM({ region: outputs.region || 'us-east-1' });
-      const lambda = new Lambda({ region: outputs.region || 'us-east-1' });
+      const iam = new AWS.IAM({ region: outputs.region || 'us-east-1' });
+      const lambda = new AWS.Lambda({ region: outputs.region || 'us-east-1' });
 
       const functionName = outputs.access_expiration_lambda_function_name;
       if (!functionName) {
@@ -597,8 +583,7 @@ describe('Terraform IAM Zero-Trust Security Framework - Integration Tests', () =
 
     test('should verify EventBridge schedule rule exists for Lambda', async () => {
       if (!outputsExist) return;
-      const { EventBridge } = await import('aws-sdk');
-      const eventbridge = new EventBridge({ region: outputs.region || 'us-east-1' });
+      const eventbridge = new AWS.EventBridge({ region: outputs.region || 'us-east-1' });
 
       const functionName = outputs.access_expiration_lambda_function_name;
       if (!functionName) {
@@ -620,8 +605,7 @@ describe('Terraform IAM Zero-Trust Security Framework - Integration Tests', () =
 
     test('should verify Lambda function CloudWatch logs are encrypted', async () => {
       if (!outputsExist) return;
-      const { CloudWatchLogs } = await import('aws-sdk');
-      const logs = new CloudWatchLogs({ region: outputs.region || 'us-east-1' });
+      const logs = new AWS.CloudWatchLogs({ region: outputs.region || 'us-east-1' });
 
       const functionName = outputs.access_expiration_lambda_function_name;
       if (!functionName) {
@@ -644,8 +628,7 @@ describe('Terraform IAM Zero-Trust Security Framework - Integration Tests', () =
   describe('Application Flow - Cross-Account Access Workflow', () => {
     test('should verify cross-account auditor role requires external ID', async () => {
       if (!outputsExist) return;
-      const { IAM } = await import('aws-sdk');
-      const iam = new IAM({ region: outputs.region || 'us-east-1' });
+      const iam = new AWS.IAM({ region: outputs.region || 'us-east-1' });
 
       const roleArn = outputs.cross_account_auditor_role_arn;
       if (!roleArn) {
@@ -665,8 +648,7 @@ describe('Terraform IAM Zero-Trust Security Framework - Integration Tests', () =
 
     test('should verify cross-account auditor role has read-only policies', async () => {
       if (!outputsExist) return;
-      const { IAM } = await import('aws-sdk');
-      const iam = new IAM({ region: outputs.region || 'us-east-1' });
+      const iam = new AWS.IAM({ region: outputs.region || 'us-east-1' });
 
       const roleArn = outputs.cross_account_auditor_role_arn;
       if (!roleArn) {

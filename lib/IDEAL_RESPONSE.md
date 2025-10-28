@@ -1,336 +1,21 @@
-# Zero-Trust IAM Security Framework for Financial Services
+# Zero-Trust IAM Security Framework for Financial Services - Complete Implementation
 
 ## Overview
 
-This Terraform infrastructure implements a comprehensive zero-trust IAM security framework for a regulated financial services company. The solution provides:
-
-- Advanced conditional IAM policies with IP restrictions, MFA requirements, time-based access, VPC endpoint enforcement, and regional restrictions
-- Granular role hierarchy with separation of duties (developers, operators, administrators)
-- Cross-account access controls with external ID validation
-- Automated time-based access expiration via Lambda
-- Comprehensive CloudWatch monitoring for all IAM activities
-- Strict password policies and service-specific least privilege roles
-- S3 bucket policies with VPC restrictions and MFA delete requirements
+This document contains the complete implementation of a zero-trust IAM security framework for a regulated financial services company using Terraform HCL.
 
 ## Architecture
 
-### Multi-File Terraform Structure
+### Components
 
-The infrastructure is organized into logical, maintainable files:
-
-- **versions.tf**: Terraform and provider version constraints
-- **provider.tf**: AWS provider configuration with S3 backend
-- **variables.tf**: Input variables with validation rules
-- **data.tf**: Data sources for AWS account information
-- **locals.tf**: Local values, naming conventions, and common tags
-- **iam-policies.tf**: Advanced conditional IAM policies
-- **iam-roles-developer.tf**: Developer role definitions
-- **iam-roles-operator.tf**: Operator role definitions  
-- **iam-roles-administrator.tf**: Administrator and break-glass roles
-- **iam-roles-service.tf**: EC2, Lambda, and RDS service roles
-- **iam-cross-account.tf**: Cross-account access configurations
-- **iam-password-policy.tf**: Account password policy
-- **s3.tf**: Secure S3 buckets with advanced policies
-- **monitoring.tf**: CloudWatch monitoring and alerting
-- **lambda.tf**: Lambda function for access expiration
-- **outputs.tf**: Output values
-
-### Key Security Features
-
-1. **Multi-Condition IAM Policies**: Every policy includes 3+ condition keys (IP, MFA, region, time, VPC endpoint)
-2. **Explicit Deny Statements**: Fail-closed security with explicit denies for unauthorized actions
-3. **Permission Boundaries**: Prevents privilege escalation
-4. **Session Duration Limits**: Maximum 4 hours for internal roles, 2 hours for external
-5. **MFA Enforcement**: Required for all role assumptions and sensitive operations
-6. **Regional Restrictions**: Operations limited to us-east-1 only
-7. **Automated Access Expiration**: Lambda function automatically revokes time-based access
-8. **Comprehensive Monitoring**: EventBridge rules and CloudWatch alarms for all IAM events
+- **IAM Roles:** Developer, Operator, Administrator, Break-Glass, Service Roles (EC2, Lambda, RDS)
+- **IAM Policies:** Advanced conditional policies with 3+ condition keys each
+- **S3 Security:** KMS encryption, versioning, VPC endpoint restrictions, MFA delete support
+- **Monitoring:** CloudWatch, EventBridge, SNS alerts, metric filters
+- **Automation:** Lambda function for time-based access expiration
+- **Security:** Password policies, permission boundaries, cross-account access controls
 
 ## Complete Terraform Code
-
-### versions.tf
-
-```hcl
-terraform {
-  required_version = ">= 1.5.0"
-
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = ">= 5.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = ">= 3.5"
-    }
-  }
-}
-```
-
-### provider.tf
-
-```hcl
-# provider.tf
-
-terraform {
-  required_version = ">= 1.5.0"
-
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = ">= 5.0"
-    }
-  }
-
-  # Partial backend config: values are injected at `terraform init` time
-  backend "s3" {}
-}
-
-# Primary AWS provider for general resources
-provider "aws" {
-  region = var.aws_region
-}
-```
-
-### variables.tf
-
-```hcl
-# General Variables
-variable "aws_region" {
-  description = "AWS region for resource deployment"
-  type        = string
-  default     = "us-east-1"
-}
-
-variable "environment" {
-  description = "Environment name (dev, staging, production)"
-  type        = string
-  default     = "production"
-
-  validation {
-    condition     = contains(["dev", "staging", "production"], var.environment)
-    error_message = "Environment must be dev, staging, or production."
-  }
-}
-
-variable "environment_suffix" {
-  description = "Unique suffix for resource naming (e.g., pr4798, synth123). Reads from ENVIRONMENT_SUFFIX env variable if not provided."
-  type        = string
-  default     = ""
-
-  validation {
-    condition     = var.environment_suffix == "" || can(regex("^[a-z0-9-]+$", var.environment_suffix))
-    error_message = "Environment suffix must contain only lowercase letters, numbers, and hyphens."
-  }
-}
-
-variable "project_name" {
-  description = "Project name for resource tagging and naming"
-  type        = string
-  default     = "zero-trust-iam"
-}
-
-variable "owner" {
-  description = "Owner or team responsible for the infrastructure"
-  type        = string
-  default     = "security-team"
-}
-
-# Network Security Variables
-variable "allowed_ip_ranges" {
-  description = "List of allowed IP CIDR ranges for corporate network and VPN access"
-  type        = list(string)
-  default = [
-    "10.0.0.0/8",
-    "172.16.0.0/12"
-  ]
-}
-
-variable "vpc_endpoint_id" {
-  description = "VPC endpoint ID for S3 access restrictions"
-  type        = string
-  default     = ""
-}
-
-# Time-Based Access Variables
-variable "business_hours_start" {
-  description = "Start of business hours in UTC (format: HH:MM:SS)"
-  type        = string
-  default     = "13:00:00"
-}
-
-variable "business_hours_end" {
-  description = "End of business hours in UTC (format: HH:MM:SS)"
-  type        = string
-  default     = "22:00:00"
-}
-
-# Session Configuration Variables
-variable "max_session_duration" {
-  description = "Maximum session duration in seconds for IAM roles (max 14400 = 4 hours)"
-  type        = number
-  default     = 14400
-
-  validation {
-    condition     = var.max_session_duration >= 3600 && var.max_session_duration <= 14400
-    error_message = "Maximum session duration must be between 3600 seconds (1 hour) and 14400 seconds (4 hours)."
-  }
-}
-
-variable "external_session_duration" {
-  description = "Session duration in seconds for external cross-account access (max 7200 = 2 hours)"
-  type        = number
-  default     = 7200
-
-  validation {
-    condition     = var.external_session_duration >= 3600 && var.external_session_duration <= 7200
-    error_message = "External session duration must be between 3600 seconds (1 hour) and 7200 seconds (2 hours)."
-  }
-}
-
-variable "mfa_max_age" {
-  description = "Maximum age of MFA authentication in seconds"
-  type        = number
-  default     = 3600
-}
-
-# Cross-Account Access Variables
-variable "external_account_ids" {
-  description = "List of external AWS account IDs allowed for cross-account access"
-  type        = list(string)
-  default     = []
-}
-
-variable "external_id" {
-  description = "External ID for cross-account role assumption (prevents confused deputy attacks)"
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
-# Regional Restrictions Variables
-variable "allowed_regions" {
-  description = "List of AWS regions where operations are permitted"
-  type        = list(string)
-  default     = ["us-east-1"]
-}
-
-# Password Policy Variables
-variable "password_min_length" {
-  description = "Minimum password length for IAM users"
-  type        = number
-  default     = 14
-
-  validation {
-    condition     = var.password_min_length >= 14
-    error_message = "Password minimum length must be at least 14 characters."
-  }
-}
-
-variable "password_max_age" {
-  description = "Maximum password age in days before expiration"
-  type        = number
-  default     = 90
-
-  validation {
-    condition     = var.password_max_age >= 1 && var.password_max_age <= 90
-    error_message = "Password maximum age must be between 1 and 90 days."
-  }
-}
-
-variable "password_reuse_prevention" {
-  description = "Number of previous passwords that cannot be reused"
-  type        = number
-  default     = 12
-
-  validation {
-    condition     = var.password_reuse_prevention >= 12
-    error_message = "Password reuse prevention must remember at least 12 passwords."
-  }
-}
-
-# S3 Security Variables
-variable "enable_s3_access_logging" {
-  description = "Enable S3 access logging for financial data buckets"
-  type        = bool
-  default     = true
-}
-
-variable "s3_encryption_enabled" {
-  description = "Enable KMS encryption for S3 buckets"
-  type        = bool
-  default     = true
-}
-
-# Monitoring Variables
-variable "enable_iam_monitoring" {
-  description = "Enable CloudWatch monitoring for IAM activities"
-  type        = bool
-  default     = true
-}
-
-variable "alert_email" {
-  description = "Email address for security alerts"
-  type        = string
-  default     = "security-team@example.com"
-}
-
-variable "log_retention_days" {
-  description = "CloudWatch Logs retention period in days"
-  type        = number
-  default     = 90
-
-  validation {
-    condition     = var.log_retention_days >= 90
-    error_message = "Log retention must be at least 90 days for compliance."
-  }
-}
-
-# Time-Based Access Expiration Variables
-variable "enable_time_based_access" {
-  description = "Enable Lambda function for automatic time-based access expiration"
-  type        = bool
-  default     = true
-}
-
-variable "access_check_interval" {
-  description = "Interval in minutes for checking and revoking expired access"
-  type        = number
-  default     = 60
-}
-
-# Service Role Variables
-variable "enable_ec2_instance_role" {
-  description = "Create IAM role for EC2 instances"
-  type        = bool
-  default     = true
-}
-
-variable "enable_lambda_execution_role" {
-  description = "Create IAM role for Lambda functions"
-  type        = bool
-  default     = true
-}
-
-variable "enable_rds_monitoring_role" {
-  description = "Create IAM role for RDS Enhanced Monitoring"
-  type        = bool
-  default     = true
-}
-
-# Financial Data Bucket Variables
-variable "financial_data_bucket_name" {
-  description = "Name of the S3 bucket for financial data storage (will be suffixed with environment)"
-  type        = string
-  default     = "financial-data"
-}
-
-variable "enable_mfa_delete" {
-  description = "Require MFA for S3 object deletion operations"
-  type        = bool
-  default     = true
-}
-```
 
 ### data.tf
 
@@ -350,97 +35,201 @@ data "aws_availability_zones" "available" {
 
 # AWS partition for constructing ARNs
 data "aws_partition" "current" {}
+
 ```
 
-### locals.tf
+### iam-cross-account.tf
 
 ```hcl
-# Random suffix for unique resource naming (fallback when environment_suffix not provided)
-resource "random_string" "suffix" {
-  length  = 8
-  special = false
-  upper   = false
+# Cross-Account Access Roles
+
+# Cross-Account Auditor Role
+data "aws_iam_policy_document" "cross_account_auditor_trust" {
+  count = length(var.external_account_ids) > 0 ? 1 : 0
+
+  statement {
+    sid     = "AllowCrossAccountAssumeRole"
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "AWS"
+      identifiers = [for account_id in var.external_account_ids : "arn:${local.partition}:iam::${account_id}:root"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "sts:ExternalId"
+      values   = [var.external_id]
+    }
+
+    condition {
+      test     = "Bool"
+      variable = "aws:MultiFactorAuthPresent"
+      values   = ["true"]
+    }
+  }
 }
 
-# Local Values
-locals {
-  # Resource naming
-  name_prefix = "${var.project_name}-${var.environment}"
+resource "aws_iam_role" "cross_account_auditor" {
+  count = length(var.external_account_ids) > 0 ? 1 : 0
 
-  # Use environment_suffix if provided (from ENVIRONMENT_SUFFIX env var), otherwise use random suffix
-  name_suffix = var.environment_suffix != "" ? var.environment_suffix : random_string.suffix.result
+  name                 = "${local.name_prefix}-cross-account-auditor-${local.name_suffix}"
+  description          = "Cross-account auditor role for external partners"
+  assume_role_policy   = data.aws_iam_policy_document.cross_account_auditor_trust[0].json
+  max_session_duration = var.external_session_duration
 
-  # AWS Account and Region
-  account_id = data.aws_caller_identity.current.account_id
-  region     = data.aws_region.current.id
-  partition  = data.aws_partition.current.partition
-
-  # Common tags for all resources
-  common_tags = {
-    Project        = var.project_name
-    Environment    = var.environment
-    Owner          = var.owner
-    ManagedBy      = "Terraform"
-    ComplianceType = "FinancialServices"
-    SecurityLevel  = "High"
-  }
-
-  # IAM policy conditions
-  ip_condition = {
-    IpAddress = {
-      "aws:SourceIp" = var.allowed_ip_ranges
-    }
-  }
-
-  mfa_condition = {
-    Bool = {
-      "aws:MultiFactorAuthPresent" = "true"
-    }
-    NumericLessThan = {
-      "aws:MultiFactorAuthAge" = var.mfa_max_age
-    }
-  }
-
-  region_condition = {
-    StringEquals = {
-      "aws:RequestedRegion" = var.allowed_regions
-    }
-  }
-
-  vpc_endpoint_condition = var.vpc_endpoint_id != "" ? {
-    StringEquals = {
-      "aws:SourceVpce" = var.vpc_endpoint_id
-    }
-  } : {}
-
-  # Time-based access condition
-  time_condition = {
-    DateGreaterThan = {
-      "aws:CurrentTime" = formatdate("YYYY-MM-DD'T'${var.business_hours_start}Z", timestamp())
-    }
-    DateLessThan = {
-      "aws:CurrentTime" = formatdate("YYYY-MM-DD'T'${var.business_hours_end}Z", timestamp())
-    }
-  }
-
-  # S3 bucket names
-  financial_data_bucket = "${local.name_prefix}-${var.financial_data_bucket_name}-${local.name_suffix}"
-  access_logs_bucket    = "${local.name_prefix}-access-logs-${local.name_suffix}"
-
-  # SNS topic name
-  security_alerts_topic = "${local.name_prefix}-security-alerts-${local.name_suffix}"
-
-  # Lambda function names
-  access_expiration_lambda = "${local.name_prefix}-access-expiration-${local.name_suffix}"
-
-  # CloudWatch log group names
-  iam_events_log_group        = "/aws/iam/${local.name_prefix}-events-${local.name_suffix}"
-  access_expiration_log_group = "/aws/lambda/${local.access_expiration_lambda}"
-  cloudtrail_log_group        = "/aws/cloudtrail/${local.name_prefix}-${local.name_suffix}"
-
-  # KMS key alias
-  kms_key_alias = "alias/${local.name_prefix}-${local.name_suffix}"
+  tags = merge(local.common_tags, {
+    RoleType = "CrossAccount-Auditor"
+  })
 }
+
+# Cross-Account Auditor Policy - Read-only access
+data "aws_iam_policy_document" "cross_account_auditor_policy" {
+  count = length(var.external_account_ids) > 0 ? 1 : 0
+
+  # Read-only access for auditing
+  statement {
+    sid    = "ReadOnlyAuditAccess"
+    effect = "Allow"
+    actions = [
+      "s3:GetBucketPolicy",
+      "s3:GetBucketVersioning",
+      "s3:GetBucketLogging",
+      "s3:GetEncryptionConfiguration",
+      "s3:ListBucket",
+      "iam:GetRole",
+      "iam:GetPolicy",
+      "iam:GetPolicyVersion",
+      "iam:ListPolicies",
+      "iam:ListRoles",
+      "cloudtrail:DescribeTrails",
+      "cloudtrail:GetTrailStatus",
+      "cloudtrail:LookupEvents",
+      "logs:DescribeLogGroups",
+      "logs:DescribeLogStreams",
+      "kms:DescribeKey",
+      "kms:GetKeyPolicy",
+      "kms:GetKeyRotationStatus",
+      "config:DescribeConfigRules",
+      "config:GetComplianceDetailsByConfigRule"
+    ]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestedRegion"
+      values   = var.allowed_regions
+    }
+  }
+
+  # Deny any modification actions
+  statement {
+    sid    = "DenyAllModifications"
+    effect = "Deny"
+    actions = [
+      "*:Create*",
+      "*:Update*",
+      "*:Delete*",
+      "*:Put*",
+      "*:Modify*"
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_policy" "cross_account_auditor" {
+  count = length(var.external_account_ids) > 0 ? 1 : 0
+
+  name        = "${local.name_prefix}-cross-account-auditor-policy-${local.name_suffix}"
+  description = "Cross-account auditor policy with read-only access"
+  policy      = data.aws_iam_policy_document.cross_account_auditor_policy[0].json
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "cross_account_auditor" {
+  count = length(var.external_account_ids) > 0 ? 1 : 0
+
+  role       = aws_iam_role.cross_account_auditor[0].name
+  policy_arn = aws_iam_policy.cross_account_auditor[0].arn
+}
+
+# Cross-Account Support Role (with more limited access)
+data "aws_iam_policy_document" "cross_account_support_trust" {
+  count = length(var.external_account_ids) > 0 ? 1 : 0
+
+  statement {
+    sid     = "AllowSupportAssumeRole"
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "AWS"
+      identifiers = [for account_id in var.external_account_ids : "arn:${local.partition}:iam::${account_id}:root"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "sts:ExternalId"
+      values   = [var.external_id]
+    }
+
+    condition {
+      test     = "Bool"
+      variable = "aws:MultiFactorAuthPresent"
+      values   = ["true"]
+    }
+
+    # Session tagging for tracking
+    condition {
+      test     = "StringLike"
+      variable = "sts:RequestTag/Purpose"
+      values   = ["Support", "Troubleshooting"]
+    }
+  }
+}
+
+resource "aws_iam_role" "cross_account_support" {
+  count = length(var.external_account_ids) > 0 ? 1 : 0
+
+  name                 = "${local.name_prefix}-cross-account-support-${local.name_suffix}"
+  description          = "Cross-account support role for external partners"
+  assume_role_policy   = data.aws_iam_policy_document.cross_account_support_trust[0].json
+  max_session_duration = var.external_session_duration
+
+  tags = merge(local.common_tags, {
+    RoleType = "CrossAccount-Support"
+  })
+}
+
+# Attach AWS managed ReadOnlyAccess policy
+resource "aws_iam_role_policy_attachment" "cross_account_support_readonly" {
+  count = length(var.external_account_ids) > 0 ? 1 : 0
+
+  role       = aws_iam_role.cross_account_support[0].name
+  policy_arn = "arn:${local.partition}:iam::aws:policy/ReadOnlyAccess"
+}
+
+```
+
+### iam-password-policy.tf
+
+```hcl
+# IAM Account Password Policy
+
+resource "aws_iam_account_password_policy" "strict" {
+  minimum_password_length        = var.password_min_length
+  require_uppercase_characters   = true
+  require_lowercase_characters   = true
+  require_numbers                = true
+  require_symbols                = true
+  allow_users_to_change_password = true
+  max_password_age               = var.password_max_age
+  password_reuse_prevention      = var.password_reuse_prevention
+  hard_expiry                    = false
+}
+
 ```
 
 ### iam-policies.tf
@@ -873,6 +662,156 @@ resource "aws_iam_policy" "permission_boundary" {
 
   tags = local.common_tags
 }
+
+```
+
+### iam-roles-administrator.tf
+
+```hcl
+# Administrator IAM Roles
+
+# Administrator Trust Policy - Strictest MFA and IP requirements
+data "aws_iam_policy_document" "administrator_trust" {
+  statement {
+    sid     = "AllowAssumeRoleWithStrictMFA"
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:${local.partition}:iam::${local.account_id}:root"]
+    }
+
+    condition {
+      test     = "Bool"
+      variable = "aws:MultiFactorAuthPresent"
+      values   = ["true"]
+    }
+
+    condition {
+      test     = "NumericLessThan"
+      variable = "aws:MultiFactorAuthAge"
+      values   = ["900"]
+    }
+
+    condition {
+      test     = "IpAddress"
+      variable = "aws:SourceIp"
+      values   = var.allowed_ip_ranges
+    }
+  }
+}
+
+# Administrator Role
+resource "aws_iam_role" "administrator" {
+  name                 = "${local.name_prefix}-administrator-role-${local.name_suffix}"
+  description          = "Administrator role with full access and maximum security controls"
+  assume_role_policy   = data.aws_iam_policy_document.administrator_trust.json
+  max_session_duration = var.max_session_duration
+  permissions_boundary = aws_iam_policy.permission_boundary.arn
+
+  tags = merge(local.common_tags, {
+    RoleType = "Administrator"
+  })
+}
+
+# Attach administrator policy
+resource "aws_iam_role_policy_attachment" "administrator_main" {
+  role       = aws_iam_role.administrator.name
+  policy_arn = aws_iam_policy.administrator.arn
+}
+
+# Attach regional restriction policy
+resource "aws_iam_role_policy_attachment" "administrator_regional" {
+  role       = aws_iam_role.administrator.name
+  policy_arn = aws_iam_policy.regional_restriction.arn
+}
+
+# Administrator audit policy - Enhanced logging
+data "aws_iam_policy_document" "administrator_audit_policy" {
+  statement {
+    sid    = "AuditAllActions"
+    effect = "Allow"
+    actions = [
+      "cloudtrail:LookupEvents",
+      "cloudtrail:GetTrailStatus",
+      "cloudtrail:DescribeTrails",
+      "cloudtrail:GetEventSelectors",
+      "logs:GetLogEvents",
+      "logs:FilterLogEvents",
+      "config:GetComplianceDetailsByConfigRule",
+      "config:DescribeConfigRules",
+      "access-analyzer:ListFindings",
+      "guardduty:ListFindings"
+    ]
+    resources = ["*"]
+
+    condition {
+      test     = "IpAddress"
+      variable = "aws:SourceIp"
+      values   = var.allowed_ip_ranges
+    }
+
+    condition {
+      test     = "Bool"
+      variable = "aws:MultiFactorAuthPresent"
+      values   = ["true"]
+    }
+  }
+}
+
+resource "aws_iam_policy" "administrator_audit" {
+  name        = "${local.name_prefix}-administrator-audit-policy-${local.name_suffix}"
+  description = "Administrator audit and compliance policy"
+  policy      = data.aws_iam_policy_document.administrator_audit_policy.json
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "administrator_audit" {
+  role       = aws_iam_role.administrator.name
+  policy_arn = aws_iam_policy.administrator_audit.arn
+}
+
+# Break Glass Role - Emergency access with minimal conditions
+data "aws_iam_policy_document" "break_glass_trust" {
+  statement {
+    sid     = "EmergencyAccess"
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:${local.partition}:iam::${local.account_id}:root"]
+    }
+
+    condition {
+      test     = "Bool"
+      variable = "aws:MultiFactorAuthPresent"
+      values   = ["true"]
+    }
+  }
+}
+
+# Break Glass Role - For absolute emergencies only
+resource "aws_iam_role" "break_glass" {
+  name                 = "${local.name_prefix}-break-glass-role-${local.name_suffix}"
+  description          = "Emergency break-glass role with full access (use only in critical situations)"
+  assume_role_policy   = data.aws_iam_policy_document.break_glass_trust.json
+  max_session_duration = 3600
+
+  tags = merge(local.common_tags, {
+    RoleType = "BreakGlass"
+    Critical = "true"
+  })
+}
+
+# Attach AdministratorAccess for break glass
+resource "aws_iam_role_policy_attachment" "break_glass_admin" {
+  role       = aws_iam_role.break_glass.name
+  policy_arn = "arn:${local.partition}:iam::aws:policy/AdministratorAccess"
+}
+
 ```
 
 ### iam-roles-developer.tf
@@ -1058,6 +997,7 @@ resource "aws_iam_role_policy_attachment" "developer_logs" {
   role       = aws_iam_role.developer.name
   policy_arn = aws_iam_policy.developer_logs.arn
 }
+
 ```
 
 ### iam-roles-operator.tf
@@ -1242,154 +1182,7 @@ resource "aws_iam_role_policy_attachment" "operator_monitoring" {
   role       = aws_iam_role.operator.name
   policy_arn = aws_iam_policy.operator_monitoring.arn
 }
-```
 
-### iam-roles-administrator.tf
-
-```hcl
-# Administrator IAM Roles
-
-# Administrator Trust Policy - Strictest MFA and IP requirements
-data "aws_iam_policy_document" "administrator_trust" {
-  statement {
-    sid     = "AllowAssumeRoleWithStrictMFA"
-    effect  = "Allow"
-    actions = ["sts:AssumeRole"]
-
-    principals {
-      type        = "AWS"
-      identifiers = ["arn:${local.partition}:iam::${local.account_id}:root"]
-    }
-
-    condition {
-      test     = "Bool"
-      variable = "aws:MultiFactorAuthPresent"
-      values   = ["true"]
-    }
-
-    condition {
-      test     = "NumericLessThan"
-      variable = "aws:MultiFactorAuthAge"
-      values   = ["900"]
-    }
-
-    condition {
-      test     = "IpAddress"
-      variable = "aws:SourceIp"
-      values   = var.allowed_ip_ranges
-    }
-  }
-}
-
-# Administrator Role
-resource "aws_iam_role" "administrator" {
-  name                 = "${local.name_prefix}-administrator-role-${local.name_suffix}"
-  description          = "Administrator role with full access and maximum security controls"
-  assume_role_policy   = data.aws_iam_policy_document.administrator_trust.json
-  max_session_duration = var.max_session_duration
-  permissions_boundary = aws_iam_policy.permission_boundary.arn
-
-  tags = merge(local.common_tags, {
-    RoleType = "Administrator"
-  })
-}
-
-# Attach administrator policy
-resource "aws_iam_role_policy_attachment" "administrator_main" {
-  role       = aws_iam_role.administrator.name
-  policy_arn = aws_iam_policy.administrator.arn
-}
-
-# Attach regional restriction policy
-resource "aws_iam_role_policy_attachment" "administrator_regional" {
-  role       = aws_iam_role.administrator.name
-  policy_arn = aws_iam_policy.regional_restriction.arn
-}
-
-# Administrator audit policy - Enhanced logging
-data "aws_iam_policy_document" "administrator_audit_policy" {
-  statement {
-    sid    = "AuditAllActions"
-    effect = "Allow"
-    actions = [
-      "cloudtrail:LookupEvents",
-      "cloudtrail:GetTrailStatus",
-      "cloudtrail:DescribeTrails",
-      "cloudtrail:GetEventSelectors",
-      "logs:GetLogEvents",
-      "logs:FilterLogEvents",
-      "config:GetComplianceDetailsByConfigRule",
-      "config:DescribeConfigRules",
-      "access-analyzer:ListFindings",
-      "guardduty:ListFindings"
-    ]
-    resources = ["*"]
-
-    condition {
-      test     = "IpAddress"
-      variable = "aws:SourceIp"
-      values   = var.allowed_ip_ranges
-    }
-
-    condition {
-      test     = "Bool"
-      variable = "aws:MultiFactorAuthPresent"
-      values   = ["true"]
-    }
-  }
-}
-
-resource "aws_iam_policy" "administrator_audit" {
-  name        = "${local.name_prefix}-administrator-audit-policy-${local.name_suffix}"
-  description = "Administrator audit and compliance policy"
-  policy      = data.aws_iam_policy_document.administrator_audit_policy.json
-
-  tags = local.common_tags
-}
-
-resource "aws_iam_role_policy_attachment" "administrator_audit" {
-  role       = aws_iam_role.administrator.name
-  policy_arn = aws_iam_policy.administrator_audit.arn
-}
-
-# Break Glass Role - Emergency access with minimal conditions
-data "aws_iam_policy_document" "break_glass_trust" {
-  statement {
-    sid     = "EmergencyAccess"
-    effect  = "Allow"
-    actions = ["sts:AssumeRole"]
-
-    principals {
-      type        = "AWS"
-      identifiers = ["arn:${local.partition}:iam::${local.account_id}:root"]
-    }
-
-    condition {
-      test     = "Bool"
-      variable = "aws:MultiFactorAuthPresent"
-      values   = ["true"]
-    }
-  }
-}
-
-# Break Glass Role - For absolute emergencies only
-resource "aws_iam_role" "break_glass" {
-  name                 = "${local.name_prefix}-break-glass-role-${local.name_suffix}"
-  description          = "Emergency break-glass role with full access (use only in critical situations)"
-  assume_role_policy   = data.aws_iam_policy_document.break_glass_trust.json
-  max_session_duration = 3600
-
-  tags = merge(local.common_tags, {
-    RoleType = "BreakGlass"
-    Critical = "true"
-  })
-}
-
-# Attach AdministratorAccess for break glass
-resource "aws_iam_role_policy_attachment" "break_glass_admin" {
-  role       = aws_iam_role.break_glass.name
-  policy_arn = "arn:${local.partition}:iam::aws:policy/AdministratorAccess"
-}
 ```
 
 ### iam-roles-service.tf
@@ -1629,496 +1422,286 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring" {
   role       = aws_iam_role.rds_monitoring[0].name
   policy_arn = "arn:${local.partition}:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
 }
+
 ```
 
-### iam-cross-account.tf
+### lambda.tf
 
 ```hcl
-# Cross-Account Access Roles
+# Lambda Function for Time-Based Access Expiration
 
-# Cross-Account Auditor Role
-data "aws_iam_policy_document" "cross_account_auditor_trust" {
-  count = length(var.external_account_ids) > 0 ? 1 : 0
+# CloudWatch Log Group for Lambda
+resource "aws_cloudwatch_log_group" "access_expiration" {
+  count = var.enable_time_based_access ? 1 : 0
 
+  name              = local.access_expiration_log_group
+  retention_in_days = var.log_retention_days
+  kms_key_id        = var.s3_encryption_enabled ? aws_kms_key.s3[0].arn : null
+
+  tags = local.common_tags
+
+  depends_on = [aws_kms_key.s3]
+}
+
+# Lambda IAM Role
+data "aws_iam_policy_document" "access_expiration_lambda_trust" {
   statement {
-    sid     = "AllowCrossAccountAssumeRole"
+    sid     = "AllowLambdaAssumeRole"
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
     principals {
-      type        = "AWS"
-      identifiers = [for account_id in var.external_account_ids : "arn:${local.partition}:iam::${account_id}:root"]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "sts:ExternalId"
-      values   = [var.external_id]
-    }
-
-    condition {
-      test     = "Bool"
-      variable = "aws:MultiFactorAuthPresent"
-      values   = ["true"]
+      type        = "Service"
+      identifiers = ["lambda.amazonaws.com"]
     }
   }
 }
 
-resource "aws_iam_role" "cross_account_auditor" {
-  count = length(var.external_account_ids) > 0 ? 1 : 0
+resource "aws_iam_role" "access_expiration_lambda" {
+  count = var.enable_time_based_access ? 1 : 0
 
-  name                 = "${local.name_prefix}-cross-account-auditor-${local.name_suffix}"
-  description          = "Cross-account auditor role for external partners"
-  assume_role_policy   = data.aws_iam_policy_document.cross_account_auditor_trust[0].json
-  max_session_duration = var.external_session_duration
+  name                 = "${local.name_prefix}-access-expiration-lambda-${local.name_suffix}"
+  description          = "Lambda role for time-based access expiration"
+  assume_role_policy   = data.aws_iam_policy_document.access_expiration_lambda_trust.json
+  max_session_duration = 3600
 
   tags = merge(local.common_tags, {
-    RoleType = "CrossAccount-Auditor"
+    RoleType = "Lambda-AccessExpiration"
   })
 }
 
-# Cross-Account Auditor Policy - Read-only access
-data "aws_iam_policy_document" "cross_account_auditor_policy" {
-  count = length(var.external_account_ids) > 0 ? 1 : 0
-
-  # Read-only access for auditing
+# Lambda Execution Policy
+data "aws_iam_policy_document" "access_expiration_lambda_policy" {
+  # CloudWatch Logs permissions
   statement {
-    sid    = "ReadOnlyAuditAccess"
+    sid    = "WriteCloudWatchLogs"
     effect = "Allow"
     actions = [
-      "s3:GetBucketPolicy",
-      "s3:GetBucketVersioning",
-      "s3:GetBucketLogging",
-      "s3:GetEncryptionConfiguration",
-      "s3:ListBucket",
-      "iam:GetRole",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents"
+    ]
+    resources = [
+      "${aws_cloudwatch_log_group.access_expiration[0].arn}:*"
+    ]
+  }
+
+  # IAM permissions to list and detach policies
+  statement {
+    sid    = "ManageIAMPolicies"
+    effect = "Allow"
+    actions = [
+      "iam:ListPolicies",
       "iam:GetPolicy",
       "iam:GetPolicyVersion",
-      "iam:ListPolicies",
-      "iam:ListRoles",
-      "cloudtrail:DescribeTrails",
-      "cloudtrail:GetTrailStatus",
-      "cloudtrail:LookupEvents",
-      "logs:DescribeLogGroups",
-      "logs:DescribeLogStreams",
-      "kms:DescribeKey",
-      "kms:GetKeyPolicy",
-      "kms:GetKeyRotationStatus",
-      "config:DescribeConfigRules",
-      "config:GetComplianceDetailsByConfigRule"
+      "iam:ListEntitiesForPolicy",
+      "iam:DetachUserPolicy",
+      "iam:DetachGroupPolicy",
+      "iam:DetachRolePolicy"
     ]
     resources = ["*"]
-
-    condition {
-      test     = "StringEquals"
-      variable = "aws:RequestedRegion"
-      values   = var.allowed_regions
-    }
   }
 
-  # Deny any modification actions
+  # CloudWatch metrics permissions
   statement {
-    sid    = "DenyAllModifications"
-    effect = "Deny"
+    sid    = "PublishMetrics"
+    effect = "Allow"
     actions = [
-      "*:Create*",
-      "*:Update*",
-      "*:Delete*",
-      "*:Put*",
-      "*:Modify*"
+      "cloudwatch:PutMetricData"
     ]
     resources = ["*"]
+  }
+
+  # SNS permissions for notifications
+  statement {
+    sid    = "PublishToSNS"
+    effect = "Allow"
+    actions = [
+      "sns:Publish"
+    ]
+    resources = var.enable_iam_monitoring ? [aws_sns_topic.security_alerts[0].arn] : []
   }
 }
 
-resource "aws_iam_policy" "cross_account_auditor" {
-  count = length(var.external_account_ids) > 0 ? 1 : 0
+resource "aws_iam_policy" "access_expiration_lambda" {
+  count = var.enable_time_based_access ? 1 : 0
 
-  name        = "${local.name_prefix}-cross-account-auditor-policy-${local.name_suffix}"
-  description = "Cross-account auditor policy with read-only access"
-  policy      = data.aws_iam_policy_document.cross_account_auditor_policy[0].json
+  name        = "${local.name_prefix}-access-expiration-lambda-policy-${local.name_suffix}"
+  description = "Lambda policy for access expiration function"
+  policy      = data.aws_iam_policy_document.access_expiration_lambda_policy.json
 
   tags = local.common_tags
 }
 
-resource "aws_iam_role_policy_attachment" "cross_account_auditor" {
-  count = length(var.external_account_ids) > 0 ? 1 : 0
+resource "aws_iam_role_policy_attachment" "access_expiration_lambda" {
+  count = var.enable_time_based_access ? 1 : 0
 
-  role       = aws_iam_role.cross_account_auditor[0].name
-  policy_arn = aws_iam_policy.cross_account_auditor[0].arn
+  role       = aws_iam_role.access_expiration_lambda[0].name
+  policy_arn = aws_iam_policy.access_expiration_lambda[0].arn
 }
 
-# Cross-Account Support Role (with more limited access)
-data "aws_iam_policy_document" "cross_account_support_trust" {
-  count = length(var.external_account_ids) > 0 ? 1 : 0
+# Archive Lambda function code
+data "archive_file" "access_expiration_lambda" {
+  count = var.enable_time_based_access ? 1 : 0
 
-  statement {
-    sid     = "AllowSupportAssumeRole"
-    effect  = "Allow"
-    actions = ["sts:AssumeRole"]
+  type        = "zip"
+  source_dir  = "${path.module}/lambda-access-expiration"
+  output_path = "${path.module}/.terraform/lambda-access-expiration.zip"
+}
 
-    principals {
-      type        = "AWS"
-      identifiers = [for account_id in var.external_account_ids : "arn:${local.partition}:iam::${account_id}:root"]
-    }
+# Lambda Function
+resource "aws_lambda_function" "access_expiration" {
+  count = var.enable_time_based_access ? 1 : 0
 
-    condition {
-      test     = "StringEquals"
-      variable = "sts:ExternalId"
-      values   = [var.external_id]
-    }
+  filename         = data.archive_file.access_expiration_lambda[0].output_path
+  function_name    = local.access_expiration_lambda
+  role             = aws_iam_role.access_expiration_lambda[0].arn
+  handler          = "index.lambda_handler"
+  source_code_hash = data.archive_file.access_expiration_lambda[0].output_base64sha256
+  runtime          = "python3.11"
+  timeout          = 300
+  memory_size      = 256
 
-    condition {
-      test     = "Bool"
-      variable = "aws:MultiFactorAuthPresent"
-      values   = ["true"]
-    }
-
-    # Session tagging for tracking
-    condition {
-      test     = "StringLike"
-      variable = "sts:RequestTag/Purpose"
-      values   = ["Support", "Troubleshooting"]
+  environment {
+    variables = {
+      SNS_TOPIC_ARN = var.enable_iam_monitoring ? aws_sns_topic.security_alerts[0].arn : ""
+      PROJECT_NAME  = var.project_name
     }
   }
+
+  tracing_config {
+    mode = "Active"
+  }
+
+  tags = local.common_tags
+
+  depends_on = [
+    aws_cloudwatch_log_group.access_expiration,
+    aws_iam_role_policy_attachment.access_expiration_lambda
+  ]
 }
 
-resource "aws_iam_role" "cross_account_support" {
-  count = length(var.external_account_ids) > 0 ? 1 : 0
+# EventBridge Rule to trigger Lambda on schedule
+resource "aws_cloudwatch_event_rule" "access_expiration_schedule" {
+  count = var.enable_time_based_access ? 1 : 0
 
-  name                 = "${local.name_prefix}-cross-account-support-${local.name_suffix}"
-  description          = "Cross-account support role for external partners"
-  assume_role_policy   = data.aws_iam_policy_document.cross_account_support_trust[0].json
-  max_session_duration = var.external_session_duration
-
-  tags = merge(local.common_tags, {
-    RoleType = "CrossAccount-Support"
-  })
-}
-
-# Attach AWS managed ReadOnlyAccess policy
-resource "aws_iam_role_policy_attachment" "cross_account_support_readonly" {
-  count = length(var.external_account_ids) > 0 ? 1 : 0
-
-  role       = aws_iam_role.cross_account_support[0].name
-  policy_arn = "arn:${local.partition}:iam::aws:policy/ReadOnlyAccess"
-}
-```
-
-### iam-password-policy.tf
-
-```hcl
-# IAM Account Password Policy
-
-resource "aws_iam_account_password_policy" "strict" {
-  minimum_password_length        = var.password_min_length
-  require_uppercase_characters   = true
-  require_lowercase_characters   = true
-  require_numbers                = true
-  require_symbols                = true
-  allow_users_to_change_password = true
-  max_password_age               = var.password_max_age
-  password_reuse_prevention      = var.password_reuse_prevention
-  hard_expiry                    = false
-}
-```
-
-### s3.tf
-
-```hcl
-# S3 Buckets with Advanced Security
-
-# KMS Key for S3 Encryption
-resource "aws_kms_key" "s3" {
-  count = var.s3_encryption_enabled ? 1 : 0
-
-  description             = "KMS key for S3 bucket encryption"
-  deletion_window_in_days = 30
-  enable_key_rotation     = true
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "Enable IAM User Permissions"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:${local.partition}:iam::${local.account_id}:root"
-        }
-        Action   = "kms:*"
-        Resource = "*"
-      },
-      {
-        Sid    = "Allow S3 to use the key"
-        Effect = "Allow"
-        Principal = {
-          Service = "s3.amazonaws.com"
-        }
-        Action = [
-          "kms:Decrypt",
-          "kms:GenerateDataKey"
-        ]
-        Resource = "*"
-      },
-      {
-        Sid    = "Allow CloudWatch Logs"
-        Effect = "Allow"
-        Principal = {
-          Service = "logs.${local.region}.amazonaws.com"
-        }
-        Action = [
-          "kms:Encrypt",
-          "kms:Decrypt",
-          "kms:ReEncrypt*",
-          "kms:GenerateDataKey*",
-          "kms:CreateGrant",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-        Condition = {
-          ArnLike = {
-            "kms:EncryptionContext:aws:logs:arn" = "arn:${local.partition}:logs:${local.region}:${local.account_id}:log-group:*"
-          }
-        }
-      }
-    ]
-  })
+  name                = "${local.name_prefix}-access-expiration-schedule-${local.name_suffix}"
+  description         = "Trigger access expiration check every ${var.access_check_interval} minutes"
+  schedule_expression = "rate(${var.access_check_interval} minutes)"
 
   tags = local.common_tags
 }
 
-resource "aws_kms_alias" "s3" {
-  count = var.s3_encryption_enabled ? 1 : 0
+resource "aws_cloudwatch_event_target" "access_expiration_lambda" {
+  count = var.enable_time_based_access ? 1 : 0
 
-  name          = local.kms_key_alias
-  target_key_id = aws_kms_key.s3[0].key_id
+  rule      = aws_cloudwatch_event_rule.access_expiration_schedule[0].name
+  target_id = "AccessExpirationLambda"
+  arn       = aws_lambda_function.access_expiration[0].arn
 }
 
-# Access Logs Bucket
-resource "aws_s3_bucket" "access_logs" {
-  count = var.enable_s3_access_logging ? 1 : 0
+# Lambda permission for EventBridge
+resource "aws_lambda_permission" "access_expiration_eventbridge" {
+  count = var.enable_time_based_access ? 1 : 0
 
-  bucket = local.access_logs_bucket
-
-  tags = merge(local.common_tags, {
-    Purpose = "AccessLogs"
-  })
+  statement_id  = "AllowExecutionFromEventBridge"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.access_expiration[0].function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.access_expiration_schedule[0].arn
 }
 
-resource "aws_s3_bucket_public_access_block" "access_logs" {
-  count = var.enable_s3_access_logging ? 1 : 0
+```
 
-  bucket = aws_s3_bucket.access_logs[0].id
+### locals.tf
 
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
+```hcl
+# Random suffix for unique resource naming (fallback when environment_suffix not provided)
+resource "random_string" "suffix" {
+  length  = 8
+  special = false
+  upper   = false
 }
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "access_logs" {
-  count = var.enable_s3_access_logging && var.s3_encryption_enabled ? 1 : 0
+# Local Values
+locals {
+  # Resource naming
+  name_prefix = "${var.project_name}-${var.environment}"
 
-  bucket = aws_s3_bucket.access_logs[0].id
+  # Use environment_suffix if provided (from ENVIRONMENT_SUFFIX env var), otherwise use random suffix
+  name_suffix = var.environment_suffix != "" ? var.environment_suffix : random_string.suffix.result
 
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm     = "aws:kms"
-      kms_master_key_id = aws_kms_key.s3[0].arn
-    }
-    bucket_key_enabled = true
+  # AWS Account and Region
+  account_id = data.aws_caller_identity.current.account_id
+  region     = data.aws_region.current.id
+  partition  = data.aws_partition.current.partition
+
+  # Common tags for all resources
+  common_tags = {
+    Project        = var.project_name
+    Environment    = var.environment
+    Owner          = var.owner
+    ManagedBy      = "Terraform"
+    ComplianceType = "FinancialServices"
+    SecurityLevel  = "High"
   }
-}
 
-resource "aws_s3_bucket_lifecycle_configuration" "access_logs" {
-  count = var.enable_s3_access_logging ? 1 : 0
-
-  bucket = aws_s3_bucket.access_logs[0].id
-
-  rule {
-    id     = "expire-old-logs"
-    status = "Enabled"
-
-    filter {}
-
-    transition {
-      days          = 90
-      storage_class = "GLACIER"
-    }
-
-    expiration {
-      days = 2555
-    }
-  }
-}
-
-# Financial Data Bucket
-resource "aws_s3_bucket" "financial_data" {
-  bucket = local.financial_data_bucket
-
-  tags = merge(local.common_tags, {
-    Purpose            = "FinancialData"
-    DataClassification = "Confidential"
-  })
-}
-
-resource "aws_s3_bucket_versioning" "financial_data" {
-  bucket = aws_s3_bucket.financial_data.id
-
-  versioning_configuration {
-    status     = "Enabled"
-    mfa_delete = var.enable_mfa_delete ? "Enabled" : "Disabled"
-  }
-}
-
-resource "aws_s3_bucket_public_access_block" "financial_data" {
-  bucket = aws_s3_bucket.financial_data.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "financial_data" {
-  count = var.s3_encryption_enabled ? 1 : 0
-
-  bucket = aws_s3_bucket.financial_data.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm     = "aws:kms"
-      kms_master_key_id = aws_kms_key.s3[0].arn
-    }
-    bucket_key_enabled = true
-  }
-}
-
-resource "aws_s3_bucket_logging" "financial_data" {
-  count = var.enable_s3_access_logging ? 1 : 0
-
-  bucket = aws_s3_bucket.financial_data.id
-
-  target_bucket = aws_s3_bucket.access_logs[0].id
-  target_prefix = "financial-data-logs/"
-}
-
-# Financial Data Bucket Policy with VPC Endpoint and Encryption Requirements
-data "aws_iam_policy_document" "financial_data_bucket_policy" {
-  # Deny all access unless through VPC endpoint
-  dynamic "statement" {
-    for_each = var.vpc_endpoint_id != "" ? [1] : []
-    content {
-      sid    = "DenyAccessWithoutVPCEndpoint"
-      effect = "Deny"
-      principals {
-        type        = "*"
-        identifiers = ["*"]
-      }
-      actions = ["s3:*"]
-      resources = [
-        aws_s3_bucket.financial_data.arn,
-        "${aws_s3_bucket.financial_data.arn}/*"
-      ]
-
-      condition {
-        test     = "StringNotEquals"
-        variable = "aws:SourceVpce"
-        values   = [var.vpc_endpoint_id]
-      }
+  # IAM policy conditions
+  ip_condition = {
+    IpAddress = {
+      "aws:SourceIp" = var.allowed_ip_ranges
     }
   }
 
-  # Deny unencrypted uploads
-  statement {
-    sid    = "DenyUnencryptedUploads"
-    effect = "Deny"
-    principals {
-      type        = "*"
-      identifiers = ["*"]
+  mfa_condition = {
+    Bool = {
+      "aws:MultiFactorAuthPresent" = "true"
     }
-    actions = ["s3:PutObject"]
-    resources = [
-      "${aws_s3_bucket.financial_data.arn}/*"
-    ]
-
-    condition {
-      test     = "StringNotEquals"
-      variable = "s3:x-amz-server-side-encryption"
-      values   = ["aws:kms"]
+    NumericLessThan = {
+      "aws:MultiFactorAuthAge" = var.mfa_max_age
     }
   }
 
-  # Deny insecure transport
-  statement {
-    sid    = "DenyInsecureTransport"
-    effect = "Deny"
-    principals {
-      type        = "*"
-      identifiers = ["*"]
-    }
-    actions = ["s3:*"]
-    resources = [
-      aws_s3_bucket.financial_data.arn,
-      "${aws_s3_bucket.financial_data.arn}/*"
-    ]
-
-    condition {
-      test     = "Bool"
-      variable = "aws:SecureTransport"
-      values   = ["false"]
+  region_condition = {
+    StringEquals = {
+      "aws:RequestedRegion" = var.allowed_regions
     }
   }
 
-  # Require MFA for delete operations
-  statement {
-    sid    = "RequireMFAForDelete"
-    effect = "Deny"
-    principals {
-      type        = "*"
-      identifiers = ["*"]
+  vpc_endpoint_condition = var.vpc_endpoint_id != "" ? {
+    StringEquals = {
+      "aws:SourceVpce" = var.vpc_endpoint_id
     }
-    actions = [
-      "s3:DeleteObject",
-      "s3:DeleteObjectVersion"
-    ]
-    resources = [
-      "${aws_s3_bucket.financial_data.arn}/*"
-    ]
+  } : {}
 
-    condition {
-      test     = "Bool"
-      variable = "aws:MultiFactorAuthPresent"
-      values   = ["false"]
+  # Time-based access condition
+  time_condition = {
+    DateGreaterThan = {
+      "aws:CurrentTime" = formatdate("YYYY-MM-DD'T'${var.business_hours_start}Z", timestamp())
+    }
+    DateLessThan = {
+      "aws:CurrentTime" = formatdate("YYYY-MM-DD'T'${var.business_hours_end}Z", timestamp())
     }
   }
 
-  # Deny public access explicitly
-  statement {
-    sid    = "DenyPublicAccess"
-    effect = "Deny"
-    principals {
-      type        = "*"
-      identifiers = ["*"]
-    }
-    actions = ["s3:*"]
-    resources = [
-      aws_s3_bucket.financial_data.arn,
-      "${aws_s3_bucket.financial_data.arn}/*"
-    ]
+  # S3 bucket names
+  financial_data_bucket = "${local.name_prefix}-${var.financial_data_bucket_name}-${local.name_suffix}"
+  access_logs_bucket    = "${local.name_prefix}-access-logs-${local.name_suffix}"
 
-    condition {
-      test     = "StringLike"
-      variable = "s3:x-amz-acl"
-      values   = ["public-read", "public-read-write"]
-    }
-  }
+  # SNS topic name
+  security_alerts_topic = "${local.name_prefix}-security-alerts-${local.name_suffix}"
+
+  # Lambda function names
+  access_expiration_lambda = "${local.name_prefix}-access-expiration-${local.name_suffix}"
+
+  # CloudWatch log group names
+  iam_events_log_group        = "/aws/iam/${local.name_prefix}-events-${local.name_suffix}"
+  access_expiration_log_group = "/aws/lambda/${local.access_expiration_lambda}"
+  cloudtrail_log_group        = "/aws/cloudtrail/${local.name_prefix}-${local.name_suffix}"
+
+  # KMS key alias
+  kms_key_alias = "alias/${local.name_prefix}-${local.name_suffix}"
 }
 
-resource "aws_s3_bucket_policy" "financial_data" {
-  bucket = aws_s3_bucket.financial_data.id
-  policy = data.aws_iam_policy_document.financial_data_bucket_policy.json
-}
 ```
 
 ### monitoring.tf
@@ -2356,7 +1939,7 @@ resource "aws_cloudwatch_log_metric_filter" "unauthorized_api_calls" {
   count = var.enable_iam_monitoring ? 1 : 0
 
   name           = "${local.name_prefix}-unauthorized-api-calls-${local.name_suffix}"
-  log_group_name = local.cloudtrail_log_group
+  log_group_name = aws_cloudwatch_log_group.iam_events[0].name
   pattern        = "{ ($.errorCode = \"*UnauthorizedOperation\") || ($.errorCode = \"AccessDenied*\") }"
 
   metric_transformation {
@@ -2364,6 +1947,8 @@ resource "aws_cloudwatch_log_metric_filter" "unauthorized_api_calls" {
     namespace = "${var.project_name}/Security"
     value     = "1"
   }
+
+  depends_on = [aws_cloudwatch_log_group.iam_events]
 }
 
 resource "aws_cloudwatch_metric_alarm" "unauthorized_api_calls" {
@@ -2389,7 +1974,7 @@ resource "aws_cloudwatch_log_metric_filter" "no_mfa_console_login" {
   count = var.enable_iam_monitoring ? 1 : 0
 
   name           = "${local.name_prefix}-no-mfa-console-login-${local.name_suffix}"
-  log_group_name = local.cloudtrail_log_group
+  log_group_name = aws_cloudwatch_log_group.iam_events[0].name
   pattern        = "{ ($.eventName = \"ConsoleLogin\") && ($.additionalEventData.MFAUsed != \"Yes\") }"
 
   metric_transformation {
@@ -2397,6 +1982,8 @@ resource "aws_cloudwatch_log_metric_filter" "no_mfa_console_login" {
     namespace = "${var.project_name}/Security"
     value     = "1"
   }
+
+  depends_on = [aws_cloudwatch_log_group.iam_events]
 }
 
 resource "aws_cloudwatch_metric_alarm" "no_mfa_console_login" {
@@ -2479,192 +2066,7 @@ resource "aws_cloudwatch_log_resource_policy" "eventbridge_logs" {
     ]
   })
 }
-```
 
-### lambda.tf
-
-```hcl
-# Lambda Function for Time-Based Access Expiration
-
-# CloudWatch Log Group for Lambda
-resource "aws_cloudwatch_log_group" "access_expiration" {
-  count = var.enable_time_based_access ? 1 : 0
-
-  name              = local.access_expiration_log_group
-  retention_in_days = var.log_retention_days
-  kms_key_id        = var.s3_encryption_enabled ? aws_kms_key.s3[0].arn : null
-
-  tags = local.common_tags
-
-  depends_on = [aws_kms_key.s3]
-}
-
-# Lambda IAM Role
-data "aws_iam_policy_document" "access_expiration_lambda_trust" {
-  statement {
-    sid     = "AllowLambdaAssumeRole"
-    effect  = "Allow"
-    actions = ["sts:AssumeRole"]
-
-    principals {
-      type        = "Service"
-      identifiers = ["lambda.amazonaws.com"]
-    }
-  }
-}
-
-resource "aws_iam_role" "access_expiration_lambda" {
-  count = var.enable_time_based_access ? 1 : 0
-
-  name                 = "${local.name_prefix}-access-expiration-lambda-${local.name_suffix}"
-  description          = "Lambda role for time-based access expiration"
-  assume_role_policy   = data.aws_iam_policy_document.access_expiration_lambda_trust.json
-  max_session_duration = 3600
-
-  tags = merge(local.common_tags, {
-    RoleType = "Lambda-AccessExpiration"
-  })
-}
-
-# Lambda Execution Policy
-data "aws_iam_policy_document" "access_expiration_lambda_policy" {
-  # CloudWatch Logs permissions
-  statement {
-    sid    = "WriteCloudWatchLogs"
-    effect = "Allow"
-    actions = [
-      "logs:CreateLogStream",
-      "logs:PutLogEvents"
-    ]
-    resources = [
-      "${aws_cloudwatch_log_group.access_expiration[0].arn}:*"
-    ]
-  }
-
-  # IAM permissions to list and detach policies
-  statement {
-    sid    = "ManageIAMPolicies"
-    effect = "Allow"
-    actions = [
-      "iam:ListPolicies",
-      "iam:GetPolicy",
-      "iam:GetPolicyVersion",
-      "iam:ListEntitiesForPolicy",
-      "iam:DetachUserPolicy",
-      "iam:DetachGroupPolicy",
-      "iam:DetachRolePolicy"
-    ]
-    resources = ["*"]
-  }
-
-  # CloudWatch metrics permissions
-  statement {
-    sid    = "PublishMetrics"
-    effect = "Allow"
-    actions = [
-      "cloudwatch:PutMetricData"
-    ]
-    resources = ["*"]
-  }
-
-  # SNS permissions for notifications
-  statement {
-    sid    = "PublishToSNS"
-    effect = "Allow"
-    actions = [
-      "sns:Publish"
-    ]
-    resources = var.enable_iam_monitoring ? [aws_sns_topic.security_alerts[0].arn] : []
-  }
-}
-
-resource "aws_iam_policy" "access_expiration_lambda" {
-  count = var.enable_time_based_access ? 1 : 0
-
-  name        = "${local.name_prefix}-access-expiration-lambda-policy-${local.name_suffix}"
-  description = "Lambda policy for access expiration function"
-  policy      = data.aws_iam_policy_document.access_expiration_lambda_policy.json
-
-  tags = local.common_tags
-}
-
-resource "aws_iam_role_policy_attachment" "access_expiration_lambda" {
-  count = var.enable_time_based_access ? 1 : 0
-
-  role       = aws_iam_role.access_expiration_lambda[0].name
-  policy_arn = aws_iam_policy.access_expiration_lambda[0].arn
-}
-
-# Archive Lambda function code
-data "archive_file" "access_expiration_lambda" {
-  count = var.enable_time_based_access ? 1 : 0
-
-  type        = "zip"
-  source_dir  = "${path.module}/lambda-access-expiration"
-  output_path = "${path.module}/.terraform/lambda-access-expiration.zip"
-}
-
-# Lambda Function
-resource "aws_lambda_function" "access_expiration" {
-  count = var.enable_time_based_access ? 1 : 0
-
-  filename         = data.archive_file.access_expiration_lambda[0].output_path
-  function_name    = local.access_expiration_lambda
-  role             = aws_iam_role.access_expiration_lambda[0].arn
-  handler          = "index.lambda_handler"
-  source_code_hash = data.archive_file.access_expiration_lambda[0].output_base64sha256
-  runtime          = "python3.11"
-  timeout          = 300
-  memory_size      = 256
-
-  environment {
-    variables = {
-      SNS_TOPIC_ARN = var.enable_iam_monitoring ? aws_sns_topic.security_alerts[0].arn : ""
-      PROJECT_NAME  = var.project_name
-    }
-  }
-
-  tracing_config {
-    mode = "Active"
-  }
-
-  tags = local.common_tags
-
-  depends_on = [
-    aws_cloudwatch_log_group.access_expiration,
-    aws_iam_role_policy_attachment.access_expiration_lambda
-  ]
-}
-
-# EventBridge Rule to trigger Lambda on schedule
-resource "aws_cloudwatch_event_rule" "access_expiration_schedule" {
-  count = var.enable_time_based_access ? 1 : 0
-
-  name                = "${local.name_prefix}-access-expiration-schedule-${local.name_suffix}"
-  description         = "Trigger access expiration check every ${var.access_check_interval} minutes"
-  schedule_expression = "rate(${var.access_check_interval} minutes)"
-
-  tags = local.common_tags
-}
-
-resource "aws_cloudwatch_event_target" "access_expiration_lambda" {
-  count = var.enable_time_based_access ? 1 : 0
-
-  rule      = aws_cloudwatch_event_rule.access_expiration_schedule[0].name
-  target_id = "AccessExpirationLambda"
-  arn       = aws_lambda_function.access_expiration[0].arn
-}
-
-# Lambda permission for EventBridge
-resource "aws_lambda_permission" "access_expiration_eventbridge" {
-  count = var.enable_time_based_access ? 1 : 0
-
-  statement_id  = "AllowExecutionFromEventBridge"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.access_expiration[0].function_name
-  principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.access_expiration_schedule[0].arn
-}
 ```
 
 ### outputs.tf
@@ -2860,6 +2262,589 @@ output "environment_suffix" {
   description = "Environment suffix used for resource naming"
   value       = local.name_suffix
 }
+
+# Post-Deployment Manual Steps
+output "mfa_delete_command" {
+  description = "Command to enable MFA delete on S3 bucket (requires root account credentials with MFA)"
+  value       = "aws s3api put-bucket-versioning --bucket ${aws_s3_bucket.financial_data.id} --versioning-configuration Status=Enabled,MFADelete=Enabled --mfa 'arn:aws:iam::${local.account_id}:mfa/root-account-mfa-device MFA_TOKEN_CODE'"
+}
+
+```
+
+### provider.tf
+
+```hcl
+# Primary AWS provider for general resources
+provider "aws" {
+  region = var.aws_region
+}
+
+```
+
+### s3.tf
+
+```hcl
+# S3 Buckets with Advanced Security
+
+# KMS Key for S3 Encryption
+resource "aws_kms_key" "s3" {
+  count = var.s3_encryption_enabled ? 1 : 0
+
+  description             = "KMS key for S3 bucket encryption"
+  deletion_window_in_days = 30
+  enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:${local.partition}:iam::${local.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow S3 to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = "s3.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${local.region}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:${local.partition}:logs:${local.region}:${local.account_id}:log-group:*"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_kms_alias" "s3" {
+  count = var.s3_encryption_enabled ? 1 : 0
+
+  name          = local.kms_key_alias
+  target_key_id = aws_kms_key.s3[0].key_id
+}
+
+# Access Logs Bucket
+resource "aws_s3_bucket" "access_logs" {
+  count = var.enable_s3_access_logging ? 1 : 0
+
+  bucket = local.access_logs_bucket
+
+  tags = merge(local.common_tags, {
+    Purpose = "AccessLogs"
+  })
+}
+
+resource "aws_s3_bucket_public_access_block" "access_logs" {
+  count = var.enable_s3_access_logging ? 1 : 0
+
+  bucket = aws_s3_bucket.access_logs[0].id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "access_logs" {
+  count = var.enable_s3_access_logging && var.s3_encryption_enabled ? 1 : 0
+
+  bucket = aws_s3_bucket.access_logs[0].id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.s3[0].arn
+    }
+    bucket_key_enabled = true
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "access_logs" {
+  count = var.enable_s3_access_logging ? 1 : 0
+
+  bucket = aws_s3_bucket.access_logs[0].id
+
+  rule {
+    id     = "expire-old-logs"
+    status = "Enabled"
+
+    filter {}
+
+    transition {
+      days          = 90
+      storage_class = "GLACIER"
+    }
+
+    expiration {
+      days = 2555
+    }
+  }
+}
+
+# Financial Data Bucket
+resource "aws_s3_bucket" "financial_data" {
+  bucket = local.financial_data_bucket
+
+  tags = merge(local.common_tags, {
+    Purpose            = "FinancialData"
+    DataClassification = "Confidential"
+  })
+}
+
+resource "aws_s3_bucket_versioning" "financial_data" {
+  bucket = aws_s3_bucket.financial_data.id
+
+  versioning_configuration {
+    status = "Enabled"
+    # MFA Delete cannot be enabled via Terraform - must be enabled manually using AWS CLI with MFA token:
+    # aws s3api put-bucket-versioning --bucket BUCKET_NAME --versioning-configuration Status=Enabled,MFADelete=Enabled --mfa "SERIAL_NUMBER MFA_CODE"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "financial_data" {
+  bucket = aws_s3_bucket.financial_data.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "financial_data" {
+  count = var.s3_encryption_enabled ? 1 : 0
+
+  bucket = aws_s3_bucket.financial_data.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.s3[0].arn
+    }
+    bucket_key_enabled = true
+  }
+}
+
+resource "aws_s3_bucket_logging" "financial_data" {
+  count = var.enable_s3_access_logging ? 1 : 0
+
+  bucket = aws_s3_bucket.financial_data.id
+
+  target_bucket = aws_s3_bucket.access_logs[0].id
+  target_prefix = "financial-data-logs/"
+}
+
+# Financial Data Bucket Policy with VPC Endpoint and Encryption Requirements
+data "aws_iam_policy_document" "financial_data_bucket_policy" {
+  # Deny all access unless through VPC endpoint
+  dynamic "statement" {
+    for_each = var.vpc_endpoint_id != "" ? [1] : []
+    content {
+      sid    = "DenyAccessWithoutVPCEndpoint"
+      effect = "Deny"
+      principals {
+        type        = "*"
+        identifiers = ["*"]
+      }
+      actions = ["s3:*"]
+      resources = [
+        aws_s3_bucket.financial_data.arn,
+        "${aws_s3_bucket.financial_data.arn}/*"
+      ]
+
+      condition {
+        test     = "StringNotEquals"
+        variable = "aws:SourceVpce"
+        values   = [var.vpc_endpoint_id]
+      }
+    }
+  }
+
+  # Deny unencrypted uploads
+  statement {
+    sid    = "DenyUnencryptedUploads"
+    effect = "Deny"
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+    actions = ["s3:PutObject"]
+    resources = [
+      "${aws_s3_bucket.financial_data.arn}/*"
+    ]
+
+    condition {
+      test     = "StringNotEquals"
+      variable = "s3:x-amz-server-side-encryption"
+      values   = ["aws:kms"]
+    }
+  }
+
+  # Deny insecure transport
+  statement {
+    sid    = "DenyInsecureTransport"
+    effect = "Deny"
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+    actions = ["s3:*"]
+    resources = [
+      aws_s3_bucket.financial_data.arn,
+      "${aws_s3_bucket.financial_data.arn}/*"
+    ]
+
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+
+  # Require MFA for delete operations
+  statement {
+    sid    = "RequireMFAForDelete"
+    effect = "Deny"
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+    actions = [
+      "s3:DeleteObject",
+      "s3:DeleteObjectVersion"
+    ]
+    resources = [
+      "${aws_s3_bucket.financial_data.arn}/*"
+    ]
+
+    condition {
+      test     = "Bool"
+      variable = "aws:MultiFactorAuthPresent"
+      values   = ["false"]
+    }
+  }
+
+  # Deny public access explicitly
+  statement {
+    sid    = "DenyPublicAccess"
+    effect = "Deny"
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+    actions = ["s3:*"]
+    resources = [
+      aws_s3_bucket.financial_data.arn,
+      "${aws_s3_bucket.financial_data.arn}/*"
+    ]
+
+    condition {
+      test     = "StringLike"
+      variable = "s3:x-amz-acl"
+      values   = ["public-read", "public-read-write"]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "financial_data" {
+  bucket = aws_s3_bucket.financial_data.id
+  policy = data.aws_iam_policy_document.financial_data_bucket_policy.json
+}
+
+```
+
+### variables.tf
+
+```hcl
+# General Variables
+variable "aws_region" {
+  description = "AWS region for resource deployment"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "environment" {
+  description = "Environment name (dev, staging, production)"
+  type        = string
+  default     = "production"
+
+  validation {
+    condition     = contains(["dev", "staging", "production"], var.environment)
+    error_message = "Environment must be dev, staging, or production."
+  }
+}
+
+variable "environment_suffix" {
+  description = "Unique suffix for resource naming (e.g., pr4798, synth123). Reads from ENVIRONMENT_SUFFIX env variable if not provided."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.environment_suffix == "" || can(regex("^[a-z0-9-]+$", var.environment_suffix))
+    error_message = "Environment suffix must contain only lowercase letters, numbers, and hyphens."
+  }
+}
+
+variable "project_name" {
+  description = "Project name for resource tagging and naming"
+  type        = string
+  default     = "zero-trust-iam"
+}
+
+variable "owner" {
+  description = "Owner or team responsible for the infrastructure"
+  type        = string
+  default     = "security-team"
+}
+
+# Network Security Variables
+variable "allowed_ip_ranges" {
+  description = "List of allowed IP CIDR ranges for corporate network and VPN access"
+  type        = list(string)
+  default = [
+    "10.0.0.0/8",
+    "172.16.0.0/12"
+  ]
+}
+
+variable "vpc_endpoint_id" {
+  description = "VPC endpoint ID for S3 access restrictions"
+  type        = string
+  default     = ""
+}
+
+# Time-Based Access Variables
+variable "business_hours_start" {
+  description = "Start of business hours in UTC (format: HH:MM:SS)"
+  type        = string
+  default     = "13:00:00"
+}
+
+variable "business_hours_end" {
+  description = "End of business hours in UTC (format: HH:MM:SS)"
+  type        = string
+  default     = "22:00:00"
+}
+
+# Session Configuration Variables
+variable "max_session_duration" {
+  description = "Maximum session duration in seconds for IAM roles (max 14400 = 4 hours)"
+  type        = number
+  default     = 14400
+
+  validation {
+    condition     = var.max_session_duration >= 3600 && var.max_session_duration <= 14400
+    error_message = "Maximum session duration must be between 3600 seconds (1 hour) and 14400 seconds (4 hours)."
+  }
+}
+
+variable "external_session_duration" {
+  description = "Session duration in seconds for external cross-account access (max 7200 = 2 hours)"
+  type        = number
+  default     = 7200
+
+  validation {
+    condition     = var.external_session_duration >= 3600 && var.external_session_duration <= 7200
+    error_message = "External session duration must be between 3600 seconds (1 hour) and 7200 seconds (2 hours)."
+  }
+}
+
+variable "mfa_max_age" {
+  description = "Maximum age of MFA authentication in seconds"
+  type        = number
+  default     = 3600
+}
+
+# Cross-Account Access Variables
+variable "external_account_ids" {
+  description = "List of external AWS account IDs allowed for cross-account access"
+  type        = list(string)
+  default     = []
+}
+
+variable "external_id" {
+  description = "External ID for cross-account role assumption (prevents confused deputy attacks)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+# Regional Restrictions Variables
+variable "allowed_regions" {
+  description = "List of AWS regions where operations are permitted"
+  type        = list(string)
+  default     = ["us-east-1"]
+}
+
+# Password Policy Variables
+variable "password_min_length" {
+  description = "Minimum password length for IAM users"
+  type        = number
+  default     = 14
+
+  validation {
+    condition     = var.password_min_length >= 14
+    error_message = "Password minimum length must be at least 14 characters."
+  }
+}
+
+variable "password_max_age" {
+  description = "Maximum password age in days before expiration"
+  type        = number
+  default     = 90
+
+  validation {
+    condition     = var.password_max_age >= 1 && var.password_max_age <= 90
+    error_message = "Password maximum age must be between 1 and 90 days."
+  }
+}
+
+variable "password_reuse_prevention" {
+  description = "Number of previous passwords that cannot be reused"
+  type        = number
+  default     = 12
+
+  validation {
+    condition     = var.password_reuse_prevention >= 12
+    error_message = "Password reuse prevention must remember at least 12 passwords."
+  }
+}
+
+# S3 Security Variables
+variable "enable_s3_access_logging" {
+  description = "Enable S3 access logging for financial data buckets"
+  type        = bool
+  default     = true
+}
+
+variable "s3_encryption_enabled" {
+  description = "Enable KMS encryption for S3 buckets"
+  type        = bool
+  default     = true
+}
+
+# Monitoring Variables
+variable "enable_iam_monitoring" {
+  description = "Enable CloudWatch monitoring for IAM activities"
+  type        = bool
+  default     = true
+}
+
+variable "alert_email" {
+  description = "Email address for security alerts"
+  type        = string
+  default     = "security-team@example.com"
+}
+
+variable "log_retention_days" {
+  description = "CloudWatch Logs retention period in days"
+  type        = number
+  default     = 90
+
+  validation {
+    condition     = var.log_retention_days >= 90
+    error_message = "Log retention must be at least 90 days for compliance."
+  }
+}
+
+# Time-Based Access Expiration Variables
+variable "enable_time_based_access" {
+  description = "Enable Lambda function for automatic time-based access expiration"
+  type        = bool
+  default     = true
+}
+
+variable "access_check_interval" {
+  description = "Interval in minutes for checking and revoking expired access"
+  type        = number
+  default     = 60
+}
+
+# Service Role Variables
+variable "enable_ec2_instance_role" {
+  description = "Create IAM role for EC2 instances"
+  type        = bool
+  default     = true
+}
+
+variable "enable_lambda_execution_role" {
+  description = "Create IAM role for Lambda functions"
+  type        = bool
+  default     = true
+}
+
+variable "enable_rds_monitoring_role" {
+  description = "Create IAM role for RDS Enhanced Monitoring"
+  type        = bool
+  default     = true
+}
+
+# Financial Data Bucket Variables
+variable "financial_data_bucket_name" {
+  description = "Name of the S3 bucket for financial data storage (will be suffixed with environment)"
+  type        = string
+  default     = "financial-data"
+}
+
+variable "enable_mfa_delete" {
+  description = "Require MFA for S3 object deletion operations (must be enabled manually via AWS CLI with MFA token after deployment)"
+  type        = bool
+  default     = false
+}
+
+```
+
+### versions.tf
+
+```hcl
+# versions.tf
+
+terraform {
+  required_version = ">= 1.5.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.5"
+    }
+  }
+
+  # Partial backend config: values are injected at `terraform init` time
+  backend "s3" {}
+}
+
 ```
 
 ### lambda-access-expiration/index.py
@@ -3118,438 +3103,6 @@ def publish_metric(metric_name: str, value: float) -> None:
         print(f"Published metric {metric_name}: {value}")
     except Exception as e:
         print(f"Error publishing metric: {str(e)}")
+
 ```
 
-## Implementation Details
-
-### Unique Resource Naming with Environment Suffix
-
-The infrastructure uses a dual naming strategy for multi-environment deployments:
-
-```hcl
-# From locals.tf
-resource "random_string" "suffix" {
-  length  = 8
-  special = false
-  upper   = false
-}
-
-locals {
-  name_suffix = var.environment_suffix != "" ? var.environment_suffix : random_string.suffix.result
-}
-```
-
-This allows GitHub Actions to pass `ENVIRONMENT_SUFFIX` environment variable:
-```bash
-export ENVIRONMENT_SUFFIX=pr4798
-terraform apply -var="environment_suffix=${ENVIRONMENT_SUFFIX}"
-```
-
-### Advanced Conditional IAM Policies
-
-Every policy includes multiple condition keys for defense in depth:
-
-**Example from Developer Policy:**
-```hcl
-condition {
-  test     = "IpAddress"
-  variable = "aws:SourceIp"
-  values   = var.allowed_ip_ranges
-}
-
-condition {
-  test     = "Bool"
-  variable = "aws:MultiFactorAuthPresent"
-  values   = ["true"]
-}
-
-condition {
-  test     = "StringEquals"
-  variable = "aws:RequestedRegion"
-  values   = var.allowed_regions
-}
-```
-
-### Role Hierarchy and Separation of Duties
-
-**Developer Role:**
-- Read access to production with IP and MFA restrictions
-- Full access to dev/staging environments
-- Cannot modify IAM policies
-- Cannot access production databases directly
-- Session duration: 4 hours maximum
-
-**Operator Role:**
-- Infrastructure management with MFA age validation
-- Cannot modify IAM or CloudTrail
-- Cannot delete production resources
-- Session duration: 4 hours maximum
-
-**Administrator Role:**
-- Full access with strictest MFA requirements (15-minute age)
-- Cannot disable logging or encryption
-- All actions logged and monitored
-- Session duration: 4 hours maximum
-
-**Break-Glass Role:**
-- Emergency access only
-- Full AdministratorAccess
-- Requires MFA
-- Session duration: 1 hour maximum
-
-### S3 Bucket Security
-
-Financial data bucket enforces multiple security layers:
-
-1. **VPC Endpoint Restriction**: Deny access unless through VPC endpoint
-2. **Encryption Enforcement**: Deny unencrypted uploads
-3. **MFA Delete**: Require MFA for delete operations
-4. **Secure Transport**: Deny non-HTTPS requests
-5. **Public Access Block**: Prevent accidental public exposure
-6. **Versioning**: Enable with MFA delete
-7. **Access Logging**: Log all access to separate bucket
-8. **KMS Encryption**: Customer-managed keys with rotation
-
-### Time-Based Access Expiration
-
-The Lambda function automatically checks and revokes expired access:
-
-**Features:**
-- Scans customer-managed IAM policies for time-based conditions
-- Detaches expired policies from all entities (users, groups, roles)
-- Sends SNS notifications for revoked access
-- Publishes CloudWatch metrics for monitoring
-- Runs on configurable schedule (default: hourly)
-
-**Example time-based policy:**
-```hcl
-condition {
-  test     = "DateLessThan"
-  variable = "aws:CurrentTime"
-  values   = ["2025-10-29T00:00:00Z"]
-}
-```
-
-### CloudWatch Monitoring
-
-Comprehensive monitoring covers all IAM security events:
-
-**EventBridge Rules:**
-- IAM policy changes
-- Role assumptions
-- Failed authentication attempts
-- User/role creation or deletion
-- Administrative actions (CloudTrail disable, KMS key deletion)
-
-**Metric Filters:**
-- Unauthorized API calls
-- Console login without MFA
-
-**Alarms:**
-- Unauthorized API calls (threshold: 5 in 5 minutes)
-- Console login without MFA (threshold: 0)
-
-All alerts sent to SNS topic with email subscription.
-
-## Deployment Instructions
-
-### Prerequisites
-
-1. AWS Account with appropriate permissions
-2. Terraform >= 1.5.0
-3. S3 bucket for Terraform state
-4. DynamoDB table for state locking
-
-### Initial Deployment
-
-```bash
-# Initialize Terraform
-terraform init \
-  -backend-config="bucket=your-terraform-state-bucket" \
-  -backend-config="key=zero-trust-iam/terraform.tfstate" \
-  -backend-config="region=us-east-1" \
-  -backend-config="dynamodb_table=terraform-state-lock"
-
-# Review plan
-terraform plan
-
-# Apply infrastructure
-terraform apply
-```
-
-### Multi-Environment Deployment
-
-```bash
-# For PR environments
-export ENVIRONMENT_SUFFIX=pr4798
-terraform apply -var="environment_suffix=${ENVIRONMENT_SUFFIX}"
-
-# For staging
-export ENVIRONMENT_SUFFIX=staging
-terraform apply -var="environment_suffix=${ENVIRONMENT_SUFFIX}"
-```
-
-### Variable Configuration
-
-Create `terraform.tfvars`:
-
-```hcl
-aws_region = "us-east-1"
-environment = "production"
-project_name = "zero-trust-iam"
-owner = "security-team"
-
-# Network security
-allowed_ip_ranges = ["10.0.0.0/8", "172.16.0.0/12"]
-vpc_endpoint_id = "vpce-xxxxx"
-
-# Session configuration
-max_session_duration = 14400  # 4 hours
-external_session_duration = 7200  # 2 hours
-mfa_max_age = 3600  # 1 hour
-
-# Cross-account access
-external_account_ids = ["123456789012"]
-external_id = "unique-external-id"
-
-# Password policy
-password_min_length = 14
-password_max_age = 90
-password_reuse_prevention = 12
-
-# Monitoring
-enable_iam_monitoring = true
-alert_email = "security-team@example.com"
-log_retention_days = 90
-
-# Service roles
-enable_ec2_instance_role = true
-enable_lambda_execution_role = true
-enable_rds_monitoring_role = true
-```
-
-## Testing
-
-### Unit Tests
-
-Run comprehensive unit tests (109 tests):
-
-```bash
-npm run test:unit
-```
-
-Tests cover:
-- Variable definitions and validations
-- Data sources
-- Locals configuration
-- IAM policies with conditional logic
-- All IAM roles (developer, operator, administrator, service, cross-account)
-- Password policy
-- S3 bucket security
-- CloudWatch monitoring
-- Lambda function configuration
-- Outputs
-
-### Integration Tests
-
-Integration tests validate deployed resources:
-
-```bash
-npm run test:int
-```
-
-Note: Integration tests run against actual AWS infrastructure and execute in CI/CD pipeline.
-
-### Terraform Validation
-
-```bash
-# Format code
-terraform fmt -recursive
-
-# Validate configuration
-terraform validate
-```
-
-## Security Compliance
-
-### Financial Services Requirements
-
-This infrastructure meets strict financial industry compliance requirements:
-
-1. **Access Control:**
-   - Least privilege access for all roles
-   - MFA required for all operations
-   - Session duration limits enforced
-   - Permission boundaries prevent escalation
-
-2. **Audit and Monitoring:**
-   - CloudTrail logging enabled
-   - All IAM events monitored
-   - Failed access attempts alerted
-   - 90-day log retention minimum
-
-3. **Data Protection:**
-   - Encryption at rest (KMS)
-   - Encryption in transit (TLS 1.2+)
-   - MFA delete for critical data
-   - Versioning enabled
-
-4. **Separation of Duties:**
-   - Developers cannot access production
-   - Operators cannot modify IAM
-   - Administrators cannot disable logging
-   - Cross-account access strictly controlled
-
-### Condition Keys Summary
-
-All policies use multiple condition keys:
-
-- `aws:SourceIp`: IP address restrictions
-- `aws:MultiFactorAuthPresent`: MFA requirements
-- `aws:MultiFactorAuthAge`: Recent MFA validation
-- `aws:CurrentTime`: Time-based access
-- `aws:RequestedRegion`: Regional restrictions
-- `aws:SourceVpce`: VPC endpoint requirements
-- `aws:SecureTransport`: HTTPS enforcement
-- `sts:ExternalId`: Cross-account validation
-- `s3:x-amz-server-side-encryption`: Encryption enforcement
-
-## Outputs
-
-After deployment, the following outputs are available:
-
-### Role Information
-- Developer, Operator, Administrator role ARNs and names
-- Break-glass role ARN and name
-- Service role ARNs (EC2, Lambda, RDS)
-- Cross-account role ARNs
-
-### Policy Information
-- Policy ARNs for all custom policies
-- Permission boundary policy ARN
-
-### Infrastructure Information
-- S3 bucket names and ARNs (financial data, access logs)
-- KMS key ID, ARN, and alias
-- SNS topic ARN for security alerts
-- CloudWatch log group names
-- Lambda function name and ARN
-- Account ID and region
-- Environment suffix used
-
-## Maintenance
-
-### Adding Users to Roles
-
-Users assume roles via AWS SSO or STS AssumeRole:
-
-```bash
-# Assume developer role
-aws sts assume-role \
-  --role-arn arn:aws:iam::ACCOUNT_ID:role/zero-trust-iam-production-developer-role-SUFFIX \
-  --role-session-name developer-session \
-  --duration-seconds 14400 \
-  --serial-number arn:aws:iam::ACCOUNT_ID:mfa/username \
-  --token-code 123456
-```
-
-### Granting Temporary Elevated Access
-
-For emergency situations:
-
-```bash
-# Assume break-glass role (1 hour only)
-aws sts assume-role \
-  --role-arn arn:aws:iam::ACCOUNT_ID:role/zero-trust-iam-production-break-glass-role-SUFFIX \
-  --role-session-name emergency-access \
-  --duration-seconds 3600 \
-  --serial-number arn:aws:iam::ACCOUNT_ID:mfa/username \
-  --token-code 123456
-```
-
-### Reviewing IAM Events
-
-Query CloudWatch Logs for IAM events:
-
-```bash
-aws logs filter-log-events \
-  --log-group-name /aws/iam/zero-trust-iam-production-events-SUFFIX \
-  --start-time $(date -d '1 hour ago' +%s)000 \
-  --filter-pattern "AssumeRole"
-```
-
-## Troubleshooting
-
-### Common Issues
-
-**Access Denied Errors:**
-- Verify IP address is in allowed ranges
-- Confirm MFA is enabled and not expired
-- Check session duration hasn't exceeded limit
-- Verify operation is in allowed region (us-east-1)
-
-**Role Assumption Failures:**
-- Confirm MFA device is registered
-- Verify external ID for cross-account access
-- Check trust policy allows your principal
-- Ensure session duration is within limits
-
-**S3 Access Denied:**
-- Verify accessing through VPC endpoint
-- Confirm using HTTPS (not HTTP)
-- Check upload includes KMS encryption header
-- For delete operations, verify MFA is provided
-
-### Security Incident Response
-
-If unauthorized access detected:
-
-1. Review CloudWatch alarms and metrics
-2. Check EventBridge rule matches
-3. Review CloudTrail logs for source IP and actions
-4. If compromised, immediately rotate credentials
-5. Use break-glass role for emergency remediation
-
-## Cost Estimation
-
-Approximate monthly costs (us-east-1):
-
-- IAM (policies, roles): $0 (no charge)
-- S3 storage (100 GB): ~$2.30
-- KMS key: ~$1.00
-- CloudWatch Logs (10 GB): ~$5.00
-- CloudWatch alarms (10): ~$1.00
-- SNS (1000 notifications): ~$0.50
-- Lambda (10,000 invocations): ~$0.20
-- EventBridge rules: $0 (within free tier)
-
-**Total: ~$10/month**
-
-Note: Actual costs depend on usage patterns and data volumes.
-
-## Complete Source Code Summary
-
-All source code files from the `lib/` directory have been included above:
-
-**Terraform Configuration Files** (16 total):
-1. versions.tf
-2. provider.tf
-3. variables.tf
-4. data.tf
-5. locals.tf
-6. iam-policies.tf
-7. iam-roles-developer.tf
-8. iam-roles-operator.tf
-9. iam-roles-administrator.tf
-10. iam-roles-service.tf
-11. iam-cross-account.tf
-12. iam-password-policy.tf
-13. s3.tf
-14. monitoring.tf
-15. lambda.tf
-16. outputs.tf
-
-**Lambda Functions** (1 total):
-1. lambda-access-expiration/index.py
-
-**Total Lines of Infrastructure Code**: ~2,500+ lines across all files
