@@ -639,124 +639,124 @@ export class RdsModule extends Construct {
 }
 
 // ==================== ALB Module ====================
-// export class AlbModule extends Construct {
-//   public readonly alb: aws.lb.Lb;
-//   public readonly targetGroup: aws.lbTargetGroup.LbTargetGroup;
-//   public readonly albSecurityGroup: aws.securityGroup.SecurityGroup;
-//   public readonly listener: aws.lbListener.LbListener;
+export class AlbModule extends Construct {
+  public readonly alb: aws.lb.Lb;
+  public readonly targetGroup: aws.lbTargetGroup.LbTargetGroup;
+  public readonly albSecurityGroup: aws.securityGroup.SecurityGroup;
+  public readonly listener: aws.lbListener.LbListener;
 
-//   constructor(
-//     scope: Construct,
-//     id: string,
-//     props: {
-//       vpc: aws.vpc.Vpc;
-//       publicSubnets: aws.subnet.Subnet[];
-//       logsBucket: aws.s3Bucket.S3Bucket;
-//       bucketPolicy?: aws.s3BucketPolicy.S3BucketPolicy;
-//     }
-//   ) {
-//     super(scope, id);
+  constructor(
+    scope: Construct,
+    id: string,
+    props: {
+      vpc: aws.vpc.Vpc;
+      publicSubnets: aws.subnet.Subnet[];
+      logsBucket: aws.s3Bucket.S3Bucket;
+      bucketPolicy?: aws.s3BucketPolicy.S3BucketPolicy;
+    }
+  ) {
+    super(scope, id);
 
-//     // ALB Security Group
-//     this.albSecurityGroup = new aws.securityGroup.SecurityGroup(
-//       this,
-//       'alb-sg',
-//       {
-//         name: 'multi-tier-alb-sg',
-//         description: 'Security group for Application Load Balancer',
-//         vpcId: props.vpc.id,
-//         tags: {
-//           Name: 'multi-tier-alb-sg',
-//           Environment: 'Production',
-//           Project: 'MultiTierWebApp',
-//         },
-//       }
-//     );
+    // ALB Security Group
+    this.albSecurityGroup = new aws.securityGroup.SecurityGroup(
+      this,
+      'alb-sg',
+      {
+        name: 'multi-tier-alb-sg',
+        description: 'Security group for Application Load Balancer',
+        vpcId: props.vpc.id,
+        tags: {
+          Name: 'multi-tier-alb-sg',
+          Environment: 'Production',
+          Project: 'MultiTierWebApp',
+        },
+      }
+    );
 
-//     // Allow HTTP inbound
-//     new aws.securityGroupRule.SecurityGroupRule(this, 'alb-http-ingress', {
-//       type: 'ingress',
-//       fromPort: 80,
-//       toPort: 80,
-//       protocol: 'tcp',
-//       cidrBlocks: ['0.0.0.0/0'],
-//       securityGroupId: this.albSecurityGroup.id,
-//       description: 'HTTP from Internet',
-//     });
+    // Allow HTTP inbound
+    new aws.securityGroupRule.SecurityGroupRule(this, 'alb-http-ingress', {
+      type: 'ingress',
+      fromPort: 80,
+      toPort: 80,
+      protocol: 'tcp',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: this.albSecurityGroup.id,
+      description: 'HTTP from Internet',
+    });
 
-//     // Allow all outbound
-//     new aws.securityGroupRule.SecurityGroupRule(this, 'alb-egress', {
-//       type: 'egress',
-//       fromPort: 0,
-//       toPort: 65535,
-//       protocol: '-1',
-//       cidrBlocks: ['0.0.0.0/0'],
-//       securityGroupId: this.albSecurityGroup.id,
-//       description: 'All outbound traffic',
-//     });
+    // Allow all outbound
+    new aws.securityGroupRule.SecurityGroupRule(this, 'alb-egress', {
+      type: 'egress',
+      fromPort: 0,
+      toPort: 65535,
+      protocol: '-1',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: this.albSecurityGroup.id,
+      description: 'All outbound traffic',
+    });
 
-//     // Application Load Balancer
-//     this.alb = new aws.lb.Lb(this, 'alb', {
-//       name: 'multi-tier-alb',
-//       loadBalancerType: 'application',
-//       subnets: props.publicSubnets.map(s => s.id),
-//       securityGroups: [this.albSecurityGroup.id],
-//       enableDeletionProtection: false,
-//       enableHttp2: true,
-//       accessLogs: {
-//         bucket: props.logsBucket.bucket,
-//         prefix: 'alb-logs',
-//         enabled: true,
-//       },
-//       tags: {
-//         Name: 'multi-tier-alb',
-//         Environment: 'Production',
-//         Project: 'MultiTierWebApp',
-//       },
-//     });
+    // Application Load Balancer
+    this.alb = new aws.lb.Lb(this, 'alb', {
+      name: 'multi-tier-alb-ts',
+      loadBalancerType: 'application',
+      subnets: props.publicSubnets.map(s => s.id),
+      securityGroups: [this.albSecurityGroup.id],
+      enableDeletionProtection: false,
+      enableHttp2: true,
+      accessLogs: {
+        bucket: props.logsBucket.bucket,
+        prefix: 'alb-logs',
+        enabled: true,
+      },
+      tags: {
+        Name: 'multi-tier-alb',
+        Environment: 'Production',
+        Project: 'MultiTierWebApp',
+      },
+    });
 
-//     // Target Group
-//     this.targetGroup = new aws.lbTargetGroup.LbTargetGroup(this, 'tg', {
-//       name: 'multi-tier-tg',
-//       port: 80,
-//       protocol: 'HTTP',
-//       vpcId: props.vpc.id,
-//       targetType: 'instance',
-//       healthCheck: {
-//         enabled: true,
-//         healthyThreshold: 2,
-//         unhealthyThreshold: 3,
-//         timeout: 5,
-//         interval: 30,
-//         path: '/',
-//         matcher: '200',
-//       },
-//       tags: {
-//         Name: 'multi-tier-tg',
-//         Environment: 'Production',
-//         Project: 'MultiTierWebApp',
-//       },
-//     });
+    // Target Group
+    this.targetGroup = new aws.lbTargetGroup.LbTargetGroup(this, 'tg', {
+      name: 'multi-tier-tg',
+      port: 80,
+      protocol: 'HTTP',
+      vpcId: props.vpc.id,
+      targetType: 'instance',
+      healthCheck: {
+        enabled: true,
+        healthyThreshold: 2,
+        unhealthyThreshold: 3,
+        timeout: 5,
+        interval: 30,
+        path: '/',
+        matcher: '200',
+      },
+      tags: {
+        Name: 'multi-tier-tg',
+        Environment: 'Production',
+        Project: 'MultiTierWebApp',
+      },
+    });
 
-//     // HTTP Listener - This associates the target group with the ALB
-//     this.listener = new aws.lbListener.LbListener(this, 'http-listener', {
-//       loadBalancerArn: this.alb.arn,
-//       port: 80,
-//       protocol: 'HTTP',
-//       defaultAction: [
-//         {
-//           type: 'forward',
-//           targetGroupArn: this.targetGroup.arn,
-//         },
-//       ],
-//       tags: {
-//         Name: 'multi-tier-http-listener',
-//         Environment: 'Production',
-//         Project: 'MultiTierWebApp',
-//       },
-//     });
-//   }
-// }
+    // HTTP Listener - This associates the target group with the ALB
+    this.listener = new aws.lbListener.LbListener(this, 'http-listener', {
+      loadBalancerArn: this.alb.arn,
+      port: 80,
+      protocol: 'HTTP',
+      defaultAction: [
+        {
+          type: 'forward',
+          targetGroupArn: this.targetGroup.arn,
+        },
+      ],
+      tags: {
+        Name: 'multi-tier-http-listener',
+        Environment: 'Production',
+        Project: 'MultiTierWebApp',
+      },
+    });
+  }
+}
 
 // ==================== ECS Module ====================
 export class EcsModule extends Construct {

@@ -12,7 +12,7 @@ import {
   IamModule,
   S3Module,
   RdsModule,
-  // AlbModule,
+  AlbModule,
   EcsModule,
   CicdModule,
   MonitoringModule,
@@ -91,12 +91,12 @@ export class TapStack extends TerraformStack {
     });
 
     // 4. ALB Module - Application Load Balancer
-    // const albModule = new AlbModule(this, 'alb', {
-    //   vpc: vpcModule.vpc,
-    //   publicSubnets: vpcModule.publicSubnets,
-    //   logsBucket: s3Module.bucket,
-    //   bucketPolicy: s3Module.bucketPolicy,
-    // });
+    const albModule = new AlbModule(this, 'alb', {
+      vpc: vpcModule.vpc,
+      publicSubnets: vpcModule.publicSubnets,
+      logsBucket: s3Module.bucket,
+      bucketPolicy: s3Module.bucketPolicy,
+    });
 
     // 5. ECS Module - Container orchestration (pass listener as dependency)
     const ecsModule = new EcsModule(this, 'ecs', {
