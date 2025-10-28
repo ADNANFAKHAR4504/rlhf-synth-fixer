@@ -49,7 +49,7 @@ class TransactionPipelineConfig:
         """Initialize configuration from environment variables."""
         self.environment = os.getenv('ENVIRONMENT', 'prod')
         self.environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'pr1234')
-        self.project_name = os.getenv('PROJECT_NAME', 'txn-pipeline')
+        self.project_name = os.getenv('PROJECT_NAME', 'txn')
         
         self.primary_region = os.getenv('AWS_REGION', 'us-east-1')
         self.normalized_region = self._normalize_region(self.primary_region)

@@ -62,7 +62,7 @@ class IAMStack:
         Returns:
             IAM Role resource
         """
-        resource_name = self.config.get_resource_name(f'lambda-role-{role_name}')
+        resource_name = self.config.get_resource_name(f'role-{role_name}')
         
         assume_role_policy = json.dumps({
             "Version": "2012-10-17",
@@ -287,7 +287,7 @@ class IAMStack:
         Returns:
             IAM Role for EventBridge
         """
-        resource_name = self.config.get_resource_name('eventbridge-sqs-role')
+        resource_name = self.config.get_resource_name('eb-sqs-role')
         
         assume_role_policy = json.dumps({
             "Version": "2012-10-17",
