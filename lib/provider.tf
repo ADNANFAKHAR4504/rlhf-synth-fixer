@@ -17,4 +17,12 @@ terraform {
 # Primary AWS provider for general resources
 provider "aws" {
   region = var.aws_region
+  default_tags {
+    tags = {
+      Project     = var.project_name
+      Environment = var.environment
+      Owner       = var.owner_email
+      ManagedBy   = "Terraform"
+    }
+  }
 }
