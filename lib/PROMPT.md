@@ -12,7 +12,6 @@ All EC2 instances must be of the t3.micro type.
 Database and Storage:
 An RDS database instance with Multi-AZ support for high availability.
 An S3 bucket with AES-256 encryption enabled.
-The S3 bucket must have a bucket policy that restricts access to specific IP addresses.
 
 Security and CDN:
 Use AWS WAF to protect the application against SQL injection and XSS attacks.

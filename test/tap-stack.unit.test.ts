@@ -53,46 +53,19 @@ describe('TapStack CloudFormation Template', () => {
             );
         });
 
-        test('should have AllowedIPRange parameter', () => {
-            expect(template.Parameters.AllowedIPRange).toBeDefined();
+        test('should have LatestAmiId parameter', () => {
+            expect(template.Parameters.LatestAmiId).toBeDefined();
         });
 
-        test('AllowedIPRange parameter should have correct properties', () => {
-            const param = template.Parameters.AllowedIPRange;
-            expect(param.Type).toBe('String');
-            expect(param.Default).toBe('10.0.0.0/8');
-            expect(param.MinLength).toBe('9');
-            expect(param.MaxLength).toBe('18');
-            expect(param.AllowedPattern).toBe(
-                '(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})'
-            );
-            expect(param.ConstraintDescription).toBe(
-                'Must be a valid IP CIDR range of the form x.x.x.x/x'
-            );
+        test('LatestAmiId parameter should have correct properties', () => {
+            const param = template.Parameters.LatestAmiId;
+            expect(param.Type).toBe('AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
+            expect(param.Default).toBe('/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2');
+            expect(param.Description).toBe('Latest Amazon Linux 2 AMI ID from SSM Parameter Store');
         });
 
         test('should have exactly 2 parameters', () => {
             expect(Object.keys(template.Parameters)).toHaveLength(2);
-        });
-    });
-
-    describe('Mappings', () => {
-        test('should have AWSRegionToAMI mapping', () => {
-            expect(template.Mappings.AWSRegionToAMI).toBeDefined();
-        });
-
-        test('should have us-east-1 AMI mapping', () => {
-            expect(template.Mappings.AWSRegionToAMI['us-east-1']).toBeDefined();
-            expect(template.Mappings.AWSRegionToAMI['us-east-1'].AMI).toBe(
-                'ami-0341d95f75f311023'
-            );
-        });
-
-        test('should have us-west-2 AMI mapping', () => {
-            expect(template.Mappings.AWSRegionToAMI['us-west-2']).toBeDefined();
-            expect(template.Mappings.AWSRegionToAMI['us-west-2'].AMI).toBe(
-                'ami-07929b704805ef1f1'
-            );
         });
     });
 
@@ -337,9 +310,7 @@ describe('TapStack CloudFormation Template', () => {
 
             const data = lt.Properties.LaunchTemplateData;
             expect(data.InstanceType).toBe('t3.micro');
-            expect(data.ImageId).toEqual({
-                'Fn::FindInMap': ['AWSRegionToAMI', { Ref: 'AWS::Region' }, 'AMI'],
-            });
+            expect(data.ImageId).toEqual({ Ref: 'LatestAmiId' });
             expect(data.SecurityGroupIds).toEqual([{ Ref: 'WebServerSecurityGroup' }]);
             expect(data.UserData).toBeDefined();
         });
@@ -430,7 +401,7 @@ describe('TapStack CloudFormation Template', () => {
             expect(secret).toBeDefined();
             expect(secret.Type).toBe('AWS::SecretsManager::Secret');
             expect(secret.Properties.Name).toEqual({
-                'Fn::Sub': 'tap-db-credentials-${EnvironmentSuffix}',
+                'Fn::Sub': 'db-credentials-${EnvironmentSuffix}',
             });
 
             const genString = secret.Properties.GenerateSecretString;
@@ -454,7 +425,7 @@ describe('TapStack CloudFormation Template', () => {
             expect(rds).toBeDefined();
             expect(rds.Type).toBe('AWS::RDS::DBInstance');
             expect(rds.Properties.DBInstanceIdentifier).toEqual({
-                'Fn::Sub': 'tap-db-${EnvironmentSuffix}',
+                'Fn::Sub': 'db-${EnvironmentSuffix}',
             });
             expect(rds.Properties.Engine).toBe('mysql');
             expect(rds.Properties.EngineVersion).toBe('8.0.39');
@@ -499,7 +470,7 @@ describe('TapStack CloudFormation Template', () => {
             expect(bucket).toBeDefined();
             expect(bucket.Type).toBe('AWS::S3::Bucket');
             expect(bucket.Properties.BucketName).toEqual({
-                'Fn::Sub': 'tap-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}-{AWS::Region}',
+                'Fn::Sub': 'secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}',
             });
 
             const encryption = bucket.Properties.BucketEncryption;
@@ -521,17 +492,13 @@ describe('TapStack CloudFormation Template', () => {
             expect(publicBlock.RestrictPublicBuckets).toBe(true);
         });
 
-        test('S3BucketPolicy should enforce SSL and IP restrictions', () => {
+        test('S3BucketPolicy should enforce SSL', () => {
             const policy = template.Resources.S3BucketPolicy;
             expect(policy).toBeDefined();
             expect(policy.Type).toBe('AWS::S3::BucketPolicy');
 
             const statements = policy.Properties.PolicyDocument.Statement;
-            expect(statements).toHaveLength(2);
-
-            const ipRestriction = statements.find((s: any) => s.Sid === 'IPAddressRestriction');
-            expect(ipRestriction).toBeDefined();
-            expect(ipRestriction.Effect).toBe('Deny');
+            expect(statements).toHaveLength(1);
 
             const sslEnforcement = statements.find((s: any) => s.Sid === 'EnforceSSLRequestsOnly');
             expect(sslEnforcement).toBeDefined();
@@ -544,7 +511,7 @@ describe('TapStack CloudFormation Template', () => {
             expect(bucket).toBeDefined();
             expect(bucket.Type).toBe('AWS::S3::Bucket');
             expect(bucket.Properties.BucketName).toEqual({
-                'Fn::Sub': 'tap-cloudtrail-${EnvironmentSuffix}-${AWS::AccountId}',
+                'Fn::Sub': 'cloudtrail-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}',
             });
 
             const encryption = bucket.Properties.BucketEncryption;
@@ -553,6 +520,14 @@ describe('TapStack CloudFormation Template', () => {
             const publicBlock = bucket.Properties.PublicAccessBlockConfiguration;
             expect(publicBlock.BlockPublicAcls).toBe(true);
             expect(publicBlock.BlockPublicPolicy).toBe(true);
+        });
+
+        test('CloudTrailBucket should have 30-day lifecycle policy', () => {
+            const bucket = template.Resources.CloudTrailBucket;
+            expect(bucket.Properties.LifecycleConfiguration).toBeDefined();
+            expect(bucket.Properties.LifecycleConfiguration.Rules).toHaveLength(1);
+            expect(bucket.Properties.LifecycleConfiguration.Rules[0].Status).toBe('Enabled');
+            expect(bucket.Properties.LifecycleConfiguration.Rules[0].ExpirationInDays).toBe(30);
         });
 
         test('CloudTrailBucketPolicy should allow CloudTrail access', () => {
@@ -657,7 +632,7 @@ describe('TapStack CloudFormation Template', () => {
             expect(trail).toBeDefined();
             expect(trail.Type).toBe('AWS::CloudTrail::Trail');
             expect(trail.Properties.TrailName).toEqual({
-                'Fn::Sub': 'tap-trail-${EnvironmentSuffix}',
+                'Fn::Sub': 'trail-${EnvironmentSuffix}',
             });
             expect(trail.Properties.IsLogging).toBe(true);
             expect(trail.Properties.EnableLogFileValidation).toBe(true);

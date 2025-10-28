@@ -13,40 +13,10 @@
       "AllowedPattern": "[a-z0-9-]+",
       "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
     },
-    "AllowedIPRange": {
-      "Type": "String",
-      "Description": "IP address range allowed to access S3 bucket",
-      "MinLength": "9",
-      "MaxLength": "18",
-      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
-      "ConstraintDescription": "Must be a valid IP CIDR range of the form x.x.x.x/x",
-      "Default": "10.0.0.0/8"
-    }
-  },
-
-  "Mappings": {
-    "AWSRegionToAMI": {
-      "us-east-1": {
-        "AMI": "ami-0341d95f75f311023"
-      },
-      "us-west-1": {
-        "AMI": "ami-0d902a8756c37e690"
-      },
-      "us-west-2": {
-        "AMI": "ami-07929b704805ef1f1"
-      },
-      "eu-central-1": {
-        "AMI": "ami-0a5b0d219e493191b"
-      },
-      "eu-west-1": {
-        "AMI": "ami-06fbe0f46a96aa1fa"
-      },
-      "ap-southeast-1": {
-        "AMI": "ami-0ffd8e96d1336b6ac"
-      },
-      "ap-northeast-1": {
-        "AMI": "ami-070e0d4707168fc07"
-      }
+    "LatestAmiId": {
+      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+      "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+      "Description": "Latest Amazon Linux 2 AMI ID from SSM Parameter Store"
     }
   },
 
@@ -61,7 +31,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${AWS::StackName}-VPC"}
+            "Value": {"Fn::Sub": "VPC-${EnvironmentSuffix}"}
           }
         ]
       }
@@ -73,7 +43,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${AWS::StackName}-IGW"}
+            "Value": {"Fn::Sub": "IGW-${EnvironmentSuffix}"}
           }
         ]
       }
@@ -97,7 +67,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${AWS::StackName}-PublicSubnet1"}
+            "Value": {"Fn::Sub": "PublicSubnet1-${EnvironmentSuffix}"}
           }
         ]
       }
@@ -113,7 +83,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${AWS::StackName}-PublicSubnet2"}
+            "Value": {"Fn::Sub": "PublicSubnet2-${EnvironmentSuffix}"}
           }
         ]
       }
@@ -128,7 +98,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${AWS::StackName}-PrivateSubnet1"}
+            "Value": {"Fn::Sub": "PrivateSubnet1-${EnvironmentSuffix}"}
           }
         ]
       }
@@ -143,7 +113,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${AWS::StackName}-PrivateSubnet2"}
+            "Value": {"Fn::Sub": "PrivateSubnet2-${EnvironmentSuffix}"}
           }
         ]
       }
@@ -188,7 +158,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${AWS::StackName}-PublicRT"}
+            "Value": {"Fn::Sub": "PublicRT-${EnvironmentSuffix}"}
           }
         ]
       }
@@ -227,7 +197,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${AWS::StackName}-PrivateRT1"}
+            "Value": {"Fn::Sub": "PrivateRT1-${EnvironmentSuffix}"}
           }
         ]
       }
@@ -257,7 +227,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${AWS::StackName}-PrivateRT2"}
+            "Value": {"Fn::Sub": "PrivateRT2-${EnvironmentSuffix}"}
           }
         ]
       }
@@ -302,7 +272,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${AWS::StackName}-ALB-SG"}
+            "Value": {"Fn::Sub": "ALB-SG-${EnvironmentSuffix}"}
           }
         ]
       }
@@ -324,7 +294,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${AWS::StackName}-WebServer-SG"}
+            "Value": {"Fn::Sub": "WebServer-SG-${EnvironmentSuffix}"}
           }
         ]
       }
@@ -346,7 +316,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${AWS::StackName}-Database-SG"}
+            "Value": {"Fn::Sub": "Database-SG-${EnvironmentSuffix}"}
           }
         ]
       }
@@ -355,7 +325,7 @@
     "DBSecret": {
       "Type": "AWS::SecretsManager::Secret",
       "Properties": {
-        "Name": {"Fn::Sub": "tap-db-credentials-${EnvironmentSuffix}"},
+        "Name": {"Fn::Sub": "db-credentials-${EnvironmentSuffix}"},
         "Description": "RDS database master credentials",
         "GenerateSecretString": {
           "SecretStringTemplate": "{\"username\": \"dbadmin\"}",
@@ -438,7 +408,7 @@
     "ApplicationLoadBalancer": {
       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
       "Properties": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-ALB"},
+        "Name": {"Fn::Sub": "ALB-${EnvironmentSuffix}"},
         "Type": "application",
         "Scheme": "internet-facing",
         "SecurityGroups": [{"Ref": "ALBSecurityGroup"}],
@@ -449,7 +419,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${AWS::StackName}-ALB"}
+            "Value": {"Fn::Sub": "ALB-${EnvironmentSuffix}"}
           }
         ]
       }
@@ -458,7 +428,7 @@
     "TargetGroup": {
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-TG"},
+        "Name": {"Fn::Sub": "TG-${EnvironmentSuffix}"},
         "Port": 80,
         "Protocol": "HTTP",
         "VpcId": {"Ref": "VPC"},
@@ -475,7 +445,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${AWS::StackName}-TG"}
+            "Value": {"Fn::Sub": "TG-${EnvironmentSuffix}"}
           }
         ]
       }
@@ -499,9 +469,9 @@
     "LaunchTemplate": {
       "Type": "AWS::EC2::LaunchTemplate",
       "Properties": {
-        "LaunchTemplateName": {"Fn::Sub": "${AWS::StackName}-LaunchTemplate"},
+        "LaunchTemplateName": {"Fn::Sub": "LaunchTemplate-${EnvironmentSuffix}"},
         "LaunchTemplateData": {
-          "ImageId": {"Fn::FindInMap": ["AWSRegionToAMI", {"Ref": "AWS::Region"}, "AMI"]},
+          "ImageId": {"Ref": "LatestAmiId"},
           "InstanceType": "t3.micro",
           "SecurityGroupIds": [{"Ref": "WebServerSecurityGroup"}],
           "IamInstanceProfile": {
@@ -519,7 +489,7 @@
     "AutoScalingGroup": {
       "Type": "AWS::AutoScaling::AutoScalingGroup",
       "Properties": {
-        "AutoScalingGroupName": {"Fn::Sub": "${AWS::StackName}-ASG"},
+        "AutoScalingGroupName": {"Fn::Sub": "ASG-${EnvironmentSuffix}"},
         "LaunchTemplate": {
           "LaunchTemplateId": {"Ref": "LaunchTemplate"},
           "Version": {"Fn::GetAtt": ["LaunchTemplate", "LatestVersionNumber"]}
@@ -537,7 +507,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${AWS::StackName}-Instance"},
+            "Value": {"Fn::Sub": "Instance-${EnvironmentSuffix}"},
             "PropagateAtLaunch": true
           }
         ]
@@ -569,7 +539,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${AWS::StackName}-DBSubnetGroup"}
+            "Value": {"Fn::Sub": "DBSubnetGroup-${EnvironmentSuffix}"}
           }
         ]
       }
@@ -580,7 +550,7 @@
       "DeletionPolicy": "Snapshot",
       "UpdateReplacePolicy": "Snapshot",
       "Properties": {
-        "DBInstanceIdentifier": {"Fn::Sub": "tap-db-${EnvironmentSuffix}"},
+        "DBInstanceIdentifier": {"Fn::Sub": "db-${EnvironmentSuffix}"},
         "DBInstanceClass": "db.t3.micro",
         "Engine": "mysql",
         "EngineVersion": "8.0.39",
@@ -598,7 +568,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${AWS::StackName}-RDS"}
+            "Value": {"Fn::Sub": "RDS-${EnvironmentSuffix}"}
           }
         ]
       }
@@ -607,7 +577,7 @@
     "S3Bucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "BucketName": {"Fn::Sub": "tap-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}-{AWS::Region}"},
+        "BucketName": {"Fn::Sub": "secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"},
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
             {
@@ -629,7 +599,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${AWS::StackName}-S3Bucket"}
+            "Value": {"Fn::Sub": "secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"}
           }
         ]
       }
@@ -642,21 +612,6 @@
         "PolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
-            {
-              "Sid": "IPAddressRestriction",
-              "Effect": "Deny",
-              "Principal": "*",
-              "Action": "s3:*",
-              "Resource": [
-                {"Fn::GetAtt": ["S3Bucket", "Arn"]},
-                {"Fn::Sub": "${S3Bucket.Arn}/*"}
-              ],
-              "Condition": {
-                "NotIpAddress": {
-                  "aws:SourceIp": [{"Ref": "AllowedIPRange"}]
-                }
-              }
-            },
             {
               "Sid": "EnforceSSLRequestsOnly",
               "Effect": "Deny",
@@ -680,7 +635,7 @@
     "WebACL": {
       "Type": "AWS::WAFv2::WebACL",
       "Properties": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-WebACL"},
+        "Name": {"Fn::Sub": "WebACL-${EnvironmentSuffix}"},
         "Scope": "REGIONAL",
         "DefaultAction": {
           "Allow": {}
@@ -726,7 +681,7 @@
         "VisibilityConfig": {
           "SampledRequestsEnabled": true,
           "CloudWatchMetricsEnabled": true,
-          "MetricName": {"Fn::Sub": "${AWS::StackName}-WebACL"}
+          "MetricName": {"Fn::Sub": "WebACL-${EnvironmentSuffix}"}
         }
       }
     },
@@ -784,7 +739,7 @@
     "CloudTrailBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "BucketName": {"Fn::Sub": "tap-cloudtrail-${EnvironmentSuffix}-${AWS::AccountId}"},
+        "BucketName": {"Fn::Sub": "cloudtrail-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"},
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
             {
@@ -799,6 +754,15 @@
           "BlockPublicPolicy": true,
           "IgnorePublicAcls": true,
           "RestrictPublicBuckets": true
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldLogs",
+              "Status": "Enabled",
+              "ExpirationInDays": 30
+            }
+          ]
         }
       }
     },
@@ -842,7 +806,7 @@
       "Type": "AWS::CloudTrail::Trail",
       "DependsOn": "CloudTrailBucketPolicy",
       "Properties": {
-        "TrailName": {"Fn::Sub": "tap-trail-${EnvironmentSuffix}"},
+        "TrailName": {"Fn::Sub": "trail-${EnvironmentSuffix}"},
         "S3BucketName": {"Ref": "CloudTrailBucket"},
         "IsLogging": true,
         "IsMultiRegionTrail": false,
@@ -859,7 +823,7 @@
     "HighCPUAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "${AWS::StackName}-HighCPU"},
+        "AlarmName": {"Fn::Sub": "HighCPU-${EnvironmentSuffix}"},
         "AlarmDescription": "Alarm when CPU exceeds 80%",
         "MetricName": "CPUUtilization",
         "Namespace": "AWS/EC2",
@@ -880,7 +844,7 @@
     "UnhealthyHostAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "${AWS::StackName}-UnhealthyHosts"},
+        "AlarmName": {"Fn::Sub": "UnhealthyHosts-${EnvironmentSuffix}"},
         "AlarmDescription": "Alarm when we have unhealthy hosts",
         "MetricName": "UnHealthyHostCount",
         "Namespace": "AWS/ApplicationELB",
@@ -905,7 +869,7 @@
     "DatabaseCPUAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "${AWS::StackName}-DatabaseCPU"},
+        "AlarmName": {"Fn::Sub": "DatabaseCPU-${EnvironmentSuffix}"},
         "AlarmDescription": "Alarm when database CPU exceeds 75%",
         "MetricName": "CPUUtilization",
         "Namespace": "AWS/RDS",

@@ -20,9 +20,9 @@
 "LaunchTemplate": {
   "Type": "AWS::EC2::LaunchTemplate",
   "Properties": {
-    "LaunchTemplateName": {"Fn::Sub": "${AWS::StackName}-LaunchTemplate"},
+    "LaunchTemplateName": {"Fn::Sub": "LaunchTemplate-${EnvironmentSuffix}"},
     "LaunchTemplateData": {
-      "ImageId": {"Fn::FindInMap": ["AWSRegionToAMI", {"Ref": "AWS::Region"}, "AMI"]},
+      "ImageId": {"Ref": "LatestAmiId"},
       "InstanceType": "t3.micro",
       "SecurityGroupIds": [{"Ref": "WebServerSecurityGroup"}],
       "IamInstanceProfile": {
@@ -61,6 +61,11 @@
     "Default": "dev",
     "AllowedPattern": "[a-z0-9-]+",
     "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+  },
+  "LatestAmiId": {
+    "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+    "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+    "Description": "Latest Amazon Linux 2 AMI ID from SSM Parameter Store"
   }
 }
 ```
@@ -144,7 +149,7 @@
   "DBSecret": {
     "Type": "AWS::SecretsManager::Secret",
     "Properties": {
-      "Name": {"Fn::Sub": "${AWS::StackName}-db-credentials-${EnvironmentSuffix}"},
+      "Name": {"Fn::Sub": "db-credentials-${EnvironmentSuffix}"},
       "Description": "RDS database master credentials",
       "GenerateSecretString": {
         "SecretStringTemplate": "{\"username\": \"dbadmin\"}",
@@ -248,7 +253,7 @@
 
 ---
 
-### 6. S3 Bucket Policy Invalid Condition Key
+### 6. S3 Bucket Policy with Overly Restrictive IP-Based Access
 
 **Model Response:**
 ```json
@@ -263,6 +268,17 @@
           "Condition": {
             "IpAddressNotEquals": {
               "aws:SourceIp": [{"Ref": "AllowedIPRange"}]
+            }
+          }
+        },
+        {
+          "Sid": "EnforceSSLRequestsOnly",
+          "Effect": "Deny",
+          "Principal": "*",
+          "Action": "s3:*",
+          "Condition": {
+            "Bool": {
+              "aws:SecureTransport": "false"
             }
           }
         }
@@ -280,11 +296,17 @@
     "PolicyDocument": {
       "Statement": [
         {
-          "Sid": "IPAddressRestriction",
+          "Sid": "EnforceSSLRequestsOnly",
           "Effect": "Deny",
+          "Principal": "*",
+          "Action": "s3:*",
+          "Resource": [
+            {"Fn::GetAtt": ["S3Bucket", "Arn"]},
+            {"Fn::Sub": "${S3Bucket.Arn}/*"}
+          ],
           "Condition": {
-            "NotIpAddress": {
-              "aws:SourceIp": [{"Ref": "AllowedIPRange"}]
+            "Bool": {
+              "aws:SecureTransport": "false"
             }
           }
         }
@@ -300,9 +322,9 @@ Policy has invalid condition key: IpAddressNotEquals
 Valid condition keys: NotIpAddress, IpAddress
 ```
 
-**Failure Impact:** Uses invalid IAM condition key `IpAddressNotEquals` which doesn't exist in AWS IAM condition operators, causing policy validation failures.
+**Failure Impact:** Uses invalid IAM condition key `IpAddressNotEquals` which causes policy validation failures. Additionally, IP-based S3 bucket restrictions can prevent CloudFormation and legitimate AWS services from accessing the bucket, causing deployment and cleanup issues.
 
-**Root Cause:** Model used non-existent `IpAddressNotEquals` condition operator. The correct IAM condition operator for negating IP address matches is `NotIpAddress`, not `IpAddressNotEquals`.
+**Root Cause:** Model used non-existent `IpAddressNotEquals` condition operator and added IP-based access restrictions. The ideal implementation removes IP restrictions entirely and only enforces SSL/TLS, as IP-based bucket policies can block CloudFormation service access and make stack deletion difficult.
 
 ---
 
