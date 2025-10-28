@@ -331,7 +331,7 @@ export class TapStack extends pulumi.ComponentResource {
         allocatedStorage: this.config.dbConfig.allocatedStorage,
         storageEncrypted: true,
         kmsKeyId: kmsKey.arn,
-        username: this.config.dbConfig.username,
+        username: "dbusername",
         password: this.generateSecurePassword(name, "source"),
         dbSubnetGroupName: subnetGroup.name,
         multiAz: true,
