@@ -1,7 +1,7 @@
-import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 import { Fn } from 'cdktf';
+import { Construct } from 'constructs';
 
 export interface NetworkingModuleConfig {
   vpcCidr: string;
@@ -538,21 +538,21 @@ export class ContainerServiceModule extends Construct {
       protocol: 'HTTP',
       defaultAction: config.certificateArn
         ? [
-            {
-              type: 'redirect',
-              redirect: {
-                port: '443',
-                protocol: 'HTTPS',
-                statusCode: 'HTTP_301',
-              },
+          {
+            type: 'redirect',
+            redirect: {
+              port: '443',
+              protocol: 'HTTPS',
+              statusCode: 'HTTP_301',
             },
-          ]
+          },
+        ]
         : [
-            {
-              type: 'forward',
-              targetGroupArn: this.targetGroup.arn,
-            },
-          ],
+          {
+            type: 'forward',
+            targetGroupArn: this.targetGroup.arn,
+          },
+        ],
     });
 
     // HTTPS Listener (if certificate provided)
