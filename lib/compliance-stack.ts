@@ -17,9 +17,11 @@ interface ComplianceStackProps extends cdk.StackProps {
   environmentSuffix?: string;
 }
 
-export class ComplianceStack extends cdk.Stack {
+export class ComplianceConstruct extends Construct {
   constructor(scope: Construct, id: string, props?: ComplianceStackProps) {
-    super(scope, id, props);
+    super(scope, id);
+
+    const stack = cdk.Stack.of(this);
 
     const environmentSuffix =
       props?.environmentSuffix ||
@@ -117,14 +119,13 @@ export class ComplianceStack extends cdk.Stack {
       this.node.tryGetContext('drTopicArn') || process.env.DR_TOPIC_ARN;
     // For publish targets from lambdas we'll include the primary topic and conditionally the DR ARN.
 
-    // IAM role for scanners — least-privilege where possible
     const approvedAmisParam =
       this.node.tryGetContext('approvedAmisParam') ||
       '/compliance/approved-amis';
     const approvedAmisParamName = approvedAmisParam.startsWith('/')
       ? approvedAmisParam.slice(1)
       : approvedAmisParam;
-    const ssmParamArn = `arn:aws:ssm:${this.region}:${this.account}:parameter/${approvedAmisParamName}`;
+    const ssmParamArn = `arn:aws:ssm:${stack.region}:${stack.account}:parameter/${approvedAmisParamName}`;
 
     // Build SNS publish resources array: include primary topic and optionally the DR topic ARN
     const snsPublishResources = [complianceViolationsTopic.topicArn];
@@ -469,62 +470,62 @@ export class ComplianceStack extends cdk.Stack {
     });
 
     // Export outputs
-    new cdk.CfnOutput(this, `ComplianceResultsBucketOutput${nameSuffix}`, {
+    new cdk.CfnOutput(stack, `ComplianceResultsBucketOutput${nameSuffix}`, {
       value: complianceResultsBucket.bucketName,
       description: 'S3 bucket for compliance scan results',
       exportName: `ComplianceResultsBucket${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, `ComplianceViolationsTopicOutput${nameSuffix}`, {
+    new cdk.CfnOutput(stack, `ComplianceViolationsTopicOutput${nameSuffix}`, {
       value: complianceViolationsTopic.topicArn,
       description: 'SNS topic for compliance violations',
       exportName: `ComplianceViolationsTopic${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, `ComplianceDashboardOutput${nameSuffix}`, {
-      value: `https://console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards:name=${complianceDashboard.dashboardName}`,
+    new cdk.CfnOutput(stack, `ComplianceDashboardOutput${nameSuffix}`, {
+      value: `https://console.aws.amazon.com/cloudwatch/home?region=${stack.region}#dashboards:name=${complianceDashboard.dashboardName}`,
       description: 'CloudWatch dashboard URL',
       exportName: `ComplianceDashboardURL${environmentSuffix}`,
     });
 
     // Additional useful outputs for integration and testing
-    new cdk.CfnOutput(this, `EC2ComplianceScannerArn${nameSuffix}`, {
+    new cdk.CfnOutput(stack, `EC2ComplianceScannerArn${nameSuffix}`, {
       value: ec2ComplianceScanner.functionArn,
       description: 'EC2 compliance scanner Lambda ARN',
       exportName: `EC2ComplianceScannerArn${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, `RDSComplianceScannerArn${nameSuffix}`, {
+    new cdk.CfnOutput(stack, `RDSComplianceScannerArn${nameSuffix}`, {
       value: rdsComplianceScanner.functionArn,
       description: 'RDS compliance scanner Lambda ARN',
       exportName: `RDSComplianceScannerArn${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, `S3ComplianceScannerArn${nameSuffix}`, {
+    new cdk.CfnOutput(stack, `S3ComplianceScannerArn${nameSuffix}`, {
       value: s3ComplianceScanner.functionArn,
       description: 'S3 compliance scanner Lambda ARN',
       exportName: `S3ComplianceScannerArn${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, `ComplianceVpcId${nameSuffix}`, {
+    new cdk.CfnOutput(stack, `ComplianceVpcId${nameSuffix}`, {
       value: vpc.vpcId,
       description: 'VPC id used by compliance scanners',
       exportName: `ComplianceVpcId${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, `EC2ComplianceLogGroup${nameSuffix}`, {
+    new cdk.CfnOutput(stack, `EC2ComplianceLogGroup${nameSuffix}`, {
       value: `/aws/lambda/${ec2ComplianceScanner.functionName}`,
       description: 'CloudWatch Log Group name for EC2 compliance scanner',
       exportName: `EC2ComplianceLogGroup${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, `RDSComplianceLogGroup${nameSuffix}`, {
+    new cdk.CfnOutput(stack, `RDSComplianceLogGroup${nameSuffix}`, {
       value: `/aws/lambda/${rdsComplianceScanner.functionName}`,
       description: 'CloudWatch Log Group name for RDS compliance scanner',
       exportName: `RDSComplianceLogGroup${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, `S3ComplianceLogGroup${nameSuffix}`, {
+    new cdk.CfnOutput(stack, `S3ComplianceLogGroup${nameSuffix}`, {
       value: `/aws/lambda/${s3ComplianceScanner.functionName}`,
       description: 'CloudWatch Log Group name for S3 compliance scanner',
       exportName: `S3ComplianceLogGroup${environmentSuffix}`,
