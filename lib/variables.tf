@@ -48,33 +48,17 @@ variable "database_name" {
   default     = "gaming_db"
 }
 
-variable "master_username" {
-  description = "Master username for Aurora cluster"
+# Secrets Manager configuration
+variable "secret_name" {
+  description = "Name of the AWS Secrets Manager secret for Aurora database credentials"
+  type        = string
+  default     = "" # Default empty, will create new secret if not specified
+}
+
+variable "secret_arn" {
+  description = "ARN of existing Secrets Manager secret (used if secret already exists)"
   type        = string
   default     = ""
-  sensitive   = true
-}
-
-variable "master_password" {
-  description = "Master password for Aurora cluster"
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
-# Support CI/CD variable naming convention
-variable "db_username" {
-  description = "Master username for Aurora cluster (CI/CD uses TF_VAR_db_username)"
-  type        = string
-  default     = "admin"
-  sensitive   = true
-}
-
-variable "db_password" {
-  description = "Master password for Aurora cluster (CI/CD uses TF_VAR_db_password)"
-  type        = string
-  default     = "TempPassword123!"
-  sensitive   = true
 }
 
 variable "aurora_mysql_version" {

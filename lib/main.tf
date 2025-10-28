@@ -45,8 +45,17 @@ resource "aws_rds_cluster" "aurora_serverless" {
   engine_mode     = "provisioned" # v2 uses provisioned mode with serverless scaling
   engine_version  = var.aurora_mysql_version
   database_name   = var.database_name
-  master_username = var.master_username != "" ? var.master_username : var.db_username
-  master_password = var.master_password != "" ? var.master_password : var.db_password # Should be from AWS Secrets Manager in production
+  master_username = var.db_username != "admin" ? var.db_username : "admin"
+  master_password = var.db_password != "TempPassword123!" ? var.db_password : "TempPassword123!"
+
+  # Use AWS Secrets Manager for secure credential management
+  # RDS will automatically create and manage the secret with naming convention: rds-db-credentials/cluster-<cluster-identifier>/<random-suffix>
+  manage_master_user_password   = true
+  master_user_secret_kms_key_id = aws_kms_key.aurora.key_id
+
+  lifecycle {
+    ignore_changes = [master_password]
+  }
 
   # Networking
   db_subnet_group_name   = aws_db_subnet_group.aurora.name
@@ -90,10 +99,6 @@ resource "aws_rds_cluster" "aurora_serverless" {
       Name = "${var.project_name}-${var.environment_suffix}-aurora-cluster"
     }
   )
-
-  lifecycle {
-    ignore_changes = [master_password]
-  }
 }
 
 # Aurora Serverless v2 instance

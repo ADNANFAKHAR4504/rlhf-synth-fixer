@@ -31,6 +31,12 @@ resource "aws_iam_role_policy_attachment" "rds_enhanced_monitoring" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
 }
 
+# Attach Secrets Manager policy to RDS Enhanced Monitoring role (RDS uses this for secret access)
+resource "aws_iam_role_policy_attachment" "rds_secrets_manager" {
+  role       = aws_iam_role.rds_enhanced_monitoring.name
+  policy_arn = aws_iam_policy.aurora_secrets_manager.arn
+}
+
 # IAM role for Aurora S3 backup access
 resource "aws_iam_role" "aurora_s3_backup" {
   name = "${var.project_name}-${var.environment_suffix}-aurora-s3-backup"

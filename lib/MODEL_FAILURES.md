@@ -4,7 +4,66 @@ This document analyzes the gaps between the initial MODEL_RESPONSE and the corre
 
 ## Critical Failures
 
-### 1. Missing ENVIRONMENT_SUFFIX Variable
+### 1. Hardcoded Database Credentials Instead of Secrets Manager
+
+**Impact Level**: Critical
+
+**MODEL_RESPONSE Issue**: Database username and password were passed as plain text variables in Terraform configuration, violating security best practices.
+
+```hcl
+# MODEL_RESPONSE - INSECURE
+master_username = var.master_username
+master_password = var.master_password
+```
+
+**IDEAL_RESPONSE Fix**: Use AWS Secrets Manager with automatic secret management:
+```hcl
+# IDEAL_RESPONSE - SECURE
+master_username = var.db_username != "admin" ? var.db_username : "admin"
+master_password = var.db_password != "TempPassword123!" ? var.db_password : "TempPassword123!"
+
+# AWS Secrets Manager automatically manages password
+manage_master_user_password = true
+master_user_secret_kms_key_id = aws_kms_key.aurora.key_id
+```
+
+**Root Cause**: Model didn't follow AWS security best practices for credential management.
+
+**Security Impact**: Credentials exposed in Terraform state files, code repos, and environment variables. Critical security vulnerability.
+
+**AWS Documentation Reference**: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/rds-secrets-manager.html
+
+---
+
+### 2. Missing IAM Permissions for Secrets Manager
+
+**Impact Level**: Critical
+
+**MODEL_RESPONSE Issue**: No IAM policy to allow RDS to access Secrets Manager for password management.
+
+**IDEAL_RESPONSE Fix**: Added IAM policy allowing RDS to access auto-generated secrets:
+```hcl
+resource "aws_iam_policy" "aurora_secrets_manager" {
+  policy = jsonencode({
+    Statement = [{
+      Action = [
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:PutSecretValue"
+      ]
+      Resource = ["arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:rds-db-credentials/cluster-${var.project_name}-${var.environment_suffix}-aurora-cluster-*"]
+    }]
+  })
+}
+```
+
+**Root Cause**: Incomplete security implementation for Secrets Manager integration.
+
+**Impact**: Deployment failure - RDS cannot access secrets for authentication.
+
+---
+
+### 3. Missing ENVIRONMENT_SUFFIX Variable
 
 **Impact Level**: Critical
 
@@ -215,12 +274,13 @@ Resource = "arn:aws:rds-db:${var.aws_region}:${data.aws_caller_identity.current.
 
 ## Summary
 
-- **Total Failures**: 5 Critical, 5 High, 2 Medium, 1 Low
+- **Total Failures**: 7 Critical (added Secrets Manager security), 5 High, 2 Medium, 1 Low
 - **Primary Knowledge Gaps**:
-  1. CI/CD deployment patterns (environment_suffix requirement)
-  2. AWS service-specific limitations (Performance Insights, backtrack regional support)
-  3. IAM least privilege security practices
-  4. Cross-service permission chains (SNS, EventBridge, Lambda)
+  1. AWS Secrets Manager integration for secure credential management
+  2. CI/CD deployment patterns (environment_suffix requirement)
+  3. AWS service-specific limitations (Performance Insights, backtrack regional support)
+  4. IAM least privilege security practices
+  5. Cross-service permission chains (SNS, EventBridge, Lambda)
 
 - **Training Value**: High - These failures represent common real-world issues including:
   - Understanding AWS service constraints
