@@ -363,10 +363,18 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('should list Lambda function in service', async () => {
-      const command = new ListFunctionsCommand({});
-      const response = await lambdaClient.send(command);
+      // Get all functions with pagination
+      let allFunctions: any[] = [];
+      let marker: string | undefined;
+      
+      do {
+        const command = new ListFunctionsCommand({ Marker: marker });
+        const response = await lambdaClient.send(command);
+        allFunctions = allFunctions.concat(response.Functions || []);
+        marker = response.NextMarker;
+      } while (marker);
 
-      const functionNames = response.Functions?.map(f => f.FunctionName) || [];
+      const functionNames = allFunctions.map(f => f.FunctionName) || [];
       expect(functionNames).toContain(
         `tap-security-scan-analysis-${environmentSuffix}`
       );
