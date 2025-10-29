@@ -245,7 +245,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 			"kinesis:DescribeStream",
 		),
 		Resources: jsii.Strings(*awskinesis.NewStream(stack, jsii.String("TempStreamRef"), &awskinesis.StreamProps{
-			StreamName: jsii.String(fmt.Sprintf("secured-stream-analytic-%s", environmentSuffix)),
+			StreamName: jsii.String(fmt.Sprintf("analytic-secured-stream-%s", environmentSuffix)),
 		}).StreamArn()),
 	}))
 
@@ -346,7 +346,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 
 	// Create Kinesis Data Stream with encryption
 	stream := awskinesis.NewStream(stack, jsii.String("AnalyticsStream"), &awskinesis.StreamProps{
-		StreamName:      jsii.String(fmt.Sprintf("secured-stream-analytic-%s", environmentSuffix)),
+		StreamName:      jsii.String(fmt.Sprintf("analytic-secured-stream-%s", environmentSuffix)),
 		ShardCount:      jsii.Number(2),
 		Encryption:      awskinesis.StreamEncryption_KMS,
 		EncryptionKey:   kinesisKey,
