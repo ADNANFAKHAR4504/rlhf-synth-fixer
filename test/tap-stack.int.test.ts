@@ -118,7 +118,7 @@ describe('Integration tests — runtime traffic checks', () => {
 
     const bucketName = findOutputValueContaining('compliance-scan-results') || findOutputValueContaining('compliance', 'results') || findOutputValueContaining('bucket');
 
-    for (const arn of arns) {
+    for (const arn of existingArns) {
       const payload = JSON.stringify({ invocationTest: true, ts: Date.now() });
       const startTime = Date.now();
 
@@ -148,22 +148,26 @@ describe('Integration tests — runtime traffic checks', () => {
 
       let observed = false;
       const logGroup = findLogGroupForArn(arn);
-      if (logGroup) {
-        const filter = 'invocationTest';
-        for (let i = 0; i < 20 && !observed; i++) {
+      const filter = 'invocationTest';
+      // Poll logs and S3 for up to ~20 seconds to detect an observable side-effect
+      for (let i = 0; i < 20 && !observed; i++) {
+        // Check CloudWatch Logs (if we have a log group registered in outputs)
+        if (logGroup) {
           try {
-            const events = await logsClient.send(new FilterLogEventsCommand({ logGroupName: logGroup, startTime, filterPattern: filter, limit: 50 }));
-            if (events.events && events.events.length > 0 && events.events.some((e) => (e.message || '').includes('invocationTest'))) { observed = true; break; }
-          } catch (e) { /* ignore and retry */ }
-          await new Promise((r) => setTimeout(r, 1500));
+            const logResp = await logsClient.send(new FilterLogEventsCommand({ logGroupName: logGroup, startTime, filterPattern: filter, limit: 50 }));
+            if (logResp.events && logResp.events.some((e) => e.message && e.message.includes('invocationTest'))) observed = true;
+          } catch (e) { /* ignore transient errors while polling */ }
         }
-      }
 
-      if (!observed && bucketName) {
-        try {
-          const list = await s3Client.send(new ListObjectsV2Command({ Bucket: bucketName, MaxKeys: 1000 }));
-          if (list.Contents && list.Contents.some((c) => c.LastModified && c.LastModified.getTime() >= startTime - 5000)) observed = true;
-        } catch (e) { /* ignore */ }
+        // Check S3 for a recently created object (if a bucket name is available)
+        if (!observed && bucketName) {
+          try {
+            const listResp = await s3Client.send(new ListObjectsV2Command({ Bucket: bucketName, MaxKeys: 50 }));
+            if (listResp.Contents && listResp.Contents.some((c) => c.LastModified && c.LastModified.getTime() >= startTime - 5000)) observed = true;
+          } catch (e) { /* ignore transient permissions/errors while polling */ }
+        }
+
+        if (!observed) await new Promise((r) => setTimeout(r, 1000));
       }
 
       if (!observed) {

@@ -2,5 +2,7 @@
   "name": "compliance-layer-nodejs",
   "version": "0.1.0",
   "private": true,
-  "dependencies": {}
+  "dependencies": {
+    "jmespath": "^0.16.0"
+  }
 }
