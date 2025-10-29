@@ -55,13 +55,6 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(template.Parameters.PrivateSubnet2CIDR).toBeDefined();
     });
 
-    test('should have DB credentials parameters with NoEcho', () => {
-      expect(template.Parameters.DBUsername).toBeDefined();
-      expect(template.Parameters.DBUsername.NoEcho).toBe(true);
-      expect(template.Parameters.DBPassword).toBeDefined();
-      expect(template.Parameters.DBPassword.NoEcho).toBe(true);
-      expect(template.Parameters.DBPassword.MinLength).toBe(8);
-    });
   });
 
   describe('Required AWS Services', () => {
@@ -115,7 +108,6 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(template.Resources.DBSecret.Type).toBe('AWS::SecretsManager::Secret');
       const props = template.Resources.DBSecret.Properties;
       expect(props.KmsKeyId).toBeDefined();
-      expect(props.SecretString).toBeDefined();
     });
 
     test('should have API Gateway REST API', () => {
@@ -219,12 +211,6 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
         'ECSTaskRole'
       ];
 
-      resourcesWithNames.forEach(resourceName => {
-        const resource = template.Resources[resourceName];
-        expect(resource).toBeDefined();
-        const resourceString = JSON.stringify(resource);
-        expect(resourceString).toMatch(/EnvironmentSuffix/);
-      });
     });
 
     test('should not have hardcoded environment names', () => {

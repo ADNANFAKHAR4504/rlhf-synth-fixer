@@ -33,19 +33,6 @@ Parameters:
     Default: '10.0.11.0/24'
     Description: 'CIDR block for private subnet in AZ2'
 
-  DBUsername:
-    Type: String
-    Default: 'dbadmin'
-    Description: 'Database master username'
-    NoEcho: true
-
-  DBPassword:
-    Type: String
-    Default: 'TempPassword123!'
-    Description: 'Database master password (will be rotated)'
-    NoEcho: true
-    MinLength: 8
-
 Resources:
   # ========================================
   # KMS Keys for Encryption
@@ -295,7 +282,6 @@ Resources:
   ECSTaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'medtech-ecs-execution-role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -322,7 +308,6 @@ Resources:
   ECSTaskRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'medtech-ecs-task-role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -370,7 +355,7 @@ Resources:
                 Resource: !GetAtt DataEncryptionKey.Arn
 
   # ========================================
-  # Secrets Manager
+  # Secrets Manager - Updated
   # ========================================
 
   DBSecret:
@@ -379,16 +364,14 @@ Resources:
       Name: !Sub 'medtech-db-credentials-${EnvironmentSuffix}'
       Description: 'Database credentials for Aurora cluster'
       KmsKeyId: !Ref DataEncryptionKey
-      SecretString: !Sub |
-        {
-          "username": "${DBUsername}",
-          "password": "${DBPassword}",
-          "engine": "postgres",
-          "dbname": "medtech"
-        }
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "dbadmin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
 
   # ========================================
-  # RDS Aurora Cluster
+  # RDS Aurora Cluster - Updated
   # ========================================
 
   DBSubnetGroup:
@@ -411,8 +394,8 @@ Resources:
       EngineVersion: '15.4'
       EngineMode: provisioned
       DatabaseName: medtech
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
         - !Ref RDSSecurityGroup
@@ -450,6 +433,14 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'medtech-aurora-instance-2-${EnvironmentSuffix}'
+
+  # Add automatic secret attachment to RDS cluster
+  SecretRDSInstanceAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties:
+      SecretId: !Ref DBSecret
+      TargetId: !Ref AuroraCluster
+      TargetType: AWS::RDS::DBCluster
 
   # ========================================
   # ElastiCache Redis Cluster
