@@ -352,34 +352,26 @@ class ComplianceInfrastructureStack extends cdk.NestedStack {
      * Recording all supported resources for comprehensive compliance
      * Re-evaluates within 15 minutes of changes (Config built-in capability)
      */
-    const configRecorder = new config.CfnConfigurationRecorder(
-      this,
-      'ConfigRecorder',
-      {
-        name: 'default', // AWS Config requires 'default' as the recorder name
-        roleArn: configRole.roleArn,
-        recordingGroup: {
-          allSupported: true,
-          includeGlobalResourceTypes: true, // Include IAM, CloudFront, etc.
-        },
-      }
-    );
+    new config.CfnConfigurationRecorder(this, 'ConfigRecorder', {
+      name: 'default', // AWS Config requires 'default' as the recorder name
+      roleArn: configRole.roleArn,
+      recordingGroup: {
+        allSupported: true,
+        includeGlobalResourceTypes: true, // Include IAM, CloudFront, etc.
+      },
+    });
 
     /**
      * Delivery Channel - sends config snapshots to S3
      * Configured for frequent snapshots to meet 15-minute evaluation target
      */
-    const deliveryChannel = new config.CfnDeliveryChannel(
-      this,
-      'ConfigDeliveryChannel',
-      {
-        name: 'default',
-        s3BucketName: this.complianceBucket.bucketName,
-        configSnapshotDeliveryProperties: {
-          deliveryFrequency: 'TwentyFour_Hours',
-        },
-      }
-    );
+    new config.CfnDeliveryChannel(this, 'ConfigDeliveryChannel', {
+      name: 'default',
+      s3BucketName: this.complianceBucket.bucketName,
+      configSnapshotDeliveryProperties: {
+        deliveryFrequency: 'TwentyFour_Hours',
+      },
+    });
 
     // Ensure recorder is created before delivery channel (AWS Config requirement)deliveryChannel.addDependency(configRecorder);
 
