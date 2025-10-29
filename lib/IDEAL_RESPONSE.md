@@ -2141,6 +2141,81 @@ output "cloudwatch_alarm_topic_arn" {
 
 ---
 
+## Provider Configuration
+
+### Provider Setup (`lib/provider.tf`)
+
+This file configures the Terraform AWS provider and backend. It should be created alongside `tap_stack.tf` for a complete deployment.
+
+```terraform
+# provider.tf
+
+terraform {
+  required_version = ">= 1.4.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+  }
+
+  # Partial backend config: values are injected at `terraform init` time
+  backend "s3" {}
+}
+
+# Primary AWS provider for general resources
+provider "aws" {
+  region = var.aws_region
+}
+```
+
+---
+
+## Lambda Placeholder Package
+
+### Minimal Deployment Package (`lib/lambda_placeholder.zip`)
+
+This is a minimal Lambda deployment package (444 bytes) used to allow the infrastructure to deploy successfully before actual Lambda code is uploaded. It contains a single file `placeholder_index.js` that returns a success response indicating the infrastructure is ready.
+
+**Purpose:**
+
+- Allows Terraform to create all Lambda functions without S3 pre-existing code
+- Enables infrastructure deployment and testing before full Lambda implementation
+- Prevents deployment errors when Lambda code is not yet available
+
+**Contents of `placeholder_index.js`:**
+
+```javascript
+exports.handler = async event => {
+  console.log('Lambda function deployed - Replace with actual implementation');
+  console.log('Event:', JSON.stringify(event, null, 2));
+
+  return {
+    statusCode: 200,
+    body: JSON.stringify({
+      message: 'Lambda function placeholder',
+      note: 'Infrastructure deployed successfully. Upload actual Lambda code to activate full functionality.',
+    }),
+  };
+};
+```
+
+**Usage:**
+All Lambda functions in `tap_stack.tf` reference this placeholder via:
+
+```terraform
+filename         = "${path.module}/lambda_placeholder.zip"
+source_code_hash = filebase64sha256("${path.module}/lambda_placeholder.zip")
+```
+
+Once the infrastructure is deployed, replace with actual function code using either:
+
+1. S3-based deployment (update Terraform to use `s3_bucket` and `s3_key`)
+2. AWS CLI: `aws lambda update-function-code --function-name <name> --zip-file fileb://function.zip`
+
+---
+
 ## Lambda Function Implementations
 
 The following Lambda functions implement the core booking system logic. Each function is designed to meet specific SLA targets and follows AWS best practices.
