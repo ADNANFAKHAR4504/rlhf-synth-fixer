@@ -49,16 +49,19 @@ class InfrastructureOptimizer:
             clusters = self.rds_client.describe_db_clusters()
             cluster_id = None
             
+            # Look for cluster with matching patterns
             for cluster in clusters['DBClusters']:
-                if f'streamflix' in cluster['DBClusterIdentifier'].lower():
+                cluster_identifier = cluster['DBClusterIdentifier'].lower()
+                # Match on various patterns: streamflix, tapstack, or environment suffix
+                if any(pattern in cluster_identifier for pattern in ['streamflix', 'tapstack', 'database', self.environment_suffix.lower()]):
                     cluster_id = cluster['DBClusterIdentifier']
+                    print(f"Found cluster: {cluster_id}")
                     break
             
             if not cluster_id:
                 print("❌ Aurora cluster not found")
+                print(f"Available clusters: {[c['DBClusterIdentifier'] for c in clusters['DBClusters']]}")
                 return False
-            
-            print(f"Found cluster: {cluster_id}")
             
             # Update serverless v2 scaling configuration
             print("Updating serverless v2 scaling configuration...")
@@ -102,18 +105,23 @@ class InfrastructureOptimizer:
             # Find the Redis replication group
             replication_groups = self.elasticache_client.describe_replication_groups()
             replication_group_id = None
+            current_node_count = 0
             
+            # Look for replication group with matching patterns
             for group in replication_groups['ReplicationGroups']:
-                if f'streamflix-redis-{self.environment_suffix}' in group['ReplicationGroupId']:
+                group_id = group['ReplicationGroupId'].lower()
+                # Match on various patterns: streamflix, redis, or environment suffix
+                if any(pattern in group_id for pattern in ['streamflix', 'redis', self.environment_suffix.lower()]):
                     replication_group_id = group['ReplicationGroupId']
                     current_node_count = len(group['NodeGroups'][0]['NodeGroupMembers'])
+                    print(f"Found replication group: {replication_group_id}")
                     break
             
             if not replication_group_id:
                 print("❌ Redis replication group not found")
+                print(f"Available groups: {[g['ReplicationGroupId'] for g in replication_groups['ReplicationGroups']]}")
                 return False
             
-            print(f"Found replication group: {replication_group_id}")
             print(f"Current node count: {current_node_count}")
             
             if current_node_count <= 2:
@@ -165,32 +173,37 @@ class InfrastructureOptimizer:
             clusters = self.ecs_client.list_clusters()
             cluster_arn = None
             
+            # Look for cluster with matching patterns
             for cluster in clusters['clusterArns']:
-                if f'streamflix-cluster-{self.environment_suffix}' in cluster:
+                cluster_lower = cluster.lower()
+                if any(pattern in cluster_lower for pattern in ['streamflix', 'cluster', self.environment_suffix.lower()]):
                     cluster_arn = cluster
+                    print(f"Found cluster: {cluster_arn.split('/')[-1]}")
                     break
             
             if not cluster_arn:
                 print("❌ ECS cluster not found")
+                print(f"Available clusters: {[c.split('/')[-1] for c in clusters['clusterArns']]}")
                 return False
-            
-            print(f"Found cluster: {cluster_arn.split('/')[-1]}")
             
             # Find the service
             services = self.ecs_client.list_services(cluster=cluster_arn)
             service_arn = None
             
+            # Look for service with matching patterns
             for service in services['serviceArns']:
-                if f'streamflix-api-{self.environment_suffix}' in service:
+                service_lower = service.lower()
+                if any(pattern in service_lower for pattern in ['streamflix', 'api', 'fargate', self.environment_suffix.lower()]):
                     service_arn = service
+                    print(f"Found service: {service_arn.split('/')[-1]}")
                     break
             
             if not service_arn:
                 print("❌ ECS service not found")
+                print(f"Available services: {[s.split('/')[-1] for s in services['serviceArns']]}")
                 return False
             
             service_name = service_arn.split('/')[-1]
-            print(f"Found service: {service_name}")
             
             # Get current service details
             service_details = self.ecs_client.describe_services(
