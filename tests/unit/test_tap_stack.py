@@ -704,5 +704,507 @@ class TestComputeStack(unittest.TestCase):
         assert compute.instance_role is not None
 
 
+@mark.describe("CDNStack")
+class TestCDNStack(unittest.TestCase):
+    """Test cases for CDNStack (CloudFront)"""
+
+    def setUp(self):
+        """Set up test environment"""
+        self.app = cdk.App()
+        self.parent_stack = cdk.Stack(
+            self.app, "ParentStack", env=cdk.Environment(account="123456789012", region="us-east-1")
+        )
+        # Create mock ALB
+        import aws_cdk.aws_ec2 as ec2
+        import aws_cdk.aws_elasticloadbalancingv2 as elbv2
+
+        mock_vpc = ec2.Vpc(self.parent_stack, "MockVPC")
+        self.mock_alb = elbv2.ApplicationLoadBalancer(
+            self.parent_stack, "MockALB", vpc=mock_vpc, internet_facing=True
+        )
+
+    @mark.it("creates CloudFront distribution")
+    def test_creates_cloudfront_distribution(self):
+        """Test that CloudFront distribution is created"""
+        cdn = CDNStack(
+            self.parent_stack,
+            "CDNTest",
+            environment_suffix="test",
+            region="us-east-1",
+            account_id="123456789012",
+            static_bucket_name="test-bucket",
+            static_bucket_regional_domain_name="test-bucket.s3.us-east-1.amazonaws.com",
+            alb=self.mock_alb,
+        )
+        template = Template.from_stack(cdn)
+
+        # Should create CloudFront distribution
+        template.resource_count_is("AWS::CloudFront::Distribution", 1)
+
+    @mark.it("creates Origin Access Identity")
+    def test_creates_oai(self):
+        """Test that Origin Access Identity is created"""
+        cdn = CDNStack(
+            self.parent_stack,
+            "CDNTest",
+            environment_suffix="test",
+            region="us-east-1",
+            account_id="123456789012",
+            static_bucket_name="test-bucket",
+            static_bucket_regional_domain_name="test-bucket.s3.us-east-1.amazonaws.com",
+            alb=self.mock_alb,
+        )
+        template = Template.from_stack(cdn)
+
+        # Should create OAI
+        template.resource_count_is("AWS::CloudFront::CloudFrontOriginAccessIdentity", 1)
+
+    @mark.it("configures HTTPS enforcement")
+    def test_https_enforcement(self):
+        """Test that distribution enforces HTTPS"""
+        cdn = CDNStack(
+            self.parent_stack,
+            "CDNTest",
+            environment_suffix="test",
+            region="us-east-1",
+            account_id="123456789012",
+            static_bucket_name="test-bucket",
+            static_bucket_regional_domain_name="test-bucket.s3.us-east-1.amazonaws.com",
+            alb=self.mock_alb,
+        )
+        template = Template.from_stack(cdn)
+
+        # Distribution should enforce HTTPS
+        template.has_resource_properties(
+            "AWS::CloudFront::Distribution",
+            {
+                "DistributionConfig": Match.object_like(
+                    {
+                        "DefaultCacheBehavior": Match.object_like(
+                            {
+                                "ViewerProtocolPolicy": "redirect-to-https",
+                            }
+                        ),
+                    }
+                ),
+            },
+        )
+
+    @mark.it("enables logging")
+    def test_enables_logging(self):
+        """Test that CloudFront logging is enabled"""
+        cdn = CDNStack(
+            self.parent_stack,
+            "CDNTest",
+            environment_suffix="test",
+            region="us-east-1",
+            account_id="123456789012",
+            static_bucket_name="test-bucket",
+            static_bucket_regional_domain_name="test-bucket.s3.us-east-1.amazonaws.com",
+            alb=self.mock_alb,
+        )
+        template = Template.from_stack(cdn)
+
+        # Should have logging enabled
+        template.has_resource_properties(
+            "AWS::CloudFront::Distribution",
+            {
+                "DistributionConfig": Match.object_like(
+                    {
+                        "Logging": Match.object_like(
+                            {
+                                "Bucket": Match.any_value(),
+                            }
+                        ),
+                    }
+                ),
+            },
+        )
+
+
+@mark.describe("MonitoringStack")
+class TestMonitoringStack(unittest.TestCase):
+    """Test cases for MonitoringStack (CloudWatch)"""
+
+    def setUp(self):
+        """Set up test environment"""
+        self.app = cdk.App()
+        self.parent_stack = cdk.Stack(
+            self.app, "ParentStack", env=cdk.Environment(account="123456789012", region="us-east-1")
+        )
+        # Create mocks
+        import aws_cdk.aws_ec2 as ec2
+        import aws_cdk.aws_elasticloadbalancingv2 as elbv2
+        import aws_cdk.aws_autoscaling as autoscaling
+        import aws_cdk.aws_sns as sns
+
+        mock_vpc = ec2.Vpc(self.parent_stack, "MockVPC")
+        self.mock_alb = elbv2.ApplicationLoadBalancer(
+            self.parent_stack, "MockALB", vpc=mock_vpc
+        )
+        self.mock_asg = autoscaling.AutoScalingGroup(
+            self.parent_stack,
+            "MockASG",
+            vpc=mock_vpc,
+            instance_type=ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+            machine_image=ec2.MachineImage.latest_amazon_linux2(),
+        )
+        self.mock_topic = sns.Topic(self.parent_stack, "MockTopic")
+
+    @mark.it("creates CloudWatch log groups")
+    def test_creates_log_groups(self):
+        """Test that CloudWatch log groups are created"""
+        monitoring = MonitoringStack(
+            self.parent_stack,
+            "MonitoringTest",
+            environment_suffix="test",
+            region="us-east-1",
+            asg=self.mock_asg,
+            alb=self.mock_alb,
+            notification_topic=self.mock_topic,
+        )
+        template = Template.from_stack(monitoring)
+
+        # Should create 2 log groups (app and infra)
+        template.resource_count_is("AWS::Logs::LogGroup", 2)
+
+    @mark.it("creates CloudWatch alarms")
+    def test_creates_alarms(self):
+        """Test that CloudWatch alarms are created"""
+        monitoring = MonitoringStack(
+            self.parent_stack,
+            "MonitoringTest",
+            environment_suffix="test",
+            region="us-east-1",
+            asg=self.mock_asg,
+            alb=self.mock_alb,
+            notification_topic=self.mock_topic,
+        )
+        template = Template.from_stack(monitoring)
+
+        # Should create alarms (high CPU and unhealthy targets)
+        template.resource_count_is("AWS::CloudWatch::Alarm", 2)
+
+    @mark.it("creates CloudWatch dashboard")
+    def test_creates_dashboard(self):
+        """Test that CloudWatch dashboard is created"""
+        monitoring = MonitoringStack(
+            self.parent_stack,
+            "MonitoringTest",
+            environment_suffix="test",
+            region="us-east-1",
+            asg=self.mock_asg,
+            alb=self.mock_alb,
+            notification_topic=self.mock_topic,
+        )
+        template = Template.from_stack(monitoring)
+
+        # Should create dashboard
+        template.resource_count_is("AWS::CloudWatch::Dashboard", 1)
+
+    @mark.it("configures alarms with SNS actions")
+    def test_alarms_have_sns_actions(self):
+        """Test that alarms have SNS notification actions"""
+        monitoring = MonitoringStack(
+            self.parent_stack,
+            "MonitoringTest",
+            environment_suffix="test",
+            region="us-east-1",
+            asg=self.mock_asg,
+            alb=self.mock_alb,
+            notification_topic=self.mock_topic,
+        )
+        template = Template.from_stack(monitoring)
+
+        # Alarms should have alarm actions - verify at least one alarm has actions
+        alarms = template.find_resources("AWS::CloudWatch::Alarm")
+        alarm_with_actions = False
+        for alarm in alarms.values():
+            if "AlarmActions" in alarm.get("Properties", {}) and alarm["Properties"]["AlarmActions"]:
+                alarm_with_actions = True
+                break
+
+        assert alarm_with_actions, "At least one alarm should have AlarmActions configured"
+
+
+@mark.describe("ComplianceStack")
+class TestComplianceStack(unittest.TestCase):
+    """Test cases for ComplianceStack (AWS Config)"""
+
+    def setUp(self):
+        """Set up test environment"""
+        self.app = cdk.App()
+        self.parent_stack = cdk.Stack(
+            self.app, "ParentStack", env=cdk.Environment(account="123456789012", region="us-east-1")
+        )
+        import aws_cdk.aws_sns as sns
+
+        self.mock_topic = sns.Topic(self.parent_stack, "MockTopic")
+
+    @mark.it("creates Config recorder")
+    def test_creates_config_recorder(self):
+        """Test that AWS Config recorder is created"""
+        compliance = ComplianceStack(
+            self.parent_stack,
+            "ComplianceTest",
+            environment_suffix="test",
+            region="us-east-1",
+            account_id="123456789012",
+            notification_topic=self.mock_topic,
+        )
+        template = Template.from_stack(compliance)
+
+        # Should create configuration recorder
+        template.resource_count_is("AWS::Config::ConfigurationRecorder", 1)
+
+    @mark.it("creates delivery channel")
+    def test_creates_delivery_channel(self):
+        """Test that Config delivery channel is created"""
+        compliance = ComplianceStack(
+            self.parent_stack,
+            "ComplianceTest",
+            environment_suffix="test",
+            region="us-east-1",
+            account_id="123456789012",
+            notification_topic=self.mock_topic,
+        )
+        template = Template.from_stack(compliance)
+
+        # Should create delivery channel
+        template.resource_count_is("AWS::Config::DeliveryChannel", 1)
+
+    @mark.it("creates Config rules")
+    def test_creates_config_rules(self):
+        """Test that Config rules are created"""
+        compliance = ComplianceStack(
+            self.parent_stack,
+            "ComplianceTest",
+            environment_suffix="test",
+            region="us-east-1",
+            account_id="123456789012",
+            notification_topic=self.mock_topic,
+        )
+        template = Template.from_stack(compliance)
+
+        # Should create Config rules (at least 3: S3 encryption, EC2 in VPC, IAM password)
+        template.resource_count_is("AWS::Config::ConfigRule", 3)
+
+    @mark.it("creates S3 bucket for Config")
+    def test_creates_config_bucket(self):
+        """Test that S3 bucket for Config is created"""
+        compliance = ComplianceStack(
+            self.parent_stack,
+            "ComplianceTest",
+            environment_suffix="test",
+            region="us-east-1",
+            account_id="123456789012",
+            notification_topic=self.mock_topic,
+        )
+        template = Template.from_stack(compliance)
+
+        # Should create S3 bucket
+        template.resource_count_is("AWS::S3::Bucket", 1)
+
+
+@mark.describe("CICDStack")
+class TestCICDStack(unittest.TestCase):
+    """Test cases for CICDStack (CodePipeline)"""
+
+    def setUp(self):
+        """Set up test environment"""
+        self.app = cdk.App()
+        self.parent_stack = cdk.Stack(
+            self.app, "ParentStack", env=cdk.Environment(account="123456789012", region="us-east-1")
+        )
+        import aws_cdk.aws_sns as sns
+
+        self.mock_topic = sns.Topic(self.parent_stack, "MockTopic")
+
+    @mark.it("creates CodePipeline")
+    def test_creates_pipeline(self):
+        """Test that CodePipeline is created"""
+        cicd = CICDStack(
+            self.parent_stack,
+            "CICDTest",
+            environment_suffix="test",
+            region="us-east-1",
+            account_id="123456789012",
+            notification_topic=self.mock_topic,
+        )
+        template = Template.from_stack(cicd)
+
+        # Should create pipeline
+        template.resource_count_is("AWS::CodePipeline::Pipeline", 1)
+
+    @mark.it("creates CodeBuild project")
+    def test_creates_codebuild_project(self):
+        """Test that CodeBuild project is created"""
+        cicd = CICDStack(
+            self.parent_stack,
+            "CICDTest",
+            environment_suffix="test",
+            region="us-east-1",
+            account_id="123456789012",
+            notification_topic=self.mock_topic,
+        )
+        template = Template.from_stack(cicd)
+
+        # Should create CodeBuild project
+        template.resource_count_is("AWS::CodeBuild::Project", 1)
+
+    @mark.it("configures pipeline stages")
+    def test_pipeline_has_stages(self):
+        """Test that pipeline has Source, Build, and Deploy stages"""
+        cicd = CICDStack(
+            self.parent_stack,
+            "CICDTest",
+            environment_suffix="test",
+            region="us-east-1",
+            account_id="123456789012",
+            notification_topic=self.mock_topic,
+        )
+        template = Template.from_stack(cicd)
+
+        # Pipeline should have stages
+        template.has_resource_properties(
+            "AWS::CodePipeline::Pipeline",
+            {
+                "Stages": Match.array_with(
+                    [
+                        Match.object_like({"Name": "Source"}),
+                        Match.object_like({"Name": "Build"}),
+                        Match.object_like({"Name": "Deploy"}),
+                    ]
+                ),
+            },
+        )
+
+    @mark.it("creates artifact bucket")
+    def test_creates_artifact_bucket(self):
+        """Test that S3 bucket for artifacts is created"""
+        cicd = CICDStack(
+            self.parent_stack,
+            "CICDTest",
+            environment_suffix="test",
+            region="us-east-1",
+            account_id="123456789012",
+            notification_topic=self.mock_topic,
+        )
+        template = Template.from_stack(cicd)
+
+        # Should create S3 bucket for artifacts
+        template.resource_count_is("AWS::S3::Bucket", 1)
+
+
+@mark.describe("SecurityStack")
+class TestSecurityStack(unittest.TestCase):
+    """Test cases for SecurityStack (CloudTrail)"""
+
+    def setUp(self):
+        """Set up test environment"""
+        self.app = cdk.App()
+        self.parent_stack = cdk.Stack(
+            self.app, "ParentStack", env=cdk.Environment(account="123456789012", region="us-east-1")
+        )
+        import aws_cdk.aws_kms as kms
+
+        self.mock_kms_key = kms.Key(self.parent_stack, "MockKey")
+
+    @mark.it("creates CloudTrail trail")
+    def test_creates_cloudtrail(self):
+        """Test that CloudTrail trail is created"""
+        security = SecurityStack(
+            self.parent_stack,
+            "SecurityTest",
+            environment_suffix="test",
+            region="us-east-1",
+            account_id="123456789012",
+            kms_key=self.mock_kms_key,
+            enable_multi_region=False,
+        )
+        template = Template.from_stack(security)
+
+        # Should create CloudTrail
+        template.resource_count_is("AWS::CloudTrail::Trail", 1)
+
+    @mark.it("enables log file validation")
+    def test_enables_log_validation(self):
+        """Test that trail has log file validation enabled"""
+        security = SecurityStack(
+            self.parent_stack,
+            "SecurityTest",
+            environment_suffix="test",
+            region="us-east-1",
+            account_id="123456789012",
+            kms_key=self.mock_kms_key,
+            enable_multi_region=False,
+        )
+        template = Template.from_stack(security)
+
+        # Should enable log file validation
+        template.has_resource_properties(
+            "AWS::CloudTrail::Trail",
+            {
+                "EnableLogFileValidation": True,
+            },
+        )
+
+    @mark.it("creates S3 bucket for trail logs")
+    def test_creates_trail_bucket(self):
+        """Test that S3 bucket for CloudTrail logs is created"""
+        security = SecurityStack(
+            self.parent_stack,
+            "SecurityTest",
+            environment_suffix="test",
+            region="us-east-1",
+            account_id="123456789012",
+            kms_key=self.mock_kms_key,
+            enable_multi_region=False,
+        )
+        template = Template.from_stack(security)
+
+        # Should create S3 bucket
+        template.resource_count_is("AWS::S3::Bucket", 1)
+
+    @mark.it("configures CloudWatch Logs integration")
+    def test_cloudwatch_logs_integration(self):
+        """Test that trail sends logs to CloudWatch"""
+        security = SecurityStack(
+            self.parent_stack,
+            "SecurityTest",
+            environment_suffix="test",
+            region="us-east-1",
+            account_id="123456789012",
+            kms_key=self.mock_kms_key,
+            enable_multi_region=False,
+        )
+        template = Template.from_stack(security)
+
+        # Should create CloudWatch log group
+        template.resource_count_is("AWS::Logs::LogGroup", 1)
+
+    @mark.it("uses KMS encryption")
+    def test_uses_kms_encryption(self):
+        """Test that trail uses KMS encryption"""
+        security = SecurityStack(
+            self.parent_stack,
+            "SecurityTest",
+            environment_suffix="test",
+            region="us-east-1",
+            account_id="123456789012",
+            kms_key=self.mock_kms_key,
+            enable_multi_region=False,
+        )
+        template = Template.from_stack(security)
+
+        # Trail should reference KMS key
+        template.has_resource_properties(
+            "AWS::CloudTrail::Trail",
+            {
+                "KMSKeyId": Match.any_value(),
+            },
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

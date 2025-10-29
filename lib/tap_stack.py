@@ -459,7 +459,8 @@ class CDNStack(NestedStack):  # pragma: no cover
         environment_suffix: str,
         region: str,
         account_id: str,
-        static_bucket: s3.Bucket,
+        static_bucket_name: str,
+        static_bucket_regional_domain_name: str,
         alb: elbv2.ApplicationLoadBalancer,
         **kwargs
     ) -> None:
@@ -473,8 +474,26 @@ class CDNStack(NestedStack):  # pragma: no cover
 
         Tags.of(self.oai).add("iac-rlhf-amazon", f"oai-{environment_suffix}")
 
-        # Grant read permissions to OAI
-        static_bucket.grant_read(self.oai)
+        # Reference the bucket by name to avoid circular dependency
+        static_bucket_ref = s3.Bucket.from_bucket_attributes(
+            self,
+            "StaticBucketRef",
+            bucket_name=static_bucket_name,
+            bucket_regional_domain_name=static_bucket_regional_domain_name,
+        )
+
+        # Grant OAI read access to the static bucket via bucket policy
+        static_bucket_ref.add_to_resource_policy(
+            iam.PolicyStatement(
+                sid="AllowCloudFrontOAI",
+                effect=iam.Effect.ALLOW,
+                principals=[iam.CanonicalUserPrincipal(
+                    self.oai.cloud_front_origin_access_identity_s3_canonical_user_id
+                )],
+                actions=["s3:GetObject"],
+                resources=[f"arn:aws:s3:::{static_bucket_name}/*"],
+            )
+        )
 
         # Create CloudFront distribution
         self.distribution = cloudfront.Distribution(
@@ -494,7 +513,7 @@ class CDNStack(NestedStack):  # pragma: no cover
             ),
             additional_behaviors={
                 "/static/*": cloudfront.BehaviorOptions(
-                    origin=origins.S3Origin(static_bucket, origin_access_identity=self.oai),
+                    origin=origins.S3Origin(static_bucket_ref, origin_access_identity=self.oai),
                     viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
                     cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED,
                     compress=True,
@@ -1391,70 +1410,70 @@ class TapStack(cdk.Stack):
             security_group=self.networking.app_security_group,
         )
 
-        # TEMPORARILY COMMENTED OUT TO FIX CIRCULAR DEPENDENCY
-        # # 5. CDN Stack (CloudFront)
-        # self.cdn = CDNStack(
-        #     self,
-        #     f"CDNStack-{environment_suffix}",
-        #     environment_suffix=environment_suffix,
-        #     region=region,
-        #     account_id=account_id,
-        #     static_bucket=self.storage.static_bucket,
-        #     alb=self.compute.alb,
-        # )
+        # 5. CDN Stack (CloudFront)
+        self.cdn = CDNStack(
+            self,
+            f"CDNStack-{environment_suffix}",
+            environment_suffix=environment_suffix,
+            region=region,
+            account_id=account_id,
+            static_bucket_name=self.storage.static_bucket.bucket_name,
+            static_bucket_regional_domain_name=self.storage.static_bucket.bucket_regional_domain_name,
+            alb=self.compute.alb,
+        )
 
-        # # 6. DNS Stack (Route53)
-        # self.dns = DNSStack(
-        #     self,
-        #     f"DNSStack-{environment_suffix}",
-        #     environment_suffix=environment_suffix,
-        #     region=region,
-        #     distribution=self.cdn.distribution,
-        #     alb=self.compute.alb,
-        #     domain_name=domain_name,
-        # )
+        # 6. DNS Stack (Route53)
+        self.dns = DNSStack(
+            self,
+            f"DNSStack-{environment_suffix}",
+            environment_suffix=environment_suffix,
+            region=region,
+            distribution=self.cdn.distribution,
+            alb=self.compute.alb,
+            domain_name=domain_name,
+        )
 
-        # # 7. Monitoring Stack (CloudWatch)
-        # self.monitoring = MonitoringStack(
-        #     self,
-        #     f"MonitoringStack-{environment_suffix}",
-        #     environment_suffix=environment_suffix,
-        #     region=region,
-        #     asg=self.compute.asg,
-        #     alb=self.compute.alb,
-        #     notification_topic=self.serverless.notification_topic,
-        # )
+        # 7. Monitoring Stack (CloudWatch)
+        self.monitoring = MonitoringStack(
+            self,
+            f"MonitoringStack-{environment_suffix}",
+            environment_suffix=environment_suffix,
+            region=region,
+            asg=self.compute.asg,
+            alb=self.compute.alb,
+            notification_topic=self.serverless.notification_topic,
+        )
 
-        # # 8. Compliance Stack (AWS Config)
-        # self.compliance = ComplianceStack(
-        #     self,
-        #     f"ComplianceStack-{environment_suffix}",
-        #     environment_suffix=environment_suffix,
-        #     region=region,
-        #     account_id=account_id,
-        #     notification_topic=self.serverless.notification_topic,
-        # )
+        # 8. Compliance Stack (AWS Config)
+        self.compliance = ComplianceStack(
+            self,
+            f"ComplianceStack-{environment_suffix}",
+            environment_suffix=environment_suffix,
+            region=region,
+            account_id=account_id,
+            notification_topic=self.serverless.notification_topic,
+        )
 
-        # # 9. CI/CD Stack (CodePipeline)
-        # self.cicd = CICDStack(
-        #     self,
-        #     f"CICDStack-{environment_suffix}",
-        #     environment_suffix=environment_suffix,
-        #     region=region,
-        #     account_id=account_id,
-        #     notification_topic=self.serverless.notification_topic,
-        # )
+        # 9. CI/CD Stack (CodePipeline)
+        self.cicd = CICDStack(
+            self,
+            f"CICDStack-{environment_suffix}",
+            environment_suffix=environment_suffix,
+            region=region,
+            account_id=account_id,
+            notification_topic=self.serverless.notification_topic,
+        )
 
-        # # 10. Security Stack (CloudTrail)
-        # self.security = SecurityStack(
-        #     self,
-        #     f"SecurityStack-{environment_suffix}",
-        #     environment_suffix=environment_suffix,
-        #     region=region,
-        #     account_id=account_id,
-        #     kms_key=self.storage.kms_key,
-        #     enable_multi_region=enable_multi_region,
-        # )
+        # 10. Security Stack (CloudTrail)
+        self.security = SecurityStack(
+            self,
+            f"SecurityStack-{environment_suffix}",
+            environment_suffix=environment_suffix,
+            region=region,
+            account_id=account_id,
+            kms_key=self.storage.kms_key,
+            enable_multi_region=enable_multi_region,
+        )
 
         # ! DO not create resources directly in this stack.
         # ! Instead, instantiate separate stacks for each resource type.
@@ -1474,13 +1493,12 @@ class TapStack(cdk.Stack):
             description="Application Load Balancer DNS name",
         )
 
-        # COMMENTED OUT - CDN stack temporarily disabled
-        # CfnOutput(
-        #     self,
-        #     "CloudFrontDomain",
-        #     value=self.cdn.distribution.distribution_domain_name,
-        #     description="CloudFront distribution domain name",
-        # )
+        CfnOutput(
+            self,
+            "CloudFrontDomain",
+            value=self.cdn.distribution.distribution_domain_name,
+            description="CloudFront distribution domain name",
+        )
 
         CfnOutput(
             self,
@@ -1531,11 +1549,10 @@ class TapStack(cdk.Stack):
             description="Application security group ID",
         )
 
-        # COMMENTED OUT - DNS stack temporarily disabled
-        # if domain_name and hasattr(self.dns, "hosted_zone"):
-        #     CfnOutput(
-        #         self,
-        #         "HostedZoneId",
-        #         value=self.dns.hosted_zone.hosted_zone_id,
-        #         description="Route53 Hosted Zone ID",
-        #     )
+        if domain_name and hasattr(self.dns, "hosted_zone"):
+            CfnOutput(
+                self,
+                "HostedZoneId",
+                value=self.dns.hosted_zone.hosted_zone_id,
+                description="Route53 Hosted Zone ID",
+            )

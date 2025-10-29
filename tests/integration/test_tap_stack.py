@@ -534,5 +534,485 @@ class TestAutoScalingIntegration(unittest.TestCase):
         self.assertIn(asg.get("HealthCheckType"), ["EC2", "ELB"])
 
 
+@mark.describe("CloudFront CDN Integration Tests")
+class TestCloudFrontIntegration(unittest.TestCase):
+    """Integration tests for CloudFront distribution"""
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up CloudFront client for tests"""
+        cls.cloudfront_client = boto3.client("cloudfront", region_name=CONFIG["region"])
+        cls.cloudfront_domain = OUTPUTS.get("CloudFrontDomain")
+
+    @mark.it("CloudFront distribution exists and is deployed")
+    def test_cloudfront_exists(self):
+        """Test that CloudFront distribution exists and is deployed"""
+        if not self.cloudfront_domain:
+            self.skipTest("CloudFront domain not found in outputs")
+
+        # List all distributions and find ours by domain name
+        response = self.cloudfront_client.list_distributions()
+
+        if "DistributionList" not in response or "Items" not in response["DistributionList"]:
+            self.fail("No CloudFront distributions found")
+
+        distributions = [
+            dist for dist in response["DistributionList"]["Items"]
+            if dist["DomainName"] == self.cloudfront_domain
+        ]
+
+        self.assertEqual(len(distributions), 1, "CloudFront distribution not found")
+        distribution = distributions[0]
+
+        self.assertEqual(distribution["Status"], "Deployed")
+        self.assertTrue(distribution["Enabled"])
+
+    @mark.it("CloudFront distribution has HTTPS enforcement")
+    def test_cloudfront_https_enforcement(self):
+        """Test that CloudFront enforces HTTPS"""
+        if not self.cloudfront_domain:
+            self.skipTest("CloudFront domain not found in outputs")
+
+        response = self.cloudfront_client.list_distributions()
+        distributions = [
+            dist for dist in response["DistributionList"]["Items"]
+            if dist["DomainName"] == self.cloudfront_domain
+        ]
+
+        if not distributions:
+            self.skipTest("CloudFront distribution not found")
+
+        distribution_id = distributions[0]["Id"]
+        config = self.cloudfront_client.get_distribution_config(Id=distribution_id)
+
+        default_behavior = config["DistributionConfig"]["DefaultCacheBehavior"]
+        self.assertEqual(default_behavior["ViewerProtocolPolicy"], "redirect-to-https")
+
+    @mark.it("CloudFront distribution has proper origins configured")
+    def test_cloudfront_origins(self):
+        """Test that CloudFront has proper origins (S3 and ALB)"""
+        if not self.cloudfront_domain:
+            self.skipTest("CloudFront domain not found in outputs")
+
+        response = self.cloudfront_client.list_distributions()
+        distributions = [
+            dist for dist in response["DistributionList"]["Items"]
+            if dist["DomainName"] == self.cloudfront_domain
+        ]
+
+        if not distributions:
+            self.skipTest("CloudFront distribution not found")
+
+        distribution_id = distributions[0]["Id"]
+        config = self.cloudfront_client.get_distribution_config(Id=distribution_id)
+
+        origins = config["DistributionConfig"]["Origins"]["Items"]
+        self.assertGreater(len(origins), 0, "No origins configured")
+
+    @mark.it("CloudFront distribution has logging enabled")
+    def test_cloudfront_logging(self):
+        """Test that CloudFront has access logging enabled"""
+        if not self.cloudfront_domain:
+            self.skipTest("CloudFront domain not found in outputs")
+
+        response = self.cloudfront_client.list_distributions()
+        distributions = [
+            dist for dist in response["DistributionList"]["Items"]
+            if dist["DomainName"] == self.cloudfront_domain
+        ]
+
+        if not distributions:
+            self.skipTest("CloudFront distribution not found")
+
+        distribution_id = distributions[0]["Id"]
+        config = self.cloudfront_client.get_distribution_config(Id=distribution_id)
+
+        logging = config["DistributionConfig"].get("Logging", {})
+        self.assertTrue(logging.get("Enabled", False), "CloudFront logging should be enabled")
+
+
+@mark.describe("Route53 DNS Integration Tests")
+class TestRoute53Integration(unittest.TestCase):
+    """Integration tests for Route53 hosted zone and records"""
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up Route53 client for tests"""
+        cls.route53_client = boto3.client("route53", region_name=CONFIG["region"])
+        cls.hosted_zone_id = OUTPUTS.get("HostedZoneId")
+
+    @mark.it("Route53 hosted zone exists if domain is configured")
+    def test_hosted_zone_exists(self):
+        """Test that Route53 hosted zone exists if domain is configured"""
+        if not self.hosted_zone_id:
+            self.skipTest("Hosted zone ID not found - domain may not be configured")
+
+        response = self.route53_client.get_hosted_zone(Id=self.hosted_zone_id)
+
+        self.assertIn("HostedZone", response)
+        zone = response["HostedZone"]
+        self.assertEqual(zone["Id"].split("/")[-1], self.hosted_zone_id.split("/")[-1])
+
+    @mark.it("Route53 has health checks configured")
+    def test_health_checks_exist(self):
+        """Test that Route53 health checks are configured"""
+        if not self.hosted_zone_id:
+            self.skipTest("Hosted zone ID not found - domain may not be configured")
+
+        response = self.route53_client.list_health_checks()
+
+        # Filter health checks by tags or name pattern
+        health_checks = response.get("HealthChecks", [])
+        self.assertGreater(len(health_checks), 0, "No health checks found")
+
+
+@mark.describe("CloudWatch Monitoring Integration Tests")
+class TestCloudWatchIntegration(unittest.TestCase):
+    """Integration tests for CloudWatch monitoring"""
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up CloudWatch client for tests"""
+        cls.cloudwatch_client = boto3.client("cloudwatch", region_name=CONFIG["region"])
+        cls.logs_client = boto3.client("logs", region_name=CONFIG["region"])
+        cls.env_suffix = CONFIG["environment_suffix"]
+        cls.region = CONFIG["region"]
+
+    @mark.it("CloudWatch log groups exist for application and infrastructure")
+    def test_log_groups_exist(self):
+        """Test that CloudWatch log groups are created"""
+        app_log_group = f"/aws/tap/app-{self.env_suffix}-{self.region}"
+        infra_log_group = f"/aws/tap/infra-{self.env_suffix}-{self.region}"
+
+        # Check app log group
+        try:
+            response = self.logs_client.describe_log_groups(
+                logGroupNamePrefix=app_log_group
+            )
+            log_groups = [lg for lg in response["logGroups"] if lg["logGroupName"] == app_log_group]
+            self.assertGreater(len(log_groups), 0, f"App log group {app_log_group} not found")
+        except ClientError:
+            self.fail(f"App log group {app_log_group} does not exist")
+
+        # Check infra log group
+        try:
+            response = self.logs_client.describe_log_groups(
+                logGroupNamePrefix=infra_log_group
+            )
+            log_groups = [lg for lg in response["logGroups"] if lg["logGroupName"] == infra_log_group]
+            self.assertGreater(len(log_groups), 0, f"Infra log group {infra_log_group} not found")
+        except ClientError:
+            self.fail(f"Infra log group {infra_log_group} does not exist")
+
+    @mark.it("CloudWatch alarms exist for critical metrics")
+    def test_alarms_exist(self):
+        """Test that CloudWatch alarms are configured"""
+        alarm_prefix = f"tap-{self.env_suffix}"
+
+        response = self.cloudwatch_client.describe_alarms(
+            AlarmNamePrefix=alarm_prefix
+        )
+
+        alarms = response.get("MetricAlarms", [])
+        self.assertGreater(len(alarms), 0, "No CloudWatch alarms found")
+
+        # Check for specific alarms
+        alarm_names = [alarm["AlarmName"] for alarm in alarms]
+        high_cpu_alarm = any("high-cpu" in name.lower() for name in alarm_names)
+        unhealthy_targets_alarm = any("unhealthy" in name.lower() for name in alarm_names)
+
+        self.assertTrue(high_cpu_alarm, "High CPU alarm not found")
+        self.assertTrue(unhealthy_targets_alarm, "Unhealthy targets alarm not found")
+
+    @mark.it("CloudWatch alarms are configured with SNS actions")
+    def test_alarms_have_sns_actions(self):
+        """Test that alarms have SNS notification actions"""
+        alarm_prefix = f"tap-{self.env_suffix}"
+
+        response = self.cloudwatch_client.describe_alarms(
+            AlarmNamePrefix=alarm_prefix
+        )
+
+        alarms = response.get("MetricAlarms", [])
+        if not alarms:
+            self.skipTest("No alarms found")
+
+        for alarm in alarms:
+            self.assertGreater(
+                len(alarm.get("AlarmActions", [])),
+                0,
+                f"Alarm {alarm['AlarmName']} has no actions configured"
+            )
+
+    @mark.it("CloudWatch dashboard exists")
+    def test_dashboard_exists(self):
+        """Test that CloudWatch dashboard is created"""
+        dashboard_name = f"tap-dashboard-{self.env_suffix}-{self.region}"
+
+        response = self.cloudwatch_client.list_dashboards(
+            DashboardNamePrefix=dashboard_name
+        )
+
+        dashboards = [
+            d for d in response.get("DashboardEntries", [])
+            if d["DashboardName"] == dashboard_name
+        ]
+
+        self.assertEqual(len(dashboards), 1, f"Dashboard {dashboard_name} not found")
+
+
+@mark.describe("AWS Config Compliance Integration Tests")
+class TestAWSConfigIntegration(unittest.TestCase):
+    """Integration tests for AWS Config"""
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up Config client for tests"""
+        cls.config_client = boto3.client("config", region_name=CONFIG["region"])
+        cls.s3_client = boto3.client("s3", region_name=CONFIG["region"])
+        cls.env_suffix = CONFIG["environment_suffix"]
+        cls.region = CONFIG["region"]
+
+    @mark.it("AWS Config recorder is enabled and recording")
+    def test_config_recorder_enabled(self):
+        """Test that Config recorder is enabled"""
+        recorder_name = f"tap-config-recorder-{self.env_suffix}-{self.region}"
+
+        try:
+            response = self.config_client.describe_configuration_recorder_status(
+                ConfigurationRecorderNames=[recorder_name]
+            )
+
+            if response["ConfigurationRecordersStatus"]:
+                status = response["ConfigurationRecordersStatus"][0]
+                self.assertTrue(status["recording"], "Config recorder is not recording")
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "NoSuchConfigurationRecorderException":
+                self.skipTest(f"Config recorder {recorder_name} not found")
+            raise
+
+    @mark.it("AWS Config delivery channel is configured")
+    def test_config_delivery_channel(self):
+        """Test that Config delivery channel is configured"""
+        channel_name = f"tap-delivery-channel-{self.env_suffix}-{self.region}"
+
+        try:
+            response = self.config_client.describe_delivery_channels(
+                DeliveryChannelNames=[channel_name]
+            )
+
+            self.assertGreater(len(response["DeliveryChannels"]), 0)
+            channel = response["DeliveryChannels"][0]
+            self.assertIn("s3BucketName", channel)
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "NoSuchDeliveryChannelException":
+                self.skipTest(f"Delivery channel {channel_name} not found")
+            raise
+
+    @mark.it("AWS Config rules are deployed")
+    def test_config_rules_exist(self):
+        """Test that Config rules are deployed"""
+        rule_prefix = f"tap-"
+
+        response = self.config_client.describe_config_rules(
+            ConfigRuleNames=[]
+        )
+
+        # Filter rules by prefix
+        rules = [
+            rule for rule in response.get("ConfigRules", [])
+            if rule["ConfigRuleName"].startswith(rule_prefix)
+        ]
+
+        self.assertGreater(len(rules), 0, "No Config rules found")
+
+        # Verify specific rules exist
+        rule_names = [rule["ConfigRuleName"] for rule in rules]
+        self.assertTrue(
+            any("s3-encryption" in name for name in rule_names),
+            "S3 encryption rule not found"
+        )
+
+
+@mark.describe("CodePipeline CI/CD Integration Tests")
+class TestCodePipelineIntegration(unittest.TestCase):
+    """Integration tests for CodePipeline"""
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up CodePipeline client for tests"""
+        cls.codepipeline_client = boto3.client("codepipeline", region_name=CONFIG["region"])
+        cls.codebuild_client = boto3.client("codebuild", region_name=CONFIG["region"])
+        cls.env_suffix = CONFIG["environment_suffix"]
+        cls.region = CONFIG["region"]
+
+    @mark.it("CodePipeline exists and is configured")
+    def test_pipeline_exists(self):
+        """Test that CodePipeline is created"""
+        pipeline_name = f"tap-pipeline-{self.env_suffix}-{self.region}"
+
+        try:
+            response = self.codepipeline_client.get_pipeline(name=pipeline_name)
+
+            self.assertIn("pipeline", response)
+            pipeline = response["pipeline"]
+            self.assertEqual(pipeline["name"], pipeline_name)
+
+            # Verify stages exist
+            stages = pipeline.get("stages", [])
+            self.assertGreater(len(stages), 0, "No pipeline stages found")
+
+            stage_names = [stage["name"] for stage in stages]
+            self.assertIn("Source", stage_names)
+            self.assertIn("Build", stage_names)
+            self.assertIn("Deploy", stage_names)
+
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "PipelineNotFoundException":
+                self.skipTest(f"Pipeline {pipeline_name} not found")
+            raise
+
+    @mark.it("CodeBuild project exists for pipeline")
+    def test_codebuild_project_exists(self):
+        """Test that CodeBuild project is created"""
+        project_name = f"tap-build-{self.env_suffix}-{self.region}"
+
+        try:
+            response = self.codebuild_client.batch_get_projects(names=[project_name])
+
+            projects = response.get("projects", [])
+            self.assertEqual(len(projects), 1, f"CodeBuild project {project_name} not found")
+
+            project = projects[0]
+            self.assertEqual(project["name"], project_name)
+            self.assertIn("source", project)
+            self.assertIn("environment", project)
+
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "ResourceNotFoundException":
+                self.skipTest(f"CodeBuild project {project_name} not found")
+            raise
+
+
+@mark.describe("CloudTrail Security Integration Tests")
+class TestCloudTrailIntegration(unittest.TestCase):
+    """Integration tests for CloudTrail"""
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up CloudTrail client for tests"""
+        cls.cloudtrail_client = boto3.client("cloudtrail", region_name=CONFIG["region"])
+        cls.s3_client = boto3.client("s3", region_name=CONFIG["region"])
+        cls.env_suffix = CONFIG["environment_suffix"]
+        cls.region = CONFIG["region"]
+
+    @mark.it("CloudTrail trail exists and is logging")
+    def test_trail_exists_and_logging(self):
+        """Test that CloudTrail trail exists and is actively logging"""
+        trail_name = f"tap-trail-{self.env_suffix}-{self.region}"
+
+        try:
+            response = self.cloudtrail_client.describe_trails(
+                trailNameList=[trail_name]
+            )
+
+            trails = response.get("trailList", [])
+            self.assertEqual(len(trails), 1, f"Trail {trail_name} not found")
+
+            trail = trails[0]
+            self.assertEqual(trail["Name"], trail_name)
+
+            # Check if trail is logging
+            status_response = self.cloudtrail_client.get_trail_status(Name=trail_name)
+            self.assertTrue(status_response["IsLogging"], "Trail is not actively logging")
+
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "TrailNotFoundException":
+                self.skipTest(f"Trail {trail_name} not found")
+            raise
+
+    @mark.it("CloudTrail has log file validation enabled")
+    def test_trail_log_validation(self):
+        """Test that CloudTrail has log file validation enabled"""
+        trail_name = f"tap-trail-{self.env_suffix}-{self.region}"
+
+        try:
+            response = self.cloudtrail_client.describe_trails(
+                trailNameList=[trail_name]
+            )
+
+            trails = response.get("trailList", [])
+            if not trails:
+                self.skipTest(f"Trail {trail_name} not found")
+
+            trail = trails[0]
+            self.assertTrue(
+                trail.get("LogFileValidationEnabled", False),
+                "Log file validation is not enabled"
+            )
+
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "TrailNotFoundException":
+                self.skipTest(f"Trail {trail_name} not found")
+            raise
+
+    @mark.it("CloudTrail sends logs to CloudWatch")
+    def test_trail_cloudwatch_integration(self):
+        """Test that CloudTrail sends logs to CloudWatch"""
+        trail_name = f"tap-trail-{self.env_suffix}-{self.region}"
+
+        try:
+            response = self.cloudtrail_client.describe_trails(
+                trailNameList=[trail_name]
+            )
+
+            trails = response.get("trailList", [])
+            if not trails:
+                self.skipTest(f"Trail {trail_name} not found")
+
+            trail = trails[0]
+            self.assertIn("CloudWatchLogsLogGroupArn", trail)
+            self.assertIsNotNone(trail.get("CloudWatchLogsLogGroupArn"))
+
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "TrailNotFoundException":
+                self.skipTest(f"Trail {trail_name} not found")
+            raise
+
+    @mark.it("CloudTrail bucket exists and has encryption")
+    def test_trail_bucket_encryption(self):
+        """Test that CloudTrail S3 bucket exists and has encryption"""
+        trail_name = f"tap-trail-{self.env_suffix}-{self.region}"
+
+        try:
+            response = self.cloudtrail_client.describe_trails(
+                trailNameList=[trail_name]
+            )
+
+            trails = response.get("trailList", [])
+            if not trails:
+                self.skipTest(f"Trail {trail_name} not found")
+
+            trail = trails[0]
+            bucket_name = trail["S3BucketName"]
+
+            # Check bucket encryption
+            encryption_response = self.s3_client.get_bucket_encryption(Bucket=bucket_name)
+
+            self.assertIn("ServerSideEncryptionConfiguration", encryption_response)
+            rules = encryption_response["ServerSideEncryptionConfiguration"]["Rules"]
+            self.assertGreater(len(rules), 0)
+
+            sse_algorithm = rules[0]["ApplyServerSideEncryptionByDefault"]["SSEAlgorithm"]
+            self.assertEqual(sse_algorithm, "aws:kms")
+
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "TrailNotFoundException":
+                self.skipTest(f"Trail {trail_name} not found")
+            elif e.response["Error"]["Code"] == "ServerSideEncryptionConfigurationNotFoundError":
+                self.fail("CloudTrail bucket does not have encryption configured")
+            raise
+
+
 if __name__ == "__main__":
     unittest.main()
