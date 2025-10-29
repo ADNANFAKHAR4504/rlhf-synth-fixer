@@ -11,6 +11,17 @@ try {
   console.warn('WARNING: flat-outputs.json not found. Integration tests will be skipped in local environment.');
 }
 
+// Helper function to parse array outputs (handles both arrays and comma-separated strings)
+function parseArrayOutput(value: any): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    // Handle comma-separated strings from Terraform outputs
+    return value.split(',').map(v => v.trim()).filter(v => v.length > 0);
+  }
+  return [];
+}
+
 const AWS_HUB_REGION = 'us-east-1';
 const AWS_USWEST_REGION = 'us-west-2';
 const AWS_EUROPE_REGION = 'eu-west-1';
@@ -312,13 +323,14 @@ describe('Terraform Multi-Region Infrastructure Integration Tests', () => {
   describe('NAT Gateway and Internet Egress Workflow', () => {
 
     test('should have NAT Gateways deployed in hub region', async () => {
-      if (!outputs.hub_nat_gateway_ids || outputs.hub_nat_gateway_ids.length === 0) {
+      const natGatewayIds = parseArrayOutput(outputs.hub_nat_gateway_ids);
+      if (natGatewayIds.length === 0) {
         console.log('Skipping: Hub NAT Gateways not deployed');
         return;
       }
 
       const natGateways = await ec2Hub.describeNatGateways({
-        NatGatewayIds: outputs.hub_nat_gateway_ids
+        NatGatewayIds: natGatewayIds
       }).promise();
 
       expect(natGateways.NatGateways).toBeDefined();
@@ -331,13 +343,14 @@ describe('Terraform Multi-Region Infrastructure Integration Tests', () => {
     }, 30000);
 
     test('should have NAT Gateways deployed in US West region', async () => {
-      if (!outputs.uswest_nat_gateway_ids || outputs.uswest_nat_gateway_ids.length === 0) {
+      const natGatewayIds = parseArrayOutput(outputs.uswest_nat_gateway_ids);
+      if (natGatewayIds.length === 0) {
         console.log('Skipping: US West NAT Gateways not deployed');
         return;
       }
 
       const natGateways = await ec2USWest.describeNatGateways({
-        NatGatewayIds: outputs.uswest_nat_gateway_ids
+        NatGatewayIds: natGatewayIds
       }).promise();
 
       expect(natGateways.NatGateways).toBeDefined();
@@ -350,13 +363,14 @@ describe('Terraform Multi-Region Infrastructure Integration Tests', () => {
     }, 30000);
 
     test('should have NAT Gateways deployed in Europe region', async () => {
-      if (!outputs.europe_nat_gateway_ids || outputs.europe_nat_gateway_ids.length === 0) {
+      const natGatewayIds = parseArrayOutput(outputs.europe_nat_gateway_ids);
+      if (natGatewayIds.length === 0) {
         console.log('Skipping: Europe NAT Gateways not deployed');
         return;
       }
 
       const natGateways = await ec2Europe.describeNatGateways({
-        NatGatewayIds: outputs.europe_nat_gateway_ids
+        NatGatewayIds: natGatewayIds
       }).promise();
 
       expect(natGateways.NatGateways).toBeDefined();
@@ -585,17 +599,21 @@ describe('Terraform Multi-Region Infrastructure Integration Tests', () => {
   describe('High Availability Workflow', () => {
 
     test('should have resources deployed across 3 availability zones per region', async () => {
-      if (!outputs.hub_private_subnet_ids || !outputs.uswest_private_subnet_ids || !outputs.europe_private_subnet_ids) {
+      const hubPrivateSubnets = parseArrayOutput(outputs.hub_private_subnet_ids);
+      const uswestPrivateSubnets = parseArrayOutput(outputs.uswest_private_subnet_ids);
+      const europePrivateSubnets = parseArrayOutput(outputs.europe_private_subnet_ids);
+
+      if (hubPrivateSubnets.length === 0 || uswestPrivateSubnets.length === 0 || europePrivateSubnets.length === 0) {
         console.log('Skipping: Subnets not deployed');
         return;
       }
 
-      expect(outputs.hub_private_subnet_ids.length).toBe(3);
-      expect(outputs.uswest_private_subnet_ids.length).toBe(3);
-      expect(outputs.europe_private_subnet_ids.length).toBe(3);
+      expect(hubPrivateSubnets.length).toBe(3);
+      expect(uswestPrivateSubnets.length).toBe(3);
+      expect(europePrivateSubnets.length).toBe(3);
 
       const hubSubnets = await ec2Hub.describeSubnets({
-        SubnetIds: outputs.hub_private_subnet_ids
+        SubnetIds: hubPrivateSubnets
       }).promise();
 
       const uniqueAZs = new Set(hubSubnets.Subnets?.map(s => s.AvailabilityZone));
@@ -603,7 +621,9 @@ describe('Terraform Multi-Region Infrastructure Integration Tests', () => {
     }, 30000);
 
     test('should have Transit Gateway attachments in multiple availability zones', async () => {
-      if (!outputs.hub_vpc_id || !outputs.hub_tgw_id) {
+      const hubPrivateSubnets = parseArrayOutput(outputs.hub_private_subnet_ids);
+
+      if (!outputs.hub_vpc_id || !outputs.hub_tgw_id || hubPrivateSubnets.length === 0) {
         console.log('Skipping: Hub resources not deployed');
         return;
       }
@@ -621,7 +641,7 @@ describe('Terraform Multi-Region Infrastructure Integration Tests', () => {
       const attachment = attachments.TransitGatewayAttachments?.[0];
       if (attachment?.ResourceId === outputs.hub_vpc_id) {
         const subnets = await ec2Hub.describeSubnets({
-          SubnetIds: outputs.hub_private_subnet_ids
+          SubnetIds: hubPrivateSubnets
         }).promise();
 
         const uniqueAZs = new Set(subnets.Subnets?.map(s => s.AvailabilityZone));
@@ -630,13 +650,15 @@ describe('Terraform Multi-Region Infrastructure Integration Tests', () => {
     }, 30000);
 
     test('should have NAT Gateway redundancy per region', async () => {
-      if (!outputs.hub_nat_gateway_ids) {
+      const natGatewayIds = parseArrayOutput(outputs.hub_nat_gateway_ids);
+
+      if (natGatewayIds.length === 0) {
         console.log('Skipping: NAT Gateways not deployed');
         return;
       }
 
       const natGateways = await ec2Hub.describeNatGateways({
-        NatGatewayIds: outputs.hub_nat_gateway_ids
+        NatGatewayIds: natGatewayIds
       }).promise();
 
       const availabilityZones = natGateways.NatGateways?.map(nat => {
@@ -698,17 +720,20 @@ describe('Terraform Multi-Region Infrastructure Integration Tests', () => {
     }, 30000);
 
     test('should have subnets deployed in correct availability zones', async () => {
-      if (!outputs.hub_public_subnet_ids || !outputs.hub_private_subnet_ids) {
+      const hubPublicSubnets = parseArrayOutput(outputs.hub_public_subnet_ids);
+      const hubPrivateSubnets = parseArrayOutput(outputs.hub_private_subnet_ids);
+
+      if (hubPublicSubnets.length === 0 || hubPrivateSubnets.length === 0) {
         console.log('Skipping: Hub subnets not deployed');
         return;
       }
 
       const publicSubnets = await ec2Hub.describeSubnets({
-        SubnetIds: outputs.hub_public_subnet_ids
+        SubnetIds: hubPublicSubnets
       }).promise();
 
       const privateSubnets = await ec2Hub.describeSubnets({
-        SubnetIds: outputs.hub_private_subnet_ids
+        SubnetIds: hubPrivateSubnets
       }).promise();
 
       expect(publicSubnets.Subnets?.length).toBe(3);
