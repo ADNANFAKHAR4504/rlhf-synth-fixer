@@ -123,6 +123,11 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     pipenv run pulumi-remove-stack || echo "Stack removal failed or stack doesn't exist"
   fi
 
+elif [ "$PLATFORM" = "analysis" ]; then
+  echo "✅ Analysis platform detected - no resources to destroy"
+  echo "ℹ️ Analysis tasks don't deploy infrastructure, so cleanup is not needed"
+  echo "✅ Analysis platform cleanup completed (no-op)"
+
 else
   echo "ℹ️ Platform '$PLATFORM' with language '$LANGUAGE' not supported for destruction, skipping destroy"
   echo "💡 Consider adding cleanup logic for $PLATFORM/$LANGUAGE projects here"

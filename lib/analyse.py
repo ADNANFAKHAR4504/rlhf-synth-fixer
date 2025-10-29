@@ -4,15 +4,16 @@ AWS Resource Audit Script
 Finds zombie volumes, wide-open security groups, and calculates CloudWatch log costs
 """
 
-import json
 import csv
-import boto3
+import json
 import logging
-from datetime import datetime
-from collections import defaultdict
-from typing import Dict, List, Any, Tuple
 import os
 import re
+from collections import defaultdict
+from datetime import datetime
+from typing import Any, Dict, List, Tuple
+
+import boto3
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

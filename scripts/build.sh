@@ -29,8 +29,24 @@ case "$LANGUAGE" in
     echo "✅ Java build completed successfully"
     ;;
 
-  py)
-    echo "⏭️ Skipping build for Python project (language=$LANGUAGE)"
+  py|python)
+    if [ "$PLATFORM" = "analysis" ]; then
+      echo "✅ Analysis platform detected, validating analysis script exists..."
+      if [ -f "lib/analyse.py" ]; then
+        echo "✅ Found lib/analyse.py"
+        # Verify it's valid Python
+        python -m py_compile lib/analyse.py || {
+          echo "❌ lib/analyse.py has syntax errors"
+          exit 1
+        }
+        echo "✅ lib/analyse.py is valid Python"
+      else
+        echo "❌ No analysis script found (lib/analyse.py)"
+        exit 1
+      fi
+    else
+      echo "⏭️ Skipping build for Python project (language=$LANGUAGE)"
+    fi
     ;;
 
   *)

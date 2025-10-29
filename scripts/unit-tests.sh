@@ -108,8 +108,13 @@ elif [ "$LANGUAGE" = "js" ]; then
   npm run test:unit-js
 
 elif [ "$LANGUAGE" = "py" ] || [ "$LANGUAGE" = "python" ]; then
-  echo "✅ Python project detected, running pytest unit tests..."
-  pipenv run test-py-unit
+  if [ "$PLATFORM" = "analysis" ]; then
+    echo "✅ Analysis platform detected - unit tests not required"
+    echo "ℹ️ Analysis tasks are validated during integration tests with moto server"
+  else
+    echo "✅ Python project detected, running pytest unit tests..."
+    pipenv run test-py-unit
+  fi
 
 else
   echo "✅ Running default unit tests..."
