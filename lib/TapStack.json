@@ -670,7 +670,7 @@
                     "Fn::Sub": "medtech-aurora-cluster-${EnvironmentSuffix}"
                 },
                 "Engine": "aurora-postgresql",
-                "EngineVersion": "15.4",
+                "EngineVersion": "15.6",
                 "EngineMode": "provisioned",
                 "DatabaseName": "medtech",
                 "MasterUsername": {
