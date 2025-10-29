@@ -88,23 +88,25 @@ describe('TapStack CloudFormation Template - Financial Transaction Processing Sy
     test('should have public subnets in multiple AZs', () => {
       expect(template.Resources.PublicSubnet1).toBeDefined();
       expect(template.Resources.PublicSubnet2).toBeDefined();
-      expect(template.Resources.PublicSubnet1.Properties.AvailabilityZone).toBe(
-        'eu-central-2a'
-      );
-      expect(template.Resources.PublicSubnet2.Properties.AvailabilityZone).toBe(
-        'eu-central-2b'
-      );
+      // Verify dynamic AZ selection using Fn::GetAZs
+      expect(template.Resources.PublicSubnet1.Properties.AvailabilityZone).toEqual({
+        'Fn::Select': [0, { 'Fn::GetAZs': '' }]
+      });
+      expect(template.Resources.PublicSubnet2.Properties.AvailabilityZone).toEqual({
+        'Fn::Select': [1, { 'Fn::GetAZs': '' }]
+      });
     });
 
     test('should have private subnets in multiple AZs', () => {
       expect(template.Resources.PrivateSubnet1).toBeDefined();
       expect(template.Resources.PrivateSubnet2).toBeDefined();
-      expect(template.Resources.PrivateSubnet1.Properties.AvailabilityZone).toBe(
-        'eu-central-2a'
-      );
-      expect(template.Resources.PrivateSubnet2.Properties.AvailabilityZone).toBe(
-        'eu-central-2b'
-      );
+      // Verify dynamic AZ selection using Fn::GetAZs
+      expect(template.Resources.PrivateSubnet1.Properties.AvailabilityZone).toEqual({
+        'Fn::Select': [0, { 'Fn::GetAZs': '' }]
+      });
+      expect(template.Resources.PrivateSubnet2.Properties.AvailabilityZone).toEqual({
+        'Fn::Select': [1, { 'Fn::GetAZs': '' }]
+      });
     });
 
     test('private subnets should not map public IP on launch', () => {
