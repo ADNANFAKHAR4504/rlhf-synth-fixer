@@ -6,6 +6,7 @@ This function handles GET /results/{symbol} requests to retrieve processed data.
 
 import json
 import os
+from datetime import datetime
 from decimal import Decimal
 
 import boto3
