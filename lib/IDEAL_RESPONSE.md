@@ -2,19 +2,15 @@
 
 This implementation provides a secure, PCI-DSS compliant financial transaction processing system using ECS Fargate and RDS Aurora Serverless v2.
 
-## AWS Region Configuration: lib/AWS_REGION
-
-The AWS region where the infrastructure will be deployed.
+## `lib/AWS_REGION`
 
 ```
 us-east-1
 ```
 
-## CloudFormation Template: lib/TapStack.json
+## `lib/TapStack.json`
 
-The template creates a complete secure infrastructure with 35 resources including VPC, ECS Fargate, RDS Aurora Serverless v2, IAM roles, KMS encryption, Secrets Manager, CloudWatch logging, VPC Flow Logs, and auto-scaling capabilities.
-
-### Full Template Code
+CloudFormation template that creates a complete secure infrastructure with 35 resources including VPC, ECS Fargate, RDS Aurora Serverless v2, IAM roles, KMS encryption, Secrets Manager, CloudWatch logging, VPC Flow Logs, and auto-scaling capabilities.
 
 ```json
 {
