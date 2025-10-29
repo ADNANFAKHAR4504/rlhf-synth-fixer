@@ -20,5 +20,11 @@
     "ElastiCache Redis",
     "Secrets Manager",
     "API Gateway"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
