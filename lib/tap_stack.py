@@ -197,7 +197,10 @@ class TapStack(pulumi.ComponentResource):
         outputs['environment_suffix'] = self.config.environment_suffix
         
         # SSM access instructions
-        outputs['ssm_access_instructions'] = "Connect to EC2 instances using AWS Systems Manager Session Manager in the AWS Console or AWS CLI"
+        outputs['ssm_access_instructions'] = (
+            "Connect to EC2 instances using AWS Systems Manager "
+            "Session Manager in the AWS Console or AWS CLI"
+        )
         
         # Register outputs with Pulumi
         # Add exception handling for pulumi.export()

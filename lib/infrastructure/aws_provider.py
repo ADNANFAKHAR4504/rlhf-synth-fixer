@@ -47,4 +47,3 @@ class AWSProviderManager:
             )
         
         return self._provider
-

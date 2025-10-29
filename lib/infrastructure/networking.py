@@ -89,7 +89,10 @@ class NetworkingStack:
         
         # Ensure we have at least 2 AZs for HA
         if len(available_az_names) < 2:
-            raise Exception(f"Region {self.config.primary_region} has fewer than 2 AZs. Cannot create HA infrastructure.")
+            raise ValueError(
+                f"Region {self.config.primary_region} has fewer than 2 AZs. "
+                "Cannot create HA infrastructure."
+            )
         
         # Use up to 2 AZs for optimal cost/redundancy balance
         return available_az_names[:min(2, len(available_az_names))]
@@ -643,4 +646,3 @@ class NetworkingStack:
     def get_flow_log_group_name(self) -> Output[str]:
         """Get VPC Flow Log CloudWatch Log Group name."""
         return self.flow_log_group.name
-

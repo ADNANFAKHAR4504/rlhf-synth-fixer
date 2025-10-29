@@ -152,7 +152,9 @@ echo "User data script completed at $(date)"
             name=template_name,
             image_id=self.ami.id,
             instance_type=self.config.instance_type,
-            user_data=pulumi.Output.secret(user_data).apply(lambda s: __import__('base64').b64encode(s.encode()).decode()),
+            user_data=pulumi.Output.secret(user_data).apply(
+                lambda s: __import__('base64').b64encode(s.encode()).decode()
+            ),
             iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
                 arn=self.instance_profile_arn
             ),
@@ -317,4 +319,3 @@ echo "User data script completed at $(date)"
     def get_scale_down_policy_arn(self) -> Output[str]:
         """Get scale-down policy ARN."""
         return self.scale_down_policy.arn
-

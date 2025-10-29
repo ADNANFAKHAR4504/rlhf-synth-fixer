@@ -80,8 +80,11 @@ class StorageStack:
             f"{bucket_name}-encryption",
             bucket=bucket.id,
             rules=[aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                    sse_algorithm='AES256'
+                apply_server_side_encryption_by_default=(
+                    aws.s3.
+                    BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                        sse_algorithm='AES256'
+                    )
                 )
             )],
             opts=ResourceOptions(
@@ -186,8 +189,11 @@ class StorageStack:
             f"{bucket_name}-encryption",
             bucket=bucket.id,
             rules=[aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                    sse_algorithm='AES256'
+                apply_server_side_encryption_by_default=(
+                    aws.s3.
+                    BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                        sse_algorithm='AES256'
+                    )
                 )
             )],
             opts=ResourceOptions(
@@ -229,4 +235,3 @@ class StorageStack:
     def get_data_bucket_arn(self) -> Output[str]:
         """Get data bucket ARN."""
         return self.data_bucket.arn
-

@@ -217,4 +217,3 @@ class MonitoringStack:
     def get_cpu_low_alarm_arn(self) -> Output[str]:
         """Get CPU low alarm ARN."""
         return self.cpu_low_alarm.arn
-

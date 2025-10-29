@@ -174,11 +174,7 @@ class IAMStack:
                         "s3:GetBucketVersioning",
                         "s3:ListBucketVersions"
                     ],
-                    "Resource": [
-                        arn for arn in arns
-                    ] + [
-                        f"{arn}/*" for arn in arns
-                    ]
+                    "Resource": list(arns) + [f"{arn}/*" for arn in arns]
                 }]
             })
         )
@@ -240,4 +236,3 @@ class IAMStack:
     def get_ec2_instance_profile(self) -> aws.iam.InstanceProfile:
         """Get EC2 instance profile resource."""
         return self.instance_profile
-

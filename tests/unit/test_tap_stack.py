@@ -27,18 +27,19 @@ class MyMocks(pulumi.runtime.Mocks):
     
     def call(self, args: pulumi.runtime.MockCallArgs):
         """Mock Pulumi function calls."""
-        if args.token == 'aws:ec2/getAmi:getAmi':
+        token = args.token
+        if token == 'aws:ec2/getAmi:getAmi':
             return {
                 'id': 'ami-12345678',
                 'architecture': 'x86_64',
                 'image_id': 'ami-12345678'
             }
-        elif args.token == 'aws:index/getAvailabilityZones:getAvailabilityZones':
+        if token == 'aws:index/getAvailabilityZones:getAvailabilityZones':
             return {
                 'names': ['us-east-1a', 'us-east-1b'],
-                'zone_ids': ['use1-az1', 'use1-az2']
+                'zone_ids': ['use1-az2', 'use1-az2']
             }
-        elif args.token == 'aws:kms/getAlias:getAlias':
+        if token == 'aws:kms/getAlias:getAlias':
             return {
                 'target_key_arn': 'arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012',
                 'arn': 'arn:aws:kms:us-east-1:123456789012:alias/aws/ebs'
@@ -149,7 +150,6 @@ class TestNetworkingStack(unittest.TestCase):
     def test_networking_stack_creates_vpc(self):
         """Test networking stack creates VPC."""
         from infrastructure.aws_provider import AWSProviderManager
-        from infrastructure.config import InfraConfig
         from infrastructure.networking import NetworkingStack
         
         config = InfraConfig()
@@ -163,7 +163,6 @@ class TestNetworkingStack(unittest.TestCase):
     def test_networking_stack_creates_subnets(self):
         """Test networking stack creates public and private subnets."""
         from infrastructure.aws_provider import AWSProviderManager
-        from infrastructure.config import InfraConfig
         from infrastructure.networking import NetworkingStack
         
         config = InfraConfig()
@@ -179,7 +178,6 @@ class TestNetworkingStack(unittest.TestCase):
     def test_networking_stack_creates_gateways(self):
         """Test networking stack creates internet and NAT gateways."""
         from infrastructure.aws_provider import AWSProviderManager
-        from infrastructure.config import InfraConfig
         from infrastructure.networking import NetworkingStack
         
         config = InfraConfig()
@@ -198,7 +196,6 @@ class TestSecurityStack(unittest.TestCase):
     def test_security_stack_creates_ec2_security_group(self):
         """Test security stack creates EC2 security group."""
         from infrastructure.aws_provider import AWSProviderManager
-        from infrastructure.config import InfraConfig
         from infrastructure.security import SecurityStack
         
         config = InfraConfig()
@@ -218,7 +215,6 @@ class TestIAMStack(unittest.TestCase):
     def test_iam_stack_creates_ec2_role(self):
         """Test IAM stack creates EC2 role."""
         from infrastructure.aws_provider import AWSProviderManager
-        from infrastructure.config import InfraConfig
         from infrastructure.iam import IAMStack
         
         config = InfraConfig()
@@ -233,7 +229,6 @@ class TestIAMStack(unittest.TestCase):
     def test_iam_stack_creates_instance_profile(self):
         """Test IAM stack creates instance profile."""
         from infrastructure.aws_provider import AWSProviderManager
-        from infrastructure.config import InfraConfig
         from infrastructure.iam import IAMStack
         
         config = InfraConfig()
@@ -252,7 +247,6 @@ class TestStorageStack(unittest.TestCase):
     def test_storage_stack_creates_logs_bucket(self):
         """Test storage stack creates logs bucket."""
         from infrastructure.aws_provider import AWSProviderManager
-        from infrastructure.config import InfraConfig
         from infrastructure.storage import StorageStack
         
         config = InfraConfig()
@@ -267,7 +261,6 @@ class TestStorageStack(unittest.TestCase):
     def test_storage_stack_creates_data_bucket(self):
         """Test storage stack creates data bucket."""
         from infrastructure.aws_provider import AWSProviderManager
-        from infrastructure.config import InfraConfig
         from infrastructure.storage import StorageStack
         
         config = InfraConfig()
@@ -287,7 +280,6 @@ class TestComputeStack(unittest.TestCase):
         """Test compute stack creates launch template."""
         from infrastructure.aws_provider import AWSProviderManager
         from infrastructure.compute import ComputeStack
-        from infrastructure.config import InfraConfig
         from infrastructure.iam import IAMStack
         
         config = InfraConfig()
@@ -313,7 +305,6 @@ class TestComputeStack(unittest.TestCase):
         """Test compute stack creates auto scaling group."""
         from infrastructure.aws_provider import AWSProviderManager
         from infrastructure.compute import ComputeStack
-        from infrastructure.config import InfraConfig
         from infrastructure.iam import IAMStack
         
         config = InfraConfig()
@@ -342,14 +333,19 @@ class TestMonitoringStack(unittest.TestCase):
     def test_monitoring_stack_creates_sns_topic(self):
         """Test monitoring stack creates SNS topic."""
         from infrastructure.aws_provider import AWSProviderManager
-        from infrastructure.config import InfraConfig
         from infrastructure.monitoring import MonitoringStack
         
         config = InfraConfig()
         provider_manager = AWSProviderManager(config)
         mock_asg_name = pulumi.Output.from_input('asg-name')
-        mock_scale_up_arn = pulumi.Output.from_input('arn:aws:autoscaling:us-east-1:123456789012:scalingPolicy:test:autoScalingGroupName/test:policyName/scale-up')
-        mock_scale_down_arn = pulumi.Output.from_input('arn:aws:autoscaling:us-east-1:123456789012:scalingPolicy:test:autoScalingGroupName/test:policyName/scale-down')
+        mock_scale_up_arn = pulumi.Output.from_input(
+            'arn:aws:autoscaling:us-east-1:123456789012:scalingPolicy:test:'
+            'autoScalingGroupName/test:policyName/scale-up'
+        )
+        mock_scale_down_arn = pulumi.Output.from_input(
+            'arn:aws:autoscaling:us-east-1:123456789012:scalingPolicy:test:'
+            'autoScalingGroupName/test:policyName/scale-down'
+        )
         
         monitoring = MonitoringStack(config, provider_manager, mock_asg_name, 
                                      mock_scale_up_arn, mock_scale_down_arn, None)
@@ -361,14 +357,19 @@ class TestMonitoringStack(unittest.TestCase):
     def test_monitoring_stack_creates_log_group(self):
         """Test monitoring stack creates CloudWatch log group."""
         from infrastructure.aws_provider import AWSProviderManager
-        from infrastructure.config import InfraConfig
         from infrastructure.monitoring import MonitoringStack
         
         config = InfraConfig()
         provider_manager = AWSProviderManager(config)
         mock_asg_name = pulumi.Output.from_input('asg-name')
-        mock_scale_up_arn = pulumi.Output.from_input('arn:aws:autoscaling:us-east-1:123456789012:scalingPolicy:test:autoScalingGroupName/test:policyName/scale-up')
-        mock_scale_down_arn = pulumi.Output.from_input('arn:aws:autoscaling:us-east-1:123456789012:scalingPolicy:test:autoScalingGroupName/test:policyName/scale-down')
+        mock_scale_up_arn = pulumi.Output.from_input(
+            'arn:aws:autoscaling:us-east-1:123456789012:scalingPolicy:test:'
+            'autoScalingGroupName/test:policyName/scale-up'
+        )
+        mock_scale_down_arn = pulumi.Output.from_input(
+            'arn:aws:autoscaling:us-east-1:123456789012:scalingPolicy:test:'
+            'autoScalingGroupName/test:policyName/scale-down'
+        )
         
         monitoring = MonitoringStack(config, provider_manager, mock_asg_name, 
                                      mock_scale_up_arn, mock_scale_down_arn, None)
@@ -380,14 +381,19 @@ class TestMonitoringStack(unittest.TestCase):
     def test_monitoring_stack_creates_alarms(self):
         """Test monitoring stack creates CloudWatch alarms."""
         from infrastructure.aws_provider import AWSProviderManager
-        from infrastructure.config import InfraConfig
         from infrastructure.monitoring import MonitoringStack
         
         config = InfraConfig()
         provider_manager = AWSProviderManager(config)
         mock_asg_name = pulumi.Output.from_input('asg-name')
-        mock_scale_up_arn = pulumi.Output.from_input('arn:aws:autoscaling:us-east-1:123456789012:scalingPolicy:test:autoScalingGroupName/test:policyName/scale-up')
-        mock_scale_down_arn = pulumi.Output.from_input('arn:aws:autoscaling:us-east-1:123456789012:scalingPolicy:test:autoScalingGroupName/test:policyName/scale-down')
+        mock_scale_up_arn = pulumi.Output.from_input(
+            'arn:aws:autoscaling:us-east-1:123456789012:scalingPolicy:test:'
+            'autoScalingGroupName/test:policyName/scale-up'
+        )
+        mock_scale_down_arn = pulumi.Output.from_input(
+            'arn:aws:autoscaling:us-east-1:123456789012:scalingPolicy:test:'
+            'autoScalingGroupName/test:policyName/scale-down'
+        )
         
         monitoring = MonitoringStack(config, provider_manager, mock_asg_name, 
                                      mock_scale_up_arn, mock_scale_down_arn, None)

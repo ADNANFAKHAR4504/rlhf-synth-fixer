@@ -218,6 +218,4 @@ class InfraConfig:
         """
         if subnet_type == 'public':
             return self.public_subnet_cidrs[:az_count]
-        else:
-            return self.private_subnet_cidrs[:az_count]
-
+        return self.private_subnet_cidrs[:az_count]

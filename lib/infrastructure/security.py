@@ -120,4 +120,3 @@ class SecurityStack:
     def get_ec2_security_group_id(self) -> Output[str]:
         """Get EC2 security group ID."""
         return self.ec2_security_group.id
-

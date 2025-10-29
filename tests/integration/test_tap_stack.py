@@ -6,7 +6,8 @@ These tests validate actual AWS resources with LIVE ACTIONS and INTERACTIONS.
 Test Structure:
 - Service-Level Tests: PERFORM ACTIONS within a single service (write to S3, send SSM command, etc.)
 - Cross-Service Tests: TEST INTERACTIONS between two services (EC2 writes to CloudWatch, EC2 accesses S3)  
-- End-to-End Tests: TRIGGER complete data flows through 3+ services (EC2 sends metric via SSM, triggers alarm, SNS notified)
+- End-to-End Tests: TRIGGER complete data flows through 3+ services
+  (EC2 sends metric via SSM, triggers alarm, SNS notified)
 
 """
 
@@ -77,7 +78,7 @@ def wait_for_ssm_command(command_id: str, instance_id: str, max_wait_seconds: in
     start_time = time.time()
     last_status = None
     
-    print(f"  [SSM] Waiting for command to complete...")
+    print("  [SSM] Waiting for command to complete...")
     print(f"    Command ID: {command_id[:20]}...")
     print(f"    Instance: {instance_id}")
     print(f"    Timeout: {max_wait_seconds}s")
@@ -126,7 +127,7 @@ def wait_for_asg_instances(asg_name: str, min_instances: int = 1, max_wait_secon
     check_count = 0
     
     print(f"\n{'='*70}")
-    print(f"[WAIT] Waiting for ASG instances to be ready...")
+    print("[WAIT] Waiting for ASG instances to be ready...")
     print(f"{'='*70}")
     print(f"  ASG Name: {asg_name}")
     print(f"  Minimum instances required: {min_instances}")
@@ -181,7 +182,7 @@ def wait_for_asg_instances(asg_name: str, min_instances: int = 1, max_wait_secon
 def wait_for_ssm_registration(instance_ids: List[str], max_wait_seconds: int = 300) -> List[str]:
     """Wait for instances to register with SSM."""
     start_time = time.time()
-    print(f"\n[SSM] Waiting for instances to register with SSM...")
+    print("\n[SSM] Waiting for instances to register with SSM...")
     print(f"  Instances: {instance_ids}")
     print(f"  Timeout: {max_wait_seconds}s")
     
@@ -229,25 +230,25 @@ class BaseIntegrationTest(unittest.TestCase):
         if not cls._instances_checked and OUTPUTS.get('auto_scaling_group_name'):
             asg_name = OUTPUTS['auto_scaling_group_name']
             print(f"\n{'='*70}")
-            print(f"[SETUP] Checking ASG instances for test suite")
+            print("[SETUP] Checking ASG instances for test suite")
             print(f"{'='*70}")
             
             instances = wait_for_asg_instances(asg_name, min_instances=1, max_wait_seconds=180)
             
             if instances:
                 instance_ids = [i['InstanceId'] for i in instances]
-                print(f"\n[SETUP] Waiting for SSM registration...")
+                print("\n[SETUP] Waiting for SSM registration...")
                 registered = wait_for_ssm_registration(instance_ids, max_wait_seconds=300)
                 
                 if registered:
                     cls._available_instances = registered
                     print(f"[SETUP] {len(registered)} instance(s) ready for testing")
                 else:
-                    print(f"[SETUP] WARNING: Instances not registered with SSM")
-                    print(f"[SETUP] Some tests may be gracefully returned")
+                    print("[SETUP] WARNING: Instances not registered with SSM")
+                    print("[SETUP] Some tests may be gracefully returned")
             else:
-                print(f"[SETUP] WARNING: No healthy instances found")
-                print(f"[SETUP] Tests requiring instances will be gracefully returned")
+                print("[SETUP] WARNING: No healthy instances found")
+                print("[SETUP] Tests requiring instances will be gracefully returned")
             
             cls._instances_checked = True
             print(f"{'='*70}\n")
@@ -285,12 +286,12 @@ class TestServiceLevelS3Operations(BaseIntegrationTest):
             Body=test_content.encode('utf-8')
         )
         
-        print(f"[VERIFY] Reading object back from S3")
+        print("[VERIFY] Reading object back from S3")
         response = s3_client.get_object(Bucket=bucket_name, Key=test_key)
         retrieved_content = response['Body'].read().decode('utf-8')
         
         self.assertEqual(retrieved_content, test_content, "Retrieved content should match written content")
-        print(f"[SUCCESS] S3 write and read operations successful")
+        print("[SUCCESS] S3 write and read operations successful")
         
         s3_client.delete_object(Bucket=bucket_name, Key=test_key)
     
@@ -322,7 +323,7 @@ class TestServiceLevelS3Operations(BaseIntegrationTest):
             Body=json.dumps({'version': 2, 'timestamp': time.time()}).encode('utf-8')
         )
         
-        print(f"[VERIFY] Listing object versions")
+        print("[VERIFY] Listing object versions")
         versions_response = s3_client.list_object_versions(Bucket=bucket_name, Prefix=test_key)
         versions = versions_response.get('Versions', [])
         
@@ -378,7 +379,7 @@ class TestServiceLevelSSMOperations(BaseIntegrationTest):
         
         output = result['StandardOutputContent']
         self.assertIn('SSM Integration Test', output, "Output should contain test message")
-        print(f"[SUCCESS] SSM command executed successfully")
+        print("[SUCCESS] SSM command executed successfully")
         print(f"  Output preview: {output[:100]}...")
 
 
@@ -437,7 +438,7 @@ class TestServiceLevelAutoScaling(BaseIntegrationTest):
         self.assertGreaterEqual(asg['MaxSize'], asg['MinSize'], "Max size should be >= min size")
         self.assertEqual(asg['HealthCheckType'], 'EC2', "Health check type should be EC2")
         
-        print(f"[SUCCESS] ASG configured correctly:")
+        print("[SUCCESS] ASG configured correctly:")
         print(f"  Min: {asg['MinSize']}, Max: {asg['MaxSize']}, Desired: {asg['DesiredCapacity']}")
         print(f"  Health Check: {asg['HealthCheckType']}, Grace Period: {asg['HealthCheckGracePeriod']}s")
 
@@ -492,13 +493,13 @@ class TestCrossServiceEC2ToS3(BaseIntegrationTest):
         
         self.assertEqual(result['Status'], 'Success', "SSM command should succeed")
         
-        print(f"[VERIFY] Checking if object exists in S3")
+        print("[VERIFY] Checking if object exists in S3")
         time.sleep(2)
         
         try:
             s3_response = s3_client.head_object(Bucket=bucket_name, Key=test_key)
             self.assertIsNotNone(s3_response, "Object should exist in S3")
-            print(f"[SUCCESS] EC2 successfully wrote to S3 via IAM role")
+            print("[SUCCESS] EC2 successfully wrote to S3 via IAM role")
             print(f"  Object size: {s3_response['ContentLength']} bytes")
         finally:
             s3_client.delete_object(Bucket=bucket_name, Key=test_key)
@@ -523,7 +524,7 @@ class TestCrossServiceEC2ToCloudWatch(BaseIntegrationTest):
             return
         
         instance_id = self._available_instances[0]
-        metric_name = f'IntegrationTestMetric'
+        metric_name = 'IntegrationTestMetric'
         namespace = 'TAPIntegrationTests'
         metric_value = 42.0
         
@@ -551,7 +552,7 @@ class TestCrossServiceEC2ToCloudWatch(BaseIntegrationTest):
         
         self.assertEqual(result['Status'], 'Success', "SSM command should succeed")
         
-        print(f"[VERIFY] Checking if metric appears in CloudWatch")
+        print("[VERIFY] Checking if metric appears in CloudWatch")
         time.sleep(10)
         
         end_time = datetime.now(timezone.utc)
@@ -564,7 +565,7 @@ class TestCrossServiceEC2ToCloudWatch(BaseIntegrationTest):
         
         metrics = metrics_response.get('Metrics', [])
         self.assertGreater(len(metrics), 0, "Metric should exist in CloudWatch")
-        print(f"[SUCCESS] EC2 successfully sent custom metric to CloudWatch")
+        print("[SUCCESS] EC2 successfully sent custom metric to CloudWatch")
         print(f"  Found {len(metrics)} metric(s)")
 
 
@@ -589,11 +590,13 @@ class TestCrossServiceEC2UsesIAMRole(BaseIntegrationTest):
         instance_id = self._available_instances[0]
         
         print(f"\n[ACTION] EC2 instance {instance_id} using IAM role to call AWS API")
-        print(f"  API Call: ec2:DescribeInstances (testing IAM permissions)")
+        print("  API Call: ec2:DescribeInstances (testing IAM permissions)")
         
         command = f'''
         # Use IAM role credentials to call AWS API
-        aws ec2 describe-instances --instance-ids {instance_id} --region {PRIMARY_REGION} --output json | jq -r '.Reservations[0].Instances[0].InstanceId'
+        aws ec2 describe-instances --instance-ids {instance_id} \\
+            --region {PRIMARY_REGION} --output json | \\
+            jq -r '.Reservations[0].Instances[0].InstanceId'
         echo "API call status: $?"
         '''
         
@@ -611,8 +614,8 @@ class TestCrossServiceEC2UsesIAMRole(BaseIntegrationTest):
         output = result['StandardOutputContent']
         self.assertIn(instance_id, output, "Should successfully describe itself using IAM role")
         
-        print(f"[SUCCESS] EC2 instance used IAM role to call AWS API")
-        print(f"  IAM role permissions verified through actual API call")
+        print("[SUCCESS] EC2 instance used IAM role to call AWS API")
+        print("  IAM role permissions verified through actual API call")
 
 
 # ============================================================================
@@ -649,10 +652,10 @@ class TestE2EEC2ToS3ToCloudWatch(BaseIntegrationTest):
         metric_name = 'E2ETestSuccess'
         
         print(f"\n{'='*70}")
-        print(f"[E2E TEST] EC2 -> S3 -> CloudWatch Complete Flow")
+        print("[E2E TEST] EC2 -> S3 -> CloudWatch Complete Flow")
         print(f"{'='*70}")
         print(f"  Entry Point: SSM command to EC2 instance {instance_id}")
-        print(f"  Flow: Write to S3 -> Send success metric to CloudWatch")
+        print("  Flow: Write to S3 -> Send success metric to CloudWatch")
         
         command = f'''
         set -e
@@ -679,7 +682,7 @@ class TestE2EEC2ToS3ToCloudWatch(BaseIntegrationTest):
         echo "E2E test completed successfully"
         '''
         
-        print(f"\n[TRIGGER] Sending single SSM command to start E2E flow")
+        print("\n[TRIGGER] Sending single SSM command to start E2E flow")
         response = ssm_client.send_command(
             InstanceIds=[instance_id],
             DocumentName='AWS-RunShellScript',
@@ -690,7 +693,7 @@ class TestE2EEC2ToS3ToCloudWatch(BaseIntegrationTest):
         result = wait_for_ssm_command(command_id, instance_id, max_wait_seconds=90)
         
         self.assertEqual(result['Status'], 'Success', "E2E command should succeed")
-        print(f"\n[VERIFY] Checking S3 and CloudWatch for E2E flow results")
+        print("\n[VERIFY] Checking S3 and CloudWatch for E2E flow results")
         
         time.sleep(5)
         
@@ -713,10 +716,10 @@ class TestE2EEC2ToS3ToCloudWatch(BaseIntegrationTest):
         print(f"  [OK] CloudWatch metric created: {metric_name}")
         
         print(f"\n{'='*70}")
-        print(f"[E2E SUCCESS] Complete flow validated:")
-        print(f"  1. EC2 instance wrote to S3")
-        print(f"  2. EC2 instance sent metric to CloudWatch")
-        print(f"  3. All services interacted correctly")
+        print("[E2E SUCCESS] Complete flow validated:")
+        print("  1. EC2 instance wrote to S3")
+        print("  2. EC2 instance sent metric to CloudWatch")
+        print("  3. All services interacted correctly")
         print(f"{'='*70}\n")
 
 
@@ -747,10 +750,10 @@ class TestE2EEC2InternetAccessViaVPCNATToS3(BaseIntegrationTest):
         test_key = f'e2e-internet-test/downloaded-{int(time.time())}.txt'
         
         print(f"\n{'='*70}")
-        print(f"[E2E TEST] VPC -> NAT -> EC2 -> Internet -> S3 Complete Flow")
+        print("[E2E TEST] VPC -> NAT -> EC2 -> Internet -> S3 Complete Flow")
         print(f"{'='*70}")
         print(f"  Entry Point: Single SSM command to EC2 instance {instance_id}")
-        print(f"  Flow: Private subnet -> NAT Gateway -> Download from internet -> Upload to S3")
+        print("  Flow: Private subnet -> NAT Gateway -> Download from internet -> Upload to S3")
         
         command = f'''
         set -e
@@ -779,7 +782,7 @@ class TestE2EEC2InternetAccessViaVPCNATToS3(BaseIntegrationTest):
         echo "E2E flow completed successfully"
         '''
         
-        print(f"\n[TRIGGER] Sending single SSM command to start E2E flow")
+        print("\n[TRIGGER] Sending single SSM command to start E2E flow")
         response = ssm_client.send_command(
             InstanceIds=[instance_id],
             DocumentName='AWS-RunShellScript',
@@ -795,7 +798,7 @@ class TestE2EEC2InternetAccessViaVPCNATToS3(BaseIntegrationTest):
         self.assertIn('Downloaded', output, "Should download from internet")
         self.assertIn('Upload complete', output, "Should upload to S3")
         
-        print(f"\n[VERIFY] Checking S3 for uploaded file")
+        print("\n[VERIFY] Checking S3 for uploaded file")
         time.sleep(3)
         
         try:
@@ -807,12 +810,12 @@ class TestE2EEC2InternetAccessViaVPCNATToS3(BaseIntegrationTest):
             s3_client.delete_object(Bucket=bucket_name, Key=test_key)
         
         print(f"\n{'='*70}")
-        print(f"[E2E SUCCESS] Complete flow validated:")
-        print(f"  1. EC2 in private subnet (VPC)")
-        print(f"  2. Used NAT Gateway for internet access")
-        print(f"  3. Downloaded data from internet")
-        print(f"  4. Uploaded to S3 bucket")
-        print(f"  All 4 services interacted correctly via single trigger")
+        print("[E2E SUCCESS] Complete flow validated:")
+        print("  1. EC2 in private subnet (VPC)")
+        print("  2. Used NAT Gateway for internet access")
+        print("  3. Downloaded data from internet")
+        print("  4. Uploaded to S3 bucket")
+        print("  All 4 services interacted correctly via single trigger")
         print(f"{'='*70}\n")
 
 
@@ -846,10 +849,10 @@ class TestE2EEC2GeneratesHighCPUTriggersAlarmToSNS(BaseIntegrationTest):
         self.assertIsNotNone(alarm_topic_arn, "Alarm topic ARN not found")
         
         print(f"\n{'='*70}")
-        print(f"[E2E TEST] EC2 -> CloudWatch Alarm -> SNS Monitoring Pipeline")
+        print("[E2E TEST] EC2 -> CloudWatch Alarm -> SNS Monitoring Pipeline")
         print(f"{'='*70}")
         print(f"  Entry Point: Single SSM command to EC2 instance {instance_id}")
-        print(f"  Flow: Generate CPU load -> CloudWatch detects -> Alarm evaluates -> SNS ready")
+        print("  Flow: Generate CPU load -> CloudWatch detects -> Alarm evaluates -> SNS ready")
         
         command = '''
         set -e
@@ -874,7 +877,7 @@ class TestE2EEC2GeneratesHighCPUTriggersAlarmToSNS(BaseIntegrationTest):
         echo "E2E monitoring test completed"
         '''
         
-        print(f"\n[TRIGGER] Sending single SSM command to start E2E monitoring flow")
+        print("\n[TRIGGER] Sending single SSM command to start E2E monitoring flow")
         response = ssm_client.send_command(
             InstanceIds=[instance_id],
             DocumentName='AWS-RunShellScript',
@@ -890,7 +893,7 @@ class TestE2EEC2GeneratesHighCPUTriggersAlarmToSNS(BaseIntegrationTest):
         self.assertIn('Generating CPU load', output, "Should generate CPU load")
         self.assertIn('Sending high CPU metric', output, "Should send metric")
         
-        print(f"\n[VERIFY] Checking CloudWatch alarm configuration")
+        print("\n[VERIFY] Checking CloudWatch alarm configuration")
         time.sleep(5)
         
         alarm_name = cpu_high_alarm_arn.split(':')[-1]
@@ -900,7 +903,7 @@ class TestE2EEC2GeneratesHighCPUTriggersAlarmToSNS(BaseIntegrationTest):
         self.assertEqual(len(alarms), 1, "CloudWatch alarm should exist")
         alarm = alarms[0]
         
-        print(f"  [OK] CloudWatch alarm configured:")
+        print("  [OK] CloudWatch alarm configured:")
         print(f"       Name: {alarm['AlarmName']}")
         print(f"       Metric: {alarm['MetricName']}")
         print(f"       Threshold: {alarm['Threshold']}")
@@ -909,20 +912,20 @@ class TestE2EEC2GeneratesHighCPUTriggersAlarmToSNS(BaseIntegrationTest):
         self.assertIn('AlarmActions', alarm, "Alarm should have actions")
         if alarm.get('AlarmActions'):
             self.assertIn(alarm_topic_arn, alarm['AlarmActions'], "Alarm should notify SNS")
-            print(f"  [OK] Alarm configured to notify SNS topic")
+            print("  [OK] Alarm configured to notify SNS topic")
         
-        print(f"\n[VERIFY] Checking SNS topic configuration")
+        print("\n[VERIFY] Checking SNS topic configuration")
         topic_attrs = sns_client.get_topic_attributes(TopicArn=alarm_topic_arn)
         self.assertIsNotNone(topic_attrs, "SNS topic should exist")
-        print(f"  [OK] SNS topic ready for notifications")
+        print("  [OK] SNS topic ready for notifications")
         
         print(f"\n{'='*70}")
-        print(f"[E2E SUCCESS] Complete monitoring pipeline validated:")
-        print(f"  1. EC2 generated high CPU load")
-        print(f"  2. CloudWatch received CPU metrics")
-        print(f"  3. CloudWatch alarm monitors the metrics")
-        print(f"  4. SNS topic configured for notifications")
-        print(f"  All 4 components interacted correctly via single trigger")
+        print("[E2E SUCCESS] Complete monitoring pipeline validated:")
+        print("  1. EC2 generated high CPU load")
+        print("  2. CloudWatch received CPU metrics")
+        print("  3. CloudWatch alarm monitors the metrics")
+        print("  4. SNS topic configured for notifications")
+        print("  All 4 components interacted correctly via single trigger")
         print(f"{'='*70}\n")
 
 
