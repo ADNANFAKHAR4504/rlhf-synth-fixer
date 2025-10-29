@@ -1,4 +1,4 @@
-// @ts-nocheck
+// @ts-expect-error express is not typed
 import express from 'express';
 
 const app = express();

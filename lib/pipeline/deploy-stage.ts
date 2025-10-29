@@ -111,7 +111,7 @@ export class DeployStage extends Construct {
       {
         applicationName: this.application.applicationName!,
         environmentName: resourceName('env'),
-        solutionStackName: '64bit Amazon Linux 2023 v4.7.2 running Docker',
+        solutionStackName: '64bit Amazon Linux 2023 v4.7.3 running Docker',
         optionSettings: [
           {
             namespace: 'aws:elasticbeanstalk:environment',

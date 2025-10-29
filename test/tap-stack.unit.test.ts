@@ -211,7 +211,7 @@ describe('TapStack Unit Tests', () => {
       template.hasResourceProperties('AWS::ElasticBeanstalk::Environment', {
         ApplicationName: `acme-tech-${environmentSuffix}-app`,
         EnvironmentName: `acme-tech-${environmentSuffix}-env`,
-        SolutionStackName: '64bit Amazon Linux 2023 v4.7.2 running Docker',
+        SolutionStackName: '64bit Amazon Linux 2023 v4.7.3 running Docker',
       });
 
       // Check that environment has option settings array
