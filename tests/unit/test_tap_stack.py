@@ -82,8 +82,13 @@ class TestTapStack(unittest.TestCase):
         stack = TapStack(self.app, "TapStackTest")
         template = Template.from_stack(stack)
 
-        # ASSERT - Check for CloudWatch alarms (actual count is 2)
-        template.resource_count_is("AWS::CloudWatch::Alarm", 2)
+        # ASSERT - Check for CloudWatch alarms
+        # Expected alarms:
+        # 1. ProcessorErrorAlarm (Lambda function errors)
+        # 2. ProcessorThrottleAlarm (Lambda function throttles)
+        # 3. UnauthorizedS3Access (Compliance monitoring - S3 4xx errors)
+        # 4. HighAPICallVolume (Compliance monitoring - high API call volume)
+        template.resource_count_is("AWS::CloudWatch::Alarm", 4)
 
     @mark.it("defaults environment suffix to 'stage1' if not provided")
     def test_defaults_env_suffix_to_stage1(self):
