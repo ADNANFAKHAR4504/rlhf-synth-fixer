@@ -867,3 +867,130 @@ Outputs:
     Value: !Ref SecureAdminGroup
     Export:
       Name: !Sub '${AWS::StackName}-AdminGroup'
+
+  # Network Outputs
+  PublicSubnet1Id:
+    Description: 'Public Subnet 1 ID'
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet1'
+
+  PublicSubnet2Id:
+    Description: 'Public Subnet 2 ID'
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet2'
+
+  PrivateSubnet1Id:
+    Description: 'Private Subnet 1 ID'
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet1'
+
+  PrivateSubnet2Id:
+    Description: 'Private Subnet 2 ID'
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet2'
+
+  InternetGatewayId:
+    Description: 'Internet Gateway ID'
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-IGW'
+
+  NATGateway1Id:
+    Description: 'NAT Gateway 1 ID'
+    Value: !Ref NATGateway1
+    Export:
+      Name: !Sub '${AWS::StackName}-NAT1'
+
+  NATGateway2Id:
+    Description: 'NAT Gateway 2 ID'
+    Value: !Ref NATGateway2
+    Export:
+      Name: !Sub '${AWS::StackName}-NAT2'
+
+  # EC2 Outputs
+  EC2Instance1Id:
+    Description: 'EC2 Instance 1 ID'
+    Value: !Ref EC2Instance1
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2-1'
+
+  EC2Instance2Id:
+    Description: 'EC2 Instance 2 ID'
+    Value: !Ref EC2Instance2
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2-2'
+
+  EC2InstanceRoleArn:
+    Description: 'EC2 Instance Role ARN'
+    Value: !GetAtt EC2InstanceRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2-Role-ARN'
+
+  # RDS Outputs
+  RDSSecretArn:
+    Description: 'RDS Master Password Secret ARN'
+    Value: !Ref RDSMasterPasswordSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-RDS-Secret-ARN'
+
+  DBSubnetGroupName:
+    Description: 'DB Subnet Group Name'
+    Value: !Ref DBSubnetGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-DB-SubnetGroup'
+
+  # S3 Outputs
+  CloudTrailBucketName:
+    Description: 'CloudTrail Logs Bucket Name'
+    Value: !Ref CloudTrailLogsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrail-Bucket'
+
+  ConfigBucketName:
+    Description: 'Config Logs Bucket Name'
+    Value: !Ref ConfigBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-Config-Bucket'
+
+  # Security Group Outputs
+  ALBSecurityGroupId:
+    Description: 'ALB Security Group ID'
+    Value: !Ref ALBSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB-SG'
+
+  EC2SecurityGroupId:
+    Description: 'EC2 Security Group ID'
+    Value: !Ref EC2SecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2-SG'
+
+  RDSSecurityGroupId:
+    Description: 'RDS Security Group ID'
+    Value: !Ref RDSSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-RDS-SG'
+
+  # Load Balancer Outputs
+  TargetGroupArn:
+    Description: 'Target Group ARN'
+    Value: !Ref TargetGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-TG-ARN'
+
+  ALBArn:
+    Description: 'Application Load Balancer ARN'
+    Value: !Ref ApplicationLoadBalancer
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB-ARN'
+
+  # CloudWatch Outputs
+  EC2LogGroupName:
+    Description: 'EC2 CloudWatch Log Group Name'
+    Value: !Ref EC2LogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2-LogGroup'
