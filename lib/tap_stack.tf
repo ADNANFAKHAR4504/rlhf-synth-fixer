@@ -392,7 +392,6 @@ resource "aws_iam_role_policy" "codepipeline" {
           "s3:PutObject",
           "s3:GetBucketLocation",
           "s3:ListBucket",
-          "s3:ListObjects",
           "s3:GetBucketVersioning"
         ]
         Resource = [
