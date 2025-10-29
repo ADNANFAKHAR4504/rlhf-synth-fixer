@@ -12,37 +12,40 @@
  * The stack created by this module uses environment suffixes to distinguish between
  * different deployment environments (development, staging, production, etc.).
  */
-import * as pulumi from '@pulumi/pulumi';
-import { TapStack } from '../lib/tap-stack';
+import * as pulumi from "@pulumi/pulumi";
+import { TapStack } from "../lib/tap-stack";
 
-// Initialize Pulumi configuration for the current stack.
+// Get environment suffix from context or environment variable
 const config = new pulumi.Config();
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX ||
+  config.get("environmentSuffix") ||
+  pulumi.getStack().split("-").pop() ||
+  "dev";
 
-// Get the environment suffix from the CI, Pulumi config, defaulting to 'dev'.
-const environmentSuffix =
-  process.env.ENVIRONMENT_SUFFIX || config.get('env') || 'dev';
+const repositoryName = process.env.REPOSITORY || "unknown";
+const commitAuthor = process.env.COMMIT_AUTHOR || "unknown";
 
-// Get metadata from environment variables for tagging purposes.
-// These are often injected by CI/CD systems.
-const repository = config.get('repository') || 'unknown';
-const commitAuthor = config.get('commitAuthor') || 'unknown';
-
-// Define a set of default tags to apply to all resources.
-// While not explicitly used in the TapStack instantiation here,
-// this is the standard place to define them. They would typically be passed
-// into the TapStack or configured on the AWS provider.
-const defaultTags = {
-  Environment: environmentSuffix,
-  Repository: repository,
-  Author: commitAuthor,
-};
-
-// Instantiate the main stack component for the infrastructure.
-// This encapsulates all the resources for the platform.
-new TapStack('pulumi-infra', {
-  tags: defaultTags,
+// Create the stack with environment suffix
+const stack = new TapStack("tap-stack", {
+  environmentSuffix: environmentSuffix
 });
 
-// To use the stack outputs, you can export them.
-// For example, if TapStack had an output `bucketName`:
-// export const bucketName = stack.bucketName;
+// Export all outputs
+export const vpcId = stack.outputs.vpcId;
+export const vpcCidr = stack.outputs.vpcCidr;
+export const albDnsName = stack.outputs.albDnsName;
+export const albArn = stack.outputs.albArn;
+export const ecsClusterArn = stack.outputs.ecsClusterArn;
+export const ecsServiceName = stack.outputs.ecsServiceName;
+export const rdsEndpoint = stack.outputs.rdsEndpoint;
+export const rdsPort = stack.outputs.rdsPort;
+export const rdsSecretArn = stack.outputs.rdsSecretArn;
+export const s3BucketName = stack.outputs.s3BucketName;
+export const route53ZoneId = stack.outputs.route53ZoneId;
+export const route53ZoneName = stack.outputs.route53ZoneName;
+export const cloudwatchDashboardArn = stack.outputs.cloudwatchDashboardArn;
+export const publicSubnetIds = stack.outputs.publicSubnetIds;
+export const privateSubnetIds = stack.outputs.privateSubnetIds;
+export const vpcPeeringConnectionIds = stack.outputs.vpcPeeringConnectionIds;
+export const repository = repositoryName;
+export const author = commitAuthor;
