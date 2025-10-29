@@ -5,6 +5,8 @@ import {
 import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
+import { KeyPair } from '@cdktf/provider-aws/lib/key-pair';
+
 
 // Import the constructs from modules
 import {

@@ -1,6 +1,8 @@
 import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
 import { Fn } from 'cdktf';
+import { provider, privateKey } from '@cdktf/provider-tls';
+
 
 export interface BaseConfig {
   region: string;
@@ -14,6 +16,10 @@ export interface NetworkingConfig extends BaseConfig {
   availabilityZones: string[];
   publicSubnetCidrs: string[];
   privateSubnetCidrs: string[];
+}
+
+export interface KeyPairConfig extends BaseConfig {
+  publicKey?: string;
 }
 
 export class NetworkingConstruct extends Construct {
@@ -330,7 +336,6 @@ export class DatabaseConstruct extends Construct {
     this.dbInstance = new aws.dbInstance.DbInstance(this, 'db', {
       identifier: `${config.projectName}-db-${config.environment}`,
       engine: 'postgres',
-      engineVersion: '15.4',
       instanceClass: config.instanceClass,
       allocatedStorage: config.allocatedStorage,
       storageType: 'gp3',
@@ -512,6 +517,62 @@ export interface ComputeConfig extends BaseConfig {
   minSize: number;
   maxSize: number;
   desiredCapacity: number;
+}
+
+export class KeyPairConstruct extends Construct {
+  public readonly keyPair: aws.keyPair.KeyPair;
+  public readonly keyPairName: string;
+
+  constructor(scope: Construct, id: string, config: KeyPairConfig) {
+    super(scope, id);
+
+    this.keyPairName = `${config.projectName}-keypair-${config.environment}`;
+
+    if (config.publicKey) {
+      // Use provided public key
+      this.keyPair = new aws.keyPair.KeyPair(this, 'keypair', {
+        keyName: this.keyPairName,
+        publicKey: config.publicKey,
+        tags: {
+          ...config.tags,
+          Name: this.keyPairName,
+        },
+      });
+    } else {
+      // Generate a new key pair using TLS provider
+      const tlsProvider = new provider.TlsProvider(this, 'tls');
+      
+      const tlsPrivateKey = new privateKey.PrivateKey(this, 'private-key', {
+        algorithm: 'RSA',
+        rsaBits: 4096,
+      });
+
+      this.keyPair = new aws.keyPair.KeyPair(this, 'keypair', {
+        keyName: this.keyPairName,
+        publicKey: tlsPrivateKey.publicKeyOpenssh,
+        tags: {
+          ...config.tags,
+          Name: this.keyPairName,
+        },
+      });
+
+      // Store private key in Secrets Manager
+      const keypairSecret = new aws.secretsmanagerSecret.SecretsmanagerSecret(this, 'keypair-secret', {
+        name: `${this.keyPairName}-private`,
+        description: 'Private key for EC2 instances',
+        tags: config.tags,
+      });
+
+      new aws.secretsmanagerSecretVersion.SecretsmanagerSecretVersion(
+        this,
+        'keypair-secret-version',
+        {
+          secretId: keypairSecret.id,
+          secretString: tlsPrivateKey.privateKeyPem,
+        }
+      );
+    }
+  }
 }
 
 export class ComputeConstruct extends Construct {
