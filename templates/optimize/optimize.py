@@ -114,6 +114,7 @@ class InfrastructureOptimizer:
             # Find the Redis replication group using exact naming pattern
             replication_groups = self.elasticache_client.describe_replication_groups()
             replication_group_id = None
+            current_group = None
             current_node_count = 0
             expected_group_id = f'streamflix-redis-{self.environment_suffix}'
             
@@ -121,6 +122,7 @@ class InfrastructureOptimizer:
             for group in replication_groups['ReplicationGroups']:
                 if group['ReplicationGroupId'] == expected_group_id:
                     replication_group_id = group['ReplicationGroupId']
+                    current_group = group
                     current_node_count = len(group['NodeGroups'][0]['NodeGroupMembers'])
                     print(f"Found replication group (exact match): {replication_group_id}")
                     break
@@ -130,11 +132,12 @@ class InfrastructureOptimizer:
                 for group in replication_groups['ReplicationGroups']:
                     if 'streamflix-redis-' in group['ReplicationGroupId']:
                         replication_group_id = group['ReplicationGroupId']
+                        current_group = group
                         current_node_count = len(group['NodeGroups'][0]['NodeGroupMembers'])
                         print(f"Found replication group (pattern match): {replication_group_id}")
                         break
             
-            if not replication_group_id:
+            if not replication_group_id or not current_group:
                 print(f"❌ Redis replication group not found. Expected: {expected_group_id}")
                 print(f"Available groups: {[g['ReplicationGroupId'] for g in replication_groups['ReplicationGroups']]}")
                 return False
@@ -145,8 +148,7 @@ class InfrastructureOptimizer:
                 print("✅ Already optimized (2 or fewer nodes)")
                 return True
             
-            # Get the current member clusters
-            current_group = replication_groups['ReplicationGroups'][0]
+            # Get the current member clusters from the CORRECT group
             member_clusters = current_group.get('MemberClusters', [])
             
             print(f"Current member clusters: {member_clusters}")
@@ -405,11 +407,7 @@ def main():
     
     args = parser.parse_args()
     
-    # Get environment suffix - same pattern as bin/tap.ts
-    # Priority: CLI arg > ENVIRONMENT_SUFFIX env var > 'dev' default
     environment_suffix = args.environment or os.getenv('ENVIRONMENT_SUFFIX') or 'dev'
-    
-    # Get AWS region - Priority: CLI arg > AWS_REGION env var > 'us-east-1' default
     aws_region = args.region or os.getenv('AWS_REGION') or 'us-east-1'
     
     if args.dry_run:
