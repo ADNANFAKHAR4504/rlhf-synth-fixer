@@ -63,9 +63,9 @@ interface TapStackOutputs {
   route53ZoneId: pulumi.Output<string>;
   route53ZoneName: pulumi.Output<string>;
   cloudwatchDashboardArn: pulumi.Output<string>;
-  publicSubnetIds: pulumi.Output<string>[];
-  privateSubnetIds: pulumi.Output<string>[];
-  vpcPeeringConnectionIds: pulumi.Output<string>[];
+  publicSubnetIds: pulumi.Output<string[]>;
+  privateSubnetIds: pulumi.Output<string[]>;
+  vpcPeeringConnectionIds: pulumi.Output<string[]>;
 }
 
 /**
@@ -86,7 +86,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     this.projectName = pulumi.getProject();
     this.stackName = pulumi.getStack();
-    
+
     // Load environment-specific configuration
     this.config = this.loadConfiguration(args.environmentSuffix);
 
@@ -134,6 +134,11 @@ export class TapStack extends pulumi.ComponentResource {
     // Create VPC Peering connections if enabled
     const vpcPeering = this.createVpcPeering(vpc);
 
+    // Convert VPC peering array to Output<string[]>
+    const vpcPeeringIds = pulumi.output(
+      Promise.all(vpcPeering.map(p => p.id.apply(id => id)))
+    );
+
     // Export outputs
     this.outputs = {
       vpcId: vpc.vpcId,
@@ -151,7 +156,7 @@ export class TapStack extends pulumi.ComponentResource {
       cloudwatchDashboardArn: cloudwatch.dashboard.dashboardArn,
       publicSubnetIds: vpc.publicSubnetIds,
       privateSubnetIds: vpc.privateSubnetIds,
-      vpcPeeringConnectionIds: vpcPeering.map((p) => p.id),
+      vpcPeeringConnectionIds: vpcPeeringIds,
     };
 
     // Write outputs to JSON file
@@ -165,7 +170,7 @@ export class TapStack extends pulumi.ComponentResource {
    */
   private loadConfiguration(environmentSuffix: string): EnvironmentConfig {
     const config = new pulumi.Config();
-    
+
     return {
       environmentSuffix,
       vpcCidr: config.require("vpcCidr"),
@@ -197,7 +202,7 @@ export class TapStack extends pulumi.ComponentResource {
    */
   private createVpc() {
     const vpcName = this.getResourceName("vpc");
-    
+
     const vpc = new awsx.ec2.Vpc(
       vpcName,
       {
@@ -448,11 +453,11 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Get the secret created by RDS
-    const secret = cluster.masterUserSecrets[0].secretArn.apply(
-      (arn) =>
-        aws.secretsmanager.getSecretOutput({
-          arn: arn,
-        })
+    const secretArn = cluster.masterUserSecrets[0].secretArn;
+    const secret = secretArn.apply((arn) =>
+      aws.secretsmanager.getSecretOutput({
+        arn: arn,
+      })
     );
 
     return { cluster, clusterInstance, secret, kmsKey };
@@ -531,7 +536,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create HTTP listener (redirect to HTTPS in production)
+    // Create HTTP listener
     const httpListener = new aws.lb.Listener(
       this.getResourceName("http-listener"),
       {
@@ -643,7 +648,7 @@ export class TapStack extends pulumi.ComponentResource {
       this.getResourceName("ecs-secrets-policy"),
       {
         role: taskRole.id,
-        policy: rds.secret.arn.apply((arn: string) =>
+        policy: pulumi.all([rds.secret.arn, rds.kmsKey.arn]).apply(([secretArn, kmsArn]) =>
           JSON.stringify({
             Version: "2012-10-17",
             Statement: [
@@ -653,12 +658,12 @@ export class TapStack extends pulumi.ComponentResource {
                   "secretsmanager:GetSecretValue",
                   "secretsmanager:DescribeSecret",
                 ],
-                Resource: arn,
+                Resource: secretArn,
               },
               {
                 Effect: "Allow",
                 Action: ["kms:Decrypt"],
-                Resource: rds.kmsKey.arn,
+                Resource: kmsArn,
               },
             ],
           })
@@ -721,7 +726,7 @@ export class TapStack extends pulumi.ComponentResource {
                 logConfiguration: {
                   logDriver: "awslogs",
                   options: {
-                    "awslogs-group": logGroup.name,
+                    "awslogs-group": logGroup.name.apply(n => n),
                     "awslogs-region": aws.config.region!,
                     "awslogs-stream-prefix": "ecs",
                   },
@@ -1118,40 +1123,42 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-   * Write outputs to JSON file
-   */
+ * Write outputs to JSON file
+ */
   private writeOutputsToFile(outputs: TapStackOutputs): void {
     const outputDir = path.join(process.cwd(), "cfn-outputs");
     const outputFile = path.join(outputDir, "flat-outputs.json");
 
-    pulumi.all(outputs).apply((resolvedOutputs) => {
+    // Collect all outputs in an object for pulumi.output
+    const outputsObject = pulumi.output({
+      vpcId: outputs.vpcId,
+      vpcCidr: outputs.vpcCidr,
+      albDnsName: outputs.albDnsName,
+      albArn: outputs.albArn,
+      ecsClusterArn: outputs.ecsClusterArn,
+      ecsServiceName: outputs.ecsServiceName,
+      rdsEndpoint: outputs.rdsEndpoint,
+      rdsPort: outputs.rdsPort,
+      rdsSecretArn: outputs.rdsSecretArn,
+      s3BucketName: outputs.s3BucketName,
+      route53ZoneId: outputs.route53ZoneId,
+      route53ZoneName: outputs.route53ZoneName,
+      cloudwatchDashboardArn: outputs.cloudwatchDashboardArn,
+      publicSubnetIds: outputs.publicSubnetIds,
+      privateSubnetIds: outputs.privateSubnetIds,
+      vpcPeeringConnectionIds: outputs.vpcPeeringConnectionIds,
+    });
+
+    // Apply to write the file
+    outputsObject.apply((flatOutputs) => {
       // Ensure directory exists
       if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
       }
 
-      // Flatten outputs
-      const flatOutputs: Record<string, any> = {
-        vpcId: resolvedOutputs.vpcId,
-        vpcCidr: resolvedOutputs.vpcCidr,
-        albDnsName: resolvedOutputs.albDnsName,
-        albArn: resolvedOutputs.albArn,
-        ecsClusterArn: resolvedOutputs.ecsClusterArn,
-        ecsServiceName: resolvedOutputs.ecsServiceName,
-        rdsEndpoint: resolvedOutputs.rdsEndpoint,
-        rdsPort: resolvedOutputs.rdsPort,
-        rdsSecretArn: resolvedOutputs.rdsSecretArn,
-        s3BucketName: resolvedOutputs.s3BucketName,
-        route53ZoneId: resolvedOutputs.route53ZoneId,
-        route53ZoneName: resolvedOutputs.route53ZoneName,
-        cloudwatchDashboardArn: resolvedOutputs.cloudwatchDashboardArn,
-        publicSubnetIds: resolvedOutputs.publicSubnetIds,
-        privateSubnetIds: resolvedOutputs.privateSubnetIds,
-        vpcPeeringConnectionIds: resolvedOutputs.vpcPeeringConnectionIds,
-      };
-
       // Write to file
       fs.writeFileSync(outputFile, JSON.stringify(flatOutputs, null, 2));
     });
   }
+
 }
