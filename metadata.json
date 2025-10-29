@@ -1,0 +1,14 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "5346",
+  "team": "5",
+  "startedAt": "2025-10-29T17:13:16.188Z",
+  "subtask": "CI/CD Pipeline",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": "CodeCommit, S3, DynamoDB, ECR, CodeBuild, CodePipeline, IAM, SNS, CloudWatch Logs, CloudWatch Events, CloudWatch Alarms, EventBridge"
+}
