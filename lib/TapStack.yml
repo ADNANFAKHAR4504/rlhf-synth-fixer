@@ -4,9 +4,9 @@ Description: "Automated Infrastructure Analysis and Compliance Validation System
 Parameters:
   NotificationEmail:
     Type: String
-    Description: "Email address for compliance violation notifications"
-    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    ConstraintDescription: "Must be a valid email address"
+    Default: ""
+    Description: "Email address for compliance violation notifications (optional)"
+    AllowedPattern: '(^$)|(^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$)'
 
   RequiredTags:
     Type: CommaDelimitedList
@@ -56,6 +56,7 @@ Parameters:
 Conditions:
   CreateComplianceReportsBucket: !Equals [!Ref ComplianceReportsBucketName, ""]
   CreateAnalysisResultsBucket: !Equals [!Ref AnalysisResultsBucketName, ""]
+  HasNotificationEmail: !Not [!Equals [!Ref NotificationEmail, ""]]
 
 Resources:
   # ===========================
@@ -292,7 +293,7 @@ Resources:
             Resource: !Sub "${AnalysisResultsBucket.Arn}/*"
 
   # ===========================
-  # SNS Topic
+  # SNS Topic (+ conditional subscription)
   # ===========================
   ComplianceViolationsTopic:
     Type: AWS::SNS::Topic
@@ -305,6 +306,7 @@ Resources:
           Value: ComplianceAlerts
 
   ComplianceViolationsSubscription:
+    Condition: HasNotificationEmail
     Type: AWS::SNS::Subscription
     Properties:
       Protocol: email
@@ -414,6 +416,18 @@ Resources:
                 Resource:
                   - !GetAtt ComplianceReportsBucket.Arn
                   - !GetAtt AnalysisResultsBucket.Arn
+              - Sid: ReadTargetsForChecks
+                Effect: Allow
+                Action:
+                  - "s3:GetEncryptionConfiguration" # fixed name for cfn-lint W3037
+                  - "s3:GetBucketPublicAccessBlock"
+                  - "s3:GetBucketVersioning"
+                  - "s3:ListAllMyBuckets"
+                  - "ec2:DescribeInstances"
+                  - "ec2:DescribeVolumes"
+                  - "rds:DescribeDBInstances"
+                  - "elasticloadbalancing:DescribeLoadBalancers"
+                Resource: "*"
               - Sid: KmsUse
                 Effect: Allow
                 Action:
@@ -432,18 +446,6 @@ Resources:
                   - "sqs:SendMessage"
                   - "sqs:GetQueueAttributes"
                 Resource: !GetAtt AnalyzerDLQ.Arn
-              - Sid: ReadTargetsForChecks
-                Effect: Allow
-                Action:
-                  - "s3:GetBucketEncryption"
-                  - "s3:GetBucketPublicAccessBlock"
-                  - "s3:GetBucketVersioning"
-                  - "s3:ListAllMyBuckets"
-                  - "ec2:DescribeInstances"
-                  - "ec2:DescribeVolumes"
-                  - "rds:DescribeDBInstances"
-                  - "elasticloadbalancing:DescribeLoadBalancers"
-                Resource: "*"
               - Sid: ExplicitDenies
                 Effect: Deny
                 Action:
@@ -837,9 +839,6 @@ Resources:
               lines.append("")
               lines.append(f"Full report: s3://{COMPLIANCE_BUCKET}/{report_key}/summary.json")
               sns.publish(TopicArn=SNS_TOPIC_ARN, Subject='Compliance Violation Alert', Message="\n".join(lines))
-      Tags:
-        - Key: Purpose
-          Value: ComplianceAnalyzer
 
   PeriodicScanFunction:
     Type: AWS::Lambda::Function
@@ -877,9 +876,6 @@ Resources:
               resp = lmb.invoke(FunctionName=ANALYZER_FUNCTION_ARN, InvocationType='Event', Payload=json.dumps(payload))
               print(f"Analyzer invoked: {resp.get('StatusCode')}")
               return {'statusCode': 200, 'body': json.dumps({'message': 'Periodic scan initiated'})}
-      Tags:
-        - Key: Purpose
-          Value: PeriodicScan
 
   # ===========================
   # EventBridge Rules
