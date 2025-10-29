@@ -11,5 +11,12 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": "API Gateway, Lambda, DynamoDB, S3, SQS, IAM, CloudWatch, X-Ray"
+  "aws_services": "API Gateway, Lambda, DynamoDB, S3, SQS, IAM, CloudWatch, X-Ray",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
 }
