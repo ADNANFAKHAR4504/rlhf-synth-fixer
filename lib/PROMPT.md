@@ -8,6 +8,7 @@ First, the VPC stuff. I need a VPC with CIDR 10.0.0.0/16 that spans 2 availabili
 
 For security, create a security group for the Lambda functions. It should allow HTTPS traffic (port 443) from within the VPC, and allow all outbound traffic.
 
+
 The S3 bucket should be named something like tap-data-bucket-{env}-{account}. Use S3-managed encryption, turn on versioning, and set up lifecycle rules that move objects to Infrequent Access storage after 90 days and delete old versions after 30 days. Block all public access obviously. And make sure the bucket doesn't get deleted when the stack gets torn down - use a retention policy for that.
 
 For the Lambda function, use Python 3.11 runtime. It needs to run in the private subnets with VPC configuration. Give it 256MB of memory and 30 second timeout. The code should actually work - it needs to list objects from the input/ prefix in the S3 bucket. Set environment variables for BUCKET_NAME and ENVIRONMENT.
