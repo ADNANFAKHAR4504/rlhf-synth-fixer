@@ -274,9 +274,9 @@ resource "aws_vpc_peering_connection_accepter" "us_east_1_to_eu_central_1" {
 resource "aws_route" "us_east_1_to_us_west_2_private" {
   provider = aws.us-east-1
 
-  for_each = toset(module.vpc_us_east_1.private_route_table_ids)
+  for_each = { for idx in range(3) : idx => idx }
 
-  route_table_id            = each.value
+  route_table_id            = module.vpc_us_east_1.private_route_table_ids[each.key]
   destination_cidr_block    = module.vpc_us_west_2.vpc_cidr_block
   vpc_peering_connection_id = aws_vpc_peering_connection.us_east_1_to_us_west_2.id
 }
@@ -284,9 +284,9 @@ resource "aws_route" "us_east_1_to_us_west_2_private" {
 resource "aws_route" "us_east_1_to_eu_central_1_private" {
   provider = aws.us-east-1
 
-  for_each = toset(module.vpc_us_east_1.private_route_table_ids)
+  for_each = { for idx in range(3) : idx => idx }
 
-  route_table_id            = each.value
+  route_table_id            = module.vpc_us_east_1.private_route_table_ids[each.key]
   destination_cidr_block    = module.vpc_eu_central_1.vpc_cidr_block
   vpc_peering_connection_id = aws_vpc_peering_connection.us_east_1_to_eu_central_1.id
 }
@@ -295,9 +295,9 @@ resource "aws_route" "us_east_1_to_eu_central_1_private" {
 resource "aws_route" "us_west_2_to_us_east_1_private" {
   provider = aws.us-west-2
 
-  for_each = toset(module.vpc_us_west_2.private_route_table_ids)
+  for_each = { for idx in range(3) : idx => idx }
 
-  route_table_id            = each.value
+  route_table_id            = module.vpc_us_west_2.private_route_table_ids[each.key]
   destination_cidr_block    = module.vpc_us_east_1.vpc_cidr_block
   vpc_peering_connection_id = aws_vpc_peering_connection.us_east_1_to_us_west_2.id
 }
@@ -305,9 +305,9 @@ resource "aws_route" "us_west_2_to_us_east_1_private" {
 resource "aws_route" "us_west_2_to_eu_central_1_private" {
   provider = aws.us-west-2
 
-  for_each = toset(module.vpc_us_west_2.private_route_table_ids)
+  for_each = { for idx in range(3) : idx => idx }
 
-  route_table_id            = each.value
+  route_table_id            = module.vpc_us_west_2.private_route_table_ids[each.key]
   destination_cidr_block    = module.vpc_eu_central_1.vpc_cidr_block
   vpc_peering_connection_id = aws_vpc_peering_connection.us_west_2_to_eu_central_1.id
 }
@@ -316,9 +316,9 @@ resource "aws_route" "us_west_2_to_eu_central_1_private" {
 resource "aws_route" "eu_central_1_to_us_east_1_private" {
   provider = aws.eu-central-1
 
-  for_each = toset(module.vpc_eu_central_1.private_route_table_ids)
+  for_each = { for idx in range(3) : idx => idx }
 
-  route_table_id            = each.value
+  route_table_id            = module.vpc_eu_central_1.private_route_table_ids[each.key]
   destination_cidr_block    = module.vpc_us_east_1.vpc_cidr_block
   vpc_peering_connection_id = aws_vpc_peering_connection.us_east_1_to_eu_central_1.id
 }
@@ -326,9 +326,9 @@ resource "aws_route" "eu_central_1_to_us_east_1_private" {
 resource "aws_route" "eu_central_1_to_us_west_2_private" {
   provider = aws.eu-central-1
 
-  for_each = toset(module.vpc_eu_central_1.private_route_table_ids)
+  for_each = { for idx in range(3) : idx => idx }
 
-  route_table_id            = each.value
+  route_table_id            = module.vpc_eu_central_1.private_route_table_ids[each.key]
   destination_cidr_block    = module.vpc_us_west_2.vpc_cidr_block
   vpc_peering_connection_id = aws_vpc_peering_connection.us_west_2_to_eu_central_1.id
 }
