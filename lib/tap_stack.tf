@@ -35,6 +35,26 @@ resource "aws_s3_bucket_public_access_block" "source" {
   restrict_public_buckets = true
 }
 
+# Upload pipeline files to source bucket
+data "archive_file" "docker_build_zip"{
+    type = "zip"
+    source_dir = "pipeline_files/"
+    output_path = "pipeline_files.zip"
+
+    depends_on = [
+      aws_s3_bucket.artifacts_bucket
+    ]
+}
+
+resource "aws_s3_object" "pipeline_files" {
+  bucket = aws_s3_bucket.source.bucket
+  key = "pipeline_files.zip"
+  content_type = "application/zip"
+  source = "pipeline_files.zip"
+  etag = data.archive_file.docker_build_zip.output_md5
+}
+
+
 # Artifacts bucket for CodePipeline
 resource "aws_s3_bucket" "artifacts" {
   bucket = "${var.project_name}-artifacts-${data.aws_caller_identity.current.account_id}"
@@ -159,7 +179,9 @@ resource "aws_iam_role_policy" "codepipeline" {
           "s3:GetObjectVersion",
           "s3:PutObject",
           "s3:GetBucketLocation",
-          "s3:ListBucket"
+          "s3:ListBucket",
+          "s3:ListObjects",
+          "s3:GetBucketVersioning"
         ]
         Resource = [
           aws_s3_bucket.source.arn,
@@ -173,7 +195,10 @@ resource "aws_iam_role_policy" "codepipeline" {
         Effect = "Allow"
         Action = [
           "codebuild:BatchGetBuilds",
-          "codebuild:StartBuild"
+          "codebuild:StartBuild",
+          "codebuild:ListBuilds",
+          "codebuild:StopBuild",
+          "codebuild:ListCuratedEnvironmentImages"
         ]
         Resource = aws_codebuild_project.docker_build.arn
       },
@@ -240,7 +265,15 @@ resource "aws_iam_role_policy" "codebuild" {
         Action = [
           "s3:GetObject",
           "s3:GetObjectVersion",
-          "s3:PutObject"
+          "s3:PutObject",
+          "s3:CreateBucket",
+          "s3:PutBucketPolicy",
+          "s3:GetBucketPolicy",
+          "s3:PutBucketAcl",
+          "s3:GetBucketAcl",
+          "s3:DeleteBucket",
+          "s3:DeleteObject",
+          "s3:ListBucket"
         ]
         Resource = "${aws_s3_bucket.artifacts.arn}/*"
       },
@@ -356,10 +389,19 @@ resource "aws_codebuild_project" "docker_build" {
       phases:
         pre_build:
           commands:
+            # Upate repository cache
+            - apt-get update
+
+            # Install and setup docker
+            - chmod u+x docker_install.sh
+            - ./docker_install.sh
+            - apt-get install -y  docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+            # Login to ECR Repo
             - echo Logging in to Amazon ECR...
             - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REPO_URI
             - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
-            - IMAGE_TAG=$${COMMIT_HASH:=latest}
+            - IMAGE_TAG=$${emmanuelturing:=$COMMIT_HASH}
         build:
           commands:
             - echo Build started on `date`
@@ -503,7 +545,7 @@ resource "aws_codepipeline" "main" {
       
       configuration = {
         S3Bucket    = aws_s3_bucket.source.bucket
-        S3ObjectKey = "${var.source_key_prefix}app.zip"
+        S3ObjectKey = "pipeline_files.zip"
       }
     }
   }
