@@ -263,7 +263,86 @@ class ComplianceInfrastructureStack extends cdk.NestedStack {
       })
     );
 
-    // Read-only permissions for all AWS services that Config can record
+    // Add comprehensive AWS Config service permissions
+    configRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'config:PutEvaluations',
+          'config:PutConfigurationRecorder',
+          'config:PutDeliveryChannel',
+          'config:DescribeConfigurationRecorders',
+          'config:DescribeDeliveryChannels',
+          'config:DescribeConfigurationRecorderStatus',
+          'config:DescribeDeliveryChannelStatus',
+          'config:GetComplianceDetailsByConfigRule',
+          'config:GetComplianceDetailsByResource',
+          'config:GetComplianceSummaryByConfigRule',
+          'config:GetComplianceSummaryByResource',
+          'config:GetResourceConfigHistory',
+          'config:GetDiscoveredResourceCounts',
+          'config:ListDiscoveredResources',
+        ],
+        resources: ['*'],
+      })
+    );
+
+    // Add read-only permissions for all AWS services that Config can record
+    configRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          // EC2 permissions
+          'ec2:Describe*',
+          'ec2:Get*',
+          // IAM permissions
+          'iam:Get*',
+          'iam:List*',
+          // S3 permissions
+          's3:Get*',
+          's3:List*',
+          // Lambda permissions
+          'lambda:Get*',
+          'lambda:List*',
+          // RDS permissions
+          'rds:Describe*',
+          'rds:List*',
+          // CloudFormation permissions
+          'cloudformation:Describe*',
+          'cloudformation:Get*',
+          'cloudformation:List*',
+          // CloudWatch permissions
+          'logs:Describe*',
+          'logs:Get*',
+          'logs:List*',
+          // SNS permissions
+          'sns:Get*',
+          'sns:List*',
+          // SQS permissions
+          'sqs:Get*',
+          'sqs:List*',
+          // KMS permissions
+          'kms:Describe*',
+          'kms:Get*',
+          'kms:List*',
+          // Auto Scaling permissions
+          'autoscaling:Describe*',
+          // ELB permissions
+          'elasticloadbalancing:Describe*',
+          // VPC permissions
+          'ec2:DescribeVpcs',
+          'ec2:DescribeSubnets',
+          'ec2:DescribeSecurityGroups',
+          'ec2:DescribeNetworkInterfaces',
+          'ec2:DescribeRouteTables',
+          'ec2:DescribeInternetGateways',
+          'ec2:DescribeNatGateways',
+          'ec2:DescribeVpcEndpoints',
+          'ec2:DescribeVpcPeeringConnections',
+        ],
+        resources: ['*'],
+      })
+    );
 
     // Grant Config permissions to write to compliance bucket
     this.complianceBucket.grantWrite(configRole);
@@ -277,7 +356,7 @@ class ComplianceInfrastructureStack extends cdk.NestedStack {
       this,
       'ConfigRecorder',
       {
-        name: `tap-recorder-${region}-${envSuffix}`,
+        name: 'default', // AWS Config requires 'default' as the recorder name
         roleArn: configRole.roleArn,
         recordingGroup: {
           allSupported: true,
@@ -302,8 +381,7 @@ class ComplianceInfrastructureStack extends cdk.NestedStack {
       }
     );
 
-    // Ensure recorder is created before delivery channel (AWS Config requirement)
-    deliveryChannel.addDependency(configRecorder);
+    // Ensure recorder is created before delivery channel (AWS Config requirement)deliveryChannel.addDependency(configRecorder);
 
     // Output important resource identifiers
     new cdk.CfnOutput(this, 'ComplianceBucketName', {
