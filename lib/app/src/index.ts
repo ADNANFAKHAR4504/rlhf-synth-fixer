@@ -4,7 +4,11 @@ import type {
   APIGatewayProxyResult,
   Context as LambdaContext,
 } from 'aws-lambda';
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore hono is installed at compile time
 import { Hono } from 'hono';
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore hono is installed at compile time
 import { handle as handleV2 } from 'hono/aws-lambda';
 
 const app = new Hono();
