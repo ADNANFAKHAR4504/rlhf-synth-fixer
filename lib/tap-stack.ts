@@ -137,8 +137,9 @@ export class TapStack extends cdk.Stack {
     const complianceLevel = props?.complianceLevel || 'PCI-DSS';
     const dataClassification = props?.dataClassification || 'Sensitive';
     const alertEmail = props?.alertEmail || 'security-team@example.com';
-    const secretsRotationSchedule =
-      props?.secretsRotationSchedule || 'rate(30 days)';
+    // Note: secretsRotationSchedule is available for future use
+    // const secretsRotationSchedule =
+    //   props?.secretsRotationSchedule || 'rate(30 days)';
     const enableVpcEndpoints = props?.enableVpcEndpoints ?? false;
     const logRetentionDays = props?.logRetentionDays || 365;
     const auditLogRetentionDays = props?.auditLogRetentionDays || 2555; // 7 years
@@ -500,7 +501,7 @@ export class TapStack extends cdk.Stack {
             sid: 'DenyS3BucketPolicyChanges',
             effect: iam.Effect.DENY,
             actions: ['s3:PutBucketPolicy', 's3:DeleteBucketPolicy'],
-            resources: [`arn:aws:s3:::tap-cloudtrail-*`],
+            resources: ['arn:aws:s3:::tap-cloudtrail-*'],
           }),
 
           // Deny security group changes that could expose resources
@@ -748,7 +749,8 @@ def handler(event, context):
     // ============================================================================
 
     const trailName = `tap-security-trail-${region}-${environmentSuffix}`;
-    const trailArn = `arn:aws:cloudtrail:${region}:${this.account}:trail/${trailName}`;
+    // Note: trailArn is available for future use
+    // const trailArn = `arn:aws:cloudtrail:${region}:${this.account}:trail/${trailName}`;
 
     const cloudTrailBucket = new s3.Bucket(this, 'CloudTrailBucket', {
       bucketName: `tap-cloudtrail-${region}-${environmentSuffix}-${this.account}`,
