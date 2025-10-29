@@ -45,21 +45,29 @@ class InfrastructureOptimizer:
         print("\n🔧 Optimizing Aurora Database...")
         
         try:
-            # Find the database cluster
+            # Find the database cluster - must match stack naming pattern
             clusters = self.rds_client.describe_db_clusters()
             cluster_id = None
             
-            # Look for cluster with matching patterns
+            # Priority 1: Look for cluster with 'tapstack' and environment suffix (CDK auto-generated name)
             for cluster in clusters['DBClusters']:
                 cluster_identifier = cluster['DBClusterIdentifier'].lower()
-                # Match on various patterns: streamflix, tapstack, or environment suffix
-                if any(pattern in cluster_identifier for pattern in ['streamflix', 'tapstack', 'database', self.environment_suffix.lower()]):
+                if 'tapstack' in cluster_identifier and self.environment_suffix.lower() in cluster_identifier:
                     cluster_id = cluster['DBClusterIdentifier']
-                    print(f"Found cluster: {cluster_id}")
+                    print(f"Found cluster (TapStack): {cluster_id}")
                     break
             
+            # Priority 2: Look for 'streamflix' in the name
             if not cluster_id:
-                print("❌ Aurora cluster not found")
+                for cluster in clusters['DBClusters']:
+                    cluster_identifier = cluster['DBClusterIdentifier'].lower()
+                    if 'streamflix' in cluster_identifier and self.environment_suffix.lower() in cluster_identifier:
+                        cluster_id = cluster['DBClusterIdentifier']
+                        print(f"Found cluster (StreamFlix): {cluster_id}")
+                        break
+            
+            if not cluster_id:
+                print(f"❌ Aurora cluster not found for environment: {self.environment_suffix}")
                 print(f"Available clusters: {[c['DBClusterIdentifier'] for c in clusters['DBClusters']]}")
                 return False
             
@@ -102,23 +110,31 @@ class InfrastructureOptimizer:
         print("\n🔧 Optimizing ElastiCache Redis...")
         
         try:
-            # Find the Redis replication group
+            # Find the Redis replication group using exact naming pattern
             replication_groups = self.elasticache_client.describe_replication_groups()
             replication_group_id = None
             current_node_count = 0
+            expected_group_id = f'streamflix-redis-{self.environment_suffix}'
             
-            # Look for replication group with matching patterns
+            # First try exact match
             for group in replication_groups['ReplicationGroups']:
-                group_id = group['ReplicationGroupId'].lower()
-                # Match on various patterns: streamflix, redis, or environment suffix
-                if any(pattern in group_id for pattern in ['streamflix', 'redis', self.environment_suffix.lower()]):
+                if group['ReplicationGroupId'] == expected_group_id:
                     replication_group_id = group['ReplicationGroupId']
                     current_node_count = len(group['NodeGroups'][0]['NodeGroupMembers'])
-                    print(f"Found replication group: {replication_group_id}")
+                    print(f"Found replication group (exact match): {replication_group_id}")
                     break
             
+            # If exact match not found, try pattern match with streamflix-redis
             if not replication_group_id:
-                print("❌ Redis replication group not found")
+                for group in replication_groups['ReplicationGroups']:
+                    if 'streamflix-redis-' in group['ReplicationGroupId']:
+                        replication_group_id = group['ReplicationGroupId']
+                        current_node_count = len(group['NodeGroups'][0]['NodeGroupMembers'])
+                        print(f"Found replication group (pattern match): {replication_group_id}")
+                        break
+            
+            if not replication_group_id:
+                print(f"❌ Redis replication group not found. Expected: {expected_group_id}")
                 print(f"Available groups: {[g['ReplicationGroupId'] for g in replication_groups['ReplicationGroups']]}")
                 return False
             
@@ -185,33 +201,30 @@ class InfrastructureOptimizer:
         print("\n🔧 Optimizing ECS Fargate...")
         
         try:
-            # Find the ECS cluster
+            # Find the ECS cluster using exact naming pattern: streamflix-cluster-{environmentSuffix}
             clusters = self.ecs_client.list_clusters()
             cluster_arn = None
+            expected_cluster_name = f'streamflix-cluster-{self.environment_suffix}'
             
-            # Prioritize 'streamflix' pattern, then fallback to environment suffix
+            # First try exact match
             for cluster in clusters['clusterArns']:
-                cluster_lower = cluster.lower()
-                if 'streamflix' in cluster_lower:
+                cluster_name = cluster.split('/')[-1]
+                if cluster_name == expected_cluster_name:
                     cluster_arn = cluster
-                    print(f"Found cluster: {cluster_arn.split('/')[-1]}")
+                    print(f"Found cluster (exact match): {cluster_name}")
                     break
             
-            # If no streamflix cluster found, try matching on environment suffix
+            # If no exact match, try pattern match with streamflix-cluster
             if not cluster_arn:
                 for cluster in clusters['clusterArns']:
-                    if self.environment_suffix.lower() in cluster.lower():
+                    cluster_lower = cluster.lower()
+                    if 'streamflix-cluster-' in cluster_lower and self.environment_suffix.lower() in cluster_lower:
                         cluster_arn = cluster
-                        print(f"Found cluster by env suffix: {cluster_arn.split('/')[-1]}")
+                        print(f"Found cluster (pattern match): {cluster.split('/')[-1]}")
                         break
             
-            # If still not found and only one cluster exists, use it
-            if not cluster_arn and len(clusters['clusterArns']) == 1:
-                cluster_arn = clusters['clusterArns'][0]
-                print(f"Using only available cluster: {cluster_arn.split('/')[-1]}")
-            
             if not cluster_arn:
-                print("❌ ECS cluster not found")
+                print(f"❌ ECS cluster not found. Expected: {expected_cluster_name}")
                 print(f"Available clusters: {[c.split('/')[-1] for c in clusters['clusterArns']]}")
                 return False
             
