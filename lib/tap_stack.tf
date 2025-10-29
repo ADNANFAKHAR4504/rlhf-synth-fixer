@@ -384,18 +384,29 @@ resource "aws_iam_role_policy" "codepipeline" {
     Version = "2012-10-17"
     Statement = [
       {
-        # Read source and write artifacts
+        # S3 bucket-level permissions (for ListBucket, GetBucketLocation, GetBucketVersioning)
         Effect = "Allow"
         Action = [
-          "s3:GetObject",
-          "s3:GetObjectVersion",
-          "s3:PutObject",
           "s3:GetBucketLocation",
           "s3:ListBucket",
           "s3:GetBucketVersioning"
         ]
         Resource = [
-          "*"
+          aws_s3_bucket.source.arn,
+          aws_s3_bucket.artifacts.arn
+        ]
+      },
+      {
+        # S3 object-level permissions (for GetObject, PutObject)
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:GetObjectVersion",
+          "s3:PutObject"
+        ]
+        Resource = [
+          "${aws_s3_bucket.source.arn}/*",
+          "${aws_s3_bucket.artifacts.arn}/*"
         ]
       },
       {
