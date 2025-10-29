@@ -435,10 +435,7 @@ export class TapStack extends cdk.Stack {
           ecs.Secret.fromSecretsManager(dbCredentialsSecret),
       },
       healthCheck: {
-        command: [
-          'CMD-SHELL',
-          'curl -f http://localhost:8080/health || exit 1',
-        ],
+        command: ['CMD-SHELL', 'curl -f http://localhost:8080/ || exit 1'],
         interval: Duration.seconds(30),
         timeout: Duration.seconds(5),
         retries: 3,
