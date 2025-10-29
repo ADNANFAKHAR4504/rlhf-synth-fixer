@@ -73,8 +73,26 @@ export class ApplicationInfrastructure extends Construct {
       functionName: `${config.prefix}-function`,
       runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'index.handler',
-      // initialize the lambda function with the code from the app/src directory
-      code: lambda.Code.fromAsset(path.join(__dirname, '../app/src')),
+      code: lambda.Code.fromAsset(path.join(__dirname, '../app'), {
+        bundling: {
+          image: lambda.Runtime.NODEJS_20_X.bundlingImage,
+          command: [
+            'bash',
+            '-c',
+            [
+              'npm install --include=dev --cache /tmp/.npm --no-audit --no-fund',
+              'npm run build',
+              'cp -r dist/* /asset-output/',
+              'npm install --omit=dev --cache /tmp/.npm --no-audit --no-fund', // reinstall only prod deps
+              'cp -r node_modules /asset-output/',
+              'cp package*.json /asset-output/',
+            ].join(' && '),
+          ],
+          environment: {
+            npm_config_cache: '/tmp/.npm',
+          },
+        },
+      }),
       role: lambdaRole,
       timeout: cdk.Duration.seconds(30),
       memorySize: 512,

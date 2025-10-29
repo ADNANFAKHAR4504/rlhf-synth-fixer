@@ -339,7 +339,6 @@ import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
@@ -404,11 +403,30 @@ export class ApplicationInfrastructure extends Construct {
     });
 
     // Lambda function
-    this.lambdaFunction = new NodejsFunction(this, 'HonoFunction', {
+    this.lambdaFunction = new lambda.Function(this, 'HonoFunction', {
       functionName: `${config.prefix}-function`,
       runtime: lambda.Runtime.NODEJS_20_X,
-      entry: path.join(__dirname, '../app/src/index.ts'),
-      depsLockFilePath: path.join(__dirname, '../app/package-lock.json'),
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../app'), {
+        bundling: {
+          image: lambda.Runtime.NODEJS_20_X.bundlingImage,
+          command: [
+            'bash',
+            '-c',
+            [
+              'npm install --include=dev --cache /tmp/.npm --no-audit --no-fund',
+              'npm run build',
+              'cp -r dist/* /asset-output/',
+              'npm install --omit=dev --cache /tmp/.npm --no-audit --no-fund', // reinstall only prod deps
+              'cp -r node_modules /asset-output/',
+              'cp package*.json /asset-output/',
+            ].join(' && '),
+          ],
+          environment: {
+            npm_config_cache: '/tmp/.npm',
+          },
+        },
+      }),
       role: lambdaRole,
       timeout: cdk.Duration.seconds(30),
       memorySize: 512,
@@ -419,7 +437,8 @@ export class ApplicationInfrastructure extends Construct {
       },
       logGroup,
       tracing: lambda.Tracing.ACTIVE,
-      reservedConcurrentExecutions: 100,
+      reservedConcurrentExecutions:
+        config.environmentSuffix === 'prod' ? 100 : 2,
       environmentEncryption: kmsKey,
     });
 
