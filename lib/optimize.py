@@ -4,6 +4,7 @@ Infrastructure optimization script for StreamFlix development environment.
 Scales down Aurora, ElastiCache, and ECS resources for cost optimization.
 """
 
+import os
 import sys
 import time
 from typing import Any, Dict, Optional
@@ -387,14 +388,14 @@ def main():
     parser.add_argument(
         '--environment',
         '-e',
-        default='dev',
-        help='Environment suffix (default: dev)'
+        default=None,
+        help='Environment suffix (overrides ENVIRONMENT_SUFFIX env var)'
     )
     parser.add_argument(
         '--region',
         '-r',
-        default='us-east-1',
-        help='AWS region (default: us-east-1)'
+        default=None,
+        help='AWS region (overrides AWS_REGION env var, defaults to us-east-1)'
     )
     parser.add_argument(
         '--dry-run',
@@ -404,6 +405,9 @@ def main():
     
     args = parser.parse_args()
     
+    environment_suffix = args.environment or os.getenv('ENVIRONMENT_SUFFIX') or 'dev'
+    aws_region = args.region or os.getenv('AWS_REGION') or 'us-east-1'
+    
     if args.dry_run:
         print("🔍 DRY RUN MODE - No changes will be made")
         print("\nPlanned optimizations:")
@@ -411,17 +415,17 @@ def main():
         print("- ElastiCache: Reduce nodes from 3→2")
         print("- ECS: Reduce tasks from 3→2")
         
-        optimizer = InfrastructureOptimizer(args.environment, args.region)
+        optimizer = InfrastructureOptimizer(environment_suffix, aws_region)
         savings = optimizer.get_cost_savings_estimate()
         print(f"\nEstimated monthly savings: ${savings['total_monthly_savings']}")
         return
     
     # Proceed with optimization
-    print(f"🚀 Starting optimization in {args.region}")
-    print(f"Environment: {args.environment}")
+    print(f"🚀 Starting optimization in {aws_region}")
+    print(f"Environment suffix: {environment_suffix}")
     
     try:
-        optimizer = InfrastructureOptimizer(args.environment, args.region)
+        optimizer = InfrastructureOptimizer(environment_suffix, aws_region)
         optimizer.run_optimization()
     except KeyboardInterrupt:
         print("\n\n⚠️  Optimization interrupted by user")
