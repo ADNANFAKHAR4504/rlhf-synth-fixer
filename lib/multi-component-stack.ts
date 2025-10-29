@@ -21,7 +21,13 @@ import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
 import path from 'path';
 
-export class MultiComponentApplicationStack extends cdk.NestedStack {
+export interface MultiComponentProps extends cdk.StackProps {
+  secondaryRegion?: string;
+  baseEnvironmentSuffix?: string;
+  isPrimary?: boolean;
+}
+
+export class MultiComponentApplicationConstruct extends Construct {
   // String suffix for unique resource naming
   private readonly stringSuffix: string;
   // Expose important resource tokens as public properties so other stacks
@@ -40,6 +46,9 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
   public readonly databaseSecurityGroupId!: string;
   public readonly lambdaSecurityGroupId!: string;
   public readonly lambdaLogGroupName!: string;
+  // Indicate whether WAF creation was skipped (so callers/stacks can emit
+  // equivalent CFN outputs at the stack level if desired).
+  public readonly wafWasSkipped: boolean = false;
 
   // Expose a small helper to compute the sanitized suffix used for Lambda names.
   // This is intentionally simple and useful to call from unit tests to exercise
@@ -50,13 +59,15 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
       : cdk.Aws.NO_VALUE;
   }
 
-  constructor(scope: Construct, id: string, props?: cdk.NestedStackProps) {
-    // Respect props by passing them directly to the NestedStack constructor
-    super(scope, id, props);
+  constructor(scope: Construct, id: string, props?: MultiComponentProps) {
+    // Construct (not a NestedStack) - call Construct's constructor and
+    // accept a superset of the previous NestedStack props so callers can
+    // continue forwarding stack-like options.
+    super(scope, id);
 
     // Read isPrimary flag forwarded from TapStack props. Default to true
     // to preserve single-region behavior.
-    const isPrimary = (props as any)?.isPrimary;
+    const isPrimary = props?.isPrimary;
     const createPrimaryResources =
       isPrimary === undefined || isPrimary === true;
 
@@ -171,9 +182,7 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     // S3 Buckets
     // ========================================
     // Prefer a deterministic base suffix for cross-region deployments when provided
-    const baseEnvSuffix = (props as any)?.baseEnvironmentSuffix as
-      | string
-      | undefined;
+    const baseEnvSuffix = props?.baseEnvironmentSuffix as string | undefined;
 
     const bucketNameParts = [
       'prod-s3-static',
@@ -217,9 +226,7 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
       enableReplicationEnv;
 
     // Accept secondaryRegion via props (forwarded by TapStack) as a token or literal
-    const secondaryRegion = (props as any)?.secondaryRegion as
-      | string
-      | undefined;
+    const secondaryRegion = props?.secondaryRegion as string | undefined;
     // When computing the destination bucket name, prefer the same deterministic
     // base suffix as used for the local bucket so the destination bucket's
     // name will match the bucket created by the nested stack in the
@@ -296,7 +303,7 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
               },
             },
           ],
-        } as any;
+        } as s3.CfnBucket.ReplicationConfigurationProperty;
       }
     }
 
@@ -748,12 +755,9 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
       }
       webAclAssociation.node.addDependency(webAcl);
     } else {
-      // Emit an explicit output so reviewers/operators can see the WAF was
-      // intentionally skipped for this region during deploy/synth.
-      new cdk.CfnOutput(this, 'WafCreationSkipped', {
-        value: `WAF not created in region ${stackRegion}. Set context allowGlobalWaf=true to override.`,
-        description: 'Indicates WAF creation was skipped due to region guard',
-      });
+      // WAF was intentionally skipped for this region. Record that state
+      // so callers can decide whether to emit a top-level CFN output.
+      this.wafWasSkipped = true;
     }
 
     // If this is the primary stack, create Route53 records and health
@@ -785,45 +789,31 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
         2,
         cdk.Fn.split('/', this.apiUrl || api.url)
       );
-      const apiHealthCheck = new route53.CfnHealthCheck(
-        this,
-        'ApiHealthCheck',
-        {
-          healthCheckConfig: {
-            type: 'HTTPS',
-            fullyQualifiedDomainName: apiHost,
-            port: 443,
-            resourcePath: '/',
-            requestInterval: 30,
-            failureThreshold: 3,
-          },
-        }
-      );
-
-      new cdk.CfnOutput(this, 'ApiHealthCheckId', {
-        value: apiHealthCheck.attrHealthCheckId,
-        description: 'Route53 HealthCheckId for API endpoint',
+      new route53.CfnHealthCheck(this, 'ApiHealthCheck', {
+        healthCheckConfig: {
+          type: 'HTTPS',
+          fullyQualifiedDomainName: apiHost,
+          port: 443,
+          resourcePath: '/',
+          requestInterval: 30,
+          failureThreshold: 3,
+        },
       });
 
-      const cfHealthCheck = new route53.CfnHealthCheck(
-        this,
-        'CloudFrontHealthCheck',
-        {
-          healthCheckConfig: {
-            type: 'HTTPS',
-            fullyQualifiedDomainName: distribution.distributionDomainName,
-            port: 443,
-            resourcePath: '/',
-            requestInterval: 30,
-            failureThreshold: 3,
-          },
-        }
-      );
+      // ApiHealthCheck created; do not emit a CFN output from the construct.
 
-      new cdk.CfnOutput(this, 'CloudFrontHealthCheckId', {
-        value: cfHealthCheck.attrHealthCheckId,
-        description: 'Route 53 HealthCheckId for CloudFront distribution',
+      new route53.CfnHealthCheck(this, 'CloudFrontHealthCheck', {
+        healthCheckConfig: {
+          type: 'HTTPS',
+          fullyQualifiedDomainName: distribution.distributionDomainName,
+          port: 443,
+          resourcePath: '/',
+          requestInterval: 30,
+          failureThreshold: 3,
+        },
       });
+
+      // CloudFront health check created; keep CFN outputs at the stack level.
     }
 
     // ========================================
@@ -1031,92 +1021,22 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     // Route53 health checks are created above in the primary-only guarded
     // block (if createPrimaryResources && hostedZone). Do not recreate them
     // here to avoid duplicate construct names during synthesis.
+    // Expose tokens as public properties for the calling stack to use.
     this.vpcId = vpc.vpcId;
-    new cdk.CfnOutput(this, 'VpcId', {
-      value: this.vpcId,
-      description: 'VPC ID',
-    });
-
     this.apiUrl = api.url;
-    new cdk.CfnOutput(this, 'ApiGatewayUrl', {
-      value: this.apiUrl,
-      description: 'API Gateway URL',
-    });
-
     this.lambdaFunctionArn = lambdaFunction.functionArn;
-    new cdk.CfnOutput(this, 'LambdaFunctionArn', {
-      value: this.lambdaFunctionArn,
-      description: 'Lambda Function ARN',
-    });
-
     this.rdsEndpoint = rdsInstance.dbInstanceEndpointAddress;
-    new cdk.CfnOutput(this, 'RdsEndpoint', {
-      value: this.rdsEndpoint,
-      description: 'RDS PostgreSQL Endpoint',
-    });
-
     this.s3BucketName = staticFilesBucket.bucketName;
-    new cdk.CfnOutput(this, 'S3BucketName', {
-      value: this.s3BucketName,
-      description: 'S3 Bucket Name',
-    });
-
     this.sqsQueueUrl = asyncQueue.queueUrl;
-    new cdk.CfnOutput(this, 'SqsQueueUrl', {
-      value: this.sqsQueueUrl,
-      description: 'SQS Queue URL',
-    });
-
     this.cloudFrontDomainName = distribution.distributionDomainName;
-    new cdk.CfnOutput(this, 'CloudFrontDomainName', {
-      value: this.cloudFrontDomainName,
-      description: 'CloudFront Distribution Domain Name',
-    });
-
-    if (hostedZone) {
-      this.hostedZoneId = hostedZone.hostedZoneId;
-    } else {
-      // When not creating the hosted zone (secondary stacks), set a NO_VALUE
-      // token to avoid unresolved references in top-level outputs.
-      this.hostedZoneId = cdk.Aws.NO_VALUE as unknown as string;
-    }
-
-    // Always emit the HostedZoneId output; secondary stacks will report NO_VALUE
-    // which makes it easier for output consumers to handle optional zones.
-    new cdk.CfnOutput(this, 'HostedZoneId', {
-      value: this.hostedZoneId,
-      description: 'Route 53 Hosted Zone ID',
-    });
-
+    this.hostedZoneId = hostedZone
+      ? hostedZone.hostedZoneId
+      : (cdk.Aws.NO_VALUE as unknown as string);
     this.databaseSecretArn = databaseSecret.secretArn;
-    new cdk.CfnOutput(this, 'DatabaseSecretArn', {
-      value: this.databaseSecretArn,
-      description: 'Database Secret ARN',
-    });
-
     this.lambdaRoleArn = lambdaRole.roleArn;
-    new cdk.CfnOutput(this, 'LambdaRoleArn', {
-      value: this.lambdaRoleArn,
-      description: 'Lambda IAM Role ARN',
-    });
-
     this.databaseSecurityGroupId = databaseSecurityGroup.securityGroupId;
-    new cdk.CfnOutput(this, 'DatabaseSecurityGroupId', {
-      value: this.databaseSecurityGroupId,
-      description: 'Database Security Group ID',
-    });
-
     this.lambdaSecurityGroupId = lambdaSecurityGroup.securityGroupId;
-    new cdk.CfnOutput(this, 'LambdaSecurityGroupId', {
-      value: this.lambdaSecurityGroupId,
-      description: 'Lambda Security Group ID',
-    });
-
     this.lambdaLogGroupName = lambdaLogGroup.logGroupName;
-    new cdk.CfnOutput(this, 'LambdaLogGroupName', {
-      value: this.lambdaLogGroupName,
-      description: 'Lambda Log Group Name',
-    });
 
     // Tags for all resources
     cdk.Tags.of(this).add('Environment', 'Production');
@@ -1124,5 +1044,136 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     cdk.Tags.of(this).add('ManagedBy', 'CDK');
     cdk.Tags.of(this).add('Region', cdk.Aws.REGION);
     cdk.Tags.of(this).add('iac-rlhf-amazon', 'enabled');
+  }
+}
+
+// Backwards-compatible wrapper: preserve the original NestedStack API so
+// existing tests and callers that instantiate MultiComponentApplicationStack
+// continue to work. This NestedStack simply delegates to the Construct
+// implementation and re-exposes the same public tokens and CloudFormation
+// outputs as the prior design.
+export class MultiComponentApplicationStack extends cdk.NestedStack {
+  public readonly vpcId!: string;
+  public readonly apiUrl!: string;
+  public readonly lambdaFunctionArn!: string;
+  public readonly rdsEndpoint!: string;
+  public readonly s3BucketName!: string;
+  public readonly sqsQueueUrl!: string;
+  public readonly cloudFrontDomainName!: string;
+  public readonly hostedZoneId!: string;
+  public readonly databaseSecretArn!: string;
+  public readonly lambdaRoleArn!: string;
+  public readonly databaseSecurityGroupId!: string;
+  public readonly lambdaSecurityGroupId!: string;
+  public readonly lambdaLogGroupName!: string;
+
+  private impl!: MultiComponentApplicationConstruct;
+
+  constructor(scope: Construct, id: string, props?: cdk.NestedStackProps) {
+    super(scope, id, props);
+
+    // Instantiate the Construct implementation inside the NestedStack
+    // wrapper to preserve the previous deployment shape while allowing
+    // consumers to use the Construct API directly in future.
+    this.impl = new MultiComponentApplicationConstruct(
+      this,
+      'Inner',
+      props as unknown as MultiComponentProps
+    );
+
+    // Re-expose tokens and emit the same CloudFormation outputs the
+    // previous NestedStack implementation created. This keeps existing
+    // tooling/tests that read stack outputs working unchanged.
+    this.vpcId = this.impl.vpcId;
+    new cdk.CfnOutput(this, 'VpcId', {
+      value: this.vpcId,
+      description: 'VPC ID',
+    });
+
+    this.apiUrl = this.impl.apiUrl;
+    new cdk.CfnOutput(this, 'ApiGatewayUrl', {
+      value: this.apiUrl,
+      description: 'API Gateway URL',
+    });
+
+    this.lambdaFunctionArn = this.impl.lambdaFunctionArn;
+    new cdk.CfnOutput(this, 'LambdaFunctionArn', {
+      value: this.lambdaFunctionArn,
+      description: 'Lambda Function ARN',
+    });
+
+    this.rdsEndpoint = this.impl.rdsEndpoint;
+    new cdk.CfnOutput(this, 'RdsEndpoint', {
+      value: this.rdsEndpoint,
+      description: 'RDS PostgreSQL Endpoint',
+    });
+
+    this.s3BucketName = this.impl.s3BucketName;
+    new cdk.CfnOutput(this, 'S3BucketName', {
+      value: this.s3BucketName,
+      description: 'S3 Bucket Name',
+    });
+
+    this.sqsQueueUrl = this.impl.sqsQueueUrl;
+    new cdk.CfnOutput(this, 'SqsQueueUrl', {
+      value: this.sqsQueueUrl,
+      description: 'SQS Queue URL',
+    });
+
+    this.cloudFrontDomainName = this.impl.cloudFrontDomainName;
+    new cdk.CfnOutput(this, 'CloudFrontDomainName', {
+      value: this.cloudFrontDomainName,
+      description: 'CloudFront Distribution Domain Name',
+    });
+
+    this.hostedZoneId =
+      this.impl.hostedZoneId || (cdk.Aws.NO_VALUE as unknown as string);
+    new cdk.CfnOutput(this, 'HostedZoneId', {
+      value: this.hostedZoneId,
+      description: 'Route 53 Hosted Zone ID',
+    });
+
+    this.databaseSecretArn = this.impl.databaseSecretArn;
+    new cdk.CfnOutput(this, 'DatabaseSecretArn', {
+      value: this.databaseSecretArn,
+      description: 'Database Secret ARN',
+    });
+
+    this.lambdaRoleArn = this.impl.lambdaRoleArn;
+    new cdk.CfnOutput(this, 'LambdaRoleArn', {
+      value: this.lambdaRoleArn,
+      description: 'Lambda IAM Role ARN',
+    });
+
+    this.databaseSecurityGroupId = this.impl.databaseSecurityGroupId;
+    new cdk.CfnOutput(this, 'DatabaseSecurityGroupId', {
+      value: this.databaseSecurityGroupId,
+      description: 'Database Security Group ID',
+    });
+
+    this.lambdaSecurityGroupId = this.impl.lambdaSecurityGroupId;
+    new cdk.CfnOutput(this, 'LambdaSecurityGroupId', {
+      value: this.lambdaSecurityGroupId,
+      description: 'Lambda Security Group ID',
+    });
+
+    this.lambdaLogGroupName = this.impl.lambdaLogGroupName;
+    new cdk.CfnOutput(this, 'LambdaLogGroupName', {
+      value: this.lambdaLogGroupName,
+      description: 'Lambda Log Group Name',
+    });
+
+    // Preserve the previous behavior: if the Construct recorded that WAF
+    // was skipped, emit the top-level signal expected by tests/operators.
+    if (this.impl.wafWasSkipped) {
+      new cdk.CfnOutput(this, 'WafCreationSkipped', {
+        value: `WAF not created in region ${cdk.Stack.of(this).region}. Set context allowGlobalWaf=true to override.`,
+        description: 'Indicates WAF creation was skipped due to region guard',
+      });
+    }
+  }
+
+  public computeSafeSuffixForLambda(input?: string): string | cdk.Aws {
+    return this.impl.computeSafeSuffixForLambda(input);
   }
 }

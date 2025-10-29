@@ -17,13 +17,18 @@ const multiRegionContext = app.node.tryGetContext('multiRegion');
 const multiRegion =
   multiRegionContext === true || multiRegionContext === 'true';
 
-// Regions: prefer explicit contexts, then environment, then safe defaults
+// Prefer explicit context or environment-provided regions. Do NOT fall
+// back to hard-coded region literals so the CLI/CI can control region
+// selection via CDK_DEFAULT_REGION or CDK context without surprises.
 const primaryRegion =
   app.node.tryGetContext('primaryRegion') ||
   process.env.CDK_DEFAULT_REGION ||
-  'us-east-1';
+  process.env.AWS_REGION ||
+  undefined;
 const secondaryRegion =
-  app.node.tryGetContext('secondaryRegion') || 'us-east-2';
+  app.node.tryGetContext('secondaryRegion') ||
+  process.env.SECONDARY_REGION ||
+  undefined;
 
 // Apply tags to all stacks in this app (optional - you can do this at stack level instead)
 Tags.of(app).add('Environment', environmentSuffix);
@@ -46,7 +51,7 @@ if (multiRegion) {
     baseEnvironmentSuffix: environmentSuffix,
     env: {
       account: process.env.CDK_DEFAULT_ACCOUNT,
-      region: primaryRegion,
+      ...(primaryRegion ? { region: primaryRegion } : {}),
     },
   });
 
@@ -60,7 +65,7 @@ if (multiRegion) {
     baseEnvironmentSuffix: environmentSuffix,
     env: {
       account: process.env.CDK_DEFAULT_ACCOUNT,
-      region: secondaryRegion,
+      ...(secondaryRegion ? { region: secondaryRegion } : {}),
     },
   });
 } else {
@@ -72,7 +77,9 @@ if (multiRegion) {
     baseEnvironmentSuffix: environmentSuffix,
     env: {
       account: process.env.CDK_DEFAULT_ACCOUNT,
-      region: process.env.CDK_DEFAULT_REGION || process.env.AWS_REGION,
+      ...(process.env.CDK_DEFAULT_REGION || process.env.AWS_REGION
+        ? { region: process.env.CDK_DEFAULT_REGION || process.env.AWS_REGION }
+        : {}),
     },
   });
 }

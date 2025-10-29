@@ -28,13 +28,13 @@ export class TapStack extends cdk.Stack {
       'MultiComponentApplication',
       {
         ...props,
-        // forward secondaryRegion through props so nested stack can optionally
+        // forward secondaryRegion through props so construct can optionally
         // configure cross-region replication when requested by context.
-        secondaryRegion: (props as any)?.secondaryRegion,
-        // forward isPrimary so nested stacks can decide whether to create
+        secondaryRegion: props?.secondaryRegion,
+        // forward isPrimary so construct can decide whether to create
         // global resources like HostedZone and Route53 failover records.
-        isPrimary: (props as any)?.isPrimary,
-      } as any
+        isPrimary: props?.isPrimary,
+      } as unknown as cdk.NestedStackProps
     );
 
     // Re-expose selected runtime tokens from the nested child as top-level outputs.

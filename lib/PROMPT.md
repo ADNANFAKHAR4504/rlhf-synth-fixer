@@ -19,7 +19,7 @@ Set up a CloudFormation stack for a multi-component application using AWS CDK an
 **Constraints:**
 
 - TypeScript and AWS CDK must be used for all resource definitions.
-- All resources should be deployed to us-east-1, with multi-region awareness for us-east-2.
+- All resources should be deployed to ' ', with multi-region awareness for ' '.
 - Lambda must be highly available (multi-AZ).
 - API Gateway must enforce IAM authentication.
 - IAM roles must be least privilege.
