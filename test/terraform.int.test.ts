@@ -566,7 +566,23 @@ describe("Healthcare Infrastructure Integration Tests", () => {
 
       expect(arnOutputs.length).toBeGreaterThan(0);
 
-      arnOutputs.forEach(arn => {
+      // Filter ARNs that should have a region (exclude global services like IAM)
+      const regionalArns = arnOutputs.filter(arn => {
+        const parts = arn.split(":");
+        const service = parts[2];
+        const arnRegion = parts[3];
+
+        // Skip global services that don't have regions
+        const globalServices = ["iam", "route53", "cloudfront", "waf", "wafv2"];
+        if (globalServices.includes(service)) return false;
+
+        // Only check ARNs that have a region specified
+        return arnRegion && arnRegion.length > 0;
+      });
+
+      expect(regionalArns.length).toBeGreaterThan(0);
+
+      regionalArns.forEach(arn => {
         const arnRegion = arn.split(":")[3];
         expect(arnRegion).toBe(region);
       });
