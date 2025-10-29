@@ -10,10 +10,10 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
-import { Construct } from 'constructs';
-import * as path from 'path';
 import { spawnSync } from 'child_process';
+import { Construct } from 'constructs';
 import * as fs from 'fs';
+import * as path from 'path';
 
 interface ComplianceStackProps extends cdk.StackProps {
   environmentSuffix?: string;
