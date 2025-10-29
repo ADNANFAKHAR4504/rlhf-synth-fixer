@@ -11,5 +11,26 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "VPC, EC2, Auto Scaling Group, Lambda, CloudWatch (Alarms, Logs, Metrics), EventBridge, IAM (Roles, Policies, Instance Profiles), SSM (Systems Manager), NAT Gateway, Internet Gateway, Route Tables, Security Groups, Launch Template"
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling Group",
+    "Lambda",
+    "CloudWatch",
+    "EventBridge",
+    "IAM",
+    "SSM",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Route Tables",
+    "Security Groups",
+    "Launch Template"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
 }
