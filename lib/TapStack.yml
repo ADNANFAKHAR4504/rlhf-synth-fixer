@@ -23,8 +23,8 @@ Parameters:
     AllowedPattern: '^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$|^$'
     ConstraintDescription: Must be a valid EC2 KeyPair name or empty string
     
-  NovaRDSPasswordSecret:
-    Description: ARN of Secrets Manager secret containing RDS password
+  DBMasterUsername:
+    Description: Database master username
     Type: String
     Default: 'dbadmin'
     NoEcho: true
@@ -33,7 +33,7 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     ConstraintDescription: Must begin with a letter and contain only alphanumeric characters
     
-    
+  
   DatabasePort:
     Description: Database port for RDS instance
     Type: Number
@@ -52,9 +52,23 @@ Parameters:
 
 Resources:
   # ============================================
+  # SECRETS
+  # ============================================
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'db-password-${AWS::AccountId}'
+      Description: RDS master credentials
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username":"${DBMasterUsername}"}'
+        GenerateStringKey: password
+        PasswordLength: 16
+        ExcludePunctuation: true
+
+  # ============================================
   # NETWORKING INFRASTRUCTURE
   # ============================================
-  
+
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -642,8 +656,8 @@ Resources:
       MaxAllocatedStorage: 500
       StorageType: gp3
       StorageEncrypted: true
-      MasterUsername: !Sub '{{resolve:secretsmanager:${NovaRDSPasswordSecret}::username}}'
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${NovaRDSPasswordSecret}::password}}'
+      MasterUsername: !Ref DBMasterUsername
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecret}::password}}'
       VPCSecurityGroups:
         - !GetAtt DatabaseSecurityGroup.GroupId
       DBSubnetGroupName: !Ref DBSubnetGroup
