@@ -11,11 +11,21 @@ try {
   console.warn('WARNING: flat-outputs.json not found. Integration tests will be skipped in local environment.');
 }
 
-// Helper function to parse array outputs (handles both arrays and comma-separated strings)
+// Helper function to parse array outputs (handles arrays, JSON strings, and comma-separated strings)
 function parseArrayOutput(value: any): string[] {
   if (!value) return [];
   if (Array.isArray(value)) return value;
   if (typeof value === 'string') {
+    // Handle JSON array strings (e.g., '["id1", "id2"]')
+    const trimmed = value.trim();
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {
+        // Fall through to comma-separated logic if JSON parsing fails
+      }
+    }
     // Handle comma-separated strings from Terraform outputs
     return value.split(',').map(v => v.trim()).filter(v => v.length > 0);
   }
