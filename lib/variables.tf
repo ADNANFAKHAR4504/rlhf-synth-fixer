@@ -3,6 +3,7 @@
 variable "environment" {
   description = "Environment name (e.g., dev, staging, prod)"
   type        = string
+  default     = "dev"
 
   validation {
     condition     = contains(["dev", "staging", "prod"], var.environment)
@@ -36,11 +37,13 @@ variable "base_cidr_block" {
 variable "project_name" {
   description = "Project name for tagging"
   type        = string
+  default     = "vpc-infrastructure"
 }
 
 variable "cost_center" {
   description = "Cost center for billing allocation"
   type        = string
+  default     = "engineering-infrastructure"
 }
 
 variable "enable_flow_logs" {
@@ -53,6 +56,7 @@ variable "enable_flow_logs" {
 variable "state_bucket" {
   description = "S3 bucket for Terraform state storage"
   type        = string
+  default     = "terraform-state"
 }
 
 variable "state_key_prefix" {
