@@ -1,5 +1,14 @@
 # Route53 Resolver module for DNS resolution between VPCs
 
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+  }
+}
+
 locals {
   name_prefix = "${var.environment}-${var.region}"
 }

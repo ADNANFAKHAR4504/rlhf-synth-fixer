@@ -1,5 +1,14 @@
 # Reusable VPC module for consistent network deployment across regions
 
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+  }
+}
+
 locals {
   # Generate consistent naming
   name_prefix = "${var.environment}-${var.region}"

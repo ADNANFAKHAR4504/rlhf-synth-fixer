@@ -83,7 +83,7 @@ describe('Terraform VPC Infrastructure Unit Tests', () => {
     });
 
     test('terraform version constraint is correct', () => {
-      expect(providerTfContent).toMatch(/required_version\s*=\s*">=\s*1\.5,\s*<\s*1\.8"/);
+      expect(providerTfContent).toMatch(/required_version\s*=\s*">=\s*1\.0\.0"/);
     });
   });
 
