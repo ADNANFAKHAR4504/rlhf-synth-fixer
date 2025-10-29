@@ -1,48 +1,84 @@
-# HIPAA-Compliant Healthcare Data Processing Pipeline - AWS CDK Python Implementation
+# Learning Management System Infrastructure - CloudFormation YAML
 
-## Overview
-
-This implementation provides a fully HIPAA-compliant healthcare data processing pipeline using AWS CDK with Python, deployed to eu-west-2 region. All resources include environment suffixes for isolation and are configured with comprehensive encryption, audit logging, and security controls.
+This document contains the complete infrastructure code for the Learning Management System (LMS) deployment using AWS CloudFormation in YAML format.
 
 ## Infrastructure Components
 
-### File: lib/tap_stack.py (303 lines)
+### Networking
+- VPC with DNS support enabled
+- 2 public subnets across 2 availability zones
+- 2 private subnets for ECS tasks
+- 2 database subnets for RDS instances
+- NAT Gateway for private subnet internet access
+- Internet Gateway for public subnet access
+- Route tables configured for public and private traffic
 
-The implementation includes:
+### Security
+- KMS encryption key for data encryption at rest
+- Security groups with least privilege access
+- Secrets Manager for credential management with automatic rotation
+- Transit encryption enabled for Redis
+- EFS encryption enabled
 
-1. **TapStackProps Class** - Properties container for stack configuration with environment suffix
-2. **KMS Encryption** - Customer-managed key with rotation enabled and CloudWatch Logs policy
-3. **VPC Architecture** - Multi-AZ deployment with public/private subnets and NAT gateway
-4. **Amazon Kinesis Data Streams** - Encrypted real-time data ingestion (2 shards, 24h retention)
-5. **Amazon ECS (Fargate)** - Serverless container execution with IAM roles and logging
-6. **Amazon RDS PostgreSQL 15.10** - Multi-AZ encrypted database in private subnets
-7. **AWS Secrets Manager** - Encrypted credential storage with KMS
-8. **CloudWatch Logs** - Encrypted audit and application logging with 30-day retention
-9. **IAM Roles** - Least-privilege access for ECS execution and task roles
-10. **Security Groups** - Network isolation for RDS and ECS resources
-11. **Stack Outputs** - All critical resource identifiers for integration testing
+### Compute
+- ECS Fargate cluster with Container Insights enabled
+- Auto Scaling configured for CPU and memory metrics (2-20 instances)
+- Task definition with 1 vCPU and 2GB memory
+- Application Load Balancer for traffic distribution
+- Target group health checks on root path
 
-### Key Features
+### Database
+- Aurora MySQL cluster with 2 instances (db.r5.large)
+- Storage encryption using KMS
+- Automated backups with 7-day retention
+- CloudWatch Logs export enabled
+- Multi-AZ deployment for high availability
 
-- **HIPAA Compliance**: All data encrypted at rest (KMS) and in transit (TLS)
-- **Private Database**: RDS accessible only from VPC private subnets
-- **Audit Logging**: CloudWatch logs for all components with encryption
-- **High Availability**: Multi-AZ RDS with 7-day backup retention
-- **Performance Monitoring**: Performance Insights enabled for RDS
-- **Destroyable Resources**: No retention policies, all resources cleanly removable
-- **Environment Isolation**: All resources named with environment suffix
+### Caching
+- ElastiCache Redis cluster with 2 nodes (cache.r5.large)
+- Automatic failover enabled
+- Multi-AZ deployment
+- At-rest and transit encryption enabled
+- Snapshot retention for 5 days
 
-## Code Quality
+### Storage
+- EFS file system with encryption
+- Lifecycle policy to transition to IA after 30 days
+- Mount targets in private subnets
+- Integrated with ECS task definition
 
-- **Lint**: 10/10 pylint score
-- **Unit Tests**: 14 tests, 95.74% coverage
-- **Integration Tests**: 11 tests, all passed against live AWS resources
-- **Documentation**: Comprehensive inline comments
+### Streaming
+- Kinesis Data Stream for analytics
+- 2 shards with 24-hour retention
+- KMS encryption enabled
 
-## Deployment
+### API Management
+- API Gateway REST API
+- Usage plan with throttling (1000 req/s, 2000 burst)
+- HTTP proxy integration with ALB
 
-Successfully deployed to eu-west-2 on attempt 4/5 after fixing:
-1. KMS key policy for CloudWatch Logs service principal
-2. PostgreSQL version compatibility (15.3 → 15.10 for eu-west-2)
+### Monitoring
+- CloudWatch alarms for ECS CPU utilization
+- CloudWatch alarms for RDS connections
+- Container Insights enabled
+- CloudWatch Logs with 30-day retention
 
-All resources verified through integration testing with real AWS API calls.
+### IAM Roles
+- ECS Task Execution Role for pulling images and secrets
+- ECS Task Role for application permissions
+- Lambda Role for secret rotation
+- Least privilege policies applied
+
+### Lambda Functions
+- Secret rotation function for automated credential rotation
+- Deployed in VPC for secure database access
+- 30-day automatic rotation schedule
+
+## Key Features
+
+1. **High Availability**: Multi-AZ deployment across 2 availability zones
+2. **Security**: Encryption at rest and in transit, secret rotation, KMS encryption
+3. **Scalability**: Auto Scaling from 2 to 20 ECS tasks based on CPU/memory
+4. **Monitoring**: CloudWatch alarms and Container Insights
+5. **Compliance**: PDPA-compliant tags and security controls
+6. **Disaster Recovery**: Automated backups and snapshots
