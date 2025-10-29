@@ -638,7 +638,7 @@ Resources:
     Properties:
       # IMPORTANT: AWS S3 bucket names must be lowercase. Ensure stack name and environment are lowercase.
       BucketName:
-        Fn::Sub: "${AWS::StackName}-${Environment}-transaction-archives-${AWS::AccountId}"
+        Fn::Sub: "${Environment}-transaction-archives-${AWS::AccountId}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:

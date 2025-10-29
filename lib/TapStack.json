@@ -665,7 +665,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-${Environment}-transaction-archives-${AWS::AccountId}"
+                    "Fn::Sub": "${Environment}-transaction-archives-${AWS::AccountId}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
