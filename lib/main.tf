@@ -84,8 +84,9 @@ module "vpc_us_east_1" {
   }
 
   # Basic configuration
-  region      = "us-east-1"
-  environment = var.environment
+  region             = "us-east-1"
+  environment        = var.environment
+  environment_suffix = var.environment_suffix
 
   # Network configuration
   vpc_cidr             = local.region_configs["us-east-1"].vpc_cidr
@@ -106,7 +107,7 @@ module "vpc_us_east_1" {
 
   # Tags
   tags = {
-    Name   = "${var.environment}-us-east-1-vpc"
+    Name   = "${var.environment}-us-east-1-vpc-${var.environment_suffix}"
     Region = "us-east-1"
   }
 }
@@ -120,8 +121,9 @@ module "vpc_us_west_2" {
   }
 
   # Basic configuration
-  region      = "us-west-2"
-  environment = var.environment
+  region             = "us-west-2"
+  environment        = var.environment
+  environment_suffix = var.environment_suffix
 
   # Network configuration
   vpc_cidr             = local.region_configs["us-west-2"].vpc_cidr
@@ -142,7 +144,7 @@ module "vpc_us_west_2" {
 
   # Tags
   tags = {
-    Name   = "${var.environment}-us-west-2-vpc"
+    Name   = "${var.environment}-us-west-2-vpc-${var.environment_suffix}"
     Region = "us-west-2"
   }
 }
@@ -156,8 +158,9 @@ module "vpc_eu_central_1" {
   }
 
   # Basic configuration
-  region      = "eu-central-1"
-  environment = var.environment
+  region             = "eu-central-1"
+  environment        = var.environment
+  environment_suffix = var.environment_suffix
 
   # Network configuration
   vpc_cidr             = local.region_configs["eu-central-1"].vpc_cidr
@@ -178,7 +181,7 @@ module "vpc_eu_central_1" {
 
   # Tags
   tags = {
-    Name   = "${var.environment}-eu-central-1-vpc"
+    Name   = "${var.environment}-eu-central-1-vpc-${var.environment_suffix}"
     Region = "eu-central-1"
   }
 }
@@ -194,7 +197,7 @@ resource "aws_vpc_peering_connection" "us_east_1_to_us_west_2" {
   auto_accept = false
 
   tags = {
-    Name        = "${var.environment}-peer-us-east-1-to-us-west-2"
+    Name        = "${var.environment}-us-east-1-to-us-west-2-peer-${var.environment_suffix}"
     Type        = "inter-region-peering"
     Environment = var.environment
   }
@@ -207,7 +210,7 @@ resource "aws_vpc_peering_connection_accepter" "us_east_1_to_us_west_2" {
   auto_accept               = true
 
   tags = {
-    Name        = "${var.environment}-peer-accept-us-east-1-to-us-west-2"
+    Name        = "${var.environment}-us-east-1-to-us-west-2-peer-accept-${var.environment_suffix}"
     Environment = var.environment
   }
 }
@@ -223,7 +226,7 @@ resource "aws_vpc_peering_connection" "us_west_2_to_eu_central_1" {
   auto_accept = false
 
   tags = {
-    Name        = "${var.environment}-peer-us-west-2-to-eu-central-1"
+    Name        = "${var.environment}-us-west-2-to-eu-central-1-peer-${var.environment_suffix}"
     Type        = "inter-region-peering"
     Environment = var.environment
   }
@@ -236,7 +239,7 @@ resource "aws_vpc_peering_connection_accepter" "us_west_2_to_eu_central_1" {
   auto_accept               = true
 
   tags = {
-    Name        = "${var.environment}-peer-accept-us-west-2-to-eu-central-1"
+    Name        = "${var.environment}-us-west-2-to-eu-central-1-peer-accept-${var.environment_suffix}"
     Environment = var.environment
   }
 }
@@ -252,7 +255,7 @@ resource "aws_vpc_peering_connection" "us_east_1_to_eu_central_1" {
   auto_accept = false
 
   tags = {
-    Name        = "${var.environment}-peer-us-east-1-to-eu-central-1"
+    Name        = "${var.environment}-us-east-1-to-eu-central-1-peer-${var.environment_suffix}"
     Type        = "inter-region-peering"
     Environment = var.environment
   }
@@ -265,7 +268,7 @@ resource "aws_vpc_peering_connection_accepter" "us_east_1_to_eu_central_1" {
   auto_accept               = true
 
   tags = {
-    Name        = "${var.environment}-peer-accept-us-east-1-to-eu-central-1"
+    Name        = "${var.environment}-us-east-1-to-eu-central-1-peer-accept-${var.environment_suffix}"
     Environment = var.environment
   }
 }
@@ -346,8 +349,9 @@ module "route53_resolver_us_east_1" {
   vpc_cidr   = module.vpc_us_east_1.vpc_cidr_block
   subnet_ids = module.vpc_us_east_1.private_subnet_ids
 
-  environment = var.environment
-  region      = "us-east-1"
+  environment        = var.environment
+  environment_suffix = var.environment_suffix
+  region             = "us-east-1"
 
   tags = {
     Environment = var.environment
@@ -366,8 +370,9 @@ module "route53_resolver_us_west_2" {
   vpc_cidr   = module.vpc_us_west_2.vpc_cidr_block
   subnet_ids = module.vpc_us_west_2.private_subnet_ids
 
-  environment = var.environment
-  region      = "us-west-2"
+  environment        = var.environment
+  environment_suffix = var.environment_suffix
+  region             = "us-west-2"
 
   tags = {
     Environment = var.environment
@@ -386,8 +391,9 @@ module "route53_resolver_eu_central_1" {
   vpc_cidr   = module.vpc_eu_central_1.vpc_cidr_block
   subnet_ids = module.vpc_eu_central_1.private_subnet_ids
 
-  environment = var.environment
-  region      = "eu-central-1"
+  environment        = var.environment
+  environment_suffix = var.environment_suffix
+  region             = "eu-central-1"
 
   tags = {
     Environment = var.environment

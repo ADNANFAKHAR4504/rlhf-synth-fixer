@@ -127,6 +127,10 @@ describe('Terraform VPC Infrastructure Unit Tests', () => {
       expect(variablesTfContent).toMatch(/variable\s+"enable_route53_resolver"\s*{/);
       expect(variablesTfContent).toMatch(/default\s*=\s*false/);
     });
+
+    test('environment_suffix variable exists for resource isolation', () => {
+      expect(variablesTfContent).toMatch(/variable\s+"environment_suffix"\s*{/);
+    });
   });
 
   describe('CIDR Calculation with cidrsubnet()', () => {
@@ -233,8 +237,8 @@ describe('Terraform VPC Infrastructure Unit Tests', () => {
       expect(vpcModuleContent).toMatch(/\$\{local\.name_prefix\}-nat/);
     });
 
-    test('name_prefix is constructed from environment and region', () => {
-      expect(vpcModuleContent).toMatch(/name_prefix\s*=\s*"\$\{var\.environment\}-\$\{var\.region\}"/);
+    test('name_prefix includes environment, region, and environment_suffix', () => {
+      expect(vpcModuleContent).toMatch(/name_prefix\s*=\s*"\$\{var\.environment\}-\$\{var\.region\}-\$\{var\.environment_suffix\}"/);
     });
   });
 

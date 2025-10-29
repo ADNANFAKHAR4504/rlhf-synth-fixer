@@ -10,7 +10,7 @@ terraform {
 }
 
 locals {
-  name_prefix = "${var.environment}-${var.region}"
+  name_prefix = "${var.environment}-${var.region}-${var.environment_suffix}"
 }
 
 # Security group for Route53 Resolver endpoints

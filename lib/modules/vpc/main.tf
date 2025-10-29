@@ -10,8 +10,8 @@ terraform {
 }
 
 locals {
-  # Generate consistent naming
-  name_prefix = "${var.environment}-${var.region}"
+  # Generate consistent naming with environment suffix
+  name_prefix = "${var.environment}-${var.region}-${var.environment_suffix}"
 
   # Calculate number of NAT Gateways
   nat_gateway_count = var.enable_nat_gateway ? (var.single_nat_gateway ? 1 : length(var.availability_zones)) : 0

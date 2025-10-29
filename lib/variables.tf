@@ -11,6 +11,12 @@ variable "environment" {
   }
 }
 
+variable "environment_suffix" {
+  description = "Unique suffix for resource names to enable multiple deployments (e.g., pr123, synth456)"
+  type        = string
+  default     = "dev"
+}
+
 variable "regions" {
   description = "List of AWS regions to deploy VPCs"
   type        = list(string)

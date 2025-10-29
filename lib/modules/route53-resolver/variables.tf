@@ -20,6 +20,11 @@ variable "environment" {
   type        = string
 }
 
+variable "environment_suffix" {
+  description = "Unique suffix for resource names"
+  type        = string
+}
+
 variable "region" {
   description = "AWS region"
   type        = string
