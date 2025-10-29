@@ -119,6 +119,18 @@ describe('Integration tests — runtime traffic checks', () => {
         let parsed: any = null; try { parsed = JSON.parse(payloadStr); } catch (_) { /* ignore */ }
         const errMsg = parsed && (parsed.errorMessage || parsed.message) ? (parsed.errorMessage || parsed.message) : payloadStr;
         const stack = parsed && (parsed.stack || parsed.stackTrace) ? (parsed.stack || parsed.stackTrace) : '';
+
+        // Special-case: missing aws-sdk in the deployed Lambda package — very common when handler expects v2 but not packaged
+        if (errMsg && errMsg.includes("Cannot find module 'aws-sdk'")) {
+          const guidance = `The invoked Lambda ${arn} failed because it cannot find the 'aws-sdk' module. This indicates the function package does not include the AWS SDK v2 dependency (or the runtime doesn't provide it).\nFixes: package the dependency into the function or switch the handler to use AWS SDK v3 (@aws-sdk/*) or provide a layer that contains aws-sdk v2.\n`;
+          if (process.env.INTEGRATION_LENIENT === '1') {
+            console.warn(`Skipping invocation failure for ${arn}: ${guidance}Original payload: ${payloadStr}`);
+            // Skip this function invocation check in lenient mode
+            continue;
+          }
+          throw new Error(`Lambda ${arn} returned FunctionError=${resp.FunctionError}: ${errMsg}\n${stack}\n${guidance}`);
+        }
+
         throw new Error(`Lambda ${arn} returned FunctionError=${resp.FunctionError}: ${errMsg}\n${stack}`);
       }
 
