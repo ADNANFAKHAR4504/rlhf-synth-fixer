@@ -1650,7 +1650,7 @@ Resources:
         Ref: VPC
       ResourceType: VPC
       TrafficType: ALL
-      LogFormat: '${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action} ${flow-direction}'
+      LogFormat: '${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action} ${flow-direction}'
 
   # CloudWatch Dashboard for comprehensive monitoring
   CloudWatchDashboard:

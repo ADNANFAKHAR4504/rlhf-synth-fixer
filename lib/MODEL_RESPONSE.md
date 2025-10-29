@@ -1646,37 +1646,9 @@ Resources:
                 'aws:SecureTransport': 'false'
 
   # VPC Flow Logs
-  FlowLogsRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: vpc-flow-logs.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: FlowLogsPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                  - logs:DescribeLogGroups
-                  - logs:DescribeLogStreams
-                Resource: '*'
-
   VpcFlowLog:
     Type: AWS::EC2::FlowLog
     Properties:
-      DeliverLogsPermissionArn:
-        Fn::GetAtt:
-          - FlowLogsRole
-          - Arn
       LogDestinationType: s3
       LogDestination:
         Fn::Sub: '${LogsBucket.Arn}/vpc-flow-logs/'
@@ -1684,7 +1656,7 @@ Resources:
         Ref: VPC
       ResourceType: VPC
       TrafficType: ALL
-      LogFormat: '${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action} ${flow-direction}'
+      LogFormat: '${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action} ${flow-direction}'
 
   # CloudWatch Dashboard for comprehensive monitoring
   CloudWatchDashboard:
