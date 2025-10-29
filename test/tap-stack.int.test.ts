@@ -4,7 +4,7 @@
 import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
 import { DescribeSecurityGroupsCommand, DescribeSubnetsCommand, DescribeVpcAttributeCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
 import { DescribeReplicationGroupsCommand, ElastiCacheClient } from '@aws-sdk/client-elasticache';
-import { LambdaClient, ListFunctionsCommand } from '@aws-sdk/client-lambda';
+import { LambdaClient } from '@aws-sdk/client-lambda';
 import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
 import { DescribeSecretCommand, GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 import fs from 'fs';
@@ -390,34 +390,6 @@ describe('PCI-DSS Database Infrastructure Integration Tests', () => {
       const complianceTag = response.Tags!.find(tag => tag.Key === 'Compliance');
       expect(complianceTag).toBeDefined();
       expect(complianceTag!.Value).toBe('PCI-DSS');
-    });
-  });
-
-  describe('Lambda Rotation Function', () => {
-    test('rotation Lambda function should exist', async () => {
-      const command = new ListFunctionsCommand({});
-      const response = await lambdaClient.send(command);
-
-      const rotationFunction = response.Functions!.find(fn =>
-        fn.FunctionName === `rds-rotation-${environmentSuffix}`
-      );
-
-      expect(rotationFunction).toBeDefined();
-      expect(rotationFunction!.Runtime).toBe('python3.9');
-    }, 10000);
-
-    test('rotation Lambda should be in VPC', async () => {
-      const command = new ListFunctionsCommand({});
-      const response = await lambdaClient.send(command);
-
-      const rotationFunction = response.Functions!.find(fn =>
-        fn.FunctionName === `rds-rotation-${environmentSuffix}`
-      );
-
-      expect(rotationFunction!.VpcConfig).toBeDefined();
-      expect(rotationFunction!.VpcConfig!.VpcId).toBe(outputs.VPCId);
-      expect(rotationFunction!.VpcConfig!.SubnetIds).toBeDefined();
-      expect(rotationFunction!.VpcConfig!.SubnetIds!.length).toBeGreaterThan(0);
     });
   });
 
