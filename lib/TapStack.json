@@ -1,6 +1,29 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Security and compliance template enforcing encryption and MFA requirements",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentSuffix"
+                    ]
+                }
+            ]
+        }
+    },
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        }
+    },
     "Resources": {
         "S3KMSKey": {
             "Type": "AWS::KMS::Key",
@@ -59,7 +82,9 @@
         "S3KMSKeyAlias": {
             "Type": "AWS::KMS::Alias",
             "Properties": {
-                "AliasName": "alias/s3-encryption-key",
+                "AliasName": {
+                    "Fn::Sub": "alias/s3-encryption-key-${EnvironmentSuffix}"
+                },
                 "TargetKeyId": {
                     "Ref": "S3KMSKey"
                 }
@@ -122,7 +147,9 @@
         "EBSKMSKeyAlias": {
             "Type": "AWS::KMS::Alias",
             "Properties": {
-                "AliasName": "alias/ebs-encryption-key",
+                "AliasName": {
+                    "Fn::Sub": "alias/ebs-encryption-key-${EnvironmentSuffix}"
+                },
                 "TargetKeyId": {
                     "Ref": "EBSKMSKey"
                 }
@@ -130,8 +157,8 @@
         },
         "EncryptedS3Bucket": {
             "Type": "AWS::S3::Bucket",
-            "DeletionPolicy": "Retain",
-            "UpdateReplacePolicy": "Retain",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
             "Properties": {
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -328,7 +355,9 @@
             "Type": "AWS::IAM::ManagedPolicy",
             "Properties": {
                 "Description": "Policy requiring MFA for privileged actions",
-                "ManagedPolicyName": "RequireMFAForPrivilegedActions",
+                "ManagedPolicyName": {
+                    "Fn::Sub": "RequireMFAForPrivilegedActions-${EnvironmentSuffix}"
+                },
                 "PolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -398,7 +427,9 @@
         "AllUsersGroup": {
             "Type": "AWS::IAM::Group",
             "Properties": {
-                "GroupName": "AllUsers",
+                "GroupName": {
+                    "Fn::Sub": "AllUsers-${EnvironmentSuffix}"
+                },
                 "ManagedPolicyArns": [
                     {
                         "Ref": "MFARequiredPolicy"
@@ -440,8 +471,8 @@
         },
         "ConfigBucket": {
             "Type": "AWS::S3::Bucket",
-            "DeletionPolicy": "Retain",
-            "UpdateReplacePolicy": "Retain",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
             "Properties": {
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -526,7 +557,9 @@
         "ConfigRecorder": {
             "Type": "AWS::Config::ConfigurationRecorder",
             "Properties": {
-                "Name": "DefaultRecorder",
+                "Name": {
+                    "Fn::Sub": "DefaultRecorder-${EnvironmentSuffix}"
+                },
                 "RecordingGroup": {
                     "AllSupported": true,
                     "IncludeGlobalResourceTypes": true
@@ -554,7 +587,9 @@
         "S3EncryptionRule": {
             "Type": "AWS::Config::ConfigRule",
             "Properties": {
-                "ConfigRuleName": "s3-bucket-server-side-encryption-enabled",
+                "ConfigRuleName": {
+                    "Fn::Sub": "s3-bucket-server-side-encryption-enabled-${EnvironmentSuffix}"
+                },
                 "Description": "Checks if S3 buckets have encryption enabled",
                 "Source": {
                     "Owner": "AWS",
@@ -571,7 +606,9 @@
         "EBSEncryptionRule": {
             "Type": "AWS::Config::ConfigRule",
             "Properties": {
-                "ConfigRuleName": "encrypted-volumes",
+                "ConfigRuleName": {
+                    "Fn::Sub": "encrypted-volumes-${EnvironmentSuffix}"
+                },
                 "Description": "Checks if EBS volumes are encrypted",
                 "Source": {
                     "Owner": "AWS",

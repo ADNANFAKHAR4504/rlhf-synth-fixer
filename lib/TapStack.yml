@@ -2,6 +2,22 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Security and compliance template enforcing encryption and MFA requirements
 
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - EnvironmentSuffix
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+
 Resources:
   #----------------------------------------
   # KMS Keys for Encryption
@@ -42,7 +58,7 @@ Resources:
   S3KMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: alias/s3-encryption-key
+      AliasName: !Sub alias/s3-encryption-key-${EnvironmentSuffix}
       TargetKeyId: !Ref S3KMSKey
 
   EBSKMSKey:
@@ -81,7 +97,7 @@ Resources:
   EBSKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: alias/ebs-encryption-key
+      AliasName: !Sub alias/ebs-encryption-key-${EnvironmentSuffix}
       TargetKeyId: !Ref EBSKMSKey
 
   #----------------------------------------
@@ -89,8 +105,8 @@ Resources:
   #----------------------------------------
   EncryptedS3Bucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -251,7 +267,7 @@ Resources:
     Type: AWS::IAM::ManagedPolicy
     Properties:
       Description: Policy requiring MFA for privileged actions
-      ManagedPolicyName: RequireMFAForPrivilegedActions
+      ManagedPolicyName: !Sub RequireMFAForPrivilegedActions-${EnvironmentSuffix}
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -301,7 +317,7 @@ Resources:
   AllUsersGroup:
     Type: AWS::IAM::Group
     Properties:
-      GroupName: AllUsers
+      GroupName: !Sub AllUsers-${EnvironmentSuffix}
       ManagedPolicyArns:
         - !Ref MFARequiredPolicy
       Path: /
@@ -330,8 +346,8 @@ Resources:
 
   ConfigBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -379,7 +395,7 @@ Resources:
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
-      Name: DefaultRecorder
+      Name: !Sub DefaultRecorder-${EnvironmentSuffix}
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
@@ -399,7 +415,7 @@ Resources:
   S3EncryptionRule:
     Type: AWS::Config::ConfigRule
     Properties:
-      ConfigRuleName: s3-bucket-server-side-encryption-enabled
+      ConfigRuleName: !Sub s3-bucket-server-side-encryption-enabled-${EnvironmentSuffix}
       Description: Checks if S3 buckets have encryption enabled
       Source:
         Owner: AWS
@@ -412,7 +428,7 @@ Resources:
   EBSEncryptionRule:
     Type: AWS::Config::ConfigRule
     Properties:
-      ConfigRuleName: encrypted-volumes
+      ConfigRuleName: !Sub encrypted-volumes-${EnvironmentSuffix}
       Description: Checks if EBS volumes are encrypted
       Source:
         Owner: AWS
