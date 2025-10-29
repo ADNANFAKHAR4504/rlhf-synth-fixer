@@ -313,3 +313,19 @@ resource "aws_config_config_rule" "cloudtrail_enabled" {
 
   tags = local.mandatory_tags
 }
+
+# Config rule: EC2 instance type restrictions
+resource "aws_config_config_rule" "ec2_instance_type" {
+  name = "${local.name_prefix}-ec2-instance-type-restriction"
+
+  source {
+    owner             = "AWS"
+    source_identifier = "DESIRED_INSTANCE_TYPE"
+  }
+
+  input_parameters = jsonencode({
+    instanceType = "t2.micro,t2.small,t2.medium,t3.micro,t3.small,t3.medium,t3.large"
+  })
+
+  tags = local.mandatory_tags
+}

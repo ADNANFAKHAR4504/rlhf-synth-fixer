@@ -152,9 +152,11 @@ resource "aws_iam_policy" "developer_policy" {
         Effect = "Allow"
         Action = [
           "s3:ListAllMyBuckets",
-          "s3:GetBucketLocation"
+          "s3:GetBucketLocation",
+          "s3:GetBucketVersioning",
+          "s3:GetBucketLogging"
         ]
-        Resource = "*"
+        Resource = "arn:aws:s3:::*"
       },
       {
         Sid    = "S3DevBucketAccess"
@@ -163,7 +165,8 @@ resource "aws_iam_policy" "developer_policy" {
           "s3:ListBucket",
           "s3:GetObject",
           "s3:PutObject",
-          "s3:DeleteObject"
+          "s3:DeleteObject",
+          "s3:GetObjectVersion"
         ]
         Resource = [
           "arn:aws:s3:::${local.name_prefix}-dev-*",
@@ -225,18 +228,61 @@ resource "aws_iam_policy" "operations_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "EC2Management"
+        Sid    = "EC2DescribeActions"
         Effect = "Allow"
         Action = [
-          "ec2:*"
+          "ec2:Describe*",
+          "ec2:Get*",
+          "ec2:List*"
         ]
         Resource = "*"
+      },
+      {
+        Sid    = "EC2InstanceManagement"
+        Effect = "Allow"
+        Action = [
+          "ec2:StartInstances",
+          "ec2:StopInstances",
+          "ec2:RebootInstances",
+          "ec2:TerminateInstances",
+          "ec2:CreateTags",
+          "ec2:DeleteTags",
+          "ec2:ModifyInstanceAttribute",
+          "ec2:RunInstances"
+        ]
+        Resource = [
+          "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:instance/*",
+          "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:volume/*",
+          "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:network-interface/*",
+          "arn:aws:ec2:*::image/*",
+          "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:security-group/*",
+          "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:subnet/*"
+        ]
         Condition = {
           StringEquals = {
             "aws:RequestedRegion" = var.allowed_regions
           }
-          StringNotEquals = {
-            "ec2:InstanceType" = var.prohibited_instance_types
+        }
+      },
+      {
+        Sid    = "EC2VolumeManagement"
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateVolume",
+          "ec2:DeleteVolume",
+          "ec2:AttachVolume",
+          "ec2:DetachVolume",
+          "ec2:CreateSnapshot",
+          "ec2:DeleteSnapshot"
+        ]
+        Resource = [
+          "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:volume/*",
+          "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:snapshot/*",
+          "arn:aws:ec2:*:${data.aws_caller_identity.current.account_id}:instance/*"
+        ]
+        Condition = {
+          StringEquals = {
+            "aws:RequestedRegion" = var.allowed_regions
           }
         }
       },
@@ -259,17 +305,50 @@ resource "aws_iam_policy" "operations_policy" {
         }
       },
       {
-        Sid    = "S3Management"
+        Sid    = "S3BucketManagement"
         Effect = "Allow"
         Action = [
-          "s3:*"
+          "s3:CreateBucket",
+          "s3:DeleteBucket",
+          "s3:ListBucket",
+          "s3:GetBucketLocation",
+          "s3:GetBucketVersioning",
+          "s3:GetBucketLogging",
+          "s3:GetBucketTagging",
+          "s3:PutBucketTagging",
+          "s3:PutBucketVersioning",
+          "s3:PutBucketLogging",
+          "s3:PutBucketPublicAccessBlock",
+          "s3:GetBucketPublicAccessBlock",
+          "s3:GetBucketAcl",
+          "s3:GetBucketPolicy"
         ]
-        Resource = "*"
-        Condition = {
-          StringEquals = {
-            "s3:x-amz-acl" = "private"
-          }
-        }
+        Resource = "arn:aws:s3:::${local.name_prefix}-*"
+      },
+      {
+        Sid    = "S3ObjectManagement"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:GetObjectVersion",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:DeleteObjectVersion",
+          "s3:GetObjectAcl",
+          "s3:PutObjectAcl",
+          "s3:ListMultipartUploadParts",
+          "s3:AbortMultipartUpload"
+        ]
+        Resource = "arn:aws:s3:::${local.name_prefix}-*/*"
+      },
+      {
+        Sid    = "S3GlobalReadAccess"
+        Effect = "Allow"
+        Action = [
+          "s3:ListAllMyBuckets",
+          "s3:GetBucketLocation"
+        ]
+        Resource = "arn:aws:s3:::*"
       },
       {
         Sid      = "DenyUnencryptedUploads"
@@ -283,21 +362,57 @@ resource "aws_iam_policy" "operations_policy" {
         }
       },
       {
-        Sid    = "CloudWatchFullAccess"
+        Sid    = "CloudWatchAccess"
         Effect = "Allow"
         Action = [
-          "cloudwatch:*",
-          "logs:*"
+          "cloudwatch:PutMetricData",
+          "cloudwatch:GetMetricData",
+          "cloudwatch:GetMetricStatistics",
+          "cloudwatch:ListMetrics",
+          "cloudwatch:DescribeAlarms",
+          "cloudwatch:DescribeAlarmsForMetric",
+          "cloudwatch:PutMetricAlarm",
+          "cloudwatch:DeleteAlarms",
+          "cloudwatch:SetAlarmState"
         ]
         Resource = "*"
+      },
+      {
+        Sid    = "CloudWatchLogsAccess"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams",
+          "logs:GetLogEvents",
+          "logs:FilterLogEvents"
+        ]
+        Resource = [
+          "arn:aws:logs:*:${data.aws_caller_identity.current.account_id}:log-group:/aws/*",
+          "arn:aws:logs:*:${data.aws_caller_identity.current.account_id}:log-group:/aws/*:log-stream:*"
+        ]
       },
       {
         Sid    = "SystemsManagerAccess"
         Effect = "Allow"
         Action = [
-          "ssm:*",
-          "ssmmessages:*",
-          "ec2messages:*"
+          "ssm:StartSession",
+          "ssm:TerminateSession",
+          "ssm:ResumeSession",
+          "ssm:DescribeSessions",
+          "ssm:GetConnectionStatus",
+          "ssm:DescribeInstanceInformation",
+          "ssm:SendCommand",
+          "ssm:GetCommandInvocation",
+          "ssmmessages:CreateControlChannel",
+          "ssmmessages:CreateDataChannel",
+          "ssmmessages:OpenControlChannel",
+          "ssmmessages:OpenDataChannel",
+          "ec2messages:GetMessages",
+          "ec2messages:SendReply",
+          "ec2messages:AcknowledgeMessage"
         ]
         Resource = "*"
       },

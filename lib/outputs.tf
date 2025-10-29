@@ -119,7 +119,8 @@ output "config_rules" {
     aws_config_config_rule.ebs_encryption_enabled.name,
     aws_config_config_rule.required_tags.name,
     aws_config_config_rule.iam_password_policy.name,
-    aws_config_config_rule.cloudtrail_enabled.name
+    aws_config_config_rule.cloudtrail_enabled.name,
+    aws_config_config_rule.ec2_instance_type.name
   ]
 }
 
