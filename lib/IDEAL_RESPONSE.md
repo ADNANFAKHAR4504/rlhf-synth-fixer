@@ -657,6 +657,7 @@ output "account_id" {
 
 ### provider.tf
 ```hcl
+
 # provider.tf
 
 terraform {
