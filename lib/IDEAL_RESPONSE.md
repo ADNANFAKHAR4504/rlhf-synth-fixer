@@ -346,7 +346,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 
 	// Create Kinesis Data Stream with encryption
 	stream := awskinesis.NewStream(stack, jsii.String("AnalyticsStream"), &awskinesis.StreamProps{
-		StreamName:      jsii.String(fmt.Sprintf("stream-secure-analytics-%s", environmentSuffix)),
+		StreamName:      jsii.String(fmt.Sprintf("secured-stream-analytics-%s", environmentSuffix)),
 		ShardCount:      jsii.Number(2),
 		Encryption:      awskinesis.StreamEncryption_KMS,
 		EncryptionKey:   kinesisKey,
@@ -383,7 +383,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 			LoggingLevel:         awsapigateway.MethodLoggingLevel_INFO,
 			DataTraceEnabled:     jsii.Bool(true),
 			AccessLogDestination: awsapigateway.NewLogGroupLogDestination(apiLogGroup),
-			AccessLogFormat: awsapigateway.AccessLogFormat_JsonWithStandardFields(nil),
+			AccessLogFormat:      awsapigateway.AccessLogFormat_JsonWithStandardFields(nil),
 		},
 		DefaultCorsPreflightOptions: &awsapigateway.CorsOptions{
 			AllowOrigins: awsapigateway.Cors_ALL_ORIGINS(),
