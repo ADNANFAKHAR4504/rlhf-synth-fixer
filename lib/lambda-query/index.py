@@ -3,11 +3,15 @@ import os
 import boto3
 from decimal import Decimal
 from boto3.dynamodb.conditions import Key
-from aws_xray_sdk.core import xray_recorder
-from aws_xray_sdk.core import patch_all
 
-# Patch AWS SDK for X-Ray tracing
-patch_all()
+# Optional X-Ray tracing
+try:
+    from aws_xray_sdk.core import xray_recorder
+    from aws_xray_sdk.core import patch_all
+    patch_all()
+except ImportError:
+    # X-Ray SDK not available, continue without tracing
+    pass
 
 # Initialize AWS clients
 dynamodb = boto3.resource('dynamodb')

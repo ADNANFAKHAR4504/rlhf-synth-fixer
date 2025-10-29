@@ -4,11 +4,15 @@ import boto3
 import hashlib
 import hmac
 from datetime import datetime
-from aws_xray_sdk.core import xray_recorder
-from aws_xray_sdk.core import patch_all
 
-# Patch AWS SDK for X-Ray tracing
-patch_all()
+# Optional X-Ray tracing
+try:
+    from aws_xray_sdk.core import xray_recorder
+    from aws_xray_sdk.core import patch_all
+    patch_all()
+except ImportError:
+    # X-Ray SDK not available, continue without tracing
+    pass
 
 # Initialize AWS clients
 s3_client = boto3.client('s3')
