@@ -1,8 +1,7 @@
 import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
 import { Fn } from 'cdktf';
-import { provider, privateKey } from '@cdktf/provider-tls';
-
+import { privateKey } from '@cdktf/provider-tls';
 
 export interface BaseConfig {
   region: string;
@@ -318,6 +317,7 @@ export class DatabaseConstruct extends Construct {
           passwordLength: 32,
           includeSpace: false,
           requireEachIncludedType: true,
+          excludeCharacters: '/@"\' \\',
         }
       );
 
@@ -539,9 +539,6 @@ export class KeyPairConstruct extends Construct {
         },
       });
     } else {
-      // Generate a new key pair using TLS provider
-      const tlsProvider = new provider.TlsProvider(this, 'tls');
-      
       const tlsPrivateKey = new privateKey.PrivateKey(this, 'private-key', {
         algorithm: 'RSA',
         rsaBits: 4096,
@@ -557,11 +554,15 @@ export class KeyPairConstruct extends Construct {
       });
 
       // Store private key in Secrets Manager
-      const keypairSecret = new aws.secretsmanagerSecret.SecretsmanagerSecret(this, 'keypair-secret', {
-        name: `${this.keyPairName}-private`,
-        description: 'Private key for EC2 instances',
-        tags: config.tags,
-      });
+      const keypairSecret = new aws.secretsmanagerSecret.SecretsmanagerSecret(
+        this,
+        'keypair-secret',
+        {
+          name: `${this.keyPairName}-private`,
+          description: 'Private key for EC2 instances',
+          tags: config.tags,
+        }
+      );
 
       new aws.secretsmanagerSecretVersion.SecretsmanagerSecretVersion(
         this,
@@ -676,7 +677,7 @@ export class ComputeConstruct extends Construct {
     );
 
     // Use the custom userData if provided, otherwise use empty string
-    const userData = config.userData 
+    const userData = config.userData
       ? Fn.base64encode(Fn.rawString(config.userData))
       : '';
 

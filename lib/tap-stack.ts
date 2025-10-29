@@ -5,8 +5,6 @@ import {
 import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
-import { KeyPair } from '@cdktf/provider-aws/lib/key-pair';
-
 
 // Import the constructs from modules
 import {
@@ -20,6 +18,8 @@ import {
   LoadBalancerConfig,
   ComputeConstruct,
   ComputeConfig,
+  KeyPairConstruct, // Add this import
+  KeyPairConfig,
 } from './modules';
 
 interface TapStackProps {
@@ -92,7 +92,11 @@ export class TapStack extends TerraformStack {
       privateSubnetCidrs: ['10.0.10.0/24', '10.0.11.0/24'],
     };
 
-    const networking = new NetworkingConstruct(this, 'networking', networkingConfig);
+    const networking = new NetworkingConstruct(
+      this,
+      'networking',
+      networkingConfig
+    );
 
     // 2. Create Security Groups
     const securityGroupsConfig: SecurityGroupsConfig = {
@@ -103,7 +107,22 @@ export class TapStack extends TerraformStack {
       vpcId: networking.vpc.id,
     };
 
-    const securityGroups = new SecurityGroupsConstruct(this, 'security-groups', securityGroupsConfig);
+    const securityGroups = new SecurityGroupsConstruct(
+      this,
+      'security-groups',
+      securityGroupsConfig
+    );
+
+    const keyPairConfig: KeyPairConfig = {
+      region: awsRegion,
+      environment: environment,
+      projectName: projectName,
+      tags: commonTags,
+      // Optionally provide a public key, or let it generate one
+      // publicKey: 'ssh-rsa AAAA...'
+    };
+
+    const keyPair = new KeyPairConstruct(this, 'keypair', keyPairConfig);
 
     // 3. Create Database
     const databaseConfig: DatabaseConfig = {
@@ -113,7 +132,8 @@ export class TapStack extends TerraformStack {
       tags: commonTags,
       subnetIds: networking.privateSubnets.map(subnet => subnet.id),
       securityGroupId: securityGroups.rdsSecurityGroup.id,
-      instanceClass: environment === 'production' ? 'db.t3.medium' : 'db.t3.micro',
+      instanceClass:
+        environment === 'production' ? 'db.t3.medium' : 'db.t3.micro',
       allocatedStorage: environment === 'production' ? 100 : 20,
       dbName: 'ecommercedb',
       backupRetentionPeriod: environment === 'production' ? 7 : 1,
@@ -134,7 +154,11 @@ export class TapStack extends TerraformStack {
       // certificateArn: 'arn:aws:acm:region:account-id:certificate/certificate-id', // Add your ACM certificate ARN for HTTPS
     };
 
-    const loadBalancer = new LoadBalancerConstruct(this, 'load-balancer', loadBalancerConfig);
+    const loadBalancer = new LoadBalancerConstruct(
+      this,
+      'load-balancer',
+      loadBalancerConfig
+    );
 
     // 5. Create Compute Resources (Auto Scaling Group)
     const computeConfig: ComputeConfig = {
@@ -145,7 +169,7 @@ export class TapStack extends TerraformStack {
       subnetIds: networking.privateSubnets.map(subnet => subnet.id),
       securityGroupId: securityGroups.appSecurityGroup.id,
       instanceType: environment === 'production' ? 't3.medium' : 't3.micro',
-      keyName: `${projectName}-keypair-${environment}`, // Ensure this key pair exists in AWS
+      keyName: keyPair.keyPairName, // Use the actual key pair name from the construct
       targetGroupArn: loadBalancer.targetGroup.arn,
       dbConnectionString: database.connectionString,
       dbSecretArn: database.dbSecret.arn,
@@ -195,6 +219,11 @@ export class TapStack extends TerraformStack {
     new TerraformOutput(this, 'aws-account-id', {
       value: current.accountId,
       description: 'Current AWS Account ID',
+    });
+
+    new TerraformOutput(this, 'key-pair-name', {
+      value: keyPair.keyPairName,
+      description: 'EC2 Key Pair name',
     });
   }
 }
