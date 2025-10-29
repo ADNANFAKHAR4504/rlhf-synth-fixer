@@ -304,7 +304,7 @@ describe('CI/CD Pipeline Integration Tests', () => {
         ApplicationName: applicationName,
         EnvironmentNames: [environmentName],
       }));
-      expect(environments.Environments).toHaveLength(2);
+      expect(environments.Environments).toHaveLength(1);
       const env = environments.Environments![0];
       expect(env.EnvironmentName).toBe(environmentName);
       expect(env.Status).toBe('Ready');
@@ -656,7 +656,7 @@ describe('CI/CD Pipeline Integration Tests', () => {
         ApplicationName: applicationName,
         EnvironmentNames: [environmentName],
       }));
-      expect(environments.Environments).toHaveLength(2);
+      expect(environments.Environments).toHaveLength(1);
 
       const env = environments.Environments![0];
       expect(env.SolutionStackName).toContain('Docker');
@@ -715,7 +715,7 @@ describe('CI/CD Pipeline Integration Tests', () => {
         EnvironmentNames: [environmentName],
       }));
 
-      expect(environments.Environments).toHaveLength(2);
+      expect(environments.Environments).toHaveLength(1);
       const env = environments.Environments![0];
 
       // Verify environment is load balanced (for production readiness)
