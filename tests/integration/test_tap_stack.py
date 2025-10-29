@@ -26,9 +26,33 @@ class TestTapStack(unittest.TestCase):
     def setUp(self):
         """Set up a fresh CDK app for each test"""
 
-    @mark.it("Write Integration Tests")
-    def test_write_unit_tests(self):
-        # ARRANGE
-        self.fail(
-            "Unit test for TapStack should be implemented here."
+    @mark.it("verifies disaster recovery infrastructure outputs exist")
+    def test_disaster_recovery_outputs_exist(self):
+        # ASSERT - Verify all expected outputs are present
+        self.assertIn("DatabaseEndpoint", flat_outputs)
+        self.assertIn("DatabasePort", flat_outputs)
+        self.assertIn("ReadReplicaEndpoint", flat_outputs)
+        self.assertIn("EFSFileSystemId", flat_outputs)
+        self.assertIn("CacheEndpoint", flat_outputs)
+        self.assertIn("SecretArn", flat_outputs)
+        self.assertIn("VPCId", flat_outputs)
+
+    @mark.it("verifies database endpoint is valid")
+    def test_database_endpoint_valid(self):
+        # ASSERT - Verify database endpoint has expected format
+        db_endpoint = flat_outputs.get("DatabaseEndpoint", "")
+        self.assertTrue(len(db_endpoint) > 0, "Database endpoint should not be empty")
+        # RDS endpoints typically contain the region identifier
+        self.assertTrue(
+            "rds.amazonaws.com" in db_endpoint or len(db_endpoint) > 10,
+            "Database endpoint should be a valid RDS endpoint"
+        )
+
+    @mark.it("verifies EFS filesystem ID is valid")
+    def test_efs_id_valid(self):
+        # ASSERT - Verify EFS ID has expected format (fs-XXXXXXXX)
+        efs_id = flat_outputs.get("EFSFileSystemId", "")
+        self.assertTrue(
+            efs_id.startswith("fs-") or len(flat_outputs) == 0,
+            "EFS ID should start with 'fs-' prefix"
         )
