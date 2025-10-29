@@ -370,28 +370,48 @@ describe('Media Processing Pipeline - Live Infrastructure Tests', () => {
         return;
       }
 
-      return new Promise<void>((resolve, reject) => {
+      return new Promise<void>((resolve) => {
+        let isResolved = false;
+        
+        const cleanup = () => {
+          if (!isResolved) {
+            isResolved = true;
+            resolve();
+          }
+        };
+
         const request = https.get(apiEndpoint, (response) => {
-          expect(response.statusCode).toBeDefined();
-          // Accept any valid HTTP status code (200, 403, 404, etc.) as it means the endpoint is live
-          expect(response.statusCode).toBeGreaterThanOrEqual(200);
-          expect(response.statusCode).toBeLessThan(600);
-          console.log(`✅ API Gateway ${apiEndpoint} responded with status ${response.statusCode}`);
-          resolve();
+          if (!isResolved) {
+            expect(response.statusCode).toBeDefined();
+            // Accept any valid HTTP status code (200, 403, 404, etc.) as it means the endpoint is live
+            expect(response.statusCode).toBeGreaterThanOrEqual(200);
+            expect(response.statusCode).toBeLessThan(600);
+            console.log(`✅ API Gateway ${apiEndpoint} responded with status ${response.statusCode}`);
+            cleanup();
+          }
         });
 
         request.on('error', (error) => {
-          console.log(`API Gateway endpoint ${apiEndpoint} not reachable - skipping test`);
-          resolve(); // Pass test instead of failing
+          if (!isResolved) {
+            console.log(`API Gateway endpoint ${apiEndpoint} not reachable - skipping test`);
+            cleanup();
+          }
         });
 
-        request.setTimeout(10000, () => {
-          request.destroy();
-          console.log(`API Gateway endpoint ${apiEndpoint} timeout - skipping test`);
-          resolve(); // Pass test instead of failing
+        // Use a timeout that doesn't conflict with Jest's cleanup
+        const timeout = setTimeout(() => {
+          if (!isResolved) {
+            request.destroy();
+            console.log(`API Gateway endpoint ${apiEndpoint} timeout - skipping test`);
+            cleanup();
+          }
+        }, 8000); // Shorter timeout to ensure cleanup before Jest timeout
+
+        request.on('close', () => {
+          clearTimeout(timeout);
         });
       });
-    }, 15000); // 15 second timeout for this test
+    }, 12000); // Reduced Jest timeout
   });
 
   describe('Security and Connectivity Tests', () => {
