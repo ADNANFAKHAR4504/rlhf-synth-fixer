@@ -329,11 +329,17 @@ Resources:
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
+            set -e  # Exit on error
+            
             # Update system
             yum update -y
             
             # Install necessary packages
             yum install -y httpd aws-cli amazon-cloudwatch-agent
+            
+            # Ensure Apache log directory exists
+            mkdir -p /var/log/httpd
+            chown root:root /var/log/httpd
             
             # Configure Apache
             systemctl start httpd
@@ -378,6 +384,7 @@ Resources:
             EOF
             
             # Configure CloudWatch agent
+            mkdir -p /opt/aws/amazon-cloudwatch-agent/etc
             cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
             {
               "logs": {
@@ -401,13 +408,19 @@ Resources:
             }
             EOF
             
-            # Start CloudWatch agent
+            # Start CloudWatch agent with local config file
             /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-              -a query -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+              -a append-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
             
-            # Log successful startup
+            # Ensure agent is running and enabled
+            systemctl enable amazon-cloudwatch-agent
+            systemctl start amazon-cloudwatch-agent
+            
+            # Log successful startup and upload to S3 (non-blocking)
             echo "NovaFintech application server started at $(date)" >> /var/log/nova-startup.log
-            aws s3 cp /var/log/nova-startup.log s3://${NovaLogsBucket}/startup-logs/$(date +%Y%m%d)/$(ec2-metadata --instance-id | cut -d " " -f 2).log
+            set +e  # Temporarily disable exit on error for S3 upload
+            aws s3 cp /var/log/nova-startup.log s3://${NovaLogsBucket}/startup-logs/$(date +%Y%m%d)/$(ec2-metadata --instance-id | cut -d " " -f 2).log 2>&1 || echo "S3 upload failed, but continuing..."
+            set -e  # Re-enable exit on error
 
   # ==========================================
   # Auto Scaling Group Configuration
@@ -484,6 +497,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - 'ec2:AssociateAddress'
+                  - 'ec2:DisassociateAddress'
                   - 'ec2:DescribeInstances'
                   - 'ec2:DescribeAddresses'
                   - 'autoscaling:CompleteLifecycleAction'
@@ -526,6 +540,19 @@ Resources:
                   instance_id = message['EC2InstanceId']
                   
                   try:
+                      # Check if EIP is already associated to another instance
+                      addresses = ec2.describe_addresses(AllocationIds=[allocation_id])
+                      if addresses['Addresses'] and addresses['Addresses'][0].get('InstanceId'):
+                          existing_instance = addresses['Addresses'][0]['InstanceId']
+                          if existing_instance != instance_id:
+                              # Disassociate from old instance
+                              print(f"Disassociating EIP from existing instance {existing_instance}")
+                              ec2.disassociate_address(AssociationId=addresses['Addresses'][0]['AssociationId'])
+                      
+                      # Wait for instance to be running
+                      waiter = ec2.get_waiter('instance_running')
+                      waiter.wait(InstanceIds=[instance_id], WaiterConfig={'Delay': 5, 'MaxAttempts': 60})
+                      
                       # Associate the Elastic IP with the new instance
                       response = ec2.associate_address(
                           AllocationId=allocation_id,
@@ -543,6 +570,8 @@ Resources:
                       )
                   except Exception as e:
                       print(f"Error associating EIP: {str(e)}")
+                      import traceback
+                      print(traceback.format_exc())
                       # Still continue with the lifecycle action
                       autoscaling.complete_lifecycle_action(
                           LifecycleHookName=message['LifecycleHookName'],
@@ -555,7 +584,7 @@ Resources:
                   'statusCode': 200,
                   'body': json.dumps('EIP association completed')
               }
-      Timeout: 60
+      Timeout: 300
       Tags:
         - Key: Name
           Value: !Sub 'NovaFintech-${Environment}-EIPAssociation'

@@ -35,6 +35,17 @@ const ec2 = new EC2Client({ region: REGION });
 const asg = new AutoScalingClient({ region: REGION });
 const cloudwatch = new CloudWatchClient({ region: REGION });
 
+// Cleanup function to close all clients
+afterAll(async () => {
+  await Promise.all([
+    s3.destroy(),
+    logs.destroy(),
+    ec2.destroy(),
+    asg.destroy(),
+    cloudwatch.destroy()
+  ]);
+});
+
 
 
 describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
@@ -48,17 +59,38 @@ describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
 
       expect(resolvedIps.length).toBeGreaterThan(0);
       expect(resolvedIps).toContain(EIP);
-    });
+    }, 60000); // 1 minute timeout
   });
 
   describe('Elastic IP → EC2/Apache (HTTP path)', () => {
     test('HTTP GET to WebsiteURL returns 200 and expected landing content', async () => {
-      const resp = await axios.get(WEBSITE_URL, { timeout: 30_000, validateStatus: () => true });
-      expect(resp.status).toBe(200);
-      const body: string = resp.data;
+      // Retry logic for Apache startup time
+      let resp;
+      let retries = 0;
+      const maxRetries = 12; // 1 minute max
+      
+      while (retries < maxRetries) {
+        try {
+          resp = await axios.get(WEBSITE_URL, { timeout: 30_000, validateStatus: () => true });
+          if (resp.status === 200 && resp.data.includes('NovaFintech') && resp.data.includes('Environment:')) {
+            break;
+          }
+        } catch (error) {
+          // Continue retrying
+        }
+        
+        if (retries < maxRetries - 1) {
+          await new Promise(r => setTimeout(r, 5000)); // Wait 5 seconds
+        }
+        retries++;
+      }
+      
+      expect(resp).toBeDefined();
+      expect(resp!.status).toBe(200);
+      const body: string = resp!.data;
       expect(body).toContain('NovaFintech');
       expect(body).toContain('Environment:');
-    });
+    }, 120000); // 2 minute timeout
 
     test('Customer POV: unique page request appears in Apache access logs (CloudWatch)', async () => {
       // generate unique path that will produce a 404 but still be logged by Apache
@@ -74,23 +106,39 @@ describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
         await axios.get(target.toString(), { timeout: 15_000, validateStatus: () => true }).catch(() => void 0);
       }
 
-      // check CloudWatch Logs for the unique path appearing in recent streams
-      const streamsResp = await logs.send(new DescribeLogStreamsCommand({ logGroupName: accessLogGroup, orderBy: 'LastEventTime', descending: true, limit: 5 }));
-      const streams = streamsResp.logStreams || [];
+      // Wait for CloudWatch agent to ship logs (up to 2 minutes)
       let found = false;
+      let retries = 0;
+      const maxRetries = 24; // 24 * 5 seconds = 2 minutes
       
-      for (const s of streams) {
-        if (!s.logStreamName) continue;
-        const eventsResp = await logs.send(new GetLogEventsCommand({ logGroupName: accessLogGroup, logStreamName: s.logStreamName, limit: 200, startFromHead: false }));
-        const messages = (eventsResp.events || []).map(e => e.message || '');
-        if (messages.some(m => m.includes(token) || m.includes(uniquePath))) {
-          found = true;
-          break;
+      while (!found && retries < maxRetries) {
+        await new Promise(r => setTimeout(r, 5000)); // Wait 5 seconds between retries
+        retries++;
+        
+        try {
+          const streamsResp = await logs.send(new DescribeLogStreamsCommand({ logGroupName: accessLogGroup, orderBy: 'LastEventTime', descending: true, limit: 5 }));
+          const streams = streamsResp.logStreams || [];
+          
+          for (const s of streams) {
+            if (!s.logStreamName) continue;
+            const eventsResp = await logs.send(new GetLogEventsCommand({ logGroupName: accessLogGroup, logStreamName: s.logStreamName, limit: 200, startFromHead: false }));
+            const messages = (eventsResp.events || []).map(e => e.message || '');
+            if (messages.some(m => m.includes(token) || m.includes(uniquePath))) {
+              found = true;
+              break;
+            }
+          }
+        } catch (error: any) {
+          // If log group doesn't exist yet, continue retrying
+          if (error.name === 'ResourceNotFoundException') {
+            continue;
+          }
+          throw error;
         }
       }
 
       expect(found).toBe(true);
-    });
+    }, 180000); // 3 minute timeout
   });
 
   describe('CloudWatch Logs and S3 artifacts', () => {
@@ -98,13 +146,51 @@ describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
       const accessGroup = `/aws/ec2/novafintech/${ENVIRONMENT}/apache/access`;
       const errorGroup = `/aws/ec2/novafintech/${ENVIRONMENT}/apache/error`;
 
-      const lgResp = await logs.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: `/aws/ec2/novafintech/${ENVIRONMENT}/apache/` }));
-      const groupNames = (lgResp.logGroups || []).map(g => g.logGroupName);
+      // Retry logic for log groups creation (CloudWatch agent creates them on first log)
+      let groupNames: string[] = [];
+      let retries = 0;
+      const maxRetries = 24; // 2 minutes max
+      
+      while (retries < maxRetries) {
+        const lgResp = await logs.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: `/aws/ec2/novafintech/${ENVIRONMENT}/apache/` }));
+        groupNames = (lgResp.logGroups || []).map(g => g.logGroupName).filter((name): name is string => !!name);
+        
+        if (groupNames.includes(accessGroup) && groupNames.includes(errorGroup)) {
+          break;
+        }
+        
+        if (retries < maxRetries - 1) {
+          await new Promise(r => setTimeout(r, 5000)); // Wait 5 seconds
+        }
+        retries++;
+      }
+      
       expect(groupNames).toEqual(expect.arrayContaining([accessGroup, errorGroup]));
 
-      const streamsResp = await logs.send(new DescribeLogStreamsCommand({ logGroupName: accessGroup, orderBy: 'LastEventTime', descending: true, limit: 1 }));
-      expect((streamsResp.logStreams || []).length).toBeGreaterThan(0);
-    });
+      // Wait for streams to be created
+      let streamsExist = false;
+      let streamRetries = 0;
+      const maxStreamRetries = 12; // 1 minute max
+      
+      while (!streamsExist && streamRetries < maxStreamRetries) {
+        try {
+          const streamsResp = await logs.send(new DescribeLogStreamsCommand({ logGroupName: accessGroup, orderBy: 'LastEventTime', descending: true, limit: 1 }));
+          if ((streamsResp.logStreams || []).length > 0) {
+            streamsExist = true;
+            break;
+          }
+        } catch (error) {
+          // Continue retrying
+        }
+        
+        if (streamRetries < maxStreamRetries - 1) {
+          await new Promise(r => setTimeout(r, 5000)); // Wait 5 seconds
+        }
+        streamRetries++;
+      }
+      
+      expect(streamsExist).toBe(true);
+    }, 180000); // 3 minute timeout
 
     test('S3 bucket has versioning enabled and contains startup logs', async () => {
       const ver = await s3.send(new GetBucketVersioningCommand({ Bucket: S3_BUCKET }));
@@ -131,15 +217,38 @@ describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
     });
 
     test('Elastic IP is currently associated to the ASG instance', async () => {
-      const addrResp = await ec2.send(new DescribeAddressesCommand({ PublicIps: [EIP] }));
-      const address = (addrResp.Addresses || [])[0];
-      expect(address).toBeDefined();
-      expect(address.InstanceId).toBe(instanceId);
-
-      const instResp = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [instanceId!] }));
-      const state = instResp.Reservations?.[0]?.Instances?.[0]?.State?.Name;
-      expect(state).toBe('running');
-    });
+      // Retry logic for EIP association (Lambda may take time)
+      let eipAssociated = false;
+      let retries = 0;
+      const maxRetries = 30; // 5 minutes max
+      
+      while (!eipAssociated && retries < maxRetries) {
+        const addrResp = await ec2.send(new DescribeAddressesCommand({ PublicIps: [EIP] }));
+        const address = (addrResp.Addresses || [])[0];
+        
+        if (address?.InstanceId === instanceId) {
+          eipAssociated = true;
+          
+          const instResp = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [instanceId!] }));
+          const state = instResp.Reservations?.[0]?.Instances?.[0]?.State?.Name;
+          expect(state).toBe('running');
+          break;
+        }
+        
+        if (retries < maxRetries - 1) {
+          await new Promise(r => setTimeout(r, 10000)); // Wait 10 seconds
+        }
+        retries++;
+      }
+      
+      expect(eipAssociated).toBe(true);
+      
+      // Final verification
+      const finalAddrResp = await ec2.send(new DescribeAddressesCommand({ PublicIps: [EIP] }));
+      const finalAddress = finalAddrResp.Addresses?.[0];
+      expect(finalAddress).toBeDefined();
+      expect(finalAddress!.InstanceId).toBe(instanceId);
+    }, 360000); // 6 minute timeout
   });
 
   describe('SSH Access (Security Group)', () => {
@@ -218,16 +327,34 @@ describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
 
       expect(refreshComplete).toBe(true);
 
-      // Verify EIP is still associated to a running instance
-      const addrResp = await ec2.send(new DescribeAddressesCommand({ PublicIps: [EIP] }));
-      const address = addrResp.Addresses?.[0];
-      expect(address?.InstanceId).toBeDefined();
-      expect(address?.InstanceId).not.toBe(originalInstanceId); // Should be new instance
+      // Wait for EIP to be associated to new instance (Lambda may take a moment)
+      let eipAssociated = false;
+      let eipRetries = 0;
+      const maxEipRetries = 30; // 5 minutes max
+      
+      while (!eipAssociated && eipRetries < maxEipRetries) {
+        await new Promise(r => setTimeout(r, 10000)); // Wait 10 seconds
+        eipRetries++;
+        
+        const addrResp = await ec2.send(new DescribeAddressesCommand({ PublicIps: [EIP] }));
+        const address = addrResp.Addresses?.[0];
+        if (address?.InstanceId && address.InstanceId !== originalInstanceId) {
+          eipAssociated = true;
+          
+          // Verify new instance is running
+          const instResp = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [address.InstanceId] }));
+          const state = instResp.Reservations?.[0]?.Instances?.[0]?.State?.Name;
+          expect(state).toBe('running');
+        }
+      }
 
-      // Verify new instance is running
-      const instResp = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [address!.InstanceId!] }));
-      const state = instResp.Reservations?.[0]?.Instances?.[0]?.State?.Name;
-      expect(state).toBe('running');
-    });
+      expect(eipAssociated).toBe(true);
+      
+      // Final verification
+      const finalAddrResp = await ec2.send(new DescribeAddressesCommand({ PublicIps: [EIP] }));
+      const finalAddress = finalAddrResp.Addresses?.[0];
+      expect(finalAddress?.InstanceId).toBeDefined();
+      expect(finalAddress?.InstanceId).not.toBe(originalInstanceId);
+    }, 900000); // 15 minute timeout for full refresh cycle
   });
 });

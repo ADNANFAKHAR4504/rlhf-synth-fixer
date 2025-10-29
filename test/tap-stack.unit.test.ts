@@ -191,7 +191,7 @@ describe('NovaFintech TapStack CloudFormation Template', () => {
       const lambda = template.Resources.EIPAssociationLambda;
       expect(lambda.Properties.Runtime).toBe('python3.9');
       expect(lambda.Properties.Handler).toBe('index.handler');
-      expect(lambda.Properties.Timeout).toBe(60);
+      expect(lambda.Properties.Timeout).toBe(300);
     });
   });
 
