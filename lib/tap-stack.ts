@@ -171,31 +171,66 @@ export class TapStack extends pulumi.ComponentResource {
   private loadConfiguration(environmentSuffix: string): EnvironmentConfig {
     const config = new pulumi.Config();
 
+    // Determine VPC CIDR based on environment
+    const defaultVpcCidrs: Record<string, string> = {
+      dev: "10.1.0.0/16",
+      staging: "10.2.0.0/16",
+      prod: "10.3.0.0/16",
+    };
+
+    // Determine ECS task count based on environment
+    const defaultTaskCounts: Record<string, number> = {
+      dev: 1,
+      staging: 2,
+      prod: 4,
+    };
+
+    // Determine S3 log retention based on environment
+    const defaultLogRetention: Record<string, number> = {
+      dev: 7,
+      staging: 30,
+      prod: 90,
+    };
+
+    // Determine CloudWatch log retention based on environment
+    const defaultCloudWatchRetention: Record<string, number> = {
+      dev: 7,
+      staging: 30,
+      prod: 90,
+    };
+
+    // Get config with fallbacks
+    const vpcCidr = config.get("vpcCidr") || defaultVpcCidrs[environmentSuffix] || "10.0.0.0/16";
+    const ecsTaskCount = config.getNumber("ecsTaskCount") || defaultTaskCounts[environmentSuffix] || 2;
+    const s3LogRetentionDays = config.getNumber("s3LogRetentionDays") || defaultLogRetention[environmentSuffix] || 30;
+    const cloudwatchLogRetentionDays = config.getNumber("cloudwatchLogRetentionDays") || defaultCloudWatchRetention[environmentSuffix] || 30;
+
     return {
       environmentSuffix,
-      vpcCidr: config.require("vpcCidr"),
-      ecsTaskCount: config.requireNumber("ecsTaskCount"),
-      rdsInstanceClass: config.require("rdsInstanceClass"),
-      s3LogRetentionDays: config.requireNumber("s3LogRetentionDays"),
-      availabilityZones: config.requireObject<string[]>("availabilityZones"),
+      vpcCidr,
+      ecsTaskCount,
+      rdsInstanceClass: config.get("rdsInstanceClass") || "db.t3.micro",
+      s3LogRetentionDays,
+      availabilityZones: config.getObject<string[]>("availabilityZones") || ["us-east-1a", "us-east-1b", "us-east-1c"],
       tags: {
         Environment: environmentSuffix,
-        Team: config.require("team"),
-        CostCenter: config.require("costCenter"),
+        Team: config.get("team") || "platform-team",
+        CostCenter: config.get("costCenter") || "eng-12345",
       },
-      domain: config.require("domain"),
-      ecsTaskCpu: config.require("ecsTaskCpu"),
-      ecsTaskMemory: config.require("ecsTaskMemory"),
-      rdsAllocatedStorage: config.requireNumber("rdsAllocatedStorage"),
-      enableVpcPeering: config.requireBoolean("enableVpcPeering"),
+      domain: config.get("domain") || `${environmentSuffix}.example.com`,
+      ecsTaskCpu: config.get("ecsTaskCpu") || (environmentSuffix === "prod" ? "1024" : environmentSuffix === "staging" ? "512" : "256"),
+      ecsTaskMemory: config.get("ecsTaskMemory") || (environmentSuffix === "prod" ? "2048" : environmentSuffix === "staging" ? "1024" : "512"),
+      rdsAllocatedStorage: config.getNumber("rdsAllocatedStorage") || (environmentSuffix === "prod" ? 100 : 20),
+      enableVpcPeering: config.getBoolean("enableVpcPeering") || false,
       peeringVpcIds: config.getObject<string[]>("peeringVpcIds"),
-      cloudwatchLogRetentionDays: config.requireNumber("cloudwatchLogRetentionDays"),
-      albHealthCheckPath: config.require("albHealthCheckPath"),
-      albHealthCheckInterval: config.requireNumber("albHealthCheckInterval"),
-      containerPort: config.requireNumber("containerPort"),
-      containerImage: config.require("containerImage"),
+      cloudwatchLogRetentionDays,
+      albHealthCheckPath: config.get("albHealthCheckPath") || "/health",
+      albHealthCheckInterval: config.getNumber("albHealthCheckInterval") || 30,
+      containerPort: config.getNumber("containerPort") || 8080,
+      containerImage: config.get("containerImage") || "nginx:latest",
     };
   }
+
 
   /**
    * Create VPC with public and private subnets
