@@ -12,5 +12,11 @@
     "Cloud Environment Setup"
   ],
   "training_quality": 9,
-  "aws_services": "API Gateway, Lambda, SQS, DynamoDB, SNS, CloudWatch, IAM, X-Ray"
+  "aws_services": "API Gateway, Lambda, SQS, DynamoDB, SNS, CloudWatch, IAM, X-Ray",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
