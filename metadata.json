@@ -12,9 +12,5 @@
     "Cloud Environment Setup"
   ],
   "training_quality": 9,
-  "aws_services": "API Gateway, Lambda, SQS, DynamoDB, SNS, CloudWatch, IAM, X-Ray",
-  "deployment_status": "success",
-  "deployed_region": "eu-west-2",
-  "test_coverage": "97.6%",
-  "qa_completed_at": "2025-10-28T15:50:00.000000"
+  "aws_services": "API Gateway, Lambda, SQS, DynamoDB, SNS, CloudWatch, IAM, X-Ray"
 }
