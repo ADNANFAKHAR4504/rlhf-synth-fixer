@@ -48,6 +48,32 @@ class TapStack(Stack):
             enable_key_rotation=True,
             removal_policy=RemovalPolicy.DESTROY,
         )
+        kms_key.add_to_resource_policy(
+            iam.PolicyStatement(
+                sid="AllowCloudWatchLogsEncryption",
+                effect=iam.Effect.ALLOW,
+                principals=[
+                    iam.ServicePrincipal(
+                        f"logs.{Stack.of(self).region}.amazonaws.com"
+                    )
+                ],
+                actions=[
+                    "kms:Encrypt",
+                    "kms:Decrypt",
+                    "kms:ReEncrypt*",
+                    "kms:GenerateDataKey*",
+                    "kms:DescribeKey",
+                ],
+                resources=["*"],
+                conditions={
+                    "ArnEquals": {
+                        "kms:EncryptionContext:aws:logs:arn": self.format_arn(
+                            service="logs", resource="log-group", resource_name="*"
+                        )
+                    }
+                },
+            )
+        )
 
         # Create VPC with multi-AZ configuration
         vpc = ec2.Vpc(

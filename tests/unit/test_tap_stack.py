@@ -2,6 +2,7 @@
 
 # pylint: disable=no-member
 
+import json
 import os
 import aws_cdk as cdk
 from aws_cdk import assertions
@@ -70,6 +71,17 @@ class TestKmsEncryption:
         template.has_resource_properties(
             "AWS::KMS::Key",
             {"EnableKeyRotation": True},
+        )
+
+    def test_kms_policy_allows_cloudwatch_logs(self, template):
+        """Test key policy permits CloudWatch Logs to use the CMK."""
+        key_resources = template.find_resources("AWS::KMS::Key")
+        key_definition = next(iter(key_resources.values()))
+        statements = key_definition["Properties"]["KeyPolicy"]["Statement"]
+        assert any(
+            stmt.get("Sid") == "AllowCloudWatchLogsEncryption"
+            and "logs." in json.dumps(stmt.get("Principal", {}).get("Service", ""))
+            for stmt in statements
         )
 
 
