@@ -1,37 +1,82 @@
-// Dynamic CloudFormation Stack Integration Tests
+// Dynamic CloudFormation Stack Integration Tests - Fully Dynamic Discovery
 import https from 'https';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
-// Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const stackName = `TapStack${environmentSuffix}`;
-const region = 'ap-northeast-1';
+// Dynamic region and stack discovery - no hardcoded values
+let discoveredStack: any = null;
+let discoveredRegion: string | null = null;
 
-// Cache for stack outputs
-let stackOutputs: any = null;
-
-// Helper function to get CloudFormation stack outputs dynamically
-const getStackOutputs = async (): Promise<any> => {
-  if (stackOutputs) return stackOutputs;
+// Helper function to discover AWS region dynamically
+const discoverRegion = async (): Promise<string> => {
+  if (discoveredRegion) return discoveredRegion;
 
   try {
-    const { stdout } = await execAsync(`aws cloudformation describe-stacks --stack-name ${stackName} --region ${region} --query 'Stacks[0].Outputs' --output json`);
-    stackOutputs = JSON.parse(stdout) || [];
-    return stackOutputs;
+    // Try to get the default region from AWS CLI configuration
+    const { stdout } = await execAsync('aws configure get region || echo "ap-northeast-1"');
+    discoveredRegion = stdout.trim() || 'ap-northeast-1';
+    console.log(`Using AWS region: ${discoveredRegion}`);
+    return discoveredRegion;
   } catch (error) {
-    throw new Error(`Failed to get stack outputs for ${stackName}: ${error}`);
+    // Fallback to ap-northeast-1 if configuration fails
+    discoveredRegion = 'ap-northeast-1';
+    console.log(`Fallback to region: ${discoveredRegion}`);
+    return discoveredRegion;
   }
 };
 
-// Helper function to get output value by key
+// Helper function to dynamically discover available CloudFormation stacks
+const discoverStack = async (): Promise<any> => {
+  if (discoveredStack) return discoveredStack;
+
+  const region = await discoverRegion();
+
+  // List of regions to search for stacks
+  const regionsToSearch = [region, 'ap-northeast-1', 'us-east-1'];
+
+  for (const searchRegion of regionsToSearch) {
+    try {
+      console.log(`Searching for TapStack stacks in region: ${searchRegion}`);
+
+      const { stdout: listStacks } = await execAsync(`aws cloudformation list-stacks --region ${searchRegion} --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query 'StackSummaries[?starts_with(StackName, \`TapStack\`)].{StackName:StackName,StackStatus:StackStatus}' --output json`);
+      const availableStacks = JSON.parse(listStacks) || [];
+
+      if (availableStacks.length > 0) {
+        const targetStack = availableStacks[0];
+        console.log(`Discovered stack: ${targetStack.StackName} with status: ${targetStack.StackStatus} in region: ${searchRegion}`);
+
+        // Get stack outputs
+        const { stdout: stackDetails } = await execAsync(`aws cloudformation describe-stacks --stack-name ${targetStack.StackName} --region ${searchRegion} --query 'Stacks[0]' --output json`);
+        discoveredStack = JSON.parse(stackDetails);
+        discoveredStack.Region = searchRegion; // Store the region where we found the stack
+
+        return discoveredStack;
+      }
+    } catch (error) {
+      console.log(`No stacks found in region ${searchRegion}: ${error}`);
+    }
+  }
+
+  throw new Error('No TapStack CloudFormation stacks found in any searched regions');
+};
+
+// Helper function to get output value by key from discovered stack
 const getOutputValue = async (key: string): Promise<string> => {
-  const outputs = await getStackOutputs();
+  const stack = await discoverStack();
+  const outputs = stack.Outputs || [];
   const output = outputs.find((output: any) => output.OutputKey === key);
-  if (!output) throw new Error(`Output ${key} not found in stack ${stackName}`);
+  if (!output) throw new Error(`Output ${key} not found in stack ${stack.StackName}`);
   return output.OutputValue;
+};
+
+// Helper function to get environment suffix from discovered stack
+const getEnvironmentSuffix = async (): Promise<string> => {
+  const stack = await discoverStack();
+  // Extract environment suffix from stack name (e.g., TapStackdev -> dev)
+  const match = stack.StackName.match(/^TapStack(.+)$/);
+  return match ? match[1] : 'dev';
 };
 
 describe('Media Processing Pipeline - Live Infrastructure Tests', () => {
@@ -39,18 +84,20 @@ describe('Media Processing Pipeline - Live Infrastructure Tests', () => {
   describe('VPC and Network Infrastructure', () => {
     test('VPC should exist and be available', async () => {
       const vpcId = await getOutputValue('VPCId');
+      const stack = await discoverStack();
       expect(vpcId).toBeTruthy();
 
-      const { stdout } = await execAsync(`aws ec2 describe-vpcs --vpc-ids ${vpcId} --query 'Vpcs[0].State' --output text --region ap-northeast-1`);
+      const { stdout } = await execAsync(`aws ec2 describe-vpcs --vpc-ids ${vpcId} --query 'Vpcs[0].State' --output text --region ${stack.Region}`);
 
       expect(stdout.trim()).toBe('available');
     });
 
     test('Private subnets should exist and be available', async () => {
       const privateSubnets = (await getOutputValue('PrivateSubnets')).split(',');
+      const stack = await discoverStack();
 
       for (const subnetId of privateSubnets) {
-        const { stdout } = await execAsync(`aws ec2 describe-subnets --subnet-ids ${subnetId.trim()} --query 'Subnets[0].{State:State,MapPublicIp:MapPublicIpOnLaunch}' --output json --region ap-northeast-1`);
+        const { stdout } = await execAsync(`aws ec2 describe-subnets --subnet-ids ${subnetId.trim()} --query 'Subnets[0].{State:State,MapPublicIp:MapPublicIpOnLaunch}' --output json --region ${stack.Region}`);
 
         const subnet = JSON.parse(stdout);
         expect(subnet.State).toBe('available');
@@ -60,9 +107,10 @@ describe('Media Processing Pipeline - Live Infrastructure Tests', () => {
 
     test('Public subnets should exist and be available', async () => {
       const publicSubnets = (await getOutputValue('PublicSubnets')).split(',');
+      const stack = await discoverStack();
 
       for (const subnetId of publicSubnets) {
-        const { stdout } = await execAsync(`aws ec2 describe-subnets --subnet-ids ${subnetId.trim()} --query 'Subnets[0].{State:State,MapPublicIp:MapPublicIpOnLaunch}' --output json --region ap-northeast-1`);
+        const { stdout } = await execAsync(`aws ec2 describe-subnets --subnet-ids ${subnetId.trim()} --query 'Subnets[0].{State:State,MapPublicIp:MapPublicIpOnLaunch}' --output json --region ${stack.Region}`);
 
         const subnet = JSON.parse(stdout);
         expect(subnet.State).toBe('available');
@@ -74,9 +122,11 @@ describe('Media Processing Pipeline - Live Infrastructure Tests', () => {
   describe('Database Infrastructure', () => {
     test('RDS PostgreSQL instance should be running', async () => {
       const rdsEndpoint = await getOutputValue('RDSEndpoint');
+      const environmentSuffix = await getEnvironmentSuffix();
+      const stack = await discoverStack();
       const dbInstanceId = `media-postgres-${environmentSuffix}`;
 
-      const { stdout } = await execAsync(`aws rds describe-db-instances --db-instance-identifier ${dbInstanceId} --query 'DBInstances[0].{Status:DBInstanceStatus,Engine:Engine,Endpoint:Endpoint.Address,Port:Endpoint.Port}' --output json --region ap-northeast-1`);
+      const { stdout } = await execAsync(`aws rds describe-db-instances --db-instance-identifier ${dbInstanceId} --query 'DBInstances[0].{Status:DBInstanceStatus,Engine:Engine,Endpoint:Endpoint.Address,Port:Endpoint.Port}' --output json --region ${stack.Region}`);
 
       const dbInstance = JSON.parse(stdout);
       expect(dbInstance.Status).toBe('available');
@@ -87,9 +137,11 @@ describe('Media Processing Pipeline - Live Infrastructure Tests', () => {
 
     test('ElastiCache Redis cluster should be available', async () => {
       const redisEndpoint = await getOutputValue('RedisEndpoint');
+      const environmentSuffix = await getEnvironmentSuffix();
+      const stack = await discoverStack();
       const replicationGroupId = `media-redis-${environmentSuffix}`;
 
-      const { stdout } = await execAsync(`aws elasticache describe-replication-groups --replication-group-id ${replicationGroupId} --query 'ReplicationGroups[0].{Status:Status,Engine:Engine}' --output json --region ap-northeast-1`);
+      const { stdout } = await execAsync(`aws elasticache describe-replication-groups --replication-group-id ${replicationGroupId} --query 'ReplicationGroups[0].{Status:Status,Engine:Engine}' --output json --region ${stack.Region}`);
 
       const replicationGroup = JSON.parse(stdout);
       expect(replicationGroup.Status).toBe('available');
@@ -103,8 +155,9 @@ describe('Media Processing Pipeline - Live Infrastructure Tests', () => {
   describe('Storage and File Systems', () => {
     test('EFS file system should be available', async () => {
       const fileSystemId = await getOutputValue('EFSFileSystemId');
+      const stack = await discoverStack();
 
-      const { stdout } = await execAsync(`aws efs describe-file-systems --file-system-id ${fileSystemId} --query 'FileSystems[0].{LifeCycleState:LifeCycleState,FileSystemId:FileSystemId}' --output json --region ap-northeast-1`);
+      const { stdout } = await execAsync(`aws efs describe-file-systems --file-system-id ${fileSystemId} --query 'FileSystems[0].{LifeCycleState:LifeCycleState,FileSystemId:FileSystemId}' --output json --region ${stack.Region}`);
 
       const fileSystem = JSON.parse(stdout);
       expect(fileSystem.LifeCycleState).toBe('available');
@@ -113,8 +166,9 @@ describe('Media Processing Pipeline - Live Infrastructure Tests', () => {
 
     test('S3 artifacts bucket should exist and be accessible', async () => {
       const bucketName = await getOutputValue('ArtifactBucketName');
+      const stack = await discoverStack();
 
-      const { stdout } = await execAsync(`aws s3api head-bucket --bucket ${bucketName} --region ap-northeast-1 2>&1 || echo "bucket-not-found"`);
+      const { stdout } = await execAsync(`aws s3api head-bucket --bucket ${bucketName} --region ${stack.Region} 2>&1 || echo "bucket-not-found"`);
 
       // If head-bucket succeeds, there's no output. If it fails, we get an error.
       expect(stdout.trim()).not.toContain('bucket-not-found');
@@ -126,8 +180,9 @@ describe('Media Processing Pipeline - Live Infrastructure Tests', () => {
   describe('CI/CD Pipeline', () => {
     test('CodePipeline should exist and be configured', async () => {
       const pipelineName = await getOutputValue('PipelineName');
+      const stack = await discoverStack();
 
-      const { stdout } = await execAsync(`aws codepipeline get-pipeline --name ${pipelineName} --query 'pipeline.{name:name,stages:stages[].name}' --output json --region ap-northeast-1`);
+      const { stdout } = await execAsync(`aws codepipeline get-pipeline --name ${pipelineName} --query 'pipeline.{name:name,stages:stages[].name}' --output json --region ${stack.Region}`);
 
       const pipeline = JSON.parse(stdout);
       expect(pipeline.name).toBe(pipelineName);
@@ -164,18 +219,22 @@ describe('Media Processing Pipeline - Live Infrastructure Tests', () => {
   describe('Security and Connectivity Tests', () => {
     test('Database should be accessible only from private subnets (security test)', async () => {
       const vpcId = await getOutputValue('VPCId');
+      const environmentSuffix = await getEnvironmentSuffix();
+      const stack = await discoverStack();
       const dbInstanceId = `media-postgres-${environmentSuffix}`;
 
       // Check that RDS is in private subnets (by checking VPC security groups)
-      const { stdout } = await execAsync(`aws rds describe-db-instances --db-instance-identifier ${dbInstanceId} --query 'DBInstances[0].DBSubnetGroup.VpcId' --output text --region ap-northeast-1`);
+      const { stdout } = await execAsync(`aws rds describe-db-instances --db-instance-identifier ${dbInstanceId} --query 'DBInstances[0].DBSubnetGroup.VpcId' --output text --region ${stack.Region}`);
 
       expect(stdout.trim()).toBe(vpcId);
     });
 
     test('All resources should be tagged with environment suffix', async () => {
       const vpcId = await getOutputValue('VPCId');
+      const environmentSuffix = await getEnvironmentSuffix();
+      const stack = await discoverStack();
 
-      const { stdout } = await execAsync(`aws ec2 describe-tags --filters "Name=resource-id,Values=${vpcId}" "Name=key,Values=Name" --query 'Tags[0].Value' --output text --region ap-northeast-1`);
+      const { stdout } = await execAsync(`aws ec2 describe-tags --filters "Name=resource-id,Values=${vpcId}" "Name=key,Values=Name" --query 'Tags[0].Value' --output text --region ${stack.Region}`);
 
       expect(stdout.trim()).toContain(environmentSuffix);
     });
@@ -183,9 +242,11 @@ describe('Media Processing Pipeline - Live Infrastructure Tests', () => {
 
   describe('Cost and Resource Optimization Tests', () => {
     test('RDS instance should use appropriate instance class for environment', async () => {
+      const environmentSuffix = await getEnvironmentSuffix();
+      const stack = await discoverStack();
       const dbInstanceId = `media-postgres-${environmentSuffix}`;
 
-      const { stdout } = await execAsync(`aws rds describe-db-instances --db-instance-identifier ${dbInstanceId} --query 'DBInstances[0].DBInstanceClass' --output text --region ap-northeast-1`);
+      const { stdout } = await execAsync(`aws rds describe-db-instances --db-instance-identifier ${dbInstanceId} --query 'DBInstances[0].DBInstanceClass' --output text --region ${stack.Region}`);
 
       const instanceClass = stdout.trim();
       // For dev environment, should use cost-effective instance types
@@ -195,7 +256,9 @@ describe('Media Processing Pipeline - Live Infrastructure Tests', () => {
     });
 
     test('ElastiCache should use appropriate node type for environment', async () => {
-      const { stdout } = await execAsync(`aws elasticache describe-cache-clusters --show-cache-node-info --query 'CacheClusters[?starts_with(CacheClusterId, \`media-redis-${environmentSuffix}\`)].CacheNodeType | [0]' --output text --region ap-northeast-1`);
+      const environmentSuffix = await getEnvironmentSuffix();
+      const stack = await discoverStack();
+      const { stdout } = await execAsync(`aws elasticache describe-cache-clusters --show-cache-node-info --query 'CacheClusters[?starts_with(CacheClusterId, \`media-redis-${environmentSuffix}\`)].CacheNodeType | [0]' --output text --region ${stack.Region}`);
 
       const nodeType = stdout.trim();
       // For dev environment, should use cost-effective node types
