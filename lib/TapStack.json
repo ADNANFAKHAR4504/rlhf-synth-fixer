@@ -1003,9 +1003,19 @@
                                     "Effect": "Allow",
                                     "Action": [
                                         "kms:Decrypt",
+                                        "kms:Encrypt",
                                         "kms:GenerateDataKey",
+                                        "kms:GenerateDataKeyWithoutPlaintext",
+                                        "kms:ReEncrypt*",
                                         "kms:CreateGrant",
-                                        "kms:DescribeKey"
+                                        "kms:DescribeKey",
+                                        "kms:GetKeyPolicy",
+                                        "kms:GetKeyRotationStatus",
+                                        "kms:ListGrants",
+                                        "kms:ListKeyPolicies",
+                                        "kms:ListResourceTags",
+                                        "kms:RetireGrant",
+                                        "kms:RevokeGrant"
                                     ],
                                     "Resource": "*"
                                 }
