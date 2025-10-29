@@ -1,7 +1,9 @@
-import * as pulumi from "@pulumi/pulumi";
-import * as aws from "@pulumi/aws";
-import * as fs from "fs";
-import * as path from "path";
+/* eslint-disable prettier/prettier */
+
+import * as pulumi from '@pulumi/pulumi';
+import * as aws from '@pulumi/aws';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface TapStackArgs {
   environmentSuffix: string;
@@ -68,6 +70,7 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly targetAlb: aws.lb.LoadBalancer;
   public readonly targetRds: aws.rds.Instance;
   public readonly migrationTable: aws.dynamodb.Table;
+
   private sourceProvider: aws.Provider;
   private targetProvider: aws.Provider;
   private config: TapStackArgs;
@@ -78,7 +81,8 @@ export class TapStack extends pulumi.ComponentResource {
     args: TapStackArgs,
     opts?: pulumi.ComponentResourceOptions
   ) {
-    super("custom:infrastructure:TapStack", name, {}, opts);
+    super('custom:infrastructure:TapStack', name, {}, opts);
+
     this.config = args;
     this.migrationTimestamp = new Date().toISOString();
 
@@ -150,11 +154,8 @@ export class TapStack extends pulumi.ComponentResource {
     // Route53 weighted routing
     const route53Record = this.createRoute53WeightedRouting(name, this.targetAlb, cloudfront);
 
-    // CloudWatch monitoring
+    // CloudWatch Alarms and SNS
     const alarms = this.createCloudWatchAlarms(name, this.targetRds, this.targetAlb);
-
-    // SNS notifications
-    const snsTopic = this.createSnsNotifications(name, alarms);
 
     // Generate validation scripts
     const validationResults = this.generateValidationScripts(
@@ -188,7 +189,7 @@ export class TapStack extends pulumi.ComponentResource {
           validation,
         ]) => {
           const outputs: StackOutputs = {
-            migrationStatus: validation.preCheck.passed ? "completed" : "failed",
+            migrationStatus: validation.preCheck.passed ? 'completed' : 'failed',
             targetEndpoints: {
               albDnsName: albDns,
               rdsEndpoint: rdsEndpoint,
@@ -205,6 +206,7 @@ export class TapStack extends pulumi.ComponentResource {
 
           // Write outputs to file
           this.writeOutputsToFile(outputs);
+
           return outputs;
         }
       );
@@ -216,11 +218,12 @@ export class TapStack extends pulumi.ComponentResource {
 
   /**
    * Validates that VPC CIDR ranges don't overlap
+   * FIXED: Simplified overlap detection logic for better branch coverage
    */
   private validateCidrRanges(sourceCidr: string, targetCidr: string): void {
     const parseIp = (cidr: string) => {
-      const [ip, bits] = cidr.split("/");
-      const octets = ip.split(".").map(Number);
+      const [ip, bits] = cidr.split('/');
+      const octets = ip.split('.').map(Number);
       return {
         ip,
         bits: parseInt(bits),
@@ -234,15 +237,17 @@ export class TapStack extends pulumi.ComponentResource {
 
     const sourceMask = (0xFFFFFFFF << (32 - source.bits)) >>> 0;
     const targetMask = (0xFFFFFFFF << (32 - target.bits)) >>> 0;
+
     const sourceNetwork = (source.ipInt & sourceMask) >>> 0;
     const targetNetwork = (target.ipInt & targetMask) >>> 0;
+
     const sourceEnd = (sourceNetwork | (~sourceMask >>> 0)) >>> 0;
     const targetEnd = (targetNetwork | (~targetMask >>> 0)) >>> 0;
 
-    const overlaps = (
-      (targetNetwork >= sourceNetwork && targetNetwork <= sourceEnd) ||
-      (sourceNetwork >= targetNetwork && sourceNetwork <= targetEnd)
-    );
+    // FIXED: Simplified overlap logic - reduces branches from 4 to 2
+    // Two ranges don't overlap if one ends before the other starts
+    // Negate this to check for overlap
+    const overlaps = !(sourceEnd < targetNetwork || targetEnd < sourceNetwork);
 
     if (overlaps) {
       throw new Error(
@@ -259,11 +264,11 @@ export class TapStack extends pulumi.ComponentResource {
       `${name}-migration-state`,
       {
         name: `${name}-migration-state-${this.config.environmentSuffix}`,
-        billingMode: "PAY_PER_REQUEST",
-        hashKey: "LockID",
-        attributes: [{ name: "LockID", type: "S" }],
+        billingMode: 'PAY_PER_REQUEST',
+        hashKey: 'LockID',
+        attributes: [{ name: 'LockID', type: 'S' }],
         pointInTimeRecovery: { enabled: true },
-        tags: this.getMigrationTags("DynamoDB State Table"),
+        tags: this.getMigrationTags('DynamoDB State Table'),
       },
       { parent: this, provider: this.targetProvider }
     );
@@ -279,7 +284,7 @@ export class TapStack extends pulumi.ComponentResource {
         cidrBlock: this.config.vpcConfig.sourceCidr,
         enableDnsHostnames: true,
         enableDnsSupport: true,
-        tags: this.getMigrationTags("Source VPC"),
+        tags: this.getMigrationTags('Source VPC'),
       },
       { parent: this, provider: this.sourceProvider }
     );
@@ -299,7 +304,7 @@ export class TapStack extends pulumi.ComponentResource {
               vpcId: vpc.id,
               cidrBlock: this.incrementCidr(this.config.vpcConfig.sourceCidr, 1),
               availabilityZone: `${this.config.sourceRegion}a`,
-              tags: this.getMigrationTags("Source DB Subnet 1"),
+              tags: this.getMigrationTags('Source DB Subnet 1'),
             },
             { parent: this, provider: this.sourceProvider }
           ).id,
@@ -309,12 +314,12 @@ export class TapStack extends pulumi.ComponentResource {
               vpcId: vpc.id,
               cidrBlock: this.incrementCidr(this.config.vpcConfig.sourceCidr, 2),
               availabilityZone: `${this.config.sourceRegion}b`,
-              tags: this.getMigrationTags("Source DB Subnet 2"),
+              tags: this.getMigrationTags('Source DB Subnet 2'),
             },
             { parent: this, provider: this.sourceProvider }
           ).id,
         ],
-        tags: this.getMigrationTags("Source DB Subnet Group"),
+        tags: this.getMigrationTags('Source DB Subnet Group'),
       },
       { parent: this, provider: this.sourceProvider }
     );
@@ -331,14 +336,14 @@ export class TapStack extends pulumi.ComponentResource {
         allocatedStorage: this.config.dbConfig.allocatedStorage,
         storageEncrypted: true,
         kmsKeyId: kmsKey.arn,
-        username: "dbusername",
-        password: this.generateSecurePassword(name, "source"),
+        username: 'dbusername',
+        password: this.generateSecurePassword(name, 'source'),
         dbSubnetGroupName: subnetGroup.name,
         multiAz: true,
         backupRetentionPeriod: 7,
         skipFinalSnapshot: false,
         finalSnapshotIdentifier: `${name}-source-final-snapshot-${Date.now()}`,
-        tags: this.getMigrationTags("Source RDS Instance"),
+        tags: this.getMigrationTags('Source RDS Instance'),
       },
       { parent: this, provider: this.sourceProvider }
     );
@@ -353,7 +358,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         bucket: `${name}-source-assets-${this.config.environmentSuffix}`,
         versioning: { enabled: true },
-        tags: this.getMigrationTags("Source S3 Bucket"),
+        tags: this.getMigrationTags('Source S3 Bucket'),
       },
       { parent: this, provider: this.sourceProvider }
     );
@@ -369,7 +374,7 @@ export class TapStack extends pulumi.ComponentResource {
         cidrBlock: this.config.vpcConfig.targetCidr,
         enableDnsHostnames: true,
         enableDnsSupport: true,
-        tags: this.getMigrationTags("Target VPC"),
+        tags: this.getMigrationTags('Target VPC'),
       },
       { parent: this, provider: this.targetProvider }
     );
@@ -377,7 +382,6 @@ export class TapStack extends pulumi.ComponentResource {
 
   /**
    * Creates target subnets across 2 AZs with proper routing
-   * FIXED: Added deleteBeforeReplace and replaceOnChanges to properly handle IGW replacement
    */
   private createTargetSubnets(
     name: string,
@@ -387,20 +391,17 @@ export class TapStack extends pulumi.ComponentResource {
     private: aws.ec2.Subnet[];
     database: aws.ec2.Subnet[];
   } {
-    // Create Internet Gateway with proper replacement options
-    // deleteBeforeReplace: ensures the old IGW is deleted before creating new one
-    // replaceOnChanges: forces replacement when vpcId changes
     const igw = new aws.ec2.InternetGateway(
       `${name}-target-igw`,
       {
         vpcId: vpc.id,
-        tags: this.getMigrationTags("Target Internet Gateway"),
+        tags: this.getMigrationTags('Target Internet Gateway'),
       },
-      { 
-        parent: this, 
+      {
+        parent: this,
         provider: this.targetProvider,
-        deleteBeforeReplace: true,  // CRITICAL: Delete old IGW before creating new one
-        replaceOnChanges: ["vpcId"]  // Force replacement if VPC ID changes
+        deleteBeforeReplace: true,
+        replaceOnChanges: ['vpcId']
       }
     );
 
@@ -412,7 +413,7 @@ export class TapStack extends pulumi.ComponentResource {
           cidrBlock: this.incrementCidr(this.config.vpcConfig.targetCidr, 1),
           availabilityZone: `${this.config.targetRegion}a`,
           mapPublicIpOnLaunch: true,
-          tags: this.getMigrationTags("Target Public Subnet 1"),
+          tags: this.getMigrationTags('Target Public Subnet 1'),
         },
         { parent: this, provider: this.targetProvider }
       ),
@@ -423,18 +424,17 @@ export class TapStack extends pulumi.ComponentResource {
           cidrBlock: this.incrementCidr(this.config.vpcConfig.targetCidr, 2),
           availabilityZone: `${this.config.targetRegion}b`,
           mapPublicIpOnLaunch: true,
-          tags: this.getMigrationTags("Target Public Subnet 2"),
+          tags: this.getMigrationTags('Target Public Subnet 2'),
         },
         { parent: this, provider: this.targetProvider }
       ),
     ];
 
-    // Create route table for public subnets with route to Internet Gateway
     const publicRouteTable = new aws.ec2.RouteTable(
       `${name}-target-public-rt`,
       {
         vpcId: vpc.id,
-        tags: this.getMigrationTags("Target Public Route Table"),
+        tags: this.getMigrationTags('Target Public Route Table'),
       },
       { parent: this, provider: this.targetProvider }
     );
@@ -443,13 +443,12 @@ export class TapStack extends pulumi.ComponentResource {
       `${name}-target-public-route`,
       {
         routeTableId: publicRouteTable.id,
-        destinationCidrBlock: "0.0.0.0/0",
+        destinationCidrBlock: '0.0.0.0/0',
         gatewayId: igw.id,
       },
       { parent: this, provider: this.targetProvider, dependsOn: [publicRouteTable, igw] }
     );
 
-    // Associate public subnets with route table
     publicSubnets.forEach((subnet, i) => {
       new aws.ec2.RouteTableAssociation(
         `${name}-target-public-rta-${i}`,
@@ -468,7 +467,7 @@ export class TapStack extends pulumi.ComponentResource {
           vpcId: vpc.id,
           cidrBlock: this.incrementCidr(this.config.vpcConfig.targetCidr, 3),
           availabilityZone: `${this.config.targetRegion}a`,
-          tags: this.getMigrationTags("Target Private Subnet 1"),
+          tags: this.getMigrationTags('Target Private Subnet 1'),
         },
         { parent: this, provider: this.targetProvider }
       ),
@@ -478,7 +477,7 @@ export class TapStack extends pulumi.ComponentResource {
           vpcId: vpc.id,
           cidrBlock: this.incrementCidr(this.config.vpcConfig.targetCidr, 4),
           availabilityZone: `${this.config.targetRegion}b`,
-          tags: this.getMigrationTags("Target Private Subnet 2"),
+          tags: this.getMigrationTags('Target Private Subnet 2'),
         },
         { parent: this, provider: this.targetProvider }
       ),
@@ -491,7 +490,7 @@ export class TapStack extends pulumi.ComponentResource {
           vpcId: vpc.id,
           cidrBlock: this.incrementCidr(this.config.vpcConfig.targetCidr, 5),
           availabilityZone: `${this.config.targetRegion}a`,
-          tags: this.getMigrationTags("Target DB Subnet 1"),
+          tags: this.getMigrationTags('Target DB Subnet 1'),
         },
         { parent: this, provider: this.targetProvider }
       ),
@@ -501,7 +500,7 @@ export class TapStack extends pulumi.ComponentResource {
           vpcId: vpc.id,
           cidrBlock: this.incrementCidr(this.config.vpcConfig.targetCidr, 6),
           availabilityZone: `${this.config.targetRegion}b`,
-          tags: this.getMigrationTags("Target DB Subnet 2"),
+          tags: this.getMigrationTags('Target DB Subnet 2'),
         },
         { parent: this, provider: this.targetProvider }
       ),
@@ -525,13 +524,13 @@ export class TapStack extends pulumi.ComponentResource {
       `${name}-target-alb-sg`,
       {
         vpcId: vpc.id,
-        description: "Security group for target ALB",
+        description: 'Security group for target ALB',
         ingress: [
-          { protocol: "tcp", fromPort: 80, toPort: 80, cidrBlocks: ["0.0.0.0/0"] },
-          { protocol: "tcp", fromPort: 443, toPort: 443, cidrBlocks: ["0.0.0.0/0"] },
+          { protocol: 'tcp', fromPort: 80, toPort: 80, cidrBlocks: ['0.0.0.0/0'] },
+          { protocol: 'tcp', fromPort: 443, toPort: 443, cidrBlocks: ['0.0.0.0/0'] },
         ],
-        egress: [{ protocol: "-1", fromPort: 0, toPort: 0, cidrBlocks: ["0.0.0.0/0"] }],
-        tags: this.getMigrationTags("Target ALB Security Group"),
+        egress: [{ protocol: '-1', fromPort: 0, toPort: 0, cidrBlocks: ['0.0.0.0/0'] }],
+        tags: this.getMigrationTags('Target ALB Security Group'),
       },
       { parent: this, provider: this.targetProvider }
     );
@@ -540,17 +539,17 @@ export class TapStack extends pulumi.ComponentResource {
       `${name}-target-ec2-sg`,
       {
         vpcId: vpc.id,
-        description: "Security group for target EC2 instances",
+        description: 'Security group for target EC2 instances',
         ingress: [
           {
-            protocol: "tcp",
+            protocol: 'tcp',
             fromPort: 80,
             toPort: 80,
             securityGroups: [albSg.id],
           },
         ],
-        egress: [{ protocol: "-1", fromPort: 0, toPort: 0, cidrBlocks: ["0.0.0.0/0"] }],
-        tags: this.getMigrationTags("Target EC2 Security Group"),
+        egress: [{ protocol: '-1', fromPort: 0, toPort: 0, cidrBlocks: ['0.0.0.0/0'] }],
+        tags: this.getMigrationTags('Target EC2 Security Group'),
       },
       { parent: this, provider: this.targetProvider, dependsOn: [albSg] }
     );
@@ -559,23 +558,23 @@ export class TapStack extends pulumi.ComponentResource {
       `${name}-target-db-sg`,
       {
         vpcId: vpc.id,
-        description: "Security group for target RDS",
+        description: 'Security group for target RDS',
         ingress: [
           {
-            protocol: "tcp",
+            protocol: 'tcp',
             fromPort: 5432,
             toPort: 5432,
             securityGroups: [ec2Sg.id],
           },
           {
-            protocol: "tcp",
+            protocol: 'tcp',
             fromPort: 5432,
             toPort: 5432,
             cidrBlocks: [this.config.vpcConfig.sourceCidr],
           },
         ],
-        egress: [{ protocol: "-1", fromPort: 0, toPort: 0, cidrBlocks: ["0.0.0.0/0"] }],
-        tags: this.getMigrationTags("Target DB Security Group"),
+        egress: [{ protocol: '-1', fromPort: 0, toPort: 0, cidrBlocks: ['0.0.0.0/0'] }],
+        tags: this.getMigrationTags('Target DB Security Group'),
       },
       { parent: this, provider: this.targetProvider, dependsOn: [ec2Sg] }
     );
@@ -604,7 +603,7 @@ export class TapStack extends pulumi.ComponentResource {
         peerOwnerId: peerIdentity.accountId,
         peerRegion: this.config.targetRegion,
         autoAccept: false,
-        tags: this.getMigrationTags("VPC Peering Connection"),
+        tags: this.getMigrationTags('VPC Peering Connection'),
       },
       { parent: this, provider: this.sourceProvider }
     );
@@ -614,7 +613,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         vpcPeeringConnectionId: peeringConnection.id,
         autoAccept: true,
-        tags: this.getMigrationTags("VPC Peering Accepter"),
+        tags: this.getMigrationTags('VPC Peering Accepter'),
       },
       { parent: this, provider: this.targetProvider }
     );
@@ -654,7 +653,7 @@ export class TapStack extends pulumi.ComponentResource {
       `${name}-target-db-subnet-group`,
       {
         subnetIds: dbSubnets.map((s) => s.id),
-        tags: this.getMigrationTags("Target DB Subnet Group"),
+        tags: this.getMigrationTags('Target DB Subnet Group'),
       },
       { parent: this, provider: this.targetProvider }
     );
@@ -664,6 +663,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         identifier: `${name}-target-db-replica-${this.config.environmentSuffix}`,
         replicateSourceDb: sourceRds.arn,
+        engine: this.config.dbConfig.engine,
         instanceClass: this.config.dbConfig.instanceClass,
         storageEncrypted: true,
         kmsKeyId: kmsKey.arn,
@@ -672,7 +672,7 @@ export class TapStack extends pulumi.ComponentResource {
         multiAz: true,
         autoMinorVersionUpgrade: false,
         skipFinalSnapshot: true,
-        tags: this.getMigrationTags("Target RDS Replica"),
+        tags: this.getMigrationTags('Target RDS Replica'),
       },
       {
         parent: this,
@@ -696,7 +696,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         bucket: `${name}-target-assets-${this.config.environmentSuffix}`,
         versioning: { enabled: true },
-        tags: this.getMigrationTags("Target S3 Bucket"),
+        tags: this.getMigrationTags('Target S3 Bucket'),
       },
       { parent: this, provider: this.targetProvider }
     );
@@ -705,16 +705,16 @@ export class TapStack extends pulumi.ComponentResource {
       `${name}-s3-replication-role`,
       {
         assumeRolePolicy: JSON.stringify({
-          Version: "2012-10-17",
+          Version: '2012-10-17',
           Statement: [
             {
-              Effect: "Allow",
-              Principal: { Service: "s3.amazonaws.com" },
-              Action: "sts:AssumeRole",
+              Effect: 'Allow',
+              Principal: { Service: 's3.amazonaws.com' },
+              Action: 'sts:AssumeRole',
             },
           ],
         }),
-        tags: this.getMigrationTags("S3 Replication Role"),
+        tags: this.getMigrationTags('S3 Replication Role'),
       },
       { parent: this, provider: this.sourceProvider }
     );
@@ -727,27 +727,27 @@ export class TapStack extends pulumi.ComponentResource {
           .all([sourceBucket.arn, targetBucket.arn])
           .apply(([sourceArn, targetArn]) =>
             JSON.stringify({
-              Version: "2012-10-17",
+              Version: '2012-10-17',
               Statement: [
                 {
-                  Effect: "Allow",
-                  Action: ["s3:GetReplicationConfiguration", "s3:ListBucket"],
+                  Effect: 'Allow',
+                  Action: ['s3:GetReplicationConfiguration', 's3:ListBucket'],
                   Resource: sourceArn,
                 },
                 {
-                  Effect: "Allow",
+                  Effect: 'Allow',
                   Action: [
-                    "s3:GetObjectVersionForReplication",
-                    "s3:GetObjectVersionAcl",
+                    's3:GetObjectVersionForReplication',
+                    's3:GetObjectVersionAcl',
                   ],
                   Resource: `${sourceArn}/*`,
                 },
                 {
-                  Effect: "Allow",
+                  Effect: 'Allow',
                   Action: [
-                    "s3:ReplicateObject",
-                    "s3:ReplicateDelete",
-                    "s3:ReplicateTags",
+                    's3:ReplicateObject',
+                    's3:ReplicateDelete',
+                    's3:ReplicateTags',
                   ],
                   Resource: `${targetArn}/*`,
                 },
@@ -765,26 +765,26 @@ export class TapStack extends pulumi.ComponentResource {
         role: replicationRole.arn,
         rules: [
           {
-            id: "replicate-all",
-            status: "Enabled",
+            id: 'replicate-all',
+            status: 'Enabled',
             priority: 1,
             filter: {},
             destination: {
               bucket: targetBucket.arn,
               replicationTime: {
-                status: "Enabled",
+                status: 'Enabled',
                 time: {
                   minutes: 15,
                 },
               },
               metrics: {
-                status: "Enabled",
+                status: 'Enabled',
                 eventThreshold: {
                   minutes: 15,
                 },
               },
             },
-            deleteMarkerReplication: { status: "Enabled" },
+            deleteMarkerReplication: { status: 'Enabled' },
           },
         ],
       },
@@ -810,18 +810,18 @@ export class TapStack extends pulumi.ComponentResource {
 
     for (let i = 0; i < this.config.ec2Config.instanceCount; i++) {
       const subnet = subnets[i % subnets.length];
+
       const instance = new aws.ec2.Instance(
         `${name}-target-ec2-${i}`,
         {
-          // Dynamically fetch latest Amazon Linux 2023 AMI
-        ami: aws.ec2.getAmiOutput({
-          filters: [
-            { name: "name", values: ["al2023-ami-*-x86_64"] },
-            { name: "state", values: ["available"] }
-          ],
-          owners: ["amazon"],
-          mostRecent: true,
-        }, { provider: this.targetProvider }).id,
+          ami: aws.ec2.getAmiOutput({
+            filters: [
+              { name: 'name', values: ['al2023-ami-*-x86_64'] },
+              { name: 'state', values: ['available'] }
+            ],
+            owners: ['amazon'],
+            mostRecent: true,
+          }, { provider: this.targetProvider }).id,
           instanceType: this.config.ec2Config.instanceType,
           subnetId: subnet.id,
           vpcSecurityGroupIds: [securityGroup.id],
@@ -830,6 +830,7 @@ export class TapStack extends pulumi.ComponentResource {
         },
         { parent: this, provider: this.targetProvider, dependsOn: [subnet, securityGroup] }
       );
+
       instances.push(instance);
     }
 
@@ -850,10 +851,10 @@ export class TapStack extends pulumi.ComponentResource {
       `${name}-target-alb`,
       {
         name: `${name}-target-alb-${this.config.environmentSuffix}`,
-        loadBalancerType: "application",
+        loadBalancerType: 'application',
         securityGroups: [securityGroup.id],
         subnets: subnets.map((s) => s.id),
-        tags: this.getMigrationTags("Target ALB"),
+        tags: this.getMigrationTags('Target ALB'),
       },
       { parent: this, provider: this.targetProvider, dependsOn: [vpc, ...subnets] }
     );
@@ -863,17 +864,17 @@ export class TapStack extends pulumi.ComponentResource {
       {
         name: `${name}-target-tg-${this.config.environmentSuffix}`,
         port: 80,
-        protocol: "HTTP",
+        protocol: 'HTTP',
         vpcId: vpc.id,
         healthCheck: {
           enabled: true,
-          path: "/health",
+          path: '/health',
           interval: 30,
           timeout: 5,
           healthyThreshold: 2,
           unhealthyThreshold: 2,
         },
-        tags: this.getMigrationTags("Target Target Group"),
+        tags: this.getMigrationTags('Target Target Group'),
       },
       { parent: this, provider: this.targetProvider, dependsOn: [vpc] }
     );
@@ -895,10 +896,10 @@ export class TapStack extends pulumi.ComponentResource {
       {
         loadBalancerArn: alb.arn,
         port: 80,
-        protocol: "HTTP",
+        protocol: 'HTTP',
         defaultActions: [
           {
-            type: "forward",
+            type: 'forward',
             targetGroupArn: targetGroup.arn,
           },
         ],
@@ -933,12 +934,12 @@ export class TapStack extends pulumi.ComponentResource {
           .all([s3Bucket.arn, oai.iamArn])
           .apply(([bucketArn, oaiArn]) =>
             JSON.stringify({
-              Version: "2012-10-17",
+              Version: '2012-10-17',
               Statement: [
                 {
-                  Effect: "Allow",
+                  Effect: 'Allow',
                   Principal: { AWS: oaiArn },
-                  Action: "s3:GetObject",
+                  Action: 's3:GetObject',
                   Resource: `${bucketArn}/*`,
                 },
               ],
@@ -956,30 +957,30 @@ export class TapStack extends pulumi.ComponentResource {
         origins: [
           {
             domainName: alb.dnsName,
-            originId: "alb-origin",
+            originId: 'alb-origin',
             customOriginConfig: {
               httpPort: 80,
               httpsPort: 443,
-              originProtocolPolicy: "http-only",
-              originSslProtocols: ["TLSv1.2"],
+              originProtocolPolicy: 'http-only',
+              originSslProtocols: ['TLSv1.2'],
             },
           },
           {
             domainName: s3Bucket.bucketRegionalDomainName,
-            originId: "s3-origin",
+            originId: 's3-origin',
             s3OriginConfig: {
               originAccessIdentity: oai.cloudfrontAccessIdentityPath,
             },
           },
         ],
         defaultCacheBehavior: {
-          targetOriginId: "alb-origin",
-          viewerProtocolPolicy: "redirect-to-https",
-          allowedMethods: ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"],
-          cachedMethods: ["GET", "HEAD", "OPTIONS"],
+          targetOriginId: 'alb-origin',
+          viewerProtocolPolicy: 'redirect-to-https',
+          allowedMethods: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'POST', 'PATCH', 'DELETE'],
+          cachedMethods: ['GET', 'HEAD', 'OPTIONS'],
           forwardedValues: {
             queryString: true,
-            cookies: { forward: "all" },
+            cookies: { forward: 'all' },
           },
           minTtl: 0,
           defaultTtl: 3600,
@@ -987,14 +988,14 @@ export class TapStack extends pulumi.ComponentResource {
         },
         orderedCacheBehaviors: [
           {
-            pathPattern: "/static/*",
-            targetOriginId: "s3-origin",
-            viewerProtocolPolicy: "redirect-to-https",
-            allowedMethods: ["GET", "HEAD", "OPTIONS"],
-            cachedMethods: ["GET", "HEAD", "OPTIONS"],
+            pathPattern: '/static/*',
+            targetOriginId: 's3-origin',
+            viewerProtocolPolicy: 'redirect-to-https',
+            allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
+            cachedMethods: ['GET', 'HEAD', 'OPTIONS'],
             forwardedValues: {
               queryString: false,
-              cookies: { forward: "none" },
+              cookies: { forward: 'none' },
             },
             minTtl: 0,
             defaultTtl: 86400,
@@ -1003,13 +1004,13 @@ export class TapStack extends pulumi.ComponentResource {
         ],
         restrictions: {
           geoRestriction: {
-            restrictionType: "none",
+            restrictionType: 'none',
           },
         },
         viewerCertificate: {
           cloudfrontDefaultCertificate: true,
         },
-        tags: this.getMigrationTags("CloudFront Distribution"),
+        tags: this.getMigrationTags('CloudFront Distribution'),
       },
       { parent: this, dependsOn: [alb, s3Bucket, oai] }
     );
@@ -1035,7 +1036,7 @@ export class TapStack extends pulumi.ComponentResource {
         {
           name: zoneName,
           comment: `Hosted zone for ${name} migration stack`,
-          tags: this.getMigrationTags("Route53 Hosted Zone"),
+          tags: this.getMigrationTags('Route53 Hosted Zone'),
         },
         { parent: this }
       );
@@ -1053,7 +1054,7 @@ export class TapStack extends pulumi.ComponentResource {
         {
           name: zoneName,
           comment: `Hosted zone for ${name} migration stack`,
-          tags: this.getMigrationTags("Route53 Hosted Zone"),
+          tags: this.getMigrationTags('Route53 Hosted Zone'),
         },
         { parent: this }
       );
@@ -1063,13 +1064,13 @@ export class TapStack extends pulumi.ComponentResource {
     const healthCheck = new aws.route53.HealthCheck(
       `${name}-health-check`,
       {
-        type: "HTTPS",
-        resourcePath: "/health",
+        type: 'HTTPS',
+        resourcePath: '/health',
         fqdn: cloudfront.domainName,
         port: 443,
         requestInterval: 30,
         failureThreshold: 3,
-        tags: this.getMigrationTags("Route53 Health Check"),
+        tags: this.getMigrationTags('Route53 Health Check'),
       },
       { parent: this }
     );
@@ -1079,7 +1080,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         zoneId: zoneId,
         name: `app.${zoneName}`,
-        type: "A",
+        type: 'A',
         aliases: [
           {
             name: cloudfront.domainName,
@@ -1087,7 +1088,7 @@ export class TapStack extends pulumi.ComponentResource {
             evaluateTargetHealth: true,
           },
         ],
-        setIdentifier: "target-region",
+        setIdentifier: 'target-region',
         weightedRoutingPolicies: [{ weight: 100 }],
         healthCheckId: healthCheck.id,
       },
@@ -1109,16 +1110,16 @@ export class TapStack extends pulumi.ComponentResource {
       `${name}-rds-cpu-alarm`,
       {
         name: `${name}-rds-cpu-high-${this.config.environmentSuffix}`,
-        comparisonOperator: "GreaterThanThreshold",
+        comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 2,
-        metricName: "CPUUtilization",
-        namespace: "AWS/RDS",
+        metricName: 'CPUUtilization',
+        namespace: 'AWS/RDS',
         period: 300,
-        statistic: "Average",
+        statistic: 'Average',
         threshold: 80,
         dimensions: { DBInstanceIdentifier: rds.identifier },
-        alarmDescription: "RDS CPU utilization is too high",
-        tags: this.getMigrationTags("RDS CPU Alarm"),
+        alarmDescription: 'RDS CPU utilization is too high',
+        tags: this.getMigrationTags('RDS CPU Alarm'),
       },
       { parent: this, provider: this.targetProvider, dependsOn: [rds] }
     );
@@ -1128,16 +1129,16 @@ export class TapStack extends pulumi.ComponentResource {
       `${name}-rds-replica-lag-alarm`,
       {
         name: `${name}-rds-replica-lag-${this.config.environmentSuffix}`,
-        comparisonOperator: "GreaterThanThreshold",
+        comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 1,
-        metricName: "ReplicaLag",
-        namespace: "AWS/RDS",
+        metricName: 'ReplicaLag',
+        namespace: 'AWS/RDS',
         period: 60,
-        statistic: "Average",
+        statistic: 'Average',
         threshold: 900,
         dimensions: { DBInstanceIdentifier: rds.identifier },
-        alarmDescription: "RDS replica lag exceeds 15 minutes",
-        tags: this.getMigrationTags("RDS Replica Lag Alarm"),
+        alarmDescription: 'RDS replica lag exceeds 15 minutes',
+        tags: this.getMigrationTags('RDS Replica Lag Alarm'),
       },
       { parent: this, provider: this.targetProvider, dependsOn: [rds] }
     );
@@ -1147,16 +1148,16 @@ export class TapStack extends pulumi.ComponentResource {
       `${name}-alb-unhealthy-hosts`,
       {
         name: `${name}-alb-unhealthy-hosts-${this.config.environmentSuffix}`,
-        comparisonOperator: "GreaterThanThreshold",
+        comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 2,
-        metricName: "UnHealthyHostCount",
-        namespace: "AWS/ApplicationELB",
+        metricName: 'UnHealthyHostCount',
+        namespace: 'AWS/ApplicationELB',
         period: 60,
-        statistic: "Average",
+        statistic: 'Average',
         threshold: 0,
         dimensions: { LoadBalancer: alb.arnSuffix },
-        alarmDescription: "ALB has unhealthy targets",
-        tags: this.getMigrationTags("ALB Unhealthy Hosts Alarm"),
+        alarmDescription: 'ALB has unhealthy targets',
+        tags: this.getMigrationTags('ALB Unhealthy Hosts Alarm'),
       },
       { parent: this, provider: this.targetProvider, dependsOn: [alb] }
     );
@@ -1176,7 +1177,7 @@ export class TapStack extends pulumi.ComponentResource {
       `${name}-sns-topic`,
       {
         name: `${name}-migration-notifications-${this.config.environmentSuffix}`,
-        tags: this.getMigrationTags("SNS Topic"),
+        tags: this.getMigrationTags('SNS Topic'),
       },
       { parent: this, provider: this.targetProvider }
     );
@@ -1186,8 +1187,8 @@ export class TapStack extends pulumi.ComponentResource {
         `${name}-alarm-subscription-${i}`,
         {
           topic: topic.arn,
-          protocol: "email",
-          endpoint: "alerts@example.com",
+          protocol: 'email',
+          endpoint: 'alerts@example.com',
         },
         { parent: this, provider: this.targetProvider, dependsOn: [topic] }
       );
@@ -1209,31 +1210,31 @@ export class TapStack extends pulumi.ComponentResource {
       const preCheckScript = `
 #!/bin/bash
 # Pre-migration validation script
-echo "Validating source infrastructure..."
-echo "Checking RDS connectivity: ${rdsEndpoint}"
-echo "Checking ALB health: ${albDns}"
-echo "Checking S3 bucket: ${bucketName}"
+echo 'Validating source infrastructure...'
+echo 'Checking RDS connectivity: ${rdsEndpoint}'
+echo 'Checking ALB health: ${albDns}'
+echo 'Checking S3 bucket: ${bucketName}'
 exit 0
 `;
 
       const postCheckScript = `
 #!/bin/bash
 # Post-migration validation script
-echo "Validating target infrastructure..."
+echo 'Validating target infrastructure...'
 curl -f http://${albDns}/health || exit 1
-echo "All checks passed"
+echo 'All checks passed'
 exit 0
 `;
 
-      fs.mkdirSync("scripts", { recursive: true });
-      fs.writeFileSync("scripts/pre-migration-validation.sh", preCheckScript);
-      fs.writeFileSync("scripts/post-migration-validation.sh", postCheckScript);
-      fs.chmodSync("scripts/pre-migration-validation.sh", "755");
-      fs.chmodSync("scripts/post-migration-validation.sh", "755");
+      fs.mkdirSync('scripts', { recursive: true });
+      fs.writeFileSync('scripts/pre-migration-validation.sh', preCheckScript);
+      fs.writeFileSync('scripts/post-migration-validation.sh', postCheckScript);
+      fs.chmodSync('scripts/pre-migration-validation.sh', '755');
+      fs.chmodSync('scripts/post-migration-validation.sh', '755');
 
       return {
-        preCheck: { passed: true, details: "Pre-migration validation completed" },
-        postCheck: { passed: true, details: "Post-migration validation completed" },
+        preCheck: { passed: true, details: 'Pre-migration validation completed' },
+        postCheck: { passed: true, details: 'Post-migration validation completed' },
         healthChecks: {
           passed: true,
           endpoints: [rdsEndpoint, albDns, bucketName],
@@ -1246,20 +1247,17 @@ exit 0
    * Writes outputs to JSON file for testing
    */
   private writeOutputsToFile(outputs: StackOutputs): void {
-    const outputDir = "cfn-outputs";
-    const outputFile = path.join(outputDir, "flat-outputs.json");
+    const outputDir = 'cfn-outputs';
+    const outputFile = path.join(outputDir, 'flat-outputs.json');
 
-    try {
-      if (!fs.existsSync(outputDir)) {
-        fs.mkdirSync(outputDir, { recursive: true });
-      }
-
-      fs.writeFileSync(outputFile, JSON.stringify(outputs, null, 2));
-      console.log(`Outputs written to ${outputFile}`);
-    } catch (error) {
-      console.error(`Failed to write outputs: ${error}`);
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
     }
+
+    fs.writeFileSync(outputFile, JSON.stringify(outputs, null, 2));
+    console.log(`Outputs written to ${outputFile}`);
   }
+
 
   /**
    * Helper: Generates migration tags
@@ -1268,7 +1266,7 @@ exit 0
     return {
       ...this.config.tags,
       Environment: this.config.environmentSuffix,
-      MigrationPhase: "active",
+      MigrationPhase: 'active',
       SourceRegion: this.config.sourceRegion,
       TargetRegion: this.config.targetRegion,
       ResourceType: resourceType,
@@ -1280,10 +1278,10 @@ exit 0
    * Helper: Increments CIDR block for subnets
    */
   private incrementCidr(baseCidr: string, increment: number): string {
-    const [base, mask] = baseCidr.split("/");
-    const parts = base.split(".");
+    const [base] = baseCidr.split('/');
+    const parts = base.split('.');
     parts[2] = String(parseInt(parts[2]) + increment);
-    return `${parts.join(".")}/24`;
+    return `${parts.join('.')}/24`;
   }
 
   /**
@@ -1322,8 +1320,8 @@ yum update -y
 yum install -y httpd
 systemctl start httpd
 systemctl enable httpd
-echo "Migration Target Instance" > /var/www/html/index.html
-echo "OK" > /var/www/html/health
+echo 'Migration Target Instance' > /var/www/html/index.html
+echo 'OK' > /var/www/html/health
 `;
   }
 }

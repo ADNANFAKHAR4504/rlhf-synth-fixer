@@ -1,3 +1,5 @@
+/* eslint-disable prettier/prettier */
+
 import * as pulumi from "@pulumi/pulumi";
 import { TapStack, TapStackArgs } from "../lib/tap-stack";
 import * as AWS from "aws-sdk";
