@@ -65,55 +65,9 @@ SSMEndpoint, EC2MessagesEndpoint, DBTierSecurityGroup, AppTierSecurityGroup, SSM
 - **Security Compromise**: Cannot establish proper network security controls
 - **Operational Impact**: Infrastructure provisioning pipeline breaks entirely
 
-### 2. Missing Environment Suffix Parameter
-
-**Requirement:** Support multiple parallel deployments with environment-specific suffixes for cross-environment isolation.
-
-**Model Response:** No EnvironmentSuffix parameter defined - only basic Environment parameter for tagging.
-
-**Ideal Response:** Includes dedicated EnvironmentSuffix parameter for resource naming:
-```yaml
-EnvironmentSuffix:
-  Type: String
-  Description: 'Suffix for resource names to support multiple parallel deployments'
-  Default: "dev"
-  AllowedPattern: '^[a-zA-Z0-9\-]*$'
-```
-
-**Impact:**
-- Cannot deploy multiple environments (dev, staging, prod) in parallel in the same region
-- Resource naming conflicts when deploying multiple stacks
-- Reduced operational flexibility for CI/CD pipelines
-- Cannot achieve environment isolation through naming conventions
-
-### 3. Incomplete Resource Naming Convention
-
-**Requirement:** Use AWS::Region and EnvironmentSuffix in all resource names for complete traceability and uniqueness.
-
-**Model Response:** Basic naming without region or environment suffix:
-```yaml
-Value: !Sub '${AWS::StackName}-VPC'
-Value: !Sub '${AWS::StackName}-Web-Tier-SG'
-Value: !Sub '${AWS::StackName}-Public-Subnet-1'
-```
-
-**Ideal Response:** Comprehensive naming with region and environment:
-```yaml
-Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-vpc'
-Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-web-tier-sg'
-Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-subnet-1'
-```
-
-**Impact:**
-- Resource naming conflicts in multi-region deployments
-- Cannot identify which region/environment a resource belongs to
-- Difficult resource tracking and management in AWS console
-- Issues with parallel deployments across regions
-- Poor operational visibility and troubleshooting
-
 ## Major Issues
 
-### 4. Security Group Architecture Design Flaw
+### 2. **Security Group Architecture Design Flaw**
 
 **Requirement:** Design security groups that allow proper network segmentation without creating dependency loops.
 
@@ -133,25 +87,43 @@ Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-subnet
 - Prevents modular deployment patterns
 - Reduces flexibility for future architectural changes
 
-### 5. Missing PCI DSS Network Isolation Best Practices
+### 3. **Missing PCI DSS Network Isolation Best Practices**
 
 **Requirement:** Implement strict network isolation following PCI DSS requirements with subnet-level access controls.
 
-**Model Response:** Relies on security group references which can create broader access than intended.
+**Model Response:** Relies on security group references which can create broader access than intended:
+```yaml
+AppTierSecurityGroup:
+  SecurityGroupIngress:
+    - SourceSecurityGroupId: !Ref WebTierSecurityGroup      # Too broad - allows any source with Web SG
+DBTierSecurityGroup:
+  SecurityGroupIngress:
+    - SourceSecurityGroupId: !Ref AppTierSecurityGroup      # Too broad - allows any source with App SG
+VPCEndpointSecurityGroup:
+  SecurityGroupIngress:
+    - SourceSecurityGroupId: !Ref AppTierSecurityGroup      # Too broad - allows any source with App SG
+```
 
 **Ideal Response:** Uses specific subnet CIDR blocks to enforce network segmentation:
 ```yaml
 # App tier only allows access from specific public subnets
-SecurityGroupIngress:
-  - CidrIp: !Ref PublicSubnet1Cidr
-  - CidrIp: !Ref PublicSubnet2Cidr  
-  - CidrIp: !Ref PublicSubnet3Cidr
+AppTierSecurityGroup:
+  SecurityGroupIngress:
+    - CidrIp: !Ref PublicSubnet1Cidr
+    - CidrIp: !Ref PublicSubnet2Cidr  
+    - CidrIp: !Ref PublicSubnet3Cidr
 
 # DB tier only allows access from specific private subnets
-SecurityGroupIngress:
-  - CidrIp: !Ref PrivateSubnet1Cidr
-  - CidrIp: !Ref PrivateSubnet2Cidr
-  - CidrIp: !Ref PrivateSubnet3Cidr
+DBTierSecurityGroup:
+  SecurityGroupIngress:
+    - CidrIp: !Ref PrivateSubnet1Cidr
+    - CidrIp: !Ref PrivateSubnet2Cidr
+    - CidrIp: !Ref PrivateSubnet3Cidr
+
+# VPC endpoints allow access from entire VPC
+VPCEndpointSecurityGroup:
+  SecurityGroupIngress:
+    - CidrIp: !Ref VpcCidr
 ```
 
 **Impact:**
@@ -159,57 +131,6 @@ SecurityGroupIngress:
 - Potential compliance issues with PCI DSS requirements
 - Reduced network segmentation effectiveness
 - Harder to audit and validate network access patterns
-
-### 6. Export Name Convention Inconsistency
-
-**Requirement:** Consistent export names with region and environment for multi-region support.
-
-**Model Response:** Basic export names without region/environment context:
-```yaml
-Export:
-  Name: !Sub '${AWS::StackName}-VPC-ID'
-  Name: !Sub '${AWS::StackName}-Web-Tier-SG-ID'
-```
-
-**Ideal Response:** Comprehensive export names with full context:
-```yaml
-Export:
-  Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-vpc-id'
-  Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-web-tier-sg-id'
-```
-
-**Impact:**
-- Export name collisions in multi-region deployments
-- Cannot use same stack name across regions
-- Limited cross-stack reference capability in complex architectures
-- Reduced flexibility for multi-environment setups
-
-## Minor Issues
-
-### 7. Tag Naming Convention Inconsistency
-
-**Model Response:** Inconsistent tag values without region/environment context:
-```yaml
-Tags:
-  - Key: Name
-    Value: !Sub '${AWS::StackName}-VPC'
-  - Key: Name  
-    Value: !Sub '${AWS::StackName}-Public-Subnet-1'
-```
-
-**Ideal Response:** Consistent, comprehensive tag naming:
-```yaml
-Tags:
-  - Key: Name
-    Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-vpc'
-  - Key: Name
-    Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-subnet-1'
-```
-
-**Impact:**
-- Difficult to identify resources in AWS console
-- Poor resource organization in multi-region setups
-- Inconsistent tagging strategy affects cost allocation and management
 
 ## Deployment Impact Analysis
 
@@ -251,12 +172,8 @@ The ideal response breaks the circular dependency by:
 | Severity | Issue | Model Gap | Deployment Impact | Fix Priority |
 |----------|-------|-----------|-------------------|--------------|
 | Critical | Circular Dependencies | Security group cross-references | Complete deployment failure | P0 - Immediate |
-| Critical | Missing EnvironmentSuffix | No environment suffix parameter | Limited parallel deployments | P1 - High |
-| Critical | Incomplete Naming | No region/environment in names | Naming conflicts, poor traceability | P1 - High |
-| Major | Security Architecture | Tight coupling via SG references | Deployment fragility | P2 - Medium |
-| Major | Network Isolation | Less precise subnet-level controls | Compliance risk | P2 - Medium |
-| Major | Export Name Issues | No region/environment in exports | Cross-stack reference limitations | P2 - Medium |
-| Minor | Tag Inconsistency | Missing region/environment in tags | Poor resource identification | P3 - Low |
+| Major | Security Architecture | Tight coupling via SG references | Deployment fragility | P1 - High |
+| Major | Network Isolation | Less precise subnet-level controls | Compliance risk | P1 - High |
 
 ## Improvement Recommendations
 
@@ -268,37 +185,17 @@ The ideal response breaks the circular dependency by:
    - Use `!Ref PublicSubnet1Cidr`, `!Ref PrivateSubnet1Cidr`, etc. for tier-specific access
    - Use `!Ref VpcCidr` for VPC-wide access patterns
 
-2. **Add EnvironmentSuffix Parameter**
-   ```yaml
-   EnvironmentSuffix:
-     Type: String
-     Description: 'Suffix for resource names to support multiple parallel deployments'
-     Default: "dev"
-     AllowedPattern: '^[a-zA-Z0-9\-]*$'
-   ```
+### High Priority (Major) - Next Sprint
 
-3. **Update All Resource Names**
-   - Add `${AWS::Region}` and `${EnvironmentSuffix}` to all Name tags
-   - Update all Export names to include region and environment
-   - Ensure consistent naming pattern across all resources
-
-### Medium Priority (Major) - Next Sprint
-
-4. **Redesign Security Group Architecture**
+2. **Redesign Security Group Architecture**
    - Implement subnet-based access controls
    - Document network flow patterns
    - Validate PCI DSS compliance requirements
 
-5. **Enhanced Network Segmentation**
+3. **Enhanced Network Segmentation**
    - Use specific subnet CIDRs for each tier
    - Implement least-privilege access patterns
    - Add network flow documentation
-
-### Low Priority (Minor) - Future Iterations
-
-6. **Standardize Tagging Strategy**
-   - Implement consistent tag naming across all resources
-   - Add region and environment context to all tags
 
 ## Migration Path
 
@@ -311,26 +208,19 @@ SecurityGroupEgress:
 # With this pattern:
 SecurityGroupEgress:
   - CidrIp: !Ref VpcCidr
+
+# Replace this pattern:
+SecurityGroupIngress:
+  - SourceSecurityGroupId: !Ref WebTierSecurityGroup
+
+# With this pattern:
+SecurityGroupIngress:
+  - CidrIp: !Ref PublicSubnet1Cidr
+  - CidrIp: !Ref PublicSubnet2Cidr
+  - CidrIp: !Ref PublicSubnet3Cidr
 ```
 
-### Phase 2: Parameter Enhancement
-```yaml
-# Add missing parameter:
-EnvironmentSuffix:
-  Type: String
-  Default: "dev"
-```
-
-### Phase 3: Naming Standardization
-```yaml
-# Update naming from:
-Value: !Sub '${AWS::StackName}-VPC'
-
-# To comprehensive naming:
-Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-vpc'
-```
-
-### Phase 4: Validation & Testing
+### Phase 2: Validation & Testing
 - Deploy in test environment
 - Validate multi-region capability
 - Test parallel environment deployments
@@ -342,9 +232,7 @@ The model response demonstrates **fundamental architectural flaws** that prevent
 
 The ideal response shows **production-ready architecture** with:
 - **Deployable Infrastructure**: No circular dependencies
-- **Multi-Region Support**: Region-aware naming and exports  
-- **Environment Isolation**: Parallel deployment capability
-- **Network Security**: Subnet-based access controls
+- **Network Security**: Subnet-based access controls following PCI DSS best practices
 - **Operational Excellence**: Comprehensive tagging and naming
 
 **Gap Summary**: The model response represents a **non-functional template** that requires significant architectural redesign to achieve basic deployment capability, while the ideal response provides **enterprise-grade, production-ready infrastructure** that follows AWS best practices and supports complex operational requirements.

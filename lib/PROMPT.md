@@ -14,6 +14,25 @@ The template must be cross-account executable, region-agnostic, and free of hard
 - Template must be cross-account executable — no account- or region-specific references
 - Avoid hardcoding ARNs, Account IDs, Region names, or fixed resource names
 
+### Critical Resource Naming Pattern
+All resources must follow this naming pattern using !Sub:
+`${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-[resource-type]`
+
+Example:
+- VPC: `${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-vpc`
+- Subnets: `${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-subnet-1`
+
+### Required Parameters
+Must include the following parameters:
+```yaml
+EnvironmentSuffix:
+  Type: String
+  Description: 'Suffix for resource names to support multiple parallel deployments'
+  Default: "dev"
+  AllowedPattern: '^[a-zA-Z0-9\-]*$'
+  ConstraintDescription: 'Must contain only alphanumeric characters and hyphens'
+```
+
 ### VPC Architecture
 
 - Create a VPC with CIDR block 10.0.0.0/16 (parameterized)

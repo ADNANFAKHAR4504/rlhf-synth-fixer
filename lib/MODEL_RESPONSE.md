@@ -132,6 +132,13 @@ Parameters:
     Default: 'PCI-DSS'
     Description: 'Compliance framework identifier'
 
+  EnvironmentSuffix:
+    Type: String
+    Description: 'Suffix for resource names to support multiple parallel deployments'
+    Default: "dev"
+    AllowedPattern: '^[a-zA-Z0-9\-]*$'
+    ConstraintDescription: 'Must contain only alphanumeric characters and hyphens'
+
 # ===================================
 # Resources
 # ===================================
@@ -147,7 +154,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-VPC'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-vpc'
         - Key: Environment
           Value: !Ref Environment
         - Key: CostCenter
@@ -163,7 +170,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-IGW'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-igw'
         - Key: Environment
           Value: !Ref Environment
         - Key: CostCenter
@@ -189,7 +196,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-Public-Subnet-1'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-subnet-1'
         - Key: Tier
           Value: 'Public'
         - Key: Environment
@@ -208,7 +215,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-Public-Subnet-2'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-subnet-2'
         - Key: Tier
           Value: 'Public'
         - Key: Environment
@@ -227,7 +234,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-Public-Subnet-3'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-subnet-3'
         - Key: Tier
           Value: 'Public'
         - Key: Environment
@@ -248,7 +255,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-Private-Subnet-1'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-private-subnet-1'
         - Key: Tier
           Value: 'Application'
         - Key: Environment
@@ -266,7 +273,7 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-Private-Subnet-2'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-private-subnet-2'
         - Key: Tier
           Value: 'Application'
         - Key: Environment
@@ -284,7 +291,7 @@ Resources:
       AvailabilityZone: !Select [2, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-Private-Subnet-3'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-private-subnet-3'
         - Key: Tier
           Value: 'Application'
         - Key: Environment
@@ -305,7 +312,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-Database-Subnet-1'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-database-subnet-1'
         - Key: Tier
           Value: 'Database'
         - Key: Environment
@@ -323,7 +330,7 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-Database-Subnet-2'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-database-subnet-2'
         - Key: Tier
           Value: 'Database'
         - Key: Environment
@@ -341,7 +348,7 @@ Resources:
       AvailabilityZone: !Select [2, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-Database-Subnet-3'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-database-subnet-3'
         - Key: Tier
           Value: 'Database'
         - Key: Environment
@@ -361,7 +368,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-NAT-Gateway-1-EIP'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-nat-gateway-1-eip'
         - Key: Environment
           Value: !Ref Environment
         - Key: CostCenter
@@ -376,7 +383,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-NAT-Gateway-2-EIP'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-nat-gateway-2-eip'
         - Key: Environment
           Value: !Ref Environment
         - Key: CostCenter
@@ -391,7 +398,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-NAT-Gateway-3-EIP'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-nat-gateway-3-eip'
         - Key: Environment
           Value: !Ref Environment
         - Key: CostCenter
@@ -409,7 +416,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-NAT-Gateway-1'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-nat-gateway-1'
         - Key: Environment
           Value: !Ref Environment
         - Key: CostCenter
@@ -424,7 +431,7 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-NAT-Gateway-2'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-nat-gateway-2'
         - Key: Environment
           Value: !Ref Environment
         - Key: CostCenter
@@ -439,7 +446,7 @@ Resources:
       SubnetId: !Ref PublicSubnet3
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-NAT-Gateway-3'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-nat-gateway-3'
         - Key: Environment
           Value: !Ref Environment
         - Key: CostCenter
@@ -457,7 +464,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-Public-Route-Table'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-route-table'
         - Key: Environment
           Value: !Ref Environment
         - Key: CostCenter
@@ -498,7 +505,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-Private-Route-Table-1'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-private-route-table-1'
         - Key: Environment
           Value: !Ref Environment
         - Key: CostCenter
@@ -525,7 +532,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-Private-Route-Table-2'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-private-route-table-2'
         - Key: Environment
           Value: !Ref Environment
         - Key: CostCenter
@@ -552,7 +559,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-Private-Route-Table-3'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-private-route-table-3'
         - Key: Environment
           Value: !Ref Environment
         - Key: CostCenter
@@ -580,7 +587,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-Database-Route-Table'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-database-route-table'
         - Key: Environment
           Value: !Ref Environment
         - Key: CostCenter
@@ -613,7 +620,7 @@ Resources:
   WebTierSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${AWS::StackName}-Web-Tier-SG'
+      GroupName: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-web-tier-sg'
       GroupDescription: 'Security group for Web tier - allows HTTPS from Internet'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -635,7 +642,7 @@ Resources:
           Description: 'Allow HTTPS to Internet for external API calls'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-Web-Tier-SG'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-web-tier-sg'
         - Key: Environment
           Value: !Ref Environment
         - Key: CostCenter
@@ -647,7 +654,7 @@ Resources:
   AppTierSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${AWS::StackName}-App-Tier-SG'
+      GroupName: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-app-tier-sg'
       GroupDescription: 'Security group for App tier - allows traffic from Web tier'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -669,7 +676,7 @@ Resources:
           Description: 'Allow HTTPS within VPC for AWS services'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-App-Tier-SG'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-app-tier-sg'
         - Key: Environment
           Value: !Ref Environment
         - Key: CostCenter
@@ -681,7 +688,7 @@ Resources:
   DBTierSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${AWS::StackName}-DB-Tier-SG'
+      GroupName: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db-tier-sg'
       GroupDescription: 'Security group for Database tier - allows PostgreSQL from App tier'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -696,7 +703,7 @@ Resources:
           Description: 'Deny all outbound traffic (loopback only)'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-DB-Tier-SG'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db-tier-sg'
         - Key: Environment
           Value: !Ref Environment
         - Key: CostCenter
@@ -708,7 +715,7 @@ Resources:
   VPCEndpointSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${AWS::StackName}-VPC-Endpoint-SG'
+      GroupName: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-vpc-endpoint-sg'
       GroupDescription: 'Security group for VPC Endpoints'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -719,7 +726,7 @@ Resources:
           Description: 'Allow HTTPS from App tier'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-VPC-Endpoint-SG'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-vpc-endpoint-sg'
         - Key: Environment
           Value: !Ref Environment
         - Key: CostCenter
@@ -759,7 +766,7 @@ Resources:
                 Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:*'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-VPC-Flow-Log-Role'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-vpc-flow-log-role'
         - Key: Environment
           Value: !Ref Environment
         - Key: CostCenter
@@ -771,11 +778,11 @@ Resources:
   VPCFlowLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/vpc/flowlogs/${AWS::StackName}'
+      LogGroupName: !Sub '/aws/vpc/flowlogs/${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}'
       RetentionInDays: 90
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-VPC-Flow-Log-Group'
+          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-vpc-flow-log-group'
         - Key: Environment
           Value: !Ref Environment
         - Key: CostCenter
@@ -882,7 +889,7 @@ Outputs:
     Description: 'VPC ID'
     Value: !Ref VPC
     Export:
-      Name: !Sub '${AWS::StackName}-VPC-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-VPC-ID'
 
   VPCCidr:
     Description: 'VPC CIDR Block'
@@ -895,126 +902,126 @@ Outputs:
     Description: 'Public Subnet 1 ID'
     Value: !Ref PublicSubnet1
     Export:
-      Name: !Sub '${AWS::StackName}-Public-Subnet-1-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Public-Subnet-1-ID'
 
   PublicSubnet2Id:
     Description: 'Public Subnet 2 ID'
     Value: !Ref PublicSubnet2
     Export:
-      Name: !Sub '${AWS::StackName}-Public-Subnet-2-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Public-Subnet-2-ID'
 
   PublicSubnet3Id:
     Description: 'Public Subnet 3 ID'
     Value: !Ref PublicSubnet3
     Export:
-      Name: !Sub '${AWS::StackName}-Public-Subnet-3-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Public-Subnet-3-ID'
 
   # Private Subnet Outputs
   PrivateSubnet1Id:
     Description: 'Private Subnet 1 ID'
     Value: !Ref PrivateSubnet1
     Export:
-      Name: !Sub '${AWS::StackName}-Private-Subnet-1-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Private-Subnet-1-ID'
 
   PrivateSubnet2Id:
     Description: 'Private Subnet 2 ID'
     Value: !Ref PrivateSubnet2
     Export:
-      Name: !Sub '${AWS::StackName}-Private-Subnet-2-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Private-Subnet-2-ID'
 
   PrivateSubnet3Id:
     Description: 'Private Subnet 3 ID'
     Value: !Ref PrivateSubnet3
     Export:
-      Name: !Sub '${AWS::StackName}-Private-Subnet-3-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Private-Subnet-3-ID'
 
   # Database Subnet Outputs
   DatabaseSubnet1Id:
     Description: 'Database Subnet 1 ID'
     Value: !Ref DatabaseSubnet1
     Export:
-      Name: !Sub '${AWS::StackName}-Database-Subnet-1-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Database-Subnet-1-ID'
 
   DatabaseSubnet2Id:
     Description: 'Database Subnet 2 ID'
     Value: !Ref DatabaseSubnet2
     Export:
-      Name: !Sub '${AWS::StackName}-Database-Subnet-2-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Database-Subnet-2-ID'
 
   DatabaseSubnet3Id:
     Description: 'Database Subnet 3 ID'
     Value: !Ref DatabaseSubnet3
     Export:
-      Name: !Sub '${AWS::StackName}-Database-Subnet-3-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Database-Subnet-3-ID'
 
   # Security Group Outputs
   WebTierSecurityGroupId:
     Description: 'Web Tier Security Group ID'
     Value: !Ref WebTierSecurityGroup
     Export:
-      Name: !Sub '${AWS::StackName}-Web-Tier-SG-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Web-Tier-SG-ID'
 
   AppTierSecurityGroupId:
     Description: 'App Tier Security Group ID'
     Value: !Ref AppTierSecurityGroup
     Export:
-      Name: !Sub '${AWS::StackName}-App-Tier-SG-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-App-Tier-SG-ID'
 
   DBTierSecurityGroupId:
     Description: 'Database Tier Security Group ID'
     Value: !Ref DBTierSecurityGroup
     Export:
-      Name: !Sub '${AWS::StackName}-DB-Tier-SG-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-DB-Tier-SG-ID'
 
   # NAT Gateway Outputs
   NatGateway1Id:
     Description: 'NAT Gateway 1 ID'
     Value: !Ref NatGateway1
     Export:
-      Name: !Sub '${AWS::StackName}-NAT-Gateway-1-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-NAT-Gateway-1-ID'
 
   NatGateway2Id:
     Description: 'NAT Gateway 2 ID'
     Value: !Ref NatGateway2
     Export:
-      Name: !Sub '${AWS::StackName}-NAT-Gateway-2-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-NAT-Gateway-2-ID'
 
   NatGateway3Id:
     Description: 'NAT Gateway 3 ID'
     Value: !Ref NatGateway3
     Export:
-      Name: !Sub '${AWS::StackName}-NAT-Gateway-3-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-NAT-Gateway-3-ID'
 
   # Route Table Outputs
   PublicRouteTableId:
     Description: 'Public Route Table ID'
     Value: !Ref PublicRouteTable
     Export:
-      Name: !Sub '${AWS::StackName}-Public-Route-Table-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Public-Route-Table-ID'
 
   PrivateRouteTable1Id:
     Description: 'Private Route Table 1 ID'
     Value: !Ref PrivateRouteTable1
     Export:
-      Name: !Sub '${AWS::StackName}-Private-Route-Table-1-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Private-Route-Table-1-ID'
 
   PrivateRouteTable2Id:
     Description: 'Private Route Table 2 ID'
     Value: !Ref PrivateRouteTable2
     Export:
-      Name: !Sub '${AWS::StackName}-Private-Route-Table-2-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Private-Route-Table-2-ID'
 
   PrivateRouteTable3Id:
     Description: 'Private Route Table 3 ID'
     Value: !Ref PrivateRouteTable3
     Export:
-      Name: !Sub '${AWS::StackName}-Private-Route-Table-3-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Private-Route-Table-3-ID'
 
   DatabaseRouteTableId:
     Description: 'Database Route Table ID'
     Value: !Ref DatabaseRouteTable
     Export:
-      Name: !Sub '${AWS::StackName}-Database-Route-Table-ID'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Database-Route-Table-ID'
 ```
 
 ## Template Overview
