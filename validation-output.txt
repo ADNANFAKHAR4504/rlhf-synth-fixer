@@ -1,8 +1,0 @@
-🔍 Starting Pre-Deployment IaC Validation...
-  Platform: CloudFormation
-  Language: yaml
-  Environment Suffix: dev
-
-📋 1. Checking for hardcoded values...
-⚠️  WARNING: Potential hardcoded value found: arn:aws:.*:.*:account
-lib/TapStack.yml:64:              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
