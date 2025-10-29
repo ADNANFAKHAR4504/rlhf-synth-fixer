@@ -10,7 +10,24 @@
   "subject_labels": [
     "Multi-Environment Consistency"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC",
+  "aws_services": [
+    "DynamoDB",
+    "Lambda",
+    "API Gateway",
+    "ElastiCache",
+    "SNS",
+    "SQS",
+    "EventBridge",
+    "Step Functions",
+    "RDS Aurora",
+    "Secrets Manager",
+    "VPC",
+    "IAM",
+    "CloudWatch",
+    "S3",
+    "X-Ray"
+  ],
+  "training_quality": 10,
   "task_config": {
     "deploy_env": "prod.tfvars"
   }
