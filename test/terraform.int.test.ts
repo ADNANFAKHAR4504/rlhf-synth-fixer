@@ -2,37 +2,37 @@
 // Tests validate actual deployed AWS resources with E2E workflows
 
 import {
-  LambdaClient,
-  GetFunctionCommand,
-  InvokeCommand,
-} from '@aws-sdk/client-lambda';
-import {
   APIGatewayClient,
   GetRestApiCommand,
   GetStageCommand,
 } from '@aws-sdk/client-api-gateway';
 import {
-  DynamoDBClient,
-  DescribeTableCommand,
-  ScanCommand,
-  PutItemCommand,
-} from '@aws-sdk/client-dynamodb';
-import {
-  SQSClient,
-  GetQueueAttributesCommand,
-  SendMessageCommand,
-  ReceiveMessageCommand,
-} from '@aws-sdk/client-sqs';
-import {
-  EventBridgeClient,
-  DescribeEventBusCommand,
-  ListRulesCommand,
-} from '@aws-sdk/client-eventbridge';
-import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
-import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
+import {
+  DescribeTableCommand,
+  DynamoDBClient,
+  GetItemCommand,
+  PutItemCommand,
+  ScanCommand,
+} from '@aws-sdk/client-dynamodb';
+import {
+  DescribeEventBusCommand,
+  EventBridgeClient,
+  ListRulesCommand,
+} from '@aws-sdk/client-eventbridge';
+import {
+  GetFunctionCommand,
+  InvokeCommand,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
+import {
+  GetQueueAttributesCommand,
+  ReceiveMessageCommand,
+  SQSClient
+} from '@aws-sdk/client-sqs';
+import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 import fs from 'fs';
 import path from 'path';
 
@@ -69,7 +69,7 @@ const ssmClient = new SSMClient({ region });
 const describeWithOutputs = hasOutputs ? describe : describe.skip;
 
 describe('Terraform Serverless Infrastructure Integration Tests', () => {
-  
+
   if (!hasOutputs) {
     test('Skipping integration tests - no deployment outputs found', () => {
       console.log('ℹ️  Integration tests require cfn-outputs/all-outputs.json from deployment');
@@ -80,7 +80,7 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
   }
 
   describe('Infrastructure Deployment Validation', () => {
-    
+
     test('Lambda functions are deployed and active', async () => {
       const functionNames = [
         outputs.lambda_authorizer_arn?.split(':').pop(),
@@ -94,7 +94,7 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
       for (const functionName of functionNames) {
         const command = new GetFunctionCommand({ FunctionName: functionName });
         const response = await lambdaClient.send(command);
-        
+
         expect(response.Configuration?.State).toBe('Active');
         expect(response.Configuration?.Runtime).toBe('nodejs18.x');
         expect(response.Configuration?.Architectures).toContain('arm64');
@@ -107,7 +107,7 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
 
       const command = new GetRestApiCommand({ restApiId: apiId });
       const response = await apiGatewayClient.send(command);
-      
+
       expect(response.name).toBeDefined();
       expect(response.endpointConfiguration?.types).toBeDefined();
     }, 30000);
@@ -121,7 +121,7 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
         stageName: stageName,
       });
       const response = await apiGatewayClient.send(command);
-      
+
       expect(response.tracingEnabled).toBe(true);
     }, 30000);
 
@@ -131,10 +131,10 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
 
       const command = new DescribeTableCommand({ TableName: tableName });
       const response = await dynamoClient.send(command);
-      
+
       expect(response.Table?.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
       expect(response.Table?.SSEDescription?.Status).toBe('ENABLED');
-      
+
       // Check for composite keys
       const keySchema = response.Table?.KeySchema || [];
       expect(keySchema.length).toBe(2);
@@ -151,7 +151,7 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
         AttributeNames: ['VisibilityTimeout', 'SqsManagedSseEnabled'],
       });
       const response = await sqsClient.send(command);
-      
+
       expect(response.Attributes?.VisibilityTimeout).toBe('300');
       expect(response.Attributes?.SqsManagedSseEnabled).toBe('true');
     }, 30000);
@@ -162,7 +162,7 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
 
       const command = new DescribeEventBusCommand({ Name: busName });
       const response = await eventBridgeClient.send(command);
-      
+
       expect(response.Name).toBe(busName);
     }, 30000);
 
@@ -171,39 +171,98 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
 
       const command = new ListRulesCommand({ EventBusName: busName });
       const response = await eventBridgeClient.send(command);
-      
+
       expect(response.Rules?.length).toBeGreaterThanOrEqual(3);
     }, 30000);
 
     test('CloudWatch log groups exist with correct retention', async () => {
-      const logGroupPrefix = '/aws/lambda/';
-      
-      const command = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: logGroupPrefix,
-      });
-      const response = await logsClient.send(command);
-      
-      const logGroups = response.logGroups || [];
-      expect(logGroups.length).toBeGreaterThan(0);
-      
-      // Check retention is set (7 days)
-      logGroups.forEach(lg => {
-        if (lg.retentionInDays) {
-          expect(lg.retentionInDays).toBe(7);
+      // Prefer explicit names from outputs (flat) when available
+      const explicitGroups: string[] = [];
+      if (outputs.cloudwatch_log_groups) {
+        const map = outputs.cloudwatch_log_groups;
+        Object.values(map).forEach((name: any) => {
+          if (typeof name === 'string') explicitGroups.push(name);
+        });
+      } else {
+        // Fallback: collect flattened keys like cloudwatch_log_groups.api_gateway
+        Object.keys(outputs)
+          .filter((k) => k.startsWith('cloudwatch_log_groups.'))
+          .forEach((k) => {
+            const name = outputs[k];
+            if (typeof name === 'string') explicitGroups.push(name);
+          });
+      }
+
+      // If we don't have explicit names, scope to our lambda groups only
+      if (explicitGroups.length === 0) {
+        const prefix = '/aws/lambda/';
+        const resp = await logsClient.send(new DescribeLogGroupsCommand({
+          logGroupNamePrefix: prefix,
+        }));
+        const logGroups = (resp.logGroups || []).filter((lg) =>
+          typeof lg.logGroupName === 'string' && (
+            lg.logGroupName.includes('-auth-fn') ||
+            lg.logGroupName.includes('-ingest-fn') ||
+            lg.logGroupName.includes('-process-fn') ||
+            lg.logGroupName.includes('-store-fn')
+          )
+        );
+        expect(logGroups.length).toBeGreaterThan(0);
+        logGroups.forEach((lg) => {
+          if (lg.retentionInDays) {
+            expect(lg.retentionInDays).toBe(7);
+          }
+        });
+        return;
+      }
+
+      // Validate specific groups from outputs
+      for (const name of explicitGroups) {
+        const resp = await logsClient.send(new DescribeLogGroupsCommand({
+          logGroupNamePrefix: name,
+        }));
+        const match = (resp.logGroups || []).find((lg) => lg.logGroupName === name);
+        expect(match).toBeDefined();
+        if (match && match.retentionInDays) {
+          expect(match.retentionInDays).toBe(7);
         }
-      });
+      }
     }, 30000);
 
     test('SSM parameters are created and accessible', async () => {
-      const paramNames = Object.values(outputs.ssm_parameters || {});
-      expect(paramNames.length).toBeGreaterThan(0);
+      // Collect parameter names from nested or flattened outputs
+      let paramNames: string[] = [];
+      
+      if (outputs.ssm_parameters && typeof outputs.ssm_parameters === 'object') {
+        // Nested object - extract values
+        paramNames = Object.values(outputs.ssm_parameters).filter((v: any) => typeof v === 'string');
+      } else if (typeof outputs.ssm_parameters === 'string') {
+        // JSON string - parse it
+        try {
+          const parsed = JSON.parse(outputs.ssm_parameters);
+          paramNames = Object.values(parsed).filter((v: any) => typeof v === 'string');
+        } catch (e) {
+          // Not JSON, skip
+        }
+      }
+      
+      // Flattened keys like ssm_parameters.auth_token
+      Object.keys(outputs)
+        .filter((k) => k.startsWith('ssm_parameters.') || k.startsWith('ssm_parameters_'))
+        .forEach((k) => {
+          const val = outputs[k];
+          if (typeof val === 'string') paramNames.push(val);
+        });
 
-      for (const paramName of paramNames.slice(0, 2)) {
+      // Use only well-formed SSM paths (must start with '/')
+      const validParams = paramNames.filter((n) => typeof n === 'string' && n.startsWith('/'));
+      expect(validParams.length).toBeGreaterThan(0);
+
+      for (const paramName of validParams.slice(0, 2)) {
         const command = new GetParameterCommand({
-          Name: paramName as string,
+          Name: paramName,
           WithDecryption: false,
         });
-        
         const response = await ssmClient.send(command);
         expect(response.Parameter?.Name).toBe(paramName);
       }
@@ -211,7 +270,7 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
   });
 
   describeWithOutputs('End-to-End Event Processing Workflow', () => {
-    
+
     test('Complete workflow: API Gateway → Lambda → SQS → DynamoDB', async () => {
       // Step 1: Invoke ingestion Lambda directly (simulating API Gateway)
       const testEvent = {
@@ -241,7 +300,7 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
         new TextDecoder().decode(invokeResponse.Payload)
       );
       expect(payload.statusCode).toBe(202);
-      
+
       const body = JSON.parse(payload.body);
       expect(body.status).toBe('accepted');
       expect(body.eventId).toBeDefined();
@@ -259,7 +318,7 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
       });
 
       const sqsResponse = await sqsClient.send(receiveCommand);
-      
+
       // Message might already be processed, so we just verify queue is accessible
       expect(sqsResponse).toBeDefined();
 
@@ -275,7 +334,7 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
 
       const dynamoResponse = await dynamoClient.send(scanCommand);
       expect(dynamoResponse.Items).toBeDefined();
-      
+
       // Event should exist in DynamoDB
       if (dynamoResponse.Items && dynamoResponse.Items.length > 0) {
         const item = dynamoResponse.Items[0];
@@ -300,7 +359,7 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
         });
 
         const response = await lambdaClient.send(invokeCommand);
-        
+
         // Should handle gracefully
         expect(response.StatusCode).toBeDefined();
       } catch (error) {
@@ -312,7 +371,7 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
     test('Lambda authorizer validates tokens correctly', async () => {
       // Build method ARN from actual API Gateway outputs
       const methodArn = `arn:aws:execute-api:${region}:*:${outputs.api_id}/*/GET/events`;
-      
+
       const authEvent = {
         authorizationToken: 'Bearer invalid-token',
         methodArn: methodArn,
@@ -329,7 +388,7 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
       const payload = JSON.parse(
         new TextDecoder().decode(response.Payload)
       );
-      
+
       // Should return policy document
       expect(payload.policyDocument).toBeDefined();
       expect(payload.principalId).toBeDefined();
@@ -363,7 +422,7 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
       const payload = JSON.parse(
         new TextDecoder().decode(response.Payload)
       );
-      
+
       expect(payload.processed).toBeGreaterThanOrEqual(0);
     }, 30000);
 
@@ -392,7 +451,7 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
       );
 
       const responses = await Promise.all(invokePromises);
-      
+
       responses.forEach(response => {
         expect(response.StatusCode).toBe(200);
       });
@@ -404,7 +463,7 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
   });
 
   describeWithOutputs('Performance and Monitoring', () => {
-    
+
     test('Lambda functions respond within acceptable time', async () => {
       const startTime = Date.now();
 
@@ -420,9 +479,9 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
       });
 
       await lambdaClient.send(invokeCommand);
-      
+
       const duration = Date.now() - startTime;
-      
+
       // Should respond within 5 seconds (sub-second latency requirement)
       expect(duration).toBeLessThan(5000);
     }, 30000);
@@ -434,37 +493,38 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
     });
 
     test('Integration test config contains all required values', () => {
-      const config = outputs.integration_test_config;
-      
-      expect(config).toBeDefined();
-      expect(config.api_endpoint).toBeDefined();
-      expect(config.event_post_url).toBeDefined();
-      expect(config.region).toBeDefined();
-      expect(config.x_ray_enabled).toBe(true);
+      // In flat outputs, these are top-level keys
+      expect(outputs.api_endpoint).toBeDefined();
+      expect(outputs.event_post_url).toBeDefined();
+      expect(outputs.region).toBeDefined();
+      // x_ray_enabled may be a string in flat outputs
+      const xray = outputs.x_ray_enabled;
+      expect(xray === true || xray === 'true').toBe(true);
     });
   });
 
   describeWithOutputs('Data Consistency and Audit Trail', () => {
-    
+
     test('Audit trail table is accessible', async () => {
       const auditTableName = outputs.dynamodb_audit_table;
       expect(auditTableName).toBeDefined();
 
       const command = new DescribeTableCommand({ TableName: auditTableName });
       const response = await dynamoClient.send(command);
-      
+
       expect(response.Table?.TableName).toBe(auditTableName);
     }, 30000);
 
     test('Event storage maintains data integrity', async () => {
       const testEventId = `integrity-test-${Date.now()}`;
-      
-      // Create a test event in DynamoDB
+      const nowIso = new Date().toISOString();
+
+      // Create a test event in DynamoDB with full key
       const putCommand = new PutItemCommand({
         TableName: outputs.dynamodb_events_table,
         Item: {
           pk: { S: `EVENT#${testEventId}` },
-          sk: { S: `METADATA#${new Date().toISOString()}` },
+          sk: { S: `METADATA#${nowIso}` },
           eventId: { S: testEventId },
           eventType: { S: 'test' },
           status: { S: 'test' },
@@ -474,18 +534,22 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
 
       await dynamoClient.send(putCommand);
 
-      // Verify it was stored
-      const scanCommand = new ScanCommand({
-        TableName: outputs.dynamodb_events_table,
-        FilterExpression: 'eventId = :eventId',
-        ExpressionAttributeValues: {
-          ':eventId': { S: testEventId },
-        },
-        Limit: 1,
-      });
+      // Small delay for eventual consistency
+      await new Promise((r) => setTimeout(r, 2000));
 
-      const response = await dynamoClient.send(scanCommand);
-      expect(response.Items?.length).toBeGreaterThan(0);
+      // Use GetItem with exact key for strongly consistent read
+      const getCommand = new GetItemCommand({
+        TableName: outputs.dynamodb_events_table,
+        Key: {
+          pk: { S: `EVENT#${testEventId}` },
+          sk: { S: `METADATA#${nowIso}` },
+        },
+        ConsistentRead: true,
+      });
+      
+      const response = await dynamoClient.send(getCommand);
+      expect(response.Item).toBeDefined();
+      expect(response.Item?.eventId?.S).toBe(testEventId);
     }, 30000);
   });
 });

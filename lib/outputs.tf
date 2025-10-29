@@ -120,7 +120,18 @@ output "region" {
   value       = data.aws_region.current.id
 }
 
-# Integration Testing Endpoints
+# Flattened outputs for integration testing
+output "event_post_url" {
+  description = "API Gateway event POST endpoint"
+  value       = "${aws_api_gateway_stage.main.invoke_url}/events"
+}
+
+output "x_ray_enabled" {
+  description = "Whether X-Ray tracing is enabled"
+  value       = true
+}
+
+# Integration Testing Endpoints (nested for compatibility)
 output "integration_test_config" {
   description = "Configuration for integration testing"
   value = {
