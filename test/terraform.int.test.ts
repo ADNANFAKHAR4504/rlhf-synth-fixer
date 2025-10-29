@@ -50,13 +50,13 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
   describe('VPC Deployment Verification', () => {
     test('VPC IDs exist for all three regions', () => {
       expect(outputs).toHaveProperty('vpc_ids');
-      
+
       const vpcIds = outputs.vpc_ids;
-      
+
       expect(vpcIds).toHaveProperty('us-east-1');
       expect(vpcIds).toHaveProperty('us-west-2');
       expect(vpcIds).toHaveProperty('eu-central-1');
-      
+
       expect(vpcIds['us-east-1']).toMatch(/^vpc-/);
       expect(vpcIds['us-west-2']).toMatch(/^vpc-/);
       expect(vpcIds['eu-central-1']).toMatch(/^vpc-/);
@@ -64,7 +64,7 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
 
     test.each(regions)('VPC in %s has correct DNS settings', async (region) => {
       const vpcIds = outputs.vpc_ids;
-      
+
       const vpcId = vpcIds[region];
       if (!vpcId) {
         throw new Error(`VPC ID not found for region ${region}`);
@@ -343,7 +343,7 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
   describe('End-to-End Network Workflow', () => {
     test('complete multi-region VPC infrastructure is functional', async () => {
       // This test validates the entire workflow
-      
+
       // 1. Verify all VPCs exist
       const vpcIds = outputs.vpc_ids;
 
@@ -351,7 +351,7 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
 
       // 2. Verify subnets are properly distributed
       const publicSubnets = outputs.public_subnet_ids;
-      
+
       const privateSubnets = outputs.private_subnet_ids;
 
       regions.forEach((region) => {
