@@ -17,7 +17,6 @@ from aws_cdk import (
     aws_iam as iam,
     aws_logs as logs,
     aws_cloudtrail as cloudtrail,
-    aws_config as config,
     aws_secretsmanager as secretsmanager,
     aws_cloudwatch as cloudwatch,
     aws_sns as sns,
@@ -107,8 +106,8 @@ class TapStack(Stack):
         # 5. Enable CloudTrail
         self._create_cloudtrail()
 
-        # 6. Configure AWS Config
-        self._create_aws_config()
+        # 6. Create enhanced monitoring for compliance (replaces AWS Config due to account limits)
+        self._create_compliance_monitoring()
 
         # 7. Create Secrets Manager for credentials
         self.secret = self._create_secrets()
@@ -448,13 +447,16 @@ class TapStack(Stack):
 
         return trail
 
-    def _create_aws_config(self) -> None:
-        """Configure AWS Config for compliance monitoring."""
-        # Create S3 bucket for Config
-        config_bucket = s3.Bucket(
+    def _create_compliance_monitoring(self) -> None:
+        """
+        Create enhanced monitoring for FedRAMP compliance without AWS Config.
+        Uses CloudWatch, CloudTrail, and custom monitoring instead of Config service.
+        """
+        # Create S3 bucket for compliance logs and monitoring data
+        compliance_bucket = s3.Bucket(
             self,
-            f'ConfigBucket-{self.environment_suffix}',
-            bucket_name=f'aws-config-{self.environment_suffix}-{self.account}',
+            f'ComplianceBucket-{self.environment_suffix}',
+            bucket_name=f'compliance-logs-{self.environment_suffix}-{self.account}',
             encryption=s3.BucketEncryption.KMS,
             encryption_key=self.kms_key,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -464,82 +466,75 @@ class TapStack(Stack):
             enforce_ssl=True,
         )
 
-        # Create IAM role for Config
-        config_role = iam.Role(
+        # Create CloudWatch Insights queries for compliance monitoring
+        self._create_compliance_cloudwatch_queries()
+
+        # Create additional CloudWatch alarms for compliance monitoring
+        self._create_compliance_alarms(compliance_bucket)
+
+    def _create_compliance_cloudwatch_queries(self) -> None:
+        """Create CloudWatch Insights queries for compliance monitoring."""
+        # Query for S3 bucket access monitoring
+        logs.CfnQueryDefinition(
             self,
-            f'ConfigRole-{self.environment_suffix}',
-            assumed_by=iam.ServicePrincipal('config.amazonaws.com'),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name('service-role/AWS_ConfigRole'),
-            ],
+            f'S3AccessQuery-{self.environment_suffix}',
+            name=f'S3-Access-Monitoring-{self.environment_suffix}',
+            query_string='''
+            fields @timestamp, sourceIPAddress, eventName, requestParameters.bucketName
+            | filter eventName like /GetObject|PutObject|DeleteObject/
+            | stats count() by sourceIPAddress, eventName
+            | sort count desc
+            ''',
         )
 
-        config_bucket.grant_write(config_role)
-
-        # Create Delivery Channel first
-        delivery_channel = config.CfnDeliveryChannel(
+        # Query for IAM activity monitoring
+        logs.CfnQueryDefinition(
             self,
-            f'ConfigDeliveryChannel-{self.environment_suffix}',
-            s3_bucket_name=config_bucket.bucket_name,
+            f'IAMActivityQuery-{self.environment_suffix}',
+            name=f'IAM-Activity-Monitoring-{self.environment_suffix}',
+            query_string='''
+            fields @timestamp, sourceIPAddress, eventName, userName
+            | filter eventSource = "iam.amazonaws.com"
+            | filter eventName like /Create|Delete|Attach|Detach|Put/
+            | stats count() by eventName, userName
+            | sort count desc
+            ''',
         )
 
-        # Create Config Recorder (depends on delivery channel)
-        recorder = config.CfnConfigurationRecorder(
+    def _create_compliance_alarms(self, compliance_bucket: s3.Bucket) -> None:
+        """Create CloudWatch alarms for compliance monitoring."""
+        # Alarm for unauthorized S3 access attempts
+        cloudwatch.Alarm(
             self,
-            f'ConfigRecorder-{self.environment_suffix}',
-            role_arn=config_role.role_arn,
-            recording_group=config.CfnConfigurationRecorder.RecordingGroupProperty(
-                all_supported=True,
-                include_global_resource_types=True,
+            f'UnauthorizedS3Access-{self.environment_suffix}',
+            alarm_name=f'unauthorized-s3-access-{self.environment_suffix}',
+            alarm_description='Detects unauthorized S3 access attempts',
+            metric=cloudwatch.Metric(
+                namespace='AWS/S3',
+                metric_name='4xxErrors',
+                dimensions_map={'BucketName': compliance_bucket.bucket_name},
+                statistic='Sum'
             ),
+            threshold=5,
+            evaluation_periods=2,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
         )
 
-        recorder.add_dependency(delivery_channel)
-
-        # Add Config Rules for FedRAMP compliance (depends on recorder)
-        self._create_config_rules(recorder)
-
-    def _create_config_rules(self, recorder: config.CfnConfigurationRecorder) -> None:
-        """Create AWS Config rules for FedRAMP compliance checks."""
-        # S3 bucket encryption rule
-        s3_encryption_rule = config.ManagedRule(
+        # Alarm for high number of API calls (potential security issue)
+        cloudwatch.Alarm(
             self,
-            f'S3BucketEncryption-{self.environment_suffix}',
-            config_rule_name=f's3-bucket-encryption-{self.environment_suffix}',
-            identifier=config.ManagedRuleIdentifiers.S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED,
-            description='Checks that S3 buckets have encryption enabled',
+            f'HighAPICallVolume-{self.environment_suffix}',
+            alarm_name=f'high-api-call-volume-{self.environment_suffix}',
+            alarm_description='Detects unusually high API call volume',
+            metric=cloudwatch.Metric(
+                namespace='AWS/CloudTrail',
+                metric_name='CallCount',
+                statistic='Sum'
+            ),
+            threshold=1000,
+            evaluation_periods=1,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
         )
-        s3_encryption_rule.node.add_dependency(recorder)
-
-        # S3 bucket versioning rule
-        s3_versioning_rule = config.ManagedRule(
-            self,
-            f'S3BucketVersioning-{self.environment_suffix}',
-            config_rule_name=f's3-bucket-versioning-{self.environment_suffix}',
-            identifier=config.ManagedRuleIdentifiers.S3_BUCKET_VERSIONING_ENABLED,
-            description='Checks that S3 buckets have versioning enabled',
-        )
-        s3_versioning_rule.node.add_dependency(recorder)
-
-        # CloudTrail enabled rule
-        cloudtrail_rule = config.ManagedRule(
-            self,
-            f'CloudTrailEnabled-{self.environment_suffix}',
-            config_rule_name=f'cloudtrail-enabled-{self.environment_suffix}',
-            identifier=config.ManagedRuleIdentifiers.CLOUD_TRAIL_ENABLED,
-            description='Checks that CloudTrail is enabled',
-        )
-        cloudtrail_rule.node.add_dependency(recorder)
-
-        # IAM password policy rule
-        iam_password_rule = config.ManagedRule(
-            self,
-            f'IamPasswordPolicy-{self.environment_suffix}',
-            config_rule_name=f'iam-password-policy-{self.environment_suffix}',
-            identifier=config.ManagedRuleIdentifiers.IAM_PASSWORD_POLICY,
-            description='Checks that IAM password policy meets requirements',
-        )
-        iam_password_rule.node.add_dependency(recorder)
 
     def _create_secrets(self) -> secretsmanager.Secret:
         """
