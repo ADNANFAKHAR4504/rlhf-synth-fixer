@@ -1,134 +1,434 @@
-### Reasoning Trace
----
-
-This is a comprehensive Terraform task that requires creating a single file (`tap_stack.tf`) containing a complete multi-region AWS infrastructure deployment. Let me break down what needs to be implemented:
-
-## Key Requirements Summary:
-1. Multi-region deployment (us-east-1 and us-west-2)
-2. Everything in one file - no modules
-3. Provider aliases assumed to exist in provider.tf
-4. Comprehensive security and compliance requirements
-5. Full stack: VPC, EC2, ALB, RDS, S3, Lambda, IAM, KMS, CloudWatch
-
-## Architecture Per Region:
-- VPC with public/private subnets across 2+ AZs
-- NAT Gateway(s) for private subnet egress
-- EC2 instances in private subnets
-- ALB in public subnets
-- RDS in private subnets with backups, encryption
-- S3 bucket with KMS encryption
-- Lambda function with KMS-encrypted env vars
-- CloudWatch Log Groups
-- VPC Flow Logs
-- All necessary IAM roles/policies
-
-## Security Requirements:
-- All resources tagged with Environment = "Production" + common tags
-- S3: SSE-KMS with CMK, block public access, versioning, lifecycle
-- IAM: Least privilege, no wildcards unless necessary
-- Security Groups: Default deny, minimal required openings
-- RDS: Encrypted, 7+ day backups, deletion protection
-- Lambda: KMS-encrypted env vars
-- EC2: Instance profile for S3 access
-- VPC Flow Logs to CloudWatch
-
-## Implementation Approach:
-Since I need to deploy everything twice (once per region) and use provider aliases, I'll:
-1. Define all variables with sensible defaults
-2. Create locals for common values and region-specific naming
-3. Create resources for each region with explicit provider assignments
-4. Use consistent naming patterns
-5. Implement all security requirements
-
-Let me start building the file systematically.
-### Answer 
----
+I'll provide a comprehensive Terraform migration plan for moving your AWS application from us-west-1 to us-west-2. This approach uses `terraform import` to preserve resource identities and minimize downtime.
 
 ```hcl
+# main.tf
 terraform {
-  required_version = ">= 1.7"
+  required_version = ">= 1.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 5.0"
+      version = "~> 5.0"
     }
   }
 }
 
-# Variables
-variable "aws_region" {
-  description = "Primary AWS region (used by provider.tf)"
-  type        = string
-  default     = "us-east-1"
-}
-
-variable "app_name" {
-  description = "Application name used for resource naming"
-  type        = string
-  default     = "tap-app"
-}
-
-variable "common_tags" {
-  description = "Common tags to apply to all resources"
-  type        = map(string)
-  default = {
-    Environment = "Production"
-    ManagedBy   = "Terraform"
+# Primary provider for the new region (us-west-2)
+provider "aws" {
+  region = var.aws_region
+  
+  default_tags {
+    tags = {
+      Environment   = var.environment
+      Project       = var.project_name
+      ManagedBy     = "terraform"
+      MigratedFrom  = "us-west-1"
+      MigrationDate = var.migration_date
+    }
   }
 }
 
-variable "vpc_cidr_us_east_1" {
-  description = "VPC CIDR for us-east-1"
+# Alias provider for the old region (for reference/cleanup)
+provider "aws" {
+  alias  = "old_region"
+  region = "us-west-1"
+}
+
+# Data sources for existing resources in new region
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
+data "aws_caller_identity" "current" {}
+
+# VPC and Networking
+resource "aws_vpc" "main" {
+  cidr_block           = var.vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+
+  tags = {
+    Name = "${var.project_name}-vpc"
+  }
+}
+
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "${var.project_name}-igw"
+  }
+}
+
+resource "aws_subnet" "public" {
+  count = length(var.public_subnet_cidrs)
+
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = var.public_subnet_cidrs[count.index]
+  availability_zone       = data.aws_availability_zones.available.names[count.index]
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name = "${var.project_name}-public-subnet-${count.index + 1}"
+    Type = "public"
+  }
+}
+
+resource "aws_subnet" "private" {
+  count = length(var.private_subnet_cidrs)
+
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = var.private_subnet_cidrs[count.index]
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+
+  tags = {
+    Name = "${var.project_name}-private-subnet-${count.index + 1}"
+    Type = "private"
+  }
+}
+
+# Route Tables
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
+
+  tags = {
+    Name = "${var.project_name}-public-rt"
+  }
+}
+
+resource "aws_route_table" "private" {
+  count  = length(aws_subnet.private)
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "${var.project_name}-private-rt-${count.index + 1}"
+  }
+}
+
+resource "aws_route_table_association" "public" {
+  count = length(aws_subnet.public)
+
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table_association" "private" {
+  count = length(aws_subnet.private)
+
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private[count.index].id
+}
+
+# Security Groups
+resource "aws_security_group" "web" {
+  name_prefix = "${var.project_name}-web-"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${var.project_name}-web-sg"
+  }
+}
+
+resource "aws_security_group" "app" {
+  name_prefix = "${var.project_name}-app-"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = 8080
+    to_port         = 8080
+    protocol        = "tcp"
+    security_groups = [aws_security_group.web.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${var.project_name}-app-sg"
+  }
+}
+
+resource "aws_security_group" "database" {
+  name_prefix = "${var.project_name}-db-"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = 3306
+    to_port         = 3306
+    protocol        = "tcp"
+    security_groups = [aws_security_group.app.id]
+  }
+
+  tags = {
+    Name = "${var.project_name}-db-sg"
+  }
+}
+
+# Application Load Balancer
+resource "aws_lb" "main" {
+  name               = "${var.project_name}-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.web.id]
+  subnets            = aws_subnet.public[*].id
+
+  enable_deletion_protection = var.enable_deletion_protection
+
+  tags = {
+    Name = "${var.project_name}-alb"
+  }
+}
+
+resource "aws_lb_target_group" "app" {
+  name     = "${var.project_name}-app-tg"
+  port     = 8080
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main.id
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    timeout             = 5
+    interval            = 30
+    path                = "/health"
+    matcher             = "200"
+  }
+
+  tags = {
+    Name = "${var.project_name}-app-tg"
+  }
+}
+
+resource "aws_lb_listener" "app" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app.arn
+  }
+}
+
+# Launch Template and Auto Scaling Group
+resource "aws_launch_template" "app" {
+  name_prefix   = "${var.project_name}-app-"
+  image_id      = var.ami_id
+  instance_type = var.instance_type
+  key_name      = var.key_pair_name
+
+  vpc_security_group_ids = [aws_security_group.app.id]
+
+  user_data = base64encode(var.user_data_script)
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name = "${var.project_name}-app-instance"
+    }
+  }
+
+  tags = {
+    Name = "${var.project_name}-app-lt"
+  }
+}
+
+resource "aws_autoscaling_group" "app" {
+  name                = "${var.project_name}-app-asg"
+  vpc_zone_identifier = aws_subnet.private[*].id
+  target_group_arns   = [aws_lb_target_group.app.arn]
+  health_check_type   = "ELB"
+  health_check_grace_period = 300
+
+  min_size         = var.asg_min_size
+  max_size         = var.asg_max_size
+  desired_capacity = var.asg_desired_capacity
+
+  launch_template {
+    id      = aws_launch_template.app.id
+    version = "$Latest"
+  }
+
+  tag {
+    key                 = "Name"
+    value               = "${var.project_name}-app-asg"
+    propagate_at_launch = false
+  }
+}
+
+# RDS Subnet Group and Database
+resource "aws_db_subnet_group" "main" {
+  name       = "${var.project_name}-db-subnet-group"
+  subnet_ids = aws_subnet.private[*].id
+
+  tags = {
+    Name = "${var.project_name}-db-subnet-group"
+  }
+}
+
+resource "aws_db_instance" "main" {
+  identifier = "${var.project_name}-database"
+
+  engine         = "mysql"
+  engine_version = var.db_engine_version
+  instance_class = var.db_instance_class
+
+  allocated_storage     = var.db_allocated_storage
+  max_allocated_storage = var.db_max_allocated_storage
+  storage_type          = "gp2"
+  storage_encrypted     = true
+
+  db_name  = var.db_name
+  username = var.db_username
+  password = var.db_password
+
+  vpc_security_group_ids = [aws_security_group.database.id]
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+
+  backup_retention_period = var.db_backup_retention_period
+  backup_window          = var.db_backup_window
+  maintenance_window     = var.db_maintenance_window
+
+  skip_final_snapshot = var.skip_final_snapshot
+  deletion_protection = var.enable_deletion_protection
+
+  tags = {
+    Name = "${var.project_name}-database"
+  }
+}
+```
+
+```hcl
+# variables.tf
+variable "aws_region" {
+  description = "AWS region for resources"
   type        = string
-  default     = "10.1.0.0/16"
+  default     = "us-west-2"
 }
 
-variable "vpc_cidr_us_west_2" {
-  description = "VPC CIDR for us-west-2"
+variable "environment" {
+  description = "Environment name"
   type        = string
-  default     = "10.2.0.0/16"
+  default     = "production"
 }
 
-variable "public_subnet_cidrs_us_east_1" {
-  description = "Public subnet CIDRs for us-east-1"
-  type        = list(string)
-  default     = ["10.1.1.0/24", "10.1.2.0/24"]
-}
-
-variable "private_subnet_cidrs_us_east_1" {
-  description = "Private subnet CIDRs for us-east-1"
-  type        = list(string)
-  default     = ["10.1.11.0/24", "10.1.12.0/24"]
-}
-
-variable "public_subnet_cidrs_us_west_2" {
-  description = "Public subnet CIDRs for us-west-2"
-  type        = list(string)
-  default     = ["10.2.1.0/24", "10.2.2.0/24"]
-}
-
-variable "private_subnet_cidrs_us_west_2" {
-  description = "Private subnet CIDRs for us-west-2"
-  type        = list(string)
-  default     = ["10.2.11.0/24", "10.2.12.0/24"]
-}
-
-variable "allowed_ingress_cidrs" {
-  description = "List of CIDR blocks allowed to access ALB"
-  type        = list(string)
-  default     = ["0.0.0.0/0"] # Restrict in production
-}
-
-variable "db_engine" {
-  description = "RDS database engine"
+variable "project_name" {
+  description = "Project name for resource naming"
   type        = string
-  default     = "postgres"
+  default     = "myapp"
 }
 
+variable "migration_date" {
+  description = "Date of migration for tagging"
+  type        = string
+  default     = "2024-01-15"
+}
+
+# Network Configuration
+variable "vpc_cidr" {
+  description = "CIDR block for VPC"
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "public_subnet_cidrs" {
+  description = "CIDR blocks for public subnets"
+  type        = list(string)
+  default     = ["10.0.1.0/24", "10.0.2.0/24"]
+}
+
+variable "private_subnet_cidrs" {
+  description = "CIDR blocks for private subnets"
+  type        = list(string)
+  default     = ["10.0.10.0/24", "10.0.20.0/24"]
+}
+
+# EC2 Configuration
+variable "ami_id" {
+  description = "AMI ID for EC2 instances"
+  type        = string
+  default     = "ami-0c02fb55956c7d316" # Amazon Linux 2 in us-west-2
+}
+
+variable "instance_type" {
+  description = "EC2 instance type"
+  type        = string
+  default     = "t3.medium"
+}
+
+variable "key_pair_name" {
+  description = "EC2 Key Pair name"
+  type        = string
+  default     = "myapp-keypair"
+}
+
+variable "user_data_script" {
+  description = "User data script for EC2 instances"
+  type        = string
+  default     = <<-EOF
+    #!/bin/bash
+    yum update -y
+    yum install -y docker
+    service docker start
+    usermod -a -G docker ec2-user
+    # Add your application startup commands here
+  EOF
+}
+
+# Auto Scaling Configuration
+variable "asg_min_size" {
+  description = "Minimum size of Auto Scaling Group"
+  type        = number
+  default     = 2
+}
+
+variable "asg_max_size" {
+  description = "Maximum size of Auto Scaling Group"
+  type        = number
+  default     = 6
+}
+
+variable "asg_desired_capacity" {
+  description = "Desired capacity of Auto Scaling Group"
+  type        = number
+  default     = 2
+}
+
+# Database Configuration
 variable "db_engine_version" {
-  description = "RDS database engine version"
+  description = "RDS engine version"
   type        = string
-  default     = "15.4"
+  default     = "8.0.35"
 }
 
 variable "db_instance_class" {
@@ -137,1389 +437,483 @@ variable "db_instance_class" {
   default     = "db.t3.micro"
 }
 
-variable "db_username" {
-  description = "RDS master username"
+variable "db_allocated_storage" {
+  description = "RDS allocated storage in GB"
+  type        = number
+  default     = 20
+}
+
+variable "db_max_allocated_storage" {
+  description = "RDS maximum allocated storage in GB"
+  type        = number
+  default     = 100
+}
+
+variable "db_name" {
+  description = "Database name"
   type        = string
-  default     = "dbadmin"
-  sensitive   = false
+  default     = "myappdb"
+}
+
+variable "db_username" {
+  description = "Database username"
+  type        = string
+  default     = "admin"
+  sensitive   = true
 }
 
 variable "db_password" {
-  description = "RDS master password"
+  description = "Database password"
   type        = string
   sensitive   = true
 }
 
-variable "backup_retention_days" {
-  description = "RDS backup retention period in days"
+variable "db_backup_retention_period" {
+  description = "Database backup retention period in days"
   type        = number
   default     = 7
 }
 
-variable "s3_bucket_name_prefix" {
-  description = "Prefix for S3 bucket names"
+variable "db_backup_window" {
+  description = "Database backup window"
   type        = string
-  default     = "tap-app"
+  default     = "03:00-04:00"
 }
 
-variable "lambda_zip_path" {
-  description = "Path to Lambda function ZIP file"
+variable "db_maintenance_window" {
+  description = "Database maintenance window"
   type        = string
-  default     = "lambda.zip"
+  default     = "sun:04:00-sun:05:00"
 }
 
-variable "lambda_handler" {
-  description = "Lambda function handler"
-  type        = string
-  default     = "index.handler"
-}
-
-variable "lambda_runtime" {
-  description = "Lambda function runtime"
-  type        = string
-  default     = "python3.11"
-}
-
-variable "enable_https" {
-  description = "Enable HTTPS on ALB"
-  type        = bool
-  default     = false
-}
-
-variable "certificate_arn" {
-  description = "ACM certificate ARN for HTTPS"
-  type        = string
-  default     = ""
-}
-
-variable "app_port" {
-  description = "Application port on EC2 instances"
-  type        = number
-  default     = 8080
-}
-
-variable "one_nat_gateway_per_region" {
-  description = "Use only one NAT gateway per region (cost optimization)"
+# General Configuration
+variable "enable_deletion_protection" {
+  description = "Enable deletion protection for critical resources"
   type        = bool
   default     = true
 }
 
-variable "log_retention_days" {
-  description = "CloudWatch Logs retention in days"
-  type        = number
-  default     = 30
-}
-
-variable "enable_bastion" {
-  description = "Enable bastion host"
+variable "skip_final_snapshot" {
+  description = "Skip final snapshot when destroying RDS instance"
   type        = bool
   default     = false
 }
+```
 
-variable "bastion_allowed_cidrs" {
-  description = "CIDR blocks allowed to SSH to bastion"
-  type        = list(string)
-  default     = []
-}
-
-# Locals
-locals {
-  regions = ["us-east-1", "us-west-2"]
-  
-  vpc_configs = {
-    "us-east-1" = {
-      cidr             = var.vpc_cidr_us_east_1
-      public_subnets   = var.public_subnet_cidrs_us_east_1
-      private_subnets  = var.private_subnet_cidrs_us_east_1
-    }
-    "us-west-2" = {
-      cidr             = var.vpc_cidr_us_west_2
-      public_subnets   = var.public_subnet_cidrs_us_west_2
-      private_subnets  = var.private_subnet_cidrs_us_west_2
-    }
-  }
-  
-  common_tags = merge(var.common_tags, {
-    Environment = "Production"
-    Application = var.app_name
-  })
-  
-  # Generate unique S3 bucket names
-  s3_bucket_names = {
-    "us-east-1" = "${var.s3_bucket_name_prefix}-${data.aws_caller_identity.current.account_id}-us-east-1"
-    "us-west-2" = "${var.s3_bucket_name_prefix}-${data.aws_caller_identity.current.account_id}-us-west-2"
-  }
-}
-
-# Data Sources
-data "aws_caller_identity" "current" {}
-
-data "aws_availability_zones" "us_east_1" {
-  provider = aws.us_east_1
-  state    = "available"
-}
-
-data "aws_availability_zones" "us_west_2" {
-  provider = aws.us_west_2
-  state    = "available"
-}
-
-# KMS Keys - US-EAST-1
-resource "aws_kms_key" "main_us_east_1" {
-  provider                = aws.us_east_1
-  description             = "${var.app_name} encryption key for us-east-1"
-  deletion_window_in_days = 10
-  enable_key_rotation     = true
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-kms-us-east-1"
-  })
-}
-
-resource "aws_kms_alias" "main_us_east_1" {
-  provider      = aws.us_east_1
-  name          = "alias/${var.app_name}-us-east-1"
-  target_key_id = aws_kms_key.main_us_east_1.id
-}
-
-# KMS Keys - US-WEST-2
-resource "aws_kms_key" "main_us_west_2" {
-  provider                = aws.us_west_2
-  description             = "${var.app_name} encryption key for us-west-2"
-  deletion_window_in_days = 10
-  enable_key_rotation     = true
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-kms-us-west-2"
-  })
-}
-
-resource "aws_kms_alias" "main_us_west_2" {
-  provider      = aws.us_west_2
-  name          = "alias/${var.app_name}-us-west-2"
-  target_key_id = aws_kms_key.main_us_west_2.id
-}
-
-# VPC - US-EAST-1
-resource "aws_vpc" "main_us_east_1" {
-  provider             = aws.us_east_1
-  cidr_block           = local.vpc_configs["us-east-1"].cidr
-  enable_dns_hostnames = true
-  enable_dns_support   = true
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-vpc-us-east-1"
-  })
-}
-
-# VPC - US-WEST-2
-resource "aws_vpc" "main_us_west_2" {
-  provider             = aws.us_west_2
-  cidr_block           = local.vpc_configs["us-west-2"].cidr
-  enable_dns_hostnames = true
-  enable_dns_support   = true
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-vpc-us-west-2"
-  })
-}
-
-# Internet Gateways
-resource "aws_internet_gateway" "main_us_east_1" {
-  provider = aws.us_east_1
-  vpc_id   = aws_vpc.main_us_east_1.id
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-igw-us-east-1"
-  })
-}
-
-resource "aws_internet_gateway" "main_us_west_2" {
-  provider = aws.us_west_2
-  vpc_id   = aws_vpc.main_us_west_2.id
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-igw-us-west-2"
-  })
-}
-
-# Public Subnets - US-EAST-1
-resource "aws_subnet" "public_us_east_1" {
-  provider                = aws.us_east_1
-  count                   = length(local.vpc_configs["us-east-1"].public_subnets)
-  vpc_id                  = aws_vpc.main_us_east_1.id
-  cidr_block              = local.vpc_configs["us-east-1"].public_subnets[count.index]
-  availability_zone       = data.aws_availability_zones.us_east_1.names[count.index]
-  map_public_ip_on_launch = true
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-public-subnet-${count.index + 1}-us-east-1"
-    Type = "Public"
-  })
-}
-
-# Public Subnets - US-WEST-2
-resource "aws_subnet" "public_us_west_2" {
-  provider                = aws.us_west_2
-  count                   = length(local.vpc_configs["us-west-2"].public_subnets)
-  vpc_id                  = aws_vpc.main_us_west_2.id
-  cidr_block              = local.vpc_configs["us-west-2"].public_subnets[count.index]
-  availability_zone       = data.aws_availability_zones.us_west_2.names[count.index]
-  map_public_ip_on_launch = true
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-public-subnet-${count.index + 1}-us-west-2"
-    Type = "Public"
-  })
-}
-
-# Private Subnets - US-EAST-1
-resource "aws_subnet" "private_us_east_1" {
-  provider          = aws.us_east_1
-  count             = length(local.vpc_configs["us-east-1"].private_subnets)
-  vpc_id            = aws_vpc.main_us_east_1.id
-  cidr_block        = local.vpc_configs["us-east-1"].private_subnets[count.index]
-  availability_zone = data.aws_availability_zones.us_east_1.names[count.index]
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-private-subnet-${count.index + 1}-us-east-1"
-    Type = "Private"
-  })
-}
-
-# Private Subnets - US-WEST-2
-resource "aws_subnet" "private_us_west_2" {
-  provider          = aws.us_west_2
-  count             = length(local.vpc_configs["us-west-2"].private_subnets)
-  vpc_id            = aws_vpc.main_us_west_2.id
-  cidr_block        = local.vpc_configs["us-west-2"].private_subnets[count.index]
-  availability_zone = data.aws_availability_zones.us_west_2.names[count.index]
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-private-subnet-${count.index + 1}-us-west-2"
-    Type = "Private"
-  })
-}
-
-# EIPs for NAT Gateways - US-EAST-1
-resource "aws_eip" "nat_us_east_1" {
-  provider = aws.us_east_1
-  count    = var.one_nat_gateway_per_region ? 1 : length(aws_subnet.public_us_east_1)
-  domain   = "vpc"
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-nat-eip-${count.index + 1}-us-east-1"
-  })
-}
-
-# EIPs for NAT Gateways - US-WEST-2
-resource "aws_eip" "nat_us_west_2" {
-  provider = aws.us_west_2
-  count    = var.one_nat_gateway_per_region ? 1 : length(aws_subnet.public_us_west_2)
-  domain   = "vpc"
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-nat-eip-${count.index + 1}-us-west-2"
-  })
-}
-
-# NAT Gateways - US-EAST-1
-resource "aws_nat_gateway" "main_us_east_1" {
-  provider      = aws.us_east_1
-  count         = var.one_nat_gateway_per_region ? 1 : length(aws_subnet.public_us_east_1)
-  allocation_id = aws_eip.nat_us_east_1[count.index].id
-  subnet_id     = aws_subnet.public_us_east_1[count.index].id
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-nat-gateway-${count.index + 1}-us-east-1"
-  })
-  
-  depends_on = [aws_internet_gateway.main_us_east_1]
-}
-
-# NAT Gateways - US-WEST-2
-resource "aws_nat_gateway" "main_us_west_2" {
-  provider      = aws.us_west_2
-  count         = var.one_nat_gateway_per_region ? 1 : length(aws_subnet.public_us_west_2)
-  allocation_id = aws_eip.nat_us_west_2[count.index].id
-  subnet_id     = aws_subnet.public_us_west_2[count.index].id
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-nat-gateway-${count.index + 1}-us-west-2"
-  })
-  
-  depends_on = [aws_internet_gateway.main_us_west_2]
-}
-
-# Route Tables - US-EAST-1
-resource "aws_route_table" "public_us_east_1" {
-  provider = aws.us_east_1
-  vpc_id   = aws_vpc.main_us_east_1.id
-  
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main_us_east_1.id
-  }
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-public-rt-us-east-1"
-  })
-}
-
-resource "aws_route_table" "private_us_east_1" {
-  provider = aws.us_east_1
-  count    = var.one_nat_gateway_per_region ? 1 : length(aws_subnet.private_us_east_1)
-  vpc_id   = aws_vpc.main_us_east_1.id
-  
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = var.one_nat_gateway_per_region ? aws_nat_gateway.main_us_east_1[0].id : aws_nat_gateway.main_us_east_1[count.index].id
-  }
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-private-rt-${count.index + 1}-us-east-1"
-  })
-}
-
-# Route Tables - US-WEST-2
-resource "aws_route_table" "public_us_west_2" {
-  provider = aws.us_west_2
-  vpc_id   = aws_vpc.main_us_west_2.id
-  
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main_us_west_2.id
-  }
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-public-rt-us-west-2"
-  })
-}
-
-resource "aws_route_table" "private_us_west_2" {
-  provider = aws.us_west_2
-  count    = var.one_nat_gateway_per_region ? 1 : length(aws_subnet.private_us_west_2)
-  vpc_id   = aws_vpc.main_us_west_2.id
-  
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = var.one_nat_gateway_per_region ? aws_nat_gateway.main_us_west_2[0].id : aws_nat_gateway.main_us_west_2[count.index].id
-  }
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-private-rt-${count.index + 1}-us-west-2"
-  })
-}
-
-# Route Table Associations - US-EAST-1
-resource "aws_route_table_association" "public_us_east_1" {
-  provider       = aws.us_east_1
-  count          = length(aws_subnet.public_us_east_1)
-  subnet_id      = aws_subnet.public_us_east_1[count.index].id
-  route_table_id = aws_route_table.public_us_east_1.id
-}
-
-resource "aws_route_table_association" "private_us_east_1" {
-  provider       = aws.us_east_1
-  count          = length(aws_subnet.private_us_east_1)
-  subnet_id      = aws_subnet.private_us_east_1[count.index].id
-  route_table_id = var.one_nat_gateway_per_region ? aws_route_table.private_us_east_1[0].id : aws_route_table.private_us_east_1[count.index].id
-}
-
-# Route Table Associations - US-WEST-2
-resource "aws_route_table_association" "public_us_west_2" {
-  provider       = aws.us_west_2
-  count          = length(aws_subnet.public_us_west_2)
-  subnet_id      = aws_subnet.public_us_west_2[count.index].id
-  route_table_id = aws_route_table.public_us_west_2.id
-}
-
-resource "aws_route_table_association" "private_us_west_2" {
-  provider       = aws.us_west_2
-  count          = length(aws_subnet.private_us_west_2)
-  subnet_id      = aws_subnet.private_us_west_2[count.index].id
-  route_table_id = var.one_nat_gateway_per_region ? aws_route_table.private_us_west_2[0].id : aws_route_table.private_us_west_2[count.index].id
-}
-
-# VPC Flow Logs IAM Role
-resource "aws_iam_role" "vpc_flow_logs" {
-  name = "${var.app_name}-vpc-flow-logs-role"
-  
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "vpc-flow-logs.amazonaws.com"
-        }
-        Action = "sts:AssumeRole"
-      }
-    ]
-  })
-  
-  tags = local.common_tags
-}
-
-# VPC Flow Logs IAM Policy - US-EAST-1
-resource "aws_iam_role_policy" "vpc_flow_logs_us_east_1" {
-  name = "${var.app_name}-vpc-flow-logs-policy-us-east-1"
-  role = aws_iam_role.vpc_flow_logs.id
-  
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents",
-          "logs:DescribeLogGroups",
-          "logs:DescribeLogStreams"
-        ]
-        Resource = [
-          aws_cloudwatch_log_group.vpc_flow_logs_us_east_1.arn,
-          "${aws_cloudwatch_log_group.vpc_flow_logs_us_east_1.arn}:*"
-        ]
-      }
-    ]
-  })
-}
-
-# VPC Flow Logs IAM Policy - US-WEST-2
-resource "aws_iam_role_policy" "vpc_flow_logs_us_west_2" {
-  name = "${var.app_name}-vpc-flow-logs-policy-us-west-2"
-  role = aws_iam_role.vpc_flow_logs.id
-  
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents",
-          "logs:DescribeLogGroups",
-          "logs:DescribeLogStreams"
-        ]
-        Resource = [
-          aws_cloudwatch_log_group.vpc_flow_logs_us_west_2.arn,
-          "${aws_cloudwatch_log_group.vpc_flow_logs_us_west_2.arn}:*"
-        ]
-      }
-    ]
-  })
-}
-
-# CloudWatch Log Groups for VPC Flow Logs
-resource "aws_cloudwatch_log_group" "vpc_flow_logs_us_east_1" {
-  provider          = aws.us_east_1
-  name              = "/aws/vpc/${var.app_name}-us-east-1"
-  retention_in_days = var.log_retention_days
-  kms_key_id        = aws_kms_key.main_us_east_1.arn
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-vpc-flow-logs-us-east-1"
-  })
-}
-
-resource "aws_cloudwatch_log_group" "vpc_flow_logs_us_west_2" {
-  provider          = aws.us_west_2
-  name              = "/aws/vpc/${var.app_name}-us-west-2"
-  retention_in_days = var.log_retention_days
-  kms_key_id        = aws_kms_key.main_us_west_2.arn
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-vpc-flow-logs-us-west-2"
-  })
-}
-
-# VPC Flow Logs
-resource "aws_flow_log" "vpc_us_east_1" {
-  provider                 = aws.us_east_1
-  iam_role_arn            = aws_iam_role.vpc_flow_logs.arn
-  log_destination_type    = "cloud-watch-logs"
-  log_destination         = aws_cloudwatch_log_group.vpc_flow_logs_us_east_1.arn
-  traffic_type            = "ALL"
-  vpc_id                  = aws_vpc.main_us_east_1.id
-  max_aggregation_interval = 60
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-vpc-flow-log-us-east-1"
-  })
-}
-
-resource "aws_flow_log" "vpc_us_west_2" {
-  provider                 = aws.us_west_2
-  iam_role_arn            = aws_iam_role.vpc_flow_logs.arn
-  log_destination_type    = "cloud-watch-logs"
-  log_destination         = aws_cloudwatch_log_group.vpc_flow_logs_us_west_2.arn
-  traffic_type            = "ALL"
-  vpc_id                  = aws_vpc.main_us_west_2.id
-  max_aggregation_interval = 60
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-vpc-flow-log-us-west-2"
-  })
-}
-
-# Security Groups - ALB - US-EAST-1
-resource "aws_security_group" "alb_us_east_1" {
-  provider    = aws.us_east_1
-  name_prefix = "${var.app_name}-alb-"
-  description = "Security group for ALB"
-  vpc_id      = aws_vpc.main_us_east_1.id
-  
-  ingress {
-    description = "HTTP from allowed CIDRs"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = var.allowed_ingress_cidrs
-  }
-  
-  dynamic "ingress" {
-    for_each = var.enable_https ? [1] : []
-    content {
-      description = "HTTPS from allowed CIDRs"
-      from_port   = 443
-      to_port     = 443
-      protocol    = "tcp"
-      cidr_blocks = var.allowed_ingress_cidrs
-    }
-  }
-  
-  egress {
-    description = "Allow outbound to app instances"
-    from_port   = var.app_port
-    to_port     = var.app_port
-    protocol    = "tcp"
-    cidr_blocks = local.vpc_configs["us-east-1"].private_subnets
-  }
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-alb-sg-us-east-1"
-  })
-  
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-# Security Groups - ALB - US-WEST-2
-resource "aws_security_group" "alb_us_west_2" {
-  provider    = aws.us_west_2
-  name_prefix = "${var.app_name}-alb-"
-  description = "Security group for ALB"
-  vpc_id      = aws_vpc.main_us_west_2.id
-  
-  ingress {
-    description = "HTTP from allowed CIDRs"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = var.allowed_ingress_cidrs
-  }
-  
-  dynamic "ingress" {
-    for_each = var.enable_https ? [1] : []
-    content {
-      description = "HTTPS from allowed CIDRs"
-      from_port   = 443
-      to_port     = 443
-      protocol    = "tcp"
-      cidr_blocks = var.allowed_ingress_cidrs
-    }
-  }
-  
-  egress {
-    description = "Allow outbound to app instances"
-    from_port   = var.app_port
-    to_port     = var.app_port
-    protocol    = "tcp"
-    cidr_blocks = local.vpc_configs["us-west-2"].private_subnets
-  }
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-alb-sg-us-west-2"
-  })
-  
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-# Security Groups - App - US-EAST-1
-resource "aws_security_group" "app_us_east_1" {
-  provider    = aws.us_east_1
-  name_prefix = "${var.app_name}-app-"
-  description = "Security group for application instances"
-  vpc_id      = aws_vpc.main_us_east_1.id
-  
-  ingress {
-    description     = "App port from ALB"
-    from_port       = var.app_port
-    to_port         = var.app_port
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb_us_east_1.id]
-  }
-  
-  egress {
-    description = "HTTPS outbound for updates"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  
-  egress {
-    description = "HTTP outbound for updates"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-app-sg-us-east-1"
-  })
-  
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-# Security Groups - App - US-WEST-2
-resource "aws_security_group" "app_us_west_2" {
-  provider    = aws.us_west_2
-  name_prefix = "${var.app_name}-app-"
-  description = "Security group for application instances"
-  vpc_id      = aws_vpc.main_us_west_2.id
-  
-  ingress {
-    description     = "App port from ALB"
-    from_port       = var.app_port
-    to_port         = var.app_port
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb_us_west_2.id]
-  }
-  
-  egress {
-    description = "HTTPS outbound for updates"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  
-  egress {
-    description = "HTTP outbound for updates"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-app-sg-us-west-2"
-  })
-  
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-# Security Groups - Database - US-EAST-1
-resource "aws_security_group" "db_us_east_1" {
-  provider    = aws.us_east_1
-  name_prefix = "${var.app_name}-db-"
-  description = "Security group for RDS database"
-  vpc_id      = aws_vpc.main_us_east_1.id
-  
-  ingress {
-    description     = "Database port from app instances"
-    from_port       = var.db_engine == "postgres" ? 5432 : 3306
-    to_port         = var.db_engine == "postgres" ? 5432 : 3306
-    protocol        = "tcp"
-    security_groups = [aws_security_group.app_us_east_1.id]
-  }
-  
-  # No egress rules - database doesn't need outbound
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-db-sg-us-east-1"
-  })
-  
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-# Security Groups - Database - US-WEST-2
-resource "aws_security_group" "db_us_west_2" {
-  provider    = aws.us_west_2
-  name_prefix = "${var.app_name}-db-"
-  description = "Security group for RDS database"
-  vpc_id      = aws_vpc.main_us_west_2.id
-  
-  ingress {
-    description     = "Database port from app instances"
-    from_port       = var.db_engine == "postgres" ? 5432 : 3306
-    to_port         = var.db_engine == "postgres" ? 5432 : 3306
-    protocol        = "tcp"
-    security_groups = [aws_security_group.app_us_west_2.id]
-  }
-  
-  # No egress rules - database doesn't need outbound
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-db-sg-us-west-2"
-  })
-  
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-# S3 Buckets
-resource "aws_s3_bucket" "app_us_east_1" {
-  provider = aws.us_east_1
-  bucket   = local.s3_bucket_names["us-east-1"]
-  
-  tags = merge(local.common_tags, {
-    Name = local.s3_bucket_names["us-east-1"]
-  })
-}
-
-resource "aws_s3_bucket" "app_us_west_2" {
-  provider = aws.us_west_2
-  bucket   = local.s3_bucket_names["us-west-2"]
-  
-  tags = merge(local.common_tags, {
-    Name = local.s3_bucket_names["us-west-2"]
-  })
-}
-
-# S3 Bucket Public Access Block
-resource "aws_s3_bucket_public_access_block" "app_us_east_1" {
-  provider                = aws.us_east_1
-  bucket                  = aws_s3_bucket.app_us_east_1.id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_public_access_block" "app_us_west_2" {
-  provider                = aws.us_west_2
-  bucket                  = aws_s3_bucket.app_us_west_2.id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-# S3 Bucket Versioning
-resource "aws_s3_bucket_versioning" "app_us_east_1" {
-  provider = aws.us_east_1
-  bucket   = aws_s3_bucket.app_us_east_1.id
-  
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-resource "aws_s3_bucket_versioning" "app_us_west_2" {
-  provider = aws.us_west_2
-  bucket   = aws_s3_bucket.app_us_west_2.id
-  
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-# S3 Bucket Server-Side Encryption
-resource "aws_s3_bucket_server_side_encryption_configuration" "app_us_east_1" {
-  provider = aws.us_east_1
-  bucket   = aws_s3_bucket.app_us_east_1.id
-  
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm     = "aws:kms"
-      kms_master_key_id = aws_kms_key.main_us_east_1.arn
-    }
-    bucket_key_enabled = true
-  }
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "app_us_west_2" {
-  provider = aws.us_west_2
-  bucket   = aws_s3_bucket.app_us_west_2.id
-  
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm     = "aws:kms"
-      kms_master_key_id = aws_kms_key.main_us_west_2.arn
-    }
-    bucket_key_enabled = true
-  }
-}
-
-# S3 Bucket Lifecycle Rules
-resource "aws_s3_bucket_lifecycle_configuration" "app_us_east_1" {
-  provider = aws.us_east_1
-  bucket   = aws_s3_bucket.app_us_east_1.id
-  
-  rule {
-    id     = "cleanup-old-versions"
-    status = "Enabled"
+```hcl
+# backend.tf
+terraform {
+  backend "s3" {
+    bucket         = "PLACEHOLDER-terraform-state-bucket"
+    key            = "myapp/us-west-2/terraform.tfstate"
+    region         = "us-west-2"
+    encrypt        = true
+    dynamodb_table = "PLACEHOLDER-terraform-locks"
     
-    noncurrent_version_expiration {
-      noncurrent_days = 90
-    }
+    # Optional: Use assume role for cross-account access
+    # role_arn = "arn:aws:iam::ACCOUNT-ID:role/TerraformRole"
   }
 }
 
-resource "aws_s3_bucket_lifecycle_configuration" "app_us_west_2" {
-  provider = aws.us_west_2
-  bucket   = aws_s3_bucket.app_us_west_2.id
-  
-  rule {
-    id     = "cleanup-old-versions"
-    status = "Enabled"
-    
-    noncurrent_version_expiration {
-      noncurrent_days = 90
-    }
-  }
-}
+# Alternative backend configuration for remote state management
+# terraform {
+#   backend "remote" {
+#     hostname     = "app.terraform.io"
+#     organization = "PLACEHOLDER-ORG-NAME"
+#
+#     workspaces {
+#       name = "myapp-us-west-2"
+#     }
+#   }
+# }
 
-# IAM Role for EC2 Instances
-resource "aws_iam_role" "ec2_instance" {
-  name = "${var.app_name}-ec2-instance-role"
-  
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-        Action = "sts:AssumeRole"
+# Local backend for testing (not recommended for production)
+# terraform {
+#   backend "local" {
+#     path = "terraform.tfstate"
+#   }
+# }
+```
+
+```markdown
+# state-migration.md
+
+# Terraform State Migration Guide: us-west-1 → us-west-2
+
+## Prerequisites
+
+1. Ensure you have appropriate AWS credentials configured
+2. Backup existing Terraform state files
+3. Verify all resources exist in both regions
+4. Have the old resource IDs documented (see id-mapping.csv)
+
+## Step 1: Backup Current State
+
+```bash
+# Backup current state from us-west-1
+terraform workspace select myapp-us-west-1
+terraform state pull > backup-us-west-1-$(date +%Y%m%d-%H%M%S).json
+
+# List all resources in current state
+terraform state list > resources-us-west-1.txt
+```
+
+## Step 2: Create New Workspace for us-west-2
+
+```bash
+# Create new workspace for us-west-2
+terraform workspace new myapp-us-west-2
+
+# Or select if already exists
+terraform workspace select myapp-us-west-2
+
+# Initialize the new workspace
+terraform init
+```
+
+## Step 3: Import Resources to New State
+
+**Important**: Execute imports in dependency order (VPC → Subnets → Security Groups → etc.)
+
+### Network Resources
+
+```bash
+# Import VPC
+terraform import aws_vpc.main vpc-0123456789abcdef0
+
+# Import Internet Gateway
+terraform import aws_internet_gateway.main igw-0123456789abcdef0
+
+# Import Subnets
+terraform import 'aws_subnet.public[0]' subnet-0123456789abcdef0
+terraform import 'aws_subnet.public[1]' subnet-0123456789abcdef1
+terraform import 'aws_subnet.private[0]' subnet-0123456789abcdef2
+terraform import 'aws_subnet.private[1]' subnet-0123456789abcdef3
+
+# Import Route Tables
+terraform import aws_route_table.public rtb-0123456789abcdef0
+terraform import 'aws_route_table.private[0]' rtb-0123456789abcdef1
+terraform import 'aws_route_table.private[1]' rtb-0123456789abcdef2
+
+# Import Route Table Associations
+terraform import 'aws_route_table_association.public[0]' subnet-0123456789abcdef0/rtb-0123456789abcdef0
+terraform import 'aws_route_table_association.public[1]' subnet-0123456789abcdef1/rtb-0123456789abcdef0
+terraform import 'aws_route_table_association.private[0]' subnet-0123456789abcdef2/rtb-0123456789abcdef1
+terraform import 'aws_route_table_association.private[1]' subnet-0123456789abcdef3/rtb-0123456789abcdef2
+```
+
+### Security Groups
+
+```bash
+# Import Security Groups
+terraform import aws_security_group.web sg-0123456789abcdef0
+terraform import aws_security_group.app sg-0123456789abcdef1
+terraform import aws_security_group.database sg-0123456789abcdef2
+```
+
+### Load Balancer Resources
+
+```bash
+# Import ALB
+terraform import aws_lb.main arn:aws:elasticloadbalancing:us-west-2:123456789012:loadbalancer/app/myapp-alb/1234567890123456
+
+# Import Target Group
+terraform import aws_lb_target_group.app arn:aws:elasticloadbalancing:us-west-2:123456789012:targetgroup/myapp-app-tg/1234567890123456
+
+# Import Listener
+terraform import aws_lb_listener.app arn:aws:elasticloadbalancing:us-west-2:123456789012:listener/app/myapp-alb/1234567890123456/1234567890123456
+```
+
+### Auto Scaling Resources
+
+```bash
+# Import Launch Template
+terraform import aws_launch_template.app lt-0123456789abcdef0
+
+# Import Auto Scaling Group
+terraform import aws_autoscaling_group.app myapp-app-asg
+```
+
+### Database Resources
+
+```bash
+# Import DB Subnet Group
+terraform import aws_db_subnet_group.main myapp-db-subnet-group
+
+# Import RDS Instance
+terraform import aws_db_instance.main myapp-database
+```
+
+## Step 4: Verify State Consistency
+
+```bash
+# Plan should show no changes if import was successful
+terraform plan
+
+# If there are differences, review and adjust configuration
+terraform show
+
+# Verify all resources are in state
+terraform state list
+```
+
+## Step 5: Test Configuration
+
+```bash
+# Validate configuration
+terraform validate
+
+# Run plan to ensure no unexpected changes
+terraform plan -out=migration-plan
+
+# Apply only if plan shows expected results
+# terraform apply migration-plan
+```
+
+## Step 6: State Verification Commands
+
+```bash
+# Compare resource counts
+echo "Old region resources:"
+wc -l resources-us-west-1.txt
+
+echo "New region resources:"
+terraform state list | wc -l
+
+# Verify specific resources
+terraform state show aws_vpc.main
+terraform state show aws_db_instance.main
+terraform state show aws_lb.main
+
+# Check for any drift
+terraform plan -detailed-exitcode
+```
+
+## Rollback Procedure
+
+If migration fails:
+
+```bash
+# Switch back to old workspace
+terraform workspace select myapp-us-west-1
+
+# Restore from backup if needed
+terraform state push backup-us-west-1-TIMESTAMP.json
+
+# Delete problematic new workspace
+terraform workspace select default
+terraform workspace delete myapp-us-west-2
+```
+
+## Post-Migration Cleanup
+
+```bash
+# After successful migration and testing
+terraform workspace select myapp-us-west-1
+
+# Document old resources for cleanup
+terraform state list > old-resources-for-cleanup.txt
+
+# Eventually destroy old resources (after DNS cutover)
+# terraform destroy
+```
+```
+
+```csv
+# id-mapping.csv
+resource,address,old_id,new_id,notes
+VPC,aws_vpc.main,vpc-abc123def456,vpc-def456abc123,Main application VPC
+Internet Gateway,aws_internet_gateway.main,igw-abc123def456,igw-def456abc123,Main internet gateway
+Public Subnet 1,aws_subnet.public[0],subnet-abc123def456,subnet-def456abc123,Public subnet AZ-a
+Public Subnet 2,aws_subnet.public[1],subnet-bcd234efa567,subnet-efa567bcd234,Public subnet AZ-b
+Private Subnet 1,aws_subnet.private[0],subnet-cde345fgb678,subnet-fgb678cde345,Private subnet AZ-a
+Private Subnet 2,aws_subnet.private[1],subnet-def456ghc789,subnet-ghc789def456,Private subnet AZ-b
+Public Route Table,aws_route_table.public,rtb-abc123def456,rtb-def456abc123,Public route table
+Private Route Table 1,aws_route_table.private[0],rtb-bcd234efa567,rtb-efa567bcd234,Private route table AZ-a
+Private Route Table 2,aws_route_table.private[1],rtb-cde345fgb678,rtb-fgb678cde345,Private route table AZ-b
+Web Security Group,aws_security_group.web,sg-abc123def456,sg-def456abc123,Web tier security group
+App Security Group,aws_security_group.app,sg-bcd234efa567,sg-efa567bcd234,Application tier security group
+DB Security Group,aws_security_group.database,sg-cde345fgb678,sg-fgb678cde345,Database tier security group
+Application Load Balancer,aws_lb.main,arn:aws:elasticloadbalancing:us-west-1:123456789012:loadbalancer/app/myapp-alb/50dc6c495c0c9188,arn:aws:elasticloadbalancing:us-west-2:123456789012:loadbalancer/app/myapp-alb/60ec7d596d1d9299,Main application load balancer
+Target Group,aws_lb_target_group.app,arn:aws:elasticloadbalancing:us-west-1:123456789012:targetgroup/myapp-app-tg/73e2d6ba618ba529,arn:aws:elasticloadbalancing:us-west-2:123456789012:targetgroup/myapp-app-tg/84f3e7cb729cb63a,Application target group
+ALB Listener,aws_lb_listener.app,arn:aws:elasticloadbalancing:us-west-1:123456789012:listener/app/myapp-alb/50dc6c495c0c9188/f2f7dc8efc522ab2,arn:aws:elasticloadbalancing:us-west-2:123456789012:listener/app/myapp-alb/60ec7d596d1d9299/g3g8ed9fgd633bc3,HTTP listener port 80
+Launch Template,aws_launch_template.app,lt-abc123def456,lt-def456abc123,Application launch template
+Auto Scaling Group,aws_autoscaling_group.app,myapp-app-asg,myapp-app-asg,Application auto scaling group
+DB Subnet Group,aws_db_subnet_group.main,myapp-db-subnet-group,myapp-db-subnet-group,Database subnet group
+RDS Instance,aws_db_instance.main,myapp-database,myapp-database,Main database instance
+Route Table Association 1,aws_route_table_association.public[0],subnet-abc123def456/rtb-abc123def456,subnet-def456abc123/rtb-def456abc123,Public subnet 1 association
+Route Table Association 2,aws_route_table_association.public[1],subnet-bcd234efa567/rtb-abc123def456,subnet-efa567bcd234/rtb-def456abc123,Public subnet 2 association
+Route Table Association 3,aws_route_table_association.private[0],subnet-cde345fgb678/rtb-bcd234efa567,subnet-fgb678cde345/rtb-efa567bcd234,Private subnet 1 association
+Route Table Association 4,aws_route_table_association.private[1],subnet-def456ghc789/rtb-cde345fgb678,subnet-ghc789def456/rtb-fgb678cde345,Private subnet 2 association
+```
+
+```markdown
+# runbook.md
+
+# AWS Region Migration Runbook: us-west-1 → us-west-2
+
+## Overview
+
+This runbook provides step-by-step instructions for migrating the application from us-west-1 to us-west-2 with minimal downtime.
+
+## Pre-Migration Checklist
+
+- [ ] All stakeholders notified of maintenance window
+- [ ] Backup verification completed
+- [ ] New region resources provisioned and tested
+- [ ] Database replication/backup restored in new region
+- [ ] Application configuration updated for new region
+- [ ] DNS TTL reduced to 60 seconds (24-48 hours before migration)
+- [ ] Monitoring and alerting configured for new region
+- [ ] Rollback procedures tested
+
+## Migration Timeline
+
+**Total Estimated Downtime: 15-30 minutes**
+
+### Phase 1: Pre-Cutover (No Downtime)
+*Duration: 2-4 hours*
+
+#### Step 1: Final Data Sync
+```bash
+# Stop application writes (enable maintenance mode)
+# Perform final database backup/sync
+aws rds create-db-snapshot \
+  --db-instance-identifier myapp-database \
+  --db-snapshot-identifier myapp-final-snapshot-$(date +%Y%m%d-%H%M%S) \
+  --region us-west-1
+
+# Wait for snapshot completion
+aws rds wait db-snapshot-completed \
+  --db-snapshot-identifier myapp-final-snapshot-TIMESTAMP \
+  --region us-west-1
+
+# Restore snapshot in new region
+aws rds restore-db-instance-from-db-snapshot \
+  --db-instance-identifier myapp-database \
+  --db-snapshot-identifier myapp-final-snapshot-TIMESTAMP \
+  --region us-west-2
+```
+
+#### Step 2: Application Deployment
+```bash
+# Deploy application to new region
+terraform workspace select myapp-us-west-2
+terraform apply
+
+# Verify application health
+curl -f https://internal-alb-us-west-2.example.com/health
+```
+
+#### Step 3: Pre-Cutover Testing
+```bash
+# Test application functionality
+./scripts/smoke-test.sh us-west-2
+
+# Verify database connectivity
+./scripts/db-connectivity-test.sh us-west-2
+
+# Load test (optional)
+./scripts/load-test.sh us-west-2
+```
+
+### Phase 2: DNS Cutover (Downtime Begins)
+*Duration: 5-10 minutes*
+
+#### Step 4: Update DNS Records
+```bash
+# Get new ALB DNS name
+NEW_ALB_DNS=$(aws elbv2 describe-load-balancers \
+  --names myapp-alb \
+  --region us-west-2 \
+  --query 'LoadBalancers[0].DNSName' \
+  --output text)
+
+echo "New ALB DNS: $NEW_ALB_DNS"
+
+# Update Route 53 records
+aws route53 change-resource-record-sets \
+  --hosted-zone-id Z123456789 \
+  --change-batch '{
+    "Changes": [{
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "api.example.com",
+        "Type": "CNAME",
+        "TTL": 60,
+        "ResourceRecords": [{"Value": "'$NEW_ALB_DNS'"}]
       }
-    ]
-  })
-  
-  tags = local.common_tags
-}
+    }]
+  }'
+```
 
-# IAM Policy for EC2 S3 Access - US-EAST-1
-resource "aws_iam_role_policy" "ec2_s3_access_us_east_1" {
-  name = "${var.app_name}-ec2-s3-access-us-east-1"
-  role = aws_iam_role.ec2_instance.id
-  
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:ListBucket"
-        ]
-        Resource = [
-          aws_s3_bucket.app_us_east_1.arn,
-          "${aws_s3_bucket.app_us_east_1.arn}/*"
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "kms:Decrypt",
-          "kms:GenerateDataKey"
-        ]
-        Resource = aws_kms_key.main_us_east_1.arn
-      }
-    ]
-  })
-}
+#### Step 5: Verify DNS Propagation
+```bash
+# Monitor DNS propagation
+while true; do
+  RESOLVED=$(dig +short api.example.com)
+  echo "$(date): DNS resolves to: $RESOLVED"
+  if [[ "$RESOLVED" == *"us-west-2"* ]]; then
+    echo "DNS cutover successful!"
+    break
+  fi
+  sleep 10
+done
+```
 
-# IAM Policy for EC2 S3 Access - US-WEST-2
-resource "aws_iam_role_policy" "ec2_s3_access_us_west_2" {
-  name = "${var.app_name}-ec2-s3-access-us-west-2"
-  role = aws_iam_role.ec2_instance.id
-  
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:ListBucket"
-        ]
-        Resource = [
-          aws_s3_bucket.app_us_west_2.arn,
-          "${aws_s3_bucket.app_us_west_2.arn}/*"
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "kms:Decrypt",
-          "kms:GenerateDataKey"
-        ]
-        Resource = aws_kms_key.main_us_west_2.arn
-      }
-    ]
-  })
-}
+### Phase 3: Post-Cutover Verification (Downtime Ends)
+*Duration: 10-15 minutes*
 
-# Instance Profile for EC2
-resource "aws_iam_instance_profile" "ec2_instance" {
-  name = "${var.app_name}-ec2-instance-profile"
-  role = aws_iam_role.ec2_instance.name
-  
-  tags = local.common_tags
-}
+#### Step 6: Application Health Checks
+```bash
+# Verify application is responding
+curl -f https://api.example.com/health
 
-# ALB - US-EAST-1
-resource "aws_lb" "main_us_east_1" {
-  provider           = aws.us_east_1
-  name               = "${var.app_name}-alb-us-east-1"
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb_us_east_1.id]
-  subnets            = aws_subnet.public_us_east_1[*].id
-  
-  enable_deletion_protection = false
-  enable_http2              = true
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-alb-us-east-1"
-  })
-}
+# Check application logs
+aws logs tail /aws/ec2/myapp --region us-west-2 --follow
 
-# ALB - US-WEST-2
-resource "aws_lb" "main_us_west_2" {
-  provider           = aws.us_west_2
-  name               = "${var.app_name}-alb-us-west-2"
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb_us_west_2.id]
-  subnets            = aws_subnet.public_us_west_2[*].id
-  
-  enable_deletion_protection = false
-  enable_http2              = true
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-alb-us-west-2"
-  })
-}
+# Verify database connectivity
+./scripts/db-connectivity-test.sh production
+```
 
-# Target Groups
-resource "aws_lb_target_group" "app_us_east_1" {
-  provider    = aws.us_east_1
-  name        = "${var.app_name}-tg-us-east-1"
-  port        = var.app_port
-  protocol    = "HTTP"
-  vpc_id      = aws_vpc.main_us_east_1.id
-  target_type = "instance"
-  
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 5
-    interval            = 30
-    path                = "/"
-    matcher             = "200"
-  }
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-tg-us-east-1"
-  })
-}
+#### Step 7: Traffic Monitoring
+```bash
+# Monitor ALB metrics
+aws cloudwatch get-metric-statistics \
+  --namespace AWS/ApplicationELB \
+  --metric-name RequestCount \
+  --dimensions Name=LoadBalancer,Value=app/myapp-alb/1234567890123456 \
+  --start-time $(date -u -d '10 minutes ago' +%Y-%m-%dT%H:%M:%S) \
+  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
+  --period 300 \
+  --statistics Sum \
+  --region us-west-2
 
-resource "aws_lb_target_group" "app_us_west_2" {
-  provider    = aws.us_west_2
-  name        = "${var.app_name}-tg-us-west-2"
-  port        = var.app_port
-  protocol    = "HTTP"
-  vpc_id      = aws_vpc.main_us_west_2.id
-  target_type = "instance"
-  
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 5
-    interval            = 30
-    path                = "/"
-    matcher             = "200"
-  }
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-tg-us-west-2"
-  })
-}
+# Check error rates
+aws cloudwatch get-metric-statistics \
+  --namespace AWS/ApplicationELB \
+  --metric-name HTTPCode_ELB_5XX_Count \
+  --dimensions Name=LoadBalancer,Value=app/myapp-alb/1234567890123456 \
+  --start-time $(date -u -d '10 minutes ago' +%Y-%m-%dT%H:%M:%S) \
+  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
+  --period 300 \
+  --statistics Sum \
+  --region us-west-2
+```
 
-# ALB Listeners
-resource "aws_lb_listener" "http_us_east_1" {
-  provider          = aws.us_east_1
-  load_balancer_arn = aws_lb.main_us_east_1.arn
-  port              = "80"
-  protocol          = "HTTP"
-  
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app_us_east_1.arn
-  }
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-http-listener-us-east-1"
-  })
-}
+## Post-Migration Tasks
 
-resource "aws_lb_listener" "http_us_west_2" {
-  provider          = aws.us_west_2
-  load_balancer_arn = aws_lb.main_us_west_2.arn
-  port              = "80"
-  protocol          = "HTTP"
-  
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app_us_west_2.arn
-  }
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-http-listener-us-west-2"
-  })
-}
+### Immediate (Within 1 hour)
+- [ ] Verify all application functionality
+- [ ] Confirm monitoring and alerting are working
+- [ ] Update documentation with new resource IDs
+- [ ] Notify stakeholders of successful migration
+- [ ] Monitor application performance for anomalies
 
-# HTTPS Listeners (conditional)
-resource "aws_lb_listener" "https_us_east_1" {
-  provider          = aws.us_east_1
-  count             = var.enable_https && var.certificate_arn != "" ? 1 : 0
-  load_balancer_arn = aws_lb.main_us_east_1.arn
-  port              = "443"
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = var.certificate_arn
-  
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app_us_east_1.arn
-  }
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-https-listener-us-east-1"
-  })
-}
+### Within 24 hours
+- [ ] Increase DNS TTL back to normal values (300-3600 seconds)
+- [ ] Update any hardcoded references to old region
+- [ ] Verify backup procedures are working in new region
+- [ ] Update disaster recovery procedures
 
-resource "aws_lb_listener" "https_us_west_2" {
-  provider          = aws.us_west_2
-  count             = var.enable_https && var.certificate_arn != "" ? 1 : 0
-  load_balancer_arn = aws_lb.main_us_west_2.arn
-  port              = "443"
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = var.certificate_arn
-  
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app_us_west_2.arn
-  }
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-https-listener-us-west-2"
-  })
-}
-
-# Get latest Amazon Linux 2 AMI
-data "aws_ami" "amazon_linux_2_us_east_1" {
-  provider    = aws.us_east_1
-  most_recent = true
-  owners      = ["amazon"]
-  
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
-  }
-}
-
-data "aws_ami" "amazon_linux_2_us_west_2" {
-  provider    = aws.us_west_2
-  most_recent = true
-  owners      = ["amazon"]
-  
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
-  }
-}
-
-# EC2 Instances - US-EAST-1
-resource "aws_instance" "app_us_east_1" {
-  provider                    = aws.us_east_1
-  count                       = 2
-  ami                         = data.aws_ami.amazon_linux_2_us_east_1.id
-  instance_type               = "t3.micro"
-  subnet_id                   = aws_subnet.private_us_east_1[count.index % length(aws_subnet.private_us_east_1)].id
-  vpc_security_group_ids      = [aws_security_group.app_us_east_1.id]
-  iam_instance_profile        = aws_iam_instance_profile.ec2_instance.name
-  associate_public_ip_address = false
-  
-  user_data = base64encode(<<-EOF
-    #!/bin/bash
-    yum update -y
-    yum install -y httpd
-    systemctl start httpd
-    systemctl enable httpd
-    echo "<h1>Hello from ${var.app_name} in us-east-1 - Instance ${count.index + 1}</h1>" > /var/www/html/index.html
-    sed -i 's/Listen 80/Listen ${var.app_port}/' /etc/httpd/conf/httpd.conf
-    systemctl restart httpd
-  EOF
-  )
-  
-  root_block_device {
-    volume_type = "gp3"
-    volume_size = 20
-    encrypted   = true
-    kms_key_id  = aws_kms_key.main_us_east_1.arn
-  }
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-instance-${count.index + 1}-us-east-1"
-  })
-}
-
-# EC2 Instances - US-WEST-2
-resource "aws_instance" "app_us_west_2" {
-  provider                    = aws.us_west_2
-  count                       = 2
-  ami                         = data.aws_ami.amazon_linux_2_us_west_2.id
-  instance_type               = "t3.micro"
-  subnet_id                   = aws_subnet.private_us_west_2[count.index % length(aws_subnet.private_us_west_2)].id
-  vpc_security_group_ids      = [aws_security_group.app_us_west_2.id]
-  iam_instance_profile        = aws_iam_instance_profile.ec2_instance.name
-  associate_public_ip_address = false
-  
-  user_data = base64encode(<<-EOF
-    #!/bin/bash
-    yum update -y
-    yum install -y httpd
-    systemctl start httpd
-    systemctl enable httpd
-    echo "<h1>Hello from ${var.app_name} in us-west-2 - Instance ${count.index + 1}</h1>" > /var/www/html/index.html
-    sed -i 's/Listen 80/Listen ${var.app_port}/' /etc/httpd/conf/httpd.conf
-    systemctl restart httpd
-  EOF
-  )
-  
-  root_block_device {
-    volume_type = "gp3"
-    volume_size = 20
-    encrypted   = true
-    kms_key_id  = aws_kms_key.main_us_west_2.arn
-  }
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-instance-${count.index + 1}-us-west-2"
-  })
-}
-
-# Target Group Attachments
-resource "aws_lb_target_group_attachment" "app_us_east_1" {
-  provider         = aws.us_east_1
-  count            = length(aws_instance.app_us_east_1)
-  target_group_arn = aws_lb_target_group.app_us_east_1.arn
-  target_id        = aws_instance.app_us_east_1[count.index].id
-  port             = var.app_port
-}
-
-resource "aws_lb_target_group_attachment" "app_us_west_2" {
-  provider         = aws.us_west_2
-  count            = length(aws_instance.app_us_west_2)
-  target_group_arn = aws_lb_target_group.app_us_west_2.arn
-  target_id        = aws_instance.app_us_west_2[count.index].id
-  port             = var.app_port
-}
-
-# DB Subnet Groups
-resource "aws_db_subnet_group" "main_us_east_1" {
-  provider    = aws.us_east_1
-  name        = "${var.app_name}-db-subnet-group-us-east-1"
-  description = "DB subnet group for RDS"
-  subnet_ids  = aws_subnet.private_us_east_1[*].id
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-db-subnet-group-us-east-1"
-  })
-}
-
-resource "aws_db_subnet_group" "main_us_west_2" {
-  provider    = aws.us_west_2
-  name        = "${var.app_name}-db-subnet-group-us-west-2"
-  description = "DB subnet group for RDS"
-  subnet_ids  = aws_subnet.private_us_west_2[*].id
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-db-subnet-group-us-west-2"
-  })
-}
-
-# RDS Instances
-resource "aws_db_instance" "main_us_east_1" {
-  provider                   = aws.us_east_1
-  identifier                 = "${var.app_name}-db-us-east-1"
-  engine                     = var.db_engine
-  engine_version            = var.db_engine_version
-  instance_class            = var.db_instance_class
-  allocated_storage         = 20
-  storage_type              = "gp3"
-  storage_encrypted         = true
-  kms_key_id               = aws_kms_key.main_us_east_1.arn
-  db_subnet_group_name     = aws_db_subnet_group.main_us_east_1.name
-  vpc_security_group_ids   = [aws_security_group.db_us_east_1.id]
-  
-  db_name  = "${replace(var.app_name, "-", "")}db"
-  username = var.db_username
-  password = var.db_password
-  
-  backup_retention_period = var.backup_retention_days
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
-  
-  deletion_protection    = true
-  skip_final_snapshot    = false
-  final_snapshot_identifier = "${var.app_name}-db-final-snapshot-us-east-1-${formatdate("YYYYMMDDHHmmss", timestamp())}"
-  
-  enabled_cloudwatch_logs_exports = var.db_engine == "postgres" ? ["postgresql"] : ["error", "general", "slowquery"]
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-db-us-east-1"
-  })
-}
-
-resource "aws_db_instance" "main_us_west_2" {
-  provider                   = aws.us_west_2
-  identifier                 = "${var.app_name}-db-us-west-2"
-  engine                     = var.db_engine
-  engine_version            = var.db_engine_version
-  instance_class            = var.db_instance_class
-  allocated_storage         = 20
-  storage_type              = "gp3"
-  storage_encrypted         = true
-  kms_key_id               = aws_kms_key.main_us_west_2.arn
-  db_subnet_group_name     = aws_db_subnet_group.main_us_west_2.name
-  vpc_security_group_ids   = [aws_security_group.db_us_west_2.id]
-  
-  db_name  = "${replace(var.app_name, "-", "")}db"
-  username = var.db_username
-  password = var.db_password
-  
-  backup_retention_period = var.backup_retention_days
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
-  
-  deletion_protection    = true
-  skip_final_snapshot    = false
-  final_snapshot_identifier = "${var.app_name}-db-final-snapshot-us-west-2-${formatdate("YYYYMMDDHHmmss", timestamp())}"
-  
-  enabled_cloudwatch_logs_exports = var.db_engine == "postgres" ? ["postgresql"] : ["error", "general", "slowquery"]
-  
-  tags = merge(local.common_tags, {
-    Name = "${var.app_name}-db-us-west-2"
-  })
-}
-
-# Lambda IAM Role
-resource "aws_iam_role" "lambda" {
-  name = "${var.app_name}-lambda-role"
-  
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "lambda.amazonaws.com"
-        }
-        Action = "sts:AssumeRole"
-      }
-    ]
-  })
-  
-  tags = local.common_tags
-}
-
-# Lambda CloudWatch Logs Policy - US-EAST-1
-resource "aws_iam_role_policy" "lambda_logs_us_east_1" {
-  name = "${var.app_name}-lambda-logs-us-east-1"
-  role = aws_iam_role.lambda.id
-  
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ]
-        Resource = [
-          "arn:aws:logs:us-east-1:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.app_name}-function-us-east-1",
-          "arn:aws:logs:us-east-1:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.app_name}-function-us-east-1:*"
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "kms:Decrypt"
-        ]
-        Resource = aws_kms_key.main_us_east_1.arn
-      }
-    ]
-  })
-}
-
-# Lambda CloudWatch Logs Policy - US-WEST-2
-resource "aws_iam_role_policy" "lambda_logs_us_west_2" {
-  name = "${var.app_name}-lambda-logs-us-west-2"
-  role = aws_iam_role.lambda.id
-  
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ]
-        Resource = [
-          "arn:aws:logs:us-west-2:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.app_name}-function-us-west-2",
-          "arn:aws:logs:us-west-2:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.app_name}-function-us-west-2:*"
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "kms:Decrypt"
-        ]
-        Resource = aws_kms_key.main_us_west_2.arn
-      }
-    ]
-  })
-}
-
-# Lambda S3 Access Policy - US-EAST-1
-resource "aws_iam_role_policy" "lambda_s3_us_east_1" {
-  name = "${var.app_name}-lambda-s3-us-east-1"
-  role = aws_iam_role.lambda
+### Within 1 week
