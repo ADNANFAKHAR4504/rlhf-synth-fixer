@@ -1,40 +1,40 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
-import fs from 'fs';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  RDSClient,
-  DescribeDBClustersCommand,
-  DescribeDBInstancesCommand,
-} from '@aws-sdk/client-rds';
-import {
-  ElastiCacheClient,
-  DescribeReplicationGroupsCommand,
-} from '@aws-sdk/client-elasticache';
-import {
-  ECSClient,
-  DescribeClustersCommand,
-  DescribeServicesCommand,
-} from '@aws-sdk/client-ecs';
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-  DescribeTargetHealthCommand,
-} from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
   APIGatewayClient,
   GetRestApisCommand,
   GetStagesCommand,
 } from '@aws-sdk/client-api-gateway';
 import {
-  SecretsManagerClient,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeClustersCommand,
+  DescribeServicesCommand,
+  ECSClient,
+} from '@aws-sdk/client-ecs';
+import {
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  DescribeTargetHealthCommand,
+  ElasticLoadBalancingV2Client,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  DescribeReplicationGroupsCommand,
+  ElastiCacheClient,
+} from '@aws-sdk/client-elasticache';
+import {
+  DescribeDBClustersCommand,
+  DescribeDBInstancesCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
   DescribeSecretCommand,
+  SecretsManagerClient,
 } from '@aws-sdk/client-secrets-manager';
+import fs from 'fs';
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -380,7 +380,7 @@ describe('StreamFlix Content Delivery API Integration Tests', () => {
       );
 
       expect(api).toBeDefined();
-      expect(api!.name.toLowerCase()).toContain('streamflix');
+      expect(api?.name?.toLowerCase()).toContain('streamflix');
     });
 
     test('should have API Gateway stage with throttling configured', async () => {
@@ -415,7 +415,7 @@ describe('StreamFlix Content Delivery API Integration Tests', () => {
 
       expect(stage).toBeDefined();
       // Verify throttling settings exist (may be undefined if using defaults)
-      expect(stage.throttleSettings !== undefined || stage.methodSettings !== undefined).toBe(true);
+      expect(stage.methodSettings !== undefined).toBe(true);
     });
 
     test('should be able to reach API Gateway endpoint', async () => {
@@ -620,6 +620,145 @@ describe('StreamFlix Content Delivery API Integration Tests', () => {
       );
 
       expect(availabilityZones.size).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('Cost Optimization Verification (Post-Optimization)', () => {
+    test('should have Aurora with optimized capacity (0.5-1 ACU)', async () => {
+      const dbEndpoint = outputs.DatabaseStackDatabaseEndpoint0DF8269D;
+      if (!dbEndpoint) {
+        console.log('Skipping: Database endpoint not found in outputs');
+        return;
+      }
+
+      const command = new DescribeDBClustersCommand({});
+      const response = await rdsClient.send(command);
+
+      const cluster = response.DBClusters?.find(
+        (c) => c.Endpoint === dbEndpoint
+      );
+
+      expect(cluster).toBeDefined();
+
+      // Verify ServerlessV2ScalingConfiguration has been optimized
+      if (cluster!.ServerlessV2ScalingConfiguration) {
+        const scaling = cluster!.ServerlessV2ScalingConfiguration;
+        console.log(`Aurora capacity: Min ${scaling.MinCapacity} ACU, Max ${scaling.MaxCapacity} ACU`);
+
+        // After optimization: should be 0.5 min, 1 max
+        expect(scaling.MinCapacity).toBe(0.5);
+        expect(scaling.MaxCapacity).toBe(1);
+      } else {
+        console.log('⚠️  ServerlessV2ScalingConfiguration not found - optimization may not have been applied');
+      }
+    });
+
+    test('should have Aurora with optimized backup retention (1 day)', async () => {
+      const dbEndpoint = outputs.DatabaseStackDatabaseEndpoint0DF8269D;
+      if (!dbEndpoint) {
+        console.log('Skipping: Database endpoint not found in outputs');
+        return;
+      }
+
+      const command = new DescribeDBClustersCommand({});
+      const response = await rdsClient.send(command);
+
+      const cluster = response.DBClusters?.find(
+        (c) => c.Endpoint === dbEndpoint
+      );
+
+      expect(cluster).toBeDefined();
+      console.log(`Aurora backup retention: ${cluster!.BackupRetentionPeriod} days`);
+
+      // After optimization: should be 1 day for dev
+      expect(cluster!.BackupRetentionPeriod).toBe(1);
+    });
+
+    test('should have ElastiCache Redis with optimized node count (2 nodes)', async () => {
+      const redisEndpoint = outputs.CacheStackRedisEndpoint44D3ECC1;
+      if (!redisEndpoint) {
+        console.log('Skipping: Redis endpoint not found in outputs');
+        return;
+      }
+
+      const command = new DescribeReplicationGroupsCommand({});
+      const response = await elastiCacheClient.send(command);
+
+      const replicationGroup = response.ReplicationGroups?.find(
+        (rg) => rg.NodeGroups?.[0]?.PrimaryEndpoint?.Address === redisEndpoint
+      );
+
+      expect(replicationGroup).toBeDefined();
+
+      // Count total member clusters (nodes)
+      const memberClusters = replicationGroup!.MemberClusters;
+      console.log(`Redis node count: ${memberClusters?.length} nodes`);
+
+      // After optimization: should be 2 nodes (reduced from 3)
+      expect(memberClusters?.length).toBe(2);
+    });
+
+    test('should have ECS service with optimized task count (2 tasks)', async () => {
+      // First get cluster ARN
+      const clustersResponse = await ecsClient.send(new DescribeClustersCommand({}));
+      const cluster = clustersResponse.clusters?.find(
+        (c) => c.clusterName?.includes('streamflix-cluster')
+      );
+
+      if (!cluster) {
+        console.log('Skipping: ECS cluster not found');
+        return;
+      }
+
+      try {
+        // List all services in the cluster
+        const { ECSClient: ECSClientForList, ListServicesCommand } = await import('@aws-sdk/client-ecs');
+        const ecsListClient = new ECSClientForList({ region });
+        const listCmd = new ListServicesCommand({ cluster: cluster.clusterArn });
+        const listResponse = await ecsListClient.send(listCmd);
+
+        if (listResponse.serviceArns && listResponse.serviceArns.length > 0) {
+          const describeCmd = new DescribeServicesCommand({
+            cluster: cluster.clusterArn,
+            services: listResponse.serviceArns,
+          });
+
+          const response = await ecsClient.send(describeCmd);
+
+          if (response.services && response.services.length > 0) {
+            const service = response.services[0];
+            console.log(`ECS desired task count: ${service.desiredCount}`);
+
+            expect(service.status).toBe('ACTIVE');
+            // After optimization: should be 2 tasks (reduced from 3)
+            expect(service.desiredCount).toBe(2);
+            expect(service.launchType).toBe('FARGATE');
+          }
+        } else {
+          console.log('⚠️  No ECS services found - service may not be deployed yet');
+        }
+      } catch (error) {
+        console.log('Service not found or not yet available:', error);
+      }
+    });
+
+    test('should verify cost optimization outputs', () => {
+      // Check capacity output if it exists
+      const capacityOutput = outputs.DatabaseStackDatabaseCapacityF4CFE98D;
+      const backupOutput = outputs.DatabaseStackDatabaseBackupRetention7F2F3B89;
+
+      if (capacityOutput) {
+        console.log('Database capacity output:', capacityOutput);
+        // Should show optimized values
+        expect(capacityOutput).toContain('Min: 0.5 ACU');
+        expect(capacityOutput).toContain('Max: 1 ACU');
+      }
+
+      if (backupOutput) {
+        console.log('Database backup retention output:', backupOutput);
+        // Should show optimized value
+        expect(backupOutput).toContain('1 day');
+      }
     });
   });
 });

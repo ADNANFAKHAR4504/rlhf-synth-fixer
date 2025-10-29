@@ -331,12 +331,6 @@ def main():
         action='store_true',
         help='Show what would be optimized without making changes'
     )
-    parser.add_argument(
-        '--yes',
-        '-y',
-        action='store_true',
-        help='Skip confirmation prompt (auto-approve)'
-    )
     
     args = parser.parse_args()
     
@@ -352,21 +346,9 @@ def main():
         print(f"\nEstimated monthly savings: ${savings['total_monthly_savings']}")
         return
     
-    # Check if running in CI environment
-    is_ci = os.getenv('CI') == 'true' or os.getenv('CI') == '1'
-    
-    # Confirm before proceeding (skip in CI or if --yes flag is set)
-    if not args.yes and not is_ci:
-        print(f"⚠️  WARNING: This will modify production infrastructure in {args.region}")
-        print(f"Environment: {args.environment}")
-        confirm = input("\nAre you sure you want to proceed? (yes/no): ")
-        
-        if confirm.lower() != 'yes':
-            print("Optimization cancelled.")
-            return
-    else:
-        print(f"⚠️  AUTO-APPROVED: Proceeding with optimization in {args.region}")
-        print(f"Environment: {args.environment}")
+    # Proceed with optimization
+    print(f"🚀 Starting optimization in {args.region}")
+    print(f"Environment: {args.environment}")
     
     try:
         optimizer = InfrastructureOptimizer(args.environment, args.region)
