@@ -199,7 +199,7 @@ class TapStack(Stack):
             "AuroraCluster",
             cluster_identifier=f"medical-imaging-db-{environment_suffix}",
             engine=rds.DatabaseClusterEngine.aurora_postgres(
-                version=rds.AuroraPostgresEngineVersion.VER_16_9
+                version=rds.AuroraPostgresEngineVersion.VER_16_4
             ),
             credentials=rds.Credentials.from_secret(db_secret),
             writer=rds.ClusterInstance.serverless_v2(
@@ -272,7 +272,7 @@ class TapStack(Stack):
             replication_group_description="Redis cluster for medical imaging queue",
             engine="redis",
             engine_version="7.0",
-            cache_node_type="cache.t4g.micro",
+            cache_node_type="cache.t3.small",
             num_cache_clusters=2,
             automatic_failover_enabled=True,
             multi_az_enabled=True,
@@ -316,275 +316,275 @@ class TapStack(Stack):
             removal_policy=RemovalPolicy.DESTROY,
         )
 
-        # # Create task execution role
-        # task_execution_role = iam.Role(
-        #     self,
-        #     "TaskExecutionRole",
-        #     assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
-        #     description="ECS task execution role",
-        #     managed_policies=[
-        #         iam.ManagedPolicy.from_aws_managed_policy_name(
-        #             "service-role/AmazonECSTaskExecutionRolePolicy"
-        #         )
-        #     ],
-        # )
+        # Create task execution role
+        task_execution_role = iam.Role(
+            self,
+            "TaskExecutionRole",
+            assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+            description="ECS task execution role",
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AmazonECSTaskExecutionRolePolicy"
+                )
+            ],
+        )
 
-        # # Grant permissions to read secrets
-        # db_secret.grant_read(task_execution_role)
-        # kms_key.grant_decrypt(task_execution_role)
+        # Grant permissions to read secrets
+        db_secret.grant_read(task_execution_role)
+        kms_key.grant_decrypt(task_execution_role)
 
-        # # Create task role with permissions
-        # task_role = iam.Role(
-        #     self,
-        #     "TaskRole",
-        #     assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
-        #     description="ECS task role for image processing",
-        # )
+        # Create task role with permissions
+        task_role = iam.Role(
+            self,
+            "TaskRole",
+            assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+            description="ECS task role for image processing",
+        )
 
-        # # Grant task permissions
-        # db_secret.grant_read(task_role)
-        # kms_key.grant_decrypt(task_role)
-        # kinesis_stream.grant_write(task_role)
+        # Grant task permissions
+        db_secret.grant_read(task_role)
+        kms_key.grant_decrypt(task_role)
+        kinesis_stream.grant_write(task_role)
 
-        # # EFS permissions
-        # task_role.add_to_policy(
-        #     iam.PolicyStatement(
-        #         effect=iam.Effect.ALLOW,
-        #         actions=[
-        #             "elasticfilesystem:ClientMount",
-        #             "elasticfilesystem:ClientWrite",
-        #             "elasticfilesystem:ClientRootAccess",
-        #         ],
-        #         resources=[file_system.file_system_arn],
-        #     )
-        # )
+        # EFS permissions
+        task_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "elasticfilesystem:ClientMount",
+                    "elasticfilesystem:ClientWrite",
+                    "elasticfilesystem:ClientRootAccess",
+                ],
+                resources=[file_system.file_system_arn],
+            )
+        )
 
-        # # Create Fargate task definition
-        # task_definition = ecs.FargateTaskDefinition(
-        #     self,
-        #     "TaskDefinition",
-        #     family=f"medical-imaging-processor-{environment_suffix}",
-        #     memory_limit_mib=2048,
-        #     cpu=1024,
-        #     execution_role=task_execution_role,
-        #     task_role=task_role,
-        # )
+        # Create Fargate task definition
+        task_definition = ecs.FargateTaskDefinition(
+            self,
+            "TaskDefinition",
+            family=f"medical-imaging-processor-{environment_suffix}",
+            memory_limit_mib=2048,
+            cpu=1024,
+            execution_role=task_execution_role,
+            task_role=task_role,
+        )
 
-        # # Add EFS volume to task definition
-        # task_definition.add_volume(
-        #     name="dicom-storage",
-        #     efs_volume_configuration=ecs.EfsVolumeConfiguration(
-        #         file_system_id=file_system.file_system_id,
-        #         transit_encryption="ENABLED",
-        #         authorization_config=ecs.AuthorizationConfig(
-        #             access_point_id=efs_access_point.access_point_id,
-        #             iam="ENABLED",
-        #         ),
-        #     ),
-        # )
+        # Add EFS volume to task definition
+        task_definition.add_volume(
+            name="dicom-storage",
+            efs_volume_configuration=ecs.EfsVolumeConfiguration(
+                file_system_id=file_system.file_system_id,
+                transit_encryption="ENABLED",
+                authorization_config=ecs.AuthorizationConfig(
+                    access_point_id=efs_access_point.access_point_id,
+                    iam="ENABLED",
+                ),
+            ),
+        )
 
-        # # Add container to task definition
-        # container = task_definition.add_container(
-        #     "ProcessorContainer",
-        #     image=ecs.ContainerImage.from_registry(
-        #         "public.ecr.aws/docker/library/python:3.11-slim"
-        #     ),
-        #     logging=ecs.LogDriver.aws_logs(
-        #         stream_prefix="medical-imaging",
-        #         log_group=log_group,
-        #     ),
-        #     environment={
-        #         "KINESIS_STREAM_NAME": kinesis_stream.stream_name,
-        #         "REDIS_HOST": redis_cluster.attr_primary_end_point_address,
-        #         "REDIS_PORT": redis_cluster.attr_primary_end_point_port,
-        #         "AWS_REGION": self.region,
-        #     },
-        #     secrets={
-        #         "DB_HOST": ecs.Secret.from_secrets_manager(db_secret, "host"),
-        #         "DB_PORT": ecs.Secret.from_secrets_manager(db_secret, "port"),
-        #         "DB_NAME": ecs.Secret.from_secrets_manager(db_secret, "dbname"),
-        #         "DB_USERNAME": ecs.Secret.from_secrets_manager(db_secret, "username"),
-        #         "DB_PASSWORD": ecs.Secret.from_secrets_manager(db_secret, "password"),
-        #     },
-        # )
+        # Add container to task definition
+        container = task_definition.add_container(
+            "ProcessorContainer",
+            image=ecs.ContainerImage.from_registry(
+                "public.ecr.aws/docker/library/python:3.11-slim"
+            ),
+            logging=ecs.LogDriver.aws_logs(
+                stream_prefix="medical-imaging",
+                log_group=log_group,
+            ),
+            environment={
+                "KINESIS_STREAM_NAME": kinesis_stream.stream_name,
+                "REDIS_HOST": redis_cluster.attr_primary_end_point_address,
+                "REDIS_PORT": redis_cluster.attr_primary_end_point_port,
+                "AWS_REGION": self.region,
+            },
+            secrets={
+                "DB_HOST": ecs.Secret.from_secrets_manager(db_secret, "host"),
+                "DB_PORT": ecs.Secret.from_secrets_manager(db_secret, "port"),
+                "DB_NAME": ecs.Secret.from_secrets_manager(db_secret, "dbname"),
+                "DB_USERNAME": ecs.Secret.from_secrets_manager(db_secret, "username"),
+                "DB_PASSWORD": ecs.Secret.from_secrets_manager(db_secret, "password"),
+            },
+        )
 
-        # # Add mount point for EFS
-        # container.add_mount_points(
-        #     ecs.MountPoint(
-        #         container_path="/mnt/dicom",
-        #         source_volume="dicom-storage",
-        #         read_only=False,
-        #     )
-        # )
+        # Add mount point for EFS
+        container.add_mount_points(
+            ecs.MountPoint(
+                container_path="/mnt/dicom",
+                source_volume="dicom-storage",
+                read_only=False,
+            )
+        )
 
-        # # Create Fargate service
-        # fargate_service = ecs.FargateService(
-        #     self,
-        #     "ProcessingService",
-        #     cluster=ecs_cluster,
-        #     task_definition=task_definition,
-        #     service_name=f"medical-imaging-service-{environment_suffix}",
-        #     desired_count=1,
-        #     vpc_subnets=ec2.SubnetSelection(
-        #         subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
-        #     ),
-        #     security_groups=[ecs_security_group],
-        #     enable_execute_command=True,
-        # )
+        # Create Fargate service
+        fargate_service = ecs.FargateService(
+            self,
+            "ProcessingService",
+            cluster=ecs_cluster,
+            task_definition=task_definition,
+            service_name=f"medical-imaging-service-{environment_suffix}",
+            desired_count=1,
+            vpc_subnets=ec2.SubnetSelection(
+                subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
+            ),
+            security_groups=[ecs_security_group],
+            enable_execute_command=True,
+        )
 
-        # # Create API Gateway with mutual TLS
-        # api_log_group = logs.LogGroup(
-        #     self,
-        #     "ApiLogGroup",
-        #     log_group_name=f"/aws/apigateway/medical-imaging-{environment_suffix}",
-        #     retention=logs.RetentionDays.ONE_WEEK,
-        #     encryption_key=kms_key,
-        #     removal_policy=RemovalPolicy.DESTROY,
-        # )
+        # Create API Gateway with mutual TLS
+        api_log_group = logs.LogGroup(
+            self,
+            "ApiLogGroup",
+            log_group_name=f"/aws/apigateway/medical-imaging-{environment_suffix}",
+            retention=logs.RetentionDays.ONE_WEEK,
+            encryption_key=kms_key,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
 
-        # api = apigateway.RestApi(
-        #     self,
-        #     "MedicalImagingApi",
-        #     rest_api_name=f"medical-imaging-api-{environment_suffix}",
-        #     description="API Gateway for medical imaging ingestion with mTLS",
-        #     deploy_options=apigateway.StageOptions(
-        #         stage_name="prod",
-        #         logging_level=apigateway.MethodLoggingLevel.INFO,
-        #         data_trace_enabled=True,
-        #         metrics_enabled=True,
-        #         access_log_destination=apigateway.LogGroupLogDestination(api_log_group),
-        #         access_log_format=apigateway.AccessLogFormat.clf(),
-        #     ),
-        #     endpoint_configuration=apigateway.EndpointConfiguration(
-        #         types=[apigateway.EndpointType.REGIONAL]
-        #     ),
-        # )
+        api = apigateway.RestApi(
+            self,
+            "MedicalImagingApi",
+            rest_api_name=f"medical-imaging-api-{environment_suffix}",
+            description="API Gateway for medical imaging ingestion with mTLS",
+            deploy_options=apigateway.StageOptions(
+                stage_name="prod",
+                logging_level=apigateway.MethodLoggingLevel.INFO,
+                data_trace_enabled=True,
+                metrics_enabled=True,
+                access_log_destination=apigateway.LogGroupLogDestination(api_log_group),
+                access_log_format=apigateway.AccessLogFormat.clf(),
+            ),
+            endpoint_configuration=apigateway.EndpointConfiguration(
+                types=[apigateway.EndpointType.REGIONAL]
+            ),
+        )
 
-        # # Add a health check endpoint
-        # health_resource = api.root.add_resource("health")
-        # health_integration = apigateway.MockIntegration(
-        #     integration_responses=[
-        #         apigateway.IntegrationResponse(
-        #             status_code="200",
-        #             response_templates={"application/json": '{"status": "healthy"}'},
-        #         )
-        #     ],
-        #     request_templates={"application/json": '{"statusCode": 200}'},
-        # )
-        # health_resource.add_method(
-        #     "GET",
-        #     health_integration,
-        #     method_responses=[apigateway.MethodResponse(status_code="200")],
-        # )
+        # Add a health check endpoint
+        health_resource = api.root.add_resource("health")
+        health_integration = apigateway.MockIntegration(
+            integration_responses=[
+                apigateway.IntegrationResponse(
+                    status_code="200",
+                    response_templates={"application/json": '{"status": "healthy"}'},
+                )
+            ],
+            request_templates={"application/json": '{"statusCode": 200}'},
+        )
+        health_resource.add_method(
+            "GET",
+            health_integration,
+            method_responses=[apigateway.MethodResponse(status_code="200")],
+        )
 
-        # # Add upload endpoint
-        # upload_resource = api.root.add_resource("upload")
-        # upload_integration = apigateway.MockIntegration(
-        #     integration_responses=[
-        #         apigateway.IntegrationResponse(
-        #             status_code="200",
-        #             response_templates={
-        #                 "application/json": '{"message": "Upload endpoint ready"}'
-        #             },
-        #         )
-        #     ],
-        #     request_templates={"application/json": '{"statusCode": 200}'},
-        # )
-        # upload_resource.add_method(
-        #     "POST",
-        #     upload_integration,
-        #     method_responses=[apigateway.MethodResponse(status_code="200")],
-        # )
+        # Add upload endpoint
+        upload_resource = api.root.add_resource("upload")
+        upload_integration = apigateway.MockIntegration(
+            integration_responses=[
+                apigateway.IntegrationResponse(
+                    status_code="200",
+                    response_templates={
+                        "application/json": '{"message": "Upload endpoint ready"}'
+                    },
+                )
+            ],
+            request_templates={"application/json": '{"statusCode": 200}'},
+        )
+        upload_resource.add_method(
+            "POST",
+            upload_integration,
+            method_responses=[apigateway.MethodResponse(status_code="200")],
+        )
 
         # # CloudWatch alarms for monitoring
-        # db_cluster.metric_cpu_utilization().create_alarm(
-        #     self,
-        #     "DatabaseCpuAlarm",
-        #     alarm_name=f"medical-imaging-db-cpu-{environment_suffix}",
-        #     alarm_description="Database CPU utilization is too high",
-        #     threshold=80,
-        #     evaluation_periods=2,
-        # )
+        db_cluster.metric_cpu_utilization().create_alarm(
+            self,
+            "DatabaseCpuAlarm",
+            alarm_name=f"medical-imaging-db-cpu-{environment_suffix}",
+            alarm_description="Database CPU utilization is too high",
+            threshold=80,
+            evaluation_periods=2,
+        )
 
-        # kinesis_stream.metric_get_records_success().create_alarm(
-        #     self,
-        #     "KinesisProcessingAlarm",
-        #     alarm_name=f"medical-imaging-kinesis-{environment_suffix}",
-        #     alarm_description="Kinesis stream processing issues",
-        #     threshold=0.95,
-        #     evaluation_periods=2,
-        #     comparison_operator=aws_cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
-        # )
+        kinesis_stream.metric_get_records_success().create_alarm(
+            self,
+            "KinesisProcessingAlarm",
+            alarm_name=f"medical-imaging-kinesis-{environment_suffix}",
+            alarm_description="Kinesis stream processing issues",
+            threshold=0.95,
+            evaluation_periods=2,
+            comparison_operator=aws_cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+        )
 
-        # # Outputs
-        # CfnOutput(
-        #     self,
-        #     "VpcId",
-        #     value=vpc.vpc_id,
-        #     description="VPC ID",
-        #     export_name=f"MedicalImagingVpcId-{environment_suffix}",
-        # )
+        # Outputs
+        CfnOutput(
+            self,
+            "VpcId",
+            value=vpc.vpc_id,
+            description="VPC ID",
+            export_name=f"MedicalImagingVpcId-{environment_suffix}",
+        )
 
-        # CfnOutput(
-        #     self,
-        #     "DatabaseEndpoint",
-        #     value=db_cluster.cluster_endpoint.hostname,
-        #     description="RDS Aurora cluster endpoint",
-        #     export_name=f"MedicalImagingDbEndpoint-{environment_suffix}",
-        # )
+        CfnOutput(
+            self,
+            "DatabaseEndpoint",
+            value=db_cluster.cluster_endpoint.hostname,
+            description="RDS Aurora cluster endpoint",
+            export_name=f"MedicalImagingDbEndpoint-{environment_suffix}",
+        )
 
-        # CfnOutput(
-        #     self,
-        #     "DatabaseSecretArn",
-        #     value=db_secret.secret_arn,
-        #     description="Database credentials secret ARN",
-        #     export_name=f"MedicalImagingDbSecretArn-{environment_suffix}",
-        # )
+        CfnOutput(
+            self,
+            "DatabaseSecretArn",
+            value=db_secret.secret_arn,
+            description="Database credentials secret ARN",
+            export_name=f"MedicalImagingDbSecretArn-{environment_suffix}",
+        )
 
-        # CfnOutput(
-        #     self,
-        #     "EfsFileSystemId",
-        #     value=file_system.file_system_id,
-        #     description="EFS file system ID",
-        #     export_name=f"MedicalImagingEfsId-{environment_suffix}",
-        # )
+        CfnOutput(
+            self,
+            "EfsFileSystemId",
+            value=file_system.file_system_id,
+            description="EFS file system ID",
+            export_name=f"MedicalImagingEfsId-{environment_suffix}",
+        )
 
-        # CfnOutput(
-        #     self,
-        #     "RedisEndpoint",
-        #     value=redis_cluster.attr_primary_end_point_address,
-        #     description="ElastiCache Redis primary endpoint",
-        #     export_name=f"MedicalImagingRedisEndpoint-{environment_suffix}",
-        # )
+        CfnOutput(
+            self,
+            "RedisEndpoint",
+            value=redis_cluster.attr_primary_end_point_address,
+            description="ElastiCache Redis primary endpoint",
+            export_name=f"MedicalImagingRedisEndpoint-{environment_suffix}",
+        )
 
-        # CfnOutput(
-        #     self,
-        #     "KinesisStreamName",
-        #     value=kinesis_stream.stream_name,
-        #     description="Kinesis Data Stream name",
-        #     export_name=f"MedicalImagingKinesisStream-{environment_suffix}",
-        # )
+        CfnOutput(
+            self,
+            "KinesisStreamName",
+            value=kinesis_stream.stream_name,
+            description="Kinesis Data Stream name",
+            export_name=f"MedicalImagingKinesisStream-{environment_suffix}",
+        )
 
-        # CfnOutput(
-        #     self,
-        #     "EcsClusterName",
-        #     value=ecs_cluster.cluster_name,
-        #     description="ECS cluster name",
-        #     export_name=f"MedicalImagingEcsCluster-{environment_suffix}",
-        # )
+        CfnOutput(
+            self,
+            "EcsClusterName",
+            value=ecs_cluster.cluster_name,
+            description="ECS cluster name",
+            export_name=f"MedicalImagingEcsCluster-{environment_suffix}",
+        )
 
-        # CfnOutput(
-        #     self,
-        #     "ApiGatewayUrl",
-        #     value=api.url,
-        #     description="API Gateway URL",
-        #     export_name=f"MedicalImagingApiUrl-{environment_suffix}",
-        # )
+        CfnOutput(
+            self,
+            "ApiGatewayUrl",
+            value=api.url,
+            description="API Gateway URL",
+            export_name=f"MedicalImagingApiUrl-{environment_suffix}",
+        )
 
-        # CfnOutput(
-        #     self,
-        #     "KmsKeyId",
-        #     value=kms_key.key_id,
-        #     description="KMS key ID for encryption",
-        #     export_name=f"MedicalImagingKmsKeyId-{environment_suffix}",
-        # )
+        CfnOutput(
+            self,
+            "KmsKeyId",
+            value=kms_key.key_id,
+            description="KMS key ID for encryption",
+            export_name=f"MedicalImagingKmsKeyId-{environment_suffix}",
+        )
