@@ -1133,7 +1133,7 @@
         "EngineName": "s3",
         "S3Settings": {
           "BucketName": {"Ref": "S3Bucket"},
-          "DataFormat": "json",
+          "DataFormat": "parquet",
           "CompressionType": "gzip",
           "IncludeOpForFullLoad": true,
           "TimestampColumnName": "migration_timestamp",
