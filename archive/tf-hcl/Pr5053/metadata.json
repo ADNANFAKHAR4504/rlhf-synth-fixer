@@ -11,6 +11,20 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": ["s3", "EventBridge", "Lambda", "DynamoDB", "SNS", "CloudWatch", "IAM"],
-  "training_quality": 9.5
+  "aws_services": [
+    "s3",
+    "EventBridge",
+    "Lambda",
+    "DynamoDB",
+    "SNS",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 9.5,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
 }
