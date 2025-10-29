@@ -9,6 +9,9 @@ import { EC2Client, DescribeAddressesCommand, DescribeInstancesCommand, Describe
 import { AutoScalingClient, DescribeAutoScalingGroupsCommand, StartInstanceRefreshCommand, DescribeInstanceRefreshesCommand } from '@aws-sdk/client-auto-scaling';
 import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
 
+// Set global Jest timeout to 10 minutes for integration tests
+jest.setTimeout(600000);
+
 // Read flattened CloudFormation outputs produced post-deploy
 const outputsPath = path.join(process.cwd(), 'cfn-outputs/flat-outputs.json');
 if (!fs.existsSync(outputsPath)) {
