@@ -428,25 +428,10 @@ jobs:
           aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Check and Run IaC Optimization
-        run: |
-          # Check if IaC Optimization is in subject_labels
-          if [ -f "metadata.json" ]; then
-            SUBJECT_LABELS=$(jq -r '.subject_labels[]? // empty' metadata.json)
-            if echo "$SUBJECT_LABELS" | grep -q "IaC Optimization"; then
-              echo "IaC Optimization subtask detected, checking for lib/optimize.py..."
-              if [ ! -f "lib/optimize.py" ]; then
-                echo "❌ Error: lib/optimize.py not found but subtask is IaC Optimization"
-                exit 1
-              fi
-              echo "✓ Found lib/optimize.py, executing..."
-              python3 lib/optimize.py
-              echo "✓ IaC Optimization completed successfully"
-            else
-              echo "IaC Optimization subtask not selected, skipping job..."
-            fi
-          else
-            echo "metadata.json not found, skipping optimization step"
-          fi
+        run: ./scripts/optimize.sh
+        env:
+          ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
+          AWS_REGION: ${{ env.AWS_REGION || 'us-east-1' }}
 
   lint:
     name: Lint
