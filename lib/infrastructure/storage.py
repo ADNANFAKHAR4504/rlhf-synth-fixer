@@ -3,11 +3,6 @@ Storage module for S3 bucket configuration.
 
 This module creates S3 buckets with server-side encryption, event notifications,
 and lifecycle policies for the financial data processing pipeline.
-
-Addresses Model Failures:
-- S3 lifecycle rule for processed files (not incoming)
-- Server-side encryption with AWS-managed keys (AES256)
-- S3 event notification permissions
 """
 
 import pulumi
