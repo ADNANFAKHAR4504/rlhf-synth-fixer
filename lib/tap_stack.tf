@@ -125,6 +125,98 @@ resource "aws_route_table_association" "private" {
   route_table_id = aws_route_table.private.id
 }
 
+# === Application Load Balancer ===
+
+# Security group for ALB (allows HTTP/HTTPS from internet)
+resource "aws_security_group" "alb" {
+  name        = "${var.project_name}-alb"
+  description = "Security group for Application Load Balancer"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow HTTP from internet"
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow HTTPS from internet"
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound traffic"
+  }
+
+  tags = {
+    Name = "${var.project_name}-alb-sg"
+  }
+}
+
+# Application Load Balancer in public subnets (accessible from internet)
+resource "aws_lb" "main" {
+  name               = "${var.project_name}-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = aws_subnet.public[*].id
+
+  enable_deletion_protection = false
+  enable_http2              = true
+  enable_cross_zone_load_balancing = true
+
+  tags = {
+    Name = "${var.project_name}-alb"
+  }
+}
+
+# Target group for ECS tasks
+resource "aws_lb_target_group" "app" {
+  name        = "${var.project_name}-tg"
+  port        = var.container_port
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
+  target_type = "ip"
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    timeout             = 5
+    interval            = 30
+    path                = "/"
+    protocol            = "HTTP"
+    matcher             = "200"
+  }
+
+  deregistration_delay = 30
+
+  tags = {
+    Name = "${var.project_name}-target-group"
+  }
+}
+
+# HTTP listener on ALB
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app.arn
+  }
+}
+
 # === S3 Buckets ===
 
 # Source bucket for zip uploads (triggers pipeline)
@@ -604,6 +696,14 @@ resource "aws_security_group" "ecs_tasks" {
   description = "Security group for ECS tasks"
   vpc_id      = aws_vpc.main.id
   
+  ingress {
+    from_port       = var.container_port
+    to_port         = var.container_port
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+    description     = "Allow traffic from ALB"
+  }
+  
   egress {
     from_port   = 0
     to_port     = 0
@@ -629,7 +729,13 @@ resource "aws_ecs_service" "app" {
   network_configuration {
     subnets          = aws_subnet.private[*].id
     security_groups  = [aws_security_group.ecs_tasks.id]
-    assign_public_ip = false # Running in private subnets
+    assign_public_ip = false # Running in private subnets, accessed via ALB
+  }
+  
+  load_balancer {
+    target_group_arn = aws_lb_target_group.app.arn
+    container_name   = "app"
+    container_port    = var.container_port
   }
   
   # Ignore task definition changes from pipeline
@@ -829,6 +935,16 @@ output "ecs_cluster_name" {
 output "ecs_service_name" {
   description = "Name of the ECS service"
   value       = aws_ecs_service.app.name
+}
+
+output "alb_dns_name" {
+  description = "DNS name of the Application Load Balancer (use this to access your application)"
+  value       = aws_lb.main.dns_name
+}
+
+output "alb_url" {
+  description = "Full URL to access the application via ALB"
+  value       = "http://${aws_lb.main.dns_name}"
 }
 
 output "vpc_id" {

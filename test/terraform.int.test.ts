@@ -79,6 +79,8 @@ type StructuredOutputs = {
   sns_topic_arn?: TfOutputValue<string>;
   source_bucket_name?: TfOutputValue<string>;
   artifact_bucket_name?: TfOutputValue<string>;
+  alb_dns_name?: TfOutputValue<string>;
+  alb_url?: TfOutputValue<string>;
 };
 
 function readStructuredOutputs(): StructuredOutputs {
@@ -122,6 +124,12 @@ function readStructuredOutputs(): StructuredOutputs {
   }
   if (process.env.TF_ARTIFACT_BUCKET_NAME) {
     outputs.artifact_bucket_name = { sensitive: false, type: "string", value: process.env.TF_ARTIFACT_BUCKET_NAME };
+  }
+  if (process.env.TF_ALB_DNS_NAME) {
+    outputs.alb_dns_name = { sensitive: false, type: "string", value: process.env.TF_ALB_DNS_NAME };
+  }
+  if (process.env.TF_ALB_URL) {
+    outputs.alb_url = { sensitive: false, type: "string", value: process.env.TF_ALB_URL };
   }
 
   if (Object.keys(outputs).length === 0) {
@@ -167,6 +175,63 @@ const logsClient = new CloudWatchLogsClient({ region });
 const eventBridgeClient = new EventBridgeClient({ region });
 const iamClient = new IAMClient({ region });
 const cloudWatchClient = new CloudWatchClient({ region });
+
+// End-to-End ALB Accessibility Test - Run first
+describe("LIVE: End-to-End ALB Accessibility", () => {
+  const albDnsName = outputs.alb_dns_name?.value || outputs.alb_url?.value?.replace(/^https?:\/\//, "");
+
+  test("ALB domain is accessible and returns a response", async () => {
+    expect(albDnsName).toBeTruthy();
+
+    // Retry logic for ALB to be fully ready
+    const testResponse = await retry(async () => {
+      const url = outputs.alb_url?.value || `http://${albDnsName}`;
+      
+      // Create abort controller for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      try {
+        // Use Node.js fetch (available in Node 18+)
+        // For older Node versions, would need to use http/https module
+        const response = await fetch(url, {
+          method: "GET",
+          headers: {
+            "User-Agent": "Terraform-Integration-Test",
+          },
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        // Accept any non-500 status code (200, 404, etc.) as proof the ALB is responding
+        if (response.status >= 500) {
+          throw new Error(`ALB returned server error: ${response.status}`);
+        }
+
+        return {
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries()),
+        };
+      } catch (error: any) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+          throw new Error(`Request to ALB timed out after 10 seconds`);
+        }
+        throw error;
+      }
+    }, 15, 5000); // 15 attempts with 5 second base delay
+
+    expect(testResponse).toBeTruthy();
+    expect(testResponse.status).toBeLessThan(500); // Any status < 500 means ALB is responding
+    expect(testResponse.statusText).toBeTruthy();
+
+    // Log for debugging
+    console.log(`ALB accessibility test passed: ${albDnsName}`);
+    console.log(`Response status: ${testResponse.status} ${testResponse.statusText}`);
+  }, 180000); // 3 minute timeout for this critical test
+});
 
 describe("LIVE: CodePipeline", () => {
   const pipelineName = outputs.pipeline_name?.value;

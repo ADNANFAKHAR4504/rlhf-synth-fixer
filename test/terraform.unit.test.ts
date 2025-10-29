@@ -425,6 +425,67 @@ describe("CI/CD Pipeline Infrastructure - CodePipeline Resources", () => {
   });
 });
 
+describe("CI/CD Pipeline Infrastructure - ALB Resources", () => {
+  let stackContent: string;
+
+  beforeAll(() => {
+    stackContent = fs.readFileSync(stackPath, "utf8");
+  });
+
+  test("creates ALB security group", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"alb"\s*{/);
+    expect(stackContent).toMatch(/vpc_id\s*=\s*aws_vpc\.main\.id/);
+  });
+
+  test("ALB security group allows HTTP from internet", () => {
+    const albSgBlock = stackContent.match(/resource\s+"aws_security_group"\s+"alb"\s*{[\s\S]*?(?=resource|$)/);
+    expect(albSgBlock).toBeTruthy();
+    expect(albSgBlock![0]).toMatch(/ingress\s*{[\s\S]*?from_port\s*=\s*80/);
+    expect(albSgBlock![0]).toMatch(/cidr_blocks\s*=\s*\[\s*"0\.0\.0\.0\/0"\s*\]/);
+  });
+
+  test("ALB security group allows HTTPS from internet", () => {
+    const albSgBlock = stackContent.match(/resource\s+"aws_security_group"\s+"alb"\s*{[\s\S]*?(?=resource|$)/);
+    expect(albSgBlock).toBeTruthy();
+    expect(albSgBlock![0]).toMatch(/ingress\s*{[\s\S]*?from_port\s*=\s*443/);
+  });
+
+  test("creates Application Load Balancer in public subnets", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_lb"\s+"main"\s*{/);
+    expect(stackContent).toMatch(/load_balancer_type\s*=\s*"application"/);
+    expect(stackContent).toMatch(/internal\s*=\s*false/);
+    expect(stackContent).toMatch(/subnets\s*=\s*aws_subnet\.public\[\*\]\.id/);
+  });
+
+  test("ALB enables HTTP/2 and cross-zone load balancing", () => {
+    expect(stackContent).toMatch(/enable_http2\s*=\s*true/);
+    expect(stackContent).toMatch(/enable_cross_zone_load_balancing\s*=\s*true/);
+  });
+
+  test("creates target group for ECS tasks", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_lb_target_group"\s+"app"\s*{/);
+    expect(stackContent).toMatch(/target_type\s*=\s*"ip"/);
+    expect(stackContent).toMatch(/port\s*=\s*var\.container_port/);
+    expect(stackContent).toMatch(/protocol\s*=\s*"HTTP"/);
+    expect(stackContent).toMatch(/vpc_id\s*=\s*aws_vpc\.main\.id/);
+  });
+
+  test("target group has health check configured", () => {
+    expect(stackContent).toMatch(/health_check\s*{[\s\S]*?enabled\s*=\s*true/);
+    expect(stackContent).toMatch(/path\s*=/);
+    expect(stackContent).toMatch(/protocol\s*=\s*"HTTP"/);
+    expect(stackContent).toMatch(/matcher\s*=\s*"200"/);
+  });
+
+  test("creates HTTP listener on ALB", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_lb_listener"\s+"http"\s*{/);
+    expect(stackContent).toMatch(/load_balancer_arn\s*=\s*aws_lb\.main\.arn/);
+    expect(stackContent).toMatch(/port\s*=\s*"80"/);
+    expect(stackContent).toMatch(/protocol\s*=\s*"HTTP"/);
+    expect(stackContent).toMatch(/target_group_arn\s*=\s*aws_lb_target_group\.app\.arn/);
+  });
+});
+
 describe("CI/CD Pipeline Infrastructure - ECS Resources", () => {
   let stackContent: string;
 
@@ -493,6 +554,12 @@ describe("CI/CD Pipeline Infrastructure - ECS Resources", () => {
     expect(stackContent).toMatch(/assign_public_ip\s*=\s*false/);
   });
 
+  test("ECS service is connected to load balancer", () => {
+    expect(stackContent).toMatch(/load_balancer\s*{[\s\S]*?target_group_arn\s*=\s*aws_lb_target_group\.app\.arn/);
+    expect(stackContent).toMatch(/container_name\s*=\s*"app"/);
+    expect(stackContent).toMatch(/container_port\s*=\s*var\.container_port/);
+  });
+
   test("ECS service ignores task definition changes from pipeline", () => {
     expect(stackContent).toMatch(/lifecycle\s*{[\s\S]*?ignore_changes\s*=\s*\[task_definition\]/);
   });
@@ -502,6 +569,13 @@ describe("CI/CD Pipeline Infrastructure - ECS Resources", () => {
     expect(stackContent).toMatch(/vpc_id\s*=\s*aws_vpc\.main\.id/);
     expect(stackContent).not.toMatch(/resource\s+"aws_security_group"\s+"ecs_tasks"\s*{[\s\S]*?count\s*=\s*var\.vpc_id/);
     expect(stackContent).toMatch(/egress\s*{[\s\S]*?cidr_blocks\s*=\s*\[\s*"0\.0\.0\.0\/0"\s*\]/);
+  });
+
+  test("ECS task security group allows ingress from ALB only", () => {
+    const ecsSgBlock = stackContent.match(/resource\s+"aws_security_group"\s+"ecs_tasks"\s*{[\s\S]*?(?=resource|$)/);
+    expect(ecsSgBlock).toBeTruthy();
+    expect(ecsSgBlock![0]).toMatch(/ingress\s*{[\s\S]*?security_groups\s*=\s*\[aws_security_group\.alb\.id\]/);
+    expect(ecsSgBlock![0]).toMatch(/from_port\s*=\s*var\.container_port/);
   });
 });
 
@@ -731,6 +805,16 @@ describe("CI/CD Pipeline Infrastructure - Outputs", () => {
     expect(stackContent).not.toMatch(/length\(var\.private_subnet_ids\)/);
   });
 
+  test("exports ALB DNS name", () => {
+    expect(stackContent).toMatch(/output\s+"alb_dns_name"\s*{/);
+    expect(stackContent).toMatch(/value\s*=\s*aws_lb\.main\.dns_name/);
+  });
+
+  test("exports ALB URL", () => {
+    expect(stackContent).toMatch(/output\s+"alb_url"\s*{/);
+    expect(stackContent).toMatch(/value\s*=\s*"http:\/\/\$\{aws_lb\.main\.dns_name\}"/);
+  });
+
   test("exports VPC ID", () => {
     expect(stackContent).toMatch(/output\s+"vpc_id"\s*{/);
     expect(stackContent).toMatch(/value\s*=\s*aws_vpc\.main\.id/);
@@ -841,13 +925,17 @@ describe("CI/CD Pipeline Infrastructure - Security Best Practices", () => {
     expect(stackContent).toMatch(/subnets\s*=\s*aws_subnet\.private\[\*\]\.id/);
   });
 
-  test("ECS security group only allows outbound traffic", () => {
+  test("ECS security group allows ingress from ALB only (not from internet)", () => {
     const sgBlock = stackContent.match(/resource\s+"aws_security_group"\s+"ecs_tasks"\s*{[\s\S]*?(?=resource|$)/);
     expect(sgBlock).toBeTruthy();
     expect(sgBlock![0]).toMatch(/egress\s*{/);
-    // Should not have ingress rules
-    const ingressRules = (sgBlock![0].match(/ingress\s*{/g) || []).length;
-    expect(ingressRules).toBe(0);
+    // Should have ingress but only from ALB security group (not from CIDR blocks)
+    expect(sgBlock![0]).toMatch(/ingress\s*{/);
+    expect(sgBlock![0]).toMatch(/security_groups\s*=\s*\[aws_security_group\.alb\.id\]/);
+    // Should not allow ingress with cidr_blocks (only security_groups reference)
+    const ingressBlock = sgBlock![0].match(/ingress\s*{[\s\S]*?(?=ingress|egress|resource|$)/);
+    expect(ingressBlock).toBeTruthy();
+    expect(ingressBlock![0]).not.toMatch(/cidr_blocks/);
   });
 
   test("SNS topic uses encryption", () => {
