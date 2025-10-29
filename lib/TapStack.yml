@@ -17,11 +17,11 @@ Parameters:
     ConstraintDescription: Must be a valid CIDR block
     
   KeyPairName:
-    Description: EC2 Key Pair for SSH access
+    Description: EC2 Key Pair for SSH access (optional - leave empty to disable SSH access)
     Type: String
-    Default: 'my-key-pair'
-    AllowedPattern: '^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$'
-    ConstraintDescription: Must be a valid EC2 KeyPair name
+    Default: ''
+    AllowedPattern: '^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$|^$'
+    ConstraintDescription: Must be a valid EC2 KeyPair name or empty string
     
   DBMasterUsername:
     Description: Database master username
@@ -48,7 +48,8 @@ Parameters:
     AllowedPattern: '^arn:aws:acm:.*:.*:certificate/.*$|^$'
     ConstraintDescription: Must be a valid ACM certificate ARN
 
-
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
 
 Resources:
   # ============================================
@@ -746,7 +747,7 @@ Resources:
         InstanceType: t3.medium
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
-        KeyName: !Ref KeyPairName
+        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
         BlockDeviceMappings:
