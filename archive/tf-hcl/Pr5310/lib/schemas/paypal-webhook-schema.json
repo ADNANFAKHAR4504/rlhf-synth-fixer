@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier for the event"
+    },
+    "event_version": {
+      "type": "string"
+    },
+    "create_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "event_type": {
+      "type": "string",
+      "description": "The event type"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "resource_type": {
+      "type": "string"
+    },
+    "resource": {
+      "type": "object",
+      "description": "The resource that triggered the event"
+    },
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "href": {
+            "type": "string"
+          },
+          "rel": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "required": ["id", "event_type", "resource"]
+}
