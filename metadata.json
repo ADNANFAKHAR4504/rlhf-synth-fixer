@@ -1,0 +1,13 @@
+{
+  "platform": "analysis",
+  "language": "python",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "356253",
+  "team": "stf",
+  "startedAt": "2025-10-28T09:50:09.177Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring"
+  ]
+}
