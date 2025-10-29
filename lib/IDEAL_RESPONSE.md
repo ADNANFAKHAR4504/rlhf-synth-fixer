@@ -655,85 +655,26 @@ output "account_id" {
 }
 ```
 
-## 🚀 Deployment Instructions
+### provider.tf
+```hcl
+# provider.tf
 
-### Prerequisites
-- Terraform 1.5+ installed
-- AWS CLI configured with appropriate IAM permissions
-- AWS Provider 5.0+ configured
+terraform {
+  required_version = ">= 1.4.0"
 
-### Basic Deployment
-```bash
-# Initialize Terraform
-terraform init
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+  }
 
-# Validate configuration
-terraform validate
+  # Partial backend config: values are injected at `terraform init` time
+  backend "s3" {}
+}
 
-# Plan deployment
-terraform plan
-
-# Apply configuration
-terraform apply
+# Primary AWS provider for general resources
+provider "aws" {
+  region = var.aws_region
+}
 ```
-
-### Multi-Region Deployment
-Deploy to different regions by setting the `aws_region` variable:
-
-```bash
-# Deploy to US East 1
-terraform apply -var="aws_region=us-east-1"
-
-# Deploy to EU West 1
-terraform apply -var="aws_region=eu-west-1"
-
-# Deploy to AP Southeast 1
-terraform apply -var="aws_region=ap-southeast-1"
-```
-
-### Customization Examples
-```bash
-# Custom environment and project name
-terraform apply \
-  -var="environment=prod" \
-  -var="project_name=mycompany-vpc" \
-  -var="vpc_cidr=172.16.0.0/20"
-
-# Disable NAT Gateway for dev environment (cost savings)
-terraform apply \
-  -var="environment=dev" \
-  -var="enable_nat_gateway=false"
-```
-
-## ✅ Requirements Compliance
-
-| Requirement | Status | Implementation |
-|-------------|---------|----------------|
-| VPC /20 CIDR block | ✅ | `10.0.0.0/20` with validation |
-| 3 Availability Zones | ✅ | Dynamic AZ selection with validation |
-| Public subnets /26 | ✅ | `10.0.0.0/26`, `10.0.0.64/26`, `10.0.0.128/26` |
-| Private subnets /24 | ✅ | `10.0.1.0/24`, `10.0.2.0/24`, `10.0.3.0/24` |
-| Single NAT Gateway | ✅ | Cost-optimized placement in first AZ |
-| Internet Gateway tagging | ✅ | Environment and Project tags |
-| Cross-AZ isolation | ✅ | Separate route tables per private subnet |
-| VPC Flow Logs | ✅ | CloudWatch Logs destination |
-| Custom DNS servers | ✅ | `8.8.8.8` and `8.8.4.4` in DHCP options |
-| Region suffix naming | ✅ | All resources include region in name |
-| Module outputs | ✅ | VPC ID, subnet IDs, route table IDs |
-
-## 🏗️ Resource Overview
-
-**Created Resources:**
-- 1 VPC with /20 CIDR block
-- 1 Internet Gateway 
-- 1 NAT Gateway (first AZ only)
-- 1 Elastic IP for NAT Gateway
-- 3 Public subnets (/26 each)
-- 3 Private subnets (/24 each)
-- 1 Public route table
-- 3 Private route tables (one per AZ)
-- 1 DHCP options set
-- VPC Flow Logs with CloudWatch integration
-- IAM role and policy for Flow Logs
-
-**Total estimated cost:** ~$45-60/month (primarily NAT Gateway)
