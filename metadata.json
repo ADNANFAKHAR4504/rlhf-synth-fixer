@@ -21,6 +21,5 @@
     "CloudWatch",
     "AWS Backup"
   ],
-  "training_quality": 9,
-  "completedAt": "2025-10-28T14:51:49+05:30"
+  "training_quality": 9
 }
