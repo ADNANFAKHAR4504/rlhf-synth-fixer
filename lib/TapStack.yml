@@ -361,6 +361,7 @@ Resources:
     Properties:
       RouteTableId: !Ref HubPrivateRtA
       SubnetId: !Ref HubPrvA
+
   HubPrvBRTAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -373,6 +374,7 @@ Resources:
       RouteTableId: !Ref HubPrivateRtA
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref HubNatA
+
   HubPrvBDefaultToNat:
     Type: AWS::EC2::Route
     Properties:
@@ -396,6 +398,7 @@ Resources:
           Value: !Ref CostCenter
         - Key: owner
           Value: !Ref Owner
+
   Spoke2Vpc:
     Type: AWS::EC2::VPC
     Properties:
@@ -411,6 +414,7 @@ Resources:
           Value: !Ref CostCenter
         - Key: owner
           Value: !Ref Owner
+
   Spoke3Vpc:
     Type: AWS::EC2::VPC
     Properties:
@@ -448,6 +452,7 @@ Resources:
           Value: !Ref Owner
         - Key: network-role
           Value: private
+
   Spoke1PrvB:
     Type: AWS::EC2::Subnet
     Properties:
@@ -491,6 +496,7 @@ Resources:
           Value: !Ref Owner
         - Key: network-role
           Value: private
+
   Spoke2PrvB:
     Type: AWS::EC2::Subnet
     Properties:
@@ -534,6 +540,7 @@ Resources:
           Value: !Ref Owner
         - Key: network-role
           Value: private
+
   Spoke3PrvB:
     Type: AWS::EC2::Subnet
     Properties:
@@ -569,11 +576,13 @@ Resources:
           Value: !Ref CostCenter
         - Key: owner
           Value: !Ref Owner
+
   Spoke1PrvARTAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref Spoke1PrivateRt
       SubnetId: !Ref Spoke1PrvA
+
   Spoke1PrvBRTAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -593,11 +602,13 @@ Resources:
           Value: !Ref CostCenter
         - Key: owner
           Value: !Ref Owner
+
   Spoke2PrvARTAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref Spoke2PrivateRt
       SubnetId: !Ref Spoke2PrvA
+
   Spoke2PrvBRTAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -617,11 +628,13 @@ Resources:
           Value: !Ref CostCenter
         - Key: owner
           Value: !Ref Owner
+
   Spoke3PrvARTAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref Spoke3PrivateRt
       SubnetId: !Ref Spoke3PrvA
+
   Spoke3PrvBRTAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -833,11 +846,13 @@ Resources:
     Properties:
       TransitGatewayAttachmentId: !Ref Spoke1TgwAttachment
       TransitGatewayRouteTableId: !Ref TgwSpokeRt
+
   AssocSpoke2ToSpokeRt:
     Type: AWS::EC2::TransitGatewayRouteTableAssociation
     Properties:
       TransitGatewayAttachmentId: !Ref Spoke2TgwAttachment
       TransitGatewayRouteTableId: !Ref TgwSpokeRt
+
   AssocSpoke3ToSpokeRt:
     Type: AWS::EC2::TransitGatewayRouteTableAssociation
     Properties:
@@ -851,12 +866,14 @@ Resources:
       TransitGatewayRouteTableId: !Ref TgwHubRt
       DestinationCidrBlock: !FindInMap [Cidrs, Spoke1, Vpc]
       TransitGatewayAttachmentId: !Ref Spoke1TgwAttachment
+
   TgwHubRtToSpoke2:
     Type: AWS::EC2::TransitGatewayRoute
     Properties:
       TransitGatewayRouteTableId: !Ref TgwHubRt
       DestinationCidrBlock: !FindInMap [Cidrs, Spoke2, Vpc]
       TransitGatewayAttachmentId: !Ref Spoke2TgwAttachment
+
   TgwHubRtToSpoke3:
     Type: AWS::EC2::TransitGatewayRoute
     Properties:
@@ -872,19 +889,22 @@ Resources:
       DestinationCidrBlock: !FindInMap [Cidrs, Hub, Vpc]
       TransitGatewayAttachmentId: !Ref HubTgwAttachment
 
-  # VPC route tables toward TGW for central egress and hub reachability
+  # --------- VPC route tables toward TGW (explicitly wait for attachments) ---------
   Spoke1ToHubRoute:
     Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref Spoke1PrivateRt
       DestinationCidrBlock: !FindInMap [Cidrs, Hub, Vpc]
       TransitGatewayId: !Ref Tgw
+    DependsOn: Spoke1TgwAttachment
+
   Spoke1DefaultToTgw:
     Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref Spoke1PrivateRt
       DestinationCidrBlock: 0.0.0.0/0
       TransitGatewayId: !Ref Tgw
+    DependsOn: Spoke1TgwAttachment
 
   Spoke2ToHubRoute:
     Type: AWS::EC2::Route
@@ -892,12 +912,15 @@ Resources:
       RouteTableId: !Ref Spoke2PrivateRt
       DestinationCidrBlock: !FindInMap [Cidrs, Hub, Vpc]
       TransitGatewayId: !Ref Tgw
+    DependsOn: Spoke2TgwAttachment
+
   Spoke2DefaultToTgw:
     Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref Spoke2PrivateRt
       DestinationCidrBlock: 0.0.0.0/0
       TransitGatewayId: !Ref Tgw
+    DependsOn: Spoke2TgwAttachment
 
   Spoke3ToHubRoute:
     Type: AWS::EC2::Route
@@ -905,12 +928,15 @@ Resources:
       RouteTableId: !Ref Spoke3PrivateRt
       DestinationCidrBlock: !FindInMap [Cidrs, Hub, Vpc]
       TransitGatewayId: !Ref Tgw
+    DependsOn: Spoke3TgwAttachment
+
   Spoke3DefaultToTgw:
     Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref Spoke3PrivateRt
       DestinationCidrBlock: 0.0.0.0/0
       TransitGatewayId: !Ref Tgw
+    DependsOn: Spoke3TgwAttachment
 
   # ------------------- Interface Endpoints (SSM) -------------------
   HubEndpointSg:
@@ -932,6 +958,7 @@ Resources:
           Value: !Ref CostCenter
         - Key: owner
           Value: !Ref Owner
+
   Spoke1EndpointSg:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -951,6 +978,7 @@ Resources:
           Value: !Ref CostCenter
         - Key: owner
           Value: !Ref Owner
+
   Spoke2EndpointSg:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -970,6 +998,7 @@ Resources:
           Value: !Ref CostCenter
         - Key: owner
           Value: !Ref Owner
+
   Spoke3EndpointSg:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -1008,6 +1037,7 @@ Resources:
           Value: !Ref CostCenter
         - Key: owner
           Value: !Ref Owner
+
   HubSsmMessagesEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
@@ -1026,6 +1056,7 @@ Resources:
           Value: !Ref CostCenter
         - Key: owner
           Value: !Ref Owner
+
   HubEc2MessagesEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
@@ -1063,6 +1094,7 @@ Resources:
           Value: !Ref CostCenter
         - Key: owner
           Value: !Ref Owner
+
   Spoke1SsmMessagesEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
@@ -1081,6 +1113,7 @@ Resources:
           Value: !Ref CostCenter
         - Key: owner
           Value: !Ref Owner
+
   Spoke1Ec2MessagesEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
@@ -1118,6 +1151,7 @@ Resources:
           Value: !Ref CostCenter
         - Key: owner
           Value: !Ref Owner
+
   Spoke2SsmMessagesEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
@@ -1136,6 +1170,7 @@ Resources:
           Value: !Ref CostCenter
         - Key: owner
           Value: !Ref Owner
+
   Spoke2Ec2MessagesEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
@@ -1173,6 +1208,7 @@ Resources:
           Value: !Ref CostCenter
         - Key: owner
           Value: !Ref Owner
+
   Spoke3SsmMessagesEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
@@ -1191,6 +1227,7 @@ Resources:
           Value: !Ref CostCenter
         - Key: owner
           Value: !Ref Owner
+
   Spoke3Ec2MessagesEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
