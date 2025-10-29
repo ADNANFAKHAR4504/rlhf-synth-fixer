@@ -11,13 +11,13 @@
  - (Optional) set AWS_REGION in environment; otherwise region is inferred from ARNs
 */
 
+import { CloudWatchLogsClient, FilterLogEventsCommand } from '@aws-sdk/client-cloudwatch-logs';
+import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
+import { GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
 import fs from 'fs';
 import path from 'path';
 import { TextDecoder, TextEncoder } from 'util';
-import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
-import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
-import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
-import { CloudWatchLogsClient, FilterLogEventsCommand } from '@aws-sdk/client-cloudwatch-logs';
 
 const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
 
@@ -42,15 +42,11 @@ describe('Integration tests — runtime traffic checks', () => {
     if (!region) {
       const anyArn = Object.values(outputs).find((v) => typeof v === 'string' && v.startsWith('arn:aws:')) as string | undefined;
       if (anyArn) {
-        // arn:partition:service:region:account:resource
         const parts = anyArn.split(':');
-        if (parts.length >= 4) {
-          region = parts[3];
-        }
+        if (parts.length >= 4) region = parts[3];
       }
     }
 
-    // final fallback
     if (!region) region = 'us-east-1';
 
     lambdaClient = new LambdaClient({ region });
@@ -70,112 +66,90 @@ describe('Integration tests — runtime traffic checks', () => {
   }
 
   test('invoke EC2/RDS/S3 scanner lambdas (request/response) — should respond without FunctionError and produce observable side-effects', async () => {
-    // Look for scanner function ARNs in outputs. We accept variations in key names — search values.
-    const ec2Arn = findOutputValueContaining('ec2', 'compliance', ':function:');
-    const rdsArn = findOutputValueContaining('rds', 'compliance', ':function:');
-    const s3Arn = findOutputValueContaining('s3', 'compliance', ':function:');
-
-    let arns = [ec2Arn, rdsArn, s3Arn].filter(Boolean) as string[];
-
-    // Filter out obviously redacted or invalid ARNs (some CI environments redact account IDs as '***')
-    const invalidArns = arns.filter((a) => !a.startsWith('arn:') || a.includes('***') || a.toLowerCase().includes('redacted'));
-    if (invalidArns.length > 0) {
-      invalidArns.forEach((a) => console.warn(`Skipping invalid/redacted ARN from outputs: ${a}`));
+    // Find scanner ARNs or function names by name patterns present in outputs
+    function findLambdaIdentifier(namePart: string) {
+      // Prefer an ARN value
+      const arnVal = Object.values(outputs).find((v) => typeof v === 'string' && v.startsWith('arn:aws:lambda') && v.toLowerCase().includes(namePart));
+      if (arnVal) return arnVal as string;
+      // Next, try to find a log group value like /aws/lambda/<functionName> and extract functionName
+      const lg = Object.values(outputs).find((v) => typeof v === 'string' && v.includes(`/aws/lambda/${namePart}`));
+      if (lg && typeof lg === 'string') {
+        const parts = lg.split('/');
+        return parts[parts.length - 1];
+      }
+      // Fallback: any value that includes the namePart
+      const anyVal = Object.values(outputs).find((v) => typeof v === 'string' && (v as string).toLowerCase().includes(namePart));
+      return anyVal as string | undefined;
     }
 
-    arns = arns.filter((a) => !invalidArns.includes(a));
+    const ec2Arn = findLambdaIdentifier('ec2-compliance-scanner');
+    const rdsArn = findLambdaIdentifier('rds-compliance-scanner');
+    const s3Arn = findLambdaIdentifier('s3-compliance-scanner');
 
-    if (arns.length === 0) {
-      // Nothing to invoke — fail early so the runner knows outputs don't contain usable scanner lambdas
-      throw new Error('No usable scanner Lambda ARNs found in cfn-outputs/flat-outputs.json (expected EC2/RDS/S3 compliance scanner ARNs)');
-    }
+    const arns = [ec2Arn, rdsArn, s3Arn].filter(Boolean) as string[];
+    if (arns.length === 0) throw new Error('No scanner Lambda ARNs found in cfn-outputs/flat-outputs.json');
 
-    // Try to find a matching log group for each function ARN in outputs
     function findLogGroupForArn(fnArn: string) {
-      // outputs often contain log group names like "/aws/lambda/ec2-compliance-scanner-..."
       const fnName = fnArn.split(':').pop() || fnArn;
       return Object.values(outputs).find((v) => typeof v === 'string' && v.includes(`/aws/lambda/${fnName}`)) as string | undefined;
     }
 
-    for (const arn of arns) {
-      const functionIdentifier = arn;
-      const payload = JSON.stringify({ invocationTest: true, ts: Date.now() });
+    const bucketName = findOutputValueContaining('compliance-scan-results') || findOutputValueContaining('compliance', 'results') || findOutputValueContaining('bucket');
 
+    for (const arn of arns) {
+      const payload = JSON.stringify({ invocationTest: true, ts: Date.now() });
       const startTime = Date.now();
 
-      const cmd = new InvokeCommand({
-        FunctionName: functionIdentifier,
-        InvocationType: 'RequestResponse',
-        Payload: new TextEncoder().encode(payload),
-      });
+      const cmd = new InvokeCommand({ FunctionName: arn, InvocationType: 'RequestResponse', Payload: new TextEncoder().encode(payload) });
+      let resp;
+      try {
+        resp = await lambdaClient.send(cmd);
+      } catch (err: any) {
+        if (err.name === 'AccessDeniedException' || (err.Code && err.Code === 'AccessDeniedException') || (err.message && err.message.includes('not authorized to perform: lambda:InvokeFunction'))) {
+          throw new Error(`Lambda invoke failed - caller is not authorized to invoke ${arn}. Ensure the executing AWS principal has lambda:InvokeFunction permissions on the function or its resource.`);
+        }
+        throw err;
+      }
 
-      const resp = await lambdaClient.send(cmd);
       expect(resp.StatusCode).toBe(200);
-      expect(resp.FunctionError).toBeUndefined();
 
-      // Now check for observable side-effects: prefer CloudWatch Logs entries; fallback to new S3 objects
-      const logGroup = findLogGroupForArn(arn);
+      if (resp.FunctionError) {
+        let payloadStr = '<empty>';
+        try { if (resp.Payload) payloadStr = new TextDecoder().decode(resp.Payload as Uint8Array); } catch (e) { payloadStr = `<<decode failed: ${String(e)}>>`; }
+        let parsed: any = null; try { parsed = JSON.parse(payloadStr); } catch (_) { /* ignore */ }
+        const errMsg = parsed && (parsed.errorMessage || parsed.message) ? (parsed.errorMessage || parsed.message) : payloadStr;
+        const stack = parsed && (parsed.stack || parsed.stackTrace) ? (parsed.stack || parsed.stackTrace) : '';
+        throw new Error(`Lambda ${arn} returned FunctionError=${resp.FunctionError}: ${errMsg}\n${stack}`);
+      }
+
       let observed = false;
-
+      const logGroup = findLogGroupForArn(arn);
       if (logGroup) {
-        // Poll CloudWatch Logs for an event that contains the invocation payload marker
-        const filterPattern = 'invocationTest';
-        const maxAttempts = 20;
-        for (let attempt = 0; attempt < maxAttempts && !observed; attempt++) {
-          const filterCmd = new FilterLogEventsCommand({
-            logGroupName: logGroup,
-            startTime,
-            filterPattern,
-            limit: 50,
-          });
-
+        const filter = 'invocationTest';
+        for (let i = 0; i < 20 && !observed; i++) {
           try {
-            const eventsResp = await logsClient.send(filterCmd);
-            if (eventsResp.events && eventsResp.events.length > 0) {
-              // Make sure one of the events includes our marker
-              if (eventsResp.events.some((e) => (e.message || '').includes('invocationTest'))) {
-                observed = true;
-                break;
-              }
-            }
-          } catch (e) {
-            // ignore and retry
-          }
-
+            const events = await logsClient.send(new FilterLogEventsCommand({ logGroupName: logGroup, startTime, filterPattern: filter, limit: 50 }));
+            if (events.events && events.events.length > 0 && events.events.some((e) => (e.message || '').includes('invocationTest'))) { observed = true; break; }
+          } catch (e) { /* ignore and retry */ }
           await new Promise((r) => setTimeout(r, 1500));
         }
       }
 
-      if (!observed) {
-        // Fallback: check the compliance results bucket for a new object created after startTime
-        const bucketName = findOutputValueContaining('compliance', 'results') || findOutputValueContaining('bucket');
-        if (bucketName) {
-          try {
-            const listCmd = new ListObjectsV2Command({ Bucket: bucketName, MaxKeys: 1000 });
-            const listResp = await s3Client.send(listCmd);
-            if (listResp.Contents && listResp.Contents.length > 0) {
-              const recent = listResp.Contents.find((c) => c.LastModified && c.LastModified.getTime() >= startTime - 5000);
-              if (recent) observed = true;
-            }
-          } catch (e) {
-            // ignore S3 listing errors
-          }
-        }
+      if (!observed && bucketName) {
+        try {
+          const list = await s3Client.send(new ListObjectsV2Command({ Bucket: bucketName, MaxKeys: 1000 }));
+          if (list.Contents && list.Contents.some((c) => c.LastModified && c.LastModified.getTime() >= startTime - 5000)) observed = true;
+        } catch (e) { /* ignore */ }
       }
 
-      // It's acceptable if we didn't observe side-effects (depends on function behavior and permissions),
-      // but prefer to surface a warning rather than failing the whole test run.
       if (!observed) {
-        console.warn(`No observable side-effect detected for invoked function ${arn} (no recent log events or new S3 objects found)`);
-      } else {
-        // Pass: we observed something
-        expect(observed).toBe(true);
+        throw new Error(`No observable side-effect (logs or new S3 objects) detected for invocation of ${arn}`);
       }
     }
   });
 
   test('write and read object to the compliance results S3 bucket', async () => {
-    const bucketName = findOutputValueContaining('compliance', 'results') || findOutputValueContaining('bucket');
+    const bucketName = findOutputValueContaining('compliance-scan-results') || findOutputValueContaining('compliance', 'results') || findOutputValueContaining('bucket');
     if (!bucketName) {
       throw new Error('No S3 bucket name found in outputs (expected compliance results bucket)');
     }
@@ -188,31 +162,34 @@ describe('Integration tests — runtime traffic checks', () => {
 
     const get = new GetObjectCommand({ Bucket: bucketName, Key: key });
     const resp = await s3Client.send(get);
-    // resp.Body may be a stream in Node; transformToString is available on stream bodies in SDK v3
-    // Use a tolerant approach: if transformToString exists, use it; otherwise buffer manually.
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
-    const content = resp.Body && typeof resp.Body.transformToString === 'function'
-      // @ts-ignore
-      ? await resp.Body.transformToString()
+    const content = resp.Body && typeof (resp.Body as any).transformToString === 'function'
+      ? await (resp.Body as any).transformToString()
       : await (async () => {
-          const chunks: Uint8Array[] = [];
-          // @ts-ignore
-          for await (const chunk of resp.Body) chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
-          return Buffer.concat(chunks).toString('utf8');
-        })();
+        const chunks: Uint8Array[] = [];
+        // @ts-ignore
+        for await (const chunk of resp.Body) chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+        return Buffer.concat(chunks).toString('utf8');
+      })();
 
     expect(content).toBe(body);
   });
 
   test('publish a message to the compliance SNS topic', async () => {
-    const topicArn = findOutputValueContaining('compliance', 'violations') || Object.values(outputs).find((v) => typeof v === 'string' && v.startsWith('arn:aws:sns:')) as string | undefined;
+    const topicArn = findOutputValueContaining('compliance-violations') || findOutputValueContaining('violations') || Object.values(outputs).find((v) => typeof v === 'string' && v.startsWith('arn:aws:sns:')) as string | undefined;
     if (!topicArn) {
       throw new Error('No SNS topic ARN found in outputs (expected compliance violations SNS topic)');
     }
 
-    const cmd = new PublishCommand({ TopicArn: topicArn, Message: 'integration-test-message' });
-    const resp = await snsClient.send(cmd);
-    expect(resp.MessageId).toBeDefined();
+    try {
+      const cmd = new PublishCommand({ TopicArn: topicArn, Message: 'integration-test-message' });
+      const resp = await snsClient.send(cmd);
+      expect(resp.MessageId).toBeDefined();
+    } catch (err: any) {
+      // Propagate a clearer error for common auth issues
+      if (err.name === 'AuthorizationErrorException' || (err.Code && err.Code === 'AuthorizationErrorException')) {
+        throw new Error(`SNS publish failed - caller is not authorized to publish to ${topicArn}. Ensure the executing AWS principal has sns:Publish permissions. Original error: ${err.message || String(err)}`);
+      }
+      throw err;
+    }
   });
 });
