@@ -111,97 +111,64 @@ Resources:
   # KMS Key for encryption
   KMSKey:
     Type: AWS::KMS::Key
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       Description: KMS key for encrypting EBS volumes and S3 buckets
-      EnableKeyRotation: true
       KeyPolicy:
         Version: '2012-10-17'
         Statement:
-          - Sid: Enable IAM User Permissions
+          - Sid: Enable IAM policies
             Effect: Allow
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
             Resource: '*'
-          - Sid: Allow CloudWatch Logs to use the key
+          - Sid: Allow services to use the key
+            Effect: Allow
+            Principal:
+              Service:
+                - s3.amazonaws.com
+                - logs.amazonaws.com
+                - rds.amazonaws.com
+                - cloudtrail.amazonaws.com
+                - ec2.amazonaws.com
+                - autoscaling.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+              - 'kms:CreateGrant'
+            Resource: '*'
+          - Sid: Allow CloudWatch Logs for VPC Flow Logs
             Effect: Allow
             Principal:
               Service: logs.amazonaws.com
             Action:
-              - 'kms:Encrypt*'
-              - 'kms:Decrypt*'
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
               - 'kms:ReEncrypt*'
               - 'kms:GenerateDataKey*'
-              - 'kms:Describe*'
+              - 'kms:DescribeKey'
+              - 'kms:CreateGrant'
             Resource: '*'
             Condition:
               ArnLike:
-                "kms:EncryptionContext:aws:logs:arn": !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
-          - Sid: Allow EC2 to use the key
+                'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/vpc/*'
+          - Sid: Allow CloudWatch Logs for CloudTrail
             Effect: Allow
             Principal:
-              Service: ec2.amazonaws.com
-            Action:
-              - 'kms:Decrypt'
-              - 'kms:GenerateDataKey*'
-              - 'kms:CreateGrant'
-              - 'kms:RevokeGrant' 
-              - 'kms:GenerateDataKeyWithoutPlaintext'
-              - 'kms:DescribeKey'
-              - 'kms:ReEncrypt*'
-            Resource: '*'
-            Condition:
-              Bool:
-                kms:GrantIsForAWSResource: true
-          - Sid: Allow S3 to use the key
-            Effect: Allow
-            Principal:
-              Service: s3.amazonaws.com
-            Action:
-              - 'kms:Decrypt'
-              - 'kms:GenerateDataKey*'
-              - 'kms:Encrypt'
-              - 'kms:DescribeKey'
-              - 'kms:ReEncrypt*'
-            Resource: '*'
-          - Sid: Allow IAM roles to use the key
-            Effect: Allow
-            Principal:
-              AWS: '*'
-            Action:
-              - 'kms:Decrypt'
-              - 'kms:GenerateDataKey*'
-              - 'kms:DescribeKey'
-            Resource: '*'
-            Condition:
-              StringEquals:
-                'aws:PrincipalAccount': !Ref 'AWS::AccountId'
-          - Sid: Allow RDS to use the key
-            Effect: Allow
-            Principal:
-              Service: rds.amazonaws.com
+              Service: logs.amazonaws.com
             Action:
               - 'kms:Encrypt'
               - 'kms:Decrypt'
               - 'kms:ReEncrypt*'
               - 'kms:GenerateDataKey*'
               - 'kms:DescribeKey'
-            Resource: '*'  
-          - Sid: Allow AutoScaling service to use the key
-            Effect: Allow
-            Principal:
-              Service: autoscaling.amazonaws.com
-            Action:
-              - 'kms:Decrypt'
-              - 'kms:GenerateDataKey*'
               - 'kms:CreateGrant'
-              - 'kms:RevokeGrant'
-              - 'kms:DescribeKey'
-              - 'kms:ReEncrypt*'
             Resource: '*'
             Condition:
-              Bool:
-                kms:GrantIsForAWSResource: true
+              ArnLike:
+                'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/cloudtrail/*'
       Tags:
         - Key: Environment
           Value: Production
@@ -585,6 +552,8 @@ Resources:
 
   VPCFlowLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       LogGroupName: !Sub '/aws/vpc/${EnvironmentSuffix}${ResourceSuffix}'
       RetentionInDays: 90
@@ -607,6 +576,8 @@ Resources:
   # S3 Buckets
   ApplicationDataBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       BucketName:
         Fn::Join:
@@ -640,6 +611,8 @@ Resources:
 
   LoggingBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       BucketName:
         Fn::Join:
@@ -712,6 +685,8 @@ Resources:
             
   BackupReplicaBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       BucketName:
         Fn::Join:
@@ -737,6 +712,8 @@ Resources:
 
   BackupBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       BucketName:
         Fn::Join:
@@ -899,6 +876,8 @@ Resources:
   # CloudTrail
   CloudTrailBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       BucketName:
         Fn::Join:
@@ -954,6 +933,8 @@ Resources:
 
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       LogGroupName: !Sub '/aws/cloudtrail/${EnvironmentSuffix}-logs'
       RetentionInDays: 365
@@ -982,6 +963,8 @@ Resources:
 
   CloudTrail:
     Type: AWS::CloudTrail::Trail
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     DependsOn:
       - CloudTrailBucketPolicy
     Properties:
@@ -1445,6 +1428,8 @@ Resources:
   # RDS Subnet Group
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       DBSubnetGroupName:
         Fn::Join:
@@ -1464,6 +1449,8 @@ Resources:
   # Using a timestamp-based suffix instead of explicit name to avoid collisions
   DBSecret:
     Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       Description: RDS database master credentials
       GenerateSecretString:
@@ -1481,8 +1468,8 @@ Resources:
   # RDS MySQL instance (non-Aurora) — simpler, widely supported engine/version
   DBInstance:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       DBInstanceIdentifier: !Join 
         - ""
@@ -1507,7 +1494,7 @@ Resources:
         - error
         - general
         - slowquery
-      DeletionProtection: true
+      DeletionProtection: false
       MultiAZ: true
       Tags:
         - Key: Environment
@@ -1516,6 +1503,8 @@ Resources:
   # Config for compliance monitoring
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       Name:
         Fn::Join:
@@ -1530,6 +1519,8 @@ Resources:
 
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     DependsOn: 
       - ConfigBucketPolicy
     Properties:
@@ -1546,6 +1537,8 @@ Resources:
 
   ConfigBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       BucketName:
         Fn::Join:

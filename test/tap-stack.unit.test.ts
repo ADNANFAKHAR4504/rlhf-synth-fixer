@@ -41,16 +41,17 @@ describe('TapStack CloudFormation Template', () => {
 
   describe('KMS Resources', () => {
     const kmsKey = 'KMSKey';
-    test(`${kmsKey} should be defined and enabled for rotation`, () => {
+    test(`${kmsKey} should be defined with deletion policies`, () => {
       const resource = template.Resources[kmsKey];
       expect(resource).toBeDefined();
       expect(resource.Type).toBe('AWS::KMS::Key');
-      expect(resource.Properties.EnableKeyRotation).toBe(true);
+      expect(resource.DeletionPolicy).toBe('Delete');
+      expect(resource.UpdateReplacePolicy).toBe('Delete');
     });
 
     test(`${kmsKey} policy should grant admin permissions to root`, () => {
       const policy = template.Resources[kmsKey].Properties.KeyPolicy;
-      const rootStatement = policy.Statement.find((s: any) => s.Sid === 'Enable IAM User Permissions');
+      const rootStatement = policy.Statement.find((s: any) => s.Sid === 'Enable IAM policies');
       expect(rootStatement).toBeDefined();
       expect(rootStatement.Effect).toBe('Allow');
       expect(rootStatement.Principal.AWS['Fn::Sub']).toBe('arn:aws:iam::${AWS::AccountId}:root');
@@ -60,22 +61,22 @@ describe('TapStack CloudFormation Template', () => {
 
     test(`${kmsKey} policy should allow required services to use the key`, () => {
       const policy = template.Resources[kmsKey].Properties.KeyPolicy;
-      const services = [
-        { Sid: 'Allow CloudWatch Logs to use the key', Service: 'logs.amazonaws.com' },
-        { Sid: 'Allow EC2 to use the key', Service: 'ec2.amazonaws.com' },
-        { Sid: 'Allow S3 to use the key', Service: 's3.amazonaws.com' },
-        { Sid: 'Allow RDS to use the key', Service: 'rds.amazonaws.com' },
-        { Sid: 'Allow AutoScaling service to use the key', Service: 'autoscaling.amazonaws.com' },
-      ];
-
-      services.forEach(service => {
-        const stmt = policy.Statement.find((s: any) => s.Sid === service.Sid);
-        expect(stmt).toBeDefined();
-        expect(stmt.Effect).toBe('Allow');
-        expect(stmt.Principal.Service).toBe(service.Service);
-        // Use stringMatching to accept both 'kms:DescribeKey' and 'kms:Describe*'
-        expect(stmt.Action).toEqual(expect.arrayContaining([expect.stringMatching(/^kms:Describe.*$/)]));
-      });
+      const servicesStatement = policy.Statement.find((s: any) => s.Sid === 'Allow services to use the key');
+      expect(servicesStatement).toBeDefined();
+      expect(servicesStatement.Effect).toBe('Allow');
+      expect(servicesStatement.Principal.Service).toEqual(expect.arrayContaining([
+        's3.amazonaws.com',
+        'logs.amazonaws.com',
+        'rds.amazonaws.com',
+        'cloudtrail.amazonaws.com',
+        'ec2.amazonaws.com',
+        'autoscaling.amazonaws.com'
+      ]));
+      expect(servicesStatement.Action).toEqual(expect.arrayContaining([
+        'kms:Decrypt',
+        'kms:GenerateDataKey',
+        'kms:CreateGrant'
+      ]));
     });
   });
 
@@ -173,12 +174,14 @@ describe('TapStack CloudFormation Template', () => {
         expect(bucket.ReplicationConfiguration.Rules[0].Status).toBe('Enabled');
     });
 
-    test('RDS instance should be Multi-AZ, encrypted, with backups and deletion protection', () => {
-      const db = template.Resources.DBInstance.Properties;
-      expect(db.MultiAZ).toBe(true);
-      expect(db.StorageEncrypted).toBe(true);
-      expect(db.BackupRetentionPeriod).toBe(7);
-      expect(db.DeletionProtection).toBe(true);
+    test('RDS instance should be Multi-AZ, encrypted, with backups and deletion policies', () => {
+      const db = template.Resources.DBInstance;
+      expect(db.Properties.MultiAZ).toBe(true);
+      expect(db.Properties.StorageEncrypted).toBe(true);
+      expect(db.Properties.BackupRetentionPeriod).toBe(7);
+      expect(db.Properties.DeletionProtection).toBe(false);
+      expect(db.DeletionPolicy).toBe('Delete');
+      expect(db.UpdateReplacePolicy).toBe('Delete');
     });
   });
 
