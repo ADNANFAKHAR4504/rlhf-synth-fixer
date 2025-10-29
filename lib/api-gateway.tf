@@ -158,6 +158,11 @@ EOF
   response_parameters = {
     "method.response.header.X-Request-Id" = "context.requestId"
   }
+
+  depends_on = [
+    aws_api_gateway_integration.post_event,
+    aws_api_gateway_method_response.post_event
+  ]
 }
 
 # Deployment

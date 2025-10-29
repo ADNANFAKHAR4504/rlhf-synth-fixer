@@ -68,7 +68,7 @@ resource "aws_lambda_function" "event_ingestion" {
 
   layers = [aws_lambda_layer_version.common_dependencies.arn]
 
-  reserved_concurrent_executions = 100
+  reserved_concurrent_executions = 10
 
   tracing_config {
     mode = "Active"
@@ -106,7 +106,7 @@ resource "aws_lambda_function" "event_processing" {
 
   layers = [aws_lambda_layer_version.common_dependencies.arn]
 
-  reserved_concurrent_executions = 50
+  reserved_concurrent_executions = 5
 
   tracing_config {
     mode = "Active"
@@ -144,7 +144,7 @@ resource "aws_lambda_function" "event_storage" {
 
   layers = [aws_lambda_layer_version.common_dependencies.arn]
 
-  reserved_concurrent_executions = 75
+  reserved_concurrent_executions = 5
 
   tracing_config {
     mode = "Active"
