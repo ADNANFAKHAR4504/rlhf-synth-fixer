@@ -734,7 +734,11 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !GetAtt StateMachineLogGroup.Arn
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Resource:
+                  - !GetAtt StateMachineLogGroup.Arn
+                  - !Sub "${StateMachineLogGroup.Arn}:*"
 
   PaymentWorkflow:
     Type: AWS::StepFunctions::StateMachine
