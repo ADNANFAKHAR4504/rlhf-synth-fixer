@@ -156,7 +156,7 @@ export class TapStack extends cdk.Stack {
     // Database parameter group with SSL enforcement
     const dbParameterGroup = new rds.ParameterGroup(this, 'DBParameterGroup', {
       engine: rds.DatabaseClusterEngine.auroraPostgres({
-        version: rds.AuroraPostgresEngineVersion.VER_15_4,
+        version: rds.AuroraPostgresEngineVersion.VER_15_5,
       }),
       parameters: {
         'rds.force_ssl': '1',
@@ -166,7 +166,7 @@ export class TapStack extends cdk.Stack {
     // Aurora PostgreSQL cluster with Multi-AZ
     this.dbCluster = new rds.DatabaseCluster(this, 'PaymentDatabase', {
       engine: rds.DatabaseClusterEngine.auroraPostgres({
-        version: rds.AuroraPostgresEngineVersion.VER_15_4,
+        version: rds.AuroraPostgresEngineVersion.VER_15_5,
       }),
       credentials: rds.Credentials.fromSecret(dbCredentialsSecret),
       writer: rds.ClusterInstance.provisioned('writer', {

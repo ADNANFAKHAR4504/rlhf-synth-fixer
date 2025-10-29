@@ -133,7 +133,7 @@ describe('TapStack', () => {
     test('creates Aurora PostgreSQL cluster with encryption', () => {
       template.hasResourceProperties('AWS::RDS::DBCluster', {
         Engine: 'aurora-postgresql',
-        EngineVersion: Match.stringLikeRegexp('15\\.4'),
+        EngineVersion: Match.stringLikeRegexp('15\\.5'),
         StorageEncrypted: true,
         DeletionProtection: false,
       });
