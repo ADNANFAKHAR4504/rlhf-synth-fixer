@@ -311,13 +311,13 @@ describe('TapStack', () => {
         Port: 8080,
         Protocol: 'HTTP',
         TargetType: 'ip',
-        HealthCheckPath: '/health',
+        HealthCheckPath: '/',
         HealthCheckIntervalSeconds: 30,
         HealthCheckTimeoutSeconds: 5,
         HealthyThresholdCount: 2,
         UnhealthyThresholdCount: 3,
         Matcher: {
-          HttpCode: '200',
+          HttpCode: '200,301,302',
         },
       });
     });
@@ -365,7 +365,7 @@ describe('TapStack', () => {
               },
             ],
             HealthCheck: {
-              Command: ['CMD-SHELL', 'curl -f http://localhost:8080/health || exit 1'],
+              Command: ['CMD-SHELL', 'curl -f http://localhost:8080/ || exit 1'],
               Interval: 30,
               Retries: 3,
               StartPeriod: 60,
