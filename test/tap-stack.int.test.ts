@@ -1,195 +1,343 @@
 import fs from 'fs';
-import AWS from 'aws-sdk';
+import path from 'path';
 
-// Configuration - These are coming from cfn-outputs after cdk deploy
-const outputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-);
+// AWS SDK v3 clients & commands
+import {
+  CloudWatchLogsClient,
+  DescribeLogGroupsCommand,
+} from '@aws-sdk/client-cloudwatch-logs';
+import {
+  DescribeRuleCommand,
+  EventBridgeClient,
+} from '@aws-sdk/client-eventbridge';
+import {
+  DescribeKeyCommand,
+  GetKeyRotationStatusCommand,
+  KMSClient,
+  ListAliasesCommand,
+} from '@aws-sdk/client-kms';
+import {
+  GetFunctionCommand,
+  InvokeCommand,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketLifecycleConfigurationCommand,
+  GetBucketVersioningCommand,
+  GetPublicAccessBlockCommand,
+  HeadBucketCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
+  GetTopicAttributesCommand,
+  SNSClient,
+} from '@aws-sdk/client-sns';
 
-// Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+// -------------------------------
+// Load outputs & resolve region
+// -------------------------------
+const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
+const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 
-// Initialize AWS clients
-const s3 = new AWS.S3();
-const lambda = new AWS.Lambda();
-const sns = new AWS.SNS();
-const kms = new AWS.KMS();
-const cloudWatchLogs = new AWS.CloudWatchLogs();
+// Prefer lib/AWS_REGION like your reference suite
+let awsRegion = 'eu-central-1';
+try {
+  const regionFile = path.join(process.cwd(), 'lib', 'AWS_REGION');
+  if (fs.existsSync(regionFile)) {
+    awsRegion = fs.readFileSync(regionFile, 'utf8').trim() || awsRegion;
+  }
+} catch {
+  // ignore; fallback handled
+}
+const regionFromArn = (arn?: string) => {
+  if (!arn || typeof arn !== 'string') return undefined;
+  const parts = arn.split(':');
+  return parts[3];
+};
+awsRegion =
+  process.env.AWS_REGION ||
+  awsRegion ||
+  regionFromArn(outputs.AnalyzerFunctionArn) ||
+  regionFromArn(outputs.PeriodicScanFunctionArn) ||
+  'eu-central-1';
 
-describe('Compliance Validation System Integration Tests', () => {
+// -------------------------------
+/* v3 clients (region-scoped) */
+// -------------------------------
+const s3 = new S3Client({ region: awsRegion });
+const lambda = new LambdaClient({ region: awsRegion });
+const sns = new SNSClient({ region: awsRegion });
+const kms = new KMSClient({ region: awsRegion });
+const logs = new CloudWatchLogsClient({ region: awsRegion });
+const events = new EventBridgeClient({ region: awsRegion });
+
+// -------------------------------
+// Helpers
+// -------------------------------
+const functionNameFromArn = (arn: string) => arn.split(':').slice(-1)[0]; // arn:...:function:NAME
+const ruleNameFromArn = (arn: string) => {
+  const idx = arn.lastIndexOf('/');
+  return idx >= 0 ? arn.slice(idx + 1) : arn;
+};
+
+jest.setTimeout(180000);
+
+describe('Compliance Validation System — Live Integration (AWS SDK v3)', () => {
+  test('flat outputs must include required keys', () => {
+    const required = [
+      'KMSKeyId',
+      'KMSKeyAlias',
+      'ComplianceReportsBucketArn',
+      'ComplianceReportsBucketName',
+      'AnalysisResultsBucketArn',
+      'AnalysisResultsBucketName',
+      'AnalyzerFunctionArn',
+      'PeriodicScanFunctionArn',
+      'ComplianceViolationsTopicArn',
+      'StackChangeEventRuleArn',
+      'PeriodicScanScheduleRuleArn',
+      'ReportsBaseURI',
+    ];
+    required.forEach((k) => {
+      expect(outputs[k]).toBeDefined();
+      expect(String(outputs[k]).length).toBeGreaterThan(0);
+    });
+  });
+
+  // -------------------------------
+  // S3 Buckets
+  // -------------------------------
   describe('S3 Buckets', () => {
-    test('Compliance Reports bucket should exist and be properly configured', async () => {
-      const bucketName = outputs.ComplianceReportsBucketName;
-      expect(bucketName).toBeDefined();
-      
-      // Check bucket exists
-      const bucketResponse = await s3.headBucket({ Bucket: bucketName }).promise();
-      expect(bucketResponse).toBeDefined();
-      
-      // Check encryption configuration
-      const encryptionResponse = await s3.getBucketEncryption({ Bucket: bucketName }).promise();
-      expect(encryptionResponse.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
-      
-      // Check public access block
-      const publicAccessResponse = await s3.getPublicAccessBlock({ Bucket: bucketName }).promise();
-      expect(publicAccessResponse.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
-      expect(publicAccessResponse.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(true);
+    test('Compliance Reports bucket exists, KMS-encrypted, versioned, public-blocked, lifecycle→GLACIER@90d', async () => {
+      const bucket = outputs.ComplianceReportsBucketName as string;
+
+      // Exists
+      await s3.send(new HeadBucketCommand({ Bucket: bucket }));
+
+      // Encryption (KMS)
+      const enc = await s3.send(new GetBucketEncryptionCommand({ Bucket: bucket }));
+      const rule = enc.ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault;
+      expect(rule?.SSEAlgorithm).toBe('aws:kms');
+      expect(rule?.KMSMasterKeyID).toBeDefined();
+
+      // Versioning
+      const ver = await s3.send(new GetBucketVersioningCommand({ Bucket: bucket }));
+      expect(ver.Status).toBe('Enabled');
+
+      // Public access block
+      const pab = await s3.send(new GetPublicAccessBlockCommand({ Bucket: bucket }));
+      const cfg = pab.PublicAccessBlockConfiguration!;
+      expect(cfg.BlockPublicAcls).toBe(true);
+      expect(cfg.BlockPublicPolicy).toBe(true);
+      expect(cfg.IgnorePublicAcls).toBe(true);
+      expect(cfg.RestrictPublicBuckets).toBe(true);
+
+      // Lifecycle -> GLACIER after 90 days (current & noncurrent)
+      const lc = await s3.send(new GetBucketLifecycleConfigurationCommand({ Bucket: bucket }));
+      const rules = lc.Rules || [];
+      expect(rules.length).toBeGreaterThan(0);
+
+      const hasCurrentGlacier90 = rules.some(r =>
+        (r.Transitions || []).some(t => t.StorageClass === 'GLACIER' && Number(t.TransitionInDays) === 90)
+      );
+      expect(hasCurrentGlacier90).toBe(true);
+
+      const hasNoncurrentGlacier90 = rules.some(r =>
+        (r.NoncurrentVersionTransitions || []).some(t => t.StorageClass === 'GLACIER' && Number(t.TransitionInDays) === 90)
+      );
+      expect(hasNoncurrentGlacier90).toBe(true);
     });
-    
-    test('Analysis Results bucket should exist and be properly configured', async () => {
-      const bucketName = outputs.AnalysisResultsBucketName;
-      expect(bucketName).toBeDefined();
-      
-      // Check bucket exists
-      const bucketResponse = await s3.headBucket({ Bucket: bucketName }).promise();
-      expect(bucketResponse).toBeDefined();
-      
-      // Check encryption configuration
-      const encryptionResponse = await s3.getBucketEncryption({ Bucket: bucketName }).promise();
-      expect(encryptionResponse.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+
+    test('Analysis Results bucket exists, KMS-encrypted, versioned, lifecycle→GLACIER@90d', async () => {
+      const bucket = outputs.AnalysisResultsBucketName as string;
+
+      // Exists
+      await s3.send(new HeadBucketCommand({ Bucket: bucket }));
+
+      // Encryption (KMS)
+      const enc = await s3.send(new GetBucketEncryptionCommand({ Bucket: bucket }));
+      const rule = enc.ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault;
+      expect(rule?.SSEAlgorithm).toBe('aws:kms');
+      expect(rule?.KMSMasterKeyID).toBeDefined();
+
+      // Versioning
+      const ver = await s3.send(new GetBucketVersioningCommand({ Bucket: bucket }));
+      expect(ver.Status).toBe('Enabled');
+
+      // Lifecycle -> GLACIER after 90 days (current & noncurrent)
+      const lc = await s3.send(new GetBucketLifecycleConfigurationCommand({ Bucket: bucket }));
+      const rules = lc.Rules || [];
+      expect(rules.length).toBeGreaterThan(0);
+
+      const hasCurrentGlacier90 = rules.some(r =>
+        (r.Transitions || []).some(t => t.StorageClass === 'GLACIER' && Number(t.TransitionInDays) === 90)
+      );
+      expect(hasCurrentGlacier90).toBe(true);
+
+      const hasNoncurrentGlacier90 = rules.some(r =>
+        (r.NoncurrentVersionTransitions || []).some(t => t.StorageClass === 'GLACIER' && Number(t.TransitionInDays) === 90)
+      );
+      expect(hasNoncurrentGlacier90).toBe(true);
     });
   });
-  
+
+  // -------------------------------
+  // Lambda Functions
+  // -------------------------------
   describe('Lambda Functions', () => {
-    test('Analyzer Lambda function should exist and be properly configured', async () => {
-      const functionArn = outputs.AnalyzerFunctionArn;
-      expect(functionArn).toBeDefined();
-      
-      const functionName = functionArn.split(':').pop();
-      const response = await lambda.getFunction({ FunctionName: functionName }).promise();
-      
-      expect(response.Configuration.Runtime).toBe('python3.12');
-      expect(response.Configuration.Handler).toBe('index.handler');
-      expect(response.Configuration.Timeout).toBe(300);
-      expect(response.Configuration.MemorySize).toBe(1024);
-      
-      // Check environment variables
-      expect(response.Configuration.Environment.Variables.COMPLIANCE_BUCKET).toBeDefined();
-      expect(response.Configuration.Environment.Variables.ANALYSIS_BUCKET).toBeDefined();
-      expect(response.Configuration.Environment.Variables.SNS_TOPIC_ARN).toBeDefined();
+    test('Analyzer Lambda configured correctly', async () => {
+      const arn = outputs.AnalyzerFunctionArn as string;
+      const name = functionNameFromArn(arn);
+
+      const resp = await lambda.send(new GetFunctionCommand({ FunctionName: name }));
+      const cfg = resp.Configuration!;
+      expect(cfg.Runtime).toBe('python3.12');
+      expect(cfg.Handler).toBe('index.handler');
+      expect(cfg.Timeout).toBe(300);
+      expect(cfg.MemorySize).toBe(1024);
+
+      const env = cfg.Environment?.Variables || {};
+      expect(env?.COMPLIANCE_BUCKET).toBeDefined();
+      expect(env?.ANALYSIS_BUCKET).toBeDefined();
+      expect(env?.SNS_TOPIC_ARN).toBeDefined();
+
+      // Log group exists with retention 365
+      const lgName = `/aws/lambda/${name}`;
+      const lgs = await logs.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: lgName }));
+      const lg = (lgs.logGroups || []).find(g => g.logGroupName === lgName);
+      expect(lg).toBeDefined();
+      expect(lg?.retentionInDays).toBe(365);
     });
-    
-    test('Periodic Scan Lambda function should exist and be properly configured', async () => {
-      const functionArn = outputs.PeriodicScanFunctionArn;
-      expect(functionArn).toBeDefined();
-      
-      const functionName = functionArn.split(':').pop();
-      const response = await lambda.getFunction({ FunctionName: functionName }).promise();
-      
-      expect(response.Configuration.Runtime).toBe('python3.12');
-      expect(response.Configuration.Handler).toBe('index.handler');
-      expect(response.Configuration.Timeout).toBe(300);
-      expect(response.Configuration.MemorySize).toBe(512);
-      
-      // Check environment variables
-      expect(response.Configuration.Environment.Variables.ANALYZER_FUNCTION_ARN).toBeDefined();
+
+    test('Periodic Scan Lambda configured correctly', async () => {
+      const arn = outputs.PeriodicScanFunctionArn as string;
+      const name = functionNameFromArn(arn);
+
+      const resp = await lambda.send(new GetFunctionCommand({ FunctionName: name }));
+      const cfg = resp.Configuration!;
+      expect(cfg.Runtime).toBe('python3.12');
+      expect(cfg.Handler).toBe('index.handler');
+      expect(cfg.Timeout).toBe(300);
+      expect(cfg.MemorySize).toBe(512);
+
+      const env = cfg.Environment?.Variables || {};
+      expect(env?.ANALYZER_FUNCTION_ARN).toBeDefined();
+
+      const lgName = `/aws/lambda/${name}`;
+      const lgs = await logs.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: lgName }));
+      const lg = (lgs.logGroups || []).find(g => g.logGroupName === lgName);
+      expect(lg).toBeDefined();
+      expect(lg?.retentionInDays).toBe(365);
     });
   });
-  
+
+  // -------------------------------
+  // SNS Topic
+  // -------------------------------
   describe('SNS Topic', () => {
-    test('Compliance Violations topic should exist and be properly configured', async () => {
-      const topicArn = outputs.ComplianceViolationsTopicArn;
-      expect(topicArn).toBeDefined();
-      
-      const response = await sns.getTopicAttributes({ TopicArn: topicArn }).promise();
-      
-      expect(response.Attributes.DisplayName).toBe('Compliance Violations Alert');
-      expect(response.Attributes.KmsMasterKeyId).toBeDefined();
+    test('Compliance Violations topic exists and is KMS-protected with display name', async () => {
+      const topicArn = outputs.ComplianceViolationsTopicArn as string;
+      const resp = await sns.send(new GetTopicAttributesCommand({ TopicArn: topicArn }));
+      expect(resp.Attributes?.KmsMasterKeyId).toBeDefined();
+      expect(resp.Attributes?.DisplayName).toBe('Compliance Violations Alert');
     });
   });
-  
+
+  // -------------------------------
+  // KMS Key
+  // -------------------------------
   describe('KMS Key', () => {
-    test('Compliance KMS key should exist and be properly configured', async () => {
-      const keyId = outputs.KMSKeyId;
-      const keyAlias = outputs.KMSKeyAlias;
-      
-      expect(keyId).toBeDefined();
-      expect(keyAlias).toBeDefined();
-      
-      // Check key exists and is enabled
-      const response = await kms.describeKey({ KeyId: keyId }).promise();
-      expect(response.KeyMetadata.KeyState).toBe('Enabled');
-      expect(response.KeyMetadata.KeyUsage).toBe('ENCRYPT_DECRYPT');
-      expect(response.KeyMetadata.KeySpec).toBe('SYMMETRIC_DEFAULT');
-      
-      // Check key rotation is enabled
-      const rotationResponse = await kms.getKeyRotationStatus({ KeyId: keyId }).promise();
-      expect(rotationResponse.KeyRotationEnabled).toBe(true);
+    test('Customer-managed key is Enabled, rotated, and aliased', async () => {
+      const keyId = outputs.KMSKeyId as string;
+      const aliasName = outputs.KMSKeyAlias as string; // e.g., alias/compliance-validation-key
+
+      const desc = await kms.send(new DescribeKeyCommand({ KeyId: keyId }));
+      const meta = desc.KeyMetadata!;
+      expect(meta.KeyState).toBe('Enabled');
+      expect(meta.KeyUsage).toBe('ENCRYPT_DECRYPT');
+      expect(meta.KeySpec).toBe('SYMMETRIC_DEFAULT');
+
+      const rot = await kms.send(new GetKeyRotationStatusCommand({ KeyId: keyId }));
+      expect(rot.KeyRotationEnabled).toBe(true);
+
+      // Alias attached to this key
+      const aliases = await kms.send(new ListAliasesCommand({ KeyId: keyId }));
+      const found =
+        (aliases.Aliases || []).find(a => a.AliasName === aliasName) ||
+        (await kms.send(new ListAliasesCommand({}))).Aliases?.find(a => a.AliasName === aliasName);
+      expect(found).toBeDefined();
+      expect(found?.TargetKeyId).toBe(meta.KeyId);
     });
   });
-  
-  describe('CloudWatch Log Groups', () => {
-    test('Log groups should exist with proper retention policies', async () => {
-      // Get stack name from outputs to construct log group names
-      const analyzerLogGroupName = `/aws/lambda/${outputs.AnalyzerFunctionArn.split(':').pop()}`;
-      const periodicLogGroupName = `/aws/lambda/${outputs.PeriodicScanFunctionArn.split(':').pop()}`;
-      
-      // Check analyzer log group
-      const analyzerLogGroup = await cloudWatchLogs.describeLogGroups({
-        logGroupNamePrefix: analyzerLogGroupName
-      }).promise();
-      
-      expect(analyzerLogGroup.logGroups.length).toBeGreaterThan(0);
-      expect(analyzerLogGroup.logGroups[0].retentionInDays).toBe(365);
-      
-      // Check periodic scan log group
-      const periodicLogGroup = await cloudWatchLogs.describeLogGroups({
-        logGroupNamePrefix: periodicLogGroupName
-      }).promise();
-      
-      expect(periodicLogGroup.logGroups.length).toBeGreaterThan(0);
-      expect(periodicLogGroup.logGroups[0].retentionInDays).toBe(365);
+
+  // -------------------------------
+  // EventBridge Rules
+  // -------------------------------
+  describe('EventBridge Rules', () => {
+    test('Stack change rule exists and ENABLED with CloudFormation source', async () => {
+      const arn = outputs.StackChangeEventRuleArn as string;
+      const name = ruleNameFromArn(arn);
+      const rule = await events.send(new DescribeRuleCommand({ Name: name }));
+      expect(rule.State).toBe('ENABLED');
+      expect(rule.EventPattern).toContain('aws.cloudformation');
+    });
+
+    test('Periodic scan rule exists, ENABLED, with schedule expression', async () => {
+      const arn = outputs.PeriodicScanScheduleRuleArn as string;
+      const name = ruleNameFromArn(arn);
+      const rule = await events.send(new DescribeRuleCommand({ Name: name }));
+      expect(rule.State).toBe('ENABLED');
+      expect(rule.ScheduleExpression).toBeDefined();
     });
   });
-  
-  describe('End-to-End Workflow', () => {
-    test('Analyzer function should process test event successfully', async () => {
-      const functionArn = outputs.AnalyzerFunctionArn;
-      const functionName = functionArn.split(':').pop();
-      
-      const testEvent = {
-        source: 'test',
-        triggerType: 'manual',
-        testExecution: true
-      };
-      
-      const response = await lambda.invoke({
-        FunctionName: functionName,
-        Payload: JSON.stringify(testEvent),
-        InvocationType: 'RequestResponse'
-      }).promise();
-      
-      expect(response.StatusCode).toBe(200);
-      
-      const payload = JSON.parse(response.Payload.toString());
+
+  // -------------------------------
+  // End-to-End Lambda Invocations
+  // -------------------------------
+  describe('End-to-End workflow (Lambda)', () => {
+    test('Analyzer function processes a test event and returns a report stub', async () => {
+      const arn = outputs.AnalyzerFunctionArn as string;
+      const name = functionNameFromArn(arn);
+
+      const invoke = await lambda.send(
+        new InvokeCommand({
+          FunctionName: name,
+          InvocationType: 'RequestResponse',
+          Payload: Buffer.from(
+            JSON.stringify({ source: 'test', triggerType: 'manual', testExecution: true })
+          ),
+        })
+      );
+
+      expect(invoke.StatusCode).toBe(200);
+      const payload = JSON.parse(Buffer.from(invoke.Payload ?? []).toString('utf8') || '{}');
       expect(payload.statusCode).toBe(200);
-      
+
       const body = JSON.parse(payload.body);
-      expect(body.evaluationId).toBeDefined();
-      expect(body.findingsCount).toBeDefined();
-      expect(body.violationsCount).toBeDefined();
+      expect(typeof body.evaluationId).toBe('string');
+      expect(typeof body.findingsCount).toBe('number');
+      expect(typeof body.violationsCount).toBe('number');
     });
-    
-    test('Periodic scan function should trigger analyzer successfully', async () => {
-      const functionArn = outputs.PeriodicScanFunctionArn;
-      const functionName = functionArn.split(':').pop();
-      
-      const testEvent = {
-        source: 'scheduled',
-        triggerType: 'test'
-      };
-      
-      const response = await lambda.invoke({
-        FunctionName: functionName,
-        Payload: JSON.stringify(testEvent),
-        InvocationType: 'RequestResponse'
-      }).promise();
-      
-      expect(response.StatusCode).toBe(200);
-      
-      const payload = JSON.parse(response.Payload.toString());
+
+    test('Periodic scan function acknowledges and initiates analyzer', async () => {
+      const arn = outputs.PeriodicScanFunctionArn as string;
+      const name = functionNameFromArn(arn);
+
+      const invoke = await lambda.send(
+        new InvokeCommand({
+          FunctionName: name,
+          InvocationType: 'RequestResponse',
+          Payload: Buffer.from(
+            JSON.stringify({ source: 'scheduled', triggerType: 'test' })
+          ),
+        })
+      );
+
+      expect(invoke.StatusCode).toBe(200);
+      const payload = JSON.parse(Buffer.from(invoke.Payload ?? []).toString('utf8') || '{}');
       expect(payload.statusCode).toBe(200);
-      
+
       const body = JSON.parse(payload.body);
       expect(body.message).toBe('Periodic scan initiated');
     });
