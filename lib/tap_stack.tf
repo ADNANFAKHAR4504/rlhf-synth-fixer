@@ -41,9 +41,7 @@ data "archive_file" "docker_build_zip"{
     source_dir = "pipeline_files/"
     output_path = "pipeline_files.zip"
 
-    depends_on = [
-      aws_s3_bucket.artifacts_bucket
-    ]
+    depends_on = [ aws_s3_bucket.source ]
 }
 
 resource "aws_s3_object" "pipeline_files" {
@@ -498,22 +496,18 @@ resource "aws_security_group" "ecs_tasks" {
 resource "aws_ecs_service" "app" {
   count = length(var.private_subnet_ids) > 0 ? 1 : 0
   
-  name            = var.project_name
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.app.arn
-  desired_count   = var.ecs_desired_count
-  launch_type     = "FARGATE"
+  name                               = var.project_name
+  cluster                            = aws_ecs_cluster.main.id
+  task_definition                    = aws_ecs_task_definition.app.arn
+  desired_count                      = var.ecs_desired_count
+  launch_type                        = "FARGATE"
+  deployment_minimum_healthy_percent = 100
+  deployment_maximum_percent         = 200
   
   network_configuration {
     subnets          = var.private_subnet_ids
     security_groups  = [aws_security_group.ecs_tasks[0].id]
     assign_public_ip = false # Running in private subnets
-  }
-  
-  # Enable rolling deployments
-  deployment_configuration {
-    maximum_percent         = 200
-    minimum_healthy_percent = 100
   }
   
   # Ignore task definition changes from pipeline

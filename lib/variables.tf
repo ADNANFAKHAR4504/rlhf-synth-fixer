@@ -74,7 +74,7 @@ variable "ecs_desired_count" {
 variable "container_port" {
   description = "Port the container listens on"
   type        = number
-  default     = 8080
+  default     = 80
 }
 
 variable "image_tag" {
