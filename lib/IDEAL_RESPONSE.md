@@ -5,7 +5,7 @@ This CloudFormation template implements a complete media asset processing pipeli
 ## Architecture Overview
 
 The infrastructure includes:
-- Multi-region VPC with public and private subnets (supports both ap-northeast-1 and us-east-1)
+- Multi-region VPC with public and private subnets (primary deployment in ap-northeast-1 with us-east-1 support)
 - RDS PostgreSQL instance with conditional secret management and fallback credentials
 - EFS file system for media file storage
 - ElastiCache Redis cluster with conditional authentication
@@ -1174,7 +1174,7 @@ const execAsync = promisify(exec);
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stackName = `TapStack${environmentSuffix}`;
-const region = 'us-east-1';
+const region = 'ap-northeast-1';
 
 // Cache for stack outputs
 let stackOutputs: any = null;
@@ -1207,7 +1207,7 @@ describe('Media Processing Pipeline - Live Infrastructure Tests', () => {
       const vpcId = await getOutputValue('VPCId');
       expect(vpcId).toBeTruthy();
 
-      const { stdout } = await execAsync(`aws ec2 describe-vpcs --vpc-ids ${vpcId} --query 'Vpcs[0].State' --output text --region us-east-1`);
+      const { stdout } = await execAsync(`aws ec2 describe-vpcs --vpc-ids ${vpcId} --query 'Vpcs[0].State' --output text --region ap-northeast-1`);
       expect(stdout.trim()).toBe('available');
     });
 

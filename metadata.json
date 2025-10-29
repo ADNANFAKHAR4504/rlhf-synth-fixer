@@ -2,6 +2,7 @@
   "platform": "cfn",
   "language": "yaml",
   "complexity": "medium",
+  "turn_type": "single",
   "team": "synth",
   "startedAt": "2025-10-28T03:44:00+05:30",
   "subtask": "Application Deployment",
@@ -24,15 +25,5 @@
     "cloudwatch",
     "secretsmanager"
   ],
-  "region": "us-east-1",
-  "turn_type": "single",
-  "training_quality": 10,
-  "qa_phase_completed": true,
-  "deployment_attempts": 3,
-  "validation_status": {
-    "checkpoint_e_platform_compliance": "PASS",
-    "checkpoint_f_pre_deployment": "PASS",
-    "checkpoint_g_build_quality": "PASS",
-    "deployment_blockers": "Secret Manager format issues, AWS managed policy availability"
-  }
+  "training_quality": 10
 }

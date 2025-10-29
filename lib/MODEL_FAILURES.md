@@ -184,7 +184,7 @@ Mappings:
 ```
 
 **IDEAL_RESPONSE Fix**:
-Complete multi-region support:
+Ensured primary deployment in ap-northeast-1 as specified in PROMPT with secondary region support:
 ```yaml
 Mappings:
   RegionMap:
@@ -192,13 +192,16 @@ Mappings:
       AZs: ['ap-northeast-1a', 'ap-northeast-1c']
     us-east-1:
       AZs: ['us-east-1a', 'us-east-1b']
+
+# Updated all integration tests and metadata to use ap-northeast-1
+const region = 'ap-northeast-1';
 ```
 
 **Cost/Security/Performance Impact**:
-- Deployment limited to single region (ap-northeast-1)
-- Unable to deploy in us-east-1 for cost optimization
-- Reduced disaster recovery and global deployment capabilities
-- Blocked CI/CD pipeline execution in preferred regions
+- Deployment target mismatch between specification and implementation
+- Integration tests failing due to wrong region configuration
+- CI/CD pipeline execution in incorrect region
+- Potential compliance issues with regional data residency requirements
 
 ---
 
