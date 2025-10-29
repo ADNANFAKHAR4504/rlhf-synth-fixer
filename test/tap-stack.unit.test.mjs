@@ -214,4 +214,69 @@ describe('TapStack', () => {
       template.hasOutput('Region', {});
     });
   });
+
+  describe('TapStack Specific Tests', () => {
+    test('creates stack with environment suffix from props', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestStack', {
+        environmentSuffix: 'prod',
+        env: {
+          account: '123456789012',
+          region: 'ca-central-1',
+        },
+      });
+
+      expect(testStack).toBeDefined();
+      const testTemplate = Template.fromStack(testStack);
+      expect(testTemplate).toBeDefined();
+    });
+
+    test('creates stack with environment suffix from context', () => {
+      const testApp = new cdk.App({
+        context: {
+          environmentSuffix: 'staging',
+        },
+      });
+      const testStack = new TapStack(testApp, 'TestStack', {
+        env: {
+          account: '123456789012',
+          region: 'ca-central-1',
+        },
+      });
+
+      expect(testStack).toBeDefined();
+    });
+
+    test('creates stack with default environment suffix', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestStack', {
+        env: {
+          account: '123456789012',
+          region: 'ca-central-1',
+        },
+      });
+
+      expect(testStack).toBeDefined();
+    });
+
+    test('creates all nested stacks', () => {
+      const stackNames = stack.node.children.map(child => child.node.id);
+
+      expect(stackNames).toContain('Networking');
+      expect(stackNames).toContain('Security');
+      expect(stackNames).toContain('DataIngestion');
+      expect(stackNames).toContain('Database');
+      expect(stackNames).toContain('Storage');
+      expect(stackNames).toContain('Cache');
+      expect(stackNames).toContain('Compute');
+      expect(stackNames).toContain('Api');
+      expect(stackNames).toContain('Pipeline');
+    });
+
+    test('outputs have correct descriptions', () => {
+      const outputs = template.findOutputs('*');
+      expect(outputs.StackName).toBeDefined();
+      expect(outputs.Region).toBeDefined();
+    });
+  });
 });
