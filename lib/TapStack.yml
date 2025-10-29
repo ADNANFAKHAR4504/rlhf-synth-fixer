@@ -280,7 +280,6 @@ Resources:
   RotationLambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub rotation-lambda-role-${EnvironmentSuffix}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
