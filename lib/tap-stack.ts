@@ -178,20 +178,20 @@ export class TapStack extends cdk.Stack {
 
     // Lambda defaults
     const lambdaDefaults: Omit<lambda.FunctionProps, 'code' | 'functionName'> =
-    {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      architecture: lambda.Architecture.ARM_64,
-      timeout: cdk.Duration.seconds(30),
-      tracing: lambda.Tracing.ACTIVE,
-      handler: 'index.handler',
-      environment: {
-        TRANSACTIONS_TABLE: transactionsTable.tableName,
-        AUDIT_TABLE: auditTable.tableName,
-        ARCHIVE_BUCKET: archiveBucket.bucketName,
-        EVENT_BUS_NAME: eventBus.eventBusName,
-        SECRET_ARN: apiKeySecret.secretArn,
-      },
-    };
+      {
+        runtime: lambda.Runtime.NODEJS_18_X,
+        architecture: lambda.Architecture.ARM_64,
+        timeout: cdk.Duration.seconds(30),
+        tracing: lambda.Tracing.ACTIVE,
+        handler: 'index.handler',
+        environment: {
+          TRANSACTIONS_TABLE: transactionsTable.tableName,
+          AUDIT_TABLE: auditTable.tableName,
+          ARCHIVE_BUCKET: archiveBucket.bucketName,
+          EVENT_BUS_NAME: eventBus.eventBusName,
+          SECRET_ARN: apiKeySecret.secretArn,
+        },
+      };
 
     // Shared helpers (embedded)
     const helpers = `
