@@ -172,6 +172,7 @@ resource "aws_iam_role_policy_attachment" "config" {
 
 # Config recorder
 resource "aws_config_configuration_recorder" "main" {
+  count    = var.enable_config_recorder ? 1 : 0
   name     = "${local.name_prefix}-recorder"
   role_arn = aws_iam_role.config.arn
 
@@ -183,6 +184,7 @@ resource "aws_config_configuration_recorder" "main" {
 
 # Config delivery channel
 resource "aws_config_delivery_channel" "main" {
+  count          = var.enable_config_recorder ? 1 : 0
   name           = "${local.name_prefix}-delivery-channel"
   s3_bucket_name = aws_s3_bucket.config.bucket
 
@@ -193,7 +195,8 @@ resource "aws_config_delivery_channel" "main" {
 
 # Start Config recorder
 resource "aws_config_configuration_recorder_status" "main" {
-  name       = aws_config_configuration_recorder.main.name
+  count      = var.enable_config_recorder ? 1 : 0
+  name       = aws_config_configuration_recorder.main[0].name
   is_enabled = true
 
   depends_on = [aws_config_delivery_channel.main]

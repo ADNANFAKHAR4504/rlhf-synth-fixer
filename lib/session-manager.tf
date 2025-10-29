@@ -44,6 +44,8 @@ resource "aws_cloudwatch_log_group" "session_logs" {
   retention_in_days = 365
   kms_key_id        = aws_kms_key.s3.arn
 
+  depends_on = [aws_kms_key.s3]
+
   tags = local.mandatory_tags
 }
 

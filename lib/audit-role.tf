@@ -28,6 +28,7 @@ data "aws_iam_policy_document" "audit_trust_policy" {
 
 # Cross-account audit role
 resource "aws_iam_role" "audit" {
+  count                = var.enable_audit_role && length(var.audit_account_ids) > 0 ? 1 : 0
   name                 = "${local.name_prefix}-audit-role"
   assume_role_policy   = data.aws_iam_policy_document.audit_trust_policy.json
   max_session_duration = 43200 # 12 hours
@@ -35,66 +36,32 @@ resource "aws_iam_role" "audit" {
   tags = local.mandatory_tags
 }
 
-# Audit policy - read-only access
+# Audit policy - read-only access (using AWS managed policy instead of custom)
+resource "aws_iam_role_policy_attachment" "audit_viewonly" {
+  count      = var.enable_audit_role && length(var.audit_account_ids) > 0 ? 1 : 0
+  role       = aws_iam_role.audit[0].name
+  policy_arn = "arn:aws:iam::aws:policy/ViewOnlyAccess"
+}
+
+resource "aws_iam_role_policy_attachment" "audit_security" {
+  count      = var.enable_audit_role && length(var.audit_account_ids) > 0 ? 1 : 0
+  role       = aws_iam_role.audit[0].name
+  policy_arn = "arn:aws:iam::aws:policy/SecurityAudit"
+}
+
+# Custom audit policy for additional read-only permissions
 resource "aws_iam_policy" "audit" {
+  count       = var.enable_audit_role && length(var.audit_account_ids) > 0 ? 1 : 0
   name        = "${local.name_prefix}-audit-policy"
-  description = "Read-only policy for cross-account auditing"
+  description = "Additional read-only policy for cross-account auditing"
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "ViewOnlyAccess"
+        Sid    = "AdditionalReadAccess"
         Effect = "Allow"
         Action = [
-          "acm:DescribeCertificate",
-          "acm:ListCertificates",
-          "apigateway:GET",
-          "application-autoscaling:Describe*",
-          "athena:GetQueryExecution",
-          "athena:GetQueryResults",
-          "autoscaling:Describe*",
-          "backup:Describe*",
-          "backup:GetBackupPlan",
-          "backup:GetBackupSelection",
-          "backup:GetBackupVaultAccessPolicy",
-          "backup:GetBackupVaultNotifications",
-          "backup:GetRecoveryPointRestoreMetadata",
-          "backup:ListBackupJobs",
-          "backup:ListBackupPlans",
-          "backup:ListBackupSelections",
-          "backup:ListBackupVaults",
-          "backup:ListProtectedResources",
-          "backup:ListRecoveryPointsByBackupVault",
-          "backup:ListRecoveryPointsByResource",
-          "backup:ListRestoreJobs",
-          "cloudformation:Describe*",
-          "cloudformation:Get*",
-          "cloudformation:List*",
-          "cloudfront:Get*",
-          "cloudfront:List*",
-          "cloudtrail:DescribeTrails",
-          "cloudtrail:GetEventSelectors",
-          "cloudtrail:GetTrailStatus",
-          "cloudtrail:ListPublicKeys",
-          "cloudtrail:ListTags",
-          "cloudtrail:LookupEvents",
-          "cloudwatch:Describe*",
-          "cloudwatch:Get*",
-          "cloudwatch:List*",
-          "codebuild:BatchGetBuilds",
-          "codebuild:BatchGetProjects",
-          "codebuild:List*",
-          "codecommit:BatchGetRepositories",
-          "codecommit:GetBranch",
-          "codecommit:GetCommit",
-          "codecommit:GetRepository",
-          "codecommit:GetRepositoryTriggers",
-          "codecommit:List*",
-          "codepipeline:GetPipeline",
-          "codepipeline:GetPipelineExecution",
-          "codepipeline:GetPipelineState",
-          "codepipeline:ListPipelines",
           "config:Deliver*",
           "config:Describe*",
           "config:Get*",
@@ -339,19 +306,7 @@ resource "aws_iam_policy" "audit" {
 
 # Attach audit policy to audit role
 resource "aws_iam_role_policy_attachment" "audit" {
-  role       = aws_iam_role.audit.name
-  policy_arn = aws_iam_policy.audit.arn
-}
-
-# Output the audit role ARN for sharing with audit accounts
-output "audit_role_arn" {
-  value       = aws_iam_role.audit.arn
-  description = "ARN of the cross-account audit role"
-}
-
-# Output the external ID for secure cross-account access
-output "audit_external_id" {
-  value       = var.audit_external_id
-  description = "External ID required for assuming the audit role"
-  sensitive   = true
+  count      = var.enable_audit_role && length(var.audit_account_ids) > 0 ? 1 : 0
+  role       = aws_iam_role.audit[0].name
+  policy_arn = aws_iam_policy.audit[0].arn
 }

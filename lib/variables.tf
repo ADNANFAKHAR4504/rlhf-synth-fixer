@@ -164,3 +164,15 @@ variable "enable_organization_policies" {
   type        = bool
   default     = false
 }
+
+variable "enable_config_recorder" {
+  description = "Enable AWS Config recorder and delivery channel. Set to false if account already has Config enabled."
+  type        = bool
+  default     = false
+}
+
+variable "enable_audit_role" {
+  description = "Enable cross-account audit role. Requires audit_account_ids to be specified."
+  type        = bool
+  default     = false
+}

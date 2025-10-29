@@ -34,7 +34,7 @@ resource "aws_kms_key" "s3" {
         Sid    = "Allow CloudWatch Logs"
         Effect = "Allow"
         Principal = {
-          Service = "logs.${var.allowed_regions[0]}.amazonaws.com"
+          Service = "logs.${var.aws_region}.amazonaws.com"
         }
         Action = [
           "kms:Encrypt",
@@ -47,7 +47,7 @@ resource "aws_kms_key" "s3" {
         Resource = "*"
         Condition = {
           ArnLike = {
-            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.allowed_regions[0]}:${data.aws_caller_identity.current.account_id}:*"
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
           }
         }
       },
@@ -115,11 +115,7 @@ resource "aws_kms_key" "rds" {
         Sid    = "Allow RDS to use the key"
         Effect = "Allow"
         Principal = {
-          Service = [
-            "rds.amazonaws.com",
-            "rds.${var.allowed_regions[0]}.amazonaws.com",
-            "rds.${var.allowed_regions[1]}.amazonaws.com"
-          ]
+          Service = "rds.amazonaws.com"
         }
         Action = [
           "kms:Decrypt",

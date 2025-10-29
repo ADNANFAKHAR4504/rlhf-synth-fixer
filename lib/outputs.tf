@@ -106,7 +106,7 @@ output "hybrid_activation_code" {
 # Config Rules
 output "config_recorder_name" {
   description = "Name of the AWS Config recorder"
-  value       = aws_config_configuration_recorder.main.name
+  value       = var.enable_config_recorder ? aws_config_configuration_recorder.main[0].name : null
 }
 
 output "config_rules" {
@@ -141,6 +141,12 @@ output "tag_policy_id" {
 output "auto_tagging_lambda_arn" {
   description = "ARN of the auto-tagging Lambda function"
   value       = var.enable_auto_tagging ? aws_lambda_function.auto_tagging[0].arn : null
+}
+
+# Audit Role (when enabled)
+output "audit_role_arn" {
+  description = "ARN of the cross-account audit role"
+  value       = var.enable_audit_role && length(var.audit_account_ids) > 0 ? aws_iam_role.audit[0].arn : null
 }
 
 # Summary Information
