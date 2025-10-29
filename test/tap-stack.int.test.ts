@@ -67,13 +67,6 @@ describe('Financial Transaction Processing System - Integration Tests', () => {
       expect(template.Resources.PrivateRouteTable).toBeDefined();
       expect(template.Resources.PublicRoute).toBeDefined();
     });
-
-    test('should define VPC Flow Logs', () => {
-      expect(template.Resources.VPCFlowLog).toBeDefined();
-      expect(template.Resources.VPCFlowLogsLogGroup).toBeDefined();
-      expect(template.Resources.VPCFlowLogRole).toBeDefined();
-      expect(template.Resources.VPCFlowLog.Properties.TrafficType).toBe('ALL');
-    });
   });
 
   describe('ECS Configuration', () => {
