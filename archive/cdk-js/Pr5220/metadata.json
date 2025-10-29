@@ -32,5 +32,11 @@
   ],
   "region": "ca-central-1",
   "turn_type": "single",
-  "training_quality": 9
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
