@@ -647,7 +647,6 @@ Resources:
   RDSDatabase:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: !Sub 'finsecure${AWS::AccountId}'
       DBName: appdb123
       Engine: mysql
       EngineVersion: '8.0.43'
@@ -770,6 +769,17 @@ Resources:
               VolumeType: gp3
               Encrypted: true
               DeleteOnTermination: true
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub '${EnvironmentName}-WebServer'
+              - Key: Environment
+                Value: !Ref EnvironmentName
+              - Key: team
+                Value: '2'
+              - Key: iac-rlhf-amazon
+                Value: 'true'
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
@@ -835,17 +845,7 @@ Resources:
             
             systemctl start nginx
             systemctl enable nginx
-      TagSpecifications:
-        - ResourceType: instance
-          Tags:
-            - Key: Name
-              Value: !Sub '${EnvironmentName}-WebServer'
-            - Key: Environment
-              Value: !Ref EnvironmentName
-            - Key: team
-              Value: '2'
-            - Key: iac-rlhf-amazon
-              Value: 'true'
+
 
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
