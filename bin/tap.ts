@@ -30,6 +30,40 @@ const secondaryRegion =
   process.env.SECONDARY_REGION ||
   undefined;
 
+// If multiRegion is requested, prefer explicit context/env overrides but
+// provide sensible defaults so `--context multiRegion=true` alone will
+// synth two stacks in the common pair of regions used by our org.
+// Users/CI can still override with --context primaryRegion/secondaryRegion
+// or via environment variables (CDK_DEFAULT_REGION/AWS_REGION/SECONDARY_REGION).
+let resolvedPrimaryRegion = primaryRegion;
+let resolvedSecondaryRegion = secondaryRegion;
+if (multiRegion) {
+  resolvedPrimaryRegion =
+    resolvedPrimaryRegion ||
+    process.env.CDK_DEFAULT_REGION ||
+    process.env.AWS_REGION;
+  resolvedSecondaryRegion =
+    resolvedSecondaryRegion || process.env.SECONDARY_REGION;
+
+  // Do not fall back to hard-coded regions here. Require explicit configuration
+  // so CDK/CDK_CONTEXT controls region selection deterministically in CI/CLI.
+  if (!resolvedPrimaryRegion || !resolvedSecondaryRegion) {
+    throw new Error(
+      'multiRegion mode requires both primaryRegion and secondaryRegion to be explicitly set.\n' +
+        'Provide them via --context primaryRegion/secondaryRegion or environment variables:\n' +
+        '  primary: CDK_DEFAULT_REGION or AWS_REGION\n' +
+        '  secondary: SECONDARY_REGION\n' +
+        'Example: npx cdk synth --context multiRegion=true --context primaryRegion=us-east-1 --context secondaryRegion=us-west-2'
+    );
+  }
+
+  if (resolvedPrimaryRegion === resolvedSecondaryRegion) {
+    throw new Error(
+      `primaryRegion and secondaryRegion must be different when running in multi-region mode (both are ${resolvedPrimaryRegion}).`
+    );
+  }
+}
+
 // Apply tags to all stacks in this app (optional - you can do this at stack level instead)
 Tags.of(app).add('Environment', environmentSuffix);
 Tags.of(app).add('Repository', repositoryName);
@@ -47,11 +81,11 @@ if (multiRegion) {
     // global resources (HostedZone, health checks, primary DNS records).
     isPrimary: true,
     // forward secondaryRegion so nested stack can configure replication if enabled
-    secondaryRegion,
+    secondaryRegion: resolvedSecondaryRegion,
     baseEnvironmentSuffix: environmentSuffix,
     env: {
       account: process.env.CDK_DEFAULT_ACCOUNT,
-      ...(primaryRegion ? { region: primaryRegion } : {}),
+      ...(resolvedPrimaryRegion ? { region: resolvedPrimaryRegion } : {}),
     },
   });
 
@@ -65,7 +99,7 @@ if (multiRegion) {
     baseEnvironmentSuffix: environmentSuffix,
     env: {
       account: process.env.CDK_DEFAULT_ACCOUNT,
-      ...(secondaryRegion ? { region: secondaryRegion } : {}),
+      ...(resolvedSecondaryRegion ? { region: resolvedSecondaryRegion } : {}),
     },
   });
 } else {

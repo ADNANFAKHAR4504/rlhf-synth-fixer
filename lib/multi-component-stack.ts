@@ -20,6 +20,7 @@ import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
 import path from 'path';
+import canonicalResourceName from './name-utils';
 
 export interface MultiComponentProps extends cdk.StackProps {
   secondaryRegion?: string;
@@ -74,13 +75,24 @@ export class MultiComponentApplicationConstruct extends Construct {
     // Generate unique string suffix
     this.stringSuffix = cdk.Fn.select(2, cdk.Fn.split('-', cdk.Aws.STACK_ID));
 
+    // Allow destructive removal only when explicitly enabled (CI or developer opt-in).
+    // By default keep destructive actions off in production to avoid data loss.
+    const allowDestroy =
+      this.node.tryGetContext('allowDestroy') === true ||
+      this.node.tryGetContext('allowDestroy') === 'true' ||
+      process.env.ALLOW_DESTROY === 'true';
+
     // ========================================
     // VPC Configuration
     // ========================================
     const vpc = new ec2.Vpc(this, 'AppVpc', {
       // Use a consistent, human-friendly VPC name across code and docs.
-      // Canonical pattern: prod-app-vpc-<suffix>
-      vpcName: `prod-app-vpc-${this.stringSuffix}`,
+      // Use the canonicalResourceName helper to ensure deterministic names.
+      vpcName: canonicalResourceName(
+        'prod-app-vpc',
+        props?.baseEnvironmentSuffix as string | undefined,
+        this.stringSuffix
+      ) as string,
       cidr: '10.0.0.0/16',
       maxAzs: 2,
       natGateways: 2,
@@ -104,7 +116,11 @@ export class MultiComponentApplicationConstruct extends Construct {
     // Secrets Manager - RDS Credentials
     // ========================================
     const databaseSecret = new secretsmanager.Secret(this, 'DatabaseSecret', {
-      secretName: `prod-secretsmanager-db-${this.stringSuffix.toLowerCase().replace(/[^a-zA-Z0-9\-_+=.@!]/g, '')}`,
+      secretName: canonicalResourceName(
+        'prod-secretsmanager-db',
+        props?.baseEnvironmentSuffix as string | undefined,
+        this.stringSuffix
+      ) as string,
       description: 'RDS PostgreSQL database credentials',
       generateSecretString: {
         secretStringTemplate: JSON.stringify({
@@ -123,7 +139,11 @@ export class MultiComponentApplicationConstruct extends Construct {
       this,
       'DatabaseSecurityGroup',
       {
-        securityGroupName: `prod-ec2-sg-db-${this.stringSuffix}`,
+        securityGroupName: canonicalResourceName(
+          'prod-ec2-sg-db',
+          props?.baseEnvironmentSuffix as string | undefined,
+          this.stringSuffix
+        ) as string,
         vpc,
         description: 'Security group for RDS PostgreSQL',
         allowAllOutbound: false,
@@ -148,7 +168,11 @@ export class MultiComponentApplicationConstruct extends Construct {
       : undefined;
 
     const rdsInstance = new rds.DatabaseInstance(this, 'PostgresDatabase', {
-      instanceIdentifier: `prod-rds-postgres-${this.stringSuffix.toLowerCase().replace(/[^a-z0-9-]/g, '')}`,
+      instanceIdentifier: canonicalResourceName(
+        'prod-rds-postgres',
+        props?.baseEnvironmentSuffix as string | undefined,
+        this.stringSuffix
+      ) as string,
       engine: rds.DatabaseInstanceEngine.postgres({
         // Use the major Postgres 15 engine constant so CDK/RDS will pick a supported
         // minor version available in the target region. Pinning to a minor (e.g. 15.3)
@@ -171,8 +195,13 @@ export class MultiComponentApplicationConstruct extends Construct {
       allocatedStorage: 20,
       storageEncrypted: true,
       backupRetention: Duration.days(7),
-      deletionProtection: false,
-      removalPolicy: RemovalPolicy.DESTROY,
+      // Protect DB from accidental deletion by default; allowDestroy opt-in disables protection
+      deletionProtection: !allowDestroy,
+      // Default to RETAIN for production; allowDestroy enables DESTROY for CI/dev
+      removalPolicy: allowDestroy
+        ? RemovalPolicy.DESTROY
+        : RemovalPolicy.RETAIN,
+      publiclyAccessible: false,
       multiAz: true, // High availability
       cloudwatchLogsExports: ['postgresql'],
       cloudwatchLogsRetention: logs.RetentionDays.ONE_WEEK,
@@ -184,29 +213,29 @@ export class MultiComponentApplicationConstruct extends Construct {
     // Prefer a deterministic base suffix for cross-region deployments when provided
     const baseEnvSuffix = props?.baseEnvironmentSuffix as string | undefined;
 
-    const bucketNameParts = [
-      'prod-s3-static',
-      // Use the provided base environment suffix if present so both stacks
-      // produce the same base bucket name across regions. Otherwise fall
-      // back to the internal stringSuffix which is derived from the stack id.
-      baseEnvSuffix
-        ? baseEnvSuffix.toLowerCase().replace(/[^a-z0-9-]/g, '')
-        : this.stringSuffix.toLowerCase().replace(/[^a-z0-9-]/g, ''),
-      cdk.Aws.REGION,
-    ];
-
     const staticFilesBucket = new s3.Bucket(this, 'StaticFilesBucket', {
-      bucketName: cdk.Fn.join('-', bucketNameParts),
+      bucketName: canonicalResourceName(
+        'prod-s3-static',
+        baseEnvSuffix,
+        this.stringSuffix
+      ) as string,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      removalPolicy: RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
+      // Default to RETAIN to protect production data; allowDestroy opt-in enables destructive cleanup
+      removalPolicy: allowDestroy
+        ? RemovalPolicy.DESTROY
+        : RemovalPolicy.RETAIN,
+      autoDeleteObjects: allowDestroy,
       lifecycleRules: [
         {
           id: 'delete-old-versions',
           noncurrentVersionExpiration: Duration.days(30),
           enabled: true,
+        },
+        {
+          id: 'abort-incomplete-multipart',
+          abortIncompleteMultipartUploadAfter: Duration.days(7),
         },
       ],
     });
@@ -311,14 +340,22 @@ export class MultiComponentApplicationConstruct extends Construct {
     // SQS Queue
     // ========================================
     const asyncQueue = new sqs.Queue(this, 'AsyncProcessingQueue', {
-      queueName: `prod-sqs-async-${this.stringSuffix.toLowerCase().replace(/[^a-zA-Z0-9-_]/g, '')}`,
+      queueName: canonicalResourceName(
+        'prod-sqs-async',
+        props?.baseEnvironmentSuffix as string | undefined,
+        this.stringSuffix
+      ) as string,
       encryption: sqs.QueueEncryption.KMS_MANAGED,
       retentionPeriod: Duration.days(4),
       visibilityTimeout: Duration.minutes(6),
       deadLetterQueue: {
         maxReceiveCount: 3,
         queue: new sqs.Queue(this, 'DLQ', {
-          queueName: `prod-sqs-dlq-${this.stringSuffix.toLowerCase().replace(/[^a-zA-Z0-9-_]/g, '')}`,
+          queueName: canonicalResourceName(
+            'prod-sqs-dlq',
+            props?.baseEnvironmentSuffix as string | undefined,
+            this.stringSuffix
+          ) as string,
         }),
       },
     });
@@ -327,14 +364,14 @@ export class MultiComponentApplicationConstruct extends Construct {
     // CloudWatch Log Groups
     // ========================================
     const lambdaLogGroup = new logs.LogGroup(this, 'LambdaLogGroup', {
-      logGroupName: `/aws/lambda/prod-lambda-api-v2-${this.stringSuffix.toLowerCase().replace(/[^a-zA-Z0-9-_/]/g, '')}`,
+      logGroupName: `/aws/lambda/${canonicalResourceName('prod-lambda-api-v2', props?.baseEnvironmentSuffix as string | undefined, this.stringSuffix)}`,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: RemovalPolicy.DESTROY,
     });
 
     // VPC Flow Logs: ship VPC traffic logs to CloudWatch Logs for security/monitoring
     const vpcFlowLogGroup = new logs.LogGroup(this, 'VpcFlowLogGroup', {
-      logGroupName: `/aws/vpc-flow-logs/prod-${this.stringSuffix.toLowerCase().replace(/[^a-z0-9-]/g, '')}`,
+      logGroupName: `/aws/vpc-flow-logs/${canonicalResourceName('prod-vpc', props?.baseEnvironmentSuffix as string | undefined, this.stringSuffix)}`,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: RemovalPolicy.DESTROY,
     });
@@ -422,7 +459,11 @@ export class MultiComponentApplicationConstruct extends Construct {
     // Central SNS topic for alarm notifications. We do NOT auto-subscribe an email
     // unless ALARM_NOTIFICATION_EMAIL is set in the environment to avoid CI auto-subscribes.
     const alarmsTopic = new sns.Topic(this, 'AlarmsTopic', {
-      displayName: `prod-alarms-${this.stringSuffix}`,
+      displayName: canonicalResourceName(
+        'prod-alarms',
+        props?.baseEnvironmentSuffix as string | undefined,
+        this.stringSuffix
+      ) as string,
     });
 
     if (process.env.ALARM_NOTIFICATION_EMAIL) {
@@ -437,7 +478,11 @@ export class MultiComponentApplicationConstruct extends Construct {
     // IAM Roles (Least Privilege)
     // ========================================
     const lambdaRole = new iam.Role(this, 'LambdaExecutionRoleV2', {
-      roleName: `prod-iam-lambda-${this.stringSuffix.replace(/[^a-zA-Z0-9+=,.@_-]/g, '')}`,
+      roleName: canonicalResourceName(
+        'prod-iam-lambda',
+        props?.baseEnvironmentSuffix as string | undefined,
+        this.stringSuffix
+      ) as string,
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       description: 'Execution role for Lambda function',
       managedPolicies: [
@@ -517,7 +562,11 @@ export class MultiComponentApplicationConstruct extends Construct {
       this,
       'LambdaSecurityGroup',
       {
-        securityGroupName: `prod-ec2-sg-lambda-${this.stringSuffix}`,
+        securityGroupName: canonicalResourceName(
+          'prod-ec2-sg-lambda',
+          props?.baseEnvironmentSuffix as string | undefined,
+          this.stringSuffix
+        ) as string,
         vpc,
         description: 'Security group for Lambda function',
         allowAllOutbound: true,
@@ -531,7 +580,11 @@ export class MultiComponentApplicationConstruct extends Construct {
     );
 
     const lambdaFunction = new lambda.Function(this, 'ApiLambda', {
-      functionName: `prod-lambda-api-v2-${safeSuffixForLambda}`,
+      functionName: canonicalResourceName(
+        'prod-lambda-api-v2',
+        props?.baseEnvironmentSuffix as string | undefined,
+        safeSuffixForLambda as string
+      ) as string,
       runtime: lambda.Runtime.NODEJS_18_X, // Updated to supported version
       handler: 'index.handler',
       // Use a simple asset path. In CI/local we must ensure dependencies
@@ -567,7 +620,11 @@ export class MultiComponentApplicationConstruct extends Construct {
     // API Gateway (IAM Authentication)
     // ========================================
     const api = new apigateway.RestApi(this, 'ApiGateway', {
-      restApiName: `prod-apigateway-rest-${this.stringSuffix}`,
+      restApiName: canonicalResourceName(
+        'prod-apigateway-rest',
+        props?.baseEnvironmentSuffix as string | undefined,
+        this.stringSuffix
+      ) as string,
       description: 'Production API Gateway',
       deployOptions: {
         stageName: 'prod',
@@ -667,7 +724,7 @@ export class MultiComponentApplicationConstruct extends Construct {
     // WAFv2 WebACL (protect CloudFront and proxied API)
     // ========================================
     // WAF scope=CLOUDFRONT is a global resource and must be created in
-    // us-east-1. Guard creation so that when this stack is synthesized or
+    // us-west-1. Guard creation so that when this stack is synthesized or
     // deployed in other regions (e.g., during multi-region runs) we don't
     // attempt to create a global WebACL in the wrong region which would
     // cause CloudFormation failures. To explicitly allow global WAF creation
@@ -687,7 +744,7 @@ export class MultiComponentApplicationConstruct extends Construct {
       enableWafContext === true || enableWafContext === 'true' || enableWafEnv;
 
     const shouldCreateWaf =
-      enableWaf && (stackRegion === 'us-east-1' || allowGlobalWaf);
+      enableWaf && (stackRegion === 'us-west-1' || allowGlobalWaf);
 
     if (shouldCreateWaf) {
       const webAcl = new wafv2.CfnWebACL(this, 'WebAcl', {
@@ -939,6 +996,110 @@ export class MultiComponentApplicationConstruct extends Construct {
       evaluationPeriods: 1,
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
+
+    // Additional monitoring coverage
+    // API Gateway: 4xx errors (client errors)
+    const apiClientErrorsAlarm = new cloudwatch.Alarm(
+      this,
+      'ApiClientErrorsAlarm',
+      {
+        alarmName: canonicalResourceName(
+          'prod-cloudwatch-apigateway-4xx',
+          props?.baseEnvironmentSuffix as string | undefined,
+          safeSuffixForLambda as string
+        ) as string,
+        metric: api.metricClientError(),
+        threshold: 50,
+        evaluationPeriods: 2,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      }
+    );
+    apiClientErrorsAlarm.addAlarmAction(new cw_actions.SnsAction(alarmsTopic));
+
+    // API Gateway: latency alarm (ms)
+    const apiLatencyAlarm = new cloudwatch.Alarm(this, 'ApiLatencyAlarm', {
+      alarmName: canonicalResourceName(
+        'prod-cloudwatch-apigateway-latency',
+        props?.baseEnvironmentSuffix as string | undefined,
+        safeSuffixForLambda as string
+      ) as string,
+      metric: api.metricLatency(),
+      threshold: 1000, // 1 second
+      evaluationPeriods: 2,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    });
+    apiLatencyAlarm.addAlarmAction(new cw_actions.SnsAction(alarmsTopic));
+
+    // Lambda concurrent executions - alert when concurrency grows unexpectedly
+    const lambdaConcurrentMetric = lambdaFunction.metric(
+      'ConcurrentExecutions',
+      {
+        statistic: 'Maximum',
+        period: Duration.minutes(1),
+      }
+    );
+    const lambdaConcurrentAlarm = new cloudwatch.Alarm(
+      this,
+      'LambdaConcurrentAlarm',
+      {
+        alarmName: canonicalResourceName(
+          'prod-cloudwatch-lambda-concurrent',
+          props?.baseEnvironmentSuffix as string | undefined,
+          safeSuffixForLambda as string
+        ) as string,
+        metric: lambdaConcurrentMetric,
+        threshold: 500,
+        evaluationPeriods: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      }
+    );
+    lambdaConcurrentAlarm.addAlarmAction(new cw_actions.SnsAction(alarmsTopic));
+
+    // RDS: database connections alarm
+    const rdsConnectionsMetric = new cloudwatch.Metric({
+      namespace: 'AWS/RDS',
+      metricName: 'DatabaseConnections',
+      dimensionsMap: { DBInstanceIdentifier: rdsInstance.instanceIdentifier },
+      period: Duration.minutes(5),
+      statistic: 'Maximum',
+    });
+    const rdsConnectionsAlarm = new cloudwatch.Alarm(
+      this,
+      'RdsConnectionsAlarm',
+      {
+        alarmName: canonicalResourceName(
+          'prod-cloudwatch-rds-connections',
+          props?.baseEnvironmentSuffix as string | undefined,
+          safeSuffixForLambda as string
+        ) as string,
+        metric: rdsConnectionsMetric,
+        threshold: 200,
+        evaluationPeriods: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      }
+    );
+    rdsConnectionsAlarm.addAlarmAction(new cw_actions.SnsAction(alarmsTopic));
+
+    // RDS: low freeable memory
+    const rdsFreeableAlarm = new cloudwatch.Alarm(
+      this,
+      'RdsFreeableMemoryAlarm',
+      {
+        alarmName: canonicalResourceName(
+          'prod-cloudwatch-rds-freeable-memory',
+          props?.baseEnvironmentSuffix as string | undefined,
+          safeSuffixForLambda as string
+        ) as string,
+        metric: rdsInstance.metricFreeableMemory(),
+        threshold: 200 * 1024 * 1024, // 200 MiB
+        evaluationPeriods: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+      }
+    );
+    rdsFreeableAlarm.addAlarmAction(new cw_actions.SnsAction(alarmsTopic));
 
     // RDS additional alarm: free storage space low
     new cloudwatch.Alarm(this, 'RdsFreeStorageAlarm', {

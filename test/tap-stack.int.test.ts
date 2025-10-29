@@ -4,11 +4,32 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
 // AWS SDK clients (v3)
-import { DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-dynamodb';
-import { InvokeCommand, InvokeCommandOutput, LambdaClient } from '@aws-sdk/client-lambda';
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
-import { PurgeQueueCommand, ReceiveMessageCommand, SendMessageCommand, SQSClient } from '@aws-sdk/client-sqs';
+import {
+  DynamoDBClient,
+  GetItemCommand,
+  PutItemCommand,
+} from '@aws-sdk/client-dynamodb';
+import {
+  InvokeCommand,
+  InvokeCommandOutput,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
+  GetSecretValueCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
+import {
+  PurgeQueueCommand,
+  ReceiveMessageCommand,
+  SendMessageCommand,
+  SQSClient,
+} from '@aws-sdk/client-sqs';
 import { marshall } from '@aws-sdk/util-dynamodb';
 
 // Single-file runtime-only integration test
@@ -18,7 +39,10 @@ import { marshall } from '@aws-sdk/util-dynamodb';
 // - Attempts Lambda fallback if API returns auth error and no API key is provided
 // - Detects Runtime.ImportModuleError for missing 'aws-sdk' and surfaces actionable error
 
-const outputsPath = path.resolve(process.cwd(), 'cfn-outputs/flat-outputs.json');
+const outputsPath = path.resolve(
+  process.cwd(),
+  'cfn-outputs/flat-outputs.json'
+);
 
 let outputs: Record<string, any> | null = null;
 if (fs.existsSync(outputsPath)) {
@@ -26,7 +50,10 @@ if (fs.existsSync(outputsPath)) {
     outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
   } catch (e) {
     // eslint-disable-next-line no-console
-    console.error('Failed to parse cfn-outputs/flat-outputs.json:', e && (e as Error).message ? (e as Error).message : e);
+    console.error(
+      'Failed to parse cfn-outputs/flat-outputs.json:',
+      e && (e as Error).message ? (e as Error).message : e
+    );
     outputs = null;
   }
 }
@@ -34,14 +61,22 @@ if (fs.existsSync(outputsPath)) {
 const isPossiblyMasked = (v: any) => {
   if (!v || typeof v !== 'string') return false;
   const s = v.toLowerCase();
-  return s.includes('*') || s.includes('masked') || s.includes('<masked>') || s.includes('xxxx') || s.includes('token');
+  return (
+    s.includes('*') ||
+    s.includes('masked') ||
+    s.includes('<masked>') ||
+    s.includes('xxxx') ||
+    s.includes('token')
+  );
 };
 
 if (!outputs || Object.keys(outputs).length === 0) {
   describe('Integration tests - missing outputs', () => {
     test('cfn-outputs/flat-outputs.json must exist and be non-empty', () => {
       // eslint-disable-next-line no-console
-      console.error('Missing or empty cfn-outputs/flat-outputs.json - integration tests require actual deployment outputs');
+      console.error(
+        'Missing or empty cfn-outputs/flat-outputs.json - integration tests require actual deployment outputs'
+      );
       expect(outputs).not.toBeNull();
       expect(Object.keys(outputs || {}).length).toBeGreaterThan(0);
     });
@@ -50,17 +85,32 @@ if (!outputs || Object.keys(outputs).length === 0) {
   const findOutput = (candidates: string[]) => {
     // exact keys first
     for (const c of candidates) {
-      if (Object.prototype.hasOwnProperty.call(outputs!, c) && outputs![c]) return outputs![c];
+      if (Object.prototype.hasOwnProperty.call(outputs!, c) && outputs![c])
+        return outputs![c];
     }
     // heuristics: look at values for known patterns
     for (const [k, v] of Object.entries(outputs!)) {
       if (!v || typeof v !== 'string') continue;
       const val = v as string;
-      if (candidates.includes('ApiGatewayUrl') && /execute-api\./i.test(val)) return val;
-      if (candidates.includes('SqsQueueUrl') && /sqs\.amazonaws\.com/i.test(val)) return val;
-      if (candidates.includes('LambdaFunctionArn') && /^arn:aws:lambda/i.test(val)) return val;
-      if (candidates.includes('S3BucketName') && /s3|bucket|static/i.test(k)) return val;
-      if (candidates.includes('DatabaseSecretArn') && /secretsmanager/i.test(val)) return val;
+      if (candidates.includes('ApiGatewayUrl') && /execute-api\./i.test(val))
+        return val;
+      if (
+        candidates.includes('SqsQueueUrl') &&
+        /sqs\.amazonaws\.com/i.test(val)
+      )
+        return val;
+      if (
+        candidates.includes('LambdaFunctionArn') &&
+        /^arn:aws:lambda/i.test(val)
+      )
+        return val;
+      if (candidates.includes('S3BucketName') && /s3|bucket|static/i.test(k))
+        return val;
+      if (
+        candidates.includes('DatabaseSecretArn') &&
+        /secretsmanager/i.test(val)
+      )
+        return val;
     }
     return undefined;
   };
@@ -78,16 +128,32 @@ if (!outputs || Object.keys(outputs).length === 0) {
     return undefined;
   };
 
-  const apiUrl = findOutput(['ApiGatewayUrl', 'ApiGatewayEndpoint', 'ApiGatewayEndpointEE74D018', 'InnerApiGatewayEndpoint5397B933']);
-  const lambdaArn = findOutput(['LambdaFunctionArn', 'TapStackpr5287MultiComponentApplicationInnerApiLambdaF57A8F7CArn', 'TapStackpr5287MultiComponentApplicationInnerApiLambdaArn']);
-  const sqsUrl = findOutput(['SqsQueueUrl', 'TapStackpr5287MultiComponentApplicationInnerAsyncProcessingQueue46B51B29Ref']);
+  const apiUrl = findOutput([
+    'ApiGatewayUrl',
+    'ApiGatewayEndpoint',
+    'ApiGatewayEndpointEE74D018',
+    'InnerApiGatewayEndpoint5397B933',
+  ]);
+  const lambdaArn = findOutput([
+    'LambdaFunctionArn',
+    'TapStackpr5287MultiComponentApplicationInnerApiLambdaF57A8F7CArn',
+    'TapStackpr5287MultiComponentApplicationInnerApiLambdaArn',
+  ]);
+  const sqsUrl = findOutput([
+    'SqsQueueUrl',
+    'TapStackpr5287MultiComponentApplicationInnerAsyncProcessingQueue46B51B29Ref',
+  ]);
 
   let region = process.env.AWS_REGION || 'us-east-1';
   const awsRegionFile = path.resolve(process.cwd(), 'lib/AWS_REGION');
   if (fs.existsSync(awsRegionFile)) {
     region = fs.readFileSync(awsRegionFile, 'utf8').trim();
   }
-  region = inferRegionFromUrl(apiUrl) || inferRegionFromArn(lambdaArn) || inferRegionFromUrl(sqsUrl) || region;
+  region =
+    inferRegionFromUrl(apiUrl) ||
+    inferRegionFromArn(lambdaArn) ||
+    inferRegionFromUrl(sqsUrl) ||
+    region;
 
   const dynamo = new DynamoDBClient({ region });
   const lambda = new LambdaClient({ region });
@@ -97,8 +163,14 @@ if (!outputs || Object.keys(outputs).length === 0) {
 
   describe('Live integration end-to-end workflow tests', () => {
     test('flat outputs provide required runtime identifiers (only check presence)', () => {
-      const s3Bucket = findOutput(['S3BucketName', 'TapStackpr5287MultiComponentApplicationInnerStaticFilesBucketF3D652EBRef']);
-      const secretArn = findOutput(['DatabaseSecretArn', 'TapStackpr5287MultiComponentApplicationInnerDatabaseSecret12DE2BA4Ref']);
+      const s3Bucket = findOutput([
+        'S3BucketName',
+        'TapStackpr5287MultiComponentApplicationInnerStaticFilesBucketF3D652EBRef',
+      ]);
+      const secretArn = findOutput([
+        'DatabaseSecretArn',
+        'TapStackpr5287MultiComponentApplicationInnerDatabaseSecret12DE2BA4Ref',
+      ]);
 
       expect(apiUrl).toBeTruthy();
       expect(lambdaArn).toBeTruthy();
@@ -121,40 +193,88 @@ if (!outputs || Object.keys(outputs).length === 0) {
         } catch (e: any) {
           // non-fatal
           // eslint-disable-next-line no-console
-          console.warn('SQS purge failed (non-fatal):', e && e.message ? e.message : e);
+          console.warn(
+            'SQS purge failed (non-fatal):',
+            e && e.message ? e.message : e
+          );
         }
       }, 30000);
 
       test('POST to API endpoint accepts payload (or fallback via Lambda)', async () => {
         expect(apiUrl).toBeTruthy();
 
-        const apiKey = process.env.INTEGRATION_API_KEY || process.env.ADMIN_API_KEY || process.env.READ_ONLY_API_KEY || process.env.API_KEY;
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        const apiKey =
+          process.env.INTEGRATION_API_KEY ||
+          process.env.ADMIN_API_KEY ||
+          process.env.READ_ONLY_API_KEY ||
+          process.env.API_KEY;
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
         if (apiKey) headers['x-api-key'] = apiKey;
 
         const safeApiUrl = apiUrl!.replace(/\/$/, '') + '/items';
-        const res = await axios.post(safeApiUrl, payload, { headers, validateStatus: () => true, timeout: 20000 }).catch((e) => e.response || e);
+        const res = await axios
+          .post(safeApiUrl, payload, {
+            headers,
+            validateStatus: () => true,
+            timeout: 20000,
+          })
+          .catch(e => e.response || e);
         // eslint-disable-next-line no-console
-        console.log('API POST status:', res && res.status ? res.status : 'NO_RESPONSE', 'body (truncated):', res && res.data ? JSON.stringify(res.data).slice(0, 2000) : '');
+        console.log(
+          'API POST status:',
+          res && res.status ? res.status : 'NO_RESPONSE',
+          'body (truncated):',
+          res && res.data ? JSON.stringify(res.data).slice(0, 2000) : ''
+        );
 
-        const authError = res && ((res.status === 401 || res.status === 403) || (res.data && typeof res.data === 'object' && /Missing Authentication Token/i.test(JSON.stringify(res.data))));
+        const authError =
+          res &&
+          (res.status === 401 ||
+            res.status === 403 ||
+            (res.data &&
+              typeof res.data === 'object' &&
+              /Missing Authentication Token/i.test(JSON.stringify(res.data))));
 
         if (authError && !apiKey) {
           // eslint-disable-next-line no-console
-          console.warn('API auth error and no API key. Attempting Lambda fallback.');
-          if (!lambdaArn) throw new Error('No Lambda ARN/name found for fallback invocation. Provide INTEGRATION_API_KEY in CI or ensure Lambda ARN is in flat outputs.');
+          console.warn(
+            'API auth error and no API key. Attempting Lambda fallback.'
+          );
+          if (!lambdaArn)
+            throw new Error(
+              'No Lambda ARN/name found for fallback invocation. Provide INTEGRATION_API_KEY in CI or ensure Lambda ARN is in flat outputs.'
+            );
 
           let functionIdentifier: any = lambdaArn;
           try {
-            if (typeof lambdaArn === 'string' && lambdaArn.includes('function:')) {
-              const m = (lambdaArn as string).match(/function:([a-zA-Z0-9-_]+)/);
+            if (
+              typeof lambdaArn === 'string' &&
+              lambdaArn.includes('function:')
+            ) {
+              const m = (lambdaArn as string).match(
+                /function:([a-zA-Z0-9-_]+)/
+              );
               if (m && m[1]) functionIdentifier = m[1];
             }
-          } catch (e) { }
+          } catch (e) {}
 
           const shapes = [
-            { httpMethod: 'POST', path: '/items', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) },
-            { version: '2.0', routeKey: 'POST /items', rawPath: '/items', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload), isBase64Encoded: false },
+            {
+              httpMethod: 'POST',
+              path: '/items',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            },
+            {
+              version: '2.0',
+              routeKey: 'POST /items',
+              rawPath: '/items',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify(payload),
+              isBase64Encoded: false,
+            },
             payload,
           ];
 
@@ -162,61 +282,121 @@ if (!outputs || Object.keys(outputs).length === 0) {
           for (const ev of shapes) {
             try {
               // eslint-disable-next-line no-console
-              console.log('Trying Lambda fallback shape keys:', Object.keys(ev));
-              const invokeCmd = new InvokeCommand({ FunctionName: functionIdentifier, Payload: Buffer.from(JSON.stringify(ev)) });
-              const lambdaResp = await lambda.send(invokeCmd) as InvokeCommandOutput;
+              console.log(
+                'Trying Lambda fallback shape keys:',
+                Object.keys(ev)
+              );
+              const invokeCmd = new InvokeCommand({
+                FunctionName: functionIdentifier,
+                Payload: Buffer.from(JSON.stringify(ev)),
+              });
+              const lambdaResp = (await lambda.send(
+                invokeCmd
+              )) as InvokeCommandOutput;
               // eslint-disable-next-line no-console
               console.log('Lambda fallback status:', lambdaResp.StatusCode);
               if (lambdaResp.Payload) {
-                const str = Buffer.from(lambdaResp.Payload as Uint8Array).toString();
+                const str = Buffer.from(
+                  lambdaResp.Payload as Uint8Array
+                ).toString();
                 // eslint-disable-next-line no-console
-                console.log('Lambda fallback payload (truncated):', str.slice(0, 2000));
+                console.log(
+                  'Lambda fallback payload (truncated):',
+                  str.slice(0, 2000)
+                );
 
                 // Detect common runtime ImportModuleError like missing 'aws-sdk'
                 if (/ImportModuleError/i.test(str) && /aws-sdk/i.test(str)) {
                   // eslint-disable-next-line no-console
-                  console.error('Lambda runtime ImportModuleError detected: function appears to be packaged expecting the older "aws-sdk" v2.');
+                  console.error(
+                    'Lambda runtime ImportModuleError detected: function appears to be packaged expecting the older "aws-sdk" v2.'
+                  );
                   // Fallback: attempt to perform the actions directly from the test runner (best-effort).
                   // This helps CI progress while the function package is corrected. We still surface a clear warning.
                   try {
                     // eslint-disable-next-line no-console
-                    console.warn('Attempting test-side fallback: writing item directly to DynamoDB/SQS/S3 so assertions can continue.');
-                    const tableName = findOutput(['TableName', 'DynamoTableName', 'DynamoDBTableName']);
-                    const queueUrl = findOutput(['SqsQueueUrl', 'TapStackpr5287MultiComponentApplicationInnerAsyncProcessingQueue46B51B29Ref']);
-                    const bucket = findOutput(['S3BucketName', 'TapStackpr5287MultiComponentApplicationInnerStaticFilesBucketF3D652EBRef']);
+                    console.warn(
+                      'Attempting test-side fallback: writing item directly to DynamoDB/SQS/S3 so assertions can continue.'
+                    );
+                    const tableName = findOutput([
+                      'TableName',
+                      'DynamoTableName',
+                      'DynamoDBTableName',
+                    ]);
+                    const queueUrl = findOutput([
+                      'SqsQueueUrl',
+                      'TapStackpr5287MultiComponentApplicationInnerAsyncProcessingQueue46B51B29Ref',
+                    ]);
+                    const bucket = findOutput([
+                      'S3BucketName',
+                      'TapStackpr5287MultiComponentApplicationInnerStaticFilesBucketF3D652EBRef',
+                    ]);
 
                     // Use testId from outer scope if present in payload, otherwise generate a stable id
                     let fallbackId = testId;
-                    if (payload && (payload as any).testId) fallbackId = (payload as any).testId;
+                    if (payload && (payload as any).testId)
+                      fallbackId = (payload as any).testId;
 
                     // DynamoDB: put a minimal item
                     if (tableName) {
-                      const item = { id: fallbackId, message: (payload as any).message || 'integration-test' };
+                      const item = {
+                        id: fallbackId,
+                        message: (payload as any).message || 'integration-test',
+                      };
                       // @ts-ignore
-                      await dynamo.send(new PutItemCommand({ TableName: tableName, Item: marshall(item) } as any));
+                      await dynamo.send(
+                        new PutItemCommand({
+                          TableName: tableName,
+                          Item: marshall(item),
+                        } as any)
+                      );
                     }
 
                     // SQS: send a message mirroring Lambda behavior
                     if (queueUrl) {
-                      await sqs.send(new SendMessageCommand({ QueueUrl: queueUrl, MessageBody: JSON.stringify({ id: fallbackId, message: (payload as any).message || 'integration-test' }) } as any));
+                      await sqs.send(
+                        new SendMessageCommand({
+                          QueueUrl: queueUrl,
+                          MessageBody: JSON.stringify({
+                            id: fallbackId,
+                            message:
+                              (payload as any).message || 'integration-test',
+                          }),
+                        } as any)
+                      );
                     }
 
                     // S3: put a simple object to match Lambda behavior
                     if (bucket) {
                       const key = `orders/${fallbackId}.json`;
-                      await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: JSON.stringify({ id: fallbackId, message: (payload as any).message || 'integration-test' }) } as any) as any);
+                      await s3.send(
+                        new PutObjectCommand({
+                          Bucket: bucket,
+                          Key: key,
+                          Body: JSON.stringify({
+                            id: fallbackId,
+                            message:
+                              (payload as any).message || 'integration-test',
+                          }),
+                        } as any) as any
+                      );
                     }
 
                     // Set the same outputs as a successful Lambda would
                     itemId = fallbackId;
                     postSucceeded = true;
-                    lastErr = new Error('Lambda runtime ImportModuleError detected; test performed direct-write fallback. Please repackage Lambda to include aws-sdk v2 for production correctness.');
+                    lastErr = new Error(
+                      'Lambda runtime ImportModuleError detected; test performed direct-write fallback. Please repackage Lambda to include aws-sdk v2 for production correctness.'
+                    );
                     break;
                   } catch (fbErr: any) {
                     // keep lastErr and continue to try other shapes
                     lastErr = fbErr;
                     // eslint-disable-next-line no-console
-                    console.warn('Test-side fallback attempt failed:', fbErr && fbErr.message ? fbErr.message : fbErr);
+                    console.warn(
+                      'Test-side fallback attempt failed:',
+                      fbErr && fbErr.message ? fbErr.message : fbErr
+                    );
                     continue;
                   }
                 }
@@ -224,7 +404,10 @@ if (!outputs || Object.keys(outputs).length === 0) {
                 try {
                   const parsed = JSON.parse(str);
                   if (parsed && parsed.body) {
-                    const bodyObj = typeof parsed.body === 'string' ? JSON.parse(parsed.body) : parsed.body;
+                    const bodyObj =
+                      typeof parsed.body === 'string'
+                        ? JSON.parse(parsed.body)
+                        : parsed.body;
                     if (bodyObj && bodyObj.itemId) {
                       itemId = bodyObj.itemId;
                       postSucceeded = true;
@@ -253,12 +436,19 @@ if (!outputs || Object.keys(outputs).length === 0) {
 
           if (!postSucceeded) {
             // eslint-disable-next-line no-console
-            console.error('Lambda fallback failed to return itemId. Last error:', lastErr && lastErr.message ? lastErr.message : lastErr);
-            throw new Error('API authentication failed and Lambda fallback did not return itemId. Provide INTEGRATION_API_KEY in CI or repackage the Lambda to include aws-sdk v2.');
+            console.error(
+              'Lambda fallback failed to return itemId. Last error:',
+              lastErr && lastErr.message ? lastErr.message : lastErr
+            );
+            throw new Error(
+              'API authentication failed and Lambda fallback did not return itemId. Provide INTEGRATION_API_KEY in CI or repackage the Lambda to include aws-sdk v2.'
+            );
           }
         } else if (authError && apiKey) {
           // API returned auth error despite key — fail
-          throw new Error(`API authentication failed with status ${res.status}. Provided API key did not authorize the request.`);
+          throw new Error(
+            `API authentication failed with status ${res.status}. Provided API key did not authorize the request.`
+          );
         } else {
           // success path via API
           if (res && res.data && res.data.itemId) {
@@ -266,7 +456,10 @@ if (!outputs || Object.keys(outputs).length === 0) {
             postSucceeded = true;
           } else {
             // eslint-disable-next-line no-console
-            console.error('API POST did not return itemId. Response (truncated):', res && res.data ? JSON.stringify(res.data).slice(0, 2000) : '');
+            console.error(
+              'API POST did not return itemId. Response (truncated):',
+              res && res.data ? JSON.stringify(res.data).slice(0, 2000) : ''
+            );
           }
         }
 
@@ -278,11 +471,17 @@ if (!outputs || Object.keys(outputs).length === 0) {
         expect(postSucceeded).toBe(true);
         expect(itemId).toBeDefined();
 
-        const tableName = findOutput(['TableName', 'DynamoTableName', 'DynamoDBTableName']);
+        const tableName = findOutput([
+          'TableName',
+          'DynamoTableName',
+          'DynamoDBTableName',
+        ]);
         if (!tableName) {
           // nothing to check
           // eslint-disable-next-line no-console
-          console.warn('No DynamoDB output found in flat outputs; skipping DynamoDB checks.');
+          console.warn(
+            'No DynamoDB output found in flat outputs; skipping DynamoDB checks.'
+          );
           return;
         }
 
@@ -291,7 +490,10 @@ if (!outputs || Object.keys(outputs).length === 0) {
         for (let i = 0; i < 8; i++) {
           for (const candidateKey of keyCandidates) {
             try {
-              const get = new GetItemCommand({ TableName: tableName, Key: marshall(candidateKey) });
+              const get = new GetItemCommand({
+                TableName: tableName,
+                Key: marshall(candidateKey),
+              });
               const resp = await dynamo.send(get);
               if (resp.Item) {
                 found = true;
@@ -303,7 +505,7 @@ if (!outputs || Object.keys(outputs).length === 0) {
           }
           if (found) break;
           // eslint-disable-next-line no-await-in-loop
-          await new Promise((r) => setTimeout(r, 2000));
+          await new Promise(r => setTimeout(r, 2000));
         }
 
         expect(found).toBe(true);
@@ -311,20 +513,32 @@ if (!outputs || Object.keys(outputs).length === 0) {
         const queueUrl = sqsUrl;
         if (!queueUrl) {
           // eslint-disable-next-line no-console
-          console.warn('No SQS output found in flat outputs; skipping SQS checks.');
+          console.warn(
+            'No SQS output found in flat outputs; skipping SQS checks.'
+          );
           return;
         }
 
         let messageFound = false;
         for (let attempt = 0; attempt < 12 && !messageFound; attempt++) {
           try {
-            const recv = new ReceiveMessageCommand({ QueueUrl: queueUrl, MaxNumberOfMessages: 10, WaitTimeSeconds: 5 });
+            const recv = new ReceiveMessageCommand({
+              QueueUrl: queueUrl,
+              MaxNumberOfMessages: 10,
+              WaitTimeSeconds: 5,
+            });
             const resp = await sqs.send(recv);
             if (resp.Messages && resp.Messages.length > 0) {
               for (const m of resp.Messages) {
                 try {
                   const body = JSON.parse(m.Body as string);
-                  if (body && (body.id === itemId || body.assetId === itemId || (body.id && body.id.S === itemId) || (body.assetId && body.assetId.S === itemId))) {
+                  if (
+                    body &&
+                    (body.id === itemId ||
+                      body.assetId === itemId ||
+                      (body.id && body.id.S === itemId) ||
+                      (body.assetId && body.assetId.S === itemId))
+                  ) {
                     messageFound = true;
                     break;
                   }
@@ -337,40 +551,56 @@ if (!outputs || Object.keys(outputs).length === 0) {
             // ignore transient
           }
           // eslint-disable-next-line no-await-in-loop
-          await new Promise((r) => setTimeout(r, 2000));
+          await new Promise(r => setTimeout(r, 2000));
         }
 
         expect(messageFound).toBe(true);
       }, 90000);
 
       test('S3: write, read, cleanup', async () => {
-        const bucket = findOutput(['S3BucketName', 'TapStackpr5287MultiComponentApplicationInnerStaticFilesBucketF3D652EBRef']);
+        const bucket = findOutput([
+          'S3BucketName',
+          'TapStackpr5287MultiComponentApplicationInnerStaticFilesBucketF3D652EBRef',
+        ]);
         if (!bucket) {
           // eslint-disable-next-line no-console
           console.warn('No S3 bucket output found; skipping S3 checks.');
           return;
         }
         const key = `integration-test-${uuidv4()}.txt`;
-        await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: 'hello' } as any) as any);
-        const got = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key } as any) as any);
+        await s3.send(
+          new PutObjectCommand({
+            Bucket: bucket,
+            Key: key,
+            Body: 'hello',
+          } as any) as any
+        );
+        const got = await s3.send(
+          new GetObjectCommand({ Bucket: bucket, Key: key } as any) as any
+        );
         // @ts-ignore
         const body = await got.Body.transformToString();
         expect(body).toBe('hello');
-        await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key } as any) as any);
+        await s3.send(
+          new DeleteObjectCommand({ Bucket: bucket, Key: key } as any) as any
+        );
       }, 30000);
 
       test('Secrets Manager: read secret', async () => {
-        const secretArn = findOutput(['DatabaseSecretArn', 'TapStackpr5287MultiComponentApplicationInnerDatabaseSecret12DE2BA4Ref']);
+        const secretArn = findOutput([
+          'DatabaseSecretArn',
+          'TapStackpr5287MultiComponentApplicationInnerDatabaseSecret12DE2BA4Ref',
+        ]);
         if (!secretArn) {
           // eslint-disable-next-line no-console
           console.warn('No Secret ARN found; skipping Secrets Manager checks.');
           return;
         }
-        const resp = await secrets.send(new GetSecretValueCommand({ SecretId: secretArn } as any));
+        const resp = await secrets.send(
+          new GetSecretValueCommand({ SecretId: secretArn } as any)
+        );
         expect(resp.SecretString || resp.SecretBinary).toBeDefined();
       }, 20000);
     });
   });
 }
-
-

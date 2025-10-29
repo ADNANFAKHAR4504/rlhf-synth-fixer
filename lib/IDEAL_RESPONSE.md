@@ -1,18 +1,28 @@
 ## Ideal response — summary of `lib/` implementation and source
 
-This document summarizes the TypeScript files under `lib/` and includes their
-current source as formatted code blocks. Use this for quick review.
+This document summarizes the TypeScript files under `lib/` and includes their current source as formatted code blocks. Use this for quick review.
 
 Included files:
 - `multi-component-stack.ts`
-- `tap-stack.ts`
-- `string-utils.ts`
+## Ideal response — summary of `lib/` implementation and sources
+
+This document captures the current implementation and key files under `lib/`.
+It includes short explanations of why each file exists and embeds the file contents as fenced code blocks. All TypeScript and JavaScript source blocks are
+marked with ```typescript for consistent editor rendering.
+
+Included files (from `lib/`):
+- `multi-component-stack.ts` — main construct that composes VPC, RDS, Lambda, API Gateway, CloudFront, Route53, S3, SQS and monitoring.
+- `tap-stack.ts` — top-level CDK stack that instantiates the construct and emits prefixed outputs.
+- `name-utils.ts` — canonical resource name helper used across the stack.
+- `string-utils.ts` — small string helper for safe suffix normalization.
+- `lambda/api/index.js` and `lambda/api/package.json` — the Lambda asset used by the ApiLambda construct (kept in `lib/lambda/api`).
 
 ---
 
 ### lib/multi-component-stack.ts
 
 ```typescript
+// multi-component-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -35,6 +45,7 @@ import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
 import path from 'path';
+import canonicalResourceName from './name-utils';
 
 export interface MultiComponentProps extends cdk.StackProps {
   secondaryRegion?: string;
@@ -89,13 +100,24 @@ export class MultiComponentApplicationConstruct extends Construct {
     // Generate unique string suffix
     this.stringSuffix = cdk.Fn.select(2, cdk.Fn.split('-', cdk.Aws.STACK_ID));
 
+    // Allow destructive removal only when explicitly enabled (CI or developer opt-in).
+    // By default keep destructive actions off in production to avoid data loss.
+    const allowDestroy =
+      this.node.tryGetContext('allowDestroy') === true ||
+      this.node.tryGetContext('allowDestroy') === 'true' ||
+      process.env.ALLOW_DESTROY === 'true';
+
     // ========================================
     // VPC Configuration
     // ========================================
     const vpc = new ec2.Vpc(this, 'AppVpc', {
       // Use a consistent, human-friendly VPC name across code and docs.
-      // Canonical pattern: prod-app-vpc-<suffix>
-      vpcName: `prod-app-vpc-${this.stringSuffix}`,
+      // Use the canonicalResourceName helper to ensure deterministic names.
+      vpcName: canonicalResourceName(
+        'prod-app-vpc',
+        props?.baseEnvironmentSuffix as string | undefined,
+        this.stringSuffix
+      ) as string,
       cidr: '10.0.0.0/16',
       maxAzs: 2,
       natGateways: 2,
@@ -119,7 +141,11 @@ export class MultiComponentApplicationConstruct extends Construct {
     // Secrets Manager - RDS Credentials
     // ========================================
     const databaseSecret = new secretsmanager.Secret(this, 'DatabaseSecret', {
-      secretName: `prod-secretsmanager-db-${this.stringSuffix.toLowerCase().replace(/[^a-zA-Z0-9\-_+=.@!]/g, '')}`,
+      secretName: canonicalResourceName(
+        'prod-secretsmanager-db',
+        props?.baseEnvironmentSuffix as string | undefined,
+        this.stringSuffix
+      ) as string,
       description: 'RDS PostgreSQL database credentials',
       generateSecretString: {
         secretStringTemplate: JSON.stringify({
@@ -138,7 +164,11 @@ export class MultiComponentApplicationConstruct extends Construct {
       this,
       'DatabaseSecurityGroup',
       {
-        securityGroupName: `prod-ec2-sg-db-${this.stringSuffix}`,
+        securityGroupName: canonicalResourceName(
+          'prod-ec2-sg-db',
+          props?.baseEnvironmentSuffix as string | undefined,
+          this.stringSuffix
+        ) as string,
         vpc,
         description: 'Security group for RDS PostgreSQL',
         allowAllOutbound: false,
@@ -163,7 +193,11 @@ export class MultiComponentApplicationConstruct extends Construct {
       : undefined;
 
     const rdsInstance = new rds.DatabaseInstance(this, 'PostgresDatabase', {
-      instanceIdentifier: `prod-rds-postgres-${this.stringSuffix.toLowerCase().replace(/[^a-z0-9-]/g, '')}`,
+      instanceIdentifier: canonicalResourceName(
+        'prod-rds-postgres',
+        props?.baseEnvironmentSuffix as string | undefined,
+        this.stringSuffix
+      ) as string,
       engine: rds.DatabaseInstanceEngine.postgres({
         // Use the major Postgres 15 engine constant so CDK/RDS will pick a supported
         // minor version available in the target region. Pinning to a minor (e.g. 15.3)
@@ -186,8 +220,13 @@ export class MultiComponentApplicationConstruct extends Construct {
       allocatedStorage: 20,
       storageEncrypted: true,
       backupRetention: Duration.days(7),
-      deletionProtection: false,
-      removalPolicy: RemovalPolicy.DESTROY,
+      // Protect DB from accidental deletion by default; allowDestroy opt-in disables protection
+      deletionProtection: !allowDestroy,
+      // Default to RETAIN for production; allowDestroy enables DESTROY for CI/dev
+      removalPolicy: allowDestroy
+        ? RemovalPolicy.DESTROY
+        : RemovalPolicy.RETAIN,
+      publiclyAccessible: false,
       multiAz: true, // High availability
       cloudwatchLogsExports: ['postgresql'],
       cloudwatchLogsRetention: logs.RetentionDays.ONE_WEEK,
@@ -199,29 +238,29 @@ export class MultiComponentApplicationConstruct extends Construct {
     // Prefer a deterministic base suffix for cross-region deployments when provided
     const baseEnvSuffix = props?.baseEnvironmentSuffix as string | undefined;
 
-    const bucketNameParts = [
-      'prod-s3-static',
-      // Use the provided base environment suffix if present so both stacks
-      // produce the same base bucket name across regions. Otherwise fall
-      // back to the internal stringSuffix which is derived from the stack id.
-      baseEnvSuffix
-        ? baseEnvSuffix.toLowerCase().replace(/[^a-z0-9-]/g, '')
-        : this.stringSuffix.toLowerCase().replace(/[^a-z0-9-]/g, ''),
-      cdk.Aws.REGION,
-    ];
-
     const staticFilesBucket = new s3.Bucket(this, 'StaticFilesBucket', {
-      bucketName: cdk.Fn.join('-', bucketNameParts),
+      bucketName: canonicalResourceName(
+        'prod-s3-static',
+        baseEnvSuffix,
+        this.stringSuffix
+      ) as string,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      removalPolicy: RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
+      // Default to RETAIN to protect production data; allowDestroy opt-in enables destructive cleanup
+      removalPolicy: allowDestroy
+        ? RemovalPolicy.DESTROY
+        : RemovalPolicy.RETAIN,
+      autoDeleteObjects: allowDestroy,
       lifecycleRules: [
         {
           id: 'delete-old-versions',
           noncurrentVersionExpiration: Duration.days(30),
           enabled: true,
+        },
+        {
+          id: 'abort-incomplete-multipart',
+          abortIncompleteMultipartUploadAfter: Duration.days(7),
         },
       ],
     });
@@ -326,14 +365,22 @@ export class MultiComponentApplicationConstruct extends Construct {
     // SQS Queue
     // ========================================
     const asyncQueue = new sqs.Queue(this, 'AsyncProcessingQueue', {
-      queueName: `prod-sqs-async-${this.stringSuffix.toLowerCase().replace(/[^a-zA-Z0-9-_]/g, '')}`,
+      queueName: canonicalResourceName(
+        'prod-sqs-async',
+        props?.baseEnvironmentSuffix as string | undefined,
+        this.stringSuffix
+      ) as string,
       encryption: sqs.QueueEncryption.KMS_MANAGED,
       retentionPeriod: Duration.days(4),
       visibilityTimeout: Duration.minutes(6),
       deadLetterQueue: {
         maxReceiveCount: 3,
         queue: new sqs.Queue(this, 'DLQ', {
-          queueName: `prod-sqs-dlq-${this.stringSuffix.toLowerCase().replace(/[^a-zA-Z0-9-_]/g, '')}`,
+          queueName: canonicalResourceName(
+            'prod-sqs-dlq',
+            props?.baseEnvironmentSuffix as string | undefined,
+            this.stringSuffix
+          ) as string,
         }),
       },
     });
@@ -342,14 +389,14 @@ export class MultiComponentApplicationConstruct extends Construct {
     // CloudWatch Log Groups
     // ========================================
     const lambdaLogGroup = new logs.LogGroup(this, 'LambdaLogGroup', {
-      logGroupName: `/aws/lambda/prod-lambda-api-v2-${this.stringSuffix.toLowerCase().replace(/[^a-zA-Z0-9-_/]/g, '')}`,
+      logGroupName: `/aws/lambda/${canonicalResourceName('prod-lambda-api-v2', props?.baseEnvironmentSuffix as string | undefined, this.stringSuffix)}`,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: RemovalPolicy.DESTROY,
     });
 
     // VPC Flow Logs: ship VPC traffic logs to CloudWatch Logs for security/monitoring
     const vpcFlowLogGroup = new logs.LogGroup(this, 'VpcFlowLogGroup', {
-      logGroupName: `/aws/vpc-flow-logs/prod-${this.stringSuffix.toLowerCase().replace(/[^a-z0-9-]/g, '')}`,
+      logGroupName: `/aws/vpc-flow-logs/${canonicalResourceName('prod-vpc', props?.baseEnvironmentSuffix as string | undefined, this.stringSuffix)}`,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: RemovalPolicy.DESTROY,
     });
@@ -437,7 +484,11 @@ export class MultiComponentApplicationConstruct extends Construct {
     // Central SNS topic for alarm notifications. We do NOT auto-subscribe an email
     // unless ALARM_NOTIFICATION_EMAIL is set in the environment to avoid CI auto-subscribes.
     const alarmsTopic = new sns.Topic(this, 'AlarmsTopic', {
-      displayName: `prod-alarms-${this.stringSuffix}`,
+      displayName: canonicalResourceName(
+        'prod-alarms',
+        props?.baseEnvironmentSuffix as string | undefined,
+        this.stringSuffix
+      ) as string,
     });
 
     if (process.env.ALARM_NOTIFICATION_EMAIL) {
@@ -452,7 +503,11 @@ export class MultiComponentApplicationConstruct extends Construct {
     // IAM Roles (Least Privilege)
     // ========================================
     const lambdaRole = new iam.Role(this, 'LambdaExecutionRoleV2', {
-      roleName: `prod-iam-lambda-${this.stringSuffix.replace(/[^a-zA-Z0-9+=,.@_-]/g, '')}`,
+      roleName: canonicalResourceName(
+        'prod-iam-lambda',
+        props?.baseEnvironmentSuffix as string | undefined,
+        this.stringSuffix
+      ) as string,
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       description: 'Execution role for Lambda function',
       managedPolicies: [
@@ -532,7 +587,11 @@ export class MultiComponentApplicationConstruct extends Construct {
       this,
       'LambdaSecurityGroup',
       {
-        securityGroupName: `prod-ec2-sg-lambda-${this.stringSuffix}`,
+        securityGroupName: canonicalResourceName(
+          'prod-ec2-sg-lambda',
+          props?.baseEnvironmentSuffix as string | undefined,
+          this.stringSuffix
+        ) as string,
         vpc,
         description: 'Security group for Lambda function',
         allowAllOutbound: true,
@@ -546,9 +605,16 @@ export class MultiComponentApplicationConstruct extends Construct {
     );
 
     const lambdaFunction = new lambda.Function(this, 'ApiLambda', {
-      functionName: `prod-lambda-api-v2-${safeSuffixForLambda}`,
+      functionName: canonicalResourceName(
+        'prod-lambda-api-v2',
+        props?.baseEnvironmentSuffix as string | undefined,
+        safeSuffixForLambda as string
+      ) as string,
       runtime: lambda.Runtime.NODEJS_18_X, // Updated to supported version
       handler: 'index.handler',
+      // Use a simple asset path. In CI/local we must ensure dependencies
+      // are present in `lib/lambda/api/node_modules` (e.g. run `npm ci`
+      // under that directory) so the packaged asset includes runtime deps.
       code: lambda.Code.fromAsset(path.join(__dirname, 'lambda', 'api')),
       vpc,
       vpcSubnets: {
@@ -579,7 +645,11 @@ export class MultiComponentApplicationConstruct extends Construct {
     // API Gateway (IAM Authentication)
     // ========================================
     const api = new apigateway.RestApi(this, 'ApiGateway', {
-      restApiName: `prod-apigateway-rest-${this.stringSuffix}`,
+      restApiName: canonicalResourceName(
+        'prod-apigateway-rest',
+        props?.baseEnvironmentSuffix as string | undefined,
+        this.stringSuffix
+      ) as string,
       description: 'Production API Gateway',
       deployOptions: {
         stageName: 'prod',
@@ -679,7 +749,7 @@ export class MultiComponentApplicationConstruct extends Construct {
     // WAFv2 WebACL (protect CloudFront and proxied API)
     // ========================================
     // WAF scope=CLOUDFRONT is a global resource and must be created in
-    // us-east-1. Guard creation so that when this stack is synthesized or
+    // us-west-1. Guard creation so that when this stack is synthesized or
     // deployed in other regions (e.g., during multi-region runs) we don't
     // attempt to create a global WebACL in the wrong region which would
     // cause CloudFormation failures. To explicitly allow global WAF creation
@@ -699,7 +769,7 @@ export class MultiComponentApplicationConstruct extends Construct {
       enableWafContext === true || enableWafContext === 'true' || enableWafEnv;
 
     const shouldCreateWaf =
-      enableWaf && (stackRegion === 'us-east-1' || allowGlobalWaf);
+      enableWaf && (stackRegion === 'us-west-1' || allowGlobalWaf);
 
     if (shouldCreateWaf) {
       const webAcl = new wafv2.CfnWebACL(this, 'WebAcl', {
@@ -952,6 +1022,110 @@ export class MultiComponentApplicationConstruct extends Construct {
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
+    // Additional monitoring coverage
+    // API Gateway: 4xx errors (client errors)
+    const apiClientErrorsAlarm = new cloudwatch.Alarm(
+      this,
+      'ApiClientErrorsAlarm',
+      {
+        alarmName: canonicalResourceName(
+          'prod-cloudwatch-apigateway-4xx',
+          props?.baseEnvironmentSuffix as string | undefined,
+          safeSuffixForLambda as string
+        ) as string,
+        metric: api.metricClientError(),
+        threshold: 50,
+        evaluationPeriods: 2,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      }
+    );
+    apiClientErrorsAlarm.addAlarmAction(new cw_actions.SnsAction(alarmsTopic));
+
+    // API Gateway: latency alarm (ms)
+    const apiLatencyAlarm = new cloudwatch.Alarm(this, 'ApiLatencyAlarm', {
+      alarmName: canonicalResourceName(
+        'prod-cloudwatch-apigateway-latency',
+        props?.baseEnvironmentSuffix as string | undefined,
+        safeSuffixForLambda as string
+      ) as string,
+      metric: api.metricLatency(),
+      threshold: 1000, // 1 second
+      evaluationPeriods: 2,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    });
+    apiLatencyAlarm.addAlarmAction(new cw_actions.SnsAction(alarmsTopic));
+
+    // Lambda concurrent executions - alert when concurrency grows unexpectedly
+    const lambdaConcurrentMetric = lambdaFunction.metric(
+      'ConcurrentExecutions',
+      {
+        statistic: 'Maximum',
+        period: Duration.minutes(1),
+      }
+    );
+    const lambdaConcurrentAlarm = new cloudwatch.Alarm(
+      this,
+      'LambdaConcurrentAlarm',
+      {
+        alarmName: canonicalResourceName(
+          'prod-cloudwatch-lambda-concurrent',
+          props?.baseEnvironmentSuffix as string | undefined,
+          safeSuffixForLambda as string
+        ) as string,
+        metric: lambdaConcurrentMetric,
+        threshold: 500,
+        evaluationPeriods: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      }
+    );
+    lambdaConcurrentAlarm.addAlarmAction(new cw_actions.SnsAction(alarmsTopic));
+
+    // RDS: database connections alarm
+    const rdsConnectionsMetric = new cloudwatch.Metric({
+      namespace: 'AWS/RDS',
+      metricName: 'DatabaseConnections',
+      dimensionsMap: { DBInstanceIdentifier: rdsInstance.instanceIdentifier },
+      period: Duration.minutes(5),
+      statistic: 'Maximum',
+    });
+    const rdsConnectionsAlarm = new cloudwatch.Alarm(
+      this,
+      'RdsConnectionsAlarm',
+      {
+        alarmName: canonicalResourceName(
+          'prod-cloudwatch-rds-connections',
+          props?.baseEnvironmentSuffix as string | undefined,
+          safeSuffixForLambda as string
+        ) as string,
+        metric: rdsConnectionsMetric,
+        threshold: 200,
+        evaluationPeriods: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      }
+    );
+    rdsConnectionsAlarm.addAlarmAction(new cw_actions.SnsAction(alarmsTopic));
+
+    // RDS: low freeable memory
+    const rdsFreeableAlarm = new cloudwatch.Alarm(
+      this,
+      'RdsFreeableMemoryAlarm',
+      {
+        alarmName: canonicalResourceName(
+          'prod-cloudwatch-rds-freeable-memory',
+          props?.baseEnvironmentSuffix as string | undefined,
+          safeSuffixForLambda as string
+        ) as string,
+        metric: rdsInstance.metricFreeableMemory(),
+        threshold: 200 * 1024 * 1024, // 200 MiB
+        evaluationPeriods: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+      }
+    );
+    rdsFreeableAlarm.addAlarmAction(new cw_actions.SnsAction(alarmsTopic));
+
     // RDS additional alarm: free storage space low
     new cloudwatch.Alarm(this, 'RdsFreeStorageAlarm', {
       alarmName: `prod-cloudwatch-rds-free-storage-${safeSuffixForLambda}`,
@@ -1076,12 +1250,16 @@ export class MultiComponentApplicationConstruct extends Construct {
 
 ```
 
-### lib/tap-stack.ts 
+### lib/tap-stack.ts
 
 ```typescript
+// tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { MultiComponentApplicationConstruct } from './multi-component-stack';
+import {
+  MultiComponentApplicationConstruct,
+  MultiComponentProps,
+} from './multi-component-stack';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -1107,14 +1285,14 @@ export class TapStack extends cdk.Stack {
       this,
       'MultiComponentApplication',
       {
-        ...props,
+        ...(props as MultiComponentProps),
         // forward secondaryRegion through props so construct can optionally
         // configure cross-region replication when requested by context.
         secondaryRegion: props?.secondaryRegion,
         // forward isPrimary so construct can decide whether to create
         // global resources like HostedZone and Route53 failover records.
         isPrimary: props?.isPrimary,
-      } as unknown as any
+      }
     );
 
     // Re-expose selected runtime tokens from the child construct as top-level outputs.
@@ -1139,8 +1317,13 @@ export class TapStack extends cdk.Stack {
       LambdaLogGroupName: child.lambdaLogGroupName,
     } as Record<string, string | undefined>;
 
+    // Prefix outputs with the stack name so multi-region / multi-stack
+    // deployments cannot accidentally collide when downstream tooling
+    // (CI scripts) flattens outputs into a single JSON file.
+    const stackNameToken = cdk.Stack.of(this).stackName;
     for (const [key, value] of Object.entries(forward)) {
-      new cdk.CfnOutput(this, key, {
+      const outputKey = `${stackNameToken}-${key}`;
+      new cdk.CfnOutput(this, outputKey, {
         value: value ?? cdk.Aws.NO_VALUE,
       });
     }
@@ -1148,8 +1331,9 @@ export class TapStack extends cdk.Stack {
     // Preserve previous behavior: if the construct recorded that WAF was
     // skipped due to region guards, emit the same top-level CFN output
     // that callers and tests expect.
-    if ((child as any).wafWasSkipped) {
-      new cdk.CfnOutput(this, 'WafCreationSkipped', {
+    if (child.wafWasSkipped) {
+      const wafOutputKey = `${stackNameToken}-WafCreationSkipped`;
+      new cdk.CfnOutput(this, wafOutputKey, {
         value: `WAF not created in region ${cdk.Stack.of(this).region}. Set context allowGlobalWaf=true to override.`,
         description: 'Indicates WAF creation was skipped due to region guard',
       });
@@ -1172,17 +1356,137 @@ export class TapStack extends cdk.Stack {
 
 ```
 
-### lib/string-utils.ts 
+### lib/name-utils.ts
+
+```typescript
+import * as cdk from 'aws-cdk-lib';
+
+/**
+ * Generate a deterministic resource name: <env>-<component>-<region>-<suffix>
+ * - baseEnv: optional base environment suffix (e.g., 'dev' or 'prod')
+ * - component: short component name (no spaces)
+ * - suffix: short unique suffix (usually derived from stack id)
+ *
+ * Returns a CDK token (string) suitable for resource names that accept tokens.
+ */
+export function canonicalResourceName(
+  component: string,
+  baseEnv?: string,
+  suffix?: string
+): string | cdk.Token {
+  const envPart = baseEnv
+    ? baseEnv.toLowerCase().replace(/[^a-z0-9-]/g, '-')
+    : cdk.Fn.select(2, cdk.Fn.split('-', cdk.Aws.STACK_ID));
+
+  const suffixPart = suffix
+    ? suffix.toLowerCase().replace(/[^a-z0-9-]/g, '-')
+    : cdk.Aws.NO_VALUE;
+
+  // component should be normalized too
+  const comp = component.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+
+  return cdk.Fn.join('-', [comp, envPart, cdk.Aws.REGION, suffixPart]);
+}
+
+export default canonicalResourceName;
+
+```
+
+### lib/string-utils.ts
 
 ```typescript
 export function safeSuffix(input?: string): string {
-	// Normalize input to a safe suffix: lowercase, keep a-z0-9, hyphen and underscore
-	const base = (input ?? '').toString();
-	return base.toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+  // Normalize input to a safe suffix: lowercase, keep a-z0-9, hyphen and underscore
+  const base = (input ?? '').toString();
+  return base.toLowerCase().replace(/[^a-z0-9-_]/g, '-');
 }
 
 export default safeSuffix;
 
 ```
 
----
+### lib/lambda/api/index.js
+
+```typescript
+const AWS = require('aws-sdk');
+const secretsManager = new AWS.SecretsManager();
+const s3 = new AWS.S3();
+const sqs = new AWS.SQS();
+
+exports.handler = async (event) => {
+  console.log('Processing API request:', JSON.stringify(event, null, 2));
+
+  try {
+    // Validate input
+    if (!event.body) {
+      throw new Error('Request body is required');
+    }
+
+    const requestData = JSON.parse(event.body);
+    if (!requestData.orderId || !requestData.customerId) {
+      throw new Error('orderId and customerId are required');
+    }
+
+    // Retrieve database secret for potential future DB operations
+    const secretName = process.env.DATABASE_SECRET_NAME;
+    const secret = await secretsManager.getSecretValue({ SecretId: secretName }).promise();
+    console.log('Successfully retrieved database credentials for order processing');
+
+    // Store order data in S3 for persistence
+    const s3Key = `orders/${requestData.orderId}.json`;
+    await s3.putObject({
+      Bucket: process.env.S3_BUCKET,
+      Key: s3Key,
+      Body: JSON.stringify(requestData),
+      ContentType: 'application/json'
+    }).promise();
+    console.log('Order data stored in S3:', s3Key);
+
+    // Send order to SQS for asynchronous processing (e.g., payment, fulfillment)
+    const queueUrl = process.env.SQS_QUEUE_URL;
+    await sqs.sendMessage({
+      QueueUrl: queueUrl,
+      MessageBody: JSON.stringify({
+        orderId: requestData.orderId,
+        customerId: requestData.customerId,
+        timestamp: new Date().toISOString(),
+        action: 'process_order'
+      }),
+    }).promise();
+    console.log('Order queued for processing');
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        message: 'Order received and queued for processing',
+        orderId: requestData.orderId,
+        timestamp: new Date().toISOString(),
+      }),
+    };
+  } catch (error) {
+    console.error('Error processing order:', error);
+    return {
+      statusCode: 400,
+      body: JSON.stringify({
+        error: 'Failed to process order',
+        details: error.message,
+      }),
+    };
+  }
+};
+
+```
+
+### lib/lambda/api/package.json
+
+```json
+{
+  "name": "tap-api-lambda",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "aws-sdk": "^2.1350.0"
+  }
+}
+```
+

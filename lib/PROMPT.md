@@ -1,6 +1,6 @@
 # Multi-Component AWS Infrastructure: 
 
-Set up a CloudFormation stack for a multi-component application using AWS CDK and TypeScript. The stack should run in AWS account 123456789012, primarily in us-east-1 (with support for us-east-2). Follow these requirements and constraints exactly as provided.
+Set up a CloudFormation stack for a multi-component application using AWS CDK and TypeScript. The stack should run in AWS account 123456789012, primarily in ' '(with support for '  '). Follow these requirements and constraints exactly as provided.
 
 **Requirements:**
 

@@ -2,7 +2,7 @@
 
 Based on the PROMPT.md requirements and the MODEL_RESPONSE.md implementation, the following failures have been identified:
 
-1. **Missing Multi-Region Support**: The prompt explicitly requires a multi-region environment with us-east-1 as primary and us-west-2 as secondary. However, the implementation only deploys resources in us-east-1 with no secondary region stack or cross-region components.
+1. **Missing Multi-Region Support**: The prompt explicitly requires a multi-region environment with us-west-1 as primary and us-west-2 as secondary. However, the implementation only deploys resources in us-west-1 with no secondary region stack or cross-region components.
 
 2. **Incorrect Resource Naming Convention**: The prompt specifies that all resources must follow the convention 'prod-service-role-stringSuffix' (e.g., 'prod-ec2-web'). While most resources follow this pattern, the VPC is named 'prod-app-vpc-{suffix}' instead of 'prod-vpc-app-{suffix}', violating the service-role order specified in the example.
 

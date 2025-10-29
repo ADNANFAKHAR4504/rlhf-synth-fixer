@@ -1,6 +1,9 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { MultiComponentApplicationConstruct } from './multi-component-stack';
+import {
+  MultiComponentApplicationConstruct,
+  MultiComponentProps,
+} from './multi-component-stack';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -26,14 +29,14 @@ export class TapStack extends cdk.Stack {
       this,
       'MultiComponentApplication',
       {
-        ...props,
+        ...(props as MultiComponentProps),
         // forward secondaryRegion through props so construct can optionally
         // configure cross-region replication when requested by context.
         secondaryRegion: props?.secondaryRegion,
         // forward isPrimary so construct can decide whether to create
         // global resources like HostedZone and Route53 failover records.
         isPrimary: props?.isPrimary,
-      } as unknown as any
+      }
     );
 
     // Re-expose selected runtime tokens from the child construct as top-level outputs.
@@ -58,8 +61,13 @@ export class TapStack extends cdk.Stack {
       LambdaLogGroupName: child.lambdaLogGroupName,
     } as Record<string, string | undefined>;
 
+    // Prefix outputs with the stack name so multi-region / multi-stack
+    // deployments cannot accidentally collide when downstream tooling
+    // (CI scripts) flattens outputs into a single JSON file.
+    const stackNameToken = cdk.Stack.of(this).stackName;
     for (const [key, value] of Object.entries(forward)) {
-      new cdk.CfnOutput(this, key, {
+      const outputKey = `${stackNameToken}-${key}`;
+      new cdk.CfnOutput(this, outputKey, {
         value: value ?? cdk.Aws.NO_VALUE,
       });
     }
@@ -67,8 +75,9 @@ export class TapStack extends cdk.Stack {
     // Preserve previous behavior: if the construct recorded that WAF was
     // skipped due to region guards, emit the same top-level CFN output
     // that callers and tests expect.
-    if ((child as any).wafWasSkipped) {
-      new cdk.CfnOutput(this, 'WafCreationSkipped', {
+    if (child.wafWasSkipped) {
+      const wafOutputKey = `${stackNameToken}-WafCreationSkipped`;
+      new cdk.CfnOutput(this, wafOutputKey, {
         value: `WAF not created in region ${cdk.Stack.of(this).region}. Set context allowGlobalWaf=true to override.`,
         description: 'Indicates WAF creation was skipped due to region guard',
       });
