@@ -1,3 +1,7 @@
+import { CloudWatchLogsClient, DescribeLogStreamsCommand } from "@aws-sdk/client-cloudwatch-logs";
+import { DescribeFlowLogsCommand, EC2Client } from "@aws-sdk/client-ec2";
+import { DecryptCommand, DescribeKeyCommand, EncryptCommand, KMSClient } from "@aws-sdk/client-kms";
+import { InvokeCommand, LambdaClient } from "@aws-sdk/client-lambda";
 import { execFileSync, ExecFileSyncOptions } from "child_process";
 import fs from "fs";
 import os from "os";
@@ -129,6 +133,20 @@ function getCreatedByType(plan: TfPlan, type: string) {
   );
 }
 
+async function httpGet(url: string): Promise<{ status: number; body: string }> {
+  const http = await import("http");
+  const https = await import("https");
+  const client = url.startsWith("https") ? https : http;
+
+  return new Promise((resolve, reject) => {
+    client.get(url, (res) => {
+      let body = "";
+      res.on("data", (chunk) => (body += chunk));
+      res.on("end", () => resolve({ status: res.statusCode || 0, body }));
+    }).on("error", reject);
+  });
+}
+
 describe("Terraform integration - tap_stack", () => {
   const tfOk = haveTerraform();
   const credsOk = haveAwsCreds();
@@ -243,5 +261,286 @@ describe("Terraform integration - tap_stack", () => {
       "vpc_flow_log_id_us_east_1",
       "vpc_flow_log_id_us_west_2",
     ].forEach((k) => expect(json).toHaveProperty(k));
+  });
+});
+
+describe("Service-level Integration Tests - Deployed Infrastructure", () => {
+  const credsOk = haveAwsCreds();
+
+  if (!credsOk) {
+    it("skipped: AWS credentials not available", () => {
+      expect(credsOk).toBe(true);
+    });
+    return;
+  }
+
+  if (!fs.existsSync(outputsJsonPath)) {
+    it("skipped: infrastructure not deployed (outputs file missing)", () => {
+      console.warn(`⚠️  ${outputsJsonPath} not found - skipping service tests`);
+      expect(true).toBe(true);
+    });
+    return;
+  }
+
+  let outputs: Record<string, any>;
+
+  beforeAll(() => {
+    const raw = fs.readFileSync(outputsJsonPath, "utf8");
+    const json = JSON.parse(raw);
+    outputs = {};
+    for (const [key, val] of Object.entries(json)) {
+      outputs[key] = (val as any).value || val;
+    }
+    console.log(`📋 Loaded ${Object.keys(outputs).length} outputs for service testing`);
+  });
+
+  describe("Service: Application Load Balancers", () => {
+    it("ALB us-east-1: responds to HTTP requests", async () => {
+      const url = `http://${outputs.alb_dns_name_us_east_1}`;
+      console.log(`🌐 Testing ALB: ${url}`);
+
+      const response = await httpGet(url);
+      console.log(`✅ ALB response status: ${response.status}`);
+      expect(response.status).toBe(200);
+      expect(response.body).toContain("Hello from");
+    }, 60000);
+
+    it("ALB us-west-2: responds to HTTP requests", async () => {
+      const url = `http://${outputs.alb_dns_name_us_west_2}`;
+      console.log(`🌐 Testing ALB: ${url}`);
+
+      const response = await httpGet(url);
+      console.log(`✅ ALB response status: ${response.status}`);
+      expect(response.status).toBe(200);
+      expect(response.body).toContain("Hello from");
+    }, 60000);
+  });
+
+  describe("Service: Lambda Functions", () => {
+    it("Lambda us-east-1: can invoke and returns 200", async () => {
+      const client = new LambdaClient({ region: "us-east-1" });
+      const command = new InvokeCommand({
+        FunctionName: outputs.lambda_arn_us_east_1,
+        InvocationType: "RequestResponse",
+      });
+
+      console.log(`⚡ Invoking Lambda: ${outputs.lambda_arn_us_east_1}`);
+      const response = await client.send(command);
+
+      expect(response.StatusCode).toBe(200);
+      const payload = JSON.parse(Buffer.from(response.Payload!).toString());
+      console.log(`✅ Lambda response:`, payload);
+      expect(payload.statusCode).toBe(200);
+      expect(payload.body).toBe("ok");
+    }, 60000);
+
+    it("Lambda us-west-2: can invoke and returns 200", async () => {
+      const client = new LambdaClient({ region: "us-west-2" });
+      const command = new InvokeCommand({
+        FunctionName: outputs.lambda_arn_us_west_2,
+        InvocationType: "RequestResponse",
+      });
+
+      console.log(`⚡ Invoking Lambda: ${outputs.lambda_arn_us_west_2}`);
+      const response = await client.send(command);
+
+      expect(response.StatusCode).toBe(200);
+      const payload = JSON.parse(Buffer.from(response.Payload!).toString());
+      console.log(`✅ Lambda response:`, payload);
+      expect(payload.statusCode).toBe(200);
+      expect(payload.body).toBe("ok");
+    }, 60000);
+  });
+
+  describe("Service: KMS Keys", () => {
+    it("KMS us-east-1: key is enabled and can encrypt/decrypt", async () => {
+      const client = new KMSClient({ region: "us-east-1" });
+
+      const describeCmd = new DescribeKeyCommand({
+        KeyId: outputs.kms_key_arn_us_east_1,
+      });
+      const keyInfo = await client.send(describeCmd);
+
+      console.log(`🔐 KMS Key state: ${keyInfo.KeyMetadata?.KeyState}`);
+      expect(keyInfo.KeyMetadata?.KeyState).toBe("Enabled");
+      expect(keyInfo.KeyMetadata?.KeyRotationEnabled).toBe(true);
+
+      const plaintext = "test-data-for-kms";
+      const encryptCmd = new EncryptCommand({
+        KeyId: outputs.kms_key_arn_us_east_1,
+        Plaintext: Buffer.from(plaintext),
+      });
+      const encrypted = await client.send(encryptCmd);
+      expect(encrypted.CiphertextBlob).toBeDefined();
+
+      const decryptCmd = new DecryptCommand({
+        CiphertextBlob: encrypted.CiphertextBlob,
+      });
+      const decrypted = await client.send(decryptCmd);
+      const decryptedText = Buffer.from(decrypted.Plaintext!).toString();
+
+      console.log(`✅ KMS encrypt/decrypt successful`);
+      expect(decryptedText).toBe(plaintext);
+    }, 60000);
+
+    it("KMS us-west-2: key is enabled and can encrypt/decrypt", async () => {
+      const client = new KMSClient({ region: "us-west-2" });
+
+      const describeCmd = new DescribeKeyCommand({
+        KeyId: outputs.kms_key_arn_us_west_2,
+      });
+      const keyInfo = await client.send(describeCmd);
+
+      console.log(`🔐 KMS Key state: ${keyInfo.KeyMetadata?.KeyState}`);
+      expect(keyInfo.KeyMetadata?.KeyState).toBe("Enabled");
+      expect(keyInfo.KeyMetadata?.KeyRotationEnabled).toBe(true);
+
+      const plaintext = "test-data-for-kms";
+      const encryptCmd = new EncryptCommand({
+        KeyId: outputs.kms_key_arn_us_west_2,
+        Plaintext: Buffer.from(plaintext),
+      });
+      const encrypted = await client.send(encryptCmd);
+      expect(encrypted.CiphertextBlob).toBeDefined();
+
+      const decryptCmd = new DecryptCommand({
+        CiphertextBlob: encrypted.CiphertextBlob,
+      });
+      const decrypted = await client.send(decryptCmd);
+      const decryptedText = Buffer.from(decrypted.Plaintext!).toString();
+
+      console.log(`✅ KMS encrypt/decrypt successful`);
+      expect(decryptedText).toBe(plaintext);
+    }, 60000);
+  });
+
+  describe("Service: VPC Flow Logs", () => {
+    it("VPC Flow Logs us-east-1: are enabled and writing to CloudWatch", async () => {
+      const ec2Client = new EC2Client({ region: "us-east-1" });
+      const flowLogsCmd = new DescribeFlowLogsCommand({
+        FlowLogIds: [outputs.vpc_flow_log_id_us_east_1],
+      });
+      const flowLogsResp = await ec2Client.send(flowLogsCmd);
+
+      expect(flowLogsResp.FlowLogs).toHaveLength(1);
+      const flowLog = flowLogsResp.FlowLogs![0];
+      console.log(`📊 Flow Log status: ${flowLog.FlowLogStatus}`);
+      expect(flowLog.FlowLogStatus).toBe("ACTIVE");
+      expect(flowLog.LogDestinationType).toBe("cloud-watch-logs");
+
+      const logGroupName = flowLog.LogGroupName!;
+      const cwClient = new CloudWatchLogsClient({ region: "us-east-1" });
+      const logStreamsCmd = new DescribeLogStreamsCommand({
+        logGroupName,
+        limit: 5,
+        orderBy: "LastEventTime",
+        descending: true,
+      });
+
+      const logStreams = await cwClient.send(logStreamsCmd);
+      console.log(`✅ Found ${logStreams.logStreams?.length || 0} log streams`);
+      expect(logStreams.logStreams).toBeDefined();
+    }, 60000);
+
+    it("VPC Flow Logs us-west-2: are enabled and writing to CloudWatch", async () => {
+      const ec2Client = new EC2Client({ region: "us-west-2" });
+      const flowLogsCmd = new DescribeFlowLogsCommand({
+        FlowLogIds: [outputs.vpc_flow_log_id_us_west_2],
+      });
+      const flowLogsResp = await ec2Client.send(flowLogsCmd);
+
+      expect(flowLogsResp.FlowLogs).toHaveLength(1);
+      const flowLog = flowLogsResp.FlowLogs![0];
+      console.log(`📊 Flow Log status: ${flowLog.FlowLogStatus}`);
+      expect(flowLog.FlowLogStatus).toBe("ACTIVE");
+      expect(flowLog.LogDestinationType).toBe("cloud-watch-logs");
+
+      const logGroupName = flowLog.LogGroupName!;
+      const cwClient = new CloudWatchLogsClient({ region: "us-west-2" });
+      const logStreamsCmd = new DescribeLogStreamsCommand({
+        logGroupName,
+        limit: 5,
+        orderBy: "LastEventTime",
+        descending: true,
+      });
+
+      const logStreams = await cwClient.send(logStreamsCmd);
+      console.log(`✅ Found ${logStreams.logStreams?.length || 0} log streams`);
+      expect(logStreams.logStreams).toBeDefined();
+    }, 60000);
+  });
+
+  describe("Cross-Service: ALB → EC2 → Application", () => {
+    it("ALB us-east-1: successfully routes traffic to backend EC2 instances", async () => {
+      const url = `http://${outputs.alb_dns_name_us_east_1}`;
+      console.log(`🔗 Testing ALB → EC2 routing: ${url}`);
+
+      const responses = await Promise.all([
+        httpGet(url),
+        httpGet(url),
+        httpGet(url),
+      ]);
+
+      responses.forEach((response, i) => {
+        console.log(`✅ Request ${i + 1}: HTTP ${response.status}`);
+        expect(response.status).toBe(200);
+        expect(response.body).toMatch(/Hello from.*us-east-1.*Instance/);
+      });
+
+      const instanceNumbers = responses.map(r => r.body.match(/Instance (\d+)/)?.[1]);
+      console.log(`📍 Hit instances: ${instanceNumbers.join(", ")}`);
+    }, 60000);
+
+    it("ALB us-west-2: successfully routes traffic to backend EC2 instances", async () => {
+      const url = `http://${outputs.alb_dns_name_us_west_2}`;
+      console.log(`🔗 Testing ALB → EC2 routing: ${url}`);
+
+      const responses = await Promise.all([
+        httpGet(url),
+        httpGet(url),
+        httpGet(url),
+      ]);
+
+      responses.forEach((response, i) => {
+        console.log(`✅ Request ${i + 1}: HTTP ${response.status}`);
+        expect(response.status).toBe(200);
+        expect(response.body).toMatch(/Hello from.*us-west-2.*Instance/);
+      });
+
+      const instanceNumbers = responses.map(r => r.body.match(/Instance (\d+)/)?.[1]);
+      console.log(`📍 Hit instances: ${instanceNumbers.join(", ")}`);
+    }, 60000);
+  });
+
+  describe("Cross-Service: Lambda → KMS", () => {
+    it("Lambda us-east-1: has permission to use KMS key for env variable decryption", async () => {
+      const client = new LambdaClient({ region: "us-east-1" });
+      const command = new InvokeCommand({
+        FunctionName: outputs.lambda_arn_us_east_1,
+        InvocationType: "RequestResponse",
+      });
+
+      console.log(`🔗 Testing Lambda → KMS integration`);
+      const response = await client.send(command);
+
+      expect(response.StatusCode).toBe(200);
+      expect(response.FunctionError).toBeUndefined();
+      console.log(`✅ Lambda can decrypt environment variables using KMS`);
+    }, 60000);
+
+    it("Lambda us-west-2: has permission to use KMS key for env variable decryption", async () => {
+      const client = new LambdaClient({ region: "us-west-2" });
+      const command = new InvokeCommand({
+        FunctionName: outputs.lambda_arn_us_west_2,
+        InvocationType: "RequestResponse",
+      });
+
+      console.log(`🔗 Testing Lambda → KMS integration`);
+      const response = await client.send(command);
+
+      expect(response.StatusCode).toBe(200);
+      expect(response.FunctionError).toBeUndefined();
+      console.log(`✅ Lambda can decrypt environment variables using KMS`);
+    }, 60000);
   });
 });

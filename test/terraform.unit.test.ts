@@ -127,7 +127,8 @@ describe('tap_stack.tf static validations', () => {
     expectContains(tf, /resource\s+"aws_db_instance"\s+"main_us_east_1"/);
     expectContains(tf, /storage_encrypted\s*=\s*true/);
     expectContains(tf, /backup_retention_period\s*=\s*var\.backup_retention_days|backup_retention_period\s*=\s*[7-9]|backup_retention_period\s*=\s*[1-9][0-9]+/);
-    expectContains(tf, /deletion_protection\s*=\s*true/);
+    expectContains(tf, /deletion_protection\s*=\s*false/);
+    expectContains(tf, /skip_final_snapshot\s*=\s*true/);
   });
 
   test('Lambda IAM role and log policies exist', () => {

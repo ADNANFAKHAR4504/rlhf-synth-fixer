@@ -1342,9 +1342,8 @@ resource "aws_db_instance" "main_us_east_1" {
   backup_window           = "03:00-04:00"
   maintenance_window      = "sun:04:00-sun:05:00"
 
-  deletion_protection       = true
-  skip_final_snapshot       = false
-  final_snapshot_identifier = "${var.app_name}-db-final-snapshot-us-east-1-${formatdate("YYYYMMDDHHmmss", timestamp())}"
+  deletion_protection = false
+  skip_final_snapshot = true
 
   enabled_cloudwatch_logs_exports = var.db_engine == "postgres" ? ["postgresql"] : ["error", "general", "slowquery"]
 
@@ -1374,9 +1373,8 @@ resource "aws_db_instance" "main_us_west_2" {
   backup_window           = "03:00-04:00"
   maintenance_window      = "sun:04:00-sun:05:00"
 
-  deletion_protection       = true
-  skip_final_snapshot       = false
-  final_snapshot_identifier = "${var.app_name}-db-final-snapshot-us-west-2-${formatdate("YYYYMMDDHHmmss", timestamp())}"
+  deletion_protection = false
+  skip_final_snapshot = true
 
   enabled_cloudwatch_logs_exports = var.db_engine == "postgres" ? ["postgresql"] : ["error", "general", "slowquery"]
 
