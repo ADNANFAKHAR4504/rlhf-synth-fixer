@@ -21,6 +21,12 @@ def handler(event, context):
         API Gateway proxy response
     """
     try:
+        print(json.dumps({
+            'message': 'Upload handler invoked',
+            'event': event,
+            'timestamp': datetime.utcnow().isoformat()
+        }))
+        
         body = json.loads(event.get('body', '{}'))
         filename = body.get('filename')
         
@@ -29,42 +35,54 @@ def handler(event, context):
                 'statusCode': 400,
                 'headers': {
                     'Content-Type': 'application/json',
-                    'X-Correlation-ID': context.request_id
+                    'X-Correlation-ID': context.aws_request_id
                 },
                 'body': json.dumps({
                     'error': 'Missing filename parameter',
-                    'correlationId': context.request_id
+                    'correlationId': context.aws_request_id
                 })
             }
         
         job_id = str(uuid.uuid4())
         
+        print(json.dumps({
+            'message': 'Upload job created',
+            'jobId': job_id,
+            'filename': filename,
+            'timestamp': datetime.utcnow().isoformat()
+        }))
+        
         return {
             'statusCode': 200,
             'headers': {
                 'Content-Type': 'application/json',
-                'X-Correlation-ID': context.request_id
+                'X-Correlation-ID': context.aws_request_id
             },
             'body': json.dumps({
                 'jobId': job_id,
                 'filename': filename,
                 'status': 'initiated',
                 'timestamp': datetime.utcnow().isoformat(),
-                'correlationId': context.request_id
+                'correlationId': context.aws_request_id
             })
         }
     
     except Exception as e:
+        print(json.dumps({
+            'message': 'Upload handler error',
+            'error': str(e),
+            'timestamp': datetime.utcnow().isoformat()
+        }))
         return {
             'statusCode': 500,
             'headers': {
                 'Content-Type': 'application/json',
-                'X-Correlation-ID': context.request_id
+                'X-Correlation-ID': context.aws_request_id
             },
             'body': json.dumps({
                 'error': 'Internal server error',
                 'message': str(e),
-                'correlationId': context.request_id
+                'correlationId': context.aws_request_id
             })
         }
 

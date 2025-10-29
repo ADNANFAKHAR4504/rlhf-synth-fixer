@@ -63,14 +63,32 @@ def handler(event, context):
                     item = {
                         'symbol': row['symbol'],
                         'timestamp': int(row['timestamp']),
-                        'price': Decimal(str(row.get('price', '0'))),
-                        'volume': int(row.get('volume', 0)),
                         'source_file': key,
                         'processed_at': datetime.utcnow().isoformat()
                     }
                     
+                    if 'open' in row and row['open']:
+                        item['open'] = Decimal(str(row['open']))
+                    if 'high' in row and row['high']:
+                        item['high'] = Decimal(str(row['high']))
+                    if 'low' in row and row['low']:
+                        item['low'] = Decimal(str(row['low']))
+                    if 'close' in row and row['close']:
+                        item['close'] = Decimal(str(row['close']))
+                    if 'price' in row and row['price']:
+                        item['price'] = Decimal(str(row['price']))
+                    if 'volume' in row and row['volume']:
+                        item['volume'] = int(row['volume'])
+                    
                     batch.put_item(Item=item)
                     items_processed += 1
+                    
+                    print(json.dumps({
+                        'message': 'Item processed',
+                        'symbol': row['symbol'],
+                        'timestamp': row['timestamp'],
+                        'items_processed': items_processed
+                    }))
             
             processed_key = key.replace('incoming/', 'processed/')
             s3.copy_object(
@@ -115,7 +133,7 @@ def validate_row(row):
     Returns:
         True if valid, False otherwise
     """
-    required_fields = ['symbol', 'timestamp', 'price']
+    required_fields = ['symbol', 'timestamp']
     
     for field in required_fields:
         if field not in row or not row[field]:
@@ -123,7 +141,20 @@ def validate_row(row):
     
     try:
         int(row['timestamp'])
-        float(row['price'])
+        
+        if 'price' in row and row['price']:
+            float(row['price'])
+        if 'open' in row and row['open']:
+            float(row['open'])
+        if 'high' in row and row['high']:
+            float(row['high'])
+        if 'low' in row and row['low']:
+            float(row['low'])
+        if 'close' in row and row['close']:
+            float(row['close'])
+        if 'volume' in row and row['volume']:
+            int(row['volume'])
+        
         return True
     except (ValueError, TypeError):
         return False

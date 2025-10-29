@@ -25,6 +25,12 @@ def handler(event, context):
         API Gateway proxy response
     """
     try:
+        print(json.dumps({
+            'message': 'Status handler invoked',
+            'event': event,
+            'timestamp': datetime.utcnow().isoformat()
+        }))
+        
         job_id = event.get('pathParameters', {}).get('jobId')
         
         if not job_id:
@@ -32,39 +38,50 @@ def handler(event, context):
                 'statusCode': 400,
                 'headers': {
                     'Content-Type': 'application/json',
-                    'X-Correlation-ID': context.request_id
+                    'X-Correlation-ID': context.aws_request_id
                 },
                 'body': json.dumps({
                     'error': 'Missing jobId parameter',
-                    'correlationId': context.request_id
+                    'correlationId': context.aws_request_id
                 })
             }
+        
+        print(json.dumps({
+            'message': 'Status check',
+            'jobId': job_id,
+            'timestamp': datetime.utcnow().isoformat()
+        }))
         
         return {
             'statusCode': 200,
             'headers': {
                 'Content-Type': 'application/json',
-                'X-Correlation-ID': context.request_id
+                'X-Correlation-ID': context.aws_request_id
             },
             'body': json.dumps({
                 'jobId': job_id,
                 'status': 'processing',
                 'timestamp': datetime.utcnow().isoformat(),
-                'correlationId': context.request_id
+                'correlationId': context.aws_request_id
             })
         }
     
     except Exception as e:
+        print(json.dumps({
+            'message': 'Status handler error',
+            'error': str(e),
+            'timestamp': datetime.utcnow().isoformat()
+        }))
         return {
             'statusCode': 500,
             'headers': {
                 'Content-Type': 'application/json',
-                'X-Correlation-ID': context.request_id
+                'X-Correlation-ID': context.aws_request_id
             },
             'body': json.dumps({
                 'error': 'Internal server error',
                 'message': str(e),
-                'correlationId': context.request_id
+                'correlationId': context.aws_request_id
             })
         }
 

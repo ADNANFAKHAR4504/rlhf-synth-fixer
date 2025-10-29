@@ -310,14 +310,20 @@ class TestLambdaServiceLevel(BaseIntegrationTest):
         self.assert_output_exists('lambda_function_name_upload')
         
         function_name = OUTPUTS['lambda_function_name_upload']
+        filename = f"test-{uuid.uuid4()}.csv"
+        
+        print(f"[TEST] Invoking upload Lambda: {function_name}")
+        print(f"[TEST] Filename: {filename}")
         
         payload = {
             'httpMethod': 'POST',
             'path': '/upload',
             'body': json.dumps({
-                'filename': f"test-{uuid.uuid4()}.csv"
+                'filename': filename
             })
         }
+        
+        print(f"[TEST] Payload: {json.dumps(payload, indent=2)}")
         
         response = lambda_client.invoke(
             FunctionName=function_name,
@@ -325,10 +331,19 @@ class TestLambdaServiceLevel(BaseIntegrationTest):
             Payload=json.dumps(payload)
         )
         
+        print(f"[TEST] Lambda response StatusCode: {response['StatusCode']}")
         self.assertEqual(response['StatusCode'], 200)
         
         result = json.loads(response['Payload'].read())
-        self.assertIn('statusCode', result)
+        print(f"[TEST] Lambda result: {json.dumps(result, indent=2)}")
+        
+        if 'errorMessage' in result:
+            print(f"[ERROR] Lambda error: {result.get('errorMessage')}")
+            print(f"[ERROR] Error type: {result.get('errorType')}")
+            print(f"[ERROR] Stack trace: {result.get('stackTrace')}")
+        
+        self.assertIn('statusCode', result, f"Expected 'statusCode' in result, got: {result}")
+        print(f"[TEST] Upload Lambda invocation successful")
 
     def test_status_lambda_invocation(self):
         """
@@ -342,11 +357,16 @@ class TestLambdaServiceLevel(BaseIntegrationTest):
         function_name = OUTPUTS['lambda_function_name_status']
         job_id = f"job-{uuid.uuid4()}"
         
+        print(f"[TEST] Invoking status Lambda: {function_name}")
+        print(f"[TEST] Job ID: {job_id}")
+        
         payload = {
             'httpMethod': 'GET',
             'path': f'/status/{job_id}',
             'pathParameters': {'jobId': job_id}
         }
+        
+        print(f"[TEST] Payload: {json.dumps(payload, indent=2)}")
         
         response = lambda_client.invoke(
             FunctionName=function_name,
@@ -354,10 +374,19 @@ class TestLambdaServiceLevel(BaseIntegrationTest):
             Payload=json.dumps(payload)
         )
         
+        print(f"[TEST] Lambda response StatusCode: {response['StatusCode']}")
         self.assertEqual(response['StatusCode'], 200)
         
         result = json.loads(response['Payload'].read())
-        self.assertIn('statusCode', result)
+        print(f"[TEST] Lambda result: {json.dumps(result, indent=2)}")
+        
+        if 'errorMessage' in result:
+            print(f"[ERROR] Lambda error: {result.get('errorMessage')}")
+            print(f"[ERROR] Error type: {result.get('errorType')}")
+            print(f"[ERROR] Stack trace: {result.get('stackTrace')}")
+        
+        self.assertIn('statusCode', result, f"Expected 'statusCode' in result, got: {result}")
+        print(f"[TEST] Status Lambda invocation successful")
 
     def test_results_lambda_invocation(self):
         """
@@ -371,11 +400,16 @@ class TestLambdaServiceLevel(BaseIntegrationTest):
         function_name = OUTPUTS['lambda_function_name_results']
         symbol = "AAPL"
         
+        print(f"[TEST] Invoking results Lambda: {function_name}")
+        print(f"[TEST] Symbol: {symbol}")
+        
         payload = {
             'httpMethod': 'GET',
             'path': f'/results/{symbol}',
             'pathParameters': {'symbol': symbol}
         }
+        
+        print(f"[TEST] Payload: {json.dumps(payload, indent=2)}")
         
         response = lambda_client.invoke(
             FunctionName=function_name,
@@ -383,10 +417,19 @@ class TestLambdaServiceLevel(BaseIntegrationTest):
             Payload=json.dumps(payload)
         )
         
+        print(f"[TEST] Lambda response StatusCode: {response['StatusCode']}")
         self.assertEqual(response['StatusCode'], 200)
         
         result = json.loads(response['Payload'].read())
-        self.assertIn('statusCode', result)
+        print(f"[TEST] Lambda result: {json.dumps(result, indent=2)}")
+        
+        if 'errorMessage' in result:
+            print(f"[ERROR] Lambda error: {result.get('errorMessage')}")
+            print(f"[ERROR] Error type: {result.get('errorType')}")
+            print(f"[ERROR] Stack trace: {result.get('stackTrace')}")
+        
+        self.assertIn('statusCode', result, f"Expected 'statusCode' in result, got: {result}")
+        print(f"[TEST] Results Lambda invocation successful")
 
 
 class TestS3ServiceLevel(BaseIntegrationTest):
@@ -730,29 +773,41 @@ class TestS3ToLambdaToDynamoDBE2E(BaseIntegrationTest):
         
         bucket_name = OUTPUTS['data_bucket_name']
         table_name = OUTPUTS['market_data_table_name']
+        function_name = OUTPUTS['lambda_function_name_processor']
         
         # Create unique test symbol
         test_symbol = f"E2E{uuid.uuid4().hex[:4].upper()}"
         test_timestamp = int(time.time())
         
-        # Create CSV content
+        print(f"[TEST] E2E CSV Processing Pipeline Test")
+        print(f"[TEST] Bucket: {bucket_name}")
+        print(f"[TEST] Table: {table_name}")
+        print(f"[TEST] Lambda: {function_name}")
+        print(f"[TEST] Test symbol: {test_symbol}")
+        print(f"[TEST] Test timestamp: {test_timestamp}")
+        
+        # Create CSV content - using strings for CSV, will be converted to Decimal in Lambda
         csv_buffer = io.StringIO()
         writer = csv.writer(csv_buffer)
         writer.writerow(['symbol', 'timestamp', 'open', 'high', 'low', 'close', 'volume'])
         writer.writerow([test_symbol, str(test_timestamp), '100.00', '105.00', '99.00', '103.00', '5000000'])
         csv_content = csv_buffer.getvalue()
         
+        print(f"[TEST] CSV content preview:")
+        print(csv_content)
+        
         csv_key = f"incoming/e2e-test-{uuid.uuid4()}.csv"
         
         # SINGLE TRIGGER: Upload CSV to S3
+        print(f"[TEST] Uploading CSV to s3://{bucket_name}/{csv_key}")
         s3_client.put_object(
             Bucket=bucket_name,
             Key=csv_key,
             Body=csv_content.encode('utf-8')
         )
         
-        print(f"Uploaded CSV to s3://{bucket_name}/{csv_key}")
-        print(f"Waiting for Lambda to process and write to DynamoDB...")
+        print(f"[TEST] CSV uploaded successfully")
+        print(f"[TEST] Waiting for Lambda to process and write to DynamoDB (max 60 seconds)...")
         
         # Wait for Lambda to process and write to DynamoDB
         item = wait_for_dynamodb_item(
@@ -762,22 +817,43 @@ class TestS3ToLambdaToDynamoDBE2E(BaseIntegrationTest):
         )
         
         # Verify data was processed and stored
+        if item is None:
+            print(f"[ERROR] Data not found in DynamoDB after 60 seconds")
+            print(f"[ERROR] Looking for: symbol={test_symbol}, timestamp={test_timestamp}")
+            
+            # Check Lambda logs for errors
+            print(f"[TEST] Checking Lambda logs for errors...")
+            logs = get_recent_lambda_logs(function_name, minutes=3)
+            print(f"[TEST] Found {len(logs)} log entries")
+            for i, log in enumerate(logs[-10:]):
+                print(f"[LOG {i}] {log}")
+        
         self.assertIsNotNone(item, f"Data not found in DynamoDB after 60 seconds for symbol {test_symbol}")
+        
+        print(f"[TEST] Item found in DynamoDB: {item}")
+        print(f"[TEST] Item symbol: {item.get('symbol')} (expected: {test_symbol})")
+        print(f"[TEST] Item timestamp: {item.get('timestamp')} (expected: {test_timestamp})")
+        print(f"[TEST] Item close: {item.get('close')} (type: {type(item.get('close'))})")
+        
         self.assertEqual(item['symbol'], test_symbol)
         self.assertEqual(item['timestamp'], test_timestamp)
+        
+        # Verify close is Decimal, not float
+        self.assertIsInstance(item['close'], Decimal, f"Expected Decimal, got {type(item['close'])}")
         self.assertEqual(item['close'], Decimal('103.00'))
         
-        print(f"Successfully verified E2E flow: S3 -> Lambda -> DynamoDB")
+        print(f"[TEST] Successfully verified E2E flow: S3 -> Lambda -> DynamoDB")
         
         # Verify Lambda logs
-        function_name = OUTPUTS['lambda_function_name_processor']
         logs = get_recent_lambda_logs(function_name, minutes=3)
+        print(f"[TEST] Lambda log entries: {len(logs)}")
         self.assertGreater(len(logs), 0, "No processor Lambda logs found")
         
         # Clean up
         table = dynamodb_resource.Table(table_name)
         table.delete_item(Key={'symbol': test_symbol, 'timestamp': test_timestamp})
         s3_client.delete_object(Bucket=bucket_name, Key=csv_key)
+        print(f"[TEST] Cleanup complete")
 
 
 class TestAPIGatewayToLambdaToDynamoDBE2E(BaseIntegrationTest):
@@ -819,28 +895,53 @@ class TestAPIGatewayToLambdaToDynamoDBE2E(BaseIntegrationTest):
         test_symbol = f"API{uuid.uuid4().hex[:4].upper()}"
         test_timestamp = int(time.time())
         
-        table.put_item(
-            Item={
-                'symbol': test_symbol,
-                'timestamp': test_timestamp,
-                'open': Decimal('200.00'),
-                'high': Decimal('210.00'),
-                'low': Decimal('195.00'),
-                'close': Decimal('205.00'),
-                'volume': 10000000
-            }
-        )
+        print(f"[TEST] E2E API Gateway to DynamoDB Test")
+        print(f"[TEST] API URL: {api_url}")
+        print(f"[TEST] Table: {table_name}")
+        print(f"[TEST] Test symbol: {test_symbol}")
+        print(f"[TEST] Test timestamp: {test_timestamp}")
+        
+        # Insert test data with Decimal values (not float!)
+        test_item = {
+            'symbol': test_symbol,
+            'timestamp': test_timestamp,
+            'open': Decimal('200.00'),
+            'high': Decimal('210.00'),
+            'low': Decimal('195.00'),
+            'close': Decimal('205.00'),
+            'volume': 10000000
+        }
+        
+        print(f"[TEST] Inserting test item into DynamoDB:")
+        print(f"[TEST] Item types - open: {type(test_item['open'])}, close: {type(test_item['close'])}")
+        
+        table.put_item(Item=test_item)
+        print(f"[TEST] Test data inserted successfully")
         
         # SINGLE TRIGGER: Make API request
-        response = requests.get(
-            f"{api_url}/results/{test_symbol}",
-            timeout=30
-        )
+        request_url = f"{api_url}/results/{test_symbol}"
+        print(f"[TEST] Making API request to: {request_url}")
         
-        print(f"API Response Status: {response.status_code}")
+        response = requests.get(request_url, timeout=30)
+        
+        print(f"[TEST] API Response Status: {response.status_code}")
+        print(f"[TEST] API Response Headers: {dict(response.headers)}")
+        
+        if response.status_code != 200:
+            print(f"[ERROR] API request failed")
+            print(f"[ERROR] Response body: {response.text}")
+            
+            # Check Lambda logs
+            function_name = OUTPUTS.get('lambda_function_name_results')
+            if function_name:
+                print(f"[TEST] Checking Lambda logs for function: {function_name}")
+                logs = get_recent_lambda_logs(function_name, minutes=3)
+                print(f"[TEST] Found {len(logs)} log entries")
+                for i, log in enumerate(logs[-10:]):
+                    print(f"[LOG {i}] {log}")
         
         # Verify response
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 200, f"Expected 200, got {response.status_code}. Body: {response.text}")
         
         # Verify Lambda was invoked and queried DynamoDB
         # (response should contain data or indicate query was performed)
