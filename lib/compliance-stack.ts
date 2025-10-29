@@ -12,6 +12,8 @@ import * as sns from 'aws-cdk-lib/aws-sns';
 import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import { Construct } from 'constructs';
 import * as path from 'path';
+import { spawnSync } from 'child_process';
+import * as fs from 'fs';
 
 interface ComplianceStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -283,6 +285,59 @@ export class ComplianceConstruct extends Construct {
               // copy the prepared nodejs tree to the asset output.
               'cd /asset-input && npm ci --production --prefix nodejs && cp -r nodejs /asset-output',
             ],
+            // Provide a local bundling fallback (tryBundle) so synth can succeed
+            // on CI runners that don't support Docker. tryBundle should produce
+            // the same output as the Docker command and return true on success.
+            local: {
+              tryBundle(outputDir: string) {
+                try {
+                  // Run npm ci --production --prefix nodejs in the source folder
+                  // and copy the resulting nodejs tree into outputDir/nodejs.
+                  const src = path.join(__dirname, 'lambda_layer');
+                  const nodejsPath = path.join(src, 'nodejs');
+
+                  const r = spawnSync(
+                    'npm',
+                    ['ci', '--production', '--prefix', 'nodejs'],
+                    {
+                      cwd: src,
+                      stdio: 'inherit',
+                    }
+                  );
+                  if (r.status !== 0) return false;
+
+                  const dest = path.join(outputDir, 'nodejs');
+                  // Use recursive copy (Node 16+)
+                  if ((fs as any).cpSync) {
+                    (fs as any).cpSync(nodejsPath, dest, { recursive: true });
+                  } else {
+                    // Fallback: copy files recursively
+                    const copyRecursiveSync = (
+                      srcDir: string,
+                      destDir: string
+                    ) => {
+                      if (!fs.existsSync(destDir))
+                        fs.mkdirSync(destDir, { recursive: true });
+                      const entries = fs.readdirSync(srcDir, {
+                        withFileTypes: true,
+                      });
+                      for (const entry of entries) {
+                        const srcEntry = path.join(srcDir, entry.name);
+                        const destEntry = path.join(destDir, entry.name);
+                        if (entry.isDirectory())
+                          copyRecursiveSync(srcEntry, destEntry);
+                        else fs.copyFileSync(srcEntry, destEntry);
+                      }
+                    };
+                    copyRecursiveSync(nodejsPath, dest);
+                  }
+                  return true;
+                } catch (e) {
+                  // If local bundling fails, fall back to Docker bundling path.
+                  return false;
+                }
+              },
+            },
           },
         }),
         compatibleRuntimes: [lambda.Runtime.NODEJS_18_X],
