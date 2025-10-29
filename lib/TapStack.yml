@@ -644,7 +644,7 @@ Resources:
       StorageType: gp3
       StorageEncrypted: true
       MasterUsername: !Ref DBMasterUsername
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${EnvironmentName}-db-password-??????:SecretString:password}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:db-password-${AWS::AccountId}:SecretString:password}}'
       VPCSecurityGroups:
         - !GetAtt DatabaseSecurityGroup.GroupId
       DBSubnetGroupName: !Ref DBSubnetGroup
