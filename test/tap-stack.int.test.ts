@@ -1,13 +1,13 @@
 // Integration tests for PCI-DSS Database Infrastructure
-// Tests use real AWS resources deployed to eu-central-2
+// Tests use real AWS resources deployed to us-east-1
 
-import fs from 'fs';
-import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand, DescribeVpcAttributeCommand } from '@aws-sdk/client-ec2';
-import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
-import { ElastiCacheClient, DescribeReplicationGroupsCommand } from '@aws-sdk/client-elasticache';
-import { SecretsManagerClient, GetSecretValueCommand, DescribeSecretCommand } from '@aws-sdk/client-secrets-manager';
-import { LambdaClient, ListFunctionsCommand } from '@aws-sdk/client-lambda';
 import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
+import { DescribeSecurityGroupsCommand, DescribeSubnetsCommand, DescribeVpcAttributeCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
+import { DescribeReplicationGroupsCommand, ElastiCacheClient } from '@aws-sdk/client-elasticache';
+import { LambdaClient, ListFunctionsCommand } from '@aws-sdk/client-lambda';
+import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
+import { DescribeSecretCommand, GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
+import fs from 'fs';
 
 // Get deployment outputs from cfn-outputs/flat-outputs.json
 const outputs = JSON.parse(
@@ -15,7 +15,7 @@ const outputs = JSON.parse(
 );
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'synth6545483050';
-const region = 'eu-central-2';
+const region = 'us-east-1';
 
 // AWS SDK clients
 const ec2Client = new EC2Client({ region });
