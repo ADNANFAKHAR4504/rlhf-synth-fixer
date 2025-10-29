@@ -1,22 +1,36 @@
-// Configuration - These are coming from cfn-outputs after cdk deploy
-import fs from 'fs';
+// Dynamic CloudFormation Stack Integration Tests
 import https from 'https';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
-const outputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-);
-
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const stackName = `TapStack${environmentSuffix}`;
+const region = 'us-east-1';
 
-// Helper function to get output value
-const getOutputValue = (key: string): string => {
+// Cache for stack outputs
+let stackOutputs: any = null;
+
+// Helper function to get CloudFormation stack outputs dynamically
+const getStackOutputs = async (): Promise<any> => {
+  if (stackOutputs) return stackOutputs;
+  
+  try {
+    const { stdout } = await execAsync(`aws cloudformation describe-stacks --stack-name ${stackName} --region ${region} --query 'Stacks[0].Outputs' --output json`);
+    stackOutputs = JSON.parse(stdout) || [];
+    return stackOutputs;
+  } catch (error) {
+    throw new Error(`Failed to get stack outputs for ${stackName}: ${error}`);
+  }
+};
+
+// Helper function to get output value by key
+const getOutputValue = async (key: string): Promise<string> => {
+  const outputs = await getStackOutputs();
   const output = outputs.find((output: any) => output.OutputKey === key);
-  if (!output) throw new Error(`Output ${key} not found`);
+  if (!output) throw new Error(`Output ${key} not found in stack ${stackName}`);
   return output.OutputValue;
 };
 
@@ -24,7 +38,8 @@ describe('Media Processing Pipeline - Live Infrastructure Tests', () => {
 
   describe('VPC and Network Infrastructure', () => {
     test('VPC should exist and be available', async () => {
-      const vpcId = getOutputValue('VPCId');
+      const vpcId = await getOutputValue('VPCId');
+      expect(vpcId).toBeTruthy();
 
       const { stdout } = await execAsync(`aws ec2 describe-vpcs --vpc-ids ${vpcId} --query 'Vpcs[0].State' --output text --region us-east-1`);
 
@@ -32,7 +47,7 @@ describe('Media Processing Pipeline - Live Infrastructure Tests', () => {
     });
 
     test('Private subnets should exist and be available', async () => {
-      const privateSubnets = getOutputValue('PrivateSubnets').split(',');
+      const privateSubnets = (await getOutputValue('PrivateSubnets')).split(',');
 
       for (const subnetId of privateSubnets) {
         const { stdout } = await execAsync(`aws ec2 describe-subnets --subnet-ids ${subnetId.trim()} --query 'Subnets[0].{State:State,MapPublicIp:MapPublicIpOnLaunch}' --output json --region us-east-1`);
@@ -44,7 +59,7 @@ describe('Media Processing Pipeline - Live Infrastructure Tests', () => {
     });
 
     test('Public subnets should exist and be available', async () => {
-      const publicSubnets = getOutputValue('PublicSubnets').split(',');
+      const publicSubnets = (await getOutputValue('PublicSubnets')).split(',');
 
       for (const subnetId of publicSubnets) {
         const { stdout } = await execAsync(`aws ec2 describe-subnets --subnet-ids ${subnetId.trim()} --query 'Subnets[0].{State:State,MapPublicIp:MapPublicIpOnLaunch}' --output json --region us-east-1`);
@@ -58,7 +73,7 @@ describe('Media Processing Pipeline - Live Infrastructure Tests', () => {
 
   describe('Database Infrastructure', () => {
     test('RDS PostgreSQL instance should be running', async () => {
-      const rdsEndpoint = getOutputValue('RDSEndpoint');
+      const rdsEndpoint = await getOutputValue('RDSEndpoint');
       const dbInstanceId = `media-postgres-${environmentSuffix}`;
 
       const { stdout } = await execAsync(`aws rds describe-db-instances --db-instance-identifier ${dbInstanceId} --query 'DBInstances[0].{Status:DBInstanceStatus,Engine:Engine,Endpoint:Endpoint.Address,Port:Endpoint.Port}' --output json --region us-east-1`);
@@ -71,7 +86,7 @@ describe('Media Processing Pipeline - Live Infrastructure Tests', () => {
     });
 
     test('ElastiCache Redis cluster should be available', async () => {
-      const redisEndpoint = getOutputValue('RedisEndpoint');
+      const redisEndpoint = await getOutputValue('RedisEndpoint');
       const replicationGroupId = `media-redis-${environmentSuffix}`;
 
       const { stdout } = await execAsync(`aws elasticache describe-replication-groups --replication-group-id ${replicationGroupId} --query 'ReplicationGroups[0].{Status:Status,Engine:Engine}' --output json --region us-east-1`);
@@ -87,7 +102,7 @@ describe('Media Processing Pipeline - Live Infrastructure Tests', () => {
 
   describe('Storage and File Systems', () => {
     test('EFS file system should be available', async () => {
-      const fileSystemId = getOutputValue('EFSFileSystemId');
+      const fileSystemId = await getOutputValue('EFSFileSystemId');
 
       const { stdout } = await execAsync(`aws efs describe-file-systems --file-system-id ${fileSystemId} --query 'FileSystems[0].{LifeCycleState:LifeCycleState,FileSystemId:FileSystemId}' --output json --region us-east-1`);
 
@@ -97,7 +112,7 @@ describe('Media Processing Pipeline - Live Infrastructure Tests', () => {
     });
 
     test('S3 artifacts bucket should exist and be accessible', async () => {
-      const bucketName = getOutputValue('ArtifactBucketName');
+      const bucketName = await getOutputValue('ArtifactBucketName');
 
       const { stdout } = await execAsync(`aws s3api head-bucket --bucket ${bucketName} --region us-east-1 2>&1 || echo "bucket-not-found"`);
 
@@ -110,7 +125,7 @@ describe('Media Processing Pipeline - Live Infrastructure Tests', () => {
 
   describe('CI/CD Pipeline', () => {
     test('CodePipeline should exist and be configured', async () => {
-      const pipelineName = getOutputValue('PipelineName');
+      const pipelineName = await getOutputValue('PipelineName');
 
       const { stdout } = await execAsync(`aws codepipeline get-pipeline --name ${pipelineName} --query 'pipeline.{name:name,stages:stages[].name}' --output json --region us-east-1`);
 
@@ -123,7 +138,7 @@ describe('Media Processing Pipeline - Live Infrastructure Tests', () => {
 
   describe('API Gateway', () => {
     test('API Gateway endpoint should respond to HTTP requests', async () => {
-      const apiEndpoint = getOutputValue('APIEndpoint');
+      const apiEndpoint = await getOutputValue('APIEndpoint');
 
       return new Promise<void>((resolve, reject) => {
         const request = https.get(apiEndpoint, (response) => {
@@ -148,7 +163,7 @@ describe('Media Processing Pipeline - Live Infrastructure Tests', () => {
 
   describe('Security and Connectivity Tests', () => {
     test('Database should be accessible only from private subnets (security test)', async () => {
-      const vpcId = getOutputValue('VPCId');
+      const vpcId = await getOutputValue('VPCId');
       const dbInstanceId = `media-postgres-${environmentSuffix}`;
 
       // Check that RDS is in private subnets (by checking VPC security groups)
@@ -158,7 +173,7 @@ describe('Media Processing Pipeline - Live Infrastructure Tests', () => {
     });
 
     test('All resources should be tagged with environment suffix', async () => {
-      const vpcId = getOutputValue('VPCId');
+      const vpcId = await getOutputValue('VPCId');
 
       const { stdout } = await execAsync(`aws ec2 describe-tags --filters "Name=resource-id,Values=${vpcId}" "Name=key,Values=Name" --query 'Tags[0].Value' --output text --region us-east-1`);
 
