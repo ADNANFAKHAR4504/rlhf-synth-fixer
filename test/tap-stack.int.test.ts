@@ -11,7 +11,8 @@ import {
   DescribeInternetGatewaysCommand,
   DescribeTransitGatewayAttachmentsCommand,
   DescribeTransitGatewayRouteTablesCommand,
-  DescribeTransitGatewayRoutesCommand,
+  GetTransitGatewayRouteTablePropagationsCommand,
+  GetTransitGatewayRouteTableAssociationsCommand,
   DescribeSecurityGroupsCommand,
   DescribeVpcEndpointsCommand,
 } from "@aws-sdk/client-ec2";
@@ -37,15 +38,12 @@ const outputs: Record<string, string> = {};
 for (const o of outputsArr) outputs[o.OutputKey] = o.OutputValue;
 
 function deduceRegion(): string {
-  // Prefer environment; otherwise infer from any ARNs/values that include region; fallback to us-east-1
   if (process.env.AWS_REGION) return process.env.AWS_REGION;
   if (process.env.AWS_DEFAULT_REGION) return process.env.AWS_DEFAULT_REGION;
-  // last resort: try to detect from VPC endpoints service names in outputs (not provided) -> default
   return "us-east-1";
 }
 const region = deduceRegion();
 
-// AWS clients (single-region)
 const ec2 = new EC2Client({ region });
 const logs = new CloudWatchLogsClient({ region });
 const r53 = new Route53Client({ region });
@@ -134,7 +132,6 @@ describe("TapStack — Live Integration Tests (hub-and-spoke TGW)", () => {
     const hubPub = splitCsv(outputs.HubPublicSubnets);
     expect(hubPub.length).toBeGreaterThanOrEqual(2);
 
-    // find route tables associated to those subnets, check 0.0.0.0/0 -> igw-*
     const resp = await retry(() =>
       ec2.send(new DescribeRouteTablesCommand({ Filters: [{ Name: "association.subnet-id", Values: hubPub }] }))
     );
@@ -149,9 +146,8 @@ describe("TapStack — Live Integration Tests (hub-and-spoke TGW)", () => {
     const natResp = await retry(() =>
       ec2.send(new DescribeNatGatewaysCommand({ Filter: [{ Name: "subnet-id", Values: hubPub }] }))
     );
-    // We expect at least 2 NATs (one per public subnet)
     const natCount = (natResp.NatGateways || []).length;
-    expect(natCount).toBeGreaterThanOrEqual(1); // allow 1 if cost-optimized; prefer 2
+    expect(natCount).toBeGreaterThanOrEqual(1); // allow 1 if cost-optimized
   });
 
   it("Hub private route tables route 0.0.0.0/0 via NAT", async () => {
@@ -169,7 +165,6 @@ describe("TapStack — Live Integration Tests (hub-and-spoke TGW)", () => {
     const atts = await retry(() =>
       ec2.send(new DescribeTransitGatewayAttachmentsCommand({}))
     );
-    // Attachments should include Hub + 3 spokes (allow provisioning delay with >= 1)
     const ours = (atts.TransitGatewayAttachments || []).filter(
       (a) => a.TransitGatewayId === outputs.TransitGatewayId
     );
@@ -185,22 +180,91 @@ describe("TapStack — Live Integration Tests (hub-and-spoke TGW)", () => {
     expect(resp.TransitGatewayRouteTables?.length).toBe(2);
   });
 
-  it("Hub TGW route table has routes to each spoke CIDR", async () => {
-    const hubRtId = outputs.TgwHubRouteTableId;
-    const r1 = await retry(() =>
-      ec2.send(new DescribeTransitGatewayRoutesCommand({ TransitGatewayRouteTableId: hubRtId, Filters: [] }))
+  /* -------- FIXED: validate routes via Propagations/Associations (v3-supported) -------- */
+
+  it("Hub TGW route table receives propagations from all spoke attachments", async () => {
+    // Map VPC -> TGW attachment id
+    const atts = await retry(() =>
+      ec2.send(new DescribeTransitGatewayAttachmentsCommand({
+        Filters: [{ Name: "transit-gateway-id", Values: [outputs.TransitGatewayId] }],
+      }))
     );
-    // Presence of routes is sufficient; exact CIDR matching may need extra Describe* calls for Cidrs mapping; assert non-empty
-    expect(Array.isArray(r1.Routes)).toBe(true);
+    const byVpc = new Map<string, string>();
+    for (const a of atts.TransitGatewayAttachments || []) {
+      if (a.ResourceType === "vpc" && a.ResourceId && a.TransitGatewayAttachmentId) {
+        byVpc.set(a.ResourceId, a.TransitGatewayAttachmentId);
+      }
+    }
+    const spokeAtts = [
+      byVpc.get(outputs.Spoke1VpcId),
+      byVpc.get(outputs.Spoke2VpcId),
+      byVpc.get(outputs.Spoke3VpcId),
+    ].filter(Boolean) as string[];
+
+    // Get propagations on the HUB route table and ensure all spoke attachments propagate
+    const props = await retry(() =>
+      ec2.send(new GetTransitGatewayRouteTablePropagationsCommand({
+        TransitGatewayRouteTableId: outputs.TgwHubRouteTableId,
+      }))
+    );
+    const propIds = new Set(
+      (props.TransitGatewayRouteTablePropagations || [])
+        .map((p) => p.TransitGatewayAttachmentId)
+        .filter(Boolean) as string[]
+    );
+    // allow eventual consistency: require at least one, preferably all
+    expect(propIds.size).toBeGreaterThanOrEqual(1);
+    spokeAtts.forEach((att) => {
+      expect(propIds.has(att)).toBe(true);
+    });
   });
 
-  it("Spoke TGW route table has a route to hub CIDR", async () => {
-    const spokeRtId = outputs.TgwSpokeRouteTableId;
-    const r = await retry(() =>
-      ec2.send(new DescribeTransitGatewayRoutesCommand({ TransitGatewayRouteTableId: spokeRtId, Filters: [] }))
+  it("Spoke TGW route table has association(s) for spokes and propagation from the hub attachment", async () => {
+    // Find hub & spoke attachment IDs
+    const atts = await retry(() =>
+      ec2.send(new DescribeTransitGatewayAttachmentsCommand({
+        Filters: [{ Name: "transit-gateway-id", Values: [outputs.TransitGatewayId] }],
+      }))
     );
-    expect(Array.isArray(r.Routes)).toBe(true);
+    let hubAtt: string | undefined;
+    const spokeAtts: string[] = [];
+    for (const a of atts.TransitGatewayAttachments || []) {
+      if (a.ResourceType === "vpc" && a.ResourceId && a.TransitGatewayAttachmentId) {
+        if (a.ResourceId === outputs.HubVpcId) hubAtt = a.TransitGatewayAttachmentId;
+        if ([outputs.Spoke1VpcId, outputs.Spoke2VpcId, outputs.Spoke3VpcId].includes(a.ResourceId)) {
+          spokeAtts.push(a.TransitGatewayAttachmentId);
+        }
+      }
+    }
+    expect(hubAtt).toBeDefined();
+
+    // Spoke route table should be associated with spoke attachments
+    const assoc = await retry(() =>
+      ec2.send(new GetTransitGatewayRouteTableAssociationsCommand({
+        TransitGatewayRouteTableId: outputs.TgwSpokeRouteTableId,
+      }))
+    );
+    const assocIds = new Set(
+      (assoc.Associations || []).map((a) => a.TransitGatewayAttachmentId).filter(Boolean) as string[]
+    );
+    expect(assocIds.size).toBeGreaterThanOrEqual(1);
+    spokeAtts.forEach((id) => expect(assocIds.has(id)).toBe(true));
+
+    // And should have propagation from the HUB attachment
+    const props = await retry(() =>
+      ec2.send(new GetTransitGatewayRouteTablePropagationsCommand({
+        TransitGatewayRouteTableId: outputs.TgwSpokeRouteTableId,
+      }))
+    );
+    const propIds = new Set(
+      (props.TransitGatewayRouteTablePropagations || [])
+        .map((p) => p.TransitGatewayAttachmentId)
+        .filter(Boolean) as string[]
+    );
+    expect(propIds.has(hubAtt!)).toBe(true);
   });
+
+  /* --------------------------------------------------------------------- */
 
   it("Each spoke route table in the VPC has a default route to TGW", async () => {
     const check = async (subnetsCsv: string) => {
@@ -267,7 +331,6 @@ describe("TapStack — Live Integration Tests (hub-and-spoke TGW)", () => {
   });
 
   it("Endpoint security groups allow TCP/443", async () => {
-    // Find SGs that look like *-endpoints-sg-* within Hub VPC and check port 443
     const vpcIds = [outputs.HubVpcId, outputs.Spoke1VpcId, outputs.Spoke2VpcId, outputs.Spoke3VpcId];
     for (const vpc of vpcIds) {
       const sgs = await retry(() =>
@@ -286,10 +349,8 @@ describe("TapStack — Live Integration Tests (hub-and-spoke TGW)", () => {
   it("Route53 private hosted zone exists and is associated with all VPCs", async () => {
     const hzId = outputs.PrivateHostedZoneId;
     const hz = await retry(() => r53.send(new GetHostedZoneCommand({ Id: hzId })));
-    // Private zone should have VPCs listed
     const vpcAssoc = hz.VPCs || [];
-    // Allow propagation delay; require >= 3 immediately, ideally 4
-    expect(vpcAssoc.length).toBeGreaterThanOrEqual(3);
+    expect(vpcAssoc.length).toBeGreaterThanOrEqual(3); // allow eventual consistency
   });
 
   it("Flow logs log group exists and has retention set (>=7 days)", async () => {
@@ -297,7 +358,6 @@ describe("TapStack — Live Integration Tests (hub-and-spoke TGW)", () => {
     const resp = await retry(() => logs.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: name })));
     const lg = (resp.logGroups || []).find((g) => g.logGroupName === name);
     expect(lg).toBeDefined();
-    // RetentionInDays may be absent if never set; prefer >= 7, else treat presence as success
     if (lg?.retentionInDays !== undefined) {
       expect((lg.retentionInDays || 0) >= 7).toBe(true);
     } else {
@@ -305,7 +365,7 @@ describe("TapStack — Live Integration Tests (hub-and-spoke TGW)", () => {
     }
   });
 
-  it("Each Spoke VPC has a TGW attachment in 'available' or 'pendingAcceptance'/'pending' during brief propagation", async () => {
+  it("Each Spoke VPC has a TGW attachment in a valid state", async () => {
     const tgwId = outputs.TransitGatewayId;
     const resp = await retry(() =>
       ec2.send(new DescribeTransitGatewayAttachmentsCommand({
@@ -336,7 +396,6 @@ describe("TapStack — Live Integration Tests (hub-and-spoke TGW)", () => {
   });
 
   it("Spoke route tables do NOT have routes to other spokes (enforced by TGW design)", async () => {
-    // Validate that in spoke route tables there is no route to a sibling spoke CIDR; here we only assert presence of default->TGW
     const check = async (subnetsCsv: string) => {
       const subnets = splitCsv(subnetsCsv);
       const resp = await retry(() =>
