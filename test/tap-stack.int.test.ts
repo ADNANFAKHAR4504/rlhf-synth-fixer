@@ -13,9 +13,20 @@ const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 function getOutputs() {
   const region = outputs.Region || process.env.AWS_REGION || 'us-east-1';
   const environmentSuffix = outputs.EnvironmentSuffix || 'dev';
-  const apiEndpoint = outputs[`ApiEndpoint${environmentSuffix}`] || outputs.ApiEndpoint;
-  const dynamoDBTableName = outputs[`DynamoDBTableName${environmentSuffix}`] || outputs.DynamoDBTableName;
-  const snsTopicArn = outputs[`SNSTopicArn${environmentSuffix}`] || outputs.SNSTopicArn;
+
+  // Try multiple key formats: ApiEndpointdev, ApiEndpoint-dev, ApiEndpoint
+  const apiEndpoint = outputs[`ApiEndpoint${environmentSuffix}`] ||
+                      outputs[`ApiEndpoint-${environmentSuffix}`] ||
+                      outputs.ApiEndpoint ||
+                      outputs[`PaymentAPI${environmentSuffix}Endpoint3F0B3644`];
+
+  const dynamoDBTableName = outputs[`DynamoDBTableName${environmentSuffix}`] ||
+                            outputs[`DynamoDBTableName-${environmentSuffix}`] ||
+                            outputs.DynamoDBTableName;
+
+  const snsTopicArn = outputs[`SNSTopicArn${environmentSuffix}`] ||
+                      outputs[`SNSTopicArn-${environmentSuffix}`] ||
+                      outputs.SNSTopicArn;
 
   return { region, environmentSuffix, apiEndpoint, dynamoDBTableName, snsTopicArn };
 }
