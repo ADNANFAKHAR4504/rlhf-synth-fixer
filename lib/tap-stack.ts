@@ -82,7 +82,7 @@ interface ComplianceInfrastructureStackProps extends cdk.NestedStackProps {
 
 /**
  * ComplianceInfrastructureStack
- * 
+ *
  * Creates foundational compliance infrastructure:
  * - S3 buckets for compliance data and audit logs (7-year retention)
  * - CloudWatch Log Groups for audit trails
@@ -258,14 +258,10 @@ class ComplianceInfrastructureStack extends cdk.NestedStack {
     configRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: [
-          's3:PutObject',
-          's3:PutObjectAcl',
-        ],
+        actions: ['s3:PutObject', 's3:PutObjectAcl'],
         resources: [`${this.complianceBucket.bucketArn}/*`],
       })
     );
-
 
     // Read-only permissions for all AWS services that Config can record
 
@@ -306,7 +302,8 @@ class ComplianceInfrastructureStack extends cdk.NestedStack {
       }
     );
 
-    // Ensure recorder is created before delivery channel (AWS Config requirement)deliveryChannel.addDependency(configRecorder);
+    // Ensure recorder is created before delivery channel (AWS Config requirement)
+    deliveryChannel.addDependency(configRecorder);
 
     // Output important resource identifiers
     new cdk.CfnOutput(this, 'ComplianceBucketName', {
@@ -333,7 +330,7 @@ interface LambdaTimeoutRuleStackProps extends cdk.NestedStackProps {
 
 /**
  * LambdaTimeoutRuleStack
- * 
+ *
  * Implements AWS Config rule to ensure all Lambda functions
  * have a maximum execution timeout of 5 minutes or less
  */
@@ -551,16 +548,12 @@ interface IamAccessKeyRuleStackProps extends cdk.NestedStackProps {
 
 /**
  * IamAccessKeyRuleStack
- * 
+ *
  * Implements AWS Config rule to detect and flag active IAM access keys
  * Ensures services use IAM roles rather than long-lived credentials
  */
 class IamAccessKeyRuleStack extends cdk.NestedStack {
-  constructor(
-    scope: Construct,
-    id: string,
-    props: IamAccessKeyRuleStackProps
-  ) {
+  constructor(scope: Construct, id: string, props: IamAccessKeyRuleStackProps) {
     super(scope, id, props);
 
     const region = this.region;
@@ -771,7 +764,7 @@ interface RemediationWorkflowStackProps extends cdk.NestedStackProps {
 
 /**
  * RemediationWorkflowStack
- * 
+ *
  * Implements automated remediation workflows with comprehensive audit logging
  * All remediations log to S3 and CloudWatch BEFORE making any changes
  */
@@ -810,7 +803,7 @@ class RemediationWorkflowStack extends cdk.NestedStack {
         actions: [
           // Lambda remediation permissions
           'lambda:UpdateFunctionConfiguration',
-          // IAM remediation permissions  
+          // IAM remediation permissions
           'iam:DeleteAccessKey',
           'iam:UpdateAccessKey',
           // Config permissions
@@ -827,12 +820,12 @@ class RemediationWorkflowStack extends cdk.NestedStack {
 
     /**
      * Remediation Lambda Function
-     * 
+     *
      * CRITICAL: This function ALWAYS logs audit trail before making changes
      * - Logs to CloudWatch Logs
      * - Logs to S3 audit bucket
      * - Only proceeds with remediation after successful logging
-     * 
+     *
      * PLACEHOLDER: Business-specific remediation logic goes here
      */
     const remediationFunction = new lambda.Function(
@@ -1059,7 +1052,7 @@ def lambda_handler(event, context):
 
     /**
      * EventBridge Rule - triggers remediation on Config compliance changes
-     * 
+     *
      * PLACEHOLDER: Customize the event pattern based on:
      * - Which rules should trigger auto-remediation
      * - Whether to require manual approval first
