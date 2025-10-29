@@ -697,3 +697,39 @@ new TapStack(app, stackName, {
 ```
 
 This provides a more flexible and production-ready CDK app entry point that can be used across different environments and CI/CD pipelines.
+
+---
+
+#### 21. Missing KMS Permissions for EBS Volume Encryption
+
+**Model Response:**
+Failed to include KMS permissions in the EC2 instance role, causing instance launch failures when EBS volumes are encrypted with KMS keys. The error message indicates "One or more of the attached Amazon EBS volumes are encrypted with an inaccessible AWS KMS key."
+
+**Actual Implementation:**
+Added comprehensive KMS permissions to the EC2 instance role's inline policy to allow decryption of EBS volumes encrypted with any KMS key in the account:
+
+```typescript
+new iam.PolicyStatement({
+  effect: iam.Effect.ALLOW,
+  actions: [
+    'kms:CreateGrant',
+    'kms:Decrypt',
+    'kms:DescribeKey',
+    'kms:GenerateDataKeyWithoutPlainText',
+    'kms:ReEncrypt',
+  ],
+  resources: [
+    `arn:aws:kms:*:${cdk.Stack.of(this).account}:key/*`,
+  ],
+}),
+```
+
+This solution:
+
+- Grants all required KMS permissions for EBS volume encryption/decryption
+- Uses a wildcard pattern (`*`) for region to work across all AWS regions
+- Dynamically resolves the account ID using `cdk.Stack.of(this).account` instead of hardcoding
+- Allows any KMS key (`key/*`) within the account without specifying a specific key ARN
+- Prevents "inaccessible AWS KMS key" errors during EC2 instance launches when default EBS encryption is enabled at the account level
+
+The permissions are added to the `EBInstanceRole` inline policy, ensuring all EC2 instances launched by Elastic Beanstalk can properly decrypt attached EBS volumes regardless of which KMS key was used for encryption.

@@ -1,4 +1,5 @@
-// @ts-expect-error express is not typed
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore express is installed at compile time
 import express from 'express';
 
 const app = express();

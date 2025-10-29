@@ -73,6 +73,17 @@ export class DeployStage extends Construct {
               ],
               resources: [ecrRepository.repositoryArn],
             }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'kms:CreateGrant',
+                'kms:Decrypt',
+                'kms:DescribeKey',
+                'kms:GenerateDataKeyWithoutPlainText',
+                'kms:ReEncrypt',
+              ],
+              resources: [`arn:aws:kms:*:${cdk.Stack.of(this).account}:key/*`],
+            }),
           ],
         }),
       },
