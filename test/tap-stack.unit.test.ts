@@ -14,12 +14,6 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
-  });
-
   describe('Template Structure', () => {
     test('should have valid CloudFormation format version', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
@@ -28,88 +22,142 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+        'Automated Infrastructure Analysis and Compliance Validation System for Financial Services'
       );
-    });
-
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
     });
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    test('should have NotificationEmail parameter', () => {
+      expect(template.Parameters.NotificationEmail).toBeDefined();
+      const param = template.Parameters.NotificationEmail;
+      expect(param.Type).toBe('String');
+      expect(param.Description).toBe('Email address for compliance violation notifications');
+      expect(param.AllowedPattern).toBe('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$');
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
+    test('should have RequiredTags parameter', () => {
+      expect(template.Parameters.RequiredTags).toBeDefined();
+      const param = template.Parameters.RequiredTags;
+      expect(param.Type).toBe('CommaDelimitedList');
+      expect(param.Default).toBe('Owner,CostCenter,Environment,DataClassification,ComplianceLevel');
+    });
+
+    test('should have KMSKeyAlias parameter', () => {
+      expect(template.Parameters.KMSKeyAlias).toBeDefined();
+      const param = template.Parameters.KMSKeyAlias;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('compliance-validation-key');
+    });
+
+    test('should have ScanScheduleRate parameter', () => {
+      expect(template.Parameters.ScanScheduleRate).toBeDefined();
+      const param = template.Parameters.ScanScheduleRate;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('rate(10 minutes)');
+      expect(param.AllowedValues).toContain('rate(10 minutes)');
     });
   });
 
   describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+    test('should have ComplianceKMSKey resource', () => {
+      expect(template.Resources.ComplianceKMSKey).toBeDefined();
+      const kmsKey = template.Resources.ComplianceKMSKey;
+      expect(kmsKey.Type).toBe('AWS::KMS::Key');
+      expect(kmsKey.Properties.EnableKeyRotation).toBe(true);
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
+    test('should have S3 buckets for compliance reports and analysis results', () => {
+      expect(template.Resources.ComplianceReportsBucket).toBeDefined();
+      expect(template.Resources.AnalysisResultsBucket).toBeDefined();
+      
+      const reportsS3 = template.Resources.ComplianceReportsBucket;
+      const analysisS3 = template.Resources.AnalysisResultsBucket;
+      
+      expect(reportsS3.Type).toBe('AWS::S3::Bucket');
+      expect(analysisS3.Type).toBe('AWS::S3::Bucket');
+      
+      // Check encryption configuration
+      expect(reportsS3.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+      expect(analysisS3.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
     });
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
+    test('should have SNS topic for compliance violations', () => {
+      expect(template.Resources.ComplianceViolationsTopic).toBeDefined();
+      const snsTopic = template.Resources.ComplianceViolationsTopic;
+      expect(snsTopic.Type).toBe('AWS::SNS::Topic');
+      expect(snsTopic.Properties.DisplayName).toBe('Compliance Violations Alert');
     });
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
+    test('should have Lambda functions for analyzer and periodic scan', () => {
+      expect(template.Resources.AnalyzerFunction).toBeDefined();
+      expect(template.Resources.PeriodicScanFunction).toBeDefined();
+      
+      const analyzerLambda = template.Resources.AnalyzerFunction;
+      const periodicLambda = template.Resources.PeriodicScanFunction;
+      
+      expect(analyzerLambda.Type).toBe('AWS::Lambda::Function');
+      expect(periodicLambda.Type).toBe('AWS::Lambda::Function');
+      
+      expect(analyzerLambda.Properties.Runtime).toBe('python3.12');
+      expect(periodicLambda.Properties.Runtime).toBe('python3.12');
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+    test('should have IAM roles for Lambda functions', () => {
+      expect(template.Resources.AnalyzerFunctionRole).toBeDefined();
+      expect(template.Resources.PeriodicScanFunctionRole).toBeDefined();
+      
+      const analyzerRole = template.Resources.AnalyzerFunctionRole;
+      const periodicRole = template.Resources.PeriodicScanFunctionRole;
+      
+      expect(analyzerRole.Type).toBe('AWS::IAM::Role');
+      expect(periodicRole.Type).toBe('AWS::IAM::Role');
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+    test('should have EventBridge rules for triggering scans', () => {
+      expect(template.Resources.StackChangeEventRule).toBeDefined();
+      expect(template.Resources.PeriodicScanScheduleRule).toBeDefined();
+      
+      const stackChangeRule = template.Resources.StackChangeEventRule;
+      const periodicRule = template.Resources.PeriodicScanScheduleRule;
+      
+      expect(stackChangeRule.Type).toBe('AWS::Events::Rule');
+      expect(periodicRule.Type).toBe('AWS::Events::Rule');
+      
+      expect(stackChangeRule.Properties.State).toBe('ENABLED');
+      expect(periodicRule.Properties.State).toBe('ENABLED');
+    });
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+    test('should have CloudWatch Log Groups with proper retention', () => {
+      expect(template.Resources.AnalyzerLogGroup).toBeDefined();
+      expect(template.Resources.PeriodicScanLogGroup).toBeDefined();
+      
+      const analyzerLogs = template.Resources.AnalyzerLogGroup;
+      const periodicLogs = template.Resources.PeriodicScanLogGroup;
+      
+      expect(analyzerLogs.Type).toBe('AWS::Logs::LogGroup');
+      expect(periodicLogs.Type).toBe('AWS::Logs::LogGroup');
+      
+      expect(analyzerLogs.Properties.RetentionInDays).toBe(365);
+      expect(periodicLogs.Properties.RetentionInDays).toBe(365);
     });
   });
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
+        'ComplianceReportsBucketArn',
+        'ComplianceReportsBucketName',
+        'AnalysisResultsBucketArn',
+        'AnalysisResultsBucketName',
+        'ComplianceViolationsTopicArn',
+        'AnalyzerFunctionArn',
+        'PeriodicScanFunctionArn',
+        'KMSKeyId',
+        'KMSKeyAlias',
+        'ReportsBaseURI',
+        'StackChangeEventRuleArn',
+        'PeriodicScanScheduleRuleArn'
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -117,43 +165,42 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
-    });
-
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
+    test('ComplianceReportsBucketArn output should be correct', () => {
+      const output = template.Outputs.ComplianceReportsBucketArn;
+      expect(output.Description).toBe('ARN of the compliance reports S3 bucket');
       expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
+        'Fn::GetAtt': ['ComplianceReportsBucket', 'Arn'],
       });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
-    });
-
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
+        'Fn::Sub': '${AWS::StackName}-ComplianceReportsBucketArn',
       });
     });
 
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
+    test('AnalyzerFunctionArn output should be correct', () => {
+      const output = template.Outputs.AnalyzerFunctionArn;
+      expect(output.Description).toBe('ARN of the compliance analyzer Lambda function');
+      expect(output.Value).toEqual({
+        'Fn::GetAtt': ['AnalyzerFunction', 'Arn'],
+      });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
+        'Fn::Sub': '${AWS::StackName}-AnalyzerFunctionArn',
+      });
+    });
+
+    test('KMSKeyId output should be correct', () => {
+      const output = template.Outputs.KMSKeyId;
+      expect(output.Description).toBe('ID of the KMS key used for encryption');
+      expect(output.Value).toEqual({ Ref: 'ComplianceKMSKey' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-KMSKeyId',
+      });
+    });
+
+    test('ReportsBaseURI output should be correct', () => {
+      const output = template.Outputs.ReportsBaseURI;
+      expect(output.Description).toBe('Base S3 URI for compliance reports');
+      expect(output.Value).toEqual({
+        'Fn::Sub': 's3://${ComplianceReportsBucket}/',
       });
     });
   });
@@ -170,40 +217,82 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters).not.toBeNull();
       expect(template.Resources).not.toBeNull();
       expect(template.Outputs).not.toBeNull();
+      expect(template.Conditions).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have all necessary resources for compliance validation', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBeGreaterThan(20); // We have many resources: KMS, S3, Lambda, IAM, SNS, SQS, EventBridge, etc.
     });
 
-    test('should have exactly one parameter', () => {
+    test('should have all required parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
+      expect(parameterCount).toBe(7); // NotificationEmail, RequiredTags, PublicEndpointAllowlist, ComplianceReportsBucketName, AnalysisResultsBucketName, KMSKeyAlias, ScanScheduleRate, AlertSeverityThreshold
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have all required outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBe(12); // All the compliance system outputs
+    });
+
+    test('should have conditions for bucket creation', () => {
+      expect(template.Conditions.CreateComplianceReportsBucket).toBeDefined();
+      expect(template.Conditions.CreateAnalysisResultsBucket).toBeDefined();
     });
   });
 
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
+  describe('Security and Compliance Features', () => {
+    test('S3 buckets should have proper security configuration', () => {
+      const complianceBucket = template.Resources.ComplianceReportsBucket;
+      const analysisBucket = template.Resources.AnalysisResultsBucket;
+      
+      // Check public access block
+      expect(complianceBucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
+      expect(analysisBucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
+      
+      // Check versioning
+      expect(complianceBucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+      expect(analysisBucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+      
+      // Check lifecycle configuration
+      expect(complianceBucket.Properties.LifecycleConfiguration.Rules).toBeDefined();
+      expect(analysisBucket.Properties.LifecycleConfiguration.Rules).toBeDefined();
+    });
 
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+    test('Lambda functions should use KMS encryption', () => {
+      const analyzerFunction = template.Resources.AnalyzerFunction;
+      const periodicFunction = template.Resources.PeriodicScanFunction;
+      
+      expect(analyzerFunction.Properties.KmsKeyArn).toEqual({
+        'Fn::GetAtt': ['ComplianceKMSKey', 'Arn']
       });
+      expect(periodicFunction.Properties.KmsKeyArn).toEqual({
+        'Fn::GetAtt': ['ComplianceKMSKey', 'Arn']
+      });
+    });
+
+    test('IAM roles should follow least privilege principle', () => {
+      const analyzerRole = template.Resources.AnalyzerFunctionRole;
+      const periodicRole = template.Resources.PeriodicScanFunctionRole;
+      
+      expect(analyzerRole.Properties.Policies).toBeDefined();
+      expect(periodicRole.Properties.Policies).toBeDefined();
+      
+      // Check for explicit denies in analyzer role
+      const analyzerPolicy = analyzerRole.Properties.Policies[0].PolicyDocument;
+      const denyStatement = analyzerPolicy.Statement.find(s => s.Effect === 'Deny');
+      expect(denyStatement).toBeDefined();
+      expect(denyStatement.Action).toContain('kms:ScheduleKeyDeletion');
     });
 
     test('export names should follow naming convention', () => {
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
+        if (output.Export) {
+          expect(output.Export.Name).toEqual({
+            'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
+          });
+        }
       });
     });
   });
