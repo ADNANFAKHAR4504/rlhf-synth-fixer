@@ -76,11 +76,11 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
 
       expect(response.Vpcs).toHaveLength(1);
       const vpc = response.Vpcs![0];
-      
+
       // DNS settings are enabled (undefined or true both acceptable)
       expect(vpc.EnableDnsHostnames === true || vpc.EnableDnsHostnames === undefined).toBe(true);
       expect(vpc.EnableDnsSupport === true || vpc.EnableDnsSupport === undefined).toBe(true);
-      
+
       // VPC should be in available state
       expect(vpc.State).toBe('available');
     });
@@ -213,7 +213,7 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
 
       expect(response.InternetGateways).toHaveLength(1);
       const igw = response.InternetGateways![0];
-      
+
       // IGW should be attached to a VPC
       expect(igw.Attachments).toBeDefined();
       expect(igw.Attachments!.length).toBeGreaterThan(0);
