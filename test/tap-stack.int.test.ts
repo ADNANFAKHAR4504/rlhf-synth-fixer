@@ -1,7 +1,7 @@
 // Configuration - These are coming from cfn-outputs after CloudFormation deployment
+import { GetPolicyCommand, IAMClient } from '@aws-sdk/client-iam';
+import { GetBucketEncryptionCommand, HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
 import fs from 'fs';
-import { S3Client, HeadBucketCommand, GetBucketEncryptionCommand } from '@aws-sdk/client-s3';
-import { IAMClient, GetPolicyCommand } from '@aws-sdk/client-iam';
 
 // Create dummy outputs file if it doesn't exist (for testing)
 const outputsPath = 'cfn-outputs/flat-outputs.json';
@@ -14,7 +14,7 @@ try {
   if (!fs.existsSync('cfn-outputs')) {
     fs.mkdirSync('cfn-outputs', { recursive: true });
   }
-  
+
   // Create dummy outputs for testing
   outputs = {
     S3KMSKeyArn: 'arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012',
@@ -23,7 +23,7 @@ try {
     MFARequiredPolicyArn: 'arn:aws:iam::123456789012:policy/RequireMFAForPrivilegedActions-dev',
     ConfigBucketName: 'config-bucket-dev-123456789012'
   };
-  
+
   fs.writeFileSync(outputsPath, JSON.stringify(outputs, null, 2));
 }
 
@@ -93,10 +93,10 @@ describe('Security Compliance Template Integration Tests', () => {
           Bucket: outputs.EncryptedS3BucketName
         });
         const response = await s3Client.send(command);
-        
+
         expect(response.ServerSideEncryptionConfiguration).toBeDefined();
         expect(response.ServerSideEncryptionConfiguration?.Rules).toHaveLength(1);
-        
+
         const rule = response.ServerSideEncryptionConfiguration?.Rules?.[0];
         expect(rule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
         expect(rule?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID).toBeDefined();
@@ -137,22 +137,22 @@ describe('Security Compliance Template Integration Tests', () => {
   describe('AWS Config Rules Validation', () => {
     test('S3 encryption Config rule should be properly named', () => {
       const expectedConfigRuleName = `s3-bucket-server-side-encryption-enabled-${environmentSuffix}`;
-      
+
       // Validate rule name follows expected pattern
       expect(expectedConfigRuleName).toMatch(/^s3-bucket-server-side-encryption-enabled-[a-zA-Z0-9]+$/);
       expect(expectedConfigRuleName).toContain(environmentSuffix);
-      
+
       // Ensure it's unique for the environment
       expect(expectedConfigRuleName).not.toBe('s3-bucket-server-side-encryption-enabled');
     });
 
     test('EBS encryption Config rule should be properly named', () => {
       const expectedConfigRuleName = `encrypted-volumes-${environmentSuffix}`;
-      
+
       // Validate rule name follows expected pattern
       expect(expectedConfigRuleName).toMatch(/^encrypted-volumes-[a-zA-Z0-9]+$/);
       expect(expectedConfigRuleName).toContain(environmentSuffix);
-      
+
       // Ensure it's unique for the environment
       expect(expectedConfigRuleName).not.toBe('encrypted-volumes');
     });
@@ -161,11 +161,11 @@ describe('Security Compliance Template Integration Tests', () => {
       // This test validates that our fix prevents the "AlreadyExists" error
       const s3RuleName = `s3-bucket-server-side-encryption-enabled-${environmentSuffix}`;
       const ebsRuleName = `encrypted-volumes-${environmentSuffix}`;
-      
+
       // These should be different from the original hardcoded names that caused conflicts
       expect(s3RuleName).not.toBe('s3-bucket-server-side-encryption-enabled');
       expect(ebsRuleName).not.toBe('encrypted-volumes');
-      
+
       // And they should be unique for each environment
       const devS3Rule = `s3-bucket-server-side-encryption-enabled-dev`;
       const prodS3Rule = `s3-bucket-server-side-encryption-enabled-prod`;
@@ -185,7 +185,7 @@ describe('Security Compliance Template Integration Tests', () => {
           PolicyArn: policyArn
         });
         const response = await iamClient.send(command);
-        
+
         expect(response.Policy).toBeDefined();
         expect(response.Policy?.PolicyName).toContain('RequireMFAForPrivilegedActions');
         expect(response.Policy?.Description).toBe('Policy requiring MFA for privileged actions');
@@ -203,19 +203,17 @@ describe('Security Compliance Template Integration Tests', () => {
 
   describe('Security Best Practices Validation', () => {
     test('all resources should be properly tagged for compliance', () => {
-      // This test validates that the template includes proper tagging
-      // In a real deployment, we'd check actual resource tags via AWS APIs
       expect(outputs).toBeDefined();
-      
+
       // Verify outputs contain all required compliance resources
       const requiredOutputs = [
         'S3KMSKeyArn',
-        'EBSKMSKeyArn', 
+        'EBSKMSKeyArn',
         'EncryptedS3BucketName',
         'MFARequiredPolicyArn',
         'ConfigBucketName'
       ];
-      
+
       requiredOutputs.forEach(output => {
         expect(outputs[output]).toBeDefined();
         expect(outputs[output]).not.toBe('');
@@ -226,11 +224,11 @@ describe('Security Compliance Template Integration Tests', () => {
       // Verify that environment suffix is being used consistently
       expect(environmentSuffix).toBeDefined();
       expect(environmentSuffix).toMatch(/^[a-zA-Z0-9]+$/);
-      
+
       // This ensures that the Config rules will have unique names
       const expectedS3Rule = `s3-bucket-server-side-encryption-enabled-${environmentSuffix}`;
       const expectedEBSRule = `encrypted-volumes-${environmentSuffix}`;
-      
+
       expect(expectedS3Rule).toContain(environmentSuffix);
       expect(expectedEBSRule).toContain(environmentSuffix);
     });
@@ -238,10 +236,10 @@ describe('Security Compliance Template Integration Tests', () => {
     test('KMS keys should follow security best practices', () => {
       // Verify KMS key ARNs are properly formatted and from the correct region/account
       const keyArnPattern = /^arn:aws:kms:[a-z0-9-]+:[0-9]{12}:key\/[a-f0-9-]{36}$/;
-      
+
       expect(outputs.S3KMSKeyArn).toMatch(keyArnPattern);
       expect(outputs.EBSKMSKeyArn).toMatch(keyArnPattern);
-      
+
       // Ensure different keys are used for S3 and EBS
       expect(outputs.S3KMSKeyArn).not.toBe(outputs.EBSKMSKeyArn);
     });
