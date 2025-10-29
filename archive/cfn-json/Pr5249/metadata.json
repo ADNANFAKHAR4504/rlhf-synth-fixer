@@ -10,5 +10,12 @@
   "subject_labels": [
     "Web Application Deployment"
   ],
-  "aws_services": "ALB, RDS, S3, WAF, CloudFront"
+  "aws_services": "ALB, RDS, S3, WAF, CloudFront",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "anukkrit149",
+  "dockerS3Location": ""
 }
