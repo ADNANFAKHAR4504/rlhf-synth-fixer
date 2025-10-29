@@ -1360,6 +1360,7 @@ Resources:
   # AWS Config for compliance monitoring
   ConfigRole:
     Type: AWS::IAM::Role
+    Condition: CreateConfigRecorder
     Properties:
       RoleName:
         Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-config-role-${AWS::AccountId}'
@@ -1375,6 +1376,7 @@ Resources:
 
   ConfigBucket:
     Type: AWS::S3::Bucket
+    Condition: CreateConfigRecorder
     Properties:
       BucketName:
         Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-config-${AWS::AccountId}'
@@ -1407,6 +1409,7 @@ Resources:
 
   ConfigBucketPolicy:
     Type: AWS::S3::BucketPolicy
+    Condition: CreateConfigRecorder
     Properties:
       Bucket:
         Ref: ConfigBucket
@@ -1687,10 +1690,13 @@ Resources:
       BucketName:
         Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-logs-${AWS::AccountId}'
       PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -1762,6 +1768,9 @@ Resources:
             Action: s3:PutObject
             Resource:
               Fn::Sub: '${LogsBucket.Arn}/alb-access-logs/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
           - Sid: ALBAccessLogsAclCheck
             Effect: Allow
             Principal:
