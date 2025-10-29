@@ -395,10 +395,7 @@ resource "aws_iam_role_policy" "codepipeline" {
           "s3:GetBucketVersioning"
         ]
         Resource = [
-          aws_s3_bucket.source.arn,
-          "${aws_s3_bucket.source.arn}/*",
-          aws_s3_bucket.artifacts.arn,
-          "${aws_s3_bucket.artifacts.arn}/*"
+          "*"
         ]
       },
       {
