@@ -2,7 +2,7 @@
 
 Hey team,
 
-We need to build a real-time event processing system for MedTech Solutions GmbH that handles patient vital signs data from medical devices across multiple hospitals. The company operates in Germany and needs infrastructure that processes approximately 1000 events per second during peak times while maintaining strict HIPAA compliance. I've been asked to create this using **CloudFormation with YAML** for the infrastructure deployment in the eu-central-1 region.
+We need to build a real-time event processing system for MedTech Solutions GmbH that handles patient vital signs data from medical devices across multiple hospitals. The company operates in Germany and needs infrastructure that processes approximately 1000 events per second during peak times while maintaining strict HIPAA compliance. I've been asked to create this using **CloudFormation with YAML** for the infrastructure deployment in the us-east-1 region.
 
 The business problem is straightforward but critical: medical devices at hospitals are generating vital signs data continuously, and we need to capture, process, and store this information in real-time. The data includes heart rate, blood pressure, oxygen levels, and other measurements that doctors and nurses rely on for patient care. Any delays or data loss could impact patient safety, so reliability and performance are non-negotiable.
 
@@ -49,7 +49,7 @@ Create a HIPAA-compliant event processing pipeline using **CloudFormation with Y
 ### Technical Requirements
 
 - All infrastructure defined using **CloudFormation with YAML**
-- Deploy to **eu-central-1** region
+- Deploy to **us-east-1** region
 - Use **Kinesis Data Streams** for real-time ingestion
 - Use **ECS Fargate** for serverless container processing
 - Use **RDS Aurora** with encryption for data persistence

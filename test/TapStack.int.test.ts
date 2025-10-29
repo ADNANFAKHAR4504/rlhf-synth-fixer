@@ -311,7 +311,7 @@ describe('HIPAA-Compliant Event Processing Pipeline Integration Tests', () => {
     test('API endpoint should be accessible', async () => {
       // Just verify the endpoint format is correct
       expect(outputs.APIEndpoint).toMatch(/^https:\/\/.*\.execute-api\..*/);
-      expect(outputs.APIEndpoint).toContain('eu-central-1');
+      expect(outputs.APIEndpoint).toContain('us-east-1');
       expect(outputs.APIEndpoint).toContain('/prod/vitals');
     });
   });
