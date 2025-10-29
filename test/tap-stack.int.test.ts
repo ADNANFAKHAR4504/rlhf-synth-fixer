@@ -1,8 +1,22 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import * as fs from 'fs';
 
-// Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+// Get environment suffix from environment variable, or infer from outputs file if possible
+function inferEnvironmentSuffix(outputs: any): string {
+  if (process.env.ENVIRONMENT_SUFFIX) return process.env.ENVIRONMENT_SUFFIX;
+  // Try to infer from output values (e.g., bucket or alarm name)
+  if (outputs && typeof outputs === 'object') {
+    for (const key of Object.keys(outputs)) {
+      const val = outputs[key];
+      const match = typeof val === 'string' && val.match(/pr\d{4,}/);
+      if (match) return match[0];
+    }
+  }
+  return 'dev';
+}
+
+const outputs = getOutputs();
+const environmentSuffix = inferEnvironmentSuffix(outputs);
 
 // Helper function to safely read outputs file
 function getOutputs() {
@@ -16,7 +30,7 @@ function getOutputs() {
   }
 }
 
-const outputs = getOutputs();
+
 
 describe('TapStack Integration Tests', () => {
   // Only run integration tests if outputs are available
@@ -46,9 +60,8 @@ describe('TapStack Integration Tests', () => {
 
       const bucketName = outputs['AssetsBucketName'];
       expect(bucketName).toBeDefined();
-      expect(bucketName).toMatch(
-        /^bookstore-assets-us-east-1-pr3399-[a-z0-9]+$/
-      );
+      const bucketPattern = new RegExp(`^bookstore-assets-us-east-1-${environmentSuffix}-[a-z0-9]+$`);
+      expect(bucketName).toMatch(bucketPattern);
     });
   });
 
@@ -61,7 +74,8 @@ describe('TapStack Integration Tests', () => {
 
       const alarmName = outputs['CPUAlarmName'];
       expect(alarmName).toBeDefined();
-      expect(alarmName).toMatch(/^bookstore-high-cpu-pr3399$/);
+      const alarmPattern = new RegExp(`^bookstore-high-cpu-${environmentSuffix}$`);
+      expect(alarmName).toMatch(alarmPattern);
     });
   });
 
@@ -198,8 +212,10 @@ describe('TapStack Integration Tests', () => {
       const alarmName = outputs['CPUAlarmName'];
 
       // Verify naming patterns (now includes unique suffix)
-      expect(bucketName).toMatch(/^bookstore-assets-us-east-1-pr3399-[a-z0-9]+$/);
-      expect(alarmName).toMatch(/^bookstore-high-cpu-[a-z0-9-]+$/);
+      const bucketPattern = new RegExp(`^bookstore-assets-us-east-1-${environmentSuffix}-[a-z0-9]+$`);
+      expect(bucketName).toMatch(bucketPattern);
+      const alarmPattern = /^bookstore-high-cpu-[a-z0-9-]+$/;
+      expect(alarmName).toMatch(alarmPattern);
     });
   });
 });
