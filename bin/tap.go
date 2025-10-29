@@ -3,9 +3,9 @@ package main
 import (
 	"os"
 
+	"github.com/TuringGpt/iac-test-automations/lib"
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/jsii-runtime-go"
-	"tap/lib"
 )
 
 func main() {
