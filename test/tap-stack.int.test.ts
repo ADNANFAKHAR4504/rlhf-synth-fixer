@@ -48,7 +48,7 @@ try {
     awsRegion = fs.readFileSync(regionFile, 'utf8').trim() || awsRegion;
   }
 } catch {
-  // ignore; fallback handled
+  // ignore; fallback handled below
 }
 const regionFromArn = (arn?: string) => {
   if (!arn || typeof arn !== 'string') return undefined;
@@ -63,7 +63,7 @@ awsRegion =
   'eu-central-1';
 
 // -------------------------------
-/* v3 clients (region-scoped) */
+// v3 clients (region-scoped)
 // -------------------------------
 const s3 = new S3Client({ region: awsRegion });
 const lambda = new LambdaClient({ region: awsRegion });
@@ -117,7 +117,8 @@ describe('Compliance Validation System — Live Integration (AWS SDK v3)', () =>
 
       // Encryption (KMS)
       const enc = await s3.send(new GetBucketEncryptionCommand({ Bucket: bucket }));
-      const rule = enc.ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault;
+      const rule =
+        enc.ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault;
       expect(rule?.SSEAlgorithm).toBe('aws:kms');
       expect(rule?.KMSMasterKeyID).toBeDefined();
 
@@ -138,13 +139,23 @@ describe('Compliance Validation System — Live Integration (AWS SDK v3)', () =>
       const rules = lc.Rules || [];
       expect(rules.length).toBeGreaterThan(0);
 
-      const hasCurrentGlacier90 = rules.some(r =>
-        (r.Transitions || []).some(t => t.StorageClass === 'GLACIER' && Number(t.TransitionInDays) === 90)
+      // Current-object transition uses 'Days'
+      const hasCurrentGlacier90 = rules.some((r) =>
+        (r.Transitions || []).some(
+          (t) =>
+            Number(t.Days) === 90 &&
+            (t.StorageClass === 'GLACIER' || t.StorageClass === 'GLACIER_IR')
+        )
       );
       expect(hasCurrentGlacier90).toBe(true);
 
-      const hasNoncurrentGlacier90 = rules.some(r =>
-        (r.NoncurrentVersionTransitions || []).some(t => t.StorageClass === 'GLACIER' && Number(t.TransitionInDays) === 90)
+      // Noncurrent-version transition uses 'NoncurrentDays'
+      const hasNoncurrentGlacier90 = rules.some((r) =>
+        (r.NoncurrentVersionTransitions || []).some(
+          (t) =>
+            Number(t.NoncurrentDays) === 90 &&
+            (t.StorageClass === 'GLACIER' || t.StorageClass === 'GLACIER_IR')
+        )
       );
       expect(hasNoncurrentGlacier90).toBe(true);
     });
@@ -157,7 +168,8 @@ describe('Compliance Validation System — Live Integration (AWS SDK v3)', () =>
 
       // Encryption (KMS)
       const enc = await s3.send(new GetBucketEncryptionCommand({ Bucket: bucket }));
-      const rule = enc.ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault;
+      const rule =
+        enc.ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault;
       expect(rule?.SSEAlgorithm).toBe('aws:kms');
       expect(rule?.KMSMasterKeyID).toBeDefined();
 
@@ -170,13 +182,23 @@ describe('Compliance Validation System — Live Integration (AWS SDK v3)', () =>
       const rules = lc.Rules || [];
       expect(rules.length).toBeGreaterThan(0);
 
-      const hasCurrentGlacier90 = rules.some(r =>
-        (r.Transitions || []).some(t => t.StorageClass === 'GLACIER' && Number(t.TransitionInDays) === 90)
+      // Current-object transition -> 'Days'
+      const hasCurrentGlacier90 = rules.some((r) =>
+        (r.Transitions || []).some(
+          (t) =>
+            Number(t.Days) === 90 &&
+            (t.StorageClass === 'GLACIER' || t.StorageClass === 'GLACIER_IR')
+        )
       );
       expect(hasCurrentGlacier90).toBe(true);
 
-      const hasNoncurrentGlacier90 = rules.some(r =>
-        (r.NoncurrentVersionTransitions || []).some(t => t.StorageClass === 'GLACIER' && Number(t.TransitionInDays) === 90)
+      // Noncurrent-version transition -> 'NoncurrentDays'
+      const hasNoncurrentGlacier90 = rules.some((r) =>
+        (r.NoncurrentVersionTransitions || []).some(
+          (t) =>
+            Number(t.NoncurrentDays) === 90 &&
+            (t.StorageClass === 'GLACIER' || t.StorageClass === 'GLACIER_IR')
+        )
       );
       expect(hasNoncurrentGlacier90).toBe(true);
     });
@@ -205,7 +227,7 @@ describe('Compliance Validation System — Live Integration (AWS SDK v3)', () =>
       // Log group exists with retention 365
       const lgName = `/aws/lambda/${name}`;
       const lgs = await logs.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: lgName }));
-      const lg = (lgs.logGroups || []).find(g => g.logGroupName === lgName);
+      const lg = (lgs.logGroups || []).find((g) => g.logGroupName === lgName);
       expect(lg).toBeDefined();
       expect(lg?.retentionInDays).toBe(365);
     });
@@ -226,7 +248,7 @@ describe('Compliance Validation System — Live Integration (AWS SDK v3)', () =>
 
       const lgName = `/aws/lambda/${name}`;
       const lgs = await logs.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: lgName }));
-      const lg = (lgs.logGroups || []).find(g => g.logGroupName === lgName);
+      const lg = (lgs.logGroups || []).find((g) => g.logGroupName === lgName);
       expect(lg).toBeDefined();
       expect(lg?.retentionInDays).toBe(365);
     });
@@ -264,8 +286,8 @@ describe('Compliance Validation System — Live Integration (AWS SDK v3)', () =>
       // Alias attached to this key
       const aliases = await kms.send(new ListAliasesCommand({ KeyId: keyId }));
       const found =
-        (aliases.Aliases || []).find(a => a.AliasName === aliasName) ||
-        (await kms.send(new ListAliasesCommand({}))).Aliases?.find(a => a.AliasName === aliasName);
+        (aliases.Aliases || []).find((a) => a.AliasName === aliasName) ||
+        (await kms.send(new ListAliasesCommand({}))).Aliases?.find((a) => a.AliasName === aliasName);
       expect(found).toBeDefined();
       expect(found?.TargetKeyId).toBe(meta.KeyId);
     });
