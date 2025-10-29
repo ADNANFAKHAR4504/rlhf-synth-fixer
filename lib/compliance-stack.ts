@@ -288,7 +288,9 @@ export class ComplianceConstruct extends Construct {
       memorySize: 512,
       vpc: vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-      layers: [lambdaLayer],
+      // Do not attach the heavy SDK layer by default; prefer packaging dependencies in the function bundle.
+      // This avoids shipping the full aws-sdk in the layer and relies on function packaging for dependencies.
+      // layers: [lambdaLayer],
       logRetention: logs.RetentionDays.ONE_MONTH,
     };
 

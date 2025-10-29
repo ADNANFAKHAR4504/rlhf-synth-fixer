@@ -88,8 +88,7 @@ describe('Integration tests — runtime traffic checks', () => {
 
     const arns = [ec2Arn, rdsArn, s3Arn].filter(Boolean) as string[];
     if (arns.length === 0) {
-      console.warn('No scanner Lambda ARNs found in cfn-outputs/flat-outputs.json — skipping invocation checks');
-      return;
+      throw new Error('No scanner Lambda ARNs found in cfn-outputs/flat-outputs.json');
     }
 
     // Pre-flight: only test functions that actually exist in the account/region we are testing against.
@@ -101,8 +100,7 @@ describe('Integration tests — runtime traffic checks', () => {
       } catch (err: any) {
         const msg = String(err && (err.message || err.Code || err.name || err));
         if (msg.includes('Function not found') || msg.includes('ResourceNotFoundException') || msg.includes('ResourceNotFound')) {
-          console.warn(`Skipping missing Lambda function ${arn} (not found in this account/region)`);
-          continue;
+          throw new Error(`Lambda function not found in this account/region: ${arn}`);
         }
         throw err;
       }
@@ -144,17 +142,7 @@ describe('Integration tests — runtime traffic checks', () => {
         const errMsg = parsed && (parsed.errorMessage || parsed.message) ? (parsed.errorMessage || parsed.message) : payloadStr;
         const stack = parsed && (parsed.stack || parsed.stackTrace) ? (parsed.stack || parsed.stackTrace) : '';
 
-        // Special-case: missing runtime packaging modules (aws-sdk, jmespath, etc.).
-        // These happen when the deployed Lambda package or layer doesn't include expected modules.
-        // For integration testing without deployment permissions we treat these as non-fatal and skip
-        // the function check with guidance so CI doesn't fail the suite.
-        if (errMsg && (errMsg.includes("Cannot find module 'aws-sdk'") || errMsg.includes("Cannot find module 'jmespath'") || (errMsg.toLowerCase().includes('cannot find module') && (errMsg.toLowerCase().includes('jmespath') || errMsg.toLowerCase().includes('aws-sdk'))))) {
-          const guidance = `The invoked Lambda ${arn} failed because a required module is missing: ${errMsg.split('\n')[0]}. This indicates the function package or attached layer does not include that dependency. Fixes: repackage the function to include the dependency or provide a layer containing it.`;
-          console.warn(`Skipping invocation failure for ${arn}: ${guidance} Original payload: ${payloadStr}`);
-          // Skip this function invocation check (non-fatal for this integration suite)
-          continue;
-        }
-
+        // Treat any FunctionError as a test failure. Surface the handler payload for diagnostics.
         throw new Error(`Lambda ${arn} returned FunctionError=${resp.FunctionError}: ${errMsg}\n${stack}`);
       }
 
