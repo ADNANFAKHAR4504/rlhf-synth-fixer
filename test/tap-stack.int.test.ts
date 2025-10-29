@@ -29,13 +29,38 @@ const ENVIRONMENT = process.env.ENVIRONMENT || 'Production';
 const REGION = process.env.AWS_REGION;
 
 // AWS SDK clients
-const s3 = new S3Client({ region: REGION });
-const logs = new CloudWatchLogsClient({ region: REGION });
-const ec2 = new EC2Client({ region: REGION });
-const asg = new AutoScalingClient({ region: REGION });
-const cloudwatch = new CloudWatchClient({ region: REGION });
+let s3: S3Client;
+let logs: CloudWatchLogsClient;
+let ec2: EC2Client;
+let asg: AutoScalingClient;
+let cloudwatch: CloudWatchClient;
+
+// Initialize clients
+const initClients = () => {
+  s3 = new S3Client({ region: REGION });
+  logs = new CloudWatchLogsClient({ region: REGION });
+  ec2 = new EC2Client({ region: REGION });
+  asg = new AutoScalingClient({ region: REGION });
+  cloudwatch = new CloudWatchClient({ region: REGION });
+};
+
+// Cleanup clients
+const cleanupClients = async () => {
+  if (s3) await s3.destroy();
+  if (logs) await logs.destroy();
+  if (ec2) await ec2.destroy();
+  if (asg) await asg.destroy();
+  if (cloudwatch) await cloudwatch.destroy();
+};
 
 describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
+  beforeAll(() => {
+    initClients();
+  });
+
+  afterAll(async () => {
+    await cleanupClients();
+  });
   describe('DNS → Elastic IP', () => {
     test('Route 53 A record resolves to the stack Elastic IP', async () => {
       const url = new URL(WEBSITE_URL);
@@ -48,7 +73,6 @@ describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
       // check that EIP exists and is valid
       if (!resolvedIps.includes(EIP)) {
         expect(EIP).toMatch(/^\d+\.\d+\.\d+\.\d+$/);
-        console.log(`DNS resolves to: ${resolvedIps.join(', ')}, EIP is: ${EIP}`);
       } else {
         expect(resolvedIps).toContain(EIP);
       }
@@ -134,7 +158,7 @@ describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
       }
 
       expect(found).toBe(true);
-    });
+    }, 90000); // 90 second timeout
   });
 
   describe('CloudWatch Logs and S3 artifacts', () => {
@@ -217,8 +241,24 @@ describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
     });
 
     test('Elastic IP is currently associated to the ASG instance', async () => {
-      const addrResp = await ec2.send(new DescribeAddressesCommand({ PublicIps: [EIP] }));
-      const address = (addrResp.Addresses || [])[0];
+      // Retry logic for EIP association
+      let address;
+      let retries = 0;
+      const maxRetries = 12; // 2 minutes max
+      
+      while (retries < maxRetries) {
+        const addrResp = await ec2.send(new DescribeAddressesCommand({ PublicIps: [EIP] }));
+        address = (addrResp.Addresses || [])[0];
+        
+        if (address?.InstanceId) {
+          break;
+        }
+        
+        if (retries < maxRetries - 1) {
+          await new Promise(r => setTimeout(r, 10000)); // Wait 10 seconds
+        }
+        retries++;
+      }
       
       expect(address).toBeDefined();
       expect(address!.InstanceId).toBeDefined();
@@ -232,7 +272,7 @@ describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
       if (instanceId && address!.InstanceId !== instanceId) {
         console.log(`EIP associated to ${address!.InstanceId}, ASG instance is ${instanceId}. This is normal during lifecycle events.`);
       }
-    });
+    }, 150000); // 2.5 minute timeout
   });
 
   describe('SSH Access (Security Group)', () => {
@@ -262,8 +302,8 @@ describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
       expect(alarm?.Namespace).toBe('AWS/EC2');
       expect(alarm?.Threshold).toBe(80);
       expect(alarm?.ComparisonOperator).toBe('GreaterThanThreshold');
-    });
   });
+});
 
   describe('Lifecycle Replacement Flow (EIP Reassociation)', () => {
     let originalInstanceId: string | undefined;
@@ -323,6 +363,4 @@ describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
       const instResp = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [address!.InstanceId!] }));
       const state = instResp.Reservations?.[0]?.Instances?.[0]?.State?.Name;
       expect(state).toBe('running');
-    });
-  });
-});
+    }, 360000); // 6 minute timeout (instance refresh can take 5+ minutes)
