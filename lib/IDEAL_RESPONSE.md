@@ -1,10 +1,8 @@
-# Ideal Response Guide
+# Infrastructure as Code Configuration
 
-## Introduction
+This document contains the complete Terraform configuration for deploying a CI/CD pipeline infrastructure on AWS.
 
-The following outlines the recommended approach for implementing this infrastructure in accordance with all specified requirements and compliance standards:
-
-## Terraform HCL:
+## provider.tf
 
 ```hcl
 # provider.tf
@@ -35,7 +33,11 @@ provider "aws" {
     }
   }
 }
+```
 
+## variables.tf
+
+```hcl
 # === VARIABLES ===
 variable "aws_region" {
   description = "AWS region for all resources"
@@ -114,8 +116,11 @@ variable "image_tag" {
   type        = string
   default     = "latest"
 }
+```
 
+## tap_stack.tf
 
+```hcl
 # === MAIN RESOURCES ===
 
 # Get current AWS account ID and caller identity
@@ -378,7 +383,7 @@ data "archive_file" "docker_build_zip"{
 
 resource "aws_s3_object" "pipeline_files" {
   bucket = aws_s3_bucket.source.bucket
-  key = "pipeline_files.zip"
+  key    = "pipeline_files.zip"
   content_type = "application/zip"
   source = "pipeline_files.zip"
   etag = data.archive_file.docker_build_zip.output_md5
@@ -502,21 +507,28 @@ resource "aws_iam_role_policy" "codepipeline" {
     Version = "2012-10-17"
     Statement = [
       {
-        # Read source and write artifacts
+        # S3 bucket-level permissions (for ListBucket, GetBucketLocation, GetBucketVersioning)
         Effect = "Allow"
         Action = [
-          "s3:GetObject",
-          "s3:GetObjectVersion",
-          "s3:PutObject",
           "s3:GetBucketLocation",
           "s3:ListBucket",
-          "s3:ListObjects",
           "s3:GetBucketVersioning"
         ]
         Resource = [
           aws_s3_bucket.source.arn,
+          aws_s3_bucket.artifacts.arn
+        ]
+      },
+      {
+        # S3 object-level permissions (for GetObject, PutObject)
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:GetObjectVersion",
+          "s3:PutObject"
+        ]
+        Resource = [
           "${aws_s3_bucket.source.arn}/*",
-          aws_s3_bucket.artifacts.arn,
           "${aws_s3_bucket.artifacts.arn}/*"
         ]
       },
@@ -886,6 +898,7 @@ resource "aws_codepipeline" "main" {
       configuration = {
         S3Bucket    = aws_s3_bucket.source.bucket
         S3ObjectKey = "pipeline_files.zip"
+        PollForSourceChanges = true
       }
     }
   }
@@ -1094,6 +1107,54 @@ output "artifact_bucket_name" {
   description = "Name of the S3 artifacts bucket"
   value       = aws_s3_bucket.artifacts.id
 }
+```
 
+## pipeline_files/Dockerfile
 
+```dockerfile
+FROM nginx:alpine
+
+COPY index.html /usr/share/nginx/html/index.html
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
+```
+
+## pipeline_files/docker_install.sh
+
+```bash
+apt-get install ca-certificates curl
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+chmod a+r /etc/apt/keyrings/docker.asc
+
+# Add the repository to Apt sources:
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  tee /etc/apt/sources.list.d/docker.list > /dev/null
+apt-get update
+apt-get install -y  docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+
+## codepipeline_buidspec.yml
+
+```yaml
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      # Upate repository cache
+      - apt-get update
+
+      # Install and setup docker
+      - chmod u+x docker_install.sh
+      - ./docker_install.sh
+      - apt-get install -y  docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  build:
+    commands:
+      # Deploy application
+      - docker build -t app-pipeline .
 ```
