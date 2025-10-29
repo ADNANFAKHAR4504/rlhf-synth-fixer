@@ -308,12 +308,12 @@ export class TapStack extends cdk.Stack {
         protocol: elbv2.ApplicationProtocol.HTTP,
         targetType: elbv2.TargetType.IP,
         healthCheck: {
-          path: '/health',
+          path: '/',
           interval: Duration.seconds(30),
           timeout: Duration.seconds(5),
           healthyThresholdCount: 2,
           unhealthyThresholdCount: 3,
-          healthyHttpCodes: '200',
+          healthyHttpCodes: '200,301,302',
         },
         deregistrationDelay: Duration.seconds(30),
       }
@@ -328,12 +328,12 @@ export class TapStack extends cdk.Stack {
         protocol: elbv2.ApplicationProtocol.HTTP,
         targetType: elbv2.TargetType.IP,
         healthCheck: {
-          path: '/health',
+          path: '/',
           interval: Duration.seconds(30),
           timeout: Duration.seconds(5),
           healthyThresholdCount: 2,
           unhealthyThresholdCount: 3,
-          healthyHttpCodes: '200',
+          healthyHttpCodes: '200,301,302',
         },
         deregistrationDelay: Duration.seconds(30),
       }
