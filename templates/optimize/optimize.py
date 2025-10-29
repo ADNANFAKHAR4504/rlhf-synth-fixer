@@ -173,33 +173,61 @@ class InfrastructureOptimizer:
             clusters = self.ecs_client.list_clusters()
             cluster_arn = None
             
-            # Look for cluster with matching patterns
+            # Prioritize 'streamflix' pattern, then fallback to environment suffix
             for cluster in clusters['clusterArns']:
                 cluster_lower = cluster.lower()
-                if any(pattern in cluster_lower for pattern in ['streamflix', 'cluster', self.environment_suffix.lower()]):
+                if 'streamflix' in cluster_lower:
                     cluster_arn = cluster
                     print(f"Found cluster: {cluster_arn.split('/')[-1]}")
                     break
+            
+            # If no streamflix cluster found, try matching on environment suffix
+            if not cluster_arn:
+                for cluster in clusters['clusterArns']:
+                    if self.environment_suffix.lower() in cluster.lower():
+                        cluster_arn = cluster
+                        print(f"Found cluster by env suffix: {cluster_arn.split('/')[-1]}")
+                        break
+            
+            # If still not found and only one cluster exists, use it
+            if not cluster_arn and len(clusters['clusterArns']) == 1:
+                cluster_arn = clusters['clusterArns'][0]
+                print(f"Using only available cluster: {cluster_arn.split('/')[-1]}")
             
             if not cluster_arn:
                 print("❌ ECS cluster not found")
                 print(f"Available clusters: {[c.split('/')[-1] for c in clusters['clusterArns']]}")
                 return False
             
-            # Find the service
+            # Find the service by exact naming pattern: streamflix-api-{environmentSuffix}
             services = self.ecs_client.list_services(cluster=cluster_arn)
             service_arn = None
+            expected_service_name = f'streamflix-api-{self.environment_suffix}'
             
-            # Look for service with matching patterns
+            # First, try exact match
             for service in services['serviceArns']:
-                service_lower = service.lower()
-                if any(pattern in service_lower for pattern in ['streamflix', 'api', 'fargate', self.environment_suffix.lower()]):
+                service_name = service.split('/')[-1]
+                if service_name == expected_service_name:
                     service_arn = service
-                    print(f"Found service: {service_arn.split('/')[-1]}")
+                    print(f"Found service (exact match): {service_name}")
                     break
             
+            # If exact match not found, try pattern matching
             if not service_arn:
-                print("❌ ECS service not found")
+                for service in services['serviceArns']:
+                    service_lower = service.lower()
+                    if 'streamflix-api' in service_lower:
+                        service_arn = service
+                        print(f"Found service (pattern match): {service.split('/')[-1]}")
+                        break
+            
+            # If still not found and only one service, use it
+            if not service_arn and len(services['serviceArns']) == 1:
+                service_arn = services['serviceArns'][0]
+                print(f"Using only available service: {service_arn.split('/')[-1]}")
+            
+            if not service_arn:
+                print(f"❌ ECS service not found. Expected: {expected_service_name}")
                 print(f"Available services: {[s.split('/')[-1] for s in services['serviceArns']]}")
                 return False
             
