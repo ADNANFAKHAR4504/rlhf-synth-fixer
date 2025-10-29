@@ -178,10 +178,10 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
     test('CloudWatch log groups exist with correct retention', async () => {
       // Collect log group names from outputs
       const explicitGroups: string[] = [];
-      
+
       if (outputs.cloudwatch_log_groups) {
         let map = outputs.cloudwatch_log_groups;
-        
+
         // Handle if it's a JSON string
         if (typeof map === 'string') {
           try {
@@ -191,7 +191,7 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
             map = {};
           }
         }
-        
+
         // Extract values if it's an object
         if (typeof map === 'object' && map !== null) {
           Object.values(map).forEach((name: any) => {
@@ -201,7 +201,7 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
           });
         }
       }
-      
+
       // Fallback: collect flattened keys like cloudwatch_log_groups.api_gateway
       if (explicitGroups.length === 0) {
         Object.keys(outputs)
