@@ -34,41 +34,121 @@ import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
+import path from 'path';
 
-export class MultiComponentApplicationStack extends cdk.NestedStack {
+export interface MultiComponentProps extends cdk.StackProps {
+  secondaryRegion?: string;
+  baseEnvironmentSuffix?: string;
+  isPrimary?: boolean;
+}
+
+export class MultiComponentApplicationConstruct extends Construct {
   // String suffix for unique resource naming
   private readonly stringSuffix: string;
   // Expose important resource tokens as public properties so other stacks
   // in the same CDK app can reference them without requiring manual
   // CloudFormation exports/imports.
   public readonly vpcId!: string;
-  ### lib/multi-component-stack.ts (current highlights)
+  public readonly apiUrl!: string;
+  public readonly lambdaFunctionArn!: string;
+  public readonly rdsEndpoint!: string;
+  public readonly s3BucketName!: string;
+  public readonly sqsQueueUrl!: string;
+  public readonly cloudFrontDomainName!: string;
+  public readonly hostedZoneId!: string;
+  public readonly databaseSecretArn!: string;
+  public readonly lambdaRoleArn!: string;
+  public readonly databaseSecurityGroupId!: string;
+  public readonly lambdaSecurityGroupId!: string;
+  public readonly lambdaLogGroupName!: string;
+  // Indicate whether WAF creation was skipped (so callers/stacks can emit
+  // equivalent CFN outputs at the stack level if desired).
+  public readonly wafWasSkipped: boolean = false;
 
-  This project uses a single nested stack `MultiComponentApplicationStack` that
-  creates VPC, RDS, Lambda (packaged as an asset), API Gateway, S3, SQS,
-  CloudFront, WAF (optional), and monitoring resources. Below are the current
-  implementation highlights relevant to recent fixes and test failures.
+  // Expose a small helper to compute the sanitized suffix used for Lambda names.
+  // This is intentionally simple and useful to call from unit tests to exercise
+  // the branches (defined vs falsy suffix).
+  public computeSafeSuffixForLambda(input?: string): string | cdk.Aws {
+    return input
+      ? input.toLowerCase().replace(/[^a-z0-9-_]/g, '-')
+      : cdk.Aws.NO_VALUE;
+  }
 
-  - Lambda packaging: `ApiLambda` is now packaged as an asset under
-    `lib/lambda/api` and uses `lambda.Code.fromAsset(path.join(__dirname,'lambda','api'))`.
-    This was done to include `aws-sdk` v2 in the artifact so direct Lambda
-    invocation (used as a test fallback) does not fail with ImportModuleError.
+  constructor(scope: Construct, id: string, props?: MultiComponentProps) {
+    // Construct (not a NestedStack) - call Construct's constructor and
+    // accept a superset of the previous NestedStack props so callers can
+    // continue forwarding stack-like options.
+    super(scope, id);
 
-  - VPC Flow Logs: instead of relying on a generated implicit role for the
-    flow log, an explicit IAM role `VpcFlowLogRole` is created and passed to
-    the FlowLog destination. This prevents CloudFormation from attempting to
-    resolve a generated role name/ARN during stack updates which caused
-    "Unable to retrieve Arn attribute for AWS::IAM::Role" errors.
+    // Read isPrimary flag forwarded from TapStack props. Default to true
+    // to preserve single-region behavior.
+    const isPrimary = props?.isPrimary;
+    const createPrimaryResources =
+      isPrimary === undefined || isPrimary === true;
 
-  - Outputs: the nested stack exposes runtime tokens (VpcId, ApiGatewayUrl,
-    LambdaFunctionArn, RdsEndpoint, S3BucketName, SqsQueueUrl, CloudFrontDomainName,
-    HostedZoneId, DatabaseSecretArn, LambdaRoleArn, DatabaseSecurityGroupId,
-    LambdaSecurityGroupId, LambdaLogGroupName) as `CfnOutput`s from the
-    nested stack.
+    // Generate unique string suffix
+    this.stringSuffix = cdk.Fn.select(2, cdk.Fn.split('-', cdk.Aws.STACK_ID));
 
-  For the authoritative, up-to-date TypeScript source, see
-  `lib/multi-component-stack.ts` in the repository. The two key changes to be
-  aware of are the Lambda asset packaging and the explicit VPC Flow Log role.
+    // ========================================
+    // VPC Configuration
+    // ========================================
+    const vpc = new ec2.Vpc(this, 'AppVpc', {
+      // Use a consistent, human-friendly VPC name across code and docs.
+      // Canonical pattern: prod-app-vpc-<suffix>
+      vpcName: `prod-app-vpc-${this.stringSuffix}`,
+      cidr: '10.0.0.0/16',
+      maxAzs: 2,
+      natGateways: 2,
+      enableDnsHostnames: true,
+      enableDnsSupport: true,
+      subnetConfiguration: [
+        {
+          name: 'prod-public-subnet',
+          subnetType: ec2.SubnetType.PUBLIC,
+          cidrMask: 24,
+        },
+        {
+          name: 'prod-private-subnet',
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          cidrMask: 24,
+        },
+      ],
+    });
+
+    // ========================================
+    // Secrets Manager - RDS Credentials
+    // ========================================
+    const databaseSecret = new secretsmanager.Secret(this, 'DatabaseSecret', {
+      secretName: `prod-secretsmanager-db-${this.stringSuffix.toLowerCase().replace(/[^a-zA-Z0-9\-_+=.@!]/g, '')}`,
+      description: 'RDS PostgreSQL database credentials',
+      generateSecretString: {
+        secretStringTemplate: JSON.stringify({
+          username: 'dbadmin',
+        }),
+        generateStringKey: 'password',
+        excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
+        passwordLength: 32,
+      },
+    });
+
+    // ========================================
+    // RDS PostgreSQL Database
+    // ========================================
+    const databaseSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'DatabaseSecurityGroup',
+      {
+        securityGroupName: `prod-ec2-sg-db-${this.stringSuffix}`,
+        vpc,
+        description: 'Security group for RDS PostgreSQL',
+        allowAllOutbound: false,
+      }
+    );
+
+    // Use a generally-available Postgres engine version. Some regions may not have
+    // older minor versions (e.g. 13.7). Prefer Postgres 15.x which has wider availability.
+    // Allow reusing an existing DB subnet group to avoid hitting account quotas
+    // (provide either env var RDS_SUBNET_GROUP_NAME or CDK context key
     // `rdsSubnetGroupName` to import an existing group). If not provided,
     // CDK will create a new SubnetGroup automatically.
     const importedSubnetGroupName =
@@ -116,8 +196,22 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     // ========================================
     // S3 Buckets
     // ========================================
+    // Prefer a deterministic base suffix for cross-region deployments when provided
+    const baseEnvSuffix = props?.baseEnvironmentSuffix as string | undefined;
+
+    const bucketNameParts = [
+      'prod-s3-static',
+      // Use the provided base environment suffix if present so both stacks
+      // produce the same base bucket name across regions. Otherwise fall
+      // back to the internal stringSuffix which is derived from the stack id.
+      baseEnvSuffix
+        ? baseEnvSuffix.toLowerCase().replace(/[^a-z0-9-]/g, '')
+        : this.stringSuffix.toLowerCase().replace(/[^a-z0-9-]/g, ''),
+      cdk.Aws.REGION,
+    ];
+
     const staticFilesBucket = new s3.Bucket(this, 'StaticFilesBucket', {
-      bucketName: `prod-s3-static-${this.stringSuffix.toLowerCase().replace(/[^a-z0-9-]/g, '')}`,
+      bucketName: cdk.Fn.join('-', bucketNameParts),
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -131,6 +225,102 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
         },
       ],
     });
+
+    // Optional S3 replication: if the CDK context `enableReplication=true`
+    // and a `secondaryRegion` prop was forwarded to this nested stack, then
+    // configure cross-region replication from the primary bucket to the
+    // deterministic destination bucket in the secondary region. The
+    // destination bucket will follow the same naming pattern but with the
+    // secondary region token appended so the destination's name is stable.
+    const enableReplicationContext =
+      this.node.tryGetContext('enableReplication');
+    const enableReplicationEnv = process.env.ENABLE_REPLICATION === 'true';
+    const enableReplication =
+      enableReplicationContext === true ||
+      enableReplicationContext === 'true' ||
+      enableReplicationEnv;
+
+    // Accept secondaryRegion via props (forwarded by TapStack) as a token or literal
+    const secondaryRegion = props?.secondaryRegion as string | undefined;
+    // When computing the destination bucket name, prefer the same deterministic
+    // base suffix as used for the local bucket so the destination bucket's
+    // name will match the bucket created by the nested stack in the
+    // secondary region.
+    const bucketBaseNameToken = baseEnvSuffix
+      ? baseEnvSuffix.toLowerCase().replace(/[^a-z0-9-]/g, '')
+      : this.stringSuffix.toLowerCase().replace(/[^a-z0-9-]/g, '');
+
+    if (enableReplication && secondaryRegion) {
+      // Destination bucket name (deterministic)
+      const destinationBucketName = cdk.Fn.join('-', [
+        'prod-s3-static',
+        bucketBaseNameToken,
+        secondaryRegion,
+      ]);
+
+      // Build the destination bucket ARN explicitly (works across partitions).
+      const destinationBucketArn = cdk.Stack.of(this).formatArn({
+        service: 's3',
+        resource: destinationBucketName,
+        arnFormat: cdk.ArnFormat.NO_RESOURCE_NAME,
+      });
+
+      // Assume the destination bucket exists in the secondary stack/region.
+      // Create the replication role that S3 will use to replicate objects.
+      const replicationRole = new iam.Role(this, 'S3ReplicationRole', {
+        assumedBy: new iam.ServicePrincipal('s3.amazonaws.com'),
+        description: 'Role for cross-region S3 replication',
+      });
+
+      replicationRole.addToPolicy(
+        new iam.PolicyStatement({
+          actions: [
+            's3:GetObjectVersionForReplication',
+            's3:GetObjectVersionAcl',
+            's3:GetObjectVersionTagging',
+          ],
+          resources: [staticFilesBucket.bucketArn + '/*'],
+        })
+      );
+
+      replicationRole.addToPolicy(
+        new iam.PolicyStatement({
+          actions: [
+            's3:ReplicateObject',
+            's3:ReplicateDelete',
+            's3:ReplicateTags',
+            's3:PutObjectAcl',
+          ],
+          // destination bucket ARN for objects is arn:aws:s3:::bucketName/*
+          resources: [`${destinationBucketArn}/*`],
+        })
+      );
+
+      // Add replication configuration via L1 CfnBucket
+      const cfnSourceBucket = staticFilesBucket.node
+        .defaultChild as s3.CfnBucket;
+      if (cfnSourceBucket) {
+        cfnSourceBucket.replicationConfiguration = {
+          role: replicationRole.roleArn,
+          rules: [
+            {
+              id: 'ReplicateAll',
+              priority: 1,
+              status: 'Enabled',
+              filter: { prefix: '' },
+              destination: {
+                // The destination.bucket expects the destination bucket's ARN for
+                // cross-region replication. Use the explicit ARN we constructed
+                // above so CloudFormation receives a valid value across partitions.
+                bucket: destinationBucketArn,
+                account: cdk.Aws.ACCOUNT_ID,
+                storageClass: 'STANDARD',
+              },
+            },
+          ],
+        } as s3.CfnBucket.ReplicationConfigurationProperty;
+      }
+    }
 
     // ========================================
     // SQS Queue
@@ -156,6 +346,107 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: RemovalPolicy.DESTROY,
     });
+
+    // VPC Flow Logs: ship VPC traffic logs to CloudWatch Logs for security/monitoring
+    const vpcFlowLogGroup = new logs.LogGroup(this, 'VpcFlowLogGroup', {
+      logGroupName: `/aws/vpc-flow-logs/prod-${this.stringSuffix.toLowerCase().replace(/[^a-z0-9-]/g, '')}`,
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
+
+    // Explicitly create the IAM Role that VPC Flow Logs will assume when
+    // publishing to CloudWatch Logs. Relying on the L2 construct to generate
+    // a role name can lead to CloudFormation lookup issues during updates.
+    const vpcFlowLogRole = new iam.Role(this, 'VpcFlowLogRole', {
+      assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
+      description: 'Role allowing VPC Flow Logs to publish to CloudWatch Logs',
+    });
+
+    // Allow the Flow Logs service to create streams and put events into the
+    // selected log group.
+    vpcFlowLogRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+        resources: [vpcFlowLogGroup.logGroupArn],
+      })
+    );
+
+    new ec2.FlowLog(this, 'VpcFlowLog', {
+      resourceType: ec2.FlowLogResourceType.fromVpc(vpc),
+      destination: ec2.FlowLogDestination.toCloudWatchLogs(
+        vpcFlowLogGroup,
+        vpcFlowLogRole
+      ),
+      trafficType: ec2.FlowLogTrafficType.ALL,
+    });
+
+    // Metric filters for VPC Flow Logs
+    // Count rejected packets (action = REJECT)
+    new logs.MetricFilter(this, 'VpcRejectsMetricFilter', {
+      logGroup: vpcFlowLogGroup,
+      metricNamespace: 'VPC/FlowLogs',
+      metricName: 'RejectedPackets',
+      filterPattern: logs.FilterPattern.literal(
+        '[version, account, interfaceId, srcAddr, dstAddr, srcPort, dstPort, protocol, packets, bytes, start, end, action = REJECT, logStatus]'
+      ),
+      metricValue: '1',
+    });
+
+    // Count SSH (dstPort = 22) connection attempts
+    new logs.MetricFilter(this, 'VpcSshMetricFilter', {
+      logGroup: vpcFlowLogGroup,
+      metricNamespace: 'VPC/FlowLogs',
+      metricName: 'SshConnectionAttempts',
+      filterPattern: logs.FilterPattern.literal(
+        '[version, account, interfaceId, srcAddr, dstAddr, srcPort, dstPort = 22, protocol, packets, bytes, start, end, action, logStatus]'
+      ),
+      metricValue: '1',
+    });
+
+    // Count RDP (dstPort = 3389) connection attempts
+    new logs.MetricFilter(this, 'VpcRdpMetricFilter', {
+      logGroup: vpcFlowLogGroup,
+      metricNamespace: 'VPC/FlowLogs',
+      metricName: 'RdpConnectionAttempts',
+      filterPattern: logs.FilterPattern.literal(
+        '[version, account, interfaceId, srcAddr, dstAddr, srcPort, dstPort = 3389, protocol, packets, bytes, start, end, action, logStatus]'
+      ),
+      metricValue: '1',
+    });
+
+    // Expose CloudWatch metrics for the VPC flow log derived metrics so
+    // we can create alarms and dashboards from concrete Metric objects.
+    // rejectedPacketsMetric intentionally not used directly; VPC rejects are
+    // captured via MetricFilters and exposed if needed in future.
+
+    const sshAttemptsMetric = new cloudwatch.Metric({
+      namespace: 'VPC/FlowLogs',
+      metricName: 'SshConnectionAttempts',
+      period: Duration.minutes(5),
+      statistic: 'Sum',
+    });
+
+    const rdpAttemptsMetric = new cloudwatch.Metric({
+      namespace: 'VPC/FlowLogs',
+      metricName: 'RdpConnectionAttempts',
+      period: Duration.minutes(5),
+      statistic: 'Sum',
+    });
+
+    // Central SNS topic for alarm notifications. We do NOT auto-subscribe an email
+    // unless ALARM_NOTIFICATION_EMAIL is set in the environment to avoid CI auto-subscribes.
+    const alarmsTopic = new sns.Topic(this, 'AlarmsTopic', {
+      displayName: `prod-alarms-${this.stringSuffix}`,
+    });
+
+    if (process.env.ALARM_NOTIFICATION_EMAIL) {
+      alarmsTopic.addSubscription(
+        new subscriptions.EmailSubscription(
+          process.env.ALARM_NOTIFICATION_EMAIL
+        )
+      );
+    }
 
     // ========================================
     // IAM Roles (Least Privilege)
@@ -258,7 +549,6 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
       functionName: `prod-lambda-api-v2-${safeSuffixForLambda}`,
       runtime: lambda.Runtime.NODEJS_18_X, // Updated to supported version
       handler: 'index.handler',
-      // switch to an asset so we can include aws-sdk v2 for legacy code
       code: lambda.Code.fromAsset(path.join(__dirname, 'lambda', 'api')),
       vpc,
       vpcSubnets: {
@@ -320,10 +610,13 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     // ========================================
     // Route 53 Hosted Zone
     // ========================================
-    const hostedZone = new route53.HostedZone(this, 'HostedZone', {
-      zoneName: 'example-prod.com',
-      comment: `Production hosted zone - ${this.stringSuffix}`,
-    });
+    let hostedZone: route53.IHostedZone | undefined;
+    if (createPrimaryResources) {
+      hostedZone = new route53.HostedZone(this, 'HostedZone', {
+        zoneName: 'example-prod.com',
+        comment: `Production hosted zone - ${this.stringSuffix}`,
+      });
+    }
 
     // ========================================
     // CloudFront Distribution
@@ -369,6 +662,18 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
         minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
       }
     );
+
+    // Ensure the CloudFront Distribution is created after the
+    // OriginAccessIdentity low-level resource. Without this explicit
+    // dependency CloudFormation can attempt to create the distribution
+    // before CloudFront has finished creating the OAI which results in
+    // errors like "The specified origin access identity does not exist".
+    const oaiResource = cloudFrontOAI.node.defaultChild as
+      | cdk.CfnResource
+      | undefined;
+    if (oaiResource) {
+      distribution.node.addDependency(oaiResource as cdk.CfnResource);
+    }
 
     // ========================================
     // WAFv2 WebACL (protect CloudFront and proxied API)
@@ -465,34 +770,66 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
       }
       webAclAssociation.node.addDependency(webAcl);
     } else {
-      // Emit an explicit output so reviewers/operators can see the WAF was
-      // intentionally skipped for this region during deploy/synth.
-      new cdk.CfnOutput(this, 'WafCreationSkipped', {
-        value: `WAF not created in region ${stackRegion}. Set context allowGlobalWaf=true to override.`,
-        description: 'Indicates WAF creation was skipped due to region guard',
-      });
+      // WAF was intentionally skipped for this region. Record that state
+      // so callers can decide whether to emit a top-level CFN output.
+      this.wafWasSkipped = true;
     }
 
-    // Route 53 A Record for CloudFront
-    new route53.ARecord(this, 'CloudFrontARecord', {
-      zone: hostedZone,
-      recordName: 'www',
-      target: route53.RecordTarget.fromAlias(
-        new route53Targets.CloudFrontTarget(distribution)
-      ),
-    });
+    // If this is the primary stack, create Route53 records and health
+    // checks that point to the primary CloudFront distribution. The
+    // secondary stack will rely on the primary's hosted zone and can
+    // create failover or alias records there if required by operators.
+    if (createPrimaryResources && hostedZone) {
+      // Route 53 A Record for CloudFront (www)
+      new route53.ARecord(this, 'CloudFrontARecord', {
+        zone: hostedZone,
+        recordName: 'www',
+        target: route53.RecordTarget.fromAlias(
+          new route53Targets.CloudFrontTarget(distribution)
+        ),
+      });
 
-    // Additional Route 53 records for comprehensive DNS
-    // Point the API subdomain to the CloudFront distribution which
-    // proxies /api/* to the RestApi. This avoids requiring a
-    // default domain directly on the API Gateway.
-    new route53.ARecord(this, 'ApiARecord', {
-      zone: hostedZone,
-      recordName: 'api',
-      target: route53.RecordTarget.fromAlias(
-        new route53Targets.CloudFrontTarget(distribution)
-      ),
-    });
+      // Additional Route 53 records for API
+      new route53.ARecord(this, 'ApiARecord', {
+        zone: hostedZone,
+        recordName: 'api',
+        target: route53.RecordTarget.fromAlias(
+          new route53Targets.CloudFrontTarget(distribution)
+        ),
+      });
+
+      // Create a Route53 health check for the API endpoint so we can
+      // optionally use failover routing (primary/secondary) later.
+      const apiHost = cdk.Fn.select(
+        2,
+        cdk.Fn.split('/', this.apiUrl || api.url)
+      );
+      new route53.CfnHealthCheck(this, 'ApiHealthCheck', {
+        healthCheckConfig: {
+          type: 'HTTPS',
+          fullyQualifiedDomainName: apiHost,
+          port: 443,
+          resourcePath: '/',
+          requestInterval: 30,
+          failureThreshold: 3,
+        },
+      });
+
+      // ApiHealthCheck created; do not emit a CFN output from the construct.
+
+      new route53.CfnHealthCheck(this, 'CloudFrontHealthCheck', {
+        healthCheckConfig: {
+          type: 'HTTPS',
+          fullyQualifiedDomainName: distribution.distributionDomainName,
+          port: 443,
+          resourcePath: '/',
+          requestInterval: 30,
+          failureThreshold: 3,
+        },
+      });
+
+      // CloudFront health check created; keep CFN outputs at the stack level.
+    }
 
     // ========================================
     // CloudWatch Alarms and Monitoring
@@ -527,23 +864,28 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
         cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
-    // ==========================
-    // Monitoring: SNS topic, additional alarms and dashboard
-    // ==========================
+    // Note: Route53 health checks are created earlier only for primary stacks
+    // (see the guarded block above guarded by `createPrimaryResources`).
+    // This section previously duplicated the creation of ApiHealthCheck and
+    // CloudFrontHealthCheck which caused a construct name collision during
+    // synthesis when the guarded block had already created them. Keep the
+    // outputs in the guarded block and avoid creating duplicate constructs here.
 
-    // Central SNS topic for alarm notifications. We do NOT auto-subscribe an email
-    // unless ALARM_NOTIFICATION_EMAIL is set in the environment to avoid CI auto-subscribes.
-    const alarmsTopic = new sns.Topic(this, 'AlarmsTopic', {
-      displayName: `prod-alarms-${this.stringSuffix}`,
-    });
+    new cloudwatch.Alarm(this, 'VpcSshAttemptsAlarm', {
+      alarmName: `prod-vpc-ssh-attempts-${this.stringSuffix}`,
+      metric: sshAttemptsMetric,
+      threshold: 20,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    }).addAlarmAction(new cw_actions.SnsAction(alarmsTopic));
 
-    if (process.env.ALARM_NOTIFICATION_EMAIL) {
-      alarmsTopic.addSubscription(
-        new subscriptions.EmailSubscription(
-          process.env.ALARM_NOTIFICATION_EMAIL
-        )
-      );
-    }
+    new cloudwatch.Alarm(this, 'VpcRdpAttemptsAlarm', {
+      alarmName: `prod-vpc-rdp-attempts-${this.stringSuffix}`,
+      metric: rdpAttemptsMetric,
+      threshold: 10,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    }).addAlarmAction(new cw_actions.SnsAction(alarmsTopic));
 
     // SQS alarms
     new cloudwatch.Alarm(this, 'SqsVisibleMessagesAlarm', {
@@ -691,126 +1033,25 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     // Stack Outputs
     // ========================================
 
-    // ========================================
-    // Route53 Health Checks (for monitoring and potential failover)
-    // ========================================
-    // Extract host portion from api.url (https://host/...)
-    const apiHost = cdk.Fn.select(2, cdk.Fn.split('/', this.apiUrl || api.url));
-
-    const apiHealthCheck = new route53.CfnHealthCheck(this, 'ApiHealthCheck', {
-      healthCheckConfig: {
-        type: 'HTTPS',
-        fullyQualifiedDomainName: apiHost,
-        port: 443,
-        // Ping the root path; if you have a dedicated /health path, change resourcePath
-        resourcePath: '/',
-        requestInterval: 30,
-        failureThreshold: 3,
-      },
-    });
-
-    new cdk.CfnOutput(this, 'ApiHealthCheckId', {
-      value: apiHealthCheck.attrHealthCheckId,
-      description: 'Route53 HealthCheckId for API endpoint',
-    });
-
-    // CloudFront domain health check (optional; CloudFront may throttle health probes)
-    const cfHealthCheck = new route53.CfnHealthCheck(
-      this,
-      'CloudFrontHealthCheck',
-      {
-        healthCheckConfig: {
-          type: 'HTTPS',
-          fullyQualifiedDomainName: distribution.distributionDomainName,
-          port: 443,
-          resourcePath: '/',
-          requestInterval: 30,
-          failureThreshold: 3,
-        },
-      }
-    );
-
-    new cdk.CfnOutput(this, 'CloudFrontHealthCheckId', {
-      value: cfHealthCheck.attrHealthCheckId,
-      description: 'Route53 HealthCheckId for CloudFront distribution',
-    });
+    // Route53 health checks are created above in the primary-only guarded
+    // block (if createPrimaryResources && hostedZone). Do not recreate them
+    // here to avoid duplicate construct names during synthesis.
+    // Expose tokens as public properties for the calling stack to use.
     this.vpcId = vpc.vpcId;
-    new cdk.CfnOutput(this, 'VpcId', {
-      value: this.vpcId,
-      description: 'VPC ID',
-    });
-
     this.apiUrl = api.url;
-    new cdk.CfnOutput(this, 'ApiGatewayUrl', {
-      value: this.apiUrl,
-      description: 'API Gateway URL',
-    });
-
     this.lambdaFunctionArn = lambdaFunction.functionArn;
-    new cdk.CfnOutput(this, 'LambdaFunctionArn', {
-      value: this.lambdaFunctionArn,
-      description: 'Lambda Function ARN',
-    });
-
     this.rdsEndpoint = rdsInstance.dbInstanceEndpointAddress;
-    new cdk.CfnOutput(this, 'RdsEndpoint', {
-      value: this.rdsEndpoint,
-      description: 'RDS PostgreSQL Endpoint',
-    });
-
     this.s3BucketName = staticFilesBucket.bucketName;
-    new cdk.CfnOutput(this, 'S3BucketName', {
-      value: this.s3BucketName,
-      description: 'S3 Bucket Name',
-    });
-
     this.sqsQueueUrl = asyncQueue.queueUrl;
-    new cdk.CfnOutput(this, 'SqsQueueUrl', {
-      value: this.sqsQueueUrl,
-      description: 'SQS Queue URL',
-    });
-
     this.cloudFrontDomainName = distribution.distributionDomainName;
-    new cdk.CfnOutput(this, 'CloudFrontDomainName', {
-      value: this.cloudFrontDomainName,
-      description: 'CloudFront Distribution Domain Name',
-    });
-
-    this.hostedZoneId = hostedZone.hostedZoneId;
-    new cdk.CfnOutput(this, 'HostedZoneId', {
-      value: this.hostedZoneId,
-      description: 'Route 53 Hosted Zone ID',
-    });
-
+    this.hostedZoneId = hostedZone
+      ? hostedZone.hostedZoneId
+      : (cdk.Aws.NO_VALUE as unknown as string);
     this.databaseSecretArn = databaseSecret.secretArn;
-    new cdk.CfnOutput(this, 'DatabaseSecretArn', {
-      value: this.databaseSecretArn,
-      description: 'Database Secret ARN',
-    });
-
     this.lambdaRoleArn = lambdaRole.roleArn;
-    new cdk.CfnOutput(this, 'LambdaRoleArn', {
-      value: this.lambdaRoleArn,
-      description: 'Lambda IAM Role ARN',
-    });
-
     this.databaseSecurityGroupId = databaseSecurityGroup.securityGroupId;
-    new cdk.CfnOutput(this, 'DatabaseSecurityGroupId', {
-      value: this.databaseSecurityGroupId,
-      description: 'Database Security Group ID',
-    });
-
     this.lambdaSecurityGroupId = lambdaSecurityGroup.securityGroupId;
-    new cdk.CfnOutput(this, 'LambdaSecurityGroupId', {
-      value: this.lambdaSecurityGroupId,
-      description: 'Lambda Security Group ID',
-    });
-
     this.lambdaLogGroupName = lambdaLogGroup.logGroupName;
-    new cdk.CfnOutput(this, 'LambdaLogGroupName', {
-      value: this.lambdaLogGroupName,
-      description: 'Lambda Log Group Name',
-    });
 
     // Tags for all resources
     cdk.Tags.of(this).add('Environment', 'Production');
@@ -820,6 +1061,19 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
     cdk.Tags.of(this).add('iac-rlhf-amazon', 'enabled');
   }
 }
+
+// Backwards-compatible wrapper: preserve the original NestedStack API so
+// existing tests and callers that instantiate MultiComponentApplicationStack
+// continue to work. This NestedStack simply delegates to the Construct
+// implementation and re-exposes the same public tokens and CloudFormation
+// outputs as the prior design.
+// NOTE: The previous code provided a NestedStack wrapper class named
+// MultiComponentApplicationStack for backwards compatibility. Consolidation
+// into a single top-level stack/app shape prefers direct use of the
+// MultiComponentApplicationConstruct. The wrapper has been removed so
+// callers should instantiate the Construct inside their Stack (TapStack
+// does this).
+
 ```
 
 ### lib/tap-stack.ts 
@@ -827,10 +1081,13 @@ export class MultiComponentApplicationStack extends cdk.NestedStack {
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { MultiComponentApplicationStack } from './multi-component-stack';
+import { MultiComponentApplicationConstruct } from './multi-component-stack';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
+  secondaryRegion?: string;
+  baseEnvironmentSuffix?: string;
+  isPrimary?: boolean;
 }
 
 export class TapStack extends cdk.Stack {
@@ -844,22 +1101,28 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    // Instantiate the multi-component application stack and keep a reference
-    // so we can re-expose important runtime values without using CloudFormation
-    // exports/imports (which can cause circular create-time dependency issues).
-    const child = new MultiComponentApplicationStack(
+    // Instantiate the multi-component application construct and keep a reference
+    // so we can re-expose important runtime values as top-level outputs.
+    const child = new MultiComponentApplicationConstruct(
       this,
       'MultiComponentApplication',
       {
         ...props,
-        // do not set explicit stackName for nested stacks; let CDK manage the nested logical id
-      }
+        // forward secondaryRegion through props so construct can optionally
+        // configure cross-region replication when requested by context.
+        secondaryRegion: props?.secondaryRegion,
+        // forward isPrimary so construct can decide whether to create
+        // global resources like HostedZone and Route53 failover records.
+        isPrimary: props?.isPrimary,
+      } as unknown as any
     );
 
-    // Re-expose selected runtime tokens from the nested child as top-level outputs.
-    // Because the child is a NestedStack, these outputs are resolved within the
-    // same CloudFormation stack (no account-level exports/imports are created),
-    // avoiding the cross-stack export/import blocking issue.
+    // Re-expose selected runtime tokens from the child construct as top-level outputs.
+    // The child is a Construct created inside this stack, so the outputs are
+    // resolved within the same CloudFormation template. We intentionally emit
+    // simple top-level outputs so callers and deployment tooling can find
+    // runtime identifiers in the synthesized template or the produced
+    // `cfn-outputs/flat-outputs.json` artifact.
     const forward = {
       VpcId: child.vpcId,
       ApiGatewayUrl: child.apiUrl,
@@ -882,6 +1145,16 @@ export class TapStack extends cdk.Stack {
       });
     }
 
+    // Preserve previous behavior: if the construct recorded that WAF was
+    // skipped due to region guards, emit the same top-level CFN output
+    // that callers and tests expect.
+    if ((child as any).wafWasSkipped) {
+      new cdk.CfnOutput(this, 'WafCreationSkipped', {
+        value: `WAF not created in region ${cdk.Stack.of(this).region}. Set context allowGlobalWaf=true to override.`,
+        description: 'Indicates WAF creation was skipped due to region guard',
+      });
+    }
+
     // IMPORTANT: Do NOT create CloudFormation-level outputs that reference
     // child stack tokens here. Referencing child stack tokens from this stack
     // causes CDK to generate CloudFormation exports/imports which create a
@@ -896,6 +1169,7 @@ export class TapStack extends cdk.Stack {
     // cross-stack CloudFormation exports/imports.
   }
 }
+
 ```
 
 ### lib/string-utils.ts 

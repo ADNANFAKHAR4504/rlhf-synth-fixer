@@ -1,6 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { MultiComponentApplicationStack } from './multi-component-stack';
+import { MultiComponentApplicationConstruct } from './multi-component-stack';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -20,10 +20,9 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    // Instantiate the multi-component application stack and keep a reference
-    // so we can re-expose important runtime values without using CloudFormation
-    // exports/imports (which can cause circular create-time dependency issues).
-    const child = new MultiComponentApplicationStack(
+    // Instantiate the multi-component application construct and keep a reference
+    // so we can re-expose important runtime values as top-level outputs.
+    const child = new MultiComponentApplicationConstruct(
       this,
       'MultiComponentApplication',
       {
@@ -34,13 +33,15 @@ export class TapStack extends cdk.Stack {
         // forward isPrimary so construct can decide whether to create
         // global resources like HostedZone and Route53 failover records.
         isPrimary: props?.isPrimary,
-      } as unknown as cdk.NestedStackProps
+      } as unknown as any
     );
 
-    // Re-expose selected runtime tokens from the nested child as top-level outputs.
-    // Because the child is a NestedStack, these outputs are resolved within the
-    // same CloudFormation stack (no account-level exports/imports are created),
-    // avoiding the cross-stack export/import blocking issue.
+    // Re-expose selected runtime tokens from the child construct as top-level outputs.
+    // The child is a Construct created inside this stack, so the outputs are
+    // resolved within the same CloudFormation template. We intentionally emit
+    // simple top-level outputs so callers and deployment tooling can find
+    // runtime identifiers in the synthesized template or the produced
+    // `cfn-outputs/flat-outputs.json` artifact.
     const forward = {
       VpcId: child.vpcId,
       ApiGatewayUrl: child.apiUrl,
@@ -60,6 +61,16 @@ export class TapStack extends cdk.Stack {
     for (const [key, value] of Object.entries(forward)) {
       new cdk.CfnOutput(this, key, {
         value: value ?? cdk.Aws.NO_VALUE,
+      });
+    }
+
+    // Preserve previous behavior: if the construct recorded that WAF was
+    // skipped due to region guards, emit the same top-level CFN output
+    // that callers and tests expect.
+    if ((child as any).wafWasSkipped) {
+      new cdk.CfnOutput(this, 'WafCreationSkipped', {
+        value: `WAF not created in region ${cdk.Stack.of(this).region}. Set context allowGlobalWaf=true to override.`,
+        description: 'Indicates WAF creation was skipped due to region guard',
       });
     }
 

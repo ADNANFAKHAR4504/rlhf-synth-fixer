@@ -1,6 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
-import { MultiComponentApplicationStack } from '../lib/multi-component-stack';
+import { MultiComponentApplicationConstruct } from '../lib/multi-component-stack';
 import safeSuffix from '../lib/string-utils';
 import { TapStack } from '../lib/tap-stack';
 
@@ -25,8 +25,12 @@ describe('TapStack Unit Tests (single file)', () => {
     // in unit-test environments.
     stack = new TapStack(app, 'TestTapStack', { environmentSuffix });
     const parent = new cdk.Stack(app, 'TestParentStack');
-    const multi = new MultiComponentApplicationStack(parent, 'TestMultiComponent');
-    template = Template.fromStack(multi);
+    new MultiComponentApplicationConstruct(parent, 'TestMultiComponent');
+    // Use the TapStack synthesis here so the top-level CFN outputs that
+    // TapStack emits (VpcId, ApiGatewayUrl, LambdaFunctionArn, etc.) are
+    // present for tests that assert outputs exist. The TapStack already
+    // instantiates the construct and forwards the outputs.
+    template = Template.fromStack(stack);
   });
 
   test('TapStack can be instantiated with defaults', () => {
@@ -54,7 +58,7 @@ describe('TapStack Unit Tests (single file)', () => {
     // TapStack where CfnOutput receives an actual value instead of NO_VALUE.
     jest.isolateModules(() => {
       jest.mock('../lib/multi-component-stack', () => ({
-        MultiComponentApplicationStack: class {
+        MultiComponentApplicationConstruct: class {
           public vpcId = 'vpc-000';
           public apiUrl = 'https://example.org/';
           public lambdaFunctionArn = 'arn:aws:lambda:local:function:fn';
@@ -83,7 +87,7 @@ describe('TapStack Unit Tests (single file)', () => {
   test('TapStack uses NO_VALUE when child properties are undefined', () => {
     jest.isolateModules(() => {
       jest.mock('../lib/multi-component-stack', () => ({
-        MultiComponentApplicationStack: class {
+        MultiComponentApplicationConstruct: class {
           // Intentionally leave some properties undefined to exercise the
           // nullish coalescing branch in TapStack.
           public vpcId = undefined;
@@ -196,7 +200,7 @@ describe('TapStack Unit Tests (single file)', () => {
   test('computeSafeSuffixForLambda exercises both branches', () => {
     const localApp = new cdk.App();
     const parent = new cdk.Stack(localApp, 'ComputeSuffixParent');
-    const multi = new MultiComponentApplicationStack(parent, 'ComputeSuffixTest');
+    const multi = new MultiComponentApplicationConstruct(parent, 'ComputeSuffixTest');
     // defined input
     expect(multi.computeSafeSuffixForLambda('AbC_12:34!@#')).toBe('abc_12-34---');
     // falsy input returns cdk.Aws.NO_VALUE
@@ -217,19 +221,21 @@ describe('TapStack Unit Tests (single file)', () => {
     const parent = new cdk.Stack(app, 'WafCreateParent', {
       env: { region: 'us-east-1' },
     });
-    const multi = new MultiComponentApplicationStack(parent, 'WafCreateTest');
-    const template = Template.fromStack(multi);
+    new MultiComponentApplicationConstruct(parent, 'WafCreateTest');
+    const template = Template.fromStack(parent);
     const webAcls = template.findResources('AWS::WAFv2::WebACL');
     expect(Object.keys(webAcls).length).toBeGreaterThanOrEqual(1);
   });
 
   test('skips WAF creation when region is not us-east-1', () => {
     const app = new cdk.App();
-    const parent = new cdk.Stack(app, 'WafSkipParent', {
-      env: { region: 'us-west-2' },
-    });
-    const multi = new MultiComponentApplicationStack(parent, 'WafSkipTest');
-    const template = Template.fromStack(multi);
+    // Create the TapStack in a non-us-east-1 region to trigger the "skipped"
+    // path and emit the top-level WafCreationSkipped output via TapStack.
+    const ts = new (require('../lib/tap-stack').TapStack)(app, 'WafSkipTap', {
+      env: { region: 'us-west-2' } as any,
+      environmentSuffix: 'n',
+    } as any);
+    const template = Template.fromStack(ts);
     // The else branch emits a CfnOutput named WafCreationSkipped
     const outputs = template.toJSON().Outputs || {};
     expect(outputs).toHaveProperty('WafCreationSkipped');
@@ -240,8 +246,8 @@ describe('TapStack Unit Tests (single file)', () => {
     process.env.RDS_SUBNET_GROUP_NAME = 'existing-subnet-group';
     const app = new cdk.App();
     const parent = new cdk.Stack(app, 'RdsImportParent');
-    const multi = new MultiComponentApplicationStack(parent, 'RdsImportTest');
-    const template = Template.fromStack(multi);
+    new MultiComponentApplicationConstruct(parent, 'RdsImportTest');
+    const template = Template.fromStack(parent);
     const subnetGroups = template.findResources('AWS::RDS::DBSubnetGroup');
     // Expect zero DBSubnetGroup resources created when importing
     expect(Object.keys(subnetGroups).length).toBeLessThanOrEqual(0);
@@ -252,8 +258,8 @@ describe('TapStack Unit Tests (single file)', () => {
     process.env.ALARM_NOTIFICATION_EMAIL = 'alerts@example.com';
     const app = new cdk.App();
     const parent = new cdk.Stack(app, 'SnsParent');
-    const multi = new MultiComponentApplicationStack(parent, 'SnsTest');
-    const template = Template.fromStack(multi);
+    new MultiComponentApplicationConstruct(parent, 'SnsTest');
+    const template = Template.fromStack(parent);
     const subs = template.findResources('AWS::SNS::Subscription');
     expect(Object.keys(subs).length).toBeGreaterThanOrEqual(1);
     delete process.env.ALARM_NOTIFICATION_EMAIL;
@@ -264,8 +270,8 @@ describe('TapStack Unit Tests (single file)', () => {
     const parent = new cdk.Stack(app, 'WafGlobalParent', {
       env: { region: 'eu-west-1' },
     });
-    const multi = new MultiComponentApplicationStack(parent, 'WafGlobalTest');
-    const template = Template.fromStack(multi);
+    new MultiComponentApplicationConstruct(parent, 'WafGlobalTest');
+    const template = Template.fromStack(parent);
     const webAcls = template.findResources('AWS::WAFv2::WebACL');
     expect(Object.keys(webAcls).length).toBeGreaterThanOrEqual(1);
   });
@@ -277,9 +283,9 @@ describe('TapStack Unit Tests (single file)', () => {
       env: { region: 'us-east-1' },
     });
     // Pass secondaryRegion through props (the nested stack reads props.secondaryRegion)
-    const multi = new MultiComponentApplicationStack(parent, 'ReplicationTest', { secondaryRegion: 'us-west-2' } as any);
+    new MultiComponentApplicationConstruct(parent, 'ReplicationTest', { secondaryRegion: 'us-west-2' } as any);
 
-    const template = Template.fromStack(multi);
+    const template = Template.fromStack(parent);
 
     // Find the L1 S3 bucket resource and ensure ReplicationConfiguration exists
     const buckets = template.findResources('AWS::S3::Bucket');
