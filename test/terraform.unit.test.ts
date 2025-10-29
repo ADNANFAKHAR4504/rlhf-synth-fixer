@@ -333,7 +333,9 @@ describe("CI/CD Pipeline Infrastructure - CodePipeline Resources", () => {
   });
 
   test("CodePipeline has conditional Deploy stage with ECS action", () => {
-    expect(stackContent).toMatch(/stage\s*{\s*name\s*=\s*"Deploy"/);
+    // The Deploy stage is inside a dynamic block, so we check for the dynamic block and its content
+    expect(stackContent).toMatch(/dynamic\s+"stage"\s*{/);
+    expect(stackContent).toMatch(/name\s*=\s*"Deploy"/);
     expect(stackContent).toMatch(/category\s*=\s*"Deploy"/);
     expect(stackContent).toMatch(/provider\s*=\s*"ECS"/);
     expect(stackContent).toMatch(/ClusterName\s*=\s*aws_ecs_cluster\.main\.name/);
@@ -771,13 +773,16 @@ describe("CI/CD Pipeline Infrastructure - Pipeline Integration", () => {
   });
 
   test("pipeline triggers on S3 object upload via EventBridge", () => {
-    expect(stackContent).toMatch(/aws_cloudwatch_event_rule\s+"s3_trigger"/);
-    expect(stackContent).toMatch(/aws_cloudwatch_event_target\s+"pipeline"/);
+    expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_event_rule"\s+"s3_trigger"/);
+    expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_event_target"\s+"pipeline"/);
+    expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_notification"\s+"source"/);
+    expect(stackContent).toMatch(/eventbridge\s*=\s*true/);
   });
 
   test("pipeline sends notifications via SNS", () => {
-    expect(stackContent).toMatch(/aws_codestarnotifications_notification_rule\s+"pipeline"/);
-    expect(stackContent).toMatch(/aws_sns_topic\s+"pipeline_notifications"/);
+    expect(stackContent).toMatch(/resource\s+"aws_codestarnotifications_notification_rule"\s+"pipeline"/);
+    expect(stackContent).toMatch(/resource\s+"aws_sns_topic"\s+"pipeline_notifications"/);
+    expect(stackContent).toMatch(/resource\s*=\s*aws_codepipeline\.main\.arn/);
   });
 
   test("pipeline deployment ignores task definition changes", () => {
@@ -803,12 +808,12 @@ describe("CI/CD Pipeline Infrastructure - Coverage Summary", () => {
   });
 
   test("implements complete CI/CD pipeline", () => {
-    expect(stackContent).toMatch(/aws_s3_bucket\s+"source"/);
-    expect(stackContent).toMatch(/aws_ecr_repository\s+"app"/);
-    expect(stackContent).toMatch(/aws_codebuild_project\s+"docker_build"/);
-    expect(stackContent).toMatch(/aws_codepipeline\s+"main"/);
-    expect(stackContent).toMatch(/aws_ecs_cluster\s+"main"/);
-    expect(stackContent).toMatch(/aws_ecs_task_definition\s+"app"/);
+    expect(stackContent).toMatch(/resource\s+"aws_s3_bucket"\s+"source"/);
+    expect(stackContent).toMatch(/resource\s+"aws_ecr_repository"\s+"app"/);
+    expect(stackContent).toMatch(/resource\s+"aws_codebuild_project"\s+"docker_build"/);
+    expect(stackContent).toMatch(/resource\s+"aws_codepipeline"\s+"main"/);
+    expect(stackContent).toMatch(/resource\s+"aws_ecs_cluster"\s+"main"/);
+    expect(stackContent).toMatch(/resource\s+"aws_ecs_task_definition"\s+"app"/);
   });
 
   test("implements automated deployment pipeline", () => {
