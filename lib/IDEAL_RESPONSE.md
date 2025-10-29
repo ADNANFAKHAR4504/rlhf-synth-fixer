@@ -1163,6 +1163,1022 @@ Outputs:
       Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
 ```
 
+## File: lib/TapStack.json
+
+```json
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Media Asset Processing Pipeline for StreamTech Japan - Multi-AZ Infrastructure",
+    "Metadata": {
+        "cfn-lint": {
+            "config": {
+                "ignore_checks": [
+                    "W1011"
+                ]
+            }
+        },
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentSuffix"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Network Configuration"
+                    },
+                    "Parameters": [
+                        "VpcCidr"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Security Configuration"
+                    },
+                    "Parameters": [
+                        "EnableRedisAuth",
+                        "EnableRDSSecrets",
+                        "DefaultDBUsername",
+                        "DefaultDBPassword"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Resource Naming"
+                    },
+                    "Parameters": [
+                        "ResourceTimestamp"
+                    ]
+                }
+            ]
+        }
+    },
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        },
+        "VpcCidr": {
+            "Type": "String",
+            "Default": "10.0.0.0/16",
+            "Description": "CIDR block for the VPC"
+        },
+        "EnableRedisAuth": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Enable Redis authentication (requires secrets manager)"
+        },
+        "EnableRDSSecrets": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Use Secrets Manager for RDS credentials (requires secrets)"
+        },
+        "DefaultDBUsername": {
+            "Type": "String",
+            "Default": "mediauser",
+            "Description": "Default database username when not using secrets manager",
+            "NoEcho": false
+        },
+        "DefaultDBPassword": {
+            "Type": "String",
+            "Default": "TempPassword123!",
+            "Description": "Default database password when not using secrets manager",
+            "NoEcho": true
+        },
+        "ResourceTimestamp": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional timestamp suffix for resource naming to ensure uniqueness"
+        }
+    },
+    "Conditions": {
+        "UseRedisAuth": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableRedisAuth"
+                },
+                "true"
+            ]
+        },
+        "UseRDSSecrets": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableRDSSecrets"
+                },
+                "true"
+            ]
+        },
+        "HasTimestamp": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ResourceTimestamp"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        }
+    },
+    "Mappings": {
+        "RegionMap": {
+            "ap-northeast-1": {
+                "AZs": [
+                    "ap-northeast-1a",
+                    "ap-northeast-1c"
+                ]
+            },
+            "us-east-1": {
+                "AZs": [
+                    "us-east-1a",
+                    "us-east-1b"
+                ]
+            }
+        }
+    },
+    "Resources": {
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VpcCidr"
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "media-vpc-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "media-igw-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "AttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VpcCidr"
+                                },
+                                4,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::FindInMap": [
+                                "RegionMap",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                "AZs"
+                            ]
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "media-public-subnet-1-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VpcCidr"
+                                },
+                                4,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::FindInMap": [
+                                "RegionMap",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                "AZs"
+                            ]
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "media-public-subnet-2-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VpcCidr"
+                                },
+                                4,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::FindInMap": [
+                                "RegionMap",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                "AZs"
+                            ]
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "media-private-subnet-1-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        3,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VpcCidr"
+                                },
+                                4,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::FindInMap": [
+                                "RegionMap",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                "AZs"
+                            ]
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "media-private-subnet-2-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "DBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupDescription": "Subnet group for RDS PostgreSQL",
+                "DBSubnetGroupName": {
+                    "Fn::Sub": "media-db-subnet-group-${EnvironmentSuffix}"
+                },
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "media-db-subnet-group-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "RDSDBInstance": {
+            "Type": "AWS::RDS::DBInstance",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::If": [
+                        "HasTimestamp",
+                        {
+                            "Fn::Sub": "media-postgres-${EnvironmentSuffix}-${ResourceTimestamp}"
+                        },
+                        {
+                            "Fn::Sub": "media-postgres-${EnvironmentSuffix}"
+                        }
+                    ]
+                },
+                "DBInstanceClass": "db.t3.micro",
+                "Engine": "postgres",
+                "EngineVersion": "14.19",
+                "AllocatedStorage": 20,
+                "StorageType": "gp2",
+                "StorageEncrypted": true,
+                "MultiAZ": true,
+                "DBName": "mediadb",
+                "MasterUsername": {
+                    "Fn::If": [
+                        "UseRDSSecrets",
+                        {
+                            "Fn::Sub": "{{resolve:secretsmanager:media-db-credentials-${EnvironmentSuffix}:SecretString:username}}"
+                        },
+                        {
+                            "Ref": "DefaultDBUsername"
+                        }
+                    ]
+                },
+                "MasterUserPassword": {
+                    "Fn::If": [
+                        "UseRDSSecrets",
+                        {
+                            "Fn::Sub": "{{resolve:secretsmanager:media-db-credentials-${EnvironmentSuffix}:SecretString:password}}"
+                        },
+                        {
+                            "Ref": "DefaultDBPassword"
+                        }
+                    ]
+                },
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "RDSSecurityGroup"
+                    }
+                ],
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroup"
+                },
+                "BackupRetentionPeriod": 1,
+                "PreferredBackupWindow": "03:00-04:00",
+                "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+                "EnableCloudwatchLogsExports": [
+                    "postgresql"
+                ],
+                "DeletionProtection": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "media-postgres-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "ElastiCacheSubnetGroup": {
+            "Type": "AWS::ElastiCache::SubnetGroup",
+            "Properties": {
+                "Description": "Subnet group for ElastiCache Redis",
+                "CacheSubnetGroupName": {
+                    "Fn::Sub": "media-redis-subnet-${EnvironmentSuffix}"
+                },
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "media-redis-subnet-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "ElastiCacheReplicationGroup": {
+            "Type": "AWS::ElastiCache::ReplicationGroup",
+            "Properties": {
+                "ReplicationGroupId": {
+                    "Fn::If": [
+                        "HasTimestamp",
+                        {
+                            "Fn::Sub": "media-redis-${EnvironmentSuffix}-${ResourceTimestamp}"
+                        },
+                        {
+                            "Fn::Sub": "media-redis-${EnvironmentSuffix}"
+                        }
+                    ]
+                },
+                "ReplicationGroupDescription": "Redis cluster for media content metadata caching",
+                "Engine": "redis",
+                "EngineVersion": "7.0",
+                "CacheNodeType": "cache.t3.micro",
+                "NumCacheClusters": 2,
+                "MultiAZEnabled": true,
+                "AutomaticFailoverEnabled": true,
+                "AtRestEncryptionEnabled": true,
+                "TransitEncryptionEnabled": {
+                    "Ref": "EnableRedisAuth"
+                },
+                "AuthToken": {
+                    "Fn::If": [
+                        "UseRedisAuth",
+                        {
+                            "Fn::Sub": "{{resolve:secretsmanager:media-redis-auth-${EnvironmentSuffix}}}"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "ElastiCacheSecurityGroup"
+                    }
+                ],
+                "CacheSubnetGroupName": {
+                    "Ref": "ElastiCacheSubnetGroup"
+                },
+                "SnapshotRetentionLimit": 1,
+                "SnapshotWindow": "03:00-05:00",
+                "PreferredMaintenanceWindow": "sun:05:00-sun:06:00",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "media-redis-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "EFSFileSystem": {
+            "Type": "AWS::EFS::FileSystem",
+            "Properties": {
+                "PerformanceMode": "generalPurpose",
+                "ThroughputMode": "bursting",
+                "FileSystemTags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "media-efs-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "RestAPI": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "media-content-api-${EnvironmentSuffix}"
+                },
+                "Description": "API Gateway for content management endpoints",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                }
+            }
+        },
+        "APIResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestAPI"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "RestAPI",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "content"
+            }
+        },
+        "APIMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestAPI"
+                },
+                "ResourceId": {
+                    "Ref": "APIResource"
+                },
+                "HttpMethod": "GET",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "MOCK",
+                    "RequestTemplates": {
+                        "application/json": "{\"statusCode\": 200}"
+                    },
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200,
+                            "ResponseTemplates": {
+                                "application/json": "{\"message\": \"Content management API endpoint\"}"
+                            }
+                        }
+                    ]
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200
+                    }
+                ]
+            }
+        },
+        "APIDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": "APIMethod",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestAPI"
+                },
+                "StageName": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            }
+        },
+        "ArtifactBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "BucketName": {
+                    "Fn::If": [
+                        "HasTimestamp",
+                        {
+                            "Fn::Sub": "media-artifacts-${EnvironmentSuffix}-${AWS::AccountId}-${ResourceTimestamp}"
+                        },
+                        {
+                            "Fn::Sub": "media-artifacts-${EnvironmentSuffix}-${AWS::AccountId}"
+                        }
+                    ]
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "media-artifacts-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "MediaPipeline": {
+            "Type": "AWS::CodePipeline::Pipeline",
+            "Properties": {
+                "Name": {
+                    "Fn::If": [
+                        "HasTimestamp",
+                        {
+                            "Fn::Sub": "media-pipeline-${EnvironmentSuffix}-${ResourceTimestamp}"
+                        },
+                        {
+                            "Fn::Sub": "media-pipeline-${EnvironmentSuffix}"
+                        }
+                    ]
+                },
+                "RoleArn": {
+                    "Fn::GetAtt": [
+                        "CodePipelineRole",
+                        "Arn"
+                    ]
+                },
+                "ArtifactStore": {
+                    "Type": "S3",
+                    "Location": {
+                        "Ref": "ArtifactBucket"
+                    }
+                },
+                "Stages": [
+                    {
+                        "Name": "Source",
+                        "Actions": [
+                            {
+                                "Name": "SourceAction",
+                                "ActionTypeId": {
+                                    "Category": "Source",
+                                    "Owner": "AWS",
+                                    "Provider": "S3",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "S3Bucket": {
+                                        "Ref": "ArtifactBucket"
+                                    },
+                                    "S3ObjectKey": "source.zip",
+                                    "PollForSourceChanges": false
+                                },
+                                "OutputArtifacts": [
+                                    {
+                                        "Name": "SourceOutput"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "Name": "Build",
+                        "Actions": [
+                            {
+                                "Name": "BuildAction",
+                                "ActionTypeId": {
+                                    "Category": "Build",
+                                    "Owner": "AWS",
+                                    "Provider": "CodeBuild",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "ProjectName": {
+                                        "Ref": "CodeBuildProject"
+                                    }
+                                },
+                                "InputArtifacts": [
+                                    {
+                                        "Name": "SourceOutput"
+                                    }
+                                ],
+                                "OutputArtifacts": [
+                                    {
+                                        "Name": "BuildOutput"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "media-pipeline-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "RDSSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for RDS PostgreSQL",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 5432,
+                        "ToPort": 5432,
+                        "CidrIp": {
+                            "Ref": "VpcCidr"
+                        },
+                        "Description": "PostgreSQL from VPC"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "media-rds-sg-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "ElastiCacheSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for ElastiCache Redis",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 6379,
+                        "ToPort": 6379,
+                        "CidrIp": {
+                            "Ref": "VpcCidr"
+                        },
+                        "Description": "Redis from VPC"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "media-elasticache-sg-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "EFSSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for EFS",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 2049,
+                        "ToPort": 2049,
+                        "CidrIp": {
+                            "Ref": "VpcCidr"
+                        },
+                        "Description": "NFS from VPC"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "media-efs-sg-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "VPCId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPCId"
+                }
+            }
+        },
+        "PublicSubnets": {
+            "Description": "Public subnet IDs",
+            "Value": {
+                "Fn::Join": [
+                    ",",
+                    [
+                        {
+                            "Ref": "PublicSubnet1"
+                        },
+                        {
+                            "Ref": "PublicSubnet2"
+                        }
+                    ]
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnets"
+                }
+            }
+        },
+        "PrivateSubnets": {
+            "Description": "Private subnet IDs",
+            "Value": {
+                "Fn::Join": [
+                    ",",
+                    [
+                        {
+                            "Ref": "PrivateSubnet1"
+                        },
+                        {
+                            "Ref": "PrivateSubnet2"
+                        }
+                    ]
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnets"
+                }
+            }
+        },
+        "RDSEndpoint": {
+            "Description": "RDS PostgreSQL endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "RDSDBInstance",
+                    "Endpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-RDSEndpoint"
+                }
+            }
+        },
+        "EFSFileSystemId": {
+            "Description": "EFS file system ID",
+            "Value": {
+                "Ref": "EFSFileSystem"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EFSFileSystemId"
+                }
+            }
+        },
+        "RedisEndpoint": {
+            "Description": "ElastiCache Redis primary endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ElastiCacheReplicationGroup",
+                    "PrimaryEndPoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-RedisEndpoint"
+                }
+            }
+        },
+        "APIEndpoint": {
+            "Description": "API Gateway endpoint URL",
+            "Value": {
+                "Fn::Sub": "https://${RestAPI}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-APIEndpoint"
+                }
+            }
+        },
+        "PipelineName": {
+            "Description": "CodePipeline name",
+            "Value": {
+                "Ref": "MediaPipeline"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PipelineName"
+                }
+            }
+        },
+        "ArtifactBucketName": {
+            "Description": "S3 bucket for pipeline artifacts",
+            "Value": {
+                "Ref": "ArtifactBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ArtifactBucketName"
+                }
+            }
+        },
+        "StackName": {
+            "Description": "CloudFormation stack name",
+            "Value": {
+                "Ref": "AWS::StackName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StackName"
+                }
+            }
+        },
+        "EnvironmentSuffix": {
+            "Description": "Environment suffix used for deployment",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+                }
+            }
+        }
+    }
+}
+```
+
 ## File: test/tap-stack.int.test.ts
 
 ```typescript
