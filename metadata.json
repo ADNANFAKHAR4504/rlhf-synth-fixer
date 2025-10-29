@@ -10,5 +10,5 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
-  "aws_services": "AWS Lambda, Amazon EventBridge, SQS, SNS, S3, KMS, Clooudwatch Logs, IAM, ELB"
+  "aws_services": "AWS Lambda, Amazon EventBridge, SQS, SNS, S3, KMS, Cloudwatch Logs, IAM, AWS Lambda"
 }
