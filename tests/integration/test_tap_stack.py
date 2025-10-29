@@ -17,7 +17,7 @@ from botocore.exceptions import ClientError
 from pytest import mark
 
 # Environment configuration
-AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+AWS_REGION = os.environ.get('AWS_REGION', 'eu-west-3')
 ENVIRONMENT_SUFFIX = os.environ.get('ENVIRONMENT_SUFFIX', 'stage1')
 STACK_NAME = f"TapStack{ENVIRONMENT_SUFFIX}"
 
