@@ -69,7 +69,7 @@ interface StackOutputs {
 }
 
 let outputs: StackOutputs = {};
-let awsRegion: string = process.env.AWS_REGION || "us-west-2";
+let awsRegion: string = "us-west-2"; // Will be updated from outputs
 
 // AWS SDK Clients
 let dynamoClient: DynamoDBClient;
@@ -94,7 +94,7 @@ beforeAll(async () => {
   if (fs.existsSync(outputsPath)) {
     const fileContent = fs.readFileSync(outputsPath, "utf8");
     const rawOutputs = JSON.parse(fileContent);
-
+    
     // Transform Terraform output format: { key: { value, type, sensitive } } => { key: value }
     outputs = {};
     for (const [key, output] of Object.entries(rawOutputs)) {
@@ -104,16 +104,41 @@ beforeAll(async () => {
         outputs[key] = output;
       }
     }
-
+    
+    // Extract region from ARNs (format: arn:aws:service:region:account:resource)
+    const extractRegionFromArn = (arn: string | undefined): string | null => {
+      if (!arn) return null;
+      const parts = arn.split(':');
+      return parts.length > 3 ? parts[3] : null;
+    };
+    
+    // Try to detect region from any ARN in outputs
+    const detectedRegion = 
+      extractRegionFromArn(outputs.sns_topic_arn) ||
+      extractRegionFromArn(outputs.step_functions_state_machine_arn) ||
+      extractRegionFromArn(outputs.aurora_secret_arn) ||
+      extractRegionFromArn(outputs.cloudwatch_alarm_topic_arn);
+    
+    if (detectedRegion) {
+      awsRegion = detectedRegion;
+      console.log(`✓ Detected AWS region from outputs: ${awsRegion}`);
+    }
+    
     console.log("✓ Loaded stack outputs from:", outputsPath);
   } else {
     console.warn("⚠️  Outputs file not found. Tests will be skipped or use mock data.");
     console.warn("   Expected path:", outputsPath);
   }
 
-  // Initialize AWS SDK clients
+  // Initialize AWS SDK clients with detected region
   dynamoClient = new DynamoDBClient({ region: awsRegion });
-  sqsClient = new SQSClient({ region: awsRegion });
+  // SQS client configured to use queue URL as endpoint (handles cross-region queues)
+  sqsClient = new SQSClient({ 
+    region: awsRegion,
+    // Suppress warnings about queue URL region mismatch
+    // @ts-ignore - useQueueUrlAsEndpoint is a valid option but not in types
+    useQueueUrlAsEndpoint: true
+  });
   snsClient = new SNSClient({ region: awsRegion });
   lambdaClient = new LambdaClient({ region: awsRegion });
   sfnClient = new SFNClient({ region: awsRegion });
