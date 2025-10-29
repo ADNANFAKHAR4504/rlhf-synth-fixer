@@ -169,14 +169,32 @@ class TapStack extends Stack {
                 ))
                 .build();
 
-        GatewayVpcEndpoint.Builder.create(this, "S3Endpoint")
+        // Create VPC endpoints for S3 and DynamoDB to avoid NAT Gateway charges
+        // Gateway endpoints are automatically added to route tables
+        GatewayVpcEndpoint s3Endpoint = GatewayVpcEndpoint.Builder.create(this, "S3Endpoint")
                 .vpc(newVpc)
                 .service(GatewayVpcEndpointAwsService.S3)
+                .subnets(Arrays.asList(
+                        software.amazon.awscdk.services.ec2.SubnetSelection.builder()
+                                .subnetType(SubnetType.PRIVATE_WITH_EGRESS)
+                                .build(),
+                        software.amazon.awscdk.services.ec2.SubnetSelection.builder()
+                                .subnetType(SubnetType.PUBLIC)
+                                .build()
+                ))
                 .build();
 
-        GatewayVpcEndpoint.Builder.create(this, "DynamoDbEndpoint")
+        GatewayVpcEndpoint dynamoEndpoint = GatewayVpcEndpoint.Builder.create(this, "DynamoDbEndpoint")
                 .vpc(newVpc)
                 .service(GatewayVpcEndpointAwsService.DYNAMODB)
+                .subnets(Arrays.asList(
+                        software.amazon.awscdk.services.ec2.SubnetSelection.builder()
+                                .subnetType(SubnetType.PRIVATE_WITH_EGRESS)
+                                .build(),
+                        software.amazon.awscdk.services.ec2.SubnetSelection.builder()
+                                .subnetType(SubnetType.PUBLIC)
+                                .build()
+                ))
                 .build();
 
         return newVpc;
@@ -364,8 +382,7 @@ class TapStack extends Stack {
         String lambdaCode = "import json\n"
                 + "import boto3\n"
                 + "import os\n\n"
-                + "s3_client = boto3.client('s3')\n"
-                + "ssm_client = boto3.client('ssm')\n\n"
+                + "s3_client = boto3.client('s3')\n\n"
                 + "def handler(event, context):\n"
                 + "    bucket_name = os.environ.get('BUCKET_NAME')\n"
                 + "    print(f'Processing data for bucket: {bucket_name}')\n"
