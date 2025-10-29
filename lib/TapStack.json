@@ -418,10 +418,10 @@
         },
         "NovaLogsBucket": {
             "Type": "AWS::S3::Bucket",
-            "DeletionPolicy": "Retain",
-            "UpdateReplacePolicy": "Retain",
             "Properties": {
-                "BucketName": "novafintech-logs",
+                "BucketName": {
+                    "Fn::Sub": "novafintech-bankingapp-logs-${AWS::Region}"
+                },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
                 },

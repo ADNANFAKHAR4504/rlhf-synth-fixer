@@ -252,10 +252,8 @@ Resources:
   
   NovaLogsBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: novafintech-logs
+      BucketName: !Sub 'novafintech-bankingapp-logs-${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:

@@ -34,7 +34,7 @@ describe('NovaFintech TapStack CloudFormation Template', () => {
     test('DomainName parameter should have correct properties', () => {
       const param = template.Parameters.DomainName;
       expect(param.Type).toBe('String');
-      expect(param.Default).toBe('app.novafintech.com');
+      expect(param.Default).toBe('bankingapp.novafintech.com');
       expect(param.AllowedPattern).toBe('^[a-z0-9][a-z0-9\\-\\.]*[a-z0-9]$');
     });
 
@@ -125,9 +125,8 @@ describe('NovaFintech TapStack CloudFormation Template', () => {
     test('should have NovaLogsBucket with correct properties', () => {
       const bucket = template.Resources.NovaLogsBucket;
       expect(bucket.Type).toBe('AWS::S3::Bucket');
-      expect(bucket.Properties.BucketName).toBe('novafintech-logs');
+      expect(bucket.Properties.BucketName['Fn::Sub']).toBe('novafintech-bankingapp-logs-${AWS::Region}');
       expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
-      expect(bucket.DeletionPolicy).toBe('Retain');
     });
 
     test('S3 bucket should have encryption and public access blocked', () => {
