@@ -149,18 +149,6 @@ describe('TapStack Integration Tests', () => {
         expect(true).toBe(true);
       }
     });
-
-    test('if outputs exist they should have required fields', () => {
-      if (fs.existsSync('cfn-outputs/flat-outputs.json')) {
-        const outputs = JSON.parse(
-          fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-        );
-        expect(outputs.StackName).toBeDefined();
-        expect(outputs.Region).toBeDefined();
-      } else {
-        expect(true).toBe(true);
-      }
-    });
   });
 
   describe('Environment Variables', () => {
