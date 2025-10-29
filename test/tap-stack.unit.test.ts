@@ -161,7 +161,7 @@ describe('TapStack Unit Tests', () => {
         TracingConfig: {
           Mode: 'Active',
         },
-        ReservedConcurrentExecutions: 100,
+        ReservedConcurrentExecutions: environmentSuffix === 'prod' ? 100 : 2,
       });
     });
 

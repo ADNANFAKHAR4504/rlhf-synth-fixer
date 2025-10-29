@@ -85,7 +85,7 @@ export class ApplicationInfrastructure extends Construct {
       },
       logGroup,
       tracing: lambda.Tracing.ACTIVE,
-      reservedConcurrentExecutions: 100,
+      reservedConcurrentExecutions: config.environmentSuffix === 'prod' ? 100 : 2,
       environmentEncryption: kmsKey,
     });
 
