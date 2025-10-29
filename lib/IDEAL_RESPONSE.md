@@ -830,13 +830,14 @@ class TestTapStackLiveIntegration(unittest.TestCase):
   - Tests environment suffix in resource names
   - Tests Secrets Manager configuration
 
-- **tests/test_integration.py**: Integration tests for deployed resources
-  - VPC configuration validation
-  - KMS key existence and rotation
-  - RDS encryption and backup verification
-  - Redis encryption verification
-  - API Gateway endpoint testing
-  - Secrets Manager encryption validation
+- **tests/integration/test_tap_stack.py**: Integration tests against live deployed resources
+  - VPC configuration validation  
+  - KMS key existence and functionality
+  - RDS encryption and accessibility verification
+  - ElastiCache Redis cluster validation
+  - API Gateway endpoint response testing
+  - Secrets Manager credential verification
+  - Environment suffix consistency checks
 
 ### Documentation
 - **lib/PROMPT.md**: Human-readable requirements (639 words)
@@ -856,11 +857,11 @@ export ENVIRONMENT_SUFFIX=dev
 # Deploy infrastructure
 pulumi up
 
-# Run unit tests
-pytest tests/test_stack.py -v
+# Run unit tests (100% coverage)
+pytest tests/unit/test_tap_stack.py -v --cov=lib --cov-report=term-missing
 
-# After deployment, run integration tests
-pytest tests/test_integration.py -v
+# After deployment, run integration tests against live AWS infrastructure
+pytest tests/integration/test_tap_stack.py -v
 ```
 
 ## Key Features Implemented
