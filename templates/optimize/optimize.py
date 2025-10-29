@@ -128,16 +128,32 @@ class InfrastructureOptimizer:
                 print("✅ Already optimized (2 or fewer nodes)")
                 return True
             
-            # Decrease replica count
-            print("Decreasing replica count...")
+            # Get the current member clusters
+            current_group = replication_groups['ReplicationGroups'][0]
+            member_clusters = current_group.get('MemberClusters', [])
+            
+            print(f"Current member clusters: {member_clusters}")
+            
+            # Identify which replicas to remove (keep primary + 1 replica)
+            # We need to remove specific replica IDs
+            replicas_to_remove = member_clusters[2:]  # Remove from index 2 onwards
+            
+            if not replicas_to_remove:
+                print("✅ Already optimized (2 or fewer member clusters)")
+                return True
+            
+            print(f"Removing {len(replicas_to_remove)} replica(s): {replicas_to_remove}")
+            
+            # Use decrease_replica_count with specific replica IDs to remove
             self.elasticache_client.decrease_replica_count(
                 ReplicationGroupId=replication_group_id,
-                NewReplicaCount=1,  # This will result in 2 total nodes (1 primary + 1 replica)
+                ReplicasToRemove=replicas_to_remove,
                 ApplyImmediately=True
             )
             
             print("✅ ElastiCache optimization initiated:")
-            print(f"   - Node count: {current_node_count} → 2")
+            print(f"   - Node count: {len(member_clusters)} → 2")
+            print(f"   - Removed replicas: {replicas_to_remove}")
             
             # Wait for the modification to complete
             print("Waiting for Redis cluster modification to complete...")
