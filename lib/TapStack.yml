@@ -17,11 +17,11 @@ Parameters:
     ConstraintDescription: Must be a valid CIDR block
     
   KeyPairName:
-    Description: EC2 Key Pair for SSH access (optional - leave empty to disable SSH access)
+    Description: EC2 Key Pair for SSH access
     Type: String
-    Default: ''
-    AllowedPattern: '^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$|^$'
-    ConstraintDescription: Must be a valid EC2 KeyPair name or empty string
+    Default: 'my-key-pair'
+    AllowedPattern: '^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$'
+    ConstraintDescription: Must be a valid EC2 KeyPair name
     
   DBMasterUsername:
     Description: Database master username
@@ -435,19 +435,6 @@ Resources:
                   - 's3:ListBucket'
                 Resource:
                   - !GetAtt AppDataBucket.Arn
-        - PolicyName: KMSAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'kms:Decrypt'
-                  - 'kms:GenerateDataKey'
-                Resource: '*'
-                Condition:
-                  StringEquals:
-                    'kms:ViaService':
-                      - !Sub 's3.${AWS::Region}.amazonaws.com'
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-EC2-Instance-Role'
