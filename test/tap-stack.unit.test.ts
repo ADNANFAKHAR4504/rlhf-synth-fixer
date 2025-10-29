@@ -32,16 +32,17 @@ describe('TapStack Unit Tests (Secure Baseline)', () => {
   });
 
   // --- KMS ---
-  it('should create one KMS Key with rotation enabled', () => {
+  it('should create one KMS Key and one Key Policy', () => {
     expect(countResources('aws_kms_key')).toBe(1);
+    expect(countResources('aws_kms_key_policy')).toBe(1);
     const key = Object.values(findResources('aws_kms_key'))[0] as any;
     expect(key.enable_key_rotation).toBe(true);
   });
 
   // --- IAM ---
-  it('should create two IAM Roles', () => {
-    // --- FIX: Expect 2 roles (MFA admin, CloudTrail) ---
-    expect(countResources('aws_iam_role')).toBe(2);
+  it('should create three IAM Roles', () => {
+    // --- FIX: Expect 3 roles (MFA admin, CloudTrail, Config) ---
+    expect(countResources('aws_iam_role')).toBe(3);
   });
 
   it('should create one IAM Policy for CloudTrail', () => {
@@ -50,9 +51,9 @@ describe('TapStack Unit Tests (Secure Baseline)', () => {
     expect(policy.name).toContain('CloudTrail-CloudWatch-Logs-Policy');
   });
 
-  it('should create one IAM Role Policy Attachment', () => {
-    // --- FIX: Expect 1 attachment (CloudTrail role) ---
-    expect(countResources('aws_iam_role_policy_attachment')).toBe(1);
+  it('should create two IAM Role Policy Attachments', () => {
+    // --- FIX: Expect 2 attachments (CloudTrail role + Config role) ---
+    expect(countResources('aws_iam_role_policy_attachment')).toBe(2);
   });
 
   // --- Secrets Manager ---
@@ -62,8 +63,11 @@ describe('TapStack Unit Tests (Secure Baseline)', () => {
   });
 
   // --- AWS Config ---
-  it('should create two AWS Config rules', () => {
+  it('should create Config Recorder, Channel, and 2 Rules', () => {
+    expect(countResources('aws_config_configuration_recorder')).toBe(1);
+    expect(countResources('aws_config_delivery_channel')).toBe(1);
     expect(countResources('aws_config_config_rule')).toBe(2);
+
     const rules = Object.values(findResources('aws_config_config_rule')).map(
       (r: any) => r.source.source_identifier
     );
@@ -122,3 +126,4 @@ describe('TapStack Unit Tests (Secure Baseline)', () => {
     expect(outputs).toHaveProperty('LoginFailureAlarmName');
   });
 });
+

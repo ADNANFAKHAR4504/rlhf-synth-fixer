@@ -9,6 +9,8 @@ import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
+// --- FIX: Import KmsKeyPolicy ---
+import { KmsKeyPolicy } from '@cdktf/provider-aws/lib/kms-key-policy';
 import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
 import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
 import { Cloudtrail } from '@cdktf/provider-aws/lib/cloudtrail';
@@ -19,9 +21,9 @@ import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 import { ConfigConfigRule } from '@cdktf/provider-aws/lib/config-config-rule';
-// --- FIX: Remove Config Recorder and Delivery Channel imports ---
-// import { ConfigConfigurationRecorder } from '@cdktf/provider-aws/lib/config-configuration-recorder';
-// import { ConfigDeliveryChannel } from '@cdktf/provider-aws/lib/config-delivery-channel';
+// --- FIX: Re-add Config Recorder and Delivery Channel imports ---
+import { ConfigConfigurationRecorder } from '@cdktf/provider-aws/lib/config-configuration-recorder';
+import { ConfigDeliveryChannel } from '@cdktf/provider-aws/lib/config-delivery-channel';
 
 export interface TapStackProps {
   environmentSuffix: string;
@@ -40,12 +42,98 @@ export class TapStack extends TerraformStack {
 
     const callerId = new DataAwsCallerIdentity(this, 'caller-id', {});
     const partition = new DataAwsPartition(this, 'partition', {});
+    const accountId = callerId.accountId;
+    const logServicePrincipal = `logs.${region}.amazonaws.com`;
 
     // --- 1. KMS Key for Encryption ---
     const kmsKey = new KmsKey(this, 'kms-key', {
       description: `SOC 2 Baseline Key - ${environmentSuffix}`,
       enableKeyRotation: true,
+      // --- FIX: Remove default policy to apply a custom one ---
+      policy: new DataAwsIamPolicyDocument(this, 'kms-key-base-policy-doc', {
+        statement: [
+          {
+            sid: 'Enable IAM User Permissions',
+            actions: ['kms:*'],
+            principals: [
+              {
+                type: 'AWS',
+                identifiers: [
+                  `arn:${partition.partition}:iam::${accountId}:root`,
+                ],
+              },
+            ],
+            resources: ['*'],
+          },
+        ],
+      }).json,
       tags: { Environment: environmentSuffix },
+    });
+
+    // --- FIX: Add explicit KMS Key Policy for services ---
+    const keyPolicy = new KmsKeyPolicy(this, 'kms-key-policy', {
+      keyId: kmsKey.id,
+      policy: new DataAwsIamPolicyDocument(this, 'kms-key-service-policy-doc', {
+        statement: [
+          // Base policy from above
+          {
+            sid: 'Enable IAM User Permissions',
+            actions: ['kms:*'],
+            principals: [
+              {
+                type: 'AWS',
+                identifiers: [
+                  `arn:${partition.partition}:iam::${accountId}:root`,
+                ],
+              },
+            ],
+            resources: ['*'],
+          },
+          // Grant CloudTrail permissions
+          {
+            sid: 'Allow CloudTrail to use the key',
+            actions: ['kms:GenerateDataKey*', 'kms:Decrypt', 'kms:Encrypt'],
+            principals: [
+              {
+                type: 'Service',
+                identifiers: ['cloudtrail.amazonaws.com'],
+              },
+            ],
+            resources: ['*'],
+          },
+          // Grant CloudWatch Logs permissions
+          {
+            sid: 'Allow CloudWatch Logs to use the key',
+            actions: [
+              'kms:Encrypt*',
+              'kms:Decrypt*',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:Describe*',
+            ],
+            principals: [
+              {
+                type: 'Service',
+                identifiers: [logServicePrincipal],
+              },
+            ],
+            resources: ['*'], // As required by CloudWatch Logs
+          },
+          // Grant AWS Config permissions
+          {
+            sid: 'Allow Config to use the key',
+            actions: ['kms:Encrypt', 'kms:Decrypt', 'kms:GenerateDataKey'],
+            principals: [
+              {
+                type: 'Service',
+                identifiers: ['config.amazonaws.com'],
+              },
+            ],
+            resources: ['*'],
+          },
+        ],
+      }).json,
+      dependsOn: [kmsKey],
     });
 
     // --- 2. IAM Role with MFA ---
@@ -61,13 +149,11 @@ export class TapStack extends TerraformStack {
               principals: [
                 {
                   type: 'AWS',
-                  // Allows any user in the account to assume this role
                   identifiers: [
-                    `arn:${partition.partition}:iam::${callerId.accountId}:root`,
+                    `arn:${partition.partition}:iam::${accountId}:root`,
                   ],
                 },
               ],
-              // This condition enforces MFA
               condition: [
                 {
                   test: 'Bool',
@@ -88,8 +174,7 @@ export class TapStack extends TerraformStack {
       description: 'SOC 2 Baseline Secret',
       kmsKeyId: kmsKey.id,
       tags: { Environment: environmentSuffix },
-      // --- FIX: Add dependency on KMS key ---
-      dependsOn: [kmsKey],
+      dependsOn: [keyPolicy], // Depend on the policy
     });
 
     new SecretsmanagerSecretVersion(this, 'secret-version', {
@@ -100,7 +185,7 @@ export class TapStack extends TerraformStack {
 
     // --- 4. CloudTrail and S3 Bucket for Logs ---
     const trailBucket = new S3Bucket(this, 'trail-bucket', {
-      bucket: `soc-baseline-trail-logs-${callerId.accountId}-${environmentSuffix}`,
+      bucket: `soc-baseline-trail-logs-${accountId}-${environmentSuffix}`,
       forceDestroy: true,
       tags: { Environment: environmentSuffix },
     });
@@ -129,7 +214,7 @@ export class TapStack extends TerraformStack {
           {
             sid: 'AWSCloudTrailWrite',
             actions: ['s3:PutObject'],
-            resources: [`${trailBucket.arn}/AWSLogs/${callerId.accountId}/*`],
+            resources: [`${trailBucket.arn}/AWSLogs/${accountId}/*`],
             principals: [
               { type: 'Service', identifiers: ['cloudtrail.amazonaws.com'] },
             ],
@@ -154,8 +239,8 @@ export class TapStack extends TerraformStack {
       name: `/aws/cloudtrail/SOC-Baseline-Trail-${environmentSuffix}`,
       retentionInDays: 90,
       kmsKeyId: kmsKey.id,
-      // --- FIX: Add explicit dependency on the KMS key ---
-      dependsOn: [kmsKey],
+      // --- FIX: Depend on the explicit Key Policy ---
+      dependsOn: [keyPolicy],
     });
 
     const cloudtrailLogsRole = new IamRole(this, 'cloudtrail-logs-role', {
@@ -203,20 +288,57 @@ export class TapStack extends TerraformStack {
       cloudWatchLogsRoleArn: cloudtrailLogsRole.arn,
       kmsKeyId: kmsKey.id,
       tags: { Environment: environmentSuffix },
-      dependsOn: [trailBucketPolicy, cloudtrailLogsRole, logGroup],
+      // --- FIX: Depend on the Key Policy ---
+      dependsOn: [trailBucketPolicy, cloudtrailLogsRole, logGroup, keyPolicy],
     });
 
-    // --- 5. AWS Config Rules ---
+    // --- 5. AWS Config Rules (Re-added) ---
+    // --- FIX: Re-add Config setup as per "self-contained" requirement ---
+    const configRole = new IamRole(this, 'config-role', {
+      name: `SOC-Baseline-Config-Role-${environmentSuffix}`,
+      assumeRolePolicy: new DataAwsIamPolicyDocument(
+        this,
+        'config-assume-policy',
+        {
+          statement: [
+            {
+              actions: ['sts:AssumeRole'],
+              principals: [
+                { type: 'Service', identifiers: ['config.amazonaws.com'] },
+              ],
+            },
+          ],
+        }
+      ).json,
+    });
 
-    // --- FIX: Remove Config Recorder, Channel, and Role ---
-    // The error "MaxNumberOfDeliveryChannelsExceededException" means
-    // this account ALREADY has an AWS Config setup. We will
-    // just deploy the rules, which will attach to the existing setup.
-    // ---
-    // const configRole = new IamRole(this, 'config-role', { ... });
-    // new IamRolePolicyAttachment(this, 'config-role-attach', { ... });
-    // const configRecorder = new ConfigConfigurationRecorder(this, 'config-recorder', { ... });
-    // new ConfigDeliveryChannel(this, 'config-channel', { ... });
+    new IamRolePolicyAttachment(this, 'config-role-attach', {
+      role: configRole.name,
+      // This is the AWS Managed Policy for Config
+      policyArn: 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole',
+    });
+
+    const configRecorder = new ConfigConfigurationRecorder(
+      this,
+      'config-recorder',
+      {
+        name: `soc-baseline-recorder-${environmentSuffix}`,
+        roleArn: configRole.arn,
+        recordingGroup: {
+          allSupported: true,
+          includeGlobalResourceTypes: true,
+        },
+        dependsOn: [configRole],
+      }
+    );
+
+    new ConfigDeliveryChannel(this, 'config-channel', {
+      name: `soc-baseline-channel-${environmentSuffix}`,
+      s3BucketName: trailBucket.id,
+      s3KmsKeyArn: kmsKey.arn,
+      dependsOn: [trailBucket, configRecorder, keyPolicy],
+    });
+    // --- END FIX ---
 
     const ebsRule = new ConfigConfigRule(this, 'ebs-encryption-rule', {
       name: `ebs-encryption-by-default-${environmentSuffix}`,
@@ -225,8 +347,7 @@ export class TapStack extends TerraformStack {
         sourceIdentifier: 'EC2_EBS_ENCRYPTION_BY_DEFAULT',
       },
       tags: { Environment: environmentSuffix },
-      // --- FIX: Remove dependency on deleted recorder ---
-      // dependsOn: [configRecorder],
+      dependsOn: [configRecorder],
     });
 
     const s3Rule = new ConfigConfigRule(this, 's3-encryption-rule', {
@@ -236,10 +357,8 @@ export class TapStack extends TerraformStack {
         sourceIdentifier: 'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED',
       },
       tags: { Environment: environmentSuffix },
-      // --- FIX: Remove dependency on deleted recorder ---
-      // dependsOn: [configRecorder],
+      dependsOn: [configRecorder],
     });
-    // --- END FIX ---
 
     // --- 6. CloudWatch Alarms for Unauthorized Activity ---
     const rootActivityFilter = new CloudwatchLogMetricFilter(
