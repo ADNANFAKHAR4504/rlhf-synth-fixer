@@ -86,7 +86,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     this.projectName = pulumi.getProject();
     this.stackName = pulumi.getStack();
-
+    
     // Load environment-specific configuration
     this.config = this.loadConfiguration(args.environmentSuffix);
 
@@ -166,45 +166,45 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-   * Load environment-specific configuration
+   * Load environment-specific configuration with defaults
    */
   private loadConfiguration(environmentSuffix: string): EnvironmentConfig {
     const config = new pulumi.Config();
-
+    
     // Determine VPC CIDR based on environment
     const defaultVpcCidrs: Record<string, string> = {
       dev: "10.1.0.0/16",
       staging: "10.2.0.0/16",
       prod: "10.3.0.0/16",
     };
-
+    
     // Determine ECS task count based on environment
     const defaultTaskCounts: Record<string, number> = {
       dev: 1,
       staging: 2,
       prod: 4,
     };
-
+    
     // Determine S3 log retention based on environment
     const defaultLogRetention: Record<string, number> = {
       dev: 7,
       staging: 30,
       prod: 90,
     };
-
+    
     // Determine CloudWatch log retention based on environment
     const defaultCloudWatchRetention: Record<string, number> = {
       dev: 7,
       staging: 30,
       prod: 90,
     };
-
+    
     // Get config with fallbacks
     const vpcCidr = config.get("vpcCidr") || defaultVpcCidrs[environmentSuffix] || "10.0.0.0/16";
     const ecsTaskCount = config.getNumber("ecsTaskCount") || defaultTaskCounts[environmentSuffix] || 2;
     const s3LogRetentionDays = config.getNumber("s3LogRetentionDays") || defaultLogRetention[environmentSuffix] || 30;
     const cloudwatchLogRetentionDays = config.getNumber("cloudwatchLogRetentionDays") || defaultCloudWatchRetention[environmentSuffix] || 30;
-
+    
     return {
       environmentSuffix,
       vpcCidr,
@@ -231,13 +231,12 @@ export class TapStack extends pulumi.ComponentResource {
     };
   }
 
-
   /**
    * Create VPC with public and private subnets
    */
   private createVpc() {
     const vpcName = this.getResourceName("vpc");
-
+    
     const vpc = new awsx.ec2.Vpc(
       vpcName,
       {
@@ -415,6 +414,7 @@ export class TapStack extends pulumi.ComponentResource {
     const parameterGroup = new aws.rds.ClusterParameterGroup(
       this.getResourceName("db-param-group"),
       {
+        name: this.getAwsCompliantName("db-param-group"),
         family: "aurora-postgresql14",
         description: "RDS cluster parameter group for Aurora PostgreSQL",
         tags: {
@@ -442,7 +442,7 @@ export class TapStack extends pulumi.ComponentResource {
     const cluster = new aws.rds.Cluster(
       this.getResourceName("aurora-cluster"),
       {
-        clusterIdentifier: this.getResourceName("aurora-cluster"),
+        clusterIdentifier: this.getAwsCompliantName("aurora-cluster"),
         engine: "aurora-postgresql",
         engineVersion: "14.6",
         databaseName: "tradingdb",
@@ -460,7 +460,7 @@ export class TapStack extends pulumi.ComponentResource {
         skipFinalSnapshot: this.config.environmentSuffix !== "prod",
         finalSnapshotIdentifier:
           this.config.environmentSuffix === "prod"
-            ? this.getResourceName("aurora-final-snapshot")
+            ? this.getAwsCompliantName("aurora-final-snapshot")
             : undefined,
         tags: {
           ...this.config.tags,
@@ -817,10 +817,10 @@ export class TapStack extends pulumi.ComponentResource {
    * Create S3 bucket with lifecycle policies
    */
   private createS3Bucket() {
-    const bucket = new aws.s3.BucketV2(
+    const bucket = new aws.s3.Bucket(
       this.getResourceName("logs"),
       {
-        bucket: this.getResourceName("logs"),
+        bucket: this.getResourceName("logs").toLowerCase(),
         tags: {
           ...this.config.tags,
           Name: this.getResourceName("logs"),
@@ -830,7 +830,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Enable versioning
-    new aws.s3.BucketVersioningV2(
+    new aws.s3.BucketVersioning(
       this.getResourceName("logs-versioning"),
       {
         bucket: bucket.id,
@@ -842,7 +842,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Configure lifecycle rules
-    new aws.s3.BucketLifecycleConfigurationV2(
+    new aws.s3.BucketLifecycleConfiguration(
       this.getResourceName("logs-lifecycle"),
       {
         bucket: bucket.id,
@@ -870,7 +870,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Enable server-side encryption
-    new aws.s3.BucketServerSideEncryptionConfigurationV2(
+    new aws.s3.BucketServerSideEncryptionConfiguration(
       this.getResourceName("logs-encryption"),
       {
         bucket: bucket.id,
@@ -1154,12 +1154,48 @@ export class TapStack extends pulumi.ComponentResource {
    * Get resource name with environment suffix
    */
   private getResourceName(resourceType: string): string {
-    return `${this.projectName}-${this.config.environmentSuffix}-${resourceType}`;
+    const baseName = `${this.projectName}-${this.config.environmentSuffix}-${resourceType}`;
+    
+    // S3 bucket names must be lowercase and DNS-compliant
+    if (resourceType.includes('logs') || resourceType.includes('bucket')) {
+      return baseName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+    }
+    
+    return baseName;
   }
 
   /**
- * Write outputs to JSON file
- */
+   * Get AWS-compliant resource name for resources with strict naming rules
+   * (RDS, ElastiCache, etc. - lowercase alphanumeric and hyphens only, must start with letter)
+   */
+  private getAwsCompliantName(resourceType: string): string {
+    let name = `${this.projectName}-${this.config.environmentSuffix}-${resourceType}`.toLowerCase();
+    
+    // Replace any non-alphanumeric characters (except hyphens) with hyphens
+    name = name.replace(/[^a-z0-9-]/g, '-');
+    
+    // Remove consecutive hyphens
+    name = name.replace(/-+/g, '-');
+    
+    // Ensure it starts with a letter
+    if (!/^[a-z]/.test(name)) {
+      name = 'a' + name;
+    }
+    
+    // Truncate if too long (AWS typically has 63 char limit)
+    if (name.length > 63) {
+      name = name.substring(0, 63);
+    }
+    
+    // Remove trailing hyphen if present
+    name = name.replace(/-$/, '');
+    
+    return name;
+  }
+
+  /**
+   * Write outputs to JSON file
+   */
   private writeOutputsToFile(outputs: TapStackOutputs): void {
     const outputDir = path.join(process.cwd(), "cfn-outputs");
     const outputFile = path.join(outputDir, "flat-outputs.json");
@@ -1195,5 +1231,4 @@ export class TapStack extends pulumi.ComponentResource {
       fs.writeFileSync(outputFile, JSON.stringify(flatOutputs, null, 2));
     });
   }
-
 }
