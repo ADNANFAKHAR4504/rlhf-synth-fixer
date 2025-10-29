@@ -1,0 +1,28 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "410128",
+  "team": "4",
+  "startedAt": "2025-10-21T16:04:43.811Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "Secrets Manager",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
+}
