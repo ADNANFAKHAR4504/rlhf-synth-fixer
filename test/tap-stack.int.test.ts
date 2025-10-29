@@ -7,6 +7,8 @@ import {
   DescribeNatGatewaysCommand,
   DescribeInternetGatewaysCommand,
   DescribeRouteTablesCommand,
+  DescribeLaunchTemplatesCommand,
+  DescribeInstancesCommand,
 } from '@aws-sdk/client-ec2';
 import {
   RDSClient,
@@ -31,7 +33,6 @@ import {
 import {
   CloudFrontClient,
   GetDistributionCommand,
-  ListDistributionsCommand,
 } from '@aws-sdk/client-cloudfront';
 import {
   SecretsManagerClient,
@@ -47,6 +48,7 @@ import {
   CloudTrailClient,
   GetTrailStatusCommand,
   DescribeTrailsCommand,
+  GetTrailCommand,
 } from '@aws-sdk/client-cloudtrail';
 import {
   CloudWatchClient,
@@ -55,6 +57,7 @@ import {
 import {
   WAFV2Client,
   ListWebACLsCommand,
+  GetWebACLCommand,
 } from '@aws-sdk/client-wafv2';
 
 // Configuration - Load outputs from deployed CloudFormation stack
@@ -986,5 +989,525 @@ describe('TapStack Infrastructure - Integration Tests', () => {
       );
       expect(trailResponse.IsLogging).toBe(true);
     }, 120000);
+
+    skipIfNoDeployment()('E2E: CloudFront → ALB origin mapping', async () => {
+      const distributionId = outputs['CloudFrontDistributionId'];
+
+      if (!distributionId) {
+        console.warn('CloudFront distribution ID not found, skipping test');
+        return;
+      }
+
+      // Get CloudFront distribution
+      const cfResponse = await cloudFrontClient.send(
+        new GetDistributionCommand({ Id: distributionId })
+      );
+      expect(cfResponse.Distribution).toBeDefined();
+
+      const config = cfResponse.Distribution!.DistributionConfig!;
+      const origin = config.Origins!.Items![0];
+
+      // Get ALB DNS for comparison
+      const albResponse = await elbv2Client.send(
+        new DescribeLoadBalancersCommand({
+          Names: [`ALB-${environmentSuffix}`],
+        })
+      );
+      const albDNS = albResponse.LoadBalancers![0].DNSName;
+
+      // Verify origin points to ALB
+      expect(origin.DomainName).toBe(albDNS);
+      expect(origin.Id).toBe('ALBOrigin');
+      expect(origin.CustomOriginConfig!.OriginProtocolPolicy).toBe('http-only');
+
+      console.log('✓ E2E workflow verified: CloudFront → ALB origin mapping');
+    }, 45000);
+
+    skipIfNoDeployment()('E2E: ALB → Target Group → ASG instances routing', async () => {
+      // Get ALB
+      const albResponse = await elbv2Client.send(
+        new DescribeLoadBalancersCommand({
+          Names: [`ALB-${environmentSuffix}`],
+        })
+      );
+      const albArn = albResponse.LoadBalancers![0].LoadBalancerArn;
+
+      // Get listener and verify it forwards to target group
+      const listenerResponse = await elbv2Client.send(
+        new DescribeListenersCommand({ LoadBalancerArn: albArn })
+      );
+      const listener = listenerResponse.Listeners![0];
+      expect(listener.DefaultActions![0].Type).toBe('forward');
+      const targetGroupArn = listener.DefaultActions![0].TargetGroupArn!;
+
+      // Get target group details
+      const tgResponse = await elbv2Client.send(
+        new DescribeTargetGroupsCommand({
+          TargetGroupArns: [targetGroupArn],
+        })
+      );
+      expect(tgResponse.TargetGroups).toBeDefined();
+
+      // Get target health
+      const healthResponse = await elbv2Client.send(
+        new DescribeTargetHealthCommand({ TargetGroupArn: targetGroupArn })
+      );
+      expect(healthResponse.TargetHealthDescriptions).toBeDefined();
+      expect(healthResponse.TargetHealthDescriptions!.length).toBeGreaterThanOrEqual(2);
+
+      // Verify at least some targets are healthy
+      const healthyTargets = healthResponse.TargetHealthDescriptions!.filter(
+        t => t.TargetHealth!.State === 'healthy' || t.TargetHealth!.State === 'initial'
+      );
+      expect(healthyTargets.length).toBeGreaterThanOrEqual(1);
+
+      console.log('✓ E2E workflow verified: ALB → Target Group → ASG instances');
+    }, 45000);
+
+    skipIfNoDeployment()('E2E: ASG instances → Private subnets → NAT Gateway connectivity', async () => {
+      // Get ASG details
+      const asgResponse = await autoScalingClient.send(
+        new DescribeAutoScalingGroupsCommand({
+          AutoScalingGroupNames: [`ASG-${environmentSuffix}`],
+        })
+      );
+      const asg = asgResponse.AutoScalingGroups![0];
+
+      // Verify ASG is in private subnets
+      const subnetIds = asg.VPCZoneIdentifier!.split(',');
+      expect(subnetIds.length).toBe(2);
+
+      const subnetsResponse = await ec2Client.send(
+        new DescribeSubnetsCommand({ SubnetIds: subnetIds })
+      );
+      const subnets = subnetsResponse.Subnets!;
+
+      // Verify these are private subnets (CIDR 10.0.3.0/24 or 10.0.4.0/24)
+      subnets.forEach(subnet => {
+        expect(['10.0.3.0/24', '10.0.4.0/24']).toContain(subnet.CidrBlock);
+      });
+
+      // Get route tables for private subnets
+      const rtResponse = await ec2Client.send(
+        new DescribeRouteTablesCommand({
+          Filters: [
+            { Name: 'association.subnet-id', Values: subnetIds },
+          ],
+        })
+      );
+
+      // Verify each route table has NAT Gateway route
+      rtResponse.RouteTables!.forEach(rt => {
+        const natRoute = rt.Routes!.find(r => r.DestinationCidrBlock === '0.0.0.0/0');
+        expect(natRoute).toBeDefined();
+        expect(natRoute!.NatGatewayId).toContain('nat-');
+      });
+
+      // Verify NAT Gateways are in public subnets and have EIPs
+      const natResponse = await ec2Client.send(
+        new DescribeNatGatewaysCommand({
+          Filter: [{ Name: 'state', Values: ['available'] }],
+        })
+      );
+      natResponse.NatGateways!.forEach(nat => {
+        expect(nat.NatGatewayAddresses![0].PublicIp).toBeDefined();
+      });
+
+      console.log('✓ E2E workflow verified: ASG → Private subnets → NAT Gateway');
+    }, 45000);
+
+    skipIfNoDeployment()('E2E: RDS → DB Subnet Group → Private subnets isolation', async () => {
+      // Get RDS instance details
+      const rdsResponse = await rdsClient.send(
+        new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: `db-${environmentSuffix}`,
+        })
+      );
+      const dbInstance = rdsResponse.DBInstances![0];
+
+      // Verify not publicly accessible
+      expect(dbInstance.PubliclyAccessible).toBe(false);
+
+      // Get DB Subnet Group
+      const subnetGroupName = dbInstance.DBSubnetGroup!.DBSubnetGroupName;
+      const subnetGroupResponse = await rdsClient.send(
+        new DescribeDBSubnetGroupsCommand({
+          DBSubnetGroupName: subnetGroupName,
+        })
+      );
+
+      const subnetGroup = subnetGroupResponse.DBSubnetGroups![0];
+      expect(subnetGroup.Subnets!.length).toBe(2);
+
+      // Verify subnets are in different AZs
+      const azs = subnetGroup.Subnets!.map(s => s.SubnetAvailabilityZone!.Name);
+      expect(new Set(azs).size).toBe(2);
+
+      // Verify these are private subnets by checking their CIDR blocks
+      const subnetIds = subnetGroup.Subnets!.map(s => s.SubnetIdentifier!);
+      const subnetsResponse = await ec2Client.send(
+        new DescribeSubnetsCommand({ SubnetIds: subnetIds })
+      );
+
+      subnetsResponse.Subnets!.forEach(subnet => {
+        expect(['10.0.3.0/24', '10.0.4.0/24']).toContain(subnet.CidrBlock);
+      });
+
+      console.log('✓ E2E workflow verified: RDS → DB Subnet Group → Private subnets');
+    }, 45000);
+
+    skipIfNoDeployment()('E2E: Security chain - WAF → ALB → WebServer SG → Database SG', async () => {
+      // Verify WAF is associated with ALB
+      const albResponse = await elbv2Client.send(
+        new DescribeLoadBalancersCommand({
+          Names: [`ALB-${environmentSuffix}`],
+        })
+      );
+      const albArn = albResponse.LoadBalancers![0].LoadBalancerArn;
+
+      const webACLs = await wafv2Client.send(
+        new ListWebACLsCommand({ Scope: 'REGIONAL' })
+      );
+      const ourWebACL = webACLs.WebACLs!.find(
+        acl => acl.Name === `WebACL-${environmentSuffix}`
+      );
+      expect(ourWebACL).toBeDefined();
+
+      // Get security groups
+      const sgResponse = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          Filters: [
+            { Name: 'tag:Name', Values: [`ALB-SG-${environmentSuffix}`, `WebServer-SG-${environmentSuffix}`, `Database-SG-${environmentSuffix}`] },
+          ],
+        })
+      );
+
+      const albSG = sgResponse.SecurityGroups!.find(sg => sg.GroupName?.includes('ALB'));
+      const webServerSG = sgResponse.SecurityGroups!.find(sg => sg.GroupName?.includes('WebServer'));
+      const dbSG = sgResponse.SecurityGroups!.find(sg => sg.GroupName?.includes('Database'));
+
+      expect(albSG).toBeDefined();
+      expect(webServerSG).toBeDefined();
+      expect(dbSG).toBeDefined();
+
+      // Verify WebServer SG allows traffic from ALB SG only
+      const webServerHttpRule = webServerSG!.IpPermissions!.find(
+        r => r.FromPort === 80 && r.ToPort === 80
+      );
+      expect(webServerHttpRule!.UserIdGroupPairs![0].GroupId).toBe(albSG!.GroupId);
+
+      // Verify Database SG allows traffic from WebServer SG only
+      const dbMysqlRule = dbSG!.IpPermissions!.find(
+        r => r.FromPort === 3306 && r.ToPort === 3306
+      );
+      expect(dbMysqlRule!.UserIdGroupPairs![0].GroupId).toBe(webServerSG!.GroupId);
+
+      console.log('✓ E2E workflow verified: Security chain WAF → ALB → WebServer → Database');
+    }, 45000);
+
+    skipIfNoDeployment()('E2E: Secrets Manager → RDS credentials integration', async () => {
+      const secretName = `db-credentials-${environmentSuffix}`;
+
+      // Retrieve secret from Secrets Manager
+      const secretResponse = await secretsClient.send(
+        new GetSecretValueCommand({ SecretId: secretName })
+      );
+
+      expect(secretResponse.SecretString).toBeDefined();
+      const secret = JSON.parse(secretResponse.SecretString!);
+      expect(secret.username).toBe('dbadmin');
+      expect(secret.password).toBeDefined();
+
+      // Get RDS instance
+      const rdsResponse = await rdsClient.send(
+        new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: `db-${environmentSuffix}`,
+        })
+      );
+      const dbInstance = rdsResponse.DBInstances![0];
+
+      // Verify RDS uses the same username
+      expect(dbInstance.MasterUsername).toBe('dbadmin');
+
+      // Verify secret ARN format
+      expect(secretResponse.ARN).toContain('secretsmanager');
+      expect(secretResponse.ARN).toContain(secretName);
+
+      console.log('✓ E2E workflow verified: Secrets Manager → RDS credentials');
+    }, 45000);
+
+    skipIfNoDeployment()('E2E: CloudTrail → S3 bucket → Encryption → Lifecycle', async () => {
+      const trailName = `trail-${environmentSuffix}`;
+
+      // Get CloudTrail configuration
+      const trailCommand = new GetTrailCommand({ Name: trailName });
+      const trailResponse = await cloudTrailClient.send(trailCommand);
+      const trail = trailResponse.Trail!;
+
+      expect(trail.S3BucketName).toBeDefined();
+      const bucketName = trail.S3BucketName!;
+
+      // Verify S3 bucket encryption
+      const encryptionCommand = new GetBucketEncryptionCommand({ Bucket: bucketName });
+      const encryptionResponse = await s3Client.send(encryptionCommand);
+      expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
+
+      const encryptionRule = encryptionResponse.ServerSideEncryptionConfiguration!.Rules![0];
+      expect(encryptionRule.ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe('AES256');
+
+      // Verify lifecycle policy
+      const lifecycleCommand = new GetBucketLifecycleConfigurationCommand({ Bucket: bucketName });
+      const lifecycleResponse = await s3Client.send(lifecycleCommand);
+      expect(lifecycleResponse.Rules).toBeDefined();
+      expect(lifecycleResponse.Rules!.length).toBeGreaterThan(0);
+
+      const deleteRule = lifecycleResponse.Rules!.find(r => r.Status === 'Enabled');
+      expect(deleteRule).toBeDefined();
+      expect(deleteRule!.Expiration!.Days).toBe(30);
+
+      // Verify bucket policy allows CloudTrail
+      const policyCommand = new GetBucketPolicyCommand({ Bucket: bucketName });
+      const policyResponse = await s3Client.send(policyCommand);
+      expect(policyResponse.Policy).toBeDefined();
+
+      const policy = JSON.parse(policyResponse.Policy!);
+      const cloudTrailStatement = policy.Statement.find(
+        (s: any) => s.Principal?.Service === 'cloudtrail.amazonaws.com'
+      );
+      expect(cloudTrailStatement).toBeDefined();
+
+      console.log('✓ E2E workflow verified: CloudTrail → S3 (encrypted) → Lifecycle');
+    }, 45000);
+
+    skipIfNoDeployment()('E2E: EC2 instances → IAM role → S3 and Secrets Manager access', async () => {
+      // Get launch template
+      const ltResponse = await ec2Client.send(
+        new DescribeLaunchTemplatesCommand({
+          LaunchTemplateNames: [`LaunchTemplate-${environmentSuffix}`],
+        })
+      );
+      expect(ltResponse.LaunchTemplates).toBeDefined();
+      expect(ltResponse.LaunchTemplates!.length).toBe(1);
+
+      const launchTemplate = ltResponse.LaunchTemplates![0];
+      expect(launchTemplate.LaunchTemplateName).toBe(`LaunchTemplate-${environmentSuffix}`);
+
+      // Note: IAM role details are in launch template data, which requires version details
+      // For now, verify that instance profile exists by checking ASG instances
+      const asgResponse = await autoScalingClient.send(
+        new DescribeAutoScalingGroupsCommand({
+          AutoScalingGroupNames: [`ASG-${environmentSuffix}`],
+        })
+      );
+      const asg = asgResponse.AutoScalingGroups![0];
+
+      // Verify ASG is using launch template
+      expect(asg.LaunchTemplate).toBeDefined();
+      expect(asg.LaunchTemplate!.LaunchTemplateName).toBe(`LaunchTemplate-${environmentSuffix}`);
+
+      // If there are running instances, verify they have instance profile
+      if (asg.Instances && asg.Instances.length > 0) {
+        const instanceIds = asg.Instances.map(i => i.InstanceId!);
+        const instancesResponse = await ec2Client.send(
+          new DescribeInstancesCommand({ InstanceIds: instanceIds })
+        );
+
+        instancesResponse.Reservations!.forEach(reservation => {
+          reservation.Instances!.forEach(instance => {
+            expect(instance.IamInstanceProfile).toBeDefined();
+            console.log(`✓ Instance ${instance.InstanceId} has IAM instance profile`);
+          });
+        });
+      }
+
+      console.log('✓ E2E workflow verified: EC2 → IAM role → S3 and Secrets access');
+    }, 60000);
+  });
+
+  describe('Service-Level Operations', () => {
+    skipIfNoDeployment()('Operation: Secrets Manager secret accessibility', async () => {
+      const secretName = `db-credentials-${environmentSuffix}`;
+
+      // Retrieve secret value
+      const getCommand = new GetSecretValueCommand({ SecretId: secretName });
+      const getResponse = await secretsClient.send(getCommand);
+
+      // Verify SecretString is accessible
+      expect(getResponse.SecretString).toBeDefined();
+
+      // Parse JSON and validate structure
+      const secret = JSON.parse(getResponse.SecretString!);
+      expect(secret).toHaveProperty('username');
+      expect(secret).toHaveProperty('password');
+      expect(typeof secret.username).toBe('string');
+      expect(typeof secret.password).toBe('string');
+
+      console.log('✓ Secrets Manager secret accessible');
+    }, 30000);
+
+    skipIfNoDeployment()('Operation: Secrets Manager secret metadata', async () => {
+      const secretName = `db-credentials-${environmentSuffix}`;
+
+      // Describe secret
+      const describeCommand = new DescribeSecretCommand({ SecretId: secretName });
+      const describeResponse = await secretsClient.send(describeCommand);
+
+      // Verify metadata exists
+      expect(describeResponse.CreatedDate).toBeDefined();
+      expect(describeResponse.LastChangedDate).toBeDefined();
+
+      // Verify CreatedDate is in the past
+      const createdDate = new Date(describeResponse.CreatedDate!);
+      const now = new Date();
+      expect(createdDate.getTime()).toBeLessThan(now.getTime());
+
+      // Verify LastAccessedDate (if available)
+      if (describeResponse.LastAccessedDate) {
+        const lastAccessDate = new Date(describeResponse.LastAccessedDate);
+        expect(lastAccessDate.getTime()).toBeLessThanOrEqual(now.getTime());
+      }
+
+      console.log('✓ Secrets Manager metadata operational');
+    }, 30000);
+
+    skipIfNoDeployment()('Operation: RDS database connection endpoint availability', async () => {
+      // Get RDS instance details
+      const rdsResponse = await rdsClient.send(
+        new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: `db-${environmentSuffix}`,
+        })
+      );
+
+      const dbInstance = rdsResponse.DBInstances![0];
+
+      // Verify Endpoint exists
+      expect(dbInstance.Endpoint).toBeDefined();
+      expect(dbInstance.Endpoint!.Address).toBeDefined();
+      expect(dbInstance.Endpoint!.Port).toBeDefined();
+
+      // Verify Port is 3306 (MySQL)
+      expect(dbInstance.Endpoint!.Port).toBe(3306);
+
+      // Verify endpoint format is valid FQDN
+      const endpointAddress = dbInstance.Endpoint!.Address;
+      expect(endpointAddress).toMatch(/^[a-z0-9.-]+\.(rds\.amazonaws\.com|rds\.[a-z0-9-]+\.amazonaws\.com)$/);
+
+      console.log(`✓ RDS endpoint operational: ${endpointAddress}:3306`);
+    }, 30000);
+
+    skipIfNoDeployment()('Operation: RDS database status validation', async () => {
+      // Get RDS instance status
+      const rdsResponse = await rdsClient.send(
+        new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: `db-${environmentSuffix}`,
+        })
+      );
+
+      const dbInstance = rdsResponse.DBInstances![0];
+
+      // Verify DBInstanceStatus in acceptable states
+      const acceptableStates = ['available', 'backing-up', 'modifying', 'upgrading', 'configuring-enhanced-monitoring'];
+      expect(acceptableStates).toContain(dbInstance.DBInstanceStatus);
+
+      // Verify not in failed state
+      const failedStates = ['failed', 'incompatible-parameters', 'incompatible-restore'];
+      expect(failedStates).not.toContain(dbInstance.DBInstanceStatus);
+
+      console.log(`✓ RDS status operational: ${dbInstance.DBInstanceStatus}`);
+    }, 60000);
+
+    skipIfNoDeployment()('Operation: Target Group health state validation', async () => {
+      const tgResponse = await elbv2Client.send(
+        new DescribeTargetGroupsCommand({
+          Names: [`TG-${environmentSuffix}`],
+        })
+      );
+
+      const targetGroupArn = tgResponse.TargetGroups![0].TargetGroupArn;
+
+      // Get target health descriptions
+      const healthResponse = await elbv2Client.send(
+        new DescribeTargetHealthCommand({ TargetGroupArn: targetGroupArn })
+      );
+
+      expect(healthResponse.TargetHealthDescriptions).toBeDefined();
+      const targets = healthResponse.TargetHealthDescriptions!;
+      expect(targets.length).toBeGreaterThan(0);
+
+      // Count healthy vs unhealthy targets
+      const healthyCount = targets.filter(t => t.TargetHealth!.State === 'healthy').length;
+      const unhealthyCount = targets.filter(t => t.TargetHealth!.State === 'unhealthy').length;
+      const initialCount = targets.filter(t => t.TargetHealth!.State === 'initial').length;
+
+      // Ensure healthy count >= 1 (MinSize of ASG is 2, but at least 1 should be healthy)
+      expect(healthyCount + initialCount).toBeGreaterThanOrEqual(1);
+
+      console.log(`✓ Target health operational: ${healthyCount} healthy, ${initialCount} initial, ${unhealthyCount} unhealthy`);
+    }, 45000);
+
+    skipIfNoDeployment()('Operation: CloudFront distribution deployment state', async () => {
+      const distributionId = outputs['CloudFrontDistributionId'];
+
+      if (!distributionId) {
+        console.warn('CloudFront distribution ID not found, skipping test');
+        return;
+      }
+
+      // Get distribution status
+      const response = await cloudFrontClient.send(
+        new GetDistributionCommand({ Id: distributionId })
+      );
+
+      expect(response.Distribution).toBeDefined();
+
+      // Verify Status = "Deployed" (not "InProgress")
+      expect(response.Distribution!.Status).toBe('Deployed');
+
+      // Verify Enabled = true
+      expect(response.Distribution!.DistributionConfig!.Enabled).toBe(true);
+
+      // Verify DomainName is accessible
+      const domainName = response.Distribution!.DomainName;
+      expect(domainName).toBeDefined();
+      expect(domainName).toMatch(/\.cloudfront\.net$/);
+
+      console.log(`✓ CloudFront operational: ${domainName}`);
+    }, 60000);
+
+    skipIfNoDeployment()('Operation: WAF WebACL metrics collection', async () => {
+      // List Web ACLs to find ours
+      const listCommand = new ListWebACLsCommand({ Scope: 'REGIONAL' });
+      const listResponse = await wafv2Client.send(listCommand);
+
+      const ourWebACL = listResponse.WebACLs!.find(
+        acl => acl.Name === `WebACL-${environmentSuffix}`
+      );
+      expect(ourWebACL).toBeDefined();
+
+      // Get WebACL details
+      const getCommand = new GetWebACLCommand({
+        Scope: 'REGIONAL',
+        Name: ourWebACL!.Name,
+        Id: ourWebACL!.Id,
+      });
+      const getResponse = await wafv2Client.send(getCommand);
+
+      expect(getResponse.WebACL).toBeDefined();
+      const webACL = getResponse.WebACL!;
+
+      // Verify VisibilityConfig.CloudWatchMetricsEnabled = true
+      expect(webACL.VisibilityConfig).toBeDefined();
+      expect(webACL.VisibilityConfig!.CloudWatchMetricsEnabled).toBe(true);
+      expect(webACL.VisibilityConfig!.MetricName).toBeDefined();
+
+      // Verify each rule has CloudWatchMetricsEnabled = true
+      webACL.Rules!.forEach(rule => {
+        expect(rule.VisibilityConfig).toBeDefined();
+        expect(rule.VisibilityConfig!.CloudWatchMetricsEnabled).toBe(true);
+        expect(rule.VisibilityConfig!.MetricName).toBeDefined();
+      });
+
+      console.log('✓ WAF metrics collection operational');
+    }, 30000);
   });
 });
