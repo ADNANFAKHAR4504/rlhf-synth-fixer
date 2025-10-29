@@ -1,0 +1,38 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "team": "synth",
+  "startedAt": "2025-10-28T02:46:40+05:30",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "po_id": "9422831775",
+  "aws_services": [
+    "RDS",
+    "ElastiCache",
+    "ECS",
+    "EFS",
+    "SecretsManager",
+    "APIGateway",
+    "Kinesis",
+    "Lambda",
+    "KMS",
+    "CloudWatch",
+    "VPC",
+    "IAM",
+    "EC2"
+  ],
+  "region": "eu-central-1",
+  "turn_type": "single",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
