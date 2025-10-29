@@ -262,10 +262,19 @@ export class ComplianceConstruct extends Construct {
     // Use a packaged handler in lib/lambda_handlers (index.js)
     const lambdaAssetPath = path.join(__dirname, 'lambda_handlers');
 
-    // NOTE: a Lambda layer asset used to live here; currently we prefer packaging
-    // dependencies into each function's bundle to avoid shipping a heavy shared
-    // layer. If a layer is later required, reintroduce a LayerVersion resource
-    // that points to `lib/lambda_layer`.
+    // Lambda layer: provide shared dependencies for the compliance scanners.
+    // We attach the layer to functions below so unit tests and deployments
+    // consistently include the layer resource.
+    const lambdaLayer = new lambda.LayerVersion(
+      this,
+      `ComplianceLambdaLayer${nameSuffix}`,
+      {
+        layerVersionName: `compliance-scanner-layer${nameSuffix}`,
+        code: lambda.Code.fromAsset(path.join(__dirname, 'lambda_layer')),
+        compatibleRuntimes: [lambda.Runtime.NODEJS_18_X],
+        description: 'Lambda layer for compliance scanner functions',
+      }
+    );
 
     // Create Lambda functions
     // Base lambda props but we intentionally omit required fields like `runtime` and `code` here
@@ -279,9 +288,8 @@ export class ComplianceConstruct extends Construct {
       memorySize: 512,
       vpc: vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-      // Do not attach the heavy SDK layer by default; prefer packaging dependencies in the function bundle.
-      // This avoids shipping the full aws-sdk in the layer and relies on function packaging for dependencies.
-      // layers: [lambdaLayer],
+      // Attach the shared layer so the functions can reuse packaged dependencies.
+      layers: [lambdaLayer],
       logRetention: logs.RetentionDays.ONE_MONTH,
     };
 
