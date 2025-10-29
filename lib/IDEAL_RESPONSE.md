@@ -2,7 +2,7 @@
 
 This implementation provides a production-ready disaster recovery solution for a federal government agency using AWS CDK with Python.
 
-## Architecture Overview
+### Architecture Overview
 
 - **VPC**: Multi-AZ VPC with public, private, and isolated subnets across 3 availability zones
 - **RDS**: PostgreSQL 15.10 Multi-AZ deployment with cross-region read replica capability
