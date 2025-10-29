@@ -172,9 +172,9 @@ resource "aws_route_table_association" "public" {
 
 # Associate private subnets with private route tables
 resource "aws_route_table_association" "private" {
-  for_each = { for idx, subnet in aws_subnet.private : idx => subnet.id }
+  for_each = { for idx in range(length(local.azs)) : idx => local.azs[idx] }
 
-  subnet_id      = each.value
+  subnet_id      = aws_subnet.private[each.value].id
   route_table_id = aws_route_table.private[each.key].id
 }
 
