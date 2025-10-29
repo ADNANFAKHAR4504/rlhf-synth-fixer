@@ -262,19 +262,10 @@ export class ComplianceConstruct extends Construct {
     // Use a packaged handler in lib/lambda_handlers (index.js)
     const lambdaAssetPath = path.join(__dirname, 'lambda_handlers');
 
-    // Lambda layer placeholder
-    const lambdaLayer = new lambda.LayerVersion(
-      this,
-      `ComplianceLambdaLayer${nameSuffix}`,
-      {
-        layerVersionName: `compliance-scanner-layer${nameSuffix}`,
-        // Use an asset-based layer (must not be inline). The folder `lib/lambda_layer`
-        // contains the nodejs/ tree expected by Lambda for Node.js layers.
-        code: lambda.Code.fromAsset(path.join(__dirname, 'lambda_layer')),
-        compatibleRuntimes: [lambda.Runtime.NODEJS_18_X],
-        description: 'Lambda layer for compliance scanner functions',
-      }
-    );
+    // NOTE: a Lambda layer asset used to live here; currently we prefer packaging
+    // dependencies into each function's bundle to avoid shipping a heavy shared
+    // layer. If a layer is later required, reintroduce a LayerVersion resource
+    // that points to `lib/lambda_layer`.
 
     // Create Lambda functions
     // Base lambda props but we intentionally omit required fields like `runtime` and `code` here
