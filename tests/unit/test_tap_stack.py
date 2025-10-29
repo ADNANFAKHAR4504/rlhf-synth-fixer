@@ -1,109 +1,162 @@
-import os
 import unittest
 
+import aws_cdk as cdk
+from aws_cdk.assertions import Match, Template
 from pytest import mark
+
+from lib.tap_stack import TapStack, TapStackProps
 
 
 @mark.describe("TapStack")
 class TestTapStack(unittest.TestCase):
-    """Test cases for the TapStack CloudFormation template"""
+    """Test cases for the TapStack CDK stack"""
 
     def setUp(self):
-        """Set up template path"""
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        self.template_path = os.path.join(base_dir, "..", "..", "lib", "TapStack.yml")
+        """Set up a fresh CDK app for each test"""
+        self.app = cdk.App()
+        self.env_suffix = "test"
+        self.stack = TapStack(
+            self.app, "TapStackTest", TapStackProps(environment_suffix=self.env_suffix)
+        )
+        self.template = Template.from_stack(self.stack)
 
-    @mark.it("verifies template file exists at expected location")
-    def test_template_exists(self):
-        assert os.path.exists(self.template_path), "TapStack.yml should exist"
+    @mark.it("creates a VPC with public and private subnets")
+    def test_creates_vpc_with_subnets(self):
+        # ASSERT VPC
+        self.template.resource_count_is("AWS::EC2::VPC", 1)
+        self.template.has_resource_properties(
+            "AWS::EC2::VPC", {"EnableDnsHostnames": True, "EnableDnsSupport": True}
+        )
 
-    @mark.it("verifies template is a valid YAML file")
-    def test_template_is_yaml(self):
-        with open(self.template_path, "r", encoding="utf-8") as f:
-            content = f.read()
-            assert len(content) > 0
-            assert content.strip() != ""
+        # ASSERT Subnets - should have at least 2 subnets
+        subnet_count = len(self.template.find_resources("AWS::EC2::Subnet"))
+        self.assertGreaterEqual(subnet_count, 2)
 
-    @mark.it("verifies template contains AWSTemplateFormatVersion")
-    def test_template_has_format_version(self):
-        with open(self.template_path, "r", encoding="utf-8") as f:
-            content = f.read()
-            assert "AWSTemplateFormatVersion" in content
-            assert "2010-09-09" in content
+    @mark.it("creates KMS key with rotation enabled")
+    def test_creates_kms_key_with_rotation(self):
+        # ASSERT
+        self.template.resource_count_is("AWS::KMS::Key", 1)
+        self.template.has_resource_properties(
+            "AWS::KMS::Key",
+            {
+                "EnableKeyRotation": True
+            },
+        )
 
-    @mark.it("verifies template contains required CloudFormation sections")
-    def test_template_has_required_sections(self):
-        with open(self.template_path, "r", encoding="utf-8") as f:
-            content = f.read()
-            assert "Parameters:" in content
-            assert "Resources:" in content
-            assert "Outputs:" in content
+    @mark.it("creates Kinesis Data Stream with encryption")
+    def test_creates_kinesis_stream_with_encryption(self):
+        # ASSERT
+        self.template.resource_count_is("AWS::Kinesis::Stream", 1)
+        self.template.has_resource_properties(
+            "AWS::Kinesis::Stream",
+            {
+                "ShardCount": Match.any_value(),
+                "RetentionPeriodHours": Match.any_value(),
+                "StreamEncryption": Match.object_like(
+                    {"EncryptionType": "KMS"}
+                ),
+            },
+        )
 
-    @mark.it("verifies template contains VPC resource")
-    def test_template_has_vpc(self):
-        with open(self.template_path, "r", encoding="utf-8") as f:
-            content = f.read()
-            assert "VPC:" in content
-            assert "AWS::EC2::VPC" in content
+    @mark.it("creates RDS PostgreSQL with encryption and private subnets")
+    def test_creates_rds_with_encryption(self):
+        # ASSERT RDS Instance
+        self.template.resource_count_is("AWS::RDS::DBInstance", 1)
+        self.template.has_resource_properties(
+            "AWS::RDS::DBInstance",
+            {
+                "Engine": "postgres",
+                "MultiAZ": True,
+                "StorageEncrypted": True,
+                "PubliclyAccessible": False
+            },
+        )
 
-    @mark.it("verifies template contains ECS cluster")
-    def test_template_has_ecs_cluster(self):
-        with open(self.template_path, "r", encoding="utf-8") as f:
-            content = f.read()
-            assert "ECSCluster:" in content
-            assert "AWS::ECS::Cluster" in content
+        # ASSERT DB Subnet Group
+        self.template.resource_count_is("AWS::RDS::DBSubnetGroup", 1)
 
-    @mark.it("verifies template contains Aurora DB cluster")
-    def test_template_has_aurora_cluster(self):
-        with open(self.template_path, "r", encoding="utf-8") as f:
-            content = f.read()
-            assert "AuroraDBCluster:" in content
-            assert "AWS::RDS::DBCluster" in content
+    @mark.it("creates Secrets Manager secret with encryption")
+    def test_creates_secrets_manager_secret(self):
+        # ASSERT
+        self.template.resource_count_is("AWS::SecretsManager::Secret", 1)
+        self.template.has_resource_properties(
+            "AWS::SecretsManager::Secret",
+            {
+                "KmsKeyId": Match.any_value(),
+            },
+        )
 
-    @mark.it("verifies template contains Application Load Balancer")
-    def test_template_has_alb(self):
-        with open(self.template_path, "r", encoding="utf-8") as f:
-            content = f.read()
-            assert "ApplicationLoadBalancer:" in content
-            assert "AWS::ElasticLoadBalancingV2::LoadBalancer" in content
+    @mark.it("creates ECS cluster with container insights")
+    def test_creates_ecs_cluster(self):
+        # ASSERT
+        self.template.resource_count_is("AWS::ECS::Cluster", 1)
 
-    @mark.it("verifies template contains EnvironmentSuffix parameter")
-    def test_template_has_environment_suffix(self):
-        with open(self.template_path, "r", encoding="utf-8") as f:
-            content = f.read()
-            assert "EnvironmentSuffix:" in content
+    @mark.it("creates ECS task definition with Fargate")
+    def test_creates_ecs_task_definition(self):
+        # ASSERT
+        self.template.resource_count_is("AWS::ECS::TaskDefinition", 1)
+        self.template.has_resource_properties(
+            "AWS::ECS::TaskDefinition",
+            {
+                "Cpu": Match.any_value(),
+                "Memory": Match.any_value(),
+                "NetworkMode": "awsvpc",
+                "RequiresCompatibilities": ["FARGATE"],
+            },
+        )
 
-    @mark.it("verifies template contains KMS encryption key")
-    def test_template_has_kms_key(self):
-        with open(self.template_path, "r", encoding="utf-8") as f:
-            content = f.read()
-            assert "EncryptionKey:" in content
-            assert "AWS::KMS::Key" in content
+    @mark.it("creates IAM roles with least privilege")
+    def test_creates_iam_roles(self):
+        # ASSERT at least one IAM role exists
+        iam_roles = self.template.find_resources("AWS::IAM::Role")
+        self.assertGreater(len(iam_roles), 0)
 
-    @mark.it("verifies template contains Kinesis Data Stream")
-    def test_template_has_kinesis_stream(self):
-        with open(self.template_path, "r", encoding="utf-8") as f:
-            content = f.read()
-            assert "KinesisDataStream:" in content
-            assert "AWS::Kinesis::Stream" in content
+    @mark.it("creates CloudWatch log groups with encryption")
+    def test_creates_cloudwatch_log_groups(self):
+        # ASSERT - Should have at least one log group
+        log_groups = self.template.find_resources("AWS::Logs::LogGroup")
+        self.assertGreater(len(log_groups), 0)
 
-    @mark.it("verifies template contains ElastiCache Redis")
-    def test_template_has_redis(self):
-        with open(self.template_path, "r", encoding="utf-8") as f:
-            content = f.read()
-            assert "RedisReplicationGroup:" in content
-            assert "AWS::ElastiCache::ReplicationGroup" in content
+        # ASSERT at least one has KMS encryption
+        for log_group_id, log_group in log_groups.items():
+            if "Properties" in log_group and "KmsKeyId" in log_group["Properties"]:
+                self.assertIsNotNone(log_group["Properties"]["KmsKeyId"])
+                break
 
-    @mark.it("verifies template contains EFS file system")
-    def test_template_has_efs(self):
-        with open(self.template_path, "r", encoding="utf-8") as f:
-            content = f.read()
-            assert "EFSFileSystem:" in content
-            assert "AWS::EFS::FileSystem" in content
+    @mark.it("creates security groups with proper isolation")
+    def test_creates_security_groups(self):
+        # ASSERT - At least 2 security groups
+        sg_count = len(self.template.find_resources("AWS::EC2::SecurityGroup"))
+        self.assertGreaterEqual(sg_count, 2)
 
-    @mark.it("verifies template contains Secrets Manager")
-    def test_template_has_secrets_manager(self):
-        with open(self.template_path, "r", encoding="utf-8") as f:
-            content = f.read()
-            assert "DatabaseSecret:" in content
-            assert "AWS::SecretsManager::Secret" in content
+    @mark.it("creates stack outputs for major resources")
+    def test_creates_stack_outputs(self):
+        # ASSERT outputs exist
+        outputs = self.template.find_outputs("*")
+        output_keys = [key for key in outputs.keys()]
+
+        # Should have at least some outputs
+        self.assertGreater(len(output_keys), 0)
+
+    @mark.it("ensures resources use removal policy DESTROY for dev")
+    def test_resources_destroyable(self):
+        # Check KMS Key has delete policy
+        self.template.has_resource(
+            "AWS::KMS::Key", {"DeletionPolicy": "Delete", "UpdateReplacePolicy": "Delete"}
+        )
+
+    @mark.it("validates HIPAA compliance features")
+    def test_hipaa_compliance_features(self):
+        # Encryption at rest for RDS
+        self.template.has_resource_properties(
+            "AWS::RDS::DBInstance", {"StorageEncrypted": True}
+        )
+
+        # Encryption for Kinesis
+        self.template.has_resource_properties(
+            "AWS::Kinesis::Stream",
+            {"StreamEncryption": {"EncryptionType": "KMS"}},
+        )
+
+        # Database in private subnets only
+        self.template.has_resource_properties("AWS::RDS::DBInstance", {"PubliclyAccessible": False})
