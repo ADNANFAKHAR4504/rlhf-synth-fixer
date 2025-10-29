@@ -834,6 +834,20 @@
                                         "xray:PutTelemetryRecords"
                                     ],
                                     "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "StateMachineLogGroup",
+                                            "Arn"
+                                        ]
+                                    }
                                 }
                             ]
                         }

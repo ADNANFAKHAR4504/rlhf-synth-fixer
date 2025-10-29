@@ -729,6 +729,12 @@ Resources:
                   - xray:PutTraceSegments
                   - xray:PutTelemetryRecords
                 Resource: "*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt StateMachineLogGroup.Arn
 
   PaymentWorkflow:
     Type: AWS::StepFunctions::StateMachine
