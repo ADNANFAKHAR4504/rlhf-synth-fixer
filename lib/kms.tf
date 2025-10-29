@@ -45,39 +45,6 @@ resource "aws_kms_key" "s3" {
           "kms:DescribeKey"
         ]
         Resource = "*"
-        Condition = {
-          ArnLike = {
-            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
-          }
-        }
-      },
-      {
-        Sid    = "Restrict key usage to approved services"
-        Effect = "Deny"
-        Principal = {
-          AWS = "*"
-        }
-        Action = [
-          "kms:Decrypt",
-          "kms:GenerateDataKey"
-        ]
-        Resource = "*"
-        Condition = {
-          StringNotLike = {
-            "aws:userid" = [
-              "${data.aws_caller_identity.current.account_id}:*",
-              "AIDAI*"
-            ]
-          }
-          StringNotEquals = {
-            "kms:ViaService" = [
-              "s3.${var.allowed_regions[0]}.amazonaws.com",
-              "s3.${var.allowed_regions[1]}.amazonaws.com",
-              "logs.${var.allowed_regions[0]}.amazonaws.com",
-              "logs.${var.allowed_regions[1]}.amazonaws.com"
-            ]
-          }
-        }
       }
     ]
   })
