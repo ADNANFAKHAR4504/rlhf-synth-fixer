@@ -270,7 +270,21 @@ export class ComplianceConstruct extends Construct {
       `ComplianceLambdaLayer${nameSuffix}`,
       {
         layerVersionName: `compliance-scanner-layer${nameSuffix}`,
-        code: lambda.Code.fromAsset(path.join(__dirname, 'lambda_layer')),
+        // Use bundling so the layer asset includes node_modules installed from
+        // `lib/lambda_layer/nodejs` at synth time. This makes CI/CD deterministic
+        // and avoids committing node_modules to the repo.
+        code: lambda.Code.fromAsset(path.join(__dirname, 'lambda_layer'), {
+          bundling: {
+            image: lambda.Runtime.NODEJS_18_X.bundlingImage,
+            command: [
+              'bash',
+              '-lc',
+              // Install production dependencies into the nodejs folder and
+              // copy the prepared nodejs tree to the asset output.
+              'cd /asset-input && npm ci --production --prefix nodejs && cp -r nodejs /asset-output',
+            ],
+          },
+        }),
         compatibleRuntimes: [lambda.Runtime.NODEJS_18_X],
         description: 'Lambda layer for compliance scanner functions',
       }
