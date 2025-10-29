@@ -218,8 +218,8 @@ describe('TapStack Infrastructure Integration Tests', () => {
       const subnet1 = response.Subnets!.find(s => s.SubnetId === outputs.PrivateSubnet1Id);
       const subnet2 = response.Subnets!.find(s => s.SubnetId === outputs.PrivateSubnet2Id);
 
-      expect(subnet1?.CidrBlock).toBe('10.0.3.0/24');
-      expect(subnet2?.CidrBlock).toBe('10.0.4.0/24');
+      expect(subnet1?.CidrBlock).toBe('10.0.11.0/24');
+      expect(subnet2?.CidrBlock).toBe('10.0.12.0/24');
       expect(subnet1?.MapPublicIpOnLaunch).toBe(false);
       expect(subnet2?.MapPublicIpOnLaunch).toBe(false);
       expect(subnet1?.AvailabilityZone).not.toBe(subnet2?.AvailabilityZone);
@@ -247,7 +247,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
       }
     }, testTimeout);
 
-    test('should have EC2 instances in public subnets', async () => {
+    test('should have EC2 instances in private subnets', async () => {
       if (skipIfNoOutputs()) return;
 
       const response = await ec2Client.send(new DescribeInstancesCommand({
@@ -257,8 +257,8 @@ describe('TapStack Infrastructure Integration Tests', () => {
       const instances = response.Reservations?.flatMap(r => r.Instances || []) || [];
       const subnetIds = instances.map(i => i.SubnetId);
 
-      expect(subnetIds).toContain(outputs.PublicSubnet1Id);
-      expect(subnetIds).toContain(outputs.PublicSubnet2Id);
+      expect(subnetIds).toContain(outputs.PrivateSubnet1Id);
+      expect(subnetIds).toContain(outputs.PrivateSubnet2Id);
     }, testTimeout);
 
     test('should have EC2 security group with correct ingress rules', async () => {
