@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "356254",
+  "team": "2",
+  "startedAt": "2025-10-20T14:32:11.923Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "background": "Refactor AWS CDK TypeScript project for real-time stock trading platform OrderBroker microservice with predictive auto-scaling, blue-green deployments, and enhanced observability",
+  "training_quality": 10,
+  "aws_services": [
+    "ECS",
+    "Fargate",
+    "VPC",
+    "ALB",
+    "CodeDeploy",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "Auto Scaling",
+    "EC2"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}
