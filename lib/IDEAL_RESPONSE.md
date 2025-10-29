@@ -151,7 +151,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-VPC-${AWS::AccountId}'
+            Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-VPC-${AWS::AccountId}'
   
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -159,7 +159,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-IGW-${AWS::AccountId}'
+            Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-IGW-${AWS::AccountId}'
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -185,7 +185,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-PubSubnet-1-${AWS::AccountId}'
+            Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-PubSubnet-1-${AWS::AccountId}'
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -203,7 +203,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-PubSubnet-2-${AWS::AccountId}'
+            Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-PubSubnet-2-${AWS::AccountId}'
 
   PublicSubnet3:
     Type: AWS::EC2::Subnet
@@ -221,7 +221,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-PubSubnet-3-${AWS::AccountId}'
+            Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-PubSubnet-3-${AWS::AccountId}'
   
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -231,7 +231,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-PubRouteTable-${AWS::AccountId}'
+            Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-PubRouteTable-${AWS::AccountId}'
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -282,7 +282,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-PrivSubnet-1-${AWS::AccountId}'
+            Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-PrivSubnet-1-${AWS::AccountId}'
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -299,7 +299,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-PrivSubnet-2-${AWS::AccountId}'
+            Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-PrivSubnet-2-${AWS::AccountId}'
 
   PrivateSubnet3:
     Type: AWS::EC2::Subnet
@@ -316,7 +316,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-PrivSubnet-3-${AWS::AccountId}'
+            Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-PrivSubnet-3-${AWS::AccountId}'
 
   # FIX: Create EIP unconditionally to avoid condition issues
   EIP:
@@ -326,7 +326,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-EIP-${AWS::AccountId}'
+            Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-EIP-${AWS::AccountId}'
 
   NatGateway:
     Type: AWS::EC2::NatGateway
@@ -340,7 +340,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-NAT-${AWS::AccountId}'
+            Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-NAT-${AWS::AccountId}'
 
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
@@ -350,7 +350,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-PrivRouteTable-${AWS::AccountId}'
+            Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-PrivRouteTable-${AWS::AccountId}'
 
   PrivateRoute:
     Type: AWS::EC2::Route
@@ -390,7 +390,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-ALB-SG-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-ALB-SG-${AWS::AccountId}'
       GroupDescription: Public access to ALB on port 80
       VpcId:
         Ref: VPC
@@ -402,13 +402,13 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-ALB-SG-${AWS::AccountId}'
+            Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-ALB-SG-${AWS::AccountId}'
 
   ECSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-ECS-SG-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-ECS-SG-${AWS::AccountId}'
       GroupDescription: Access from ALB to ECS tasks on port 80
       VpcId:
         Ref: VPC
@@ -421,7 +421,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-ECS-SG-${AWS::AccountId}'
+            Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-ECS-SG-${AWS::AccountId}'
 
   # Load Balancer
   LoadBalancer:
@@ -430,7 +430,7 @@ Resources:
     Properties:
       # FIX: Apply EnvironmentSuffix naming pattern (max 32 chars for ALB)
       Name:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-alb'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-alb'
       Scheme: internet-facing
       Subnets:
         - Ref: PublicSubnet1
@@ -449,14 +449,14 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-ALB-${AWS::AccountId}'
+            Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-ALB-${AWS::AccountId}'
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       # Target Group name max 32 chars
       Name:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-tg'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-tg'
       VpcId:
         Ref: VPC
       Port: 80
@@ -488,25 +488,25 @@ Resources:
     Properties:
       # FIX: Apply EnvironmentSuffix naming pattern
       ClusterName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-cluster-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-cluster-${AWS::AccountId}'
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-ECS-Cluster-${AWS::AccountId}'
+            Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-ECS-Cluster-${AWS::AccountId}'
 
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       # FIX: Apply EnvironmentSuffix naming pattern
       LogGroupName:
-        Fn::Sub: '/ecs/${ProjectName}-${EnvironmentSuffix}-svc-${AWS::AccountId}'
+        Fn::Sub: '/ecs/${EnvironmentSuffix}-${ProjectName}-svc-${AWS::AccountId}'
       RetentionInDays: 30
 
   TaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-task-exec-role-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-task-exec-role-${AWS::AccountId}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -521,7 +521,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-task-role-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-task-role-${AWS::AccountId}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -544,7 +544,7 @@ Resources:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-task-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-task-${AWS::AccountId}'
       RequiresCompatibilities:
         - FARGATE
       NetworkMode: awsvpc
@@ -583,7 +583,7 @@ Resources:
     Properties:
       # FIX: Apply EnvironmentSuffix naming pattern
       ServiceName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-service-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-service-${AWS::AccountId}'
       Cluster:
         Ref: ECSCluster
       TaskDefinition:
@@ -631,7 +631,7 @@ Resources:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
       PolicyName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-TargetTrackingPolicy-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-TargetTrackingPolicy-${AWS::AccountId}'
       PolicyType: TargetTrackingScaling
       ScalingTargetId:
         Ref: ServiceScalableTarget
@@ -647,7 +647,7 @@ Resources:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
       PolicyName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-MemoryScalingPolicy-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-MemoryScalingPolicy-${AWS::AccountId}'
       PolicyType: TargetTrackingScaling
       ScalingTargetId:
         Ref: ServiceScalableTarget
@@ -663,7 +663,7 @@ Resources:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
       PolicyName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-StepScalingPolicy-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-StepScalingPolicy-${AWS::AccountId}'
       PolicyType: StepScaling
       ScalingTargetId:
         Ref: ServiceScalableTarget
@@ -686,13 +686,13 @@ Resources:
     Type: AWS::ECR::Repository
     Properties:
       RepositoryName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-repository-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-repository-${AWS::AccountId}'
       ImageScanningConfiguration:
         ScanOnPush: true
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-ecr-${AWS::AccountId}'
+            Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-ecr-${AWS::AccountId}'
         - Key: Environment
           Value:
             Ref: EnvironmentSuffix
@@ -707,7 +707,7 @@ Resources:
     Type: AWS::SecretsManager::Secret
     Properties:
       Name:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-app-secrets-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-app-secrets-${AWS::AccountId}'
       Description: Application secrets for database credentials and API keys
       SecretString: |
         {
@@ -720,7 +720,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-app-secrets-${AWS::AccountId}'
+            Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-app-secrets-${AWS::AccountId}'
         - Key: Environment
           Value:
             Ref: EnvironmentSuffix
@@ -742,7 +742,7 @@ Resources:
         Status: Enabled
       # FIX: Apply EnvironmentSuffix naming pattern
       BucketName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-artifact-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-artifact-${AWS::AccountId}'
       # FIX: Removed legacy AccessControl property
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -758,7 +758,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-artifact-bucket-${AWS::AccountId}'
+            Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-artifact-bucket-${AWS::AccountId}'
         - Key: Environment
           Value:
             Ref: EnvironmentSuffix
@@ -799,7 +799,7 @@ Resources:
     Properties:
       # FIX: Apply EnvironmentSuffix naming pattern
       RoleName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-pipeline-role-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-pipeline-role-${AWS::AccountId}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -887,7 +887,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-codebuild-role-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-codebuild-role-${AWS::AccountId}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -906,7 +906,7 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource:
-                  Fn::Sub: 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ProjectName}-${EnvironmentSuffix}-build-${AWS::AccountId}:*'
+                  Fn::Sub: 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${EnvironmentSuffix}-${ProjectName}-build-${AWS::AccountId}:*'
               - Effect: Allow
                 Action:
                   - ecr:GetAuthorizationToken
@@ -942,7 +942,7 @@ Resources:
     Properties:
       # FIX: Apply EnvironmentSuffix naming pattern
       Name:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-build-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-build-${AWS::AccountId}'
       ServiceRole:
         Fn::GetAtt:
           - CodeBuildRole
@@ -990,7 +990,7 @@ Resources:
     Properties:
       # FIX: Apply EnvironmentSuffix naming pattern
       Name:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-pipeline-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-pipeline-${AWS::AccountId}'
       RoleArn:
         Fn::GetAtt:
           - CodePipelineRole
@@ -1052,7 +1052,7 @@ Resources:
     Type: AWS::SNS::Topic
     Properties:
       TopicName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-alerts-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-alerts-${AWS::AccountId}'
 
   AlertsTopicPolicy:
     Type: AWS::SNS::TopicPolicy
@@ -1083,7 +1083,7 @@ Resources:
     Properties:
       # FIX: Apply EnvironmentSuffix naming pattern
       AlarmName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-billing-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-billing-${AWS::AccountId}'
       AlarmDescription: Estimated charges exceed monthly threshold
       Namespace: AWS/Billing
       MetricName: EstimatedCharges
@@ -1105,7 +1105,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-alb-response-time-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-alb-response-time-${AWS::AccountId}'
       AlarmDescription: ALB response time is too high
       Namespace: AWS/ApplicationELB
       MetricName: TargetResponseTime
@@ -1128,7 +1128,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-alb-error-rate-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-alb-error-rate-${AWS::AccountId}'
       AlarmDescription: ALB error rate is too high
       Namespace: AWS/ApplicationELB
       MetricName: HTTPCode_Target_5XX_Count
@@ -1151,7 +1151,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-ecs-high-cpu-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-ecs-high-cpu-${AWS::AccountId}'
       AlarmDescription: ECS service CPU utilization is too high
       Namespace: AWS/ECS
       MetricName: CPUUtilization
@@ -1177,7 +1177,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-ecs-high-memory-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-ecs-high-memory-${AWS::AccountId}'
       AlarmDescription: ECS service memory utilization is too high
       Namespace: AWS/ECS
       MetricName: MemoryUtilization
@@ -1204,12 +1204,12 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName:
-        Fn::Sub: '/aws/cloudtrail/${ProjectName}-${EnvironmentSuffix}'
+        Fn::Sub: '/aws/cloudtrail/${EnvironmentSuffix}-${ProjectName}'
       RetentionInDays: 90
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-cloudtrail-logs-${AWS::AccountId}'
+            Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-cloudtrail-logs-${AWS::AccountId}'
         - Key: Environment
           Value:
             Ref: EnvironmentSuffix
@@ -1225,7 +1225,7 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-cloudtrail-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-cloudtrail-${AWS::AccountId}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -1241,7 +1241,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-cloudtrail-bucket-${AWS::AccountId}'
+            Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-cloudtrail-bucket-${AWS::AccountId}'
         - Key: Environment
           Value:
             Ref: EnvironmentSuffix
@@ -1273,7 +1273,7 @@ Resources:
             Condition:
               StringEquals:
                 'AWS:SourceArn':
-                  Fn::Sub: 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-${EnvironmentSuffix}-trail-${AWS::AccountId}'
+                  Fn::Sub: 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${EnvironmentSuffix}-${ProjectName}-trail-${AWS::AccountId}'
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
@@ -1285,14 +1285,14 @@ Resources:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
                 'AWS:SourceArn':
-                  Fn::Sub: 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-${EnvironmentSuffix}-trail-${AWS::AccountId}'
+                  Fn::Sub: 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${EnvironmentSuffix}-${ProjectName}-trail-${AWS::AccountId}'
 
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     DependsOn: CloudTrailBucketPolicy
     Properties:
       TrailName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-trail-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-trail-${AWS::AccountId}'
       S3BucketName:
         Ref: CloudTrailBucket
       CloudWatchLogsLogGroupArn:
@@ -1319,7 +1319,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-trail-${AWS::AccountId}'
+            Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-trail-${AWS::AccountId}'
         - Key: Environment
           Value:
             Ref: EnvironmentSuffix
@@ -1335,7 +1335,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-cloudtrail-role-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-cloudtrail-role-${AWS::AccountId}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -1363,7 +1363,7 @@ Resources:
     Condition: CreateConfigRecorder
     Properties:
       RoleName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-config-role-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-config-role-${AWS::AccountId}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -1379,7 +1379,7 @@ Resources:
     Condition: CreateConfigRecorder
     Properties:
       BucketName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-config-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-config-${AWS::AccountId}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -1395,7 +1395,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-config-bucket-${AWS::AccountId}'
+            Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-config-bucket-${AWS::AccountId}'
         - Key: Environment
           Value:
             Ref: EnvironmentSuffix
@@ -1473,7 +1473,7 @@ Resources:
     DependsOn: ConfigBucketPolicy
     Properties:
       Name:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-config-delivery-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-config-delivery-${AWS::AccountId}'
       S3BucketName:
         Ref: ConfigBucket
       S3KeyPrefix: config
@@ -1494,7 +1494,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-guardduty-${AWS::AccountId}'
+            Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-guardduty-${AWS::AccountId}'
         - Key: Environment
           Value:
             Ref: EnvironmentSuffix
@@ -1527,7 +1527,7 @@ Resources:
     Condition: CreateGuardDutyDetector
     Properties:
       AlarmName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-guardduty-high-severity-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-guardduty-high-severity-${AWS::AccountId}'
       AlarmDescription: GuardDuty high severity findings detected
       Namespace: AWS/GuardDuty
       MetricName: HighSeverityFindings
@@ -1545,7 +1545,7 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Name:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-monitoring-rule-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-monitoring-rule-${AWS::AccountId}'
       Description: EventBridge rule for ECS and ALB monitoring events
       EventPattern:
         source:
@@ -1569,7 +1569,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-eventbridge-dlq-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-eventbridge-dlq-${AWS::AccountId}'
       MessageRetentionPeriod: 1209600
       VisibilityTimeout: 60
       Tags:
@@ -1584,7 +1584,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-eventbridge-role-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-eventbridge-role-${AWS::AccountId}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -1616,7 +1616,7 @@ Resources:
     Condition: EnableWAF
     Properties:
       Name:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-waf-webacl-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-waf-webacl-${AWS::AccountId}'
       Description: WAF Web ACL for ALB protection
       Scope: REGIONAL
       DefaultAction:
@@ -1688,7 +1688,7 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-logs-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-logs-${AWS::AccountId}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: false
         BlockPublicPolicy: false
@@ -1718,7 +1718,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-logs-bucket-${AWS::AccountId}'
+            Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-logs-bucket-${AWS::AccountId}'
         - Key: Environment
           Value:
             Ref: EnvironmentSuffix
@@ -1834,7 +1834,7 @@ Resources:
     Type: AWS::CloudWatch::Dashboard
     Properties:
       DashboardName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-dashboard-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-dashboard-${AWS::AccountId}'
       DashboardBody:
         Fn::Sub:
           - |
@@ -1899,7 +1899,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-lambda-exec-role-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-lambda-exec-role-${AWS::AccountId}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -1929,7 +1929,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-source-seeder-${AWS::AccountId}'
+        Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-source-seeder-${AWS::AccountId}'
       Code:
         ZipFile: |
           import boto3
@@ -2059,7 +2059,7 @@ Outputs:
     Value:
       Fn::If:
         - CreateConfigRecorder
-        - Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-config-recorder-${AWS::AccountId}'
+        - Fn::Sub: '${EnvironmentSuffix}-${ProjectName}-config-recorder-${AWS::AccountId}'
         - 'default'
   MaxCapacity:
     Description: Maximum ECS service capacity for scaling
@@ -2089,7 +2089,7 @@ Outputs:
   CloudWatchDashboardUrl:
     Description: CloudWatch Dashboard URL for monitoring
     Value:
-      Fn::Sub: 'https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${ProjectName}-${EnvironmentSuffix}-dashboard-${AWS::AccountId}'
+      Fn::Sub: 'https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${EnvironmentSuffix}-${ProjectName}-dashboard-${AWS::AccountId}'
   LogsBucketArn:
     Description: Centralized logs bucket ARN for VPC Flow Logs, ALB access logs, and GuardDuty
     Value:

@@ -619,7 +619,7 @@ describe("TapStack integration tests (CloudFormation)", () => {
     // This test verifies that the billing threshold has been updated to a realistic value
     // The actual threshold value is set in the CloudFormation template parameters
     // We can verify this by checking that the alarm exists and is configured
-    const billingAlarmName = `webapp-${ENV_SUFFIX}-billing-${process.env.AWS_ACCOUNT_ID || '123456789012'}`;
+    const billingAlarmName = `${ENV_SUFFIX}-webapp-billing-${process.env.AWS_ACCOUNT_ID || '123456789012'}`;
     expect(billingAlarmName).toBeDefined();
     // The alarm should exist (verified by CloudFormation stack creation)
   });
@@ -923,7 +923,7 @@ describe("TapStack integration tests (CloudFormation)", () => {
       // Get alarms
       const alarmsResp = await cloudwatchClient.send(
         new DescribeAlarmsCommand({
-          AlarmNamePrefix: `webapp-${ENV_SUFFIX}`,
+          AlarmNamePrefix: `${ENV_SUFFIX}-webapp`,
           MaxRecords: 100,
         })
       );
@@ -1521,7 +1521,7 @@ describe("TapStack integration tests (CloudFormation)", () => {
 
       const alarmsResp = await cloudwatchClient.send(
         new DescribeAlarmsCommand({
-          AlarmNamePrefix: `webapp-${ENV_SUFFIX}`,
+          AlarmNamePrefix: `${ENV_SUFFIX}-webapp`,
           MaxRecords: 100,
         })
       );
