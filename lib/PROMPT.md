@@ -1,4 +1,4 @@
-You are a senior cloud infrastructure engineer and Terraform/CDKTF expert. Create production-ready, fully deployable Terraform HCL code in AWS for a multi-region ticketing marketplace system.
+Create production-ready, fully deployable Terraform HCL code in AWS for a multi-region ticketing marketplace system.
 
 Requirements:
 
