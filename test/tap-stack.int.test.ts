@@ -59,19 +59,19 @@ describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
 
       expect(resolvedIps.length).toBeGreaterThan(0);
       expect(resolvedIps).toContain(EIP);
-    }, 60000); // 1 minute timeout
+    });
   });
 
   describe('Elastic IP → EC2/Apache (HTTP path)', () => {
     test('HTTP GET to WebsiteURL returns 200 and expected landing content', async () => {
-      // Retry logic for Apache startup time
+      // Quick retry for Apache startup
       let resp;
       let retries = 0;
-      const maxRetries = 12; // 1 minute max
+      const maxRetries = 6; // 30 seconds max
       
       while (retries < maxRetries) {
         try {
-          resp = await axios.get(WEBSITE_URL, { timeout: 30_000, validateStatus: () => true });
+          resp = await axios.get(WEBSITE_URL, { timeout: 10_000, validateStatus: () => true });
           if (resp.status === 200 && resp.data.includes('NovaFintech') && resp.data.includes('Environment:')) {
             break;
           }
@@ -90,7 +90,7 @@ describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
       const body: string = resp!.data;
       expect(body).toContain('NovaFintech');
       expect(body).toContain('Environment:');
-    }, 120000); // 2 minute timeout
+    });
 
     test('Customer POV: unique page request appears in Apache access logs (CloudWatch)', async () => {
       // generate unique path that will produce a 404 but still be logged by Apache
@@ -106,10 +106,10 @@ describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
         await axios.get(target.toString(), { timeout: 15_000, validateStatus: () => true }).catch(() => void 0);
       }
 
-      // Wait for CloudWatch agent to ship logs (up to 2 minutes)
+      // Wait for CloudWatch agent to ship logs (up to 1 minute)
       let found = false;
       let retries = 0;
-      const maxRetries = 24; // 24 * 5 seconds = 2 minutes
+      const maxRetries = 12; // 12 * 5 seconds = 1 minute
       
       while (!found && retries < maxRetries) {
         await new Promise(r => setTimeout(r, 5000)); // Wait 5 seconds between retries
@@ -138,7 +138,7 @@ describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
       }
 
       expect(found).toBe(true);
-    }, 180000); // 3 minute timeout
+    });
   });
 
   describe('CloudWatch Logs and S3 artifacts', () => {
@@ -146,10 +146,10 @@ describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
       const accessGroup = `/aws/ec2/novafintech/${ENVIRONMENT}/apache/access`;
       const errorGroup = `/aws/ec2/novafintech/${ENVIRONMENT}/apache/error`;
 
-      // Retry logic for log groups creation (CloudWatch agent creates them on first log)
+      // Quick retry for log groups creation
       let groupNames: string[] = [];
       let retries = 0;
-      const maxRetries = 24; // 2 minutes max
+      const maxRetries = 12; // 1 minute max
       
       while (retries < maxRetries) {
         const lgResp = await logs.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: `/aws/ec2/novafintech/${ENVIRONMENT}/apache/` }));
@@ -167,10 +167,10 @@ describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
       
       expect(groupNames).toEqual(expect.arrayContaining([accessGroup, errorGroup]));
 
-      // Wait for streams to be created
+      // Quick check for streams
       let streamsExist = false;
       let streamRetries = 0;
-      const maxStreamRetries = 12; // 1 minute max
+      const maxStreamRetries = 6; // 30 seconds max
       
       while (!streamsExist && streamRetries < maxStreamRetries) {
         try {
@@ -190,7 +190,7 @@ describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
       }
       
       expect(streamsExist).toBe(true);
-    }, 180000); // 3 minute timeout
+    });
 
     test('S3 bucket has versioning enabled and contains startup logs', async () => {
       const ver = await s3.send(new GetBucketVersioningCommand({ Bucket: S3_BUCKET }));
@@ -217,10 +217,10 @@ describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
     });
 
     test('Elastic IP is currently associated to the ASG instance', async () => {
-      // Retry logic for EIP association (Lambda may take time)
+      // Quick retry for EIP association
       let eipAssociated = false;
       let retries = 0;
-      const maxRetries = 30; // 5 minutes max
+      const maxRetries = 12; // 2 minutes max
       
       while (!eipAssociated && retries < maxRetries) {
         const addrResp = await ec2.send(new DescribeAddressesCommand({ PublicIps: [EIP] }));
@@ -248,7 +248,7 @@ describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
       const finalAddress = finalAddrResp.Addresses?.[0];
       expect(finalAddress).toBeDefined();
       expect(finalAddress!.InstanceId).toBe(instanceId);
-    }, 360000); // 6 minute timeout
+    });
   });
 
   describe('SSH Access (Security Group)', () => {
@@ -327,10 +327,10 @@ describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
 
       expect(refreshComplete).toBe(true);
 
-      // Wait for EIP to be associated to new instance (Lambda may take a moment)
+      // Quick wait for EIP association
       let eipAssociated = false;
       let eipRetries = 0;
-      const maxEipRetries = 30; // 5 minutes max
+      const maxEipRetries = 18; // 3 minutes max
       
       while (!eipAssociated && eipRetries < maxEipRetries) {
         await new Promise(r => setTimeout(r, 10000)); // Wait 10 seconds
@@ -355,6 +355,6 @@ describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
       const finalAddress = finalAddrResp.Addresses?.[0];
       expect(finalAddress?.InstanceId).toBeDefined();
       expect(finalAddress?.InstanceId).not.toBe(originalInstanceId);
-    }, 900000); // 15 minute timeout for full refresh cycle
+    });
   });
 });
