@@ -13,9 +13,9 @@ locals {
   # This prevents IP exhaustion and ensures consistent allocation
   region_configs = {
     for idx, region in var.regions : region => {
-      vpc_cidr             = cidrsubnet(var.base_cidr_block, 4, idx)
-      public_subnet_cidrs  = [for i in range(3) : cidrsubnet(cidrsubnet(var.base_cidr_block, 4, idx), 4, i)]
-      private_subnet_cidrs = [for i in range(3) : cidrsubnet(cidrsubnet(var.base_cidr_block, 4, idx), 4, i + 8)]
+      vpc_cidr             = cidrsubnet(var.base_cidr_block, 8, idx)
+      public_subnet_cidrs  = [for i in range(3) : cidrsubnet(cidrsubnet(var.base_cidr_block, 8, idx), 4, i)]
+      private_subnet_cidrs = [for i in range(3) : cidrsubnet(cidrsubnet(var.base_cidr_block, 8, idx), 4, i + 8)]
     }
   }
 
