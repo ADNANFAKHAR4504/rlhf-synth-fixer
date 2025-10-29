@@ -1,26 +1,29 @@
 import { Construct } from 'constructs';
+// --- FIX: Remove DataAwsCallerIdentity and DataAwsPartition from 'cdktf' import ---
 import { TerraformStack, TerraformOutput } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+// --- FIX: Add correct imports for data sources ---
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { DataAwsPartition } from '@cdktf/provider-aws/lib/data-aws-partition';
-import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
+import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
 import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
-import { ConfigConfigRule } from '@cdktf/provider-aws/lib/config-config-rule';
-import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
+import { Cloudtrail } from '@cdktf/provider-aws/lib/cloudtrail';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { CloudwatchLogMetricFilter } from '@cdktf/provider-aws/lib/cloudwatch-log-metric-filter';
-import { Cloudtrail } from '@cdktf/provider-aws/lib/cloudtrail';
+import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
+import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
+import { ConfigConfigRule } from '@cdktf/provider-aws/lib/config-config-rule';
+// --- FIX: Add Config Recorder and Delivery Channel imports ---
+import { ConfigConfigurationRecorder } from '@cdktf/provider-aws/lib/config-configuration-recorder';
+import { ConfigDeliveryChannel } from '@cdktf/provider-aws/lib/config-delivery-channel';
 
-/**
- * Props for the TapStack.
- * Requires an environmentSuffix for resource naming.
- */
 export interface TapStackProps {
   environmentSuffix: string;
 }
@@ -29,315 +32,330 @@ export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id);
 
-    const suffix = props.environmentSuffix;
+    const { environmentSuffix } = props;
     const region = 'us-east-1';
-    const tags = {
-      Project: 'SecureBaseline',
-      Environment: suffix,
-    };
 
-    // --- 0. Provider and Account Info ---
     new AwsProvider(this, 'aws', {
       region: region,
     });
 
-    const identity = new DataAwsCallerIdentity(this, 'identity', {});
+    const callerId = new DataAwsCallerIdentity(this, 'caller-id', {});
     const partition = new DataAwsPartition(this, 'partition', {});
 
-    // --- 1. KMS Key with Rotation ---
-    // Creates a customer-managed key with automatic rotation enabled.
-    const kmsKey = new KmsKey(this, 'compliance-key', {
-      description: `KMS key for SOC 2 compliance - ${suffix}`,
+    // --- 1. KMS Key for Encryption ---
+    const kmsKey = new KmsKey(this, 'kms-key', {
+      description: `SOC 2 Baseline Key - ${environmentSuffix}`,
       enableKeyRotation: true,
-      tags: tags,
+      tags: { Environment: environmentSuffix },
     });
 
-    // --- 2. IAM Role with MFA Enforcement ---
-    // This policy denies all actions unless MFA is present.
-    const mfaPolicyDocument = {
-      Version: '2012-10-17',
-      Statement: [
-        {
-          Sid: 'AllowViewAccountInfo',
-          Effect: 'Allow',
-          Action: [
-            'iam:ListAccountAliases',
-            'iam:ListUsers',
-            'iam:GetAccountSummary',
-          ],
-          Resource: '*',
-        },
-        {
-          Sid: 'AllowActionsWithMFA',
-          Effect: 'Allow',
-          Action: '*',
-          Resource: '*',
-          Condition: {
-            Bool: { 'aws:MultiFactorAuthPresent': 'true' },
-          },
-        },
-        {
-          Sid: 'DenyActionsWithoutMFA',
-          Effect: 'Deny',
-          Action: '*',
-          Resource: '*',
-          Condition: {
-            BoolIfExists: { 'aws:MultiFactorAuthPresent': 'false' },
-          },
-        },
-      ],
-    };
-
-    const mfaPolicy = new IamPolicy(this, 'mfa-enforcement-policy', {
-      name: `MfaEnforcementPolicy-${suffix}`,
-      policy: JSON.stringify(mfaPolicyDocument),
-      description: 'Enforces MFA for all actions',
-      tags: tags,
-    });
-
-    // Assume role policy that allows a user to assume this role.
-    const assumeRolePolicy = {
-      Version: '2012-10-17',
-      Statement: [
-        {
-          Effect: 'Allow',
-          Principal: {
-            AWS: `arn:${partition.partition}:iam::${identity.accountId}:root`,
-          },
-          Action: 'sts:AssumeRole',
-        },
-      ],
-    };
-
+    // --- 2. IAM Role with MFA ---
     const mfaAdminRole = new IamRole(this, 'mfa-admin-role', {
-      name: `MfaAdminRole-${suffix}`,
-      assumeRolePolicy: JSON.stringify(assumeRolePolicy),
-      tags: tags,
+      name: `MfaAdminRole-${environmentSuffix}`,
+      assumeRolePolicy: new DataAwsIamPolicyDocument(
+        this,
+        'mfa-admin-assume-policy',
+        {
+          statement: [
+            {
+              actions: ['sts:AssumeRole'],
+              principals: [
+                {
+                  type: 'AWS',
+                  // Allows any user in the account to assume this role
+                  identifiers: [
+                    `arn:${partition.partition}:iam::${callerId.accountId}:root`,
+                  ],
+                },
+              ],
+              // This condition enforces MFA
+              condition: [
+                {
+                  test: 'Bool',
+                  variable: 'aws:MultiFactorAuthPresent',
+                  values: ['true'],
+                },
+              ],
+            },
+          ],
+        }
+      ).json,
+      tags: { Environment: environmentSuffix },
     });
 
-    // Attach the MFA policy
-    new IamRolePolicyAttachment(this, 'mfa-policy-attachment', {
-      role: mfaAdminRole.name,
-      policyArn: mfaPolicy.arn,
-    });
-
-    // Attach AdministratorAccess (as an example, this role is powerful)
-    // The MFA policy will still override this, requiring MFA.
-    new IamRolePolicyAttachment(this, 'admin-policy-attachment', {
-      role: mfaAdminRole.name,
-      policyArn: 'arn:aws:iam::aws:policy/AdministratorAccess',
-    });
-
-    // --- 3. Secrets Manager Secret ---
-    // Create a secret and a version. Rotation requires a Lambda,
-    // so we'll just create the secret itself.
-    const secret = new SecretsmanagerSecret(this, 'baseline-secret', {
-      name: `soc-baseline-secret-${suffix}`,
-      description: 'SOC 2 baseline demo secret',
+    // --- 3. Secrets Manager ---
+    const secret = new SecretsmanagerSecret(this, 'secret', {
+      name: `soc-baseline-secret-${environmentSuffix}`,
+      description: 'SOC 2 Baseline Secret',
       kmsKeyId: kmsKey.id,
-      tags: tags,
+      tags: { Environment: environmentSuffix },
     });
 
-    new SecretsmanagerSecretVersion(this, 'baseline-secret-version', {
+    new SecretsmanagerSecretVersion(this, 'secret-version', {
       secretId: secret.id,
-      secretString: JSON.stringify({
-        username: 'admin',
-        password: 'initial-password',
-      }),
+      secretString: '{"username":"admin","password":"InitialPassword123!"}',
     });
 
-    // --- 4. AWS Config Rules for Encryption ---
+    // --- 4. CloudTrail and S3 Bucket for Logs ---
+    const trailBucket = new S3Bucket(this, 'trail-bucket', {
+      bucket: `soc-baseline-trail-logs-${callerId.accountId}-${environmentSuffix}`,
+      forceDestroy: true,
+      tags: { Environment: environmentSuffix },
+    });
+
+    new S3BucketPublicAccessBlock(this, 'trail-bucket-pab', {
+      bucket: trailBucket.id,
+      blockPublicAcls: true,
+      blockPublicPolicy: true,
+      ignorePublicAcls: true,
+      restrictPublicBuckets: true,
+    });
+
+    const trailBucketPolicyDoc = new DataAwsIamPolicyDocument(
+      this,
+      'trail-bucket-policy-doc',
+      {
+        statement: [
+          {
+            sid: 'AWSCloudTrailAclCheck',
+            actions: ['s3:GetBucketAcl'],
+            resources: [trailBucket.arn],
+            principals: [
+              { type: 'Service', identifiers: ['cloudtrail.amazonaws.com'] },
+            ],
+          },
+          {
+            sid: 'AWSCloudTrailWrite',
+            actions: ['s3:PutObject'],
+            resources: [`${trailBucket.arn}/AWSLogs/${callerId.accountId}/*`],
+            principals: [
+              { type: 'Service', identifiers: ['cloudtrail.amazonaws.com'] },
+            ],
+            condition: [
+              {
+                test: 'StringEquals',
+                variable: 's3:x-amz-acl',
+                values: ['bucket-owner-full-control'],
+              },
+            ],
+          },
+        ],
+      }
+    );
+
+    const trailBucketPolicy = new S3BucketPolicy(this, 'trail-bucket-policy', {
+      bucket: trailBucket.id,
+      policy: trailBucketPolicyDoc.json,
+    });
+
+    const logGroup = new CloudwatchLogGroup(this, 'cloudtrail-log-group', {
+      name: `/aws/cloudtrail/SOC-Baseline-Trail-${environmentSuffix}`,
+      retentionInDays: 90,
+      kmsKeyId: kmsKey.id,
+    });
+
+    // --- FIX: Create explicit IAM Role for CloudTrail logging ---
+    const cloudtrailLogsRole = new IamRole(this, 'cloudtrail-logs-role', {
+      name: `CloudTrail-CloudWatch-Logs-Role-${environmentSuffix}`,
+      assumeRolePolicy: new DataAwsIamPolicyDocument(
+        this,
+        'cloudtrail-assume-policy',
+        {
+          statement: [
+            {
+              actions: ['sts:AssumeRole'],
+              principals: [
+                { type: 'Service', identifiers: ['cloudtrail.amazonaws.com'] },
+              ],
+            },
+          ],
+        }
+      ).json,
+    });
+
+    const cloudtrailLogsPolicy = new IamPolicy(this, 'cloudtrail-logs-policy', {
+      name: `CloudTrail-CloudWatch-Logs-Policy-${environmentSuffix}`,
+      policy: new DataAwsIamPolicyDocument(this, 'cloudtrail-logs-policy-doc', {
+        statement: [
+          {
+            actions: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+            resources: [`${logGroup.arn}:*`],
+          },
+        ],
+      }).json,
+    });
+
+    new IamRolePolicyAttachment(this, 'cloudtrail-logs-attach', {
+      role: cloudtrailLogsRole.name,
+      policyArn: cloudtrailLogsPolicy.arn,
+    });
+    // --- END FIX ---
+
+    new Cloudtrail(this, 'cloudtrail', {
+      name: `SOC-Baseline-Trail-${environmentSuffix}`,
+      s3BucketName: trailBucket.id,
+      includeGlobalServiceEvents: true,
+      isMultiRegionTrail: true,
+      enableLogFileValidation: true,
+      cloudWatchLogsGroupArn: `${logGroup.arn}:*`,
+      // --- FIX: Pass the new role's ARN ---
+      cloudWatchLogsRoleArn: cloudtrailLogsRole.arn,
+      kmsKeyId: kmsKey.id,
+      tags: { Environment: environmentSuffix },
+      dependsOn: [trailBucketPolicy, cloudtrailLogsRole, logGroup],
+    });
+
+    // --- 5. AWS Config Rules ---
+
+    const configRole = new IamRole(this, 'config-role', {
+      name: `SOC-Baseline-Config-Role-${environmentSuffix}`,
+      assumeRolePolicy: new DataAwsIamPolicyDocument(
+        this,
+        'config-assume-policy',
+        {
+          statement: [
+            {
+              actions: ['sts:AssumeRole'],
+              principals: [
+                { type: 'Service', identifiers: ['config.amazonaws.com'] },
+              ],
+            },
+          ],
+        }
+      ).json,
+    });
+
+    new IamRolePolicyAttachment(this, 'config-role-attach', {
+      role: configRole.name,
+      policyArn: 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole',
+    });
+
+    const configRecorder = new ConfigConfigurationRecorder(
+      this,
+      'config-recorder',
+      {
+        name: `soc-baseline-recorder-${environmentSuffix}`,
+        roleArn: configRole.arn,
+        recordingGroup: {
+          allSupported: true,
+          includeGlobalResourceTypes: true,
+        },
+        dependsOn: [configRole],
+      }
+    );
+
+    new ConfigDeliveryChannel(this, 'config-channel', {
+      name: `soc-baseline-channel-${environmentSuffix}`,
+      s3BucketName: trailBucket.id,
+      s3KmsKeyArn: kmsKey.arn,
+      dependsOn: [trailBucket, configRecorder],
+    });
+    // --- END FIX ---
+
     const ebsRule = new ConfigConfigRule(this, 'ebs-encryption-rule', {
-      name: `ebs-encryption-by-default-${suffix}`,
+      name: `ebs-encryption-by-default-${environmentSuffix}`,
       source: {
         owner: 'AWS',
-        sourceIdentifier: 'EBS_ENCRYPTION_BY_DEFAULT',
+        // --- FIX: Correct rule name ---
+        sourceIdentifier: 'EC2_EBS_ENCRYPTION_BY_DEFAULT',
       },
-      description: 'Checks if EBS encryption is enabled by default.',
-      tags: tags,
+      tags: { Environment: environmentSuffix },
+      // --- FIX: Add dependency on the recorder ---
+      dependsOn: [configRecorder],
     });
 
     const s3Rule = new ConfigConfigRule(this, 's3-encryption-rule', {
-      name: `s3-bucket-server-side-encryption-enabled-${suffix}`,
+      name: `s3-encryption-enabled-${environmentSuffix}`,
       source: {
         owner: 'AWS',
         sourceIdentifier: 'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED',
       },
-      description: 'Checks if S3 buckets have server-side encryption enabled.',
-      tags: tags,
+      tags: { Environment: environmentSuffix },
+      // --- FIX: Add dependency on the recorder ---
+      dependsOn: [configRecorder],
     });
 
-    // --- 5. CloudWatch Alarms for Unauthorized Activity ---
-    // First, create a Trail and S3 bucket for logs
-    const trailBucket = new S3Bucket(this, 'trail-bucket', {
-      bucket: `soc-baseline-trail-logs-${suffix}`,
-      forceDestroy: true, // OK for demo, not for production
-      tags: tags,
-    });
-
-    // S3 policy for CloudTrail to write
-    const trailBucketPolicyJson = {
-      Version: '2012-10-17',
-      Statement: [
-        {
-          Sid: 'AWSCloudTrailAclCheck',
-          Effect: 'Allow',
-          Principal: { Service: 'cloudtrail.amazonaws.com' },
-          Action: 's3:GetBucketAcl',
-          Resource: trailBucket.arn,
-        },
-        {
-          Sid: 'AWSCloudTrailWrite',
-          Effect: 'Allow',
-          Principal: { Service: 'cloudtrail.amazonaws.com' },
-          Action: 's3:PutObject',
-          Resource: `${trailBucket.arn}/*`,
-          Condition: {
-            StringEquals: { 's3:x-amz-acl': 'bucket-owner-full-control' },
-          },
-        },
-      ],
-    };
-
-    // --- FIX: Save the S3BucketPolicy resource to a variable ---
-    const trailBucketPolicyResource = new S3BucketPolicy(
+    // --- 6. CloudWatch Alarms for Unauthorized Activity ---
+    const rootActivityFilter = new CloudwatchLogMetricFilter(
       this,
-      'trail-bucket-policy',
+      'root-activity-filter',
       {
-        bucket: trailBucket.id,
-        policy: JSON.stringify(trailBucketPolicyJson),
-      }
-    );
-
-    const logGroup = new CloudwatchLogGroup(this, 'trail-log-group', {
-      name: `/aws/cloudtrail/soc-baseline-logs-${suffix}`,
-      retentionInDays: 7,
-      tags: tags,
-    });
-
-    const trail = new Cloudtrail(this, 'cloudtrail', {
-      name: `SOC-Baseline-Trail-${suffix}`,
-      s3BucketName: trailBucket.id,
-      cloudWatchLogsGroupArn: `${logGroup.arn}:*`,
-      cloudWatchLogsRoleArn: mfaAdminRole.arn, // Re-using role for simplicity
-      enableLogFileValidation: true,
-      includeGlobalServiceEvents: true,
-      isMultiRegionTrail: true,
-      tags: tags,
-      // --- FIX: Depend on the S3BucketPolicy *resource*, not the JSON object ---
-      dependsOn: [trailBucketPolicyResource, logGroup],
-    });
-
-    // Metric Filter for Root User Activity
-    // --- FIX: Corrected class name ---
-    const rootUserFilter = new CloudwatchLogMetricFilter(
-      this,
-      'root-user-filter',
-      {
-        name: `RootUserActivityFilter-${suffix}`,
+        name: `RootUserActivityFilter-${environmentSuffix}`,
         logGroupName: logGroup.name,
+        pattern: '{ $.userIdentity.type = "Root" }',
         metricTransformation: {
           name: 'RootUserActivity',
-          namespace: 'Security/SOC2',
+          namespace: 'SOCBaseline/CloudTrail',
           value: '1',
         },
-        // Filters for any activity by the root user
-        pattern: '{ $.userIdentity.type = "Root" }',
-        dependsOn: [trail],
       }
     );
 
-    // Alarm for Root User Activity
-    const rootAlarm = new CloudwatchMetricAlarm(this, 'root-user-alarm', {
-      alarmName: `RootUserActivityAlarm-${suffix}`,
-      alarmDescription: 'Fires when any AWS API call is made by the Root user.',
-      comparisonOperator: 'GreaterThanOrEqualToThreshold',
-      evaluationPeriods: 1,
-      metricName: rootUserFilter.metricTransformation.name,
-      namespace: rootUserFilter.metricTransformation.namespace,
-      period: 300,
-      statistic: 'Sum',
-      threshold: 1,
-      alarmActions: [], // Add SNS topic ARN here
-      okActions: [],
-      tags: tags,
-    });
+    const rootActivityAlarm = new CloudwatchMetricAlarm(
+      this,
+      'root-activity-alarm',
+      {
+        alarmName: `RootUserActivityAlarm-${environmentSuffix}`,
+        alarmDescription: 'Alarm for Root user activity',
+        metricName: rootActivityFilter.metricTransformation.name,
+        namespace: rootActivityFilter.metricTransformation.namespace,
+        statistic: 'Sum',
+        period: 300,
+        evaluationPeriods: 1,
+        comparisonOperator: 'GreaterThanOrEqualToThreshold',
+        threshold: 1,
+        treatMissingData: 'notBreaching',
+        tags: { Environment: environmentSuffix },
+      }
+    );
 
-    // Metric Filter for Console Login Failures
-    // --- FIX: Corrected class name ---
     const loginFailureFilter = new CloudwatchLogMetricFilter(
       this,
       'login-failure-filter',
       {
-        name: `ConsoleLoginFailureFilter-${suffix}`,
+        name: `ConsoleLoginFailureFilter-${environmentSuffix}`,
         logGroupName: logGroup.name,
-        metricTransformation: {
-          name: 'ConsoleLoginFailures',
-          namespace: 'Security/SOC2',
-          value: '1',
-        },
-        // Filters for console logins that fail
         pattern:
           '{ ($.eventName = "ConsoleLogin") && ($.errorMessage = "Failed authentication") }',
-        dependsOn: [trail],
+        metricTransformation: {
+          name: 'ConsoleLoginFailures',
+          namespace: 'SOCBaseline/CloudTrail',
+          value: '1',
+        },
       }
     );
 
-    // Alarm for Console Login Failures
     const loginFailureAlarm = new CloudwatchMetricAlarm(
       this,
       'login-failure-alarm',
       {
-        alarmName: `ConsoleLoginFailureAlarm-${suffix}`,
-        alarmDescription:
-          'Fires when 3 or more console login failures occur in 5 minutes.',
-        comparisonOperator: 'GreaterThanOrEqualToThreshold',
-        evaluationPeriods: 1,
+        alarmName: `ConsoleLoginFailureAlarm-${environmentSuffix}`,
+        alarmDescription: 'Alarm for 3+ console login failures in 5 minutes',
         metricName: loginFailureFilter.metricTransformation.name,
         namespace: loginFailureFilter.metricTransformation.namespace,
-        period: 300,
         statistic: 'Sum',
+        period: 300,
+        evaluationPeriods: 1,
+        comparisonOperator: 'GreaterThanOrEqualToThreshold',
         threshold: 3,
-        alarmActions: [], // Add SNS topic ARN here
-        okActions: [],
-        tags: tags,
+        treatMissingData: 'notBreaching',
+        tags: { Environment: environmentSuffix },
       }
     );
 
-    // --- 6. Outputs ---
-    new TerraformOutput(this, 'KmsKeyArn', {
-      value: kmsKey.arn,
-      description: 'ARN of the KMS key with rotation enabled',
-    });
-
-    new TerraformOutput(this, 'IamRoleArn', {
-      value: mfaAdminRole.arn,
-      description: 'ARN of the IAM role that enforces MFA',
-    });
-
-    new TerraformOutput(this, 'SecretArn', {
-      value: secret.arn,
-      description: 'ARN of the Secrets Manager secret',
-    });
-
-    new TerraformOutput(this, 'EbsEncryptionRuleName', {
-      value: ebsRule.name,
-      description: 'Name of the AWS Config rule for EBS encryption',
-    });
-
-    new TerraformOutput(this, 'S3EncryptionRuleName', {
-      value: s3Rule.name,
-      description: 'Name of the AWS Config rule for S3 encryption',
-    });
-
+    // --- Outputs ---
+    new TerraformOutput(this, 'KmsKeyArn', { value: kmsKey.arn });
+    new TerraformOutput(this, 'IamRoleArn', { value: mfaAdminRole.arn });
+    new TerraformOutput(this, 'SecretArn', { value: secret.arn });
+    new TerraformOutput(this, 'EbsEncryptionRuleName', { value: ebsRule.name });
+    new TerraformOutput(this, 'S3EncryptionRuleName', { value: s3Rule.name });
     new TerraformOutput(this, 'RootActivityAlarmName', {
-      value: rootAlarm.alarmName,
-      description: 'Name of the CloudWatch alarm for Root user activity',
+      // --- FIX: Use .alarmName instead of .name ---
+      value: rootActivityAlarm.alarmName,
     });
-
     new TerraformOutput(this, 'LoginFailureAlarmName', {
+      // --- FIX: Use .alarmName instead of .name ---
       value: loginFailureAlarm.alarmName,
-      description: 'Name of the CloudWatch alarm for console login failures',
     });
   }
 }
