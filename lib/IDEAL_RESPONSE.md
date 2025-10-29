@@ -3785,22 +3785,6 @@ All functions use AWS SDK v3 for better performance and tree-shaking:
 }
 ```
 
-## Testing
-
-### Unit Tests
-
-```bash
-npm test
-```
-
-### Integration Tests
-
-Requires deployed infrastructure:
-
-```bash
-npm run test:integration
-```
-
 ## Monitoring
 
 All functions emit CloudWatch metrics:
