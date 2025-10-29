@@ -260,7 +260,7 @@ data "archive_file" "docker_build_zip"{
 
 resource "aws_s3_object" "pipeline_files" {
   bucket = aws_s3_bucket.source.bucket
-  key = "pipeline_files.zip"
+  key    = "pipeline_files.zip"
   content_type = "application/zip"
   source = "pipeline_files.zip"
   etag = data.archive_file.docker_build_zip.output_md5
@@ -764,6 +764,7 @@ resource "aws_codepipeline" "main" {
       configuration = {
         S3Bucket    = aws_s3_bucket.source.bucket
         S3ObjectKey = "pipeline_files.zip"
+        PollForSourceChanges = true
       }
     }
   }
