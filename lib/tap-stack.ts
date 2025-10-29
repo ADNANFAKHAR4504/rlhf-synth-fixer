@@ -154,9 +154,6 @@ export class TapStack extends pulumi.ComponentResource {
     // Route53 weighted routing
     const route53Record = this.createRoute53WeightedRouting(name, this.targetAlb, cloudfront);
 
-    // CloudWatch Alarms and SNS
-    const alarms = this.createCloudWatchAlarms(name, this.targetRds, this.targetAlb);
-
     // Generate validation scripts
     const validationResults = this.generateValidationScripts(
       name,
@@ -1166,36 +1163,6 @@ export class TapStack extends pulumi.ComponentResource {
     return alarms;
   }
 
-  /**
-   * Creates SNS topic for notifications
-   */
-  private createSnsNotifications(
-    name: string,
-    alarms: aws.cloudwatch.MetricAlarm[]
-  ): aws.sns.Topic {
-    const topic = new aws.sns.Topic(
-      `${name}-sns-topic`,
-      {
-        name: `${name}-migration-notifications-${this.config.environmentSuffix}`,
-        tags: this.getMigrationTags('SNS Topic'),
-      },
-      { parent: this, provider: this.targetProvider }
-    );
-
-    alarms.forEach((alarm, i) => {
-      new aws.sns.TopicSubscription(
-        `${name}-alarm-subscription-${i}`,
-        {
-          topic: topic.arn,
-          protocol: 'email',
-          endpoint: 'alerts@example.com',
-        },
-        { parent: this, provider: this.targetProvider, dependsOn: [topic] }
-      );
-    });
-
-    return topic;
-  }
 
   /**
    * Generates validation scripts and performs health checks
