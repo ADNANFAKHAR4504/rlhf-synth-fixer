@@ -10,7 +10,7 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
-import { PipelineConfig } from '../config/pipeline-config';
+import { getRemovalPolicy, PipelineConfig } from '../config/pipeline-config';
 
 export interface PipelineInfrastructureProps {
   config: PipelineConfig;
@@ -35,9 +35,14 @@ export class PipelineInfrastructure extends Construct {
 
     const { config, kmsKey, notificationTopic, lambdaFunction } = props;
 
+    const removalPolicy = getRemovalPolicy(config.environmentSuffix);
+    const isProduction = config.environmentSuffix
+      .toLowerCase()
+      .includes('prod');
+
     // Source artifacts bucket
     this.sourceBucket = new s3.Bucket(this, 'SourceBucket', {
-      bucketName: `${config.prefix}-source`,
+      bucketName: `${config.prefix}-source-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: kmsKey,
       versioned: true,
@@ -47,12 +52,42 @@ export class PipelineInfrastructure extends Construct {
         },
       ],
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy,
+      autoDeleteObjects: !isProduction,
     });
+
+    // Enforce encryption at rest with bucket policy
+    this.sourceBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['s3:PutObject'],
+        resources: [`${this.sourceBucket.bucketArn}/*`],
+        conditions: {
+          StringNotEquals: {
+            's3:x-amz-server-side-encryption': 'aws:kms',
+          },
+        },
+      })
+    );
+
+    this.sourceBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['s3:PutObject'],
+        resources: [`${this.sourceBucket.bucketArn}/*`],
+        conditions: {
+          StringNotEquals: {
+            's3:x-amz-server-side-encryption-aws-kms-key-id': kmsKey.keyId,
+          },
+        },
+      })
+    );
 
     // Pipeline artifacts bucket
     this.artifactsBucket = new s3.Bucket(this, 'ArtifactsBucket', {
-      bucketName: `${config.prefix}-artifacts`,
+      bucketName: `${config.prefix}-artifacts-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: kmsKey,
       versioned: true,
@@ -62,8 +97,38 @@ export class PipelineInfrastructure extends Construct {
         },
       ],
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      removalPolicy,
+      autoDeleteObjects: !isProduction,
     });
+
+    // Enforce encryption at rest with bucket policy
+    this.artifactsBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['s3:PutObject'],
+        resources: [`${this.artifactsBucket.bucketArn}/*`],
+        conditions: {
+          StringNotEquals: {
+            's3:x-amz-server-side-encryption': 'aws:kms',
+          },
+        },
+      })
+    );
+
+    this.artifactsBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['s3:PutObject'],
+        resources: [`${this.artifactsBucket.bucketArn}/*`],
+        conditions: {
+          StringNotEquals: {
+            's3:x-amz-server-side-encryption-aws-kms-key-id': kmsKey.keyId,
+          },
+        },
+      })
+    );
 
     // Test reports bucket
     const testReportsBucket = new s3.Bucket(this, 'TestReportsBucket', {
@@ -76,7 +141,8 @@ export class PipelineInfrastructure extends Construct {
         },
       ],
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      removalPolicy,
+      autoDeleteObjects: !isProduction,
     });
 
     // Build project role
@@ -93,7 +159,7 @@ export class PipelineInfrastructure extends Construct {
       logGroupName: `/aws/codebuild/${config.prefix}-build`,
       retention: logs.RetentionDays.ONE_WEEK,
       encryptionKey: kmsKey,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      removalPolicy,
     });
 
     // Build project
@@ -183,9 +249,9 @@ export class PipelineInfrastructure extends Construct {
           build: {
             commands: [
               'echo Running integration tests...',
-              'npm run test:integration || true',
+              'npm run test:integration',
               'echo Running e2e tests...',
-              'npm run test:e2e || true',
+              'npm run test:e2e',
             ],
           },
         },
@@ -201,9 +267,41 @@ export class PipelineInfrastructure extends Construct {
       description: `Deployment role for ${config.prefix}`,
     });
 
-    // Grant necessary permissions for deployment
-    deployRole.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName('AWSCloudFormationFullAccess')
+    // Grant specific CloudFormation permissions for this stack only (least privilege)
+    const stackName = cdk.Stack.of(this).stackName;
+    deployRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'cloudformation:DescribeStacks',
+          'cloudformation:DescribeStackEvents',
+          'cloudformation:DescribeStackResource',
+          'cloudformation:DescribeStackResources',
+          'cloudformation:GetTemplate',
+          'cloudformation:ListStackResources',
+          'cloudformation:UpdateStack',
+          'cloudformation:CreateStack',
+          'cloudformation:DeleteStack',
+          'cloudformation:ValidateTemplate',
+        ],
+        resources: [
+          `arn:aws:cloudformation:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:stack/${stackName}/*`,
+        ],
+      })
+    );
+
+    // Grant S3 access for CloudFormation templates (if needed)
+    deployRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['s3:GetObject', 's3:PutObject', 's3:ListBucket'],
+        resources: [
+          'arn:aws:s3:::cdk-*',
+          'arn:aws:s3:::cdk-*/*',
+          this.artifactsBucket.bucketArn,
+          `${this.artifactsBucket.bucketArn}/*`,
+        ],
+      })
     );
 
     lambdaFunction.grantInvokeUrl(deployRole);

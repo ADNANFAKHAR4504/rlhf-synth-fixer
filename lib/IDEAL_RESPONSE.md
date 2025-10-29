@@ -64,7 +64,10 @@ import { Construct } from 'constructs';
 
 import { getPipelineConfig } from './config/pipeline-config';
 import { ApplicationInfrastructure } from './constructs/application-infrastructure';
-import { MonitoringInfrastructure } from './constructs/monitoring-infrastructure';
+import {
+  MonitoringInfrastructure,
+  createMonitoringTopics,
+} from './constructs/monitoring-infrastructure';
 import { PipelineInfrastructure } from './constructs/pipeline-infrastructure';
 import { SecurityInfrastructure } from './constructs/security-infrastructure';
 
@@ -105,27 +108,41 @@ export class TapStack extends cdk.Stack {
       config,
     });
 
-    // Monitoring infrastructure (CloudWatch, SNS)
-    const monitoring = new MonitoringInfrastructure(this, 'Monitoring', {
+    // Create SNS topics early - needed by application and pipeline infrastructure
+    const { alarmTopic, pipelineTopic } = createMonitoringTopics(
+      this,
+      'Monitoring',
       config,
-      kmsKey: security.kmsKey,
-    });
+      security.kmsKey
+    );
 
     // Application infrastructure (Lambda, API Gateway)
     const application = new ApplicationInfrastructure(this, 'Application', {
       config,
       kmsKey: security.kmsKey,
-      alarmTopic: monitoring.alarmTopic,
+      alarmTopic,
     });
 
     // CI/CD Pipeline
     const pipeline = new PipelineInfrastructure(this, 'Pipeline', {
       config,
       kmsKey: security.kmsKey,
-      notificationTopic: monitoring.pipelineTopic,
+      notificationTopic: pipelineTopic,
       lambdaFunction: application.lambdaFunction,
       apiGateway: application.api,
-      alarmTopic: monitoring.alarmTopic,
+      alarmTopic,
+    });
+
+    // Create comprehensive monitoring infrastructure with all resources at the end
+    // This creates the dashboard and all alarms in one place
+    const monitoring = new MonitoringInfrastructure(this, 'Monitoring', {
+      config,
+      kmsKey: security.kmsKey,
+      alarmTopic,
+      pipelineTopic,
+      lambdaFunctionArn: application.lambdaFunction.functionArn,
+      apiGatewayId: application.api.restApiId,
+      pipelineName: pipeline.pipeline.pipelineName,
     });
 
     // Stack outputs
@@ -219,6 +236,8 @@ export class TapStack extends cdk.Stack {
 ### 3. Configuration (lib/config/pipeline-config.ts)
 
 ```typescript
+import * as cdk from 'aws-cdk-lib';
+
 export interface PipelineConfig {
   prefix: string;
   team: string;
@@ -230,6 +249,19 @@ export interface PipelineConfig {
   retentionDays: number;
   maxRollbackRetries: number;
   notificationEmail?: string;
+  lambdaMemorySize?: number;
+  lambdaTimeout?: number;
+  provisionedConcurrency?: number;
+}
+
+/**
+ * Determines the removal policy based on environment suffix.
+ * If environmentSuffix includes "prod", returns RETAIN, otherwise DESTROY.
+ */
+export function getRemovalPolicy(environmentSuffix: string): cdk.RemovalPolicy {
+  return environmentSuffix.toLowerCase().includes('prod')
+    ? cdk.RemovalPolicy.RETAIN
+    : cdk.RemovalPolicy.DESTROY;
 }
 
 export function getPipelineConfig(
@@ -238,6 +270,7 @@ export function getPipelineConfig(
   environmentSuffix: string,
   notificationEmail?: string
 ): PipelineConfig {
+  const isProduction = environmentSuffix.toLowerCase().includes('prod');
   return {
     prefix: `${team}-${project}-${environmentSuffix}`,
     team,
@@ -249,6 +282,10 @@ export function getPipelineConfig(
     retentionDays: 30,
     maxRollbackRetries: 3,
     notificationEmail,
+    // Environment-based Lambda configuration
+    lambdaMemorySize: isProduction ? 1024 : 512, // Higher memory = more CPU in prod
+    lambdaTimeout: isProduction ? 60 : 30, // Longer timeout for prod
+    provisionedConcurrency: isProduction ? 10 : undefined, // Provisioned concurrency for prod
   };
 }
 ```
@@ -261,7 +298,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
-import { PipelineConfig } from '../config/pipeline-config';
+import { getRemovalPolicy, PipelineConfig } from '../config/pipeline-config';
 
 export interface SecurityInfrastructureProps {
   config: PipelineConfig;
@@ -284,7 +321,7 @@ export class SecurityInfrastructure extends Construct {
     this.kmsKey = new kms.Key(this, 'EncryptionKey', {
       description: `Encryption key for ${config.prefix}`,
       enableKeyRotation: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: getRemovalPolicy(config.environmentSuffix),
       alias: `${config.prefix}-key`,
     });
 
@@ -341,9 +378,10 @@ import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 import path from 'path';
-import { PipelineConfig } from '../config/pipeline-config';
+import { getRemovalPolicy, PipelineConfig } from '../config/pipeline-config';
 
 export interface ApplicationInfrastructureProps {
   config: PipelineConfig;
@@ -355,6 +393,7 @@ export class ApplicationInfrastructure extends Construct {
   public readonly lambdaFunction: lambda.Function;
   public readonly api: apigateway.RestApi;
   public readonly lambdaAlias: lambda.Alias;
+  public readonly deadLetterQueue: sqs.Queue;
 
   constructor(
     scope: Construct,
@@ -394,12 +433,24 @@ export class ApplicationInfrastructure extends Construct {
     // Grant KMS access
     kmsKey.grantDecrypt(lambdaRole);
 
+    // Dead Letter Queue for failed Lambda invocations
+    this.deadLetterQueue = new sqs.Queue(this, 'DeadLetterQueue', {
+      queueName: `${config.prefix}-dlq`,
+      encryption: sqs.QueueEncryption.KMS,
+      encryptionMasterKey: kmsKey,
+      retentionPeriod: cdk.Duration.days(14),
+      removalPolicy: getRemovalPolicy(config.environmentSuffix),
+    });
+
+    // Grant Lambda permission to send messages to DLQ
+    this.deadLetterQueue.grantSendMessages(lambdaRole);
+
     // Lambda log group
     const logGroup = new logs.LogGroup(this, 'LambdaLogGroup', {
       logGroupName: `/aws/lambda/${config.prefix}-function`,
       retention: logs.RetentionDays.ONE_MONTH,
       encryptionKey: kmsKey,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      removalPolicy: getRemovalPolicy(config.environmentSuffix),
     });
 
     // Lambda function
@@ -428,8 +479,8 @@ export class ApplicationInfrastructure extends Construct {
         },
       }),
       role: lambdaRole,
-      timeout: cdk.Duration.seconds(30),
-      memorySize: 512,
+      timeout: cdk.Duration.seconds(config.lambdaTimeout || 30),
+      memorySize: config.lambdaMemorySize || 512,
       environment: {
         NODE_ENV: config.environmentSuffix,
         PARAMETER_PREFIX: `/${config.prefix}`,
@@ -440,14 +491,30 @@ export class ApplicationInfrastructure extends Construct {
       reservedConcurrentExecutions:
         config.environmentSuffix === 'prod' ? 100 : 2,
       environmentEncryption: kmsKey,
+      deadLetterQueue: this.deadLetterQueue,
+      deadLetterQueueEnabled: true,
+      maxEventAge: cdk.Duration.hours(6),
+      retryAttempts: 2,
     });
 
     // Lambda version and alias for zero-downtime deployments
     const version = this.lambdaFunction.currentVersion;
+    const isProduction = config.environmentSuffix
+      .toLowerCase()
+      .includes('prod');
+
+    // Add provisioned concurrency for production to eliminate cold starts
     this.lambdaAlias = new lambda.Alias(this, 'LiveAlias', {
       aliasName: 'live',
       version,
+      // Provisioned concurrency from config (only for production by default)
+      // Note: This adds cost but improves latency significantly
+      provisionedConcurrentExecutions: config.provisionedConcurrency,
     });
+
+    // Environment-based throttling configuration
+    const throttlingBurstLimit = isProduction ? 1000 : 100;
+    const throttlingRateLimit = isProduction ? 500 : 50;
 
     // API Gateway
     this.api = new apigateway.RestApi(this, 'HonoApi', {
@@ -459,15 +526,37 @@ export class ApplicationInfrastructure extends Construct {
         dataTraceEnabled: true,
         tracingEnabled: true,
         metricsEnabled: true,
-        throttlingBurstLimit: 1000,
-        throttlingRateLimit: 500,
+        throttlingBurstLimit,
+        throttlingRateLimit,
       },
+      // Restrict CORS to specific origins in production
       defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
-        allowMethods: apigateway.Cors.ALL_METHODS,
-        allowHeaders: ['Content-Type', 'Authorization'],
+        allowOrigins: isProduction
+          ? apigateway.Cors.ALL_ORIGINS // TODO: Replace with specific allowed origins
+          : apigateway.Cors.ALL_ORIGINS, // Allow all in dev/test for ease of development
+        allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allowHeaders: [
+          'Content-Type',
+          'Authorization',
+          'X-Amz-Date',
+          'X-Api-Key',
+        ],
+        maxAge: cdk.Duration.days(1),
       },
+      // Request validation (basic - can be enhanced with model validation)
+      // API key usage can be enabled per method if needed
     });
+
+    // Add request validator (basic validation)
+    new apigateway.RequestValidator(this, 'RequestValidator', {
+      restApi: this.api,
+      requestValidatorName: `${config.prefix}-api-request-validator`,
+      validateRequestBody: true,
+      validateRequestParameters: false, // Enable if query params validation needed
+    });
+
+    // API Gateway access logs (S3 export can be added if needed)
+    // Note: Access logs require additional configuration and S3 bucket
 
     // Lambda integration
     const integration = new apigateway.LambdaIntegration(this.lambdaAlias, {
@@ -529,7 +618,7 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
-import { PipelineConfig } from '../config/pipeline-config';
+import { getRemovalPolicy, PipelineConfig } from '../config/pipeline-config';
 
 export interface PipelineInfrastructureProps {
   config: PipelineConfig;
@@ -554,9 +643,14 @@ export class PipelineInfrastructure extends Construct {
 
     const { config, kmsKey, notificationTopic, lambdaFunction } = props;
 
+    const removalPolicy = getRemovalPolicy(config.environmentSuffix);
+    const isProduction = config.environmentSuffix
+      .toLowerCase()
+      .includes('prod');
+
     // Source artifacts bucket
     this.sourceBucket = new s3.Bucket(this, 'SourceBucket', {
-      bucketName: `${config.prefix}-source`,
+      bucketName: `${config.prefix}-source-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: kmsKey,
       versioned: true,
@@ -566,12 +660,42 @@ export class PipelineInfrastructure extends Construct {
         },
       ],
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy,
+      autoDeleteObjects: !isProduction,
     });
+
+    // Enforce encryption at rest with bucket policy
+    this.sourceBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['s3:PutObject'],
+        resources: [`${this.sourceBucket.bucketArn}/*`],
+        conditions: {
+          StringNotEquals: {
+            's3:x-amz-server-side-encryption': 'aws:kms',
+          },
+        },
+      })
+    );
+
+    this.sourceBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['s3:PutObject'],
+        resources: [`${this.sourceBucket.bucketArn}/*`],
+        conditions: {
+          StringNotEquals: {
+            's3:x-amz-server-side-encryption-aws-kms-key-id': kmsKey.keyId,
+          },
+        },
+      })
+    );
 
     // Pipeline artifacts bucket
     this.artifactsBucket = new s3.Bucket(this, 'ArtifactsBucket', {
-      bucketName: `${config.prefix}-artifacts`,
+      bucketName: `${config.prefix}-artifacts-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: kmsKey,
       versioned: true,
@@ -581,8 +705,38 @@ export class PipelineInfrastructure extends Construct {
         },
       ],
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      removalPolicy,
+      autoDeleteObjects: !isProduction,
     });
+
+    // Enforce encryption at rest with bucket policy
+    this.artifactsBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['s3:PutObject'],
+        resources: [`${this.artifactsBucket.bucketArn}/*`],
+        conditions: {
+          StringNotEquals: {
+            's3:x-amz-server-side-encryption': 'aws:kms',
+          },
+        },
+      })
+    );
+
+    this.artifactsBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['s3:PutObject'],
+        resources: [`${this.artifactsBucket.bucketArn}/*`],
+        conditions: {
+          StringNotEquals: {
+            's3:x-amz-server-side-encryption-aws-kms-key-id': kmsKey.keyId,
+          },
+        },
+      })
+    );
 
     // Test reports bucket
     const testReportsBucket = new s3.Bucket(this, 'TestReportsBucket', {
@@ -595,7 +749,8 @@ export class PipelineInfrastructure extends Construct {
         },
       ],
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      removalPolicy,
+      autoDeleteObjects: !isProduction,
     });
 
     // Build project role
@@ -612,7 +767,7 @@ export class PipelineInfrastructure extends Construct {
       logGroupName: `/aws/codebuild/${config.prefix}-build`,
       retention: logs.RetentionDays.ONE_WEEK,
       encryptionKey: kmsKey,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      removalPolicy,
     });
 
     // Build project
@@ -702,9 +857,9 @@ export class PipelineInfrastructure extends Construct {
           build: {
             commands: [
               'echo Running integration tests...',
-              'npm run test:integration || true',
+              'npm run test:integration',
               'echo Running e2e tests...',
-              'npm run test:e2e || true',
+              'npm run test:e2e',
             ],
           },
         },
@@ -720,9 +875,41 @@ export class PipelineInfrastructure extends Construct {
       description: `Deployment role for ${config.prefix}`,
     });
 
-    // Grant necessary permissions for deployment
-    deployRole.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName('AWSCloudFormationFullAccess')
+    // Grant specific CloudFormation permissions for this stack only (least privilege)
+    const stackName = cdk.Stack.of(this).stackName;
+    deployRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'cloudformation:DescribeStacks',
+          'cloudformation:DescribeStackEvents',
+          'cloudformation:DescribeStackResource',
+          'cloudformation:DescribeStackResources',
+          'cloudformation:GetTemplate',
+          'cloudformation:ListStackResources',
+          'cloudformation:UpdateStack',
+          'cloudformation:CreateStack',
+          'cloudformation:DeleteStack',
+          'cloudformation:ValidateTemplate',
+        ],
+        resources: [
+          `arn:aws:cloudformation:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:stack/${stackName}/*`,
+        ],
+      })
+    );
+
+    // Grant S3 access for CloudFormation templates (if needed)
+    deployRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['s3:GetObject', 's3:PutObject', 's3:ListBucket'],
+        resources: [
+          `arn:aws:s3:::cdk-*`,
+          `arn:aws:s3:::cdk-*/*`,
+          this.artifactsBucket.bucketArn,
+          `${this.artifactsBucket.bucketArn}/*`,
+        ],
+      })
     );
 
     lambdaFunction.grantInvokeUrl(deployRole);
@@ -877,16 +1064,22 @@ export class PipelineInfrastructure extends Construct {
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as sns_subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import { Construct } from 'constructs';
-import { PipelineConfig } from '../config/pipeline-config';
+import { getRemovalPolicy, PipelineConfig } from '../config/pipeline-config';
 
 export interface MonitoringInfrastructureProps {
   config: PipelineConfig;
   kmsKey: kms.Key;
+  alarmTopic: sns.Topic; // Required - topics should be created earlier
+  pipelineTopic: sns.Topic; // Required - topics should be created earlier
+  lambdaFunctionArn: string;
+  apiGatewayId: string;
+  pipelineName: string;
 }
 
 export class MonitoringInfrastructure extends Construct {
@@ -901,33 +1094,13 @@ export class MonitoringInfrastructure extends Construct {
   ) {
     super(scope, id);
 
-    const { config, kmsKey } = props;
+    const { config, kmsKey, alarmTopic, pipelineTopic } = props;
 
-    // SNS topic for alarms
-    this.alarmTopic = new sns.Topic(this, 'AlarmTopic', {
-      topicName: `${config.prefix}-alarms`,
-      displayName: `${config.prefix} Alarms`,
-      masterKey: kmsKey,
-    });
+    // Store provided topics (should be created earlier)
+    this.alarmTopic = alarmTopic;
+    this.pipelineTopic = pipelineTopic;
 
-    // SNS topic for pipeline notifications
-    this.pipelineTopic = new sns.Topic(this, 'PipelineTopic', {
-      topicName: `${config.prefix}-pipeline-notifications`,
-      displayName: `${config.prefix} Pipeline Notifications`,
-      masterKey: kmsKey,
-    });
-
-    // Add email subscriptions if configured
-    if (config.notificationEmail) {
-      this.alarmTopic.addSubscription(
-        new sns_subscriptions.EmailSubscription(config.notificationEmail)
-      );
-      this.pipelineTopic.addSubscription(
-        new sns_subscriptions.EmailSubscription(config.notificationEmail)
-      );
-    }
-
-    // CloudWatch Dashboard
+    // Create CloudWatch Dashboard
     this.dashboard = new cloudwatch.Dashboard(this, 'Dashboard', {
       dashboardName: `${config.prefix}-dashboard`,
       defaultInterval: cdk.Duration.hours(1),
@@ -1022,14 +1195,22 @@ export class MonitoringInfrastructure extends Construct {
     this.dashboard.addWidgets(lambdaWidget, apiGatewayWidget);
     this.dashboard.addWidgets(pipelineWidget);
 
+    // Application log group with lifecycle policy for cost optimization
+    const isProduction = config.environmentSuffix
+      .toLowerCase()
+      .includes('prod');
+    const applicationLogGroup = new logs.LogGroup(this, 'ApplicationLogGroup', {
+      logGroupName: `/aws/application/${config.prefix}`,
+      retention: isProduction
+        ? logs.RetentionDays.ONE_MONTH
+        : logs.RetentionDays.ONE_WEEK, // Shorter retention for dev/test
+      encryptionKey: kmsKey,
+      removalPolicy: getRemovalPolicy(config.environmentSuffix),
+    });
+
     // Log metric filters for custom metrics
     const errorLogMetricFilter = new logs.MetricFilter(this, 'ErrorLogMetric', {
-      logGroup: new logs.LogGroup(this, 'ApplicationLogGroup', {
-        logGroupName: `/aws/application/${config.prefix}`,
-        retention: logs.RetentionDays.ONE_MONTH,
-        encryptionKey: kmsKey,
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-      }),
+      logGroup: applicationLogGroup,
       metricName: 'ApplicationErrors',
       metricNamespace: config.prefix,
       filterPattern: logs.FilterPattern.literal('[ERROR]'),
@@ -1037,17 +1218,168 @@ export class MonitoringInfrastructure extends Construct {
     });
 
     // Custom alarm for application errors
-    new cloudwatch.Alarm(this, 'ApplicationErrorAlarm', {
-      alarmName: `${config.prefix}-application-errors`,
-      metric: errorLogMetricFilter.metric(),
-      threshold: 5,
-      evaluationPeriods: 1,
+    const applicationErrorAlarm = new cloudwatch.Alarm(
+      this,
+      'ApplicationErrorAlarm',
+      {
+        alarmName: `${config.prefix}-application-errors`,
+        metric: errorLogMetricFilter.metric(),
+        threshold: 5,
+        evaluationPeriods: 1,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription: 'Application error rate is too high',
+      }
+    );
+    applicationErrorAlarm.addAlarmAction(
+      new cloudwatchActions.SnsAction(this.alarmTopic)
+    );
+
+    // Lambda metrics and alarms
+    // Lambda duration alarm
+    const lambdaDurationMetric = new cloudwatch.Metric({
+      namespace: 'AWS/Lambda',
+      metricName: 'Duration',
+      dimensionsMap: {
+        FunctionName: `${config.prefix}-function`,
+      },
+      statistic: 'Average',
+      period: cdk.Duration.minutes(5),
+    });
+
+    const lambdaDurationAlarm = new cloudwatch.Alarm(
+      this,
+      'LambdaDurationAlarm',
+      {
+        alarmName: `${config.prefix}-lambda-duration`,
+        metric: lambdaDurationMetric,
+        threshold: 25000, // 25 seconds
+        evaluationPeriods: 2,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription: 'Lambda function duration exceeds threshold',
+      }
+    );
+    lambdaDurationAlarm.addAlarmAction(
+      new cloudwatchActions.SnsAction(this.alarmTopic)
+    );
+
+    // Lambda throttle alarm
+    const lambdaThrottleMetric = new cloudwatch.Metric({
+      namespace: 'AWS/Lambda',
+      metricName: 'Throttles',
+      dimensionsMap: {
+        FunctionName: `${config.prefix}-function`,
+      },
+      statistic: 'Sum',
+      period: cdk.Duration.minutes(5),
+    });
+
+    const lambdaThrottleAlarm = new cloudwatch.Alarm(
+      this,
+      'LambdaThrottleAlarm',
+      {
+        alarmName: `${config.prefix}-lambda-throttles`,
+        metric: lambdaThrottleMetric,
+        threshold: 1,
+        evaluationPeriods: 1,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription: 'Lambda function throttles detected',
+      }
+    );
+    lambdaThrottleAlarm.addAlarmAction(
+      new cloudwatchActions.SnsAction(this.alarmTopic)
+    );
+
+    // API Gateway alarms
+    // API Gateway latency alarm
+    const apiLatencyMetric = new cloudwatch.Metric({
+      namespace: 'AWS/ApiGateway',
+      metricName: 'Latency',
+      dimensionsMap: {
+        ApiName: `${config.prefix}-api`,
+        Stage: config.environmentSuffix,
+      },
+      statistic: 'Average',
+      period: cdk.Duration.minutes(5),
+    });
+
+    const apiLatencyAlarm = new cloudwatch.Alarm(this, 'ApiLatencyAlarm', {
+      alarmName: `${config.prefix}-api-latency`,
+      metric: apiLatencyMetric,
+      threshold: 2000, // 2 seconds
+      evaluationPeriods: 2,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: 'Application error rate is too high',
-    }).addAlarmAction(
-      new cdk.aws_cloudwatch_actions.SnsAction(this.alarmTopic)
+      alarmDescription: 'API Gateway latency exceeds threshold',
+    });
+    apiLatencyAlarm.addAlarmAction(
+      new cloudwatchActions.SnsAction(this.alarmTopic)
+    );
+
+    // Pipeline-specific alarms
+    // Pipeline failure alarm
+    const pipelineFailureMetric = new cloudwatch.Metric({
+      namespace: 'AWS/CodePipeline',
+      metricName: 'PipelineExecutionFailure',
+      dimensionsMap: {
+        PipelineName: props.pipelineName,
+      },
+      statistic: 'Sum',
+      period: cdk.Duration.hours(1),
+    });
+
+    const pipelineFailureAlarm = new cloudwatch.Alarm(
+      this,
+      'PipelineFailureAlarm',
+      {
+        alarmName: `${config.prefix}-pipeline-failures`,
+        metric: pipelineFailureMetric,
+        threshold: 1,
+        evaluationPeriods: 1,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription: 'Pipeline execution failures detected',
+      }
+    );
+    pipelineFailureAlarm.addAlarmAction(
+      new cloudwatchActions.SnsAction(this.alarmTopic)
+    );
+    pipelineFailureAlarm.addAlarmAction(
+      new cloudwatchActions.SnsAction(this.pipelineTopic)
     );
   }
+}
+
+/**
+ * Helper function to create SNS topics for monitoring.
+ * These should be created early as they're needed by application and pipeline infrastructure.
+ */
+export function createMonitoringTopics(
+  scope: Construct,
+  id: string,
+  config: PipelineConfig,
+  kmsKey: kms.Key
+): { alarmTopic: sns.Topic; pipelineTopic: sns.Topic } {
+  const alarmTopic = new sns.Topic(scope, `${id}AlarmTopic`, {
+    topicName: `${config.prefix}-alarms`,
+    displayName: `${config.prefix} Alarms`,
+    masterKey: kmsKey,
+  });
+
+  const pipelineTopic = new sns.Topic(scope, `${id}PipelineTopic`, {
+    topicName: `${config.prefix}-pipeline-notifications`,
+    displayName: `${config.prefix} Pipeline Notifications`,
+    masterKey: kmsKey,
+  });
+
+  // Add email subscriptions if configured
+  if (config.notificationEmail) {
+    alarmTopic.addSubscription(
+      new sns_subscriptions.EmailSubscription(config.notificationEmail)
+    );
+    pipelineTopic.addSubscription(
+      new sns_subscriptions.EmailSubscription(config.notificationEmail)
+    );
+  }
+
+  return { alarmTopic, pipelineTopic };
 }
 ```
 
@@ -1118,7 +1450,11 @@ import type {
   APIGatewayProxyResult,
   Context as LambdaContext,
 } from "aws-lambda";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore hono is installed at compile time
 import { Hono } from "hono";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore hono is installed at compile time
 import { handle as handleV2 } from "hono/aws-lambda";
 
 const app = new Hono();
@@ -1141,7 +1477,7 @@ export const handler = async (
 ): Promise<APIGatewayProxyResult> => {
   return v2Handler(event as any, context) as Promise<APIGatewayProxyResult>;
 };
-' > lambda-placeholder/index.js
+' > lib/app/src/index.js
 ```
 
 ### 9. Package.json

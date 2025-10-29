@@ -1,5 +1,9 @@
 import * as cdk from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import { PipelineConfig } from '../lib/config/pipeline-config';
+import { ApplicationInfrastructure } from '../lib/constructs/application-infrastructure';
+import { SecurityInfrastructure } from '../lib/constructs/security-infrastructure';
 import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -9,7 +13,7 @@ describe('TapStack Unit Tests', () => {
   let stack: TapStack;
   let template: Template;
 
-  beforeEach(() => {
+  beforeAll(() => {
     app = new cdk.App();
     stack = new TapStack(app, 'TestTapStack', {
       environmentSuffix,
@@ -140,7 +144,7 @@ describe('TapStack Unit Tests', () => {
     test('creates log group for application logs', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
         LogGroupName: Match.stringLikeRegexp('/aws/application/.*'),
-        RetentionInDays: 30,
+        RetentionInDays: 7, // Non-production environments use 7 days
       });
     });
 
@@ -284,27 +288,49 @@ describe('TapStack Unit Tests', () => {
 
   describe('Pipeline Infrastructure Resources', () => {
     test('creates S3 source bucket with encryption', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.stringLikeRegexp('.*-source'),
-        VersioningConfiguration: {
-          Status: 'Enabled',
-        },
-        PublicAccessBlockConfiguration: {
-          BlockPublicAcls: true,
-          BlockPublicPolicy: true,
-          IgnorePublicAcls: true,
-          RestrictPublicBuckets: true,
-        },
+      // S3 bucket names use CloudFormation intrinsics, so we match on the resource
+      const buckets = template.findResources('AWS::S3::Bucket', {});
+      const sourceBucket = Object.values(buckets).find((bucket: any) => {
+        const name = bucket.Properties?.BucketName;
+        // Can be a string or Fn::Join intrinsic
+        if (typeof name === 'string') {
+          return name.includes('-source-');
+        }
+        if (name?.['Fn::Join'] && Array.isArray(name['Fn::Join'][1])) {
+          const parts = name['Fn::Join'][1];
+          return parts.some((part: any) => typeof part === 'string' && part.includes('-source'));
+        }
+        return false;
       });
+      expect(sourceBucket).toBeDefined();
+      expect(sourceBucket?.Properties?.VersioningConfiguration?.Status).toBe('Enabled');
+      expect(sourceBucket?.Properties?.PublicAccessBlockConfiguration).toMatchObject({
+        BlockPublicAcls: true,
+        BlockPublicPolicy: true,
+        IgnorePublicAcls: true,
+        RestrictPublicBuckets: true,
+      });
+      expect(sourceBucket?.Properties?.BucketEncryption).toBeDefined();
     });
 
     test('creates S3 artifacts bucket with encryption', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.stringLikeRegexp('.*-artifacts'),
-        VersioningConfiguration: {
-          Status: 'Enabled',
-        },
+      // S3 bucket names use CloudFormation intrinsics, so we match on the resource
+      const buckets = template.findResources('AWS::S3::Bucket', {});
+      const artifactsBucket = Object.values(buckets).find((bucket: any) => {
+        const name = bucket.Properties?.BucketName;
+        // Can be a string or Fn::Join intrinsic
+        if (typeof name === 'string') {
+          return name.includes('-artifacts-');
+        }
+        if (name?.['Fn::Join'] && Array.isArray(name['Fn::Join'][1])) {
+          const parts = name['Fn::Join'][1];
+          return parts.some((part: any) => typeof part === 'string' && part.includes('-artifacts'));
+        }
+        return false;
       });
+      expect(artifactsBucket).toBeDefined();
+      expect(artifactsBucket?.Properties?.VersioningConfiguration?.Status).toBe('Enabled');
+      expect(artifactsBucket?.Properties?.BucketEncryption).toBeDefined();
     });
 
     test('creates S3 test reports bucket', () => {
@@ -517,7 +543,14 @@ describe('TapStack Unit Tests', () => {
 
   describe('Resource Counts', () => {
     test('creates expected number of Lambda functions', () => {
-      template.resourceCountIs('AWS::Lambda::Function', 1);
+      // Check that we have at least one Lambda function (may have custom resources)
+      const functions = template.findResources('AWS::Lambda::Function', {});
+      expect(Object.keys(functions).length).toBeGreaterThanOrEqual(1);
+      // Verify the main application Lambda function exists
+      const appFunction = Object.values(functions).find((func: any) =>
+        func.Properties?.FunctionName?.includes('-function')
+      );
+      expect(appFunction).toBeDefined();
     });
 
     test('creates expected number of API Gateway REST APIs', () => {
@@ -647,6 +680,231 @@ describe('TapStack Unit Tests', () => {
           alarm.Properties.AlarmActions.length > 0
       );
       expect(alarmWithActions).toBeDefined();
+    });
+  });
+
+  describe('Production Environment Configuration', () => {
+    test('uses production configuration when environmentSuffix includes prod', () => {
+      const prodApp = new cdk.App();
+      const prodStack = new TapStack(prodApp, 'ProductionStack', {
+        environmentSuffix: 'prod',
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+      });
+      const prodTemplate = Template.fromStack(prodStack);
+
+      // Verify Lambda function uses production memory size (1024)
+      prodTemplate.hasResourceProperties('AWS::Lambda::Function', {
+        MemorySize: 1024,
+      });
+
+      // Verify Lambda function uses production timeout (60)
+      prodTemplate.hasResourceProperties('AWS::Lambda::Function', {
+        Timeout: 60,
+      });
+
+      // Verify production reserved concurrent executions (100)
+      prodTemplate.hasResourceProperties('AWS::Lambda::Function', {
+        ReservedConcurrentExecutions: 100,
+      });
+
+      // Verify application log group uses ONE_MONTH retention for production
+      prodTemplate.hasResourceProperties('AWS::Logs::LogGroup', {
+        LogGroupName: Match.stringLikeRegexp('/aws/application/.*'),
+        RetentionInDays: 30, // ONE_MONTH
+      });
+    });
+
+    test('uses non-production configuration when environmentSuffix does not include prod', () => {
+      const devApp = new cdk.App();
+      const devStack = new TapStack(devApp, 'DevStack', {
+        environmentSuffix: 'dev',
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+      });
+      const devTemplate = Template.fromStack(devStack);
+
+      // Verify Lambda function uses dev memory size (512)
+      devTemplate.hasResourceProperties('AWS::Lambda::Function', {
+        MemorySize: 512,
+      });
+
+      // Verify Lambda function uses dev timeout (30)
+      devTemplate.hasResourceProperties('AWS::Lambda::Function', {
+        Timeout: 30,
+      });
+
+      // Verify dev reserved concurrent executions (2)
+      devTemplate.hasResourceProperties('AWS::Lambda::Function', {
+        ReservedConcurrentExecutions: 2,
+      });
+
+      // Verify application log group uses ONE_WEEK retention for non-production
+      devTemplate.hasResourceProperties('AWS::Logs::LogGroup', {
+        LogGroupName: Match.stringLikeRegexp('/aws/application/.*'),
+        RetentionInDays: 7, // ONE_WEEK
+      });
+    });
+
+    test('uses production configuration for production-like environment names', () => {
+      const stagingApp = new cdk.App();
+      const stagingStack = new TapStack(stagingApp, 'StagingStack', {
+        environmentSuffix: 'production',
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+      });
+      const stagingTemplate = Template.fromStack(stagingStack);
+
+      // Should use production config because 'production' includes 'prod'
+      stagingTemplate.hasResourceProperties('AWS::Lambda::Function', {
+        MemorySize: 1024,
+      });
+    });
+  });
+
+  describe('Config Function Branch Coverage', () => {
+    test('getPipelineConfig returns production config when environment includes prod', () => {
+      const prodApp = new cdk.App();
+      prodApp.node.setContext('team', 'platform');
+      prodApp.node.setContext('project', 'hono-api');
+      const prodStack = new TapStack(prodApp, 'ConfigProdTest', {
+        environmentSuffix: 'prod',
+      });
+      const prodTemplate = Template.fromStack(prodStack);
+
+      // Verify production Lambda configuration
+      prodTemplate.hasResourceProperties('AWS::Lambda::Function', {
+        MemorySize: 1024,
+        Timeout: 60,
+      });
+    });
+
+    test('getPipelineConfig returns dev config when environment does not include prod', () => {
+      const devApp = new cdk.App();
+      devApp.node.setContext('team', 'platform');
+      devApp.node.setContext('project', 'hono-api');
+      const devStack = new TapStack(devApp, 'ConfigDevTest', {
+        environmentSuffix: 'dev',
+      });
+      const devTemplate = Template.fromStack(devStack);
+
+      // Verify dev Lambda configuration
+      devTemplate.hasResourceProperties('AWS::Lambda::Function', {
+        MemorySize: 512,
+        Timeout: 30,
+      });
+    });
+  });
+
+  describe('Lambda Configuration Default Values', () => {
+    test('Lambda uses default timeout when config.lambdaTimeout is undefined', () => {
+      // This test ensures the || operator default is covered
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'DefaultTimeoutTest', {
+        environmentSuffix: 'test',
+      });
+      const testTemplate = Template.fromStack(testStack);
+
+      // Lambda should use default timeout (30) for non-prod
+      testTemplate.hasResourceProperties('AWS::Lambda::Function', {
+        Timeout: 30,
+      });
+    });
+
+    test('Lambda uses config timeout when provided via production environment', () => {
+      const prodApp = new cdk.App();
+      const prodStack = new TapStack(prodApp, 'ConfigTimeoutTest', {
+        environmentSuffix: 'prod',
+      });
+      const prodTemplate = Template.fromStack(prodStack);
+
+      // Lambda should use production timeout (60)
+      prodTemplate.hasResourceProperties('AWS::Lambda::Function', {
+        Timeout: 60,
+      });
+    });
+
+    test('Lambda uses default memory when config.lambdaMemorySize is undefined', () => {
+      // For non-prod, should use default 512
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'DefaultMemoryTest', {
+        environmentSuffix: 'test',
+      });
+      const testTemplate = Template.fromStack(testStack);
+
+      testTemplate.hasResourceProperties('AWS::Lambda::Function', {
+        MemorySize: 512,
+      });
+    });
+
+    test('Lambda uses config memory when provided via production environment', () => {
+      const prodApp = new cdk.App();
+      const prodStack = new TapStack(prodApp, 'ConfigMemoryTest', {
+        environmentSuffix: 'prod',
+      });
+      const prodTemplate = Template.fromStack(prodStack);
+
+      prodTemplate.hasResourceProperties('AWS::Lambda::Function', {
+        MemorySize: 1024,
+      });
+    });
+
+    test('Lambda uses default values when config properties are explicitly undefined', () => {
+      // Test the || operator fallback branches by creating a config with undefined values
+      const testApp = new cdk.App();
+      const testStack = new cdk.Stack(testApp, 'UndefinedConfigTest', {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+      });
+
+      // Create a config with undefined timeout and memorySize to test || fallbacks
+      const configWithUndefined: PipelineConfig = {
+        prefix: 'test-app-test',
+        team: 'test',
+        project: 'app',
+        environmentSuffix: 'test',
+        runtime: 'nodejs20.x',
+        buildRuntime: 'nodejs20.x',
+        testCoverageThreshold: 80,
+        retentionDays: 30,
+        maxRollbackRetries: 3,
+        lambdaTimeout: undefined, // Explicitly undefined to test || 30 branch
+        lambdaMemorySize: undefined, // Explicitly undefined to test || 512 branch
+        provisionedConcurrency: undefined,
+      };
+
+      // Create minimal infrastructure needed for ApplicationInfrastructure
+      const security = new SecurityInfrastructure(testStack, 'Security', {
+        config: configWithUndefined,
+      });
+
+      const alarmTopic = new sns.Topic(testStack, 'TestAlarmTopic', {
+        topicName: 'test-alarms',
+        masterKey: security.kmsKey,
+      });
+
+      // Instantiate ApplicationInfrastructure with undefined config values
+      const appInfra = new ApplicationInfrastructure(testStack, 'Application', {
+        config: configWithUndefined,
+        kmsKey: security.kmsKey,
+        alarmTopic,
+      });
+
+      const template = Template.fromStack(testStack);
+
+      // Verify Lambda uses default values (30 timeout, 512 memory) when config values are undefined
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Timeout: 30,
+        MemorySize: 512,
+      });
     });
   });
 });

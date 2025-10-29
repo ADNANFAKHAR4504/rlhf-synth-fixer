@@ -1,3 +1,5 @@
+import * as cdk from 'aws-cdk-lib';
+
 export interface PipelineConfig {
   prefix: string;
   team: string;
@@ -9,6 +11,19 @@ export interface PipelineConfig {
   retentionDays: number;
   maxRollbackRetries: number;
   notificationEmail?: string;
+  lambdaMemorySize?: number;
+  lambdaTimeout?: number;
+  provisionedConcurrency?: number;
+}
+
+/**
+ * Determines the removal policy based on environment suffix.
+ * If environmentSuffix includes "prod", returns RETAIN, otherwise DESTROY.
+ */
+export function getRemovalPolicy(environmentSuffix: string): cdk.RemovalPolicy {
+  return environmentSuffix.toLowerCase().includes('prod')
+    ? cdk.RemovalPolicy.RETAIN
+    : cdk.RemovalPolicy.DESTROY;
 }
 
 export function getPipelineConfig(
@@ -17,6 +32,7 @@ export function getPipelineConfig(
   environmentSuffix: string,
   notificationEmail?: string
 ): PipelineConfig {
+  const isProduction = environmentSuffix.toLowerCase().includes('prod');
   return {
     prefix: `${team}-${project}-${environmentSuffix}`,
     team,
@@ -28,5 +44,9 @@ export function getPipelineConfig(
     retentionDays: 30,
     maxRollbackRetries: 3,
     notificationEmail,
+    // Environment-based Lambda configuration
+    lambdaMemorySize: isProduction ? 1024 : 512, // Higher memory = more CPU in prod
+    lambdaTimeout: isProduction ? 60 : 30, // Longer timeout for prod
+    provisionedConcurrency: isProduction ? 10 : undefined, // Provisioned concurrency for prod
   };
 }

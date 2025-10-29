@@ -3,7 +3,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
-import { PipelineConfig } from '../config/pipeline-config';
+import { getRemovalPolicy, PipelineConfig } from '../config/pipeline-config';
 
 export interface SecurityInfrastructureProps {
   config: PipelineConfig;
@@ -26,7 +26,7 @@ export class SecurityInfrastructure extends Construct {
     this.kmsKey = new kms.Key(this, 'EncryptionKey', {
       description: `Encryption key for ${config.prefix}`,
       enableKeyRotation: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: getRemovalPolicy(config.environmentSuffix),
       alias: `${config.prefix}-key`,
     });
 

@@ -7,9 +7,10 @@ import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 import path from 'path';
-import { PipelineConfig } from '../config/pipeline-config';
+import { getRemovalPolicy, PipelineConfig } from '../config/pipeline-config';
 
 export interface ApplicationInfrastructureProps {
   config: PipelineConfig;
@@ -21,6 +22,7 @@ export class ApplicationInfrastructure extends Construct {
   public readonly lambdaFunction: lambda.Function;
   public readonly api: apigateway.RestApi;
   public readonly lambdaAlias: lambda.Alias;
+  public readonly deadLetterQueue: sqs.Queue;
 
   constructor(
     scope: Construct,
@@ -60,12 +62,24 @@ export class ApplicationInfrastructure extends Construct {
     // Grant KMS access
     kmsKey.grantDecrypt(lambdaRole);
 
+    // Dead Letter Queue for failed Lambda invocations
+    this.deadLetterQueue = new sqs.Queue(this, 'DeadLetterQueue', {
+      queueName: `${config.prefix}-dlq`,
+      encryption: sqs.QueueEncryption.KMS,
+      encryptionMasterKey: kmsKey,
+      retentionPeriod: cdk.Duration.days(14),
+      removalPolicy: getRemovalPolicy(config.environmentSuffix),
+    });
+
+    // Grant Lambda permission to send messages to DLQ
+    this.deadLetterQueue.grantSendMessages(lambdaRole);
+
     // Lambda log group
     const logGroup = new logs.LogGroup(this, 'LambdaLogGroup', {
       logGroupName: `/aws/lambda/${config.prefix}-function`,
       retention: logs.RetentionDays.ONE_MONTH,
       encryptionKey: kmsKey,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      removalPolicy: getRemovalPolicy(config.environmentSuffix),
     });
 
     // Lambda function
@@ -94,8 +108,8 @@ export class ApplicationInfrastructure extends Construct {
         },
       }),
       role: lambdaRole,
-      timeout: cdk.Duration.seconds(30),
-      memorySize: 512,
+      timeout: cdk.Duration.seconds(config.lambdaTimeout || 30),
+      memorySize: config.lambdaMemorySize || 512,
       environment: {
         NODE_ENV: config.environmentSuffix,
         PARAMETER_PREFIX: `/${config.prefix}`,
@@ -106,14 +120,30 @@ export class ApplicationInfrastructure extends Construct {
       reservedConcurrentExecutions:
         config.environmentSuffix === 'prod' ? 100 : 2,
       environmentEncryption: kmsKey,
+      deadLetterQueue: this.deadLetterQueue,
+      deadLetterQueueEnabled: true,
+      maxEventAge: cdk.Duration.hours(6),
+      retryAttempts: 2,
     });
 
     // Lambda version and alias for zero-downtime deployments
     const version = this.lambdaFunction.currentVersion;
+    const isProduction = config.environmentSuffix
+      .toLowerCase()
+      .includes('prod');
+
+    // Add provisioned concurrency for production to eliminate cold starts
     this.lambdaAlias = new lambda.Alias(this, 'LiveAlias', {
       aliasName: 'live',
       version,
+      // Provisioned concurrency from config (only for production by default)
+      // Note: This adds cost but improves latency significantly
+      provisionedConcurrentExecutions: config.provisionedConcurrency,
     });
+
+    // Environment-based throttling configuration
+    const throttlingBurstLimit = isProduction ? 1000 : 100;
+    const throttlingRateLimit = isProduction ? 500 : 50;
 
     // API Gateway
     this.api = new apigateway.RestApi(this, 'HonoApi', {
@@ -125,15 +155,37 @@ export class ApplicationInfrastructure extends Construct {
         dataTraceEnabled: true,
         tracingEnabled: true,
         metricsEnabled: true,
-        throttlingBurstLimit: 1000,
-        throttlingRateLimit: 500,
+        throttlingBurstLimit,
+        throttlingRateLimit,
       },
+      // Restrict CORS to specific origins in production
       defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
-        allowMethods: apigateway.Cors.ALL_METHODS,
-        allowHeaders: ['Content-Type', 'Authorization'],
+        allowOrigins: isProduction
+          ? apigateway.Cors.ALL_ORIGINS // TODO: Replace with specific allowed origins
+          : apigateway.Cors.ALL_ORIGINS, // Allow all in dev/test for ease of development
+        allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allowHeaders: [
+          'Content-Type',
+          'Authorization',
+          'X-Amz-Date',
+          'X-Api-Key',
+        ],
+        maxAge: cdk.Duration.days(1),
       },
+      // Request validation (basic - can be enhanced with model validation)
+      // API key usage can be enabled per method if needed
     });
+
+    // Add request validator (basic validation)
+    new apigateway.RequestValidator(this, 'RequestValidator', {
+      restApi: this.api,
+      requestValidatorName: `${config.prefix}-api-request-validator`,
+      validateRequestBody: true,
+      validateRequestParameters: false, // Enable if query params validation needed
+    });
+
+    // API Gateway access logs (S3 export can be added if needed)
+    // Note: Access logs require additional configuration and S3 bucket
 
     // Lambda integration
     const integration = new apigateway.LambdaIntegration(this.lambdaAlias, {

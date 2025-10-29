@@ -5,7 +5,10 @@ import { Construct } from 'constructs';
 
 import { getPipelineConfig } from './config/pipeline-config';
 import { ApplicationInfrastructure } from './constructs/application-infrastructure';
-import { MonitoringInfrastructure } from './constructs/monitoring-infrastructure';
+import {
+  MonitoringInfrastructure,
+  createMonitoringTopics,
+} from './constructs/monitoring-infrastructure';
 import { PipelineInfrastructure } from './constructs/pipeline-infrastructure';
 import { SecurityInfrastructure } from './constructs/security-infrastructure';
 
@@ -46,27 +49,41 @@ export class TapStack extends cdk.Stack {
       config,
     });
 
-    // Monitoring infrastructure (CloudWatch, SNS)
-    const monitoring = new MonitoringInfrastructure(this, 'Monitoring', {
+    // Create SNS topics early - needed by application and pipeline infrastructure
+    const { alarmTopic, pipelineTopic } = createMonitoringTopics(
+      this,
+      'Monitoring',
       config,
-      kmsKey: security.kmsKey,
-    });
+      security.kmsKey
+    );
 
     // Application infrastructure (Lambda, API Gateway)
     const application = new ApplicationInfrastructure(this, 'Application', {
       config,
       kmsKey: security.kmsKey,
-      alarmTopic: monitoring.alarmTopic,
+      alarmTopic,
     });
 
     // CI/CD Pipeline
     const pipeline = new PipelineInfrastructure(this, 'Pipeline', {
       config,
       kmsKey: security.kmsKey,
-      notificationTopic: monitoring.pipelineTopic,
+      notificationTopic: pipelineTopic,
       lambdaFunction: application.lambdaFunction,
       apiGateway: application.api,
-      alarmTopic: monitoring.alarmTopic,
+      alarmTopic,
+    });
+
+    // Create comprehensive monitoring infrastructure with all resources at the end
+    // This creates the dashboard and all alarms in one place
+    const monitoring = new MonitoringInfrastructure(this, 'Monitoring', {
+      config,
+      kmsKey: security.kmsKey,
+      alarmTopic,
+      pipelineTopic,
+      lambdaFunctionArn: application.lambdaFunction.functionArn,
+      apiGatewayId: application.api.restApiId,
+      pipelineName: pipeline.pipeline.pipelineName,
     });
 
     // Stack outputs
