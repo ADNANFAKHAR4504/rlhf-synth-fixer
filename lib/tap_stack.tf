@@ -1767,3 +1767,13 @@ output "rds_event_subscription_secondary_id" {
   description = "Secondary RDS event subscription ID"
   value       = aws_db_event_subscription.secondary.id
 }
+
+output "aws_primary_region"{
+  description = "aws primary region"
+  value       = var.primary_region
+}
+
+output "aws_secondary_region"{
+  description = "aws secondary region"
+  value       = var.secondary_region
+}
