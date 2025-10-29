@@ -702,7 +702,7 @@ describe('Multi-Region VPC Infrastructure Integration Tests', () => {
 
       // Verify ARN formats
       expect(outputs.vpc_arn).toMatch(/^arn:aws:ec2:[^:]+:[^:]+:vpc\/vpc-[a-f0-9]+$/);
-      expect(outputs.internet_gateway_arn).toMatch(/^arn:aws:iam::[^:]+:internet-gateway\/igw-[a-f0-9]+$/);
+      expect(outputs.internet_gateway_arn).toMatch(/^arn:aws:ec2:[^:]+:[^:]+:internet-gateway\/igw-[a-f0-9]+$/);
 
       // Verify resource ID formats
       expect(outputs.vpc_id).toMatch(/^vpc-[a-f0-9]+$/);
