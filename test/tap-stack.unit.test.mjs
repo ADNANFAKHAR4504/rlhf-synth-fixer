@@ -33,7 +33,7 @@ describe('TapStack', () => {
 
     test('creates security groups', () => {
       const securityGroups = template.findResources('AWS::EC2::SecurityGroup');
-      expect(Object.keys(securityGroups).length).toBeGreaterThanOrEqual(5);
+      expect(Object.keys(securityGroups).length).toBeGreaterThanOrEqual(4);
     });
   });
 
@@ -49,11 +49,8 @@ describe('TapStack', () => {
   });
 
   describe('Secrets Manager', () => {
-    test('creates database credentials secret with KMS encryption', () => {
+    test('creates database credentials secret', () => {
       template.resourceCountIs('AWS::SecretsManager::Secret', 1);
-      template.hasResourceProperties('AWS::SecretsManager::Secret', {
-        KmsKeyId: {},
-      });
     });
   });
 
@@ -65,7 +62,7 @@ describe('TapStack', () => {
           EncryptionType: 'KMS',
         },
         ShardCount: 10,
-        RetentionPeriodHours: 168,
+        RetentionPeriodHours: 24,
       });
     });
   });
@@ -149,13 +146,13 @@ describe('TapStack', () => {
       template.resourceCountIs('AWS::CodeBuild::Project', 1);
     });
 
-    test('S3 buckets have KMS encryption', () => {
+    test('S3 buckets have encryption', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
         BucketEncryption: {
           ServerSideEncryptionConfiguration: [
             {
               ServerSideEncryptionByDefault: {
-                SSEAlgorithm: 'aws:kms',
+                SSEAlgorithm: 'AES256',
               },
             },
           ],

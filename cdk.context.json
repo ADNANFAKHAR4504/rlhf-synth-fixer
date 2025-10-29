@@ -64,10 +64,5 @@
     "us-east-2a",
     "us-east-2b",
     "us-east-2c"
-  ],
-  "availability-zones:account=342597974367:region=ca-central-1": [
-    "ca-central-1a",
-    "ca-central-1b",
-    "ca-central-1d"
   ]
 }
