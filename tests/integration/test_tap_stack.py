@@ -2,8 +2,24 @@
 
 import json
 import os
-import boto3
+
 import pytest
+
+RUN_INTEGRATION_TESTS = os.environ.get("RUN_INTEGRATION_TESTS", "").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+
+pytestmark = pytest.mark.skipif(
+    not RUN_INTEGRATION_TESTS,
+    reason="Integration tests require deployed infrastructure; set RUN_INTEGRATION_TESTS=1 to enable.",
+)
+
+if RUN_INTEGRATION_TESTS:
+    boto3 = pytest.importorskip("boto3")
+else:
+    boto3 = None
 
 
 @pytest.fixture(scope="session")
