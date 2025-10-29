@@ -13,6 +13,7 @@ variable "aws_region" {
 variable "environment" {
   description = "Environment name (e.g., dev, staging, prod)"
   type        = string
+  default     = "dev"
   validation {
     condition     = contains(["dev", "staging", "prod"], var.environment)
     error_message = "Environment must be dev, staging, or prod."
@@ -22,6 +23,7 @@ variable "environment" {
 variable "project_name" {
   description = "Project name for resource naming"
   type        = string
+  default     = "security-framework"
   validation {
     condition     = can(regex("^[a-z][a-z0-9-]{2,28}[a-z0-9]$", var.project_name))
     error_message = "Project name must be lowercase alphanumeric with hyphens, 4-30 characters."
@@ -55,6 +57,7 @@ variable "prohibited_instance_types" {
 variable "security_team_email" {
   description = "Email address for security alerts"
   type        = string
+  default     = "security-alerts@example.com"
   validation {
     condition     = can(regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", var.security_team_email))
     error_message = "Must be a valid email address."
@@ -74,6 +77,7 @@ variable "audit_account_ids" {
 variable "audit_external_id" {
   description = "External ID for secure cross-account audit role assumption"
   type        = string
+  default     = "change-me-external-id-minimum-32-characters-required-for-security"
   sensitive   = true
   validation {
     condition     = length(var.audit_external_id) >= 32
