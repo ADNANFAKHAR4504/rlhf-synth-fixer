@@ -25,8 +25,5 @@
     "Amazon SNS",
     "AWS IAM"
   ],
-  "region": "us-east-1",
-  "training_quality": 10,
-  "review_notes": "Excellent training value: 12 Category A security/architecture fixes, multi-service event-driven architecture with HA",
-  "deployment_attempts": 1
+  "training_quality": 10
 }
