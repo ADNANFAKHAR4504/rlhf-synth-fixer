@@ -61,19 +61,29 @@ const ssmClient = new SSMClient({ region });
 // Helper function to wait for SSM command completion
 async function waitForCommand(commandId: string, instanceId: string, maxAttempts = 30): Promise<any> {
   for (let i = 0; i < maxAttempts; i++) {
-    const response = await ssmClient.send(new GetCommandInvocationCommand({
-      CommandId: commandId,
-      InstanceId: instanceId
-    }));
+    try {
+      const response = await ssmClient.send(new GetCommandInvocationCommand({
+        CommandId: commandId,
+        InstanceId: instanceId
+      }));
 
-    if (response.Status === 'Success') {
-      return response;
-    } else if (response.Status === 'Failed' || response.Status === 'Cancelled' || response.Status === 'TimedOut') {
-      throw new Error(`Command failed with status: ${response.Status}`);
+      if (response.Status === 'Success') {
+        return response;
+      } else if (response.Status === 'Failed' || response.Status === 'Cancelled' || response.Status === 'TimedOut') {
+        throw new Error(`Command failed with status: ${response.Status}`);
+      }
+
+      // Wait 2 seconds before checking again
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    } catch (error: any) {
+      // InvocationDoesNotExist means the command invocation isn't ready yet
+      if (error.name === 'InvocationDoesNotExist') {
+        // Wait 2 seconds and retry
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        continue;
+      }
+      throw error;
     }
-
-    // Wait 2 seconds before checking again
-    await new Promise(resolve => setTimeout(resolve, 2000));
   }
   throw new Error('Command timed out');
 }
