@@ -1,41 +1,40 @@
-import * as fs from 'fs';
 import {
-  KinesisClient,
-  DescribeStreamCommand,
-  PutRecordCommand,
-} from '@aws-sdk/client-kinesis';
+  APIGatewayClient,
+  GetRestApisCommand
+} from '@aws-sdk/client-api-gateway';
 import {
-  ECSClient,
   DescribeClustersCommand,
   DescribeServicesCommand,
+  ECSClient,
   ListServicesCommand,
 } from '@aws-sdk/client-ecs';
 import {
-  RDSClient,
-  DescribeDBClustersCommand,
-  DescribeDBInstancesCommand,
-} from '@aws-sdk/client-rds';
-import {
-  ElastiCacheClient,
   DescribeReplicationGroupsCommand,
+  ElastiCacheClient,
 } from '@aws-sdk/client-elasticache';
 import {
-  SecretsManagerClient,
-  GetSecretValueCommand,
-} from '@aws-sdk/client-secrets-manager';
+  DescribeStreamCommand,
+  KinesisClient,
+  PutRecordCommand,
+} from '@aws-sdk/client-kinesis';
+import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
 import {
-  APIGatewayClient,
-  GetRestApisCommand,
-  TestInvokeMethodCommand,
-} from '@aws-sdk/client-api-gateway';
-import { KMSClient, DescribeKeyCommand } from '@aws-sdk/client-kms';
+  DescribeDBClustersCommand,
+  DescribeDBInstancesCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
+  GetSecretValueCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
+import * as fs from 'fs';
 
 // Load stack outputs
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
-const region = 'eu-central-1';
+const region = 'us-east-1';
 
 // Initialize AWS clients
 const kinesisClient = new KinesisClient({ region });
