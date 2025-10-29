@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "TapStack.yml — Hub-and-spoke network with AWS Transit Gateway in ap-southeast-2. Hub VPC (10.0.0.0/16), 3 spoke VPCs (10.1/10.2/10.3), centralized egress via hub NAT, SSM interface endpoints in all VPCs, Route53 private hosted zone, VPC Flow Logs (7 days), TGW route tables that prevent spoke-to-spoke. All subnets are /24. Resource names include ENVIRONMENT_SUFFIX. Uses 2 AZs (A,B) to satisfy TransitGatewayVpcAttachment.SubnetIds<=2 and keep linter clean.\n",
+    "Description": "TapStack.yml — Hub-and-spoke network with AWS Transit Gateway. Hub VPC (10.0.0.0/16), 3 spoke VPCs (10.1/10.2/10.3), centralized egress via hub NAT, SSM interface endpoints in all VPCs, Route53 private hosted zone, VPC Flow Logs (7 days), TGW route tables that prevent spoke-to-spoke. All subnets are /24. Resource names include ENVIRONMENT_SUFFIX. Uses 2 AZs (A,B) to satisfy TransitGatewayVpcAttachment.SubnetIds<=2 and keep linter clean.\n",
     "Parameters": {
         "EnvironmentName": {
             "Type": "String",
@@ -31,14 +31,6 @@
             "Description": "Route53 private hosted zone name (must end with a dot)",
             "AllowedPattern": "^[a-z0-9.-]+\\.$",
             "Default": "internal.local."
-        },
-        "Region": {
-            "Type": "String",
-            "Description": "deployment region (fixed to ap-southeast-2)",
-            "AllowedValues": [
-                "ap-southeast-2"
-            ],
-            "Default": "ap-southeast-2"
         }
     },
     "Mappings": {
@@ -269,7 +261,7 @@
                         0,
                         {
                             "Fn::GetAZs": {
-                                "Ref": "Region"
+                                "Ref": "AWS::Region"
                             }
                         }
                     ]
@@ -325,7 +317,7 @@
                         1,
                         {
                             "Fn::GetAZs": {
-                                "Ref": "Region"
+                                "Ref": "AWS::Region"
                             }
                         }
                     ]
@@ -381,7 +373,7 @@
                         0,
                         {
                             "Fn::GetAZs": {
-                                "Ref": "Region"
+                                "Ref": "AWS::Region"
                             }
                         }
                     ]
@@ -436,7 +428,7 @@
                         1,
                         {
                             "Fn::GetAZs": {
-                                "Ref": "Region"
+                                "Ref": "AWS::Region"
                             }
                         }
                     ]
@@ -938,7 +930,7 @@
                         0,
                         {
                             "Fn::GetAZs": {
-                                "Ref": "Region"
+                                "Ref": "AWS::Region"
                             }
                         }
                     ]
@@ -993,7 +985,7 @@
                         1,
                         {
                             "Fn::GetAZs": {
-                                "Ref": "Region"
+                                "Ref": "AWS::Region"
                             }
                         }
                     ]
@@ -1048,7 +1040,7 @@
                         0,
                         {
                             "Fn::GetAZs": {
-                                "Ref": "Region"
+                                "Ref": "AWS::Region"
                             }
                         }
                     ]
@@ -1103,7 +1095,7 @@
                         1,
                         {
                             "Fn::GetAZs": {
-                                "Ref": "Region"
+                                "Ref": "AWS::Region"
                             }
                         }
                     ]
@@ -1158,7 +1150,7 @@
                         0,
                         {
                             "Fn::GetAZs": {
-                                "Ref": "Region"
+                                "Ref": "AWS::Region"
                             }
                         }
                     ]
@@ -1213,7 +1205,7 @@
                         1,
                         {
                             "Fn::GetAZs": {
-                                "Ref": "Region"
+                                "Ref": "AWS::Region"
                             }
                         }
                     ]
@@ -2295,7 +2287,7 @@
                     "Ref": "HubVpc"
                 },
                 "ServiceName": {
-                    "Fn::Sub": "com.amazonaws.${Region}.ssm"
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ssm"
                 },
                 "PrivateDnsEnabled": true,
                 "SubnetIds": [
@@ -2347,7 +2339,7 @@
                     "Ref": "HubVpc"
                 },
                 "ServiceName": {
-                    "Fn::Sub": "com.amazonaws.${Region}.ssmmessages"
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ssmmessages"
                 },
                 "PrivateDnsEnabled": true,
                 "SubnetIds": [
@@ -2399,7 +2391,7 @@
                     "Ref": "HubVpc"
                 },
                 "ServiceName": {
-                    "Fn::Sub": "com.amazonaws.${Region}.ec2messages"
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ec2messages"
                 },
                 "PrivateDnsEnabled": true,
                 "SubnetIds": [
@@ -2451,7 +2443,7 @@
                     "Ref": "Spoke1Vpc"
                 },
                 "ServiceName": {
-                    "Fn::Sub": "com.amazonaws.${Region}.ssm"
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ssm"
                 },
                 "PrivateDnsEnabled": true,
                 "SubnetIds": [
@@ -2503,7 +2495,7 @@
                     "Ref": "Spoke1Vpc"
                 },
                 "ServiceName": {
-                    "Fn::Sub": "com.amazonaws.${Region}.ssmmessages"
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ssmmessages"
                 },
                 "PrivateDnsEnabled": true,
                 "SubnetIds": [
@@ -2555,7 +2547,7 @@
                     "Ref": "Spoke1Vpc"
                 },
                 "ServiceName": {
-                    "Fn::Sub": "com.amazonaws.${Region}.ec2messages"
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ec2messages"
                 },
                 "PrivateDnsEnabled": true,
                 "SubnetIds": [
@@ -2607,7 +2599,7 @@
                     "Ref": "Spoke2Vpc"
                 },
                 "ServiceName": {
-                    "Fn::Sub": "com.amazonaws.${Region}.ssm"
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ssm"
                 },
                 "PrivateDnsEnabled": true,
                 "SubnetIds": [
@@ -2659,7 +2651,7 @@
                     "Ref": "Spoke2Vpc"
                 },
                 "ServiceName": {
-                    "Fn::Sub": "com.amazonaws.${Region}.ssmmessages"
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ssmmessages"
                 },
                 "PrivateDnsEnabled": true,
                 "SubnetIds": [
@@ -2711,7 +2703,7 @@
                     "Ref": "Spoke2Vpc"
                 },
                 "ServiceName": {
-                    "Fn::Sub": "com.amazonaws.${Region}.ec2messages"
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ec2messages"
                 },
                 "PrivateDnsEnabled": true,
                 "SubnetIds": [
@@ -2763,7 +2755,7 @@
                     "Ref": "Spoke3Vpc"
                 },
                 "ServiceName": {
-                    "Fn::Sub": "com.amazonaws.${Region}.ssm"
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ssm"
                 },
                 "PrivateDnsEnabled": true,
                 "SubnetIds": [
@@ -2815,7 +2807,7 @@
                     "Ref": "Spoke3Vpc"
                 },
                 "ServiceName": {
-                    "Fn::Sub": "com.amazonaws.${Region}.ssmmessages"
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ssmmessages"
                 },
                 "PrivateDnsEnabled": true,
                 "SubnetIds": [
@@ -2867,7 +2859,7 @@
                     "Ref": "Spoke3Vpc"
                 },
                 "ServiceName": {
-                    "Fn::Sub": "com.amazonaws.${Region}.ec2messages"
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ec2messages"
                 },
                 "PrivateDnsEnabled": true,
                 "SubnetIds": [
@@ -2923,7 +2915,7 @@
                             "Ref": "HubVpc"
                         },
                         "VPCRegion": {
-                            "Ref": "Region"
+                            "Ref": "AWS::Region"
                         }
                     },
                     {
@@ -2931,7 +2923,7 @@
                             "Ref": "Spoke1Vpc"
                         },
                         "VPCRegion": {
-                            "Ref": "Region"
+                            "Ref": "AWS::Region"
                         }
                     },
                     {
@@ -2939,7 +2931,7 @@
                             "Ref": "Spoke2Vpc"
                         },
                         "VPCRegion": {
-                            "Ref": "Region"
+                            "Ref": "AWS::Region"
                         }
                     },
                     {
@@ -2947,7 +2939,7 @@
                             "Ref": "Spoke3Vpc"
                         },
                         "VPCRegion": {
-                            "Ref": "Region"
+                            "Ref": "AWS::Region"
                         }
                     }
                 ],

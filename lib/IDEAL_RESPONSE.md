@@ -66,7 +66,7 @@ This network stack provisions a production-grade, hub-and-spoke topology in ap-s
 
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  TapStack.yml — Hub-and-spoke network with AWS Transit Gateway in ap-southeast-2.
+  TapStack.yml — Hub-and-spoke network with AWS Transit Gateway.
   Hub VPC (10.0.0.0/16), 3 spoke VPCs (10.1/10.2/10.3), centralized egress via hub NAT,
   SSM interface endpoints in all VPCs, Route53 private hosted zone, VPC Flow Logs (7 days),
   TGW route tables that prevent spoke-to-spoke. All subnets are /24. Resource names include ENVIRONMENT_SUFFIX.
@@ -98,11 +98,6 @@ Parameters:
     Description: Route53 private hosted zone name (must end with a dot)
     AllowedPattern: '^[a-z0-9.-]+\.$'
     Default: internal.local.
-  Region:
-    Type: String
-    Description: deployment region (fixed to ap-southeast-2)
-    AllowedValues: [ap-southeast-2]
-    Default: ap-southeast-2
 
 Mappings:
   Cidrs:
@@ -220,7 +215,7 @@ Resources:
         Fn::Select:
           - 0
           - Fn::GetAZs:
-              Ref: Region
+              Ref: AWS::Region
       CidrBlock: !FindInMap [Cidrs, Hub, PubA]
       MapPublicIpOnLaunch: true
       Tags:
@@ -243,7 +238,7 @@ Resources:
         Fn::Select:
           - 1
           - Fn::GetAZs:
-              Ref: Region
+              Ref: AWS::Region
       CidrBlock: !FindInMap [Cidrs, Hub, PubB]
       MapPublicIpOnLaunch: true
       Tags:
@@ -266,7 +261,7 @@ Resources:
         Fn::Select:
           - 0
           - Fn::GetAZs:
-              Ref: Region
+              Ref: AWS::Region
       CidrBlock: !FindInMap [Cidrs, Hub, PrvA]
       Tags:
         - Key: Name
@@ -288,7 +283,7 @@ Resources:
         Fn::Select:
           - 1
           - Fn::GetAZs:
-              Ref: Region
+              Ref: AWS::Region
       CidrBlock: !FindInMap [Cidrs, Hub, PrvB]
       Tags:
         - Key: Name
@@ -505,7 +500,7 @@ Resources:
         Fn::Select:
           - 0
           - Fn::GetAZs:
-              Ref: Region
+              Ref: AWS::Region
       CidrBlock: !FindInMap [Cidrs, Spoke1, PrvA]
       Tags:
         - Key: Name
@@ -527,7 +522,7 @@ Resources:
         Fn::Select:
           - 1
           - Fn::GetAZs:
-              Ref: Region
+              Ref: AWS::Region
       CidrBlock: !FindInMap [Cidrs, Spoke1, PrvB]
       Tags:
         - Key: Name
@@ -549,7 +544,7 @@ Resources:
         Fn::Select:
           - 0
           - Fn::GetAZs:
-              Ref: Region
+              Ref: AWS::Region
       CidrBlock: !FindInMap [Cidrs, Spoke2, PrvA]
       Tags:
         - Key: Name
@@ -571,7 +566,7 @@ Resources:
         Fn::Select:
           - 1
           - Fn::GetAZs:
-              Ref: Region
+              Ref: AWS::Region
       CidrBlock: !FindInMap [Cidrs, Spoke2, PrvB]
       Tags:
         - Key: Name
@@ -593,7 +588,7 @@ Resources:
         Fn::Select:
           - 0
           - Fn::GetAZs:
-              Ref: Region
+              Ref: AWS::Region
       CidrBlock: !FindInMap [Cidrs, Spoke3, PrvA]
       Tags:
         - Key: Name
@@ -615,7 +610,7 @@ Resources:
         Fn::Select:
           - 1
           - Fn::GetAZs:
-              Ref: Region
+              Ref: AWS::Region
       CidrBlock: !FindInMap [Cidrs, Spoke3, PrvB]
       Tags:
         - Key: Name
@@ -1090,7 +1085,7 @@ Resources:
     Properties:
       VpcEndpointType: Interface
       VpcId: !Ref HubVpc
-      ServiceName: !Sub 'com.amazonaws.${Region}.ssm'
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssm'
       PrivateDnsEnabled: true
       SubnetIds: [!Ref HubPrvA, !Ref HubPrvB]
       SecurityGroupIds: [!Ref HubEndpointSg]
@@ -1109,7 +1104,7 @@ Resources:
     Properties:
       VpcEndpointType: Interface
       VpcId: !Ref HubVpc
-      ServiceName: !Sub 'com.amazonaws.${Region}.ssmmessages'
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssmmessages'
       PrivateDnsEnabled: true
       SubnetIds: [!Ref HubPrvA, !Ref HubPrvB]
       SecurityGroupIds: [!Ref HubEndpointSg]
@@ -1128,7 +1123,7 @@ Resources:
     Properties:
       VpcEndpointType: Interface
       VpcId: !Ref HubVpc
-      ServiceName: !Sub 'com.amazonaws.${Region}.ec2messages'
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ec2messages'
       PrivateDnsEnabled: true
       SubnetIds: [!Ref HubPrvA, !Ref HubPrvB]
       SecurityGroupIds: [!Ref HubEndpointSg]
@@ -1147,7 +1142,7 @@ Resources:
     Properties:
       VpcEndpointType: Interface
       VpcId: !Ref Spoke1Vpc
-      ServiceName: !Sub 'com.amazonaws.${Region}.ssm'
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssm'
       PrivateDnsEnabled: true
       SubnetIds: [!Ref Spoke1PrvA, !Ref Spoke1PrvB]
       SecurityGroupIds: [!Ref Spoke1EndpointSg]
@@ -1166,7 +1161,7 @@ Resources:
     Properties:
       VpcEndpointType: Interface
       VpcId: !Ref Spoke1Vpc
-      ServiceName: !Sub 'com.amazonaws.${Region}.ssmmessages'
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssmmessages'
       PrivateDnsEnabled: true
       SubnetIds: [!Ref Spoke1PrvA, !Ref Spoke1PrvB]
       SecurityGroupIds: [!Ref Spoke1EndpointSg]
@@ -1185,7 +1180,7 @@ Resources:
     Properties:
       VpcEndpointType: Interface
       VpcId: !Ref Spoke1Vpc
-      ServiceName: !Sub 'com.amazonaws.${Region}.ec2messages'
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ec2messages'
       PrivateDnsEnabled: true
       SubnetIds: [!Ref Spoke1PrvA, !Ref Spoke1PrvB]
       SecurityGroupIds: [!Ref Spoke1EndpointSg]
@@ -1204,7 +1199,7 @@ Resources:
     Properties:
       VpcEndpointType: Interface
       VpcId: !Ref Spoke2Vpc
-      ServiceName: !Sub 'com.amazonaws.${Region}.ssm'
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssm'
       PrivateDnsEnabled: true
       SubnetIds: [!Ref Spoke2PrvA, !Ref Spoke2PrvB]
       SecurityGroupIds: [!Ref Spoke2EndpointSg]
@@ -1223,7 +1218,7 @@ Resources:
     Properties:
       VpcEndpointType: Interface
       VpcId: !Ref Spoke2Vpc
-      ServiceName: !Sub 'com.amazonaws.${Region}.ssmmessages'
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssmmessages'
       PrivateDnsEnabled: true
       SubnetIds: [!Ref Spoke2PrvA, !Ref Spoke2PrvB]
       SecurityGroupIds: [!Ref Spoke2EndpointSg]
@@ -1242,7 +1237,7 @@ Resources:
     Properties:
       VpcEndpointType: Interface
       VpcId: !Ref Spoke2Vpc
-      ServiceName: !Sub 'com.amazonaws.${Region}.ec2messages'
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ec2messages'
       PrivateDnsEnabled: true
       SubnetIds: [!Ref Spoke2PrvA, !Ref Spoke2PrvB]
       SecurityGroupIds: [!Ref Spoke2EndpointSg]
@@ -1261,7 +1256,7 @@ Resources:
     Properties:
       VpcEndpointType: Interface
       VpcId: !Ref Spoke3Vpc
-      ServiceName: !Sub 'com.amazonaws.${Region}.ssm'
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssm'
       PrivateDnsEnabled: true
       SubnetIds: [!Ref Spoke3PrvA, !Ref Spoke3PrvB]
       SecurityGroupIds: [!Ref Spoke3EndpointSg]
@@ -1280,7 +1275,7 @@ Resources:
     Properties:
       VpcEndpointType: Interface
       VpcId: !Ref Spoke3Vpc
-      ServiceName: !Sub 'com.amazonaws.${Region}.ssmmessages'
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssmmessages'
       PrivateDnsEnabled: true
       SubnetIds: [!Ref Spoke3PrvA, !Ref Spoke3PrvB]
       SecurityGroupIds: [!Ref Spoke3EndpointSg]
@@ -1299,7 +1294,7 @@ Resources:
     Properties:
       VpcEndpointType: Interface
       VpcId: !Ref Spoke3Vpc
-      ServiceName: !Sub 'com.amazonaws.${Region}.ec2messages'
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ec2messages'
       PrivateDnsEnabled: true
       SubnetIds: [!Ref Spoke3PrvA, !Ref Spoke3PrvB]
       SecurityGroupIds: [!Ref Spoke3EndpointSg]
@@ -1320,13 +1315,13 @@ Resources:
       Name: !Ref PrivateHostedZoneName
       VPCs:
         - VPCId: !Ref HubVpc
-          VPCRegion: !Ref Region
+          VPCRegion: !Ref AWS::Region
         - VPCId: !Ref Spoke1Vpc
-          VPCRegion: !Ref Region
+          VPCRegion: !Ref AWS::Region
         - VPCId: !Ref Spoke2Vpc
-          VPCRegion: !Ref Region
+          VPCRegion: !Ref AWS::Region
         - VPCId: !Ref Spoke3Vpc
-          VPCRegion: !Ref Region
+          VPCRegion: !Ref AWS::Region
       HostedZoneConfig:
         Comment: !Sub 'private-hosted-zone-${EnvironmentSuffix}'
       HostedZoneTags:
