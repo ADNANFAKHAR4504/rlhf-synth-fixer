@@ -102,6 +102,7 @@ variable "environments" {
 variable "approval_email" {
   description = "Email address for production approval notifications"
   type        = string
+  default     = "devops-approvals@example.com"
 
   validation {
     condition     = can(regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", var.approval_email))
@@ -112,6 +113,7 @@ variable "approval_email" {
 variable "notification_email" {
   description = "Email address for pipeline notifications"
   type        = string
+  default     = "devops-notifications@example.com"
 
   validation {
     condition     = can(regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", var.notification_email))

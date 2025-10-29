@@ -69,6 +69,14 @@ describe("Terraform CI/CD Pipeline Infrastructure - Unit Tests", () => {
       expect(terraformCode).toMatch(/variable\s+"approval_email"[\s\S]*?validation[\s\S]*?regex.*@/);
     });
 
+    test("approval_email has default value", () => {
+      expect(terraformCode).toMatch(/variable\s+"approval_email"[\s\S]*?default\s*=\s*"[^"]+@[^"]+"/);
+    });
+
+    test("notification_email has default value", () => {
+      expect(terraformCode).toMatch(/variable\s+"notification_email"[\s\S]*?default\s*=\s*"[^"]+@[^"]+"/);
+    });
+
     test("environment_suffix has default empty string", () => {
       expect(terraformCode).toMatch(/variable\s+"environment_suffix"[\s\S]*?default\s*=\s*""/);
     });
