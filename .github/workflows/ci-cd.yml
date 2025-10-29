@@ -541,11 +541,13 @@ jobs:
             metadata.json file is updated with the fields stated there. If the metadata.json file after the review does not contain the fields:
             - training_quality
             - aws_services
-            then add a github comment indicating the issue and fail the job by exiting with code 1.
+            then add a github comment indicating the issue
 
             This validation is mandatory and must be completed before any other review activities.
 
-            Now follow the instructions in .claude/agents/iac-code-reviewer.md
+            Now follow the instructions in .claude/agents/iac-code-reviewer.md 
+
+            once review is done and you are satisfied with the results, then fail the job by exiting with code 1
 
       - name: Upload updated metadata.json
         uses: actions/upload-artifact@v4
