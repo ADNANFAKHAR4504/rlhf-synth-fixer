@@ -1,6 +1,6 @@
 # PCI-DSS Compliant Database Infrastructure
 
-This CloudFormation template creates a secure, PCI-DSS compliant database infrastructure for financial transaction processing in the eu-central-2 region.
+This CloudFormation template creates a secure, PCI-DSS compliant database infrastructure for financial transaction processing in the us-east-1 region.
 
 ## Infrastructure Overview
 
@@ -17,7 +17,7 @@ The solution provides:
 
 This IDEAL_RESPONSE fixes the following critical issues:
 
-1. **MySQL Engine Version**: Changed from 8.0.35 (not available in eu-central-2) to 8.0.43
+1. **MySQL Engine Version**: Changed from 8.0.35 (not available in us-east-1) to 8.0.43
 2. **Redis Secret Resolution**: Moved RedisAuthSecret definition before RedisCluster to fix dependency ordering
 3. **Transit Encryption**: Disabled TransitEncryptionEnabled to avoid AuthToken complexity
 4. **Test Coverage**: Added comprehensive unit tests (69 tests) and integration tests (35 tests)
@@ -472,7 +472,7 @@ Resources:
       DBInstanceIdentifier: !Sub rds-mysql-${EnvironmentSuffix}
       DBName: !Ref DBName
       Engine: mysql
-      EngineVersion: 8.0.43  # FIXED: Changed from 8.0.35 (not available in eu-central-2)
+      EngineVersion: 8.0.43  # FIXED: Changed from 8.0.35 (not available in us-east-1)
       DBInstanceClass: !Ref DBInstanceClass
       AllocatedStorage: 100
       StorageType: gp3
@@ -625,7 +625,7 @@ Outputs:
 ### Prerequisites
 - AWS CLI configured with appropriate credentials
 - Permissions to create VPC, RDS, ElastiCache, Secrets Manager, Lambda, and IAM resources
-- Target region: eu-central-2
+- Target region: us-east-1
 
 ### Deployment Steps
 
@@ -633,7 +633,7 @@ Outputs:
 ```bash
 aws cloudformation validate-template \
   --template-body file://lib/TapStack.yml \
-  --region eu-central-2
+  --region us-east-1
 ```
 
 2. **Deploy the stack**:
@@ -645,14 +645,14 @@ aws cloudformation create-stack \
                ParameterKey=DBInstanceClass,ParameterValue=db.t3.small \
                ParameterKey=CacheNodeType,ParameterValue=cache.t3.micro \
   --capabilities CAPABILITY_NAMED_IAM \
-  --region eu-central-2
+  --region us-east-1
 ```
 
 3. **Monitor deployment**:
 ```bash
 aws cloudformation describe-stacks \
   --stack-name pci-dss-database-infrastructure \
-  --region eu-central-2 \
+  --region us-east-1 \
   --query 'Stacks[0].StackStatus'
 ```
 
@@ -660,7 +660,7 @@ aws cloudformation describe-stacks \
 ```bash
 aws cloudformation describe-stacks \
   --stack-name pci-dss-database-infrastructure \
-  --region eu-central-2 \
+  --region us-east-1 \
   --query 'Stacks[0].Outputs'
 ```
 
@@ -719,5 +719,5 @@ Note: Resources are configured without retention policies for easy cleanup:
 ```bash
 aws cloudformation delete-stack \
   --stack-name pci-dss-database-infrastructure \
-  --region eu-central-2
+  --region us-east-1
 ```

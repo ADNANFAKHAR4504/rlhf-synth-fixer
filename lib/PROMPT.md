@@ -45,7 +45,7 @@ Create a PCI-DSS compliant database infrastructure using **CloudFormation with Y
 - Use **SecurityGroups** for network access control
 - Resource names must include **environmentSuffix** for uniqueness
 - Follow naming convention: `{resource-type}-{environment-suffix}`
-- Deploy to **eu-central-2** region
+- Deploy to **us-east-1** region
 
 ### Constraints
 

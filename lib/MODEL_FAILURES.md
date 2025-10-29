@@ -4,25 +4,25 @@ This document analyzes the issues found in the MODEL_RESPONSE.md CloudFormation 
 
 ## Critical Failures
 
-### 1. Invalid MySQL Engine Version for eu-central-2
+### 1. Invalid MySQL Engine Version for us-east-1
 
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-The template specified MySQL engine version `8.0.35` which is not available in the eu-central-2 region:
+The template specified MySQL engine version `8.0.35` which is not available in the us-east-1 region:
 ```yaml
 Engine: mysql
 EngineVersion: 8.0.35
 ```
 
 **IDEAL_RESPONSE Fix**:
-Updated to use MySQL version `8.0.43`, which is available in eu-central-2:
+Updated to use MySQL version `8.0.43`, which is available in us-east-1:
 ```yaml
 Engine: mysql
 EngineVersion: 8.0.43
 ```
 
-**Root Cause**: The model did not verify region-specific MySQL version availability. AWS RDS engine versions vary by region, and 8.0.35 is not supported in eu-central-2 (though it may be available in us-east-1).
+**Root Cause**: The model did not verify region-specific MySQL version availability. AWS RDS engine versions vary by region, and 8.0.35 is not supported in us-east-1 (though it may be available in us-east-1).
 
 **AWS Documentation Reference**: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/MySQL.Concepts.VersionMgmt.html
 
@@ -186,7 +186,7 @@ pipenv run cfn-flip lib/TapStack.yml lib/TapStack.json
 # Save deployment outputs in flat format
 cfn-outputs/flat-outputs.json contains:
 {
-  "RDSEndpoint": "rds-mysql-synth6545483050.czaas8yweflw.eu-central-2.rds.amazonaws.com",
+  "RDSEndpoint": "rds-mysql-synth6545483050.czaas8yweflw.us-east-1.rds.amazonaws.com",
   "RDSPort": "3306",
   "RedisEndpoint": "redis-cluster-synth6545483050.o5xbwz.ng.0001.euc2.cache.amazonaws.com",
   ...

@@ -318,7 +318,7 @@ Resources:
     Properties:
       FunctionName: !Sub rds-rotation-${EnvironmentSuffix}
       Description: Lambda function to rotate RDS credentials
-      Runtime: python3.9
+      Runtime: python3.11
       Handler: index.lambda_handler
       Role: !GetAtt RotationLambdaExecutionRole.Arn
       Timeout: 30

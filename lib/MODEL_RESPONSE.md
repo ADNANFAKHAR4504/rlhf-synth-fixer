@@ -609,7 +609,7 @@ Outputs:
 ### Prerequisites
 - AWS CLI configured with appropriate credentials
 - Permissions to create VPC, RDS, ElastiCache, Secrets Manager, Lambda, and IAM resources
-- Target region: eu-central-2
+- Target region: us-east-1
 
 ### Deployment Steps
 
@@ -617,7 +617,7 @@ Outputs:
 ```bash
 aws cloudformation validate-template \
   --template-body file://lib/TapStack.yml \
-  --region eu-central-2
+  --region us-east-1
 ```
 
 2. **Deploy the stack**:
@@ -627,14 +627,14 @@ aws cloudformation create-stack \
   --template-body file://lib/TapStack.yml \
   --parameters ParameterKey=EnvironmentSuffix,ParameterValue=prod \
   --capabilities CAPABILITY_NAMED_IAM \
-  --region eu-central-2
+  --region us-east-1
 ```
 
 3. **Monitor deployment**:
 ```bash
 aws cloudformation describe-stacks \
   --stack-name pci-dss-database-infrastructure \
-  --region eu-central-2 \
+  --region us-east-1 \
   --query 'Stacks[0].StackStatus'
 ```
 
@@ -642,7 +642,7 @@ aws cloudformation describe-stacks \
 ```bash
 aws cloudformation describe-stacks \
   --stack-name pci-dss-database-infrastructure \
-  --region eu-central-2 \
+  --region us-east-1 \
   --query 'Stacks[0].Outputs'
 ```
 
@@ -670,7 +670,7 @@ To delete the stack and all resources:
 ```bash
 aws cloudformation delete-stack \
   --stack-name pci-dss-database-infrastructure \
-  --region eu-central-2
+  --region us-east-1
 ```
 
 Note: All resources are configured without retention policies for easy cleanup during testing and development.
