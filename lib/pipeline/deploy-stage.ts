@@ -80,7 +80,7 @@ export class DeployStage extends Construct {
                 'kms:Decrypt',
                 'kms:DescribeKey',
                 'kms:GenerateDataKeyWithoutPlainText',
-                'kms:ReEncrypt',
+                'kms:ReEncrypt*',
               ],
               resources: [`arn:aws:kms:*:${cdk.Stack.of(this).account}:key/*`],
             }),
