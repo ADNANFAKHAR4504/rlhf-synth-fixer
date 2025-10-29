@@ -127,13 +127,9 @@ describe("CI/CD Pipeline Infrastructure - Variables", () => {
     expect(variablesContent).toMatch(/type\s*=\s*list\(string\)/);
   });
 
-  test("declares vpc_id variable", () => {
-    expect(variablesContent).toMatch(/variable\s+"vpc_id"\s*{/);
-  });
-
-  test("declares private_subnet_ids variable", () => {
-    expect(variablesContent).toMatch(/variable\s+"private_subnet_ids"\s*{/);
-    expect(variablesContent).toMatch(/type\s*=\s*list\(string\)/);
+  test("declares vpc_cidr variable", () => {
+    expect(variablesContent).toMatch(/variable\s+"vpc_cidr"\s*{/);
+    expect(variablesContent).toMatch(/type\s*=\s*string/);
   });
 
   test("declares ECS resource variables", () => {
@@ -150,6 +146,93 @@ describe("CI/CD Pipeline Infrastructure - Variables", () => {
 
   test("declares image_tag variable", () => {
     expect(variablesContent).toMatch(/variable\s+"image_tag"\s*{/);
+  });
+});
+
+describe("CI/CD Pipeline Infrastructure - VPC Resources", () => {
+  let stackContent: string;
+
+  beforeAll(() => {
+    stackContent = fs.readFileSync(stackPath, "utf8");
+  });
+
+  test("queries availability zones", () => {
+    expect(stackContent).toMatch(/data\s+"aws_availability_zones"\s+"available"\s*{/);
+    expect(stackContent).toMatch(/state\s*=\s*"available"/);
+  });
+
+  test("creates VPC", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_vpc"\s+"main"\s*{/);
+    expect(stackContent).toMatch(/cidr_block\s*=\s*var\.vpc_cidr/);
+    expect(stackContent).toMatch(/enable_dns_hostnames\s*=\s*true/);
+    expect(stackContent).toMatch(/enable_dns_support\s*=\s*true/);
+  });
+
+  test("creates Internet Gateway", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_internet_gateway"\s+"main"\s*{/);
+    expect(stackContent).toMatch(/vpc_id\s*=\s*aws_vpc\.main\.id/);
+  });
+
+  test("creates public subnets", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"public"\s*{/);
+    expect(stackContent).toMatch(/count\s*=\s*2/);
+    expect(stackContent).toMatch(/vpc_id\s*=\s*aws_vpc\.main\.id/);
+    expect(stackContent).toMatch(/cidrsubnet\(var\.vpc_cidr,\s*8,\s*count\.index\)/);
+    expect(stackContent).toMatch(/map_public_ip_on_launch\s*=\s*true/);
+  });
+
+  test("creates Elastic IP for NAT Gateway", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_eip"\s+"nat"\s*{/);
+    // Verify no count (single EIP, not multiple)
+    const eipBlock = stackContent.match(/resource\s+"aws_eip"\s+"nat"\s*{[\s\S]*?(?=resource|$)/);
+    expect(eipBlock).toBeTruthy();
+    expect(eipBlock![0]).not.toMatch(/count\s*=\s*2/);
+    expect(stackContent).toMatch(/domain\s*=\s*"vpc"/);
+  });
+
+  test("creates NAT Gateway", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_nat_gateway"\s+"main"\s*{/);
+    // Verify no count (single NAT Gateway, not multiple)
+    const natBlock = stackContent.match(/resource\s+"aws_nat_gateway"\s+"main"\s*{[\s\S]*?(?=resource|$)/);
+    expect(natBlock).toBeTruthy();
+    expect(natBlock![0]).not.toMatch(/count\s*=\s*2/);
+    expect(stackContent).toMatch(/allocation_id\s*=\s*aws_eip\.nat\.id/);
+    expect(stackContent).toMatch(/subnet_id\s*=\s*aws_subnet\.public\[0\]\.id/);
+  });
+
+  test("creates private subnets", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"private"\s*{/);
+    expect(stackContent).toMatch(/count\s*=\s*2/);
+    expect(stackContent).toMatch(/vpc_id\s*=\s*aws_vpc\.main\.id/);
+    expect(stackContent).toMatch(/cidrsubnet\(var\.vpc_cidr,\s*8,\s*count\.index\s*\+\s*10\)/);
+  });
+
+  test("creates public route table", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_route_table"\s+"public"\s*{/);
+    expect(stackContent).toMatch(/vpc_id\s*=\s*aws_vpc\.main\.id/);
+    expect(stackContent).toMatch(/route\s*{[\s\S]*?cidr_block\s*=\s*"0\.0\.0\.0\/0"/);
+    expect(stackContent).toMatch(/gateway_id\s*=\s*aws_internet_gateway\.main\.id/);
+  });
+
+  test("creates public route table associations", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_route_table_association"\s+"public"\s*{/);
+    expect(stackContent).toMatch(/count\s*=\s*2/);
+    expect(stackContent).toMatch(/subnet_id\s*=\s*aws_subnet\.public\[count\.index\]\.id/);
+  });
+
+  test("creates private route table", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_route_table"\s+"private"\s*{/);
+    // Verify no count (single route table, shared by both private subnets)
+    const rtBlock = stackContent.match(/resource\s+"aws_route_table"\s+"private"\s*{[\s\S]*?(?=resource|$)/);
+    expect(rtBlock).toBeTruthy();
+    expect(rtBlock![0]).not.toMatch(/count\s*=\s*2/);
+    expect(stackContent).toMatch(/route\s*{[\s\S]*?nat_gateway_id\s*=\s*aws_nat_gateway\.main\.id/);
+  });
+
+  test("creates private route table associations", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_route_table_association"\s+"private"\s*{/);
+    expect(stackContent).toMatch(/count\s*=\s*2/);
+    expect(stackContent).toMatch(/subnet_id\s*=\s*aws_subnet\.private\[count\.index\]\.id/);
   });
 });
 
@@ -332,19 +415,13 @@ describe("CI/CD Pipeline Infrastructure - CodePipeline Resources", () => {
     expect(stackContent).toMatch(/ProjectName\s*=\s*aws_codebuild_project\.docker_build\.name/);
   });
 
-  test("CodePipeline has conditional Deploy stage with ECS action", () => {
-    // The Deploy stage is inside a dynamic block, so we check for the dynamic block and its content
-    expect(stackContent).toMatch(/dynamic\s+"stage"\s*{/);
-    expect(stackContent).toMatch(/name\s*=\s*"Deploy"/);
+  test("CodePipeline has Deploy stage with ECS action", () => {
+    expect(stackContent).toMatch(/stage\s*{\s*name\s*=\s*"Deploy"/);
     expect(stackContent).toMatch(/category\s*=\s*"Deploy"/);
     expect(stackContent).toMatch(/provider\s*=\s*"ECS"/);
     expect(stackContent).toMatch(/ClusterName\s*=\s*aws_ecs_cluster\.main\.name/);
-    expect(stackContent).toMatch(/ServiceName\s*=\s*aws_ecs_service\.app\[0\]\.name/);
+    expect(stackContent).toMatch(/ServiceName\s*=\s*aws_ecs_service\.app\.name/);
     expect(stackContent).toMatch(/FileName\s*=\s*"imagedefinitions\.json"/);
-  });
-
-  test("Deploy stage is dynamically created when subnets exist", () => {
-    expect(stackContent).toMatch(/dynamic\s+"stage"\s*{[\s\S]*?for_each\s*=\s*length\(var\.private_subnet_ids\)/);
   });
 });
 
@@ -397,8 +474,9 @@ describe("CI/CD Pipeline Infrastructure - ECS Resources", () => {
     expect(stackContent).toMatch(/awslogs-group/);
   });
 
-  test("creates ECS service conditionally", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_ecs_service"\s+"app"\s*{[\s\S]*?count\s*=\s*length\(var\.private_subnet_ids\)/);
+  test("creates ECS service", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_ecs_service"\s+"app"\s*{/);
+    expect(stackContent).not.toMatch(/resource\s+"aws_ecs_service"\s+"app"\s*{[\s\S]*?count\s*=\s*length\(var\.private_subnet_ids\)/);
   });
 
   test("ECS service uses Fargate launch type", () => {
@@ -411,7 +489,7 @@ describe("CI/CD Pipeline Infrastructure - ECS Resources", () => {
   });
 
   test("ECS service network configuration uses private subnets", () => {
-    expect(stackContent).toMatch(/network_configuration\s*{[\s\S]*?subnets\s*=\s*var\.private_subnet_ids/);
+    expect(stackContent).toMatch(/network_configuration\s*{[\s\S]*?subnets\s*=\s*aws_subnet\.private\[\*\]\.id/);
     expect(stackContent).toMatch(/assign_public_ip\s*=\s*false/);
   });
 
@@ -419,8 +497,10 @@ describe("CI/CD Pipeline Infrastructure - ECS Resources", () => {
     expect(stackContent).toMatch(/lifecycle\s*{[\s\S]*?ignore_changes\s*=\s*\[task_definition\]/);
   });
 
-  test("creates ECS task security group conditionally", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"ecs_tasks"\s*{[\s\S]*?count\s*=\s*var\.vpc_id/);
+  test("creates ECS task security group", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"ecs_tasks"\s*{/);
+    expect(stackContent).toMatch(/vpc_id\s*=\s*aws_vpc\.main\.id/);
+    expect(stackContent).not.toMatch(/resource\s+"aws_security_group"\s+"ecs_tasks"\s*{[\s\S]*?count\s*=\s*var\.vpc_id/);
     expect(stackContent).toMatch(/egress\s*{[\s\S]*?cidr_blocks\s*=\s*\[\s*"0\.0\.0\.0\/0"\s*\]/);
   });
 });
@@ -611,6 +691,11 @@ describe("CI/CD Pipeline Infrastructure - Data Sources", () => {
   test("queries current AWS caller identity", () => {
     expect(stackContent).toMatch(/data\s+"aws_caller_identity"\s+"current"\s*{/);
   });
+
+  test("queries availability zones", () => {
+    expect(stackContent).toMatch(/data\s+"aws_availability_zones"\s+"available"\s*{/);
+    expect(stackContent).toMatch(/state\s*=\s*"available"/);
+  });
 });
 
 describe("CI/CD Pipeline Infrastructure - Outputs", () => {
@@ -640,9 +725,25 @@ describe("CI/CD Pipeline Infrastructure - Outputs", () => {
     expect(stackContent).toMatch(/value\s*=\s*aws_ecs_cluster\.main\.name/);
   });
 
-  test("exports ECS service name conditionally", () => {
+  test("exports ECS service name", () => {
     expect(stackContent).toMatch(/output\s+"ecs_service_name"\s*{/);
-    expect(stackContent).toMatch(/length\(var\.private_subnet_ids\)\s*>\s*0/);
+    expect(stackContent).toMatch(/value\s*=\s*aws_ecs_service\.app\.name/);
+    expect(stackContent).not.toMatch(/length\(var\.private_subnet_ids\)/);
+  });
+
+  test("exports VPC ID", () => {
+    expect(stackContent).toMatch(/output\s+"vpc_id"\s*{/);
+    expect(stackContent).toMatch(/value\s*=\s*aws_vpc\.main\.id/);
+  });
+
+  test("exports private subnet IDs", () => {
+    expect(stackContent).toMatch(/output\s+"private_subnet_ids"\s*{/);
+    expect(stackContent).toMatch(/value\s*=\s*aws_subnet\.private\[\*\]\.id/);
+  });
+
+  test("exports public subnet IDs", () => {
+    expect(stackContent).toMatch(/output\s+"public_subnet_ids"\s*{/);
+    expect(stackContent).toMatch(/value\s*=\s*aws_subnet\.public\[\*\]\.id/);
   });
 
   test("exports SNS topic ARN", () => {
@@ -737,7 +838,7 @@ describe("CI/CD Pipeline Infrastructure - Security Best Practices", () => {
 
   test("ECS tasks run in private subnets", () => {
     expect(stackContent).toMatch(/assign_public_ip\s*=\s*false/);
-    expect(stackContent).toMatch(/subnets\s*=\s*var\.private_subnet_ids/);
+    expect(stackContent).toMatch(/subnets\s*=\s*aws_subnet\.private\[\*\]\.id/);
   });
 
   test("ECS security group only allows outbound traffic", () => {

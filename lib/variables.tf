@@ -41,16 +41,10 @@ variable "notification_emails" {
   default     = ["team@example.com"] # Replace with your email
 }
 
-variable "vpc_id" {
-  description = "VPC ID for ECS tasks"
+variable "vpc_cidr" {
+  description = "CIDR block for the VPC"
   type        = string
-  default     = "" # Set this to your VPC ID
-}
-
-variable "private_subnet_ids" {
-  description = "Private subnet IDs for ECS tasks (need internet via NAT)"
-  type        = list(string)
-  default     = [] # Set these to your private subnet IDs
+  default     = "10.0.0.0/16"
 }
 
 variable "ecs_cpu" {

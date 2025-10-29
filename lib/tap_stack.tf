@@ -3,6 +3,128 @@
 # Get current AWS account ID and caller identity
 data "aws_caller_identity" "current" {}
 
+# Get availability zones for the region
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
+# === VPC Resources ===
+
+# VPC for the application
+resource "aws_vpc" "main" {
+  cidr_block           = var.vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+
+  tags = {
+    Name = "${var.project_name}-vpc"
+  }
+}
+
+# Internet Gateway for public subnets
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "${var.project_name}-igw"
+  }
+}
+
+# Public subnets (for NAT Gateways)
+resource "aws_subnet" "public" {
+  count = 2
+
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index)
+  availability_zone       = data.aws_availability_zones.available.names[count.index]
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name = "${var.project_name}-public-subnet-${count.index + 1}"
+    Type = "public"
+  }
+}
+
+# Elastic IPs for NAT Gateways
+resource "aws_eip" "nat" {
+  domain = "vpc"
+  depends_on = [aws_internet_gateway.main]
+
+  tags = {
+    Name = "${var.project_name}-nat-eip-hcl"
+  }
+}
+
+# NAT Gateways (one per public subnet for high availability)
+resource "aws_nat_gateway" "main" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public[0].id
+
+  tags = {
+    Name = "${var.project_name}-nat-gateway-hcl"
+  }
+
+  depends_on = [aws_internet_gateway.main]
+}
+
+# Private subnets (for ECS tasks)
+resource "aws_subnet" "private" {
+  count = 2
+
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 10)
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+
+  tags = {
+    Name = "${var.project_name}-private-subnet-${count.index + 1}"
+    Type = "private"
+  }
+}
+
+# Route table for public subnets
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
+
+  tags = {
+    Name = "${var.project_name}-public-rt"
+  }
+}
+
+# Route table associations for public subnets
+resource "aws_route_table_association" "public" {
+  count = 2
+
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}
+
+# Route table for private subnets (shared - both subnets route through single NAT Gateway)
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main.id
+  }
+
+  tags = {
+    Name = "${var.project_name}-private-rt-hcl"
+  }
+}
+
+# Route table associations for private subnets
+resource "aws_route_table_association" "private" {
+  count = 2
+
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private.id
+}
+
 # === S3 Buckets ===
 
 # Source bucket for zip uploads (triggers pipeline)
@@ -478,11 +600,9 @@ resource "aws_ecs_task_definition" "app" {
 
 # Security group for ECS tasks (outbound only)
 resource "aws_security_group" "ecs_tasks" {
-  count = var.vpc_id != "" ? 1 : 0
-  
   name        = "${var.project_name}-ecs-tasks"
   description = "Security group for ECS tasks"
-  vpc_id      = var.vpc_id
+  vpc_id      = aws_vpc.main.id
   
   egress {
     from_port   = 0
@@ -491,11 +611,13 @@ resource "aws_security_group" "ecs_tasks" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow all outbound traffic"
   }
+
+  tags = {
+    Name = "${var.project_name}-ecs-tasks-sg"
+  }
 }
 
 resource "aws_ecs_service" "app" {
-  count = length(var.private_subnet_ids) > 0 ? 1 : 0
-  
   name                               = var.project_name
   cluster                            = aws_ecs_cluster.main.id
   task_definition                    = aws_ecs_task_definition.app.arn
@@ -505,8 +627,8 @@ resource "aws_ecs_service" "app" {
   deployment_maximum_percent         = 200
   
   network_configuration {
-    subnets          = var.private_subnet_ids
-    security_groups  = [aws_security_group.ecs_tasks[0].id]
+    subnets          = aws_subnet.private[*].id
+    security_groups  = [aws_security_group.ecs_tasks.id]
     assign_public_ip = false # Running in private subnets
   }
   
@@ -562,25 +684,21 @@ resource "aws_codepipeline" "main" {
     }
   }
   
-  dynamic "stage" {
-    for_each = length(var.private_subnet_ids) > 0 ? [1] : []
+  stage {
+    name = "Deploy"
     
-    content {
-      name = "Deploy"
+    action {
+      name            = "Deploy"
+      category        = "Deploy"
+      owner           = "AWS"
+      provider        = "ECS"
+      version         = "1"
+      input_artifacts = ["build_output"]
       
-      action {
-        name            = "Deploy"
-        category        = "Deploy"
-        owner           = "AWS"
-        provider        = "ECS"
-        version         = "1"
-        input_artifacts = ["build_output"]
-        
-        configuration = {
-          ClusterName = aws_ecs_cluster.main.name
-          ServiceName = aws_ecs_service.app[0].name
-          FileName    = "imagedefinitions.json"
-        }
+      configuration = {
+        ClusterName = aws_ecs_cluster.main.name
+        ServiceName = aws_ecs_service.app.name
+        FileName    = "imagedefinitions.json"
       }
     }
   }
@@ -710,7 +828,22 @@ output "ecs_cluster_name" {
 
 output "ecs_service_name" {
   description = "Name of the ECS service"
-  value       = length(var.private_subnet_ids) > 0 ? aws_ecs_service.app[0].name : "Not deployed - set subnet IDs"
+  value       = aws_ecs_service.app.name
+}
+
+output "vpc_id" {
+  description = "ID of the VPC"
+  value       = aws_vpc.main.id
+}
+
+output "private_subnet_ids" {
+  description = "IDs of the private subnets"
+  value       = aws_subnet.private[*].id
+}
+
+output "public_subnet_ids" {
+  description = "IDs of the public subnets"
+  value       = aws_subnet.public[*].id
 }
 
 output "sns_topic_arn" {
