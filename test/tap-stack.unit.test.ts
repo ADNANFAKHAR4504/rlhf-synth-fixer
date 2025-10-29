@@ -22,13 +22,11 @@ describe('TapStack Unit Tests (Secure Baseline)', () => {
   };
 
   it('should create exactly one AWS provider for us-east-1', () => {
-    // --- FIX: Expect an array containing one provider object ---
     expect(synthesized.provider.aws).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ region: 'us-east-1' }),
       ])
     );
-    // Ensure only one provider is defined
     expect(Array.isArray(synthesized.provider.aws)).toBe(true);
     expect(synthesized.provider.aws.length).toBe(1);
   });
@@ -41,21 +39,20 @@ describe('TapStack Unit Tests (Secure Baseline)', () => {
   });
 
   // --- IAM ---
-  it('should create three IAM Roles', () => {
-    // --- FIX: Expect 3 roles (MFA admin, CloudTrail, Config) ---
-    expect(countResources('aws_iam_role')).toBe(3);
+  it('should create two IAM Roles', () => {
+    // --- FIX: Expect 2 roles (MFA admin, CloudTrail) ---
+    expect(countResources('aws_iam_role')).toBe(2);
   });
 
   it('should create one IAM Policy for CloudTrail', () => {
-    // --- FIX: Check for the one policy we create (for CloudTrail logs) ---
     expect(countResources('aws_iam_policy')).toBe(1);
     const policy = Object.values(findResources('aws_iam_policy'))[0] as any;
     expect(policy.name).toContain('CloudTrail-CloudWatch-Logs-Policy');
   });
 
-  it('should create two IAM Role Policy Attachments', () => {
-    // (CloudTrail role + Config role)
-    expect(countResources('aws_iam_role_policy_attachment')).toBe(2);
+  it('should create one IAM Role Policy Attachment', () => {
+    // --- FIX: Expect 1 attachment (CloudTrail role) ---
+    expect(countResources('aws_iam_role_policy_attachment')).toBe(1);
   });
 
   // --- Secrets Manager ---
@@ -72,7 +69,6 @@ describe('TapStack Unit Tests (Secure Baseline)', () => {
     );
     expect(rules).toEqual(
       expect.arrayContaining([
-        // --- FIX: Expect the correct rule name ---
         'EC2_EBS_ENCRYPTION_BY_DEFAULT',
         'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED',
       ])
@@ -106,7 +102,6 @@ describe('TapStack Unit Tests (Secure Baseline)', () => {
     ) as any[];
     const alarmNames = alarms.map(a => a.alarm_name);
 
-    // --- FIX: Check in any order ---
     expect(alarmNames).toEqual(
       expect.arrayContaining([
         expect.stringContaining('RootUserActivityAlarm'),
@@ -127,4 +122,3 @@ describe('TapStack Unit Tests (Secure Baseline)', () => {
     expect(outputs).toHaveProperty('LoginFailureAlarmName');
   });
 });
-

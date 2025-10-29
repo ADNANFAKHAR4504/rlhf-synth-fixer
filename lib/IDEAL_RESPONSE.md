@@ -1,9 +1,7 @@
 ```typescript
 import { Construct } from 'constructs';
-// --- FIX: Remove DataAwsCallerIdentity and DataAwsPartition from 'cdktf' import ---
 import { TerraformStack, TerraformOutput } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-// --- FIX: Add correct imports for data sources ---
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { DataAwsPartition } from '@cdktf/provider-aws/lib/data-aws-partition';
 import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
@@ -21,9 +19,9 @@ import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 import { ConfigConfigRule } from '@cdktf/provider-aws/lib/config-config-rule';
-// --- FIX: Add Config Recorder and Delivery Channel imports ---
-import { ConfigConfigurationRecorder } from '@cdktf/provider-aws/lib/config-configuration-recorder';
-import { ConfigDeliveryChannel } from '@cdktf/provider-aws/lib/config-delivery-channel';
+// --- FIX: Remove Config Recorder and Delivery Channel imports ---
+// import { ConfigConfigurationRecorder } from '@cdktf/provider-aws/lib/config-configuration-recorder';
+// import { ConfigDeliveryChannel } from '@cdktf/provider-aws/lib/config-delivery-channel';
 
 export interface TapStackProps {
   environmentSuffix: string;
@@ -90,11 +88,14 @@ export class TapStack extends TerraformStack {
       description: 'SOC 2 Baseline Secret',
       kmsKeyId: kmsKey.id,
       tags: { Environment: environmentSuffix },
+      // --- FIX: Add dependency on KMS key ---
+      dependsOn: [kmsKey],
     });
 
     new SecretsmanagerSecretVersion(this, 'secret-version', {
       secretId: secret.id,
       secretString: '{"username":"admin","password":"InitialPassword123!"}',
+      dependsOn: [secret],
     });
 
     // --- 4. CloudTrail and S3 Bucket for Logs ---
@@ -153,9 +154,10 @@ export class TapStack extends TerraformStack {
       name: `/aws/cloudtrail/SOC-Baseline-Trail-${environmentSuffix}`,
       retentionInDays: 90,
       kmsKeyId: kmsKey.id,
+      // --- FIX: Add explicit dependency on the KMS key ---
+      dependsOn: [kmsKey],
     });
 
-    // --- FIX: Create explicit IAM Role for CloudTrail logging ---
     const cloudtrailLogsRole = new IamRole(this, 'cloudtrail-logs-role', {
       name: `CloudTrail-CloudWatch-Logs-Role-${environmentSuffix}`,
       assumeRolePolicy: new DataAwsIamPolicyDocument(
@@ -190,7 +192,6 @@ export class TapStack extends TerraformStack {
       role: cloudtrailLogsRole.name,
       policyArn: cloudtrailLogsPolicy.arn,
     });
-    // --- END FIX ---
 
     new Cloudtrail(this, 'cloudtrail', {
       name: `SOC-Baseline-Trail-${environmentSuffix}`,
@@ -199,7 +200,6 @@ export class TapStack extends TerraformStack {
       isMultiRegionTrail: true,
       enableLogFileValidation: true,
       cloudWatchLogsGroupArn: `${logGroup.arn}:*`,
-      // --- FIX: Pass the new role's ARN ---
       cloudWatchLogsRoleArn: cloudtrailLogsRole.arn,
       kmsKeyId: kmsKey.id,
       tags: { Environment: environmentSuffix },
@@ -208,61 +208,25 @@ export class TapStack extends TerraformStack {
 
     // --- 5. AWS Config Rules ---
 
-    const configRole = new IamRole(this, 'config-role', {
-      name: `SOC-Baseline-Config-Role-${environmentSuffix}`,
-      assumeRolePolicy: new DataAwsIamPolicyDocument(
-        this,
-        'config-assume-policy',
-        {
-          statement: [
-            {
-              actions: ['sts:AssumeRole'],
-              principals: [
-                { type: 'Service', identifiers: ['config.amazonaws.com'] },
-              ],
-            },
-          ],
-        }
-      ).json,
-    });
-
-    new IamRolePolicyAttachment(this, 'config-role-attach', {
-      role: configRole.name,
-      policyArn: 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole',
-    });
-
-    const configRecorder = new ConfigConfigurationRecorder(
-      this,
-      'config-recorder',
-      {
-        name: `soc-baseline-recorder-${environmentSuffix}`,
-        roleArn: configRole.arn,
-        recordingGroup: {
-          allSupported: true,
-          includeGlobalResourceTypes: true,
-        },
-        dependsOn: [configRole],
-      }
-    );
-
-    new ConfigDeliveryChannel(this, 'config-channel', {
-      name: `soc-baseline-channel-${environmentSuffix}`,
-      s3BucketName: trailBucket.id,
-      s3KmsKeyArn: kmsKey.arn,
-      dependsOn: [trailBucket, configRecorder],
-    });
-    // --- END FIX ---
+    // --- FIX: Remove Config Recorder, Channel, and Role ---
+    // The error "MaxNumberOfDeliveryChannelsExceededException" means
+    // this account ALREADY has an AWS Config setup. We will
+    // just deploy the rules, which will attach to the existing setup.
+    // ---
+    // const configRole = new IamRole(this, 'config-role', { ... });
+    // new IamRolePolicyAttachment(this, 'config-role-attach', { ... });
+    // const configRecorder = new ConfigConfigurationRecorder(this, 'config-recorder', { ... });
+    // new ConfigDeliveryChannel(this, 'config-channel', { ... });
 
     const ebsRule = new ConfigConfigRule(this, 'ebs-encryption-rule', {
       name: `ebs-encryption-by-default-${environmentSuffix}`,
       source: {
         owner: 'AWS',
-        // --- FIX: Correct rule name ---
         sourceIdentifier: 'EC2_EBS_ENCRYPTION_BY_DEFAULT',
       },
       tags: { Environment: environmentSuffix },
-      // --- FIX: Add dependency on the recorder ---
-      dependsOn: [configRecorder],
+      // --- FIX: Remove dependency on deleted recorder ---
+      // dependsOn: [configRecorder],
     });
 
     const s3Rule = new ConfigConfigRule(this, 's3-encryption-rule', {
@@ -272,9 +236,10 @@ export class TapStack extends TerraformStack {
         sourceIdentifier: 'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED',
       },
       tags: { Environment: environmentSuffix },
-      // --- FIX: Add dependency on the recorder ---
-      dependsOn: [configRecorder],
+      // --- FIX: Remove dependency on deleted recorder ---
+      // dependsOn: [configRecorder],
     });
+    // --- END FIX ---
 
     // --- 6. CloudWatch Alarms for Unauthorized Activity ---
     const rootActivityFilter = new CloudwatchLogMetricFilter(
@@ -351,11 +316,9 @@ export class TapStack extends TerraformStack {
     new TerraformOutput(this, 'EbsEncryptionRuleName', { value: ebsRule.name });
     new TerraformOutput(this, 'S3EncryptionRuleName', { value: s3Rule.name });
     new TerraformOutput(this, 'RootActivityAlarmName', {
-      // --- FIX: Use .alarmName instead of .name ---
       value: rootActivityAlarm.alarmName,
     });
     new TerraformOutput(this, 'LoginFailureAlarmName', {
-      // --- FIX: Use .alarmName instead of .name ---
       value: loginFailureAlarm.alarmName,
     });
   }
