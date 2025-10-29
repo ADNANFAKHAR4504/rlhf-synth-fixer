@@ -1071,9 +1071,9 @@
       "Type": "AWS::DMS::ReplicationInstance",
       "Properties": {
         "ReplicationInstanceIdentifier": "profile-migration-instance",
-        "ReplicationInstanceClass": "dms.r5.24xlarge",
-        "AllocatedStorage": 2000,
-        "MultiAZ": true,
+        "ReplicationInstanceClass": "dms.r5.2xlarge",
+        "AllocatedStorage": 500,
+        "MultiAZ": false,
         "PubliclyAccessible": false,
         "ReplicationSubnetGroupIdentifier": {"Ref": "DMSSubnetGroup"},
         "VpcSecurityGroupIds": [{"Ref": "DMSSecurityGroup"}],
