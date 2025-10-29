@@ -87,6 +87,43 @@ Conditions:
       - Ref: CreateGuardDutyDetector
       - 'true'
 
+Mappings:
+  ELBAccountId:
+    us-east-1:
+      AccountId: '127311923021'
+    us-east-2:
+      AccountId: '033677994240'
+    us-west-1:
+      AccountId: '027434742980'
+    us-west-2:
+      AccountId: '797873946194'
+    ca-central-1:
+      AccountId: '985666609251'
+    eu-west-1:
+      AccountId: '156460612806'
+    eu-west-2:
+      AccountId: '652711504416'
+    eu-west-3:
+      AccountId: '009996457667'
+    eu-central-1:
+      AccountId: '054676820928'
+    eu-north-1:
+      AccountId: '897822967062'
+    ap-northeast-1:
+      AccountId: '582318560864'
+    ap-northeast-2:
+      AccountId: '600734575887'
+    ap-northeast-3:
+      AccountId: '383597477331'
+    ap-southeast-1:
+      AccountId: '114774131450'
+    ap-southeast-2:
+      AccountId: '783225319266'
+    ap-south-1:
+      AccountId: '718504428378'
+    sa-east-1:
+      AccountId: '507241528517'
+
 Resources:
   VPC:
     Type: AWS::EC2::VPC
@@ -374,9 +411,9 @@ Resources:
   LoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      # FIX: Apply EnvironmentSuffix naming pattern
+      # FIX: Apply EnvironmentSuffix naming pattern (max 32 chars for ALB)
       Name:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-alb-${AWS::AccountId}'
+        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-alb'
       Scheme: internet-facing
       Subnets:
         - Ref: PublicSubnet1
@@ -400,8 +437,9 @@ Resources:
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
+      # Target Group name max 32 chars
       Name:
-        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-tg-${AWS::AccountId}'
+        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-tg'
       VpcId:
         Ref: VPC
       Port: 80
@@ -450,6 +488,8 @@ Resources:
   TaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName:
+        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-task-exec-role-${AWS::AccountId}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -463,6 +503,8 @@ Resources:
   TaskRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName:
+        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-task-role-${AWS::AccountId}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -627,7 +669,7 @@ Resources:
     Type: AWS::ECR::Repository
     Properties:
       RepositoryName:
-        Fn::Sub: '${ProjectName}-repository'
+        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-repository-${AWS::AccountId}'
       ImageScanningConfiguration:
         ScanOnPush: true
       Tags:
@@ -817,6 +859,8 @@ Resources:
   CodeBuildRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName:
+        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-codebuild-role-${AWS::AccountId}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -1237,6 +1281,8 @@ Resources:
   CloudTrailRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName:
+        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-cloudtrail-role-${AWS::AccountId}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -1262,6 +1308,8 @@ Resources:
   ConfigRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName:
+        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-config-role-${AWS::AccountId}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -1632,6 +1680,36 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
+          - Sid: AWSLogDeliveryWrite
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action: s3:PutObject
+            Resource:
+              Fn::Sub: '${LogsBucket.Arn}/*'
+          - Sid: AWSLogDeliveryAclCheck
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource:
+              Fn::GetAtt:
+                - LogsBucket
+                - Arn
+          - Sid: ALBAccessLogsWrite
+            Effect: Allow
+            Principal:
+              AWS:
+                Fn::Sub:
+                  - 'arn:aws:iam::${ELBAccount}:root'
+                  - ELBAccount:
+                      Fn::FindInMap:
+                        - ELBAccountId
+                        - Ref: AWS::Region
+                        - AccountId
+            Action: s3:PutObject
+            Resource:
+              Fn::Sub: '${LogsBucket.Arn}/alb-access-logs/*'
           - Sid: DenyInsecureConnections
             Effect: Deny
             Principal: '*'
@@ -1714,6 +1792,8 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName:
+        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-lambda-exec-role-${AWS::AccountId}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -1742,6 +1822,8 @@ Resources:
   SourceSeederLambda:
     Type: AWS::Lambda::Function
     Properties:
+      FunctionName:
+        Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-source-seeder-${AWS::AccountId}'
       Code:
         ZipFile: |
           import boto3
