@@ -93,16 +93,22 @@ Mappings:
       AccountId: '797873946194'
     ca-central-1:
       AccountId: '985666609251'
+    eu-central-1:
+      AccountId: '054676820928'
     eu-west-1:
       AccountId: '156460612806'
     eu-west-2:
       AccountId: '652711504416'
     eu-west-3:
       AccountId: '009996457667'
-    eu-central-1:
-      AccountId: '054676820928'
     eu-north-1:
       AccountId: '897822967062'
+    eu-south-1:
+      AccountId: '635631232127'
+    eu-central-2:
+      AccountId: '718504428378'
+    ap-east-1:
+      AccountId: '754344448648'
     ap-northeast-1:
       AccountId: '582318560864'
     ap-northeast-2:
@@ -113,10 +119,20 @@ Mappings:
       AccountId: '114774131450'
     ap-southeast-2:
       AccountId: '783225319266'
+    ap-southeast-3:
+      AccountId: '589379963580'
     ap-south-1:
       AccountId: '718504428378'
+    ap-south-2:
+      AccountId: '635631232127'
+    me-south-1:
+      AccountId: '076674570225'
+    me-central-1:
+      AccountId: '881846578597'
     sa-east-1:
       AccountId: '507241528517'
+    af-south-1:
+      AccountId: '098369216593'
 
 Resources:
   VPC:
@@ -404,6 +420,7 @@ Resources:
   # Load Balancer
   LoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: LogsBucketPolicy
     Properties:
       # FIX: Apply EnvironmentSuffix naming pattern (max 32 chars for ALB)
       Name:
@@ -835,6 +852,16 @@ Resources:
                   - ecr:GetDownloadUrlForLayer
                   - ecr:BatchGetImage
                 Resource: '*'
+              # ECS Deploy permissions
+              - Effect: Allow
+                Action:
+                  - ecs:DescribeServices
+                  - ecs:DescribeTaskDefinition
+                  - ecs:DescribeTasks
+                  - ecs:ListTasks
+                  - ecs:RegisterTaskDefinition
+                  - ecs:UpdateService
+                Resource: '*'
               # FIX: Add required IAM PassRole permissions to resolve CodePipeline deployment failure
               - Effect: Allow
                 Action:
@@ -877,6 +904,9 @@ Resources:
               - Effect: Allow
                 Action:
                   - ecr:GetAuthorizationToken
+                Resource: '*'
+              - Effect: Allow
+                Action:
                   - ecr:BatchCheckLayerAvailability
                   - ecr:GetDownloadUrlForLayer
                   - ecr:BatchGetImage
@@ -1017,6 +1047,29 @@ Resources:
     Properties:
       TopicName:
         Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-alerts-${AWS::AccountId}'
+
+  AlertsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - Ref: AlertsTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudWatchAlarms
+            Effect: Allow
+            Principal:
+              Service: cloudwatch.amazonaws.com
+            Action: sns:Publish
+            Resource:
+              Ref: AlertsTopic
+          - Sid: AllowEventBridge
+            Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sns:Publish
+            Resource:
+              Ref: AlertsTopic
 
   BillingAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -1453,7 +1506,9 @@ Resources:
       DestinationType: S3
       DestinationProperties:
         DestinationArn:
-          Fn::Sub: '${LogsBucket.Arn}/guardduty/'
+          Fn::GetAtt:
+            - LogsBucket
+            - Arn
         KmsKeyArn:
           Fn::Sub: 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/s3'
 
@@ -1500,9 +1555,6 @@ Resources:
         - Arn:
             Ref: AlertsTopic
           Id: '1'
-          SqsParameters:
-            MessageGroupId:
-              Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-events'
 
   EventBridgeDeadLetterQueue:
     Type: AWS::SQS::Queue
@@ -1704,6 +1756,38 @@ Resources:
             Action: s3:PutObject
             Resource:
               Fn::Sub: '${LogsBucket.Arn}/alb-access-logs/*'
+          - Sid: ALBAccessLogsAclCheck
+            Effect: Allow
+            Principal:
+              AWS:
+                Fn::Sub:
+                  - 'arn:aws:iam::${ELBAccount}:root'
+                  - ELBAccount:
+                      Fn::FindInMap:
+                        - ELBAccountId
+                        - Ref: AWS::Region
+                        - AccountId
+            Action: s3:GetBucketAcl
+            Resource:
+              Fn::GetAtt:
+                - LogsBucket
+                - Arn
+          - Sid: GuardDutyWrite
+            Effect: Allow
+            Principal:
+              Service: guardduty.amazonaws.com
+            Action: s3:PutObject
+            Resource:
+              Fn::Sub: '${LogsBucket.Arn}/*'
+          - Sid: GuardDutyGetBucketLocation
+            Effect: Allow
+            Principal:
+              Service: guardduty.amazonaws.com
+            Action: s3:GetBucketLocation
+            Resource:
+              Fn::GetAtt:
+                - LogsBucket
+                - Arn
           - Sid: DenyInsecureConnections
             Effect: Deny
             Principal: '*'
@@ -1737,50 +1821,63 @@ Resources:
       DashboardName:
         Fn::Sub: '${ProjectName}-${EnvironmentSuffix}-dashboard-${AWS::AccountId}'
       DashboardBody:
-        Fn::Sub: |
-          {
-            "widgets": [
-              {
-                "type": "metric",
-                "x": 0,
-                "y": 0,
-                "width": 12,
-                "height": 6,
-                "properties": {
-                  "metrics": [
-                    [ "AWS/ApplicationELB", "RequestCount", "LoadBalancer", "${LoadBalancer}" ],
-                    [ ".", "TargetResponseTime", ".", "." ],
-                    [ ".", "HTTPCode_Target_2XX_Count", ".", "." ],
-                    [ ".", "HTTPCode_Target_4XX_Count", ".", "." ],
-                    [ ".", "HTTPCode_Target_5XX_Count", ".", "." ]
-                  ],
-                  "view": "timeSeries",
-                  "stacked": false,
-                  "region": "${AWS::Region}",
-                  "title": "ALB Metrics",
-                  "period": 300
+        Fn::Sub:
+          - |
+            {
+              "widgets": [
+                {
+                  "type": "metric",
+                  "x": 0,
+                  "y": 0,
+                  "width": 12,
+                  "height": 6,
+                  "properties": {
+                    "metrics": [
+                      [ "AWS/ApplicationELB", "RequestCount", "LoadBalancer", "${LoadBalancerFullName}" ],
+                      [ ".", "TargetResponseTime", ".", "." ],
+                      [ ".", "HTTPCode_Target_2XX_Count", ".", "." ],
+                      [ ".", "HTTPCode_Target_4XX_Count", ".", "." ],
+                      [ ".", "HTTPCode_Target_5XX_Count", ".", "." ]
+                    ],
+                    "view": "timeSeries",
+                    "stacked": false,
+                    "region": "${Region}",
+                    "title": "ALB Metrics",
+                    "period": 300
+                  }
+                },
+                {
+                  "type": "metric",
+                  "x": 12,
+                  "y": 0,
+                  "width": 12,
+                  "height": 6,
+                  "properties": {
+                    "metrics": [
+                      [ "AWS/ECS", "CPUUtilization", "ServiceName", "${ServiceName}", "ClusterName", "${ClusterName}" ],
+                      [ ".", "MemoryUtilization", ".", ".", ".", "." ]
+                    ],
+                    "view": "timeSeries",
+                    "stacked": false,
+                    "region": "${Region}",
+                    "title": "ECS Service Metrics",
+                    "period": 300
+                  }
                 }
-              },
-              {
-                "type": "metric",
-                "x": 12,
-                "y": 0,
-                "width": 12,
-                "height": 6,
-                "properties": {
-                  "metrics": [
-                    [ "AWS/ECS", "CPUUtilization", "ServiceName", "${ECSService}", "ClusterName", "${ECSCluster}" ],
-                    [ ".", "MemoryUtilization", ".", ".", ".", "." ]
-                  ],
-                  "view": "timeSeries",
-                  "stacked": false,
-                  "region": "${AWS::Region}",
-                  "title": "ECS Service Metrics",
-                  "period": 300
-                }
-              }
-            ]
-          }
+              ]
+            }
+          - LoadBalancerFullName:
+              Fn::GetAtt:
+                - LoadBalancer
+                - LoadBalancerFullName
+            ServiceName:
+              Fn::GetAtt:
+                - ECSService
+                - Name
+            ClusterName:
+              Ref: ECSCluster
+            Region:
+              Ref: AWS::Region
 
   # Custom Resource to seed S3 bucket with dummy source code to trigger pipeline
   LambdaExecutionRole:

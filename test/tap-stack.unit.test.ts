@@ -293,10 +293,21 @@ describe('TapStack.yml Structural and Property Validation (CFN Unit Tests)', () 
     const cbRole = tpl.Resources.CodeBuildRole;
     const policies = cbRole.Properties.Policies[0].PolicyDocument.Statement;
 
-    // Check ECR permissions are scoped to specific repository
-    const ecrStatement = policies.find(s => s.Action && s.Action.some && s.Action.some(action => action.includes('ecr:')));
-    expect(ecrStatement).toBeDefined();
-    expect(ecrStatement.Resource).toEqual({ 'Fn::GetAtt': ['EcrRepository', 'Arn'] });
+    // Check ECR GetAuthorizationToken has account-level permissions (required by AWS)
+    const ecrAuthStatement = policies.find(s =>
+      s.Action && s.Action.includes && s.Action.includes('ecr:GetAuthorizationToken')
+    );
+    expect(ecrAuthStatement).toBeDefined();
+    expect(ecrAuthStatement.Resource).toBe('*');
+
+    // Check other ECR permissions are scoped to specific repository
+    const ecrRepoStatement = policies.find(s =>
+      s.Action && s.Action.some && s.Action.some(action =>
+        action.includes('ecr:') && action !== 'ecr:GetAuthorizationToken'
+      )
+    );
+    expect(ecrRepoStatement).toBeDefined();
+    expect(ecrRepoStatement.Resource).toEqual({ 'Fn::GetAtt': ['EcrRepository', 'Arn'] });
 
     // Check S3 permissions are scoped to artifact bucket
     const s3Statement = policies.find(s => s.Action && s.Action.some && s.Action.some(action => action.includes('s3:')));
@@ -562,9 +573,20 @@ describe('TapStack.yml Structural and Property Validation (CFN Unit Tests)', () 
 
     // Check that DashboardBody is a Fn::Sub with the expected content
     expect(dashboard.Properties.DashboardBody).toHaveProperty('Fn::Sub');
-    const dashboardBody = dashboard.Properties.DashboardBody['Fn::Sub'];
+    const dashboardBodySub = dashboard.Properties.DashboardBody['Fn::Sub'];
+
+    // Fn::Sub can be either a string or [string, map]. For proper substitution with variables, it should be an array
+    expect(Array.isArray(dashboardBodySub)).toBe(true);
+
+    const dashboardBody = dashboardBodySub[0];
     expect(dashboardBody).toContain('ALB Metrics');
     expect(dashboardBody).toContain('ECS Service Metrics');
+
+    // Verify substitution variables exist
+    const substitutions = dashboardBodySub[1];
+    expect(substitutions).toHaveProperty('LoadBalancerFullName');
+    expect(substitutions).toHaveProperty('ServiceName');
+    expect(substitutions).toHaveProperty('ClusterName');
   });
 
   // --- New Outputs Tests ---
