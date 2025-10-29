@@ -12,9 +12,9 @@
 */
 
 import { CloudWatchLogsClient, FilterLogEventsCommand } from '@aws-sdk/client-cloudwatch-logs';
-import { InvokeCommand, LambdaClient, GetFunctionCommand } from '@aws-sdk/client-lambda';
-import { GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
-import { PublishCommand, SNSClient, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
+import { GetFunctionCommand, InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
+import { GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
 import fs from 'fs';
 import path from 'path';
 import { TextDecoder, TextEncoder } from 'util';
