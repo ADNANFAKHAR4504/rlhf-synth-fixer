@@ -283,9 +283,11 @@ describe('Aurora Serverless Infrastructure - Integration Tests', () => {
 
       console.log('\n🔍 Testing CloudWatch Alarms...');
 
+      // Search for alarms with project name prefix
+      const projectName = 'gaming-platform-test';
       const response = await cloudwatchClient.send(
         new DescribeAlarmsCommand({
-          AlarmNamePrefix: clusterId,
+          AlarmNamePrefix: projectName,
           MaxRecords: 100,
         })
       );
@@ -293,12 +295,12 @@ describe('Aurora Serverless Infrastructure - Integration Tests', () => {
       expect(response.MetricAlarms).toBeDefined();
       expect(response.MetricAlarms!.length).toBeGreaterThan(0);
 
-      const cpuAlarm = response.MetricAlarms!.find((alarm) => alarm.MetricName === 'CPUUtilization');
-      const connectionsAlarm = response.MetricAlarms!.find((alarm) => alarm.MetricName === 'DatabaseConnections');
-
       console.log(`  ✅ ${response.MetricAlarms!.length} CloudWatch alarms configured`);
-      if (cpuAlarm) console.log(`  ✅ CPU utilization alarm: ${cpuAlarm.AlarmName}`);
-      if (connectionsAlarm) console.log(`  ✅ Database connections alarm: ${connectionsAlarm.AlarmName}`);
+      
+      // Log all alarm names for debugging
+      response.MetricAlarms!.forEach((alarm) => {
+        console.log(`  📊 Alarm: ${alarm.AlarmName} (Metric: ${alarm.MetricName})`);
+      });
     }, 30000);
 
     test('8. Aurora Serverless v2 auto-scaling configuration', async () => {
