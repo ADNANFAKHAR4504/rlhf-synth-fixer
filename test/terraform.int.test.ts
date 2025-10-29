@@ -232,7 +232,7 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
     test('SSM parameters are created and accessible', async () => {
       // Collect parameter names from nested or flattened outputs
       let paramNames: string[] = [];
-      
+
       if (outputs.ssm_parameters && typeof outputs.ssm_parameters === 'object') {
         // Nested object - extract values
         paramNames = Object.values(outputs.ssm_parameters).filter((v: any) => typeof v === 'string');
@@ -245,7 +245,7 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
           // Not JSON, skip
         }
       }
-      
+
       // Flattened keys like ssm_parameters.auth_token
       Object.keys(outputs)
         .filter((k) => k.startsWith('ssm_parameters.') || k.startsWith('ssm_parameters_'))
@@ -546,7 +546,7 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
         },
         ConsistentRead: true,
       });
-      
+
       const response = await dynamoClient.send(getCommand);
       expect(response.Item).toBeDefined();
       expect(response.Item?.eventId?.S).toBe(testEventId);
