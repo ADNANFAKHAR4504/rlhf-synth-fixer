@@ -36,7 +36,13 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
 
     // Load deployment outputs
     const outputsContent = fs.readFileSync(OUTPUTS_PATH, 'utf8');
-    outputs = JSON.parse(outputsContent);
+    const rawOutputs = JSON.parse(outputsContent);
+
+    // Extract values from Terraform JSON format (which has .value property)
+    outputs = {};
+    for (const [key, val] of Object.entries(rawOutputs)) {
+      outputs[key] = (val as any).value !== undefined ? (val as any).value : val;
+    }
 
     console.log('Loaded deployment outputs:', Object.keys(outputs));
   });
@@ -44,25 +50,21 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
   describe('VPC Deployment Verification', () => {
     test('VPC IDs exist for all three regions', () => {
       expect(outputs).toHaveProperty('vpc_ids');
-
-      const vpcIds = typeof outputs.vpc_ids === 'string'
-        ? JSON.parse(outputs.vpc_ids)
-        : outputs.vpc_ids;
-
+      
+      const vpcIds = outputs.vpc_ids;
+      
       expect(vpcIds).toHaveProperty('us-east-1');
       expect(vpcIds).toHaveProperty('us-west-2');
       expect(vpcIds).toHaveProperty('eu-central-1');
-
+      
       expect(vpcIds['us-east-1']).toMatch(/^vpc-/);
       expect(vpcIds['us-west-2']).toMatch(/^vpc-/);
       expect(vpcIds['eu-central-1']).toMatch(/^vpc-/);
     });
 
     test.each(regions)('VPC in %s has correct DNS settings', async (region) => {
-      const vpcIds = typeof outputs.vpc_ids === 'string'
-        ? JSON.parse(outputs.vpc_ids)
-        : outputs.vpc_ids;
-
+      const vpcIds = outputs.vpc_ids;
+      
       const vpcId = vpcIds[region];
       if (!vpcId) {
         throw new Error(`VPC ID not found for region ${region}`);
@@ -80,9 +82,7 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
 
   describe('CIDR Block Allocation', () => {
     test('CIDR blocks are unique across all regions', () => {
-      const vpcCidrs = typeof outputs.vpc_cidr_blocks === 'string'
-        ? JSON.parse(outputs.vpc_cidr_blocks)
-        : outputs.vpc_cidr_blocks;
+      const vpcCidrs = outputs.vpc_cidr_blocks;
 
       const cidrList = [
         vpcCidrs['us-east-1'],
@@ -101,9 +101,7 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
     });
 
     test('CIDR blocks follow hierarchical allocation from base block', () => {
-      const vpcCidrs = typeof outputs.vpc_cidr_blocks === 'string'
-        ? JSON.parse(outputs.vpc_cidr_blocks)
-        : outputs.vpc_cidr_blocks;
+      const vpcCidrs = outputs.vpc_cidr_blocks;
 
       // All CIDRs should start with 10. (default base_cidr_block)
       Object.values(vpcCidrs).forEach((cidr: any) => {
@@ -114,9 +112,7 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
 
   describe('Subnet Configuration', () => {
     test('public subnets exist in all regions', () => {
-      const publicSubnets = typeof outputs.public_subnet_ids === 'string'
-        ? JSON.parse(outputs.public_subnet_ids)
-        : outputs.public_subnet_ids;
+      const publicSubnets = outputs.public_subnet_ids;
 
       regions.forEach((region) => {
         expect(publicSubnets[region]).toBeDefined();
@@ -131,9 +127,7 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
     });
 
     test('private subnets exist in all regions', () => {
-      const privateSubnets = typeof outputs.private_subnet_ids === 'string'
-        ? JSON.parse(outputs.private_subnet_ids)
-        : outputs.private_subnet_ids;
+      const privateSubnets = outputs.private_subnet_ids;
 
       regions.forEach((region) => {
         expect(privateSubnets[region]).toBeDefined();
@@ -148,9 +142,7 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
     });
 
     test.each(regions)('subnets in %s are in different AZs', async (region) => {
-      const publicSubnets = typeof outputs.public_subnet_ids === 'string'
-        ? JSON.parse(outputs.public_subnet_ids)
-        : outputs.public_subnet_ids;
+      const publicSubnets = outputs.public_subnet_ids;
 
       const subnetIds = publicSubnets[region];
       const client = new EC2Client({ region });
@@ -167,9 +159,7 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
 
   describe('NAT Gateway Cost Optimization', () => {
     test('NAT Gateways are only deployed in specified regions', () => {
-      const natGateways = typeof outputs.nat_gateway_ids === 'string'
-        ? JSON.parse(outputs.nat_gateway_ids)
-        : outputs.nat_gateway_ids;
+      const natGateways = outputs.nat_gateway_ids;
 
       // Check that only us-east-1 has NAT Gateways (based on default tfvars)
       expect(Array.isArray(natGateways['us-east-1'])).toBe(true);
@@ -185,9 +175,7 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
     });
 
     test('NAT Gateway count meets cost optimization target', () => {
-      const natGatewayCount = typeof outputs.nat_gateway_count === 'string'
-        ? parseInt(outputs.nat_gateway_count)
-        : outputs.nat_gateway_count;
+      const natGatewayCount = outputs.nat_gateway_count;
 
       // Should be significantly less than 9 (3 per region)
       expect(natGatewayCount).toBeLessThanOrEqual(3);
@@ -197,9 +185,7 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
     });
 
     test('estimated monthly NAT cost is optimized', () => {
-      const estimatedCost = typeof outputs.estimated_monthly_nat_cost === 'string'
-        ? parseFloat(outputs.estimated_monthly_nat_cost)
-        : outputs.estimated_monthly_nat_cost;
+      const estimatedCost = outputs.estimated_monthly_nat_cost;
 
       // With 3 or fewer NAT Gateways, cost should be under $150/month
       expect(estimatedCost).toBeLessThanOrEqual(150);
@@ -208,9 +194,7 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
 
   describe('Internet Gateway Configuration', () => {
     test.each(regions)('Internet Gateway exists in %s', async (region) => {
-      const igwIds = typeof outputs.internet_gateway_ids === 'string'
-        ? JSON.parse(outputs.internet_gateway_ids)
-        : outputs.internet_gateway_ids;
+      const igwIds = outputs.internet_gateway_ids;
 
       const igwId = igwIds[region];
       expect(igwId).toMatch(/^igw-/);
@@ -228,9 +212,7 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
 
   describe('VPC Peering Connections', () => {
     test('three VPC peering connections are established', () => {
-      const peeringConnections = typeof outputs.vpc_peering_connections === 'string'
-        ? JSON.parse(outputs.vpc_peering_connections)
-        : outputs.vpc_peering_connections;
+      const peeringConnections = outputs.vpc_peering_connections;
 
       expect(Object.keys(peeringConnections)).toHaveLength(3);
       expect(peeringConnections).toHaveProperty('us-east-1-to-us-west-2');
@@ -239,9 +221,7 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
     });
 
     test('all peering connections are in active state', () => {
-      const peeringConnections = typeof outputs.vpc_peering_connections === 'string'
-        ? JSON.parse(outputs.vpc_peering_connections)
-        : outputs.vpc_peering_connections;
+      const peeringConnections = outputs.vpc_peering_connections;
 
       Object.values(peeringConnections).forEach((conn: any) => {
         expect(conn.id).toMatch(/^pcx-/);
@@ -254,9 +234,7 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
       ['us-west-2', 'us-west-2-to-eu-central-1'],
       ['us-east-1', 'us-east-1-to-eu-central-1'],
     ])('peering connection %s is properly configured in %s', async (region, peeringKey) => {
-      const peeringConnections = typeof outputs.vpc_peering_connections === 'string'
-        ? JSON.parse(outputs.vpc_peering_connections)
-        : outputs.vpc_peering_connections;
+      const peeringConnections = outputs.vpc_peering_connections;
 
       const peeringId = peeringConnections[peeringKey].id;
       const client = new EC2Client({ region });
@@ -273,9 +251,7 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
 
   describe('Route Table Configuration', () => {
     test.each(regions)('private route tables in %s have peering routes', async (region) => {
-      const vpcIds = typeof outputs.vpc_ids === 'string'
-        ? JSON.parse(outputs.vpc_ids)
-        : outputs.vpc_ids;
+      const vpcIds = outputs.vpc_ids;
 
       const vpcId = vpcIds[region];
       const client = new EC2Client({ region });
@@ -297,9 +273,7 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
     });
 
     test.each(regions)('public route tables in %s have internet gateway route', async (region) => {
-      const vpcIds = typeof outputs.vpc_ids === 'string'
-        ? JSON.parse(outputs.vpc_ids)
-        : outputs.vpc_ids;
+      const vpcIds = outputs.vpc_ids;
 
       const vpcId = vpcIds[region];
       const client = new EC2Client({ region });
@@ -325,9 +299,7 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
 
   describe('Security Configuration', () => {
     test.each(regions)('default security group in %s has restrictive rules', async (region) => {
-      const vpcIds = typeof outputs.vpc_ids === 'string'
-        ? JSON.parse(outputs.vpc_ids)
-        : outputs.vpc_ids;
+      const vpcIds = outputs.vpc_ids;
 
       const vpcId = vpcIds[region];
       const client = new EC2Client({ region });
@@ -350,9 +322,7 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
 
   describe('Resource Tagging', () => {
     test.each(regions)('VPC in %s has proper tags', async (region) => {
-      const vpcIds = typeof outputs.vpc_ids === 'string'
-        ? JSON.parse(outputs.vpc_ids)
-        : outputs.vpc_ids;
+      const vpcIds = outputs.vpc_ids;
 
       const vpcId = vpcIds[region];
       const client = new EC2Client({ region });
@@ -373,22 +343,16 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
   describe('End-to-End Network Workflow', () => {
     test('complete multi-region VPC infrastructure is functional', async () => {
       // This test validates the entire workflow
-
+      
       // 1. Verify all VPCs exist
-      const vpcIds = typeof outputs.vpc_ids === 'string'
-        ? JSON.parse(outputs.vpc_ids)
-        : outputs.vpc_ids;
+      const vpcIds = outputs.vpc_ids;
 
       expect(Object.keys(vpcIds)).toHaveLength(3);
 
       // 2. Verify subnets are properly distributed
-      const publicSubnets = typeof outputs.public_subnet_ids === 'string'
-        ? JSON.parse(outputs.public_subnet_ids)
-        : outputs.public_subnet_ids;
-
-      const privateSubnets = typeof outputs.private_subnet_ids === 'string'
-        ? JSON.parse(outputs.private_subnet_ids)
-        : outputs.private_subnet_ids;
+      const publicSubnets = outputs.public_subnet_ids;
+      
+      const privateSubnets = outputs.private_subnet_ids;
 
       regions.forEach((region) => {
         expect(publicSubnets[region].length).toBeGreaterThanOrEqual(2);
@@ -396,9 +360,7 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
       });
 
       // 3. Verify peering mesh topology
-      const peeringConnections = typeof outputs.vpc_peering_connections === 'string'
-        ? JSON.parse(outputs.vpc_peering_connections)
-        : outputs.vpc_peering_connections;
+      const peeringConnections = outputs.vpc_peering_connections;
 
       expect(Object.keys(peeringConnections)).toHaveLength(3);
       Object.values(peeringConnections).forEach((conn: any) => {
@@ -406,16 +368,12 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
       });
 
       // 4. Verify NAT Gateway optimization
-      const natCount = typeof outputs.nat_gateway_count === 'string'
-        ? parseInt(outputs.nat_gateway_count)
-        : outputs.nat_gateway_count;
+      const natCount = outputs.nat_gateway_count;
 
       expect(natCount).toBeLessThanOrEqual(3);
 
       // 5. Verify cost optimization
-      const estimatedCost = typeof outputs.estimated_monthly_nat_cost === 'string'
-        ? parseFloat(outputs.estimated_monthly_nat_cost)
-        : outputs.estimated_monthly_nat_cost;
+      const estimatedCost = outputs.estimated_monthly_nat_cost;
 
       // Cost should be significantly reduced from original 9 NAT Gateways (~$405/month)
       expect(estimatedCost).toBeLessThan(200);
@@ -431,9 +389,7 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
 
   describe('High Availability Validation', () => {
     test('resources are distributed across multiple availability zones', () => {
-      const azs = typeof outputs.availability_zones_used === 'string'
-        ? JSON.parse(outputs.availability_zones_used)
-        : outputs.availability_zones_used;
+      const azs = outputs.availability_zones_used;
 
       regions.forEach((region) => {
         expect(azs[region]).toBeDefined();
