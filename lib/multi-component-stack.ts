@@ -534,6 +534,9 @@ export class MultiComponentApplicationConstruct extends Construct {
       functionName: `prod-lambda-api-v2-${safeSuffixForLambda}`,
       runtime: lambda.Runtime.NODEJS_18_X, // Updated to supported version
       handler: 'index.handler',
+      // Use a simple asset path. In CI/local we must ensure dependencies
+      // are present in `lib/lambda/api/node_modules` (e.g. run `npm ci`
+      // under that directory) so the packaged asset includes runtime deps.
       code: lambda.Code.fromAsset(path.join(__dirname, 'lambda', 'api')),
       vpc,
       vpcSubnets: {
