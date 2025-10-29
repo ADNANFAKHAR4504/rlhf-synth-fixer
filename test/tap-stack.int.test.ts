@@ -364,3 +364,5 @@ describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
       const state = instResp.Reservations?.[0]?.Instances?.[0]?.State?.Name;
       expect(state).toBe('running');
     }, 360000); // 6 minute timeout (instance refresh can take 5+ minutes)
+  });
+});
