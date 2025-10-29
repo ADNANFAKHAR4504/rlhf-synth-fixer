@@ -155,6 +155,11 @@ output "cloudwatch_log_group_name" {
   value       = aws_cloudwatch_log_group.app_logs.name
 }
 
+output "rds_monitoring_role_arn" {
+  description = "ARN of the RDS enhanced monitoring IAM role"
+  value       = aws_iam_role.rds_enhanced_monitoring.arn
+}
+
 # ================================
 # ENVIRONMENT CONFIGURATION SUMMARY
 # ================================
