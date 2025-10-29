@@ -1,0 +1,35 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "8234231039",
+  "team": "synth",
+  "startedAt": "2025-10-28T01:38:51+05:30",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Failure Recovery Automation",
+    "IaC Optimization",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "ElastiCache",
+    "Kinesis",
+    "Secrets Manager",
+    "KMS",
+    "VPC",
+    "EC2 Security Groups",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
