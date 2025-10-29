@@ -1,0 +1,39 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "348982",
+  "team": "5",
+  "startedAt": "2025-10-28T05:13:26.371Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Transit Gateway",
+    "Network Firewall",
+    "GuardDuty",
+    "Security Hub",
+    "IAM",
+    "Systems Manager",
+    "CloudTrail",
+    "Lambda",
+    "EventBridge",
+    "SNS",
+    "KMS",
+    "S3",
+    "CloudWatch Logs",
+    "AWS Organizations"
+  ],
+  "training_quality": 9,
+  "background": "Financial services zero-trust security architecture requiring comprehensive network segmentation, threat detection, automated incident response, and banking compliance across AWS infrastructure with VPC isolation, Transit Gateway routing, Network Firewall inspection, GuardDuty monitoring, and least-privilege IAM controls",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "devang-devops",
+  "dockerS3Location": ""
+}
