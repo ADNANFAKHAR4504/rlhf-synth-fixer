@@ -5,7 +5,6 @@ import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
@@ -70,11 +69,12 @@ export class ApplicationInfrastructure extends Construct {
     });
 
     // Lambda function
-    this.lambdaFunction = new NodejsFunction(this, 'HonoFunction', {
+    this.lambdaFunction = new lambda.Function(this, 'HonoFunction', {
       functionName: `${config.prefix}-function`,
       runtime: lambda.Runtime.NODEJS_20_X,
-      entry: path.join(__dirname, '../app/src/index.ts'),
-      depsLockFilePath: path.join(__dirname, '../app/package-lock.json'),
+      handler: 'index.handler',
+      // initialize the lambda function with the code from the app/src directory
+      code: lambda.Code.fromAsset(path.join(__dirname, '../app/src')),
       role: lambdaRole,
       timeout: cdk.Duration.seconds(30),
       memorySize: 512,
