@@ -335,9 +335,12 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
 
     test('should grant EC2 role S3 access', () => {
       const role = template.Resources.EC2InstanceRole;
-      const s3Policy = role.Properties.Policies.find((p: any) => p.PolicyName === 'S3ReadOnlyAccess');
+      const s3Policy = role.Properties.Policies.find((p: any) => p.PolicyName === 'S3ApplicationDataAccess');
       expect(s3Policy).toBeDefined();
       expect(s3Policy.PolicyDocument.Statement[0].Action).toContain('s3:GetObject');
+      expect(s3Policy.PolicyDocument.Statement[0].Action).toContain('s3:PutObject');
+      expect(s3Policy.PolicyDocument.Statement[0].Action).toContain('s3:DeleteObject');
+      expect(s3Policy.PolicyDocument.Statement[0].Action).toContain('s3:ListBucket');
     });
 
     test('should create instance profile', () => {
