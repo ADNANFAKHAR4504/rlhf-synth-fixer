@@ -114,6 +114,12 @@ output "lambda_layer_arn" {
   value       = aws_lambda_layer_version.common_dependencies.arn
 }
 
+# Region Output
+output "region" {
+  description = "AWS region where resources are deployed"
+  value       = data.aws_region.current.id
+}
+
 # Integration Testing Endpoints
 output "integration_test_config" {
   description = "Configuration for integration testing"
