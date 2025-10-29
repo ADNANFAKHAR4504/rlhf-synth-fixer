@@ -176,24 +176,45 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
     }, 30000);
 
     test('CloudWatch log groups exist with correct retention', async () => {
-      // Prefer explicit names from outputs (flat) when available
+      // Collect log group names from outputs
       const explicitGroups: string[] = [];
+      
       if (outputs.cloudwatch_log_groups) {
-        const map = outputs.cloudwatch_log_groups;
-        Object.values(map).forEach((name: any) => {
-          if (typeof name === 'string') explicitGroups.push(name);
-        });
-      } else {
-        // Fallback: collect flattened keys like cloudwatch_log_groups.api_gateway
+        let map = outputs.cloudwatch_log_groups;
+        
+        // Handle if it's a JSON string
+        if (typeof map === 'string') {
+          try {
+            map = JSON.parse(map);
+          } catch (e) {
+            // Not JSON, skip
+            map = {};
+          }
+        }
+        
+        // Extract values if it's an object
+        if (typeof map === 'object' && map !== null) {
+          Object.values(map).forEach((name: any) => {
+            if (typeof name === 'string' && name.startsWith('/')) {
+              explicitGroups.push(name);
+            }
+          });
+        }
+      }
+      
+      // Fallback: collect flattened keys like cloudwatch_log_groups.api_gateway
+      if (explicitGroups.length === 0) {
         Object.keys(outputs)
           .filter((k) => k.startsWith('cloudwatch_log_groups.'))
           .forEach((k) => {
             const name = outputs[k];
-            if (typeof name === 'string') explicitGroups.push(name);
+            if (typeof name === 'string' && name.startsWith('/')) {
+              explicitGroups.push(name);
+            }
           });
       }
 
-      // If we don't have explicit names, scope to our lambda groups only
+      // If still no explicit names, use pattern matching
       if (explicitGroups.length === 0) {
         const prefix = '/aws/lambda/';
         const resp = await logsClient.send(new DescribeLogGroupsCommand({
@@ -201,10 +222,10 @@ describe('Terraform Serverless Infrastructure Integration Tests', () => {
         }));
         const logGroups = (resp.logGroups || []).filter((lg) =>
           typeof lg.logGroupName === 'string' && (
-            lg.logGroupName.includes('-auth-fn') ||
-            lg.logGroupName.includes('-ingest-fn') ||
-            lg.logGroupName.includes('-process-fn') ||
-            lg.logGroupName.includes('-store-fn')
+            lg.logGroupName.includes('-auth-v2') ||
+            lg.logGroupName.includes('-ingest-v2') ||
+            lg.logGroupName.includes('-process-v2') ||
+            lg.logGroupName.includes('-store-v2')
           )
         );
         expect(logGroups.length).toBeGreaterThan(0);

@@ -26,7 +26,7 @@ data "archive_file" "event_storage" {
 # Lambda Authorizer Function
 resource "aws_lambda_function" "authorizer" {
   filename         = data.archive_file.authorizer.output_path
-  function_name    = "${local.name_prefix}-auth-fn"
+  function_name    = "${local.name_prefix}-auth-v2"
   role             = aws_iam_role.lambda_authorizer.arn
   handler          = "index.handler"
   source_code_hash = data.archive_file.authorizer.output_base64sha256
@@ -57,7 +57,7 @@ resource "aws_lambda_function" "authorizer" {
 # Event Ingestion Lambda
 resource "aws_lambda_function" "event_ingestion" {
   filename         = data.archive_file.event_ingestion.output_path
-  function_name    = "${local.name_prefix}-ingest-fn"
+  function_name    = "${local.name_prefix}-ingest-v2"
   role             = aws_iam_role.lambda_ingestion.arn
   handler          = "index.handler"
   source_code_hash = data.archive_file.event_ingestion.output_base64sha256
@@ -95,7 +95,7 @@ resource "aws_lambda_function" "event_ingestion" {
 # Event Processing Lambda
 resource "aws_lambda_function" "event_processing" {
   filename         = data.archive_file.event_processing.output_path
-  function_name    = "${local.name_prefix}-process-fn"
+  function_name    = "${local.name_prefix}-process-v2"
   role             = aws_iam_role.lambda_processing.arn
   handler          = "index.handler"
   source_code_hash = data.archive_file.event_processing.output_base64sha256
@@ -133,7 +133,7 @@ resource "aws_lambda_function" "event_processing" {
 # Event Storage Lambda
 resource "aws_lambda_function" "event_storage" {
   filename         = data.archive_file.event_storage.output_path
-  function_name    = "${local.name_prefix}-store-fn"
+  function_name    = "${local.name_prefix}-store-v2"
   role             = aws_iam_role.lambda_storage.arn
   handler          = "index.handler"
   source_code_hash = data.archive_file.event_storage.output_base64sha256

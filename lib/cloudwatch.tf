@@ -7,28 +7,28 @@ resource "aws_cloudwatch_log_group" "api_gateway" {
 }
 
 resource "aws_cloudwatch_log_group" "lambda_authorizer" {
-  name              = "/aws/lambda/${local.name_prefix}-auth-fn"
+  name              = "/aws/lambda/${local.name_prefix}-auth-v2"
   retention_in_days = var.log_retention_days
 
   tags = local.common_tags
 }
 
 resource "aws_cloudwatch_log_group" "lambda_ingestion" {
-  name              = "/aws/lambda/${local.name_prefix}-ingest-fn"
+  name              = "/aws/lambda/${local.name_prefix}-ingest-v2"
   retention_in_days = var.log_retention_days
 
   tags = local.common_tags
 }
 
 resource "aws_cloudwatch_log_group" "lambda_processing" {
-  name              = "/aws/lambda/${local.name_prefix}-process-fn"
+  name              = "/aws/lambda/${local.name_prefix}-process-v2"
   retention_in_days = var.log_retention_days
 
   tags = local.common_tags
 }
 
 resource "aws_cloudwatch_log_group" "lambda_storage" {
-  name              = "/aws/lambda/${local.name_prefix}-store-fn"
+  name              = "/aws/lambda/${local.name_prefix}-store-v2"
   retention_in_days = var.log_retention_days
 
   tags = local.common_tags
