@@ -1,0 +1,14 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000244",
+  "team": "3",
+  "startedAt": "2025-10-29T19:13:54.438Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": "AWS Lambda, Amazon EventBridge, SQS, SNS, S3, KMS, Clooudwatch Logs, IAM, ELB"
+}
