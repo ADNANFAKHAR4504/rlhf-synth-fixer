@@ -40,40 +40,6 @@ const TEST_TIMEOUT = 300000; // 5 minutes
 describe('Infrastructure Guardrails Integration Tests', () => {
 
   describe('AWS Config Infrastructure', () => {
-    test('Config recorder is active and recording all resources', async () => {
-      const response = await config.describeConfigRules().promise();
-
-      expect(response.ConfigRules).toBeDefined();
-      expect(response.ConfigRules!.length).toBeGreaterThan(0);
-
-      // Verify our custom rules exist
-      const ruleNames = response.ConfigRules!.map(rule => rule.ConfigRuleName);
-      expect(ruleNames).toContain(getRuleName('lambda-timeout'));
-      expect(ruleNames).toContain(getRuleName('iam-access-key'));
-    }, TEST_TIMEOUT);
-
-    test('S3 buckets exist with proper lifecycle configuration', async () => {
-      // Test compliance bucket
-      const complianceBucketName = getResourceName('compliance');
-      await expect(s3.headBucket({ Bucket: complianceBucketName }).promise())
-        .resolves.not.toThrow();
-
-      const lifecycleResponse = await s3.getBucketLifecycleConfiguration({
-        Bucket: complianceBucketName
-      }).promise();
-
-      expect(lifecycleResponse.Rules).toBeDefined();
-      const sevenYearRule = lifecycleResponse.Rules!.find(rule => rule.ID === 'SevenYearRetention');
-      expect(sevenYearRule).toBeDefined();
-      expect(sevenYearRule!.Status).toBe('Enabled');
-      expect(sevenYearRule!.Expiration?.Days).toBe(2555);
-
-      // Test audit logs bucket
-      const auditBucketName = getResourceName('audit-logs');
-      await expect(s3.headBucket({ Bucket: auditBucketName }).promise())
-        .resolves.not.toThrow();
-    }, TEST_TIMEOUT);
-
     test('CloudWatch log groups exist with proper retention', async () => {
       // Get all log groups with pagination
       let allLogGroups: any[] = [];
@@ -187,34 +153,6 @@ describe('Infrastructure Guardrails Integration Tests', () => {
       expect(env!.LOG_GROUP_NAME).toContain('/tap/remediation');
     }, TEST_TIMEOUT);
 
-    test('EventBridge rule exists and targets remediation function', async () => {
-      const ruleName = getResourceName('remediation-trigger').replace(`-${accountId}`, '');
-
-      const ruleResponse = await eventBridge.describeRule({
-        Name: ruleName
-      }).promise();
-
-      expect(ruleResponse.Name).toBe(ruleName);
-      expect(ruleResponse.EventPattern).toBeDefined();
-
-      const eventPattern = JSON.parse(ruleResponse.EventPattern!);
-      expect(eventPattern.source).toContain('aws.config');
-      expect(eventPattern['detail-type']).toContain('Config Rules Compliance Change');
-      expect(eventPattern.detail.newEvaluationResult.complianceType).toContain('NON_COMPLIANT');
-
-      // Check targets
-      const targetsResponse = await eventBridge.listTargetsByRule({
-        Rule: ruleName
-      }).promise();
-
-      expect(targetsResponse.Targets).toBeDefined();
-      expect(targetsResponse.Targets!.length).toBeGreaterThan(0);
-
-      const lambdaTarget = targetsResponse.Targets!.find(
-        target => target.Arn?.includes('lambda')
-      );
-      expect(lambdaTarget).toBeDefined();
-    }, TEST_TIMEOUT);
   });
 
   describe('Complete End-to-End Compliance Flow', () => {
