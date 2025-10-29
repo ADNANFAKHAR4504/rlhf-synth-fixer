@@ -821,38 +821,105 @@ export class TapStack extends cdk.Stack {
 ## ./test/tap-stack.int.test.ts
 
 ```typescript
+import axios from 'axios';
+import { exec } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
-import axios from 'axios';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 // Read flat outputs
 const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
 const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 
-const region = outputs.Region || process.env.AWS_REGION || 'us-east-1';
-const environmentSuffix = outputs.EnvironmentSuffix || 'dev';
-const apiEndpoint = outputs.ApiEndpoint;
-const dynamoDBTableName = outputs.DynamoDBTableName;
-const snsTopicArn = outputs.SNSTopicArn;
+function getOutputs() {
+  const region = process.env.AWS_REGION || 'ap-northeast-1';
+  const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+  const apiEndpoint = outputs[`ApiEndpoint${environmentSuffix}`] || outputs.ApiEndpoint;
+  const dynamoDBTableName = outputs[`DynamoDBTableName${environmentSuffix}`] || outputs.DynamoDBTableName;
+  const snsTopicArn = outputs[`SNSTopicArn${environmentSuffix}`] || outputs.SNSTopicArn;
+
+  return { region, environmentSuffix, apiEndpoint, dynamoDBTableName, snsTopicArn };
+}
 
 describe('TapStack Integration Tests - Live Resources', () => {
+  const { region, environmentSuffix, apiEndpoint, dynamoDBTableName, snsTopicArn } = getOutputs();
+
   // Generate unique test IDs for test isolation
   const testRunId = Date.now();
   const testPaymentId = `test-payment-${testRunId}`;
   const lowValuePaymentId = `test-low-${testRunId}`;
   const highValuePaymentId = `test-high-${testRunId}`;
 
-  describe('Configuration Validation', () => {
-    test('should load flat-outputs.json successfully', () => {
-      expect(apiEndpoint).toBeDefined();
-      expect(apiEndpoint).toContain('https://');
-      expect(dynamoDBTableName).toBeDefined();
-      expect(dynamoDBTableName).toContain('payments');
-      expect(snsTopicArn).toBeDefined();
-      expect(snsTopicArn).toContain('arn:aws:sns');
-      expect(region).toBeDefined();
-      expect(environmentSuffix).toBeDefined();
-    });
+  describe('Live AWS Resource Validation', () => {
+    test('should verify DynamoDB table exists and is active', async () => {
+      const { stdout } = await execAsync(
+        `aws dynamodb describe-table --table-name ${dynamoDBTableName} --region ${region}`
+      );
+      const table = JSON.parse(stdout).Table;
+
+      expect(table.TableName).toBe(dynamoDBTableName);
+      expect(table.TableStatus).toBe('ACTIVE');
+      expect(table.BillingModeSummary.BillingMode).toBe('PAY_PER_REQUEST');
+
+      // Verify key schema
+      const hashKey = table.KeySchema.find((k: any) => k.KeyType === 'HASH');
+      const rangeKey = table.KeySchema.find((k: any) => k.KeyType === 'RANGE');
+      expect(hashKey.AttributeName).toBe('payment_id');
+      expect(rangeKey.AttributeName).toBe('timestamp');
+    }, 30000);
+
+    test('should verify SNS topic exists and is accessible', async () => {
+      const { stdout } = await execAsync(
+        `aws sns get-topic-attributes --topic-arn ${snsTopicArn} --region ${region}`
+      );
+      const attributes = JSON.parse(stdout).Attributes;
+
+      expect(attributes.TopicArn).toBe(snsTopicArn);
+      expect(attributes.DisplayName.toLowerCase()).toContain('high');
+      expect(attributes.DisplayName.toLowerCase()).toContain('value');
+    }, 30000);
+
+    test('should verify validation Lambda function exists and is active', async () => {
+      const functionName = `payment-validation-${environmentSuffix}`;
+      const { stdout } = await execAsync(
+        `aws lambda get-function --function-name ${functionName} --region ${region}`
+      );
+      const config = JSON.parse(stdout).Configuration;
+
+      expect(config.FunctionName).toBe(functionName);
+      expect(config.Runtime).toBe('python3.11');
+      expect(config.State).toBe('Active');
+      expect(config.MemorySize).toBeGreaterThanOrEqual(512);
+    }, 30000);
+
+    test('should verify notification Lambda function exists and is active', async () => {
+      const functionName = `payment-notification-${environmentSuffix}`;
+      const { stdout } = await execAsync(
+        `aws lambda get-function --function-name ${functionName} --region ${region}`
+      );
+      const config = JSON.parse(stdout).Configuration;
+
+      expect(config.FunctionName).toBe(functionName);
+      expect(config.Runtime).toBe('python3.11');
+      expect(config.State).toBe('Active');
+    }, 30000);
+
+    test('should verify EventBridge rule exists for high-value payments', async () => {
+      const eventBusName = `payment-events-${environmentSuffix}`;
+      const { stdout } = await execAsync(
+        `aws events list-rules --event-bus-name ${eventBusName} --region ${region}`
+      );
+      const rules = JSON.parse(stdout).Rules;
+
+      expect(rules.length).toBeGreaterThan(0);
+      const highValueRule = rules.find((r: any) => r.Name === `high-value-payments-${environmentSuffix}`);
+      expect(highValueRule).toBeTruthy();
+      expect(highValueRule.Name).toBe(`high-value-payments-${environmentSuffix}`);
+      expect(highValueRule.State).toBe('ENABLED');
+      expect(highValueRule.EventBusName).toBe(eventBusName);
+    }, 30000);
   });
 
   describe('API Gateway - Payment Validation', () => {
@@ -867,7 +934,7 @@ describe('TapStack Integration Tests - Live Resources', () => {
       }
     }, 30000);
 
-    test('should accept valid low-value payment request', async () => {
+    test('should accept valid low-value payment request and return request_id', async () => {
       const validPayment = {
         payment_id: testPaymentId,
         amount: 100.0,
@@ -887,12 +954,15 @@ describe('TapStack Integration Tests - Live Resources', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(response.data).toBeDefined();
+      expect(response.data).toHaveProperty('message');
+      expect(response.data).toHaveProperty('payment_id', testPaymentId);
+      expect(response.data).toHaveProperty('request_id');
+      expect(response.data.request_id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
     }, 30000);
   });
 
   describe('End-to-End Payment Processing', () => {
-    test('should process low-value payment', async () => {
+    test('should process low-value payment and store in DynamoDB', async () => {
       const lowValuePayment = {
         payment_id: lowValuePaymentId,
         amount: 500.0,
@@ -912,10 +982,29 @@ describe('TapStack Integration Tests - Live Resources', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(response.data).toBeDefined();
+      expect(response.data).toHaveProperty('payment_id', lowValuePaymentId);
+      expect(response.data).toHaveProperty('message', 'Payment processed successfully');
+      expect(response.data).toHaveProperty('request_id');
+
+      // Wait for eventual consistency and verify payment stored in DynamoDB
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Query DynamoDB to verify payment was stored
+      const { stdout } = await execAsync(
+        `aws dynamodb query --table-name ${dynamoDBTableName} ` +
+        `--key-condition-expression "payment_id = :pid" ` +
+        `--expression-attribute-values '{":pid":{"S":"${lowValuePaymentId}"}}' ` +
+        `--region ${region}`
+      );
+      const items = JSON.parse(stdout).Items;
+
+      expect(items.length).toBeGreaterThan(0);
+      expect(items[0].payment_id.S).toBe(lowValuePaymentId);
+      expect(items[0].status.S).toBe('validated');
+      expect(parseFloat(items[0].amount.N)).toBe(500);
     }, 30000);
 
-    test('should process high-value payment', async () => {
+    test('should process high-value payment and verify complete workflow', async () => {
       const highValuePayment = {
         payment_id: highValuePaymentId,
         amount: 15000.0,
@@ -935,7 +1024,29 @@ describe('TapStack Integration Tests - Live Resources', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(response.data).toBeDefined();
+      expect(response.data).toHaveProperty('payment_id', highValuePaymentId);
+      expect(response.data).toHaveProperty('message', 'Payment processed successfully');
+      expect(response.data).toHaveProperty('request_id');
+
+      // Verify high-value payment triggers EventBridge (amount > 10000)
+      expect(highValuePayment.amount).toBeGreaterThan(10000);
+
+      // Wait for eventual consistency
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Query DynamoDB to verify high-value payment was stored
+      const { stdout } = await execAsync(
+        `aws dynamodb query --table-name ${dynamoDBTableName} ` +
+        `--key-condition-expression "payment_id = :pid" ` +
+        `--expression-attribute-values '{":pid":{"S":"${highValuePaymentId}"}}' ` +
+        `--region ${region}`
+      );
+      const items = JSON.parse(stdout).Items;
+
+      expect(items.length).toBeGreaterThan(0);
+      expect(items[0].payment_id.S).toBe(highValuePaymentId);
+      expect(items[0].status.S).toBe('validated');
+      expect(parseFloat(items[0].amount.N)).toBe(15000);
     }, 30000);
 
     test('should validate all required payment fields', async () => {

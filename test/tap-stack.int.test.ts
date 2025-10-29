@@ -11,8 +11,8 @@ const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json')
 const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 
 function getOutputs() {
-  const region = outputs.Region || process.env.AWS_REGION || 'us-east-1';
-  const environmentSuffix = outputs.EnvironmentSuffix || 'dev';
+  const region = process.env.AWS_REGION || 'ap-northeast-1';
+  const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
   const apiEndpoint = outputs[`ApiEndpoint${environmentSuffix}`] || outputs.ApiEndpoint;
   const dynamoDBTableName = outputs[`DynamoDBTableName${environmentSuffix}`] || outputs.DynamoDBTableName;
   const snsTopicArn = outputs[`SNSTopicArn${environmentSuffix}`] || outputs.SNSTopicArn;
