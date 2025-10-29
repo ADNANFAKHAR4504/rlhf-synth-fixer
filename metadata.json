@@ -10,5 +10,16 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "Lambda"
+  "aws_services": [
+    "Lambda",
+    "VPC",
+    "S3",
+    "SNS",
+    "CloudWatch",
+    "EventBridge",
+    "IAM",
+    "EC2",
+    "RDS"
+  ],
+  "training_quality": 9
 }
