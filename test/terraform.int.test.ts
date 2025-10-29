@@ -352,30 +352,30 @@ describe('Zero-Trust Security Infrastructure - Integration Tests', () => {
     }, 30000);
 
     test('Log groups have 365-day retention', async () => {
-      if (!hasOutputs) {
-        console.log('Skipping: No deployment found');
+      if (!hasOutputs || !outputs.audit_log_group_name || !outputs.session_log_group_name) {
+        console.log('Skipping: No log group names in outputs');
         return;
       }
 
       const logsClient = new CloudWatchLogsClient({ region: AWS_REGION });
 
       try {
-        const command = new DescribeLogGroupsCommand({});
-        const response = await logsClient.send(command);
+        // Check only the log groups created by this deployment
+        const logGroupsToCheck = [
+          outputs.audit_log_group_name,
+          outputs.session_log_group_name
+        ];
 
-        expect(response.logGroups).toBeDefined();
-
-        // Check security-related log groups
-        const securityLogGroups = response.logGroups?.filter(lg =>
-          lg.logGroupName?.includes('audit') ||
-          lg.logGroupName?.includes('session') ||
-          lg.logGroupName?.includes('security')
-        );
-
-        if (securityLogGroups && securityLogGroups.length > 0) {
-          securityLogGroups.forEach(lg => {
-            expect(lg.retentionInDays).toBe(365);
+        for (const logGroupName of logGroupsToCheck) {
+          const command = new DescribeLogGroupsCommand({
+            logGroupNamePrefix: logGroupName
           });
+          const response = await logsClient.send(command);
+
+          const logGroup = response.logGroups?.find(lg => lg.logGroupName === logGroupName);
+          if (logGroup) {
+            expect(logGroup.retentionInDays).toBe(365);
+          }
         }
       } catch (error: any) {
         console.error('Log groups test error:', error.message);
