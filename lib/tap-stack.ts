@@ -90,11 +90,7 @@ export class TapStack extends TerraformStack {
       privateSubnetCidrs: ['10.0.10.0/24', '10.0.11.0/24'],
     };
 
-    const networking = new NetworkingConstruct(
-      this,
-      'networking',
-      networkingConfig
-    );
+    const networking = new NetworkingConstruct(this, 'networking', networkingConfig);
 
     // 2. Create Security Groups
     const securityGroupsConfig: SecurityGroupsConfig = {
@@ -105,11 +101,7 @@ export class TapStack extends TerraformStack {
       vpcId: networking.vpc.id,
     };
 
-    const securityGroups = new SecurityGroupsConstruct(
-      this,
-      'security-groups',
-      securityGroupsConfig
-    );
+    const securityGroups = new SecurityGroupsConstruct(this, 'security-groups', securityGroupsConfig);
 
     // 3. Create Database
     const databaseConfig: DatabaseConfig = {
@@ -119,8 +111,7 @@ export class TapStack extends TerraformStack {
       tags: commonTags,
       subnetIds: networking.privateSubnets.map(subnet => subnet.id),
       securityGroupId: securityGroups.rdsSecurityGroup.id,
-      instanceClass:
-        environment === 'production' ? 'db.t3.medium' : 'db.t3.micro',
+      instanceClass: environment === 'production' ? 'db.t3.medium' : 'db.t3.micro',
       allocatedStorage: environment === 'production' ? 100 : 20,
       dbName: 'ecommercedb',
       backupRetentionPeriod: environment === 'production' ? 7 : 1,
@@ -141,11 +132,7 @@ export class TapStack extends TerraformStack {
       // certificateArn: 'arn:aws:acm:region:account-id:certificate/certificate-id', // Add your ACM certificate ARN for HTTPS
     };
 
-    const loadBalancer = new LoadBalancerConstruct(
-      this,
-      'load-balancer',
-      loadBalancerConfig
-    );
+    const loadBalancer = new LoadBalancerConstruct(this, 'load-balancer', loadBalancerConfig);
 
     // 5. Create Compute Resources (Auto Scaling Group)
     const computeConfig: ComputeConfig = {

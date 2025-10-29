@@ -367,7 +367,7 @@ export class DatabaseConstruct extends Construct {
             username: 'dbadmin',
             password: password.randomPassword,
             engine: 'postgres',
-            host: this.dbInstance.address, // Now this.dbInstance exists
+            host: this.dbInstance.address,
             port: 5432,
             dbname: config.dbName,
           }),
@@ -614,121 +614,10 @@ export class ComputeConstruct extends Construct {
       }
     );
 
-    // Build user data script
-    const userDataScript = `#!/bin/bash
-    set -e
-
-    # Update system
-    yum update -y
-
-    # Install Node.js 20
-    curl -sL https://rpm.nodesource.com/setup_20.x | bash -
-    yum install -y nodejs
-
-    # Install CloudWatch agent
-    wget https://amazoncloudwatch-agent.s3.amazonaws.com/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-    rpm -U ./amazon-cloudwatch-agent.rpm
-
-    # Install PostgreSQL client
-    yum install -y postgresql15
-
-    # Create app directory
-    mkdir -p /opt/app
-    cd /opt/app
-
-    # Create a sample Node.js application
-    cat > app.js <<'NODEAPP'
-    const express = require('express');
-    const app = express();
-    const port = process.env.PORT || 3000;
-
-    // Health check endpoint
-    app.get('/api/health', (req, res) => {
-    res.status(200).json({
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        environment: process.env.ENVIRONMENT || 'unknown'
-    });
-    });
-
-    // Root endpoint
-    app.get('/', (req, res) => {
-    res.json({
-        message: 'E-commerce API',
-        version: '1.0.0',
-        environment: process.env.ENVIRONMENT || 'unknown'
-    });
-    });
-
-    // Start server
-    app.listen(port, () => {
-    console.log('Server running on port ' + port);
-    });
-    NODEAPP
-
-    # Install Express
-    npm init -y
-    npm install express
-
-    # Create systemd service
-    cat > /etc/systemd/system/node-app.service <<SYSTEMD
-    [Unit]
-    Description=Node.js Application
-    After=network.target
-
-    [Service]
-    Type=simple
-    User=ec2-user
-    WorkingDirectory=/opt/app
-    ExecStart=/usr/bin/node app.js
-    Restart=always
-    RestartSec=10
-    StandardOutput=syslog
-    StandardError=syslog
-    SyslogIdentifier=node-app
-    Environment="NODE_ENV=production"
-    Environment="PORT=3000"
-    Environment="DB_SECRET_ARN=${config.dbSecretArn}"
-    Environment="ENVIRONMENT=${config.environment}"
-    Environment="REGION=${config.region}"
-
-    [Install]
-    WantedBy=multi-user.target
-    SYSTEMD
-
-    # Set permissions
-    chown -R ec2-user:ec2-user /opt/app
-
-    # Start and enable service
-    systemctl daemon-reload
-    systemctl enable node-app
-    systemctl start node-app
-
-    # Configure CloudWatch logs
-    cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<CWCONFIG
-    {
-    "logs": {
-        "logs_collected": {
-        "files": {
-            "collect_list": [
-            {
-                "file_path": "/var/log/messages",
-                "log_group_name": "/aws/ec2/${config.projectName}-${config.environment}",
-                "log_stream_name": "{instance_id}/system"
-            }
-            ]
-        }
-        }
-    }
-    }
-    CWCONFIG
-
-    # Start CloudWatch agent
-    /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a query -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
-    `;
-
-    const userData = Fn.base64encode(userDataScript);
+    // Use the custom userData if provided, otherwise use empty string
+    const userData = config.userData 
+      ? Fn.base64encode(Fn.rawString(config.userData))
+      : '';
 
     // Create Launch Template
     this.launchTemplate = new aws.launchTemplate.LaunchTemplate(this, 'lt', {
