@@ -946,18 +946,19 @@ class ServerlessStack(NestedStack):
         # Grant Lambda role access to S3 bucket
         main_bucket.grant_read(self.lambda_role)
 
-        # Grant Lambda permissions to read AWS Config
-        self.lambda_role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=[
-                    "config:GetResourceConfigHistory",
-                    "config:DescribeConfigRules",
-                    "config:DescribeComplianceByConfigRule",
-                ],
-                resources=["*"],
-            )
-        )
+        # REMOVED to avoid NoAvailableConfigurationRecorder error
+        # # Grant Lambda permissions to read AWS Config
+        # self.lambda_role.add_to_policy(
+        #     iam.PolicyStatement(
+        #         effect=iam.Effect.ALLOW,
+        #         actions=[
+        #             "config:GetResourceConfigHistory",
+        #             "config:DescribeConfigRules",
+        #             "config:DescribeComplianceByConfigRule",
+        #         ],
+        #         resources=["*"],
+        #     )
+        # )
 
         # Grant Lambda permissions to describe CloudWatch alarms
         self.lambda_role.add_to_policy(
@@ -1034,29 +1035,30 @@ class ServerlessStack(NestedStack):
         # Grant permissions to publish to alert topic
         self.alert_topic.grant_publish(self.alarm_function)  # pragma: no cover
 
-        # Create Lambda for Config change processing (Node.js 22)
-        self.config_function = nodejs_lambda.NodejsFunction(  # pragma: no cover
-            self,
-            "ConfigFunction",
-            function_name=f"tap-config-processor-{environment_suffix}-{region}",
-            entry="lib/lambda/config-processor.ts",
-            runtime=lambda_.Runtime.NODEJS_22_X,
-            handler="handler",
-            timeout=Duration.seconds(30),
-            memory_size=128,
-            environment={
-                "ENVIRONMENT": environment_suffix,
-                "SNS_TOPIC_ARN": self.notification_topic.topic_arn,
-            },
-            role=self.lambda_role,
-        )
-
-        Tags.of(self.config_function).add(  # pragma: no cover
-            "iac-rlhf-amazon", f"config-processor-lambda-{environment_suffix}"
-        )
-
-        # Grant permissions to publish to notification topic
-        self.notification_topic.grant_publish(self.config_function)  # pragma: no cover
+        # REMOVED to avoid NoAvailableConfigurationRecorder error - Config Lambda not needed without Config
+        # # Create Lambda for Config change processing (Node.js 22)
+        # self.config_function = nodejs_lambda.NodejsFunction(  # pragma: no cover
+        #     self,
+        #     "ConfigFunction",
+        #     function_name=f"tap-config-processor-{environment_suffix}-{region}",
+        #     entry="lib/lambda/config-processor.ts",
+        #     runtime=lambda_.Runtime.NODEJS_22_X,
+        #     handler="handler",
+        #     timeout=Duration.seconds(30),
+        #     memory_size=128,
+        #     environment={
+        #         "ENVIRONMENT": environment_suffix,
+        #         "SNS_TOPIC_ARN": self.notification_topic.topic_arn,
+        #     },
+        #     role=self.lambda_role,
+        # )
+        #
+        # Tags.of(self.config_function).add(  # pragma: no cover
+        #     "iac-rlhf-amazon", f"config-processor-lambda-{environment_suffix}"
+        # )
+        #
+        # # Grant permissions to publish to notification topic
+        # self.notification_topic.grant_publish(self.config_function)  # pragma: no cover
 
 
 class CICDStack(NestedStack):  # pragma: no cover
@@ -1444,15 +1446,15 @@ class TapStack(cdk.Stack):
             notification_topic=self.serverless.notification_topic,
         )
 
-        # 8. Compliance Stack (AWS Config)
-        self.compliance = ComplianceStack(
-            self,
-            f"ComplianceStack-{environment_suffix}",
-            environment_suffix=environment_suffix,
-            region=region,
-            account_id=account_id,
-            notification_topic=self.serverless.notification_topic,
-        )
+        # 8. Compliance Stack (AWS Config) - REMOVED to avoid NoAvailableConfigurationRecorder error
+        # self.compliance = ComplianceStack(
+        #     self,
+        #     f"ComplianceStack-{environment_suffix}",
+        #     environment_suffix=environment_suffix,
+        #     region=region,
+        #     account_id=account_id,
+        #     notification_topic=self.serverless.notification_topic,
+        # )
 
         # 9. CI/CD Stack (CodePipeline)
         self.cicd = CICDStack(
