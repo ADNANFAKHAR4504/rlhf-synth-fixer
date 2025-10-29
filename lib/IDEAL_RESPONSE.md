@@ -543,99 +543,20 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		EnvironmentSuffix: jsii.String(environmentSuffix),
 	}
 }
+
 ```
 
-## Architecture Overview
+## Summary
 
-This production-ready implementation includes:
+This implementation creates the core infrastructure components for the StreamSecure media processing platform:
 
-### Encryption and Security (KMS)
+- VPC with public and private subnets
+- ECS cluster for container workloads
+- EFS file system for shared storage
+- Aurora PostgreSQL database cluster
+- ElastiCache Redis for caching
+- Kinesis Data Stream for analytics
+- API Gateway for REST API
+- Secrets Manager for credentials
 
-- Four customer-managed KMS keys with automatic rotation enabled
-- Separate keys for RDS, EFS, Secrets Manager, and Kinesis
-- All data encrypted at rest and in transit where applicable
-
-### Network Architecture (VPC, NAT Gateway)
-
-- Multi-AZ VPC with public and private subnets
-- Two NAT Gateways (one per AZ) for high availability
-- Internet Gateway for public subnet access
-- Proper route table configuration
-
-### Security Groups
-
-- Least privilege security groups for each service
-- ECS security group for task communication
-- RDS security group allowing only PostgreSQL access from ECS
-- ElastiCache security group allowing only Redis access from ECS
-- EFS security group allowing only NFS access from ECS
-
-### Container Infrastructure (ECS, EFS)
-
-- ECS cluster with Container Insights enabled
-- EFS file system with KMS encryption
-- IAM roles for ECS task execution and task access
-- Proper security group configuration for ECS-EFS communication
-
-### Database Layer (RDS Aurora)
-
-- Aurora PostgreSQL 14.6 in Multi-AZ configuration
-- Two instances for high availability
-- Customer-managed KMS encryption
-- Credentials stored in Secrets Manager with auto-rotation support
-- Automated backups with 7-day retention
-- CloudWatch Logs integration
-
-### Caching Layer (ElastiCache Redis)
-
-- Multi-node Redis cluster (2 nodes)
-- Multi-AZ enabled with automatic failover
-- Encryption at rest and in transit
-- Snapshot retention for 5 days
-
-### Real-Time Analytics (Kinesis)
-
-- Kinesis Data Stream with 2 shards
-- KMS encryption enabled
-- 24-hour data retention
-- IAM roles for producers and consumers
-
-### API Layer (API Gateway)
-
-- RESTful API with rate limiting and throttling
-- API key authentication
-- Usage plan with quota management
-- CloudWatch Logs integration
-- CORS configuration
-- Health check endpoint
-
-### Secrets Management (Secrets Manager)
-
-- Database credentials with secure password generation
-- API encryption keys
-- KMS encryption for all secrets
-- Rotation configuration ready
-
-### IAM Roles and Policies
-
-- ECS task execution role with proper permissions
-- ECS task role with Kinesis access
-- Kinesis producer role
-- Least privilege principle applied throughout
-
-### CloudWatch Monitoring
-
-- Container Insights for ECS
-- RDS CloudWatch Logs
-- API Gateway access logs and execution logs
-- Centralized log groups with retention policies
-
-### Best Practices Implemented
-
-- All resources use environmentSuffix for unique naming
-- RemovalPolicy set to DESTROY for development/testing
-- Multi-AZ deployment for critical services
-- Encryption at rest and in transit
-- Comprehensive CloudWatch monitoring
-- Proper tagging through CloudFormation
-- Export names for cross-stack references
+The infrastructure uses the environment suffix for naming resources and is designed to be deployed in the eu-central-1 region.
