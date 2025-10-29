@@ -153,26 +153,27 @@ class InfrastructureOptimizer:
             
             print(f"Current member clusters: {member_clusters}")
             
-            # Identify which replicas to remove (keep primary + 1 replica)
-            # We need to remove specific replica IDs
-            replicas_to_remove = member_clusters[2:]  # Remove from index 2 onwards
+            # For Multi-AZ replication groups, use modify_replication_group
+            # This allows ElastiCache to handle AZ distribution correctly
+            print(f"Modifying replication group to 2 cache clusters...")
             
-            if not replicas_to_remove:
-                print("✅ Already optimized (2 or fewer member clusters)")
-                return True
+            self.elasticache_client.modify_replication_group(
+                ReplicationGroupId=replication_group_id,
+                CacheNodeType='cache.t4g.micro',  # Keep same node type
+                ApplyImmediately=True
+            )
             
-            print(f"Removing {len(replicas_to_remove)} replica(s): {replicas_to_remove}")
-            
-            # Use decrease_replica_count with specific replica IDs to remove
+            # Now use decrease_replica_count to reduce from 3 to 2
+            # ElastiCache will automatically handle AZ distribution
             self.elasticache_client.decrease_replica_count(
                 ReplicationGroupId=replication_group_id,
-                ReplicasToRemove=replicas_to_remove,
+                NewReplicaCount=1,  # 1 replica + 1 primary = 2 total nodes
                 ApplyImmediately=True
             )
             
             print("✅ ElastiCache optimization initiated:")
             print(f"   - Node count: {len(member_clusters)} → 2")
-            print(f"   - Removed replicas: {replicas_to_remove}")
+            print("   - ElastiCache will handle Multi-AZ distribution")
             
             # Wait for the modification to complete
             print("Waiting for Redis cluster modification to complete...")

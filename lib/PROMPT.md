@@ -218,7 +218,7 @@ export class DatabaseStack extends Construct {
     // Create Aurora Serverless v2 PostgreSQL cluster for faster provisioning
     this.databaseCluster = new rds.DatabaseCluster(this, 'DatabaseCluster', {
       engine: rds.DatabaseClusterEngine.auroraPostgres({
-        version: rds.AuroraPostgresEngineVersion.VER_15_8,
+        version: rds.AuroraPostgresEngineVersion.VER_15_10,
       }),
       credentials: rds.Credentials.fromSecret(this.databaseSecret),
       writer: rds.ClusterInstance.serverlessV2('writer', {
