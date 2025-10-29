@@ -18,7 +18,6 @@ resource "aws_lambda_function" "query" {
   architectures    = [var.lambda_architecture]
   memory_size      = var.query_memory_size
   timeout          = var.query_timeout
-  layers           = [aws_lambda_layer_version.dependencies.arn]
 
   environment {
     variables = {

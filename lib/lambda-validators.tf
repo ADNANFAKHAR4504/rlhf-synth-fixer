@@ -18,7 +18,6 @@ resource "aws_lambda_function" "stripe_validator" {
   architectures    = [var.lambda_architecture]
   memory_size      = var.validator_memory_size
   timeout          = var.validator_timeout
-  layers           = [aws_lambda_layer_version.dependencies.arn]
 
   environment {
     variables = {
@@ -75,7 +74,6 @@ resource "aws_lambda_function" "paypal_validator" {
   architectures    = [var.lambda_architecture]
   memory_size      = var.validator_memory_size
   timeout          = var.validator_timeout
-  layers           = [aws_lambda_layer_version.dependencies.arn]
 
   environment {
     variables = {
@@ -132,7 +130,6 @@ resource "aws_lambda_function" "square_validator" {
   architectures    = [var.lambda_architecture]
   memory_size      = var.validator_memory_size
   timeout          = var.validator_timeout
-  layers           = [aws_lambda_layer_version.dependencies.arn]
 
   environment {
     variables = {

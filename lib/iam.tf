@@ -37,7 +37,7 @@ resource "aws_iam_role_policy" "validator_lambda_policy" {
           "logs:PutLogEvents"
         ]
         Resource = [
-          "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${local.name_prefix}-*-validator-${local.env_suffix}*"
+          "arn:aws:logs:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${local.name_prefix}-*-validator-${local.env_suffix}*"
         ]
       },
       {
@@ -119,7 +119,7 @@ resource "aws_iam_role_policy" "processor_lambda_policy" {
           "logs:PutLogEvents"
         ]
         Resource = [
-          "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:${local.log_group_processor}*"
+          "arn:aws:logs:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:log-group:${local.log_group_processor}*"
         ]
       },
       {
@@ -198,7 +198,7 @@ resource "aws_iam_role_policy" "query_lambda_policy" {
           "logs:PutLogEvents"
         ]
         Resource = [
-          "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:${local.log_group_query}*"
+          "arn:aws:logs:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:log-group:${local.log_group_query}*"
         ]
       },
       {

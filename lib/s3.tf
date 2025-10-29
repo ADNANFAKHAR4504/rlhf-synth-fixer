@@ -43,6 +43,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "raw_payloads" {
     id     = "transition-to-glacier"
     status = "Enabled"
 
+    filter {}
+
     transition {
       days          = var.raw_payload_glacier_days
       storage_class = "GLACIER"
@@ -56,6 +58,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "raw_payloads" {
   rule {
     id     = "intelligent-tiering"
     status = "Enabled"
+
+    filter {}
 
     transition {
       days          = 0
@@ -116,6 +120,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "processed_logs" {
     id     = "transition-to-glacier"
     status = "Enabled"
 
+    filter {}
+
     transition {
       days          = var.processed_logs_glacier_days
       storage_class = "GLACIER"
@@ -129,6 +135,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "processed_logs" {
   rule {
     id     = "intelligent-tiering"
     status = "Enabled"
+
+    filter {}
 
     transition {
       days          = 0

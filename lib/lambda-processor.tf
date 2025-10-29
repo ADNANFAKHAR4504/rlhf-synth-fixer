@@ -19,7 +19,6 @@ resource "aws_lambda_function" "processor" {
   memory_size                    = var.processor_memory_size
   timeout                        = var.processor_timeout
   reserved_concurrent_executions = var.processor_reserved_concurrency
-  layers                         = [aws_lambda_layer_version.dependencies.arn]
 
   environment {
     variables = {

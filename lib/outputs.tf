@@ -111,11 +111,6 @@ output "query_function_arn" {
   value       = aws_lambda_function.query.arn
 }
 
-output "lambda_layer_arn" {
-  description = "ARN of the Lambda dependencies layer"
-  value       = aws_lambda_layer_version.dependencies.arn
-}
-
 # DynamoDB Outputs
 output "dynamodb_table_name" {
   description = "Name of the DynamoDB transactions table"
@@ -224,7 +219,7 @@ output "environment_suffix" {
 # Region
 output "aws_region" {
   description = "AWS region where resources are deployed"
-  value       = data.aws_region.current.name
+  value       = data.aws_region.current.id
 }
 
 # Account ID

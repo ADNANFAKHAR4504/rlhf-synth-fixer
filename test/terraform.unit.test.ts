@@ -41,7 +41,7 @@ describe('Terraform Infrastructure Unit Tests - Serverless Webhook Processing', 
       const requiredFiles = [
         'provider.tf', 'variables.tf', 'data.tf', 'random.tf', 'locals.tf',
         'iam.tf', 'dynamodb.tf', 's3.tf', 'sqs.tf', 'secrets.tf',
-        'lambda-layer.tf', 'lambda-validators.tf', 'lambda-processor.tf',
+        'lambda-validators.tf', 'lambda-processor.tf',
         'lambda-query.tf', 'api-gateway.tf', 'cloudwatch.tf', 'outputs.tf'
       ];
 
@@ -321,20 +321,6 @@ describe('Terraform Infrastructure Unit Tests - Serverless Webhook Processing', 
     });
   });
 
-  describe('Lambda Layer', () => {
-    test('should define Lambda layer', () => {
-      expect(terraformCode).toMatch(/resource\s+"aws_lambda_layer_version"\s+"dependencies"/);
-    });
-
-    test('should use ARM64 architecture', () => {
-      expect(terraformCode).toMatch(/compatible_architectures\s*=\s*\[var\.lambda_architecture\]/);
-    });
-
-    test('should have archive data source', () => {
-      expect(terraformCode).toMatch(/data\s+"archive_file"\s+"lambda_layer"/);
-    });
-  });
-
   describe('Lambda Validator Functions', () => {
     test('should define Stripe validator function', () => {
       expect(terraformCode).toMatch(/resource\s+"aws_lambda_function"\s+"stripe_validator"/);
@@ -362,10 +348,6 @@ describe('Terraform Infrastructure Unit Tests - Serverless Webhook Processing', 
       expect(terraformCode).toMatch(/PROVIDER_SECRET_ARN/);
       expect(terraformCode).toMatch(/S3_BUCKET/);
       expect(terraformCode).toMatch(/PROCESSOR_FUNCTION_ARN/);
-    });
-
-    test('validator functions should use Lambda layer', () => {
-      expect(terraformCode).toMatch(/layers\s*=\s*\[aws_lambda_layer_version\.dependencies\.arn\]/);
     });
 
     test('validator functions should have API Gateway invoke permissions', () => {

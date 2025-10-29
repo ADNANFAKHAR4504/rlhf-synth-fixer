@@ -38,7 +38,6 @@ locals {
   lambda_square_validator_name = "${local.name_prefix}-square-validator-${local.env_suffix}"
   lambda_processor_name        = "${local.name_prefix}-processor-${local.env_suffix}"
   lambda_query_name            = "${local.name_prefix}-query-${local.env_suffix}"
-  lambda_layer_name            = "${local.name_prefix}-dependencies-${local.env_suffix}"
 
   # IAM role names
   iam_validator_role_name   = "${local.name_prefix}-validator-role-${local.env_suffix}"
