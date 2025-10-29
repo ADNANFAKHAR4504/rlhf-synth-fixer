@@ -736,6 +736,11 @@ Resources:
                   - logs:PutLogEvents
                   - logs:DescribeLogGroups
                   - logs:DescribeLogStreams
+                  - logs:CreateLogDelivery
+                  - logs:GetLogDelivery
+                  - logs:UpdateLogDelivery
+                  - logs:DeleteLogDelivery
+                  - logs:ListLogDeliveries
                 Resource:
                   - !GetAtt StateMachineLogGroup.Arn
                   - !Sub "${StateMachineLogGroup.Arn}:*"
