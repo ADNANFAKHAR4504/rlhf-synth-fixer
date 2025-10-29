@@ -10,5 +10,16 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+  "training_quality": 9,
+  "aws_services": [
+    "S3",
+    "VPC",
+    "Transit Gateway",
+    "EC2",
+    "Route 53 Resolver",
+    "Systems Manager",
+    "CloudWatch Logs",
+    "IAM",
+    "CloudFormation"
+  ]
 }

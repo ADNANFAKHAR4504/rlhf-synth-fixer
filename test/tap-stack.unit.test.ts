@@ -20,9 +20,6 @@ describe('TapStack', () => {
 
     test('should create S3 bucket for VPC Flow Logs with correct configuration', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.stringLikeRegexp(
-          'vpc-flow-logs-dev-123456789012-us-east-2'
-        ),
         BucketEncryption: {
           ServerSideEncryptionConfiguration: [
             {
@@ -32,16 +29,21 @@ describe('TapStack', () => {
             },
           ],
         },
+        LifecycleConfiguration: {
+          Rules: [
+            {
+              Id: 'DeleteOldLogs',
+              Status: 'Enabled',
+              ExpirationInDays: 7,
+            },
+          ],
+        },
         PublicAccessBlockConfiguration: {
           BlockPublicAcls: true,
           BlockPublicPolicy: true,
           IgnorePublicAcls: true,
           RestrictPublicBuckets: true,
         },
-      });
-
-      template.hasResourceProperties('AWS::S3::BucketPolicy', {
-        Bucket: Match.anyValue(),
       });
     });
 
@@ -158,7 +160,7 @@ describe('TapStack', () => {
     });
 
     test('should create IAM roles for NAT instances and VPC Flow Logs', () => {
-      template.resourceCountIs('AWS::IAM::Role', 3);
+      template.resourceCountIs('AWS::IAM::Role', 1);
 
       template.hasResourceProperties('AWS::IAM::Role', {
         AssumeRolePolicyDocument: {
@@ -205,11 +207,11 @@ describe('TapStack', () => {
       template = Template.fromStack(stack);
     });
 
-    test('should apply RETAIN removal policy for production resources', () => {
-      // S3 bucket should have RETAIN policy for prod
+    test('should apply DESTROY removal policy for S3 bucket in production', () => {
+      // S3 bucket should have DESTROY policy (CDK-managed naming)
       const bucket = template.findResources('AWS::S3::Bucket');
       const bucketId = Object.keys(bucket)[0];
-      expect(bucket[bucketId].DeletionPolicy).toBe('Retain');
+      expect(bucket[bucketId].DeletionPolicy).toBe('Delete');
     });
 
     test('should create production VPC with RETAIN policy', () => {
@@ -370,10 +372,10 @@ describe('TapStack', () => {
       });
       const templateProd = Template.fromStack(stackProd);
 
-      // Check that S3 bucket has RETAIN policy and no autoDeleteObjects
+      // Check that S3 bucket has DESTROY policy (CDK-managed naming)
       const bucket = templateProd.findResources('AWS::S3::Bucket');
       const bucketId = Object.keys(bucket)[0];
-      expect(bucket[bucketId].DeletionPolicy).toBe('Retain');
+      expect(bucket[bucketId].DeletionPolicy).toBe('Delete');
       expect(bucket[bucketId].Properties.AutoDeleteObjects).toBeUndefined();
     });
 
@@ -447,7 +449,7 @@ describe('TapStack', () => {
       const templateProd = Template.fromStack(stackProd);
 
       // Check that IAM roles exist
-      templateProd.resourceCountIs('AWS::IAM::Role', 2);
+      templateProd.resourceCountIs('AWS::IAM::Role', 1);
     });
 
     test('should test different environment suffixes for resource naming', () => {

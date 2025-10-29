@@ -28,7 +28,6 @@ export class TapStack extends cdk.Stack {
 
     // 🔹 S3 Bucket for VPC Flow Logs
     const flowLogsBucket = new s3.Bucket(this, 'VpcFlowLogsBucket', {
-      bucketName: `vpc-flow-logs-${environmentSuffix}-${this.account}-${this.region}`,
       encryption: s3.BucketEncryption.S3_MANAGED,
       lifecycleRules: [
         {
@@ -37,11 +36,8 @@ export class TapStack extends cdk.Stack {
         },
       ],
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      removalPolicy:
-        environmentSuffix === 'prod'
-          ? cdk.RemovalPolicy.RETAIN
-          : cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: environmentSuffix === 'prod' ? false : true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      // autoDeleteObjects: true,
     });
     cdk.Tags.of(flowLogsBucket).add('Environment', commonTags.Environment);
     cdk.Tags.of(flowLogsBucket).add('CostCenter', commonTags.CostCenter);
@@ -650,15 +646,7 @@ export class TapStack extends cdk.Stack {
     );
 
     // 🔹 VPC Flow Logs
-    const flowLogsRole = new iam.Role(
-      this,
-      `VpcFlowLogsRole${environmentSuffix}`,
-      {
-        assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
-      }
-    );
-
-    flowLogsBucket.grantWrite(flowLogsRole);
+    // VPC Flow Logs - S3 bucket permissions are handled automatically for S3 delivery
 
     const flowLogFormat =
       '${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action}';
@@ -674,7 +662,7 @@ export class TapStack extends cdk.Stack {
         resourceId: vpc.vpcId,
         trafficType: 'ALL',
         logDestinationType: 's3',
-        logDestination: flowLogsBucket.s3UrlForObject(),
+        logDestination: flowLogsBucket.bucketArn,
         logFormat: flowLogFormat,
         tags: [
           { key: 'Name', value: `${name}-VPC-FlowLog-${environmentSuffix}` },
