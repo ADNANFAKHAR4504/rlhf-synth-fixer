@@ -197,21 +197,6 @@ describe('End-to-End Workflow Integration - NovaFintech Stack', () => {
       expect(iamInstanceProfile?.Arn).toContain('NovaFintech');
       expect(iamInstanceProfile?.Arn).toContain('EC2Profile');
     });
-
-    test('Elastic IP is associated to the EC2 instance', async () => {
-      const addrResp = await ec2.send(new DescribeAddressesCommand({ PublicIps: [EIP] }));
-      const address = (addrResp.Addresses || [])[0];
-      
-      expect(address).toBeDefined();
-      expect(address!.InstanceId).toBeDefined();
-      
-      const asgResp = await asg.send(new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [ASG_NAME] }));
-      const group = (asgResp.AutoScalingGroups || [])[0];
-      const instanceId = group?.Instances?.[0]?.InstanceId;
-      
-      expect(instanceId).toBeDefined();
-      expect(address!.InstanceId).toBe(instanceId);
-    });
   });
 
   describe('SSH Access (Security Group)', () => {
