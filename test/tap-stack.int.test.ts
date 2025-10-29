@@ -1,40 +1,4 @@
-import {
-  ConfigServiceClient,
-  DescribeConfigRulesCommand,
-  DescribeComplianceByResourceCommand,
-  GetComplianceDetailsByResourceCommand,
-} from '@aws-sdk/client-config';
-import {
-  LambdaClient,
-  GetFunctionCommand,
-  UpdateFunctionConfigurationCommand,
-  InvokeCommand,
-} from '@aws-sdk/client-lambda';
-import {
-  S3Client,
-  HeadBucketCommand,
-  GetBucketLifecycleConfigurationCommand,
-  ListObjectsV2Command,
-} from '@aws-sdk/client-s3';
-import {
-  IAMClient,
-  ListUsersCommand,
-  ListAccessKeysCommand,
-  CreateAccessKeyCommand,
-  DeleteAccessKeyCommand,
-  CreateUserCommand,
-  DeleteUserCommand,
-} from '@aws-sdk/client-iam';
-import {
-  CloudWatchLogsClient,
-  DescribeLogGroupsCommand,
-  FilterLogEventsCommand,
-} from '@aws-sdk/client-cloudwatch-logs';
-import {
-  EventBridgeClient,
-  DescribeRuleCommand,
-  ListTargetsByRuleCommand,
-} from '@aws-sdk/client-eventbridge';
+import AWS from 'aws-sdk';
 import fs from 'fs';
 
 // Configuration - These are coming from cfn-outputs after cdk deploy
@@ -53,36 +17,35 @@ const region = process.env.AWS_REGION || 'us-east-1';
 const accountId = process.env.AWS_ACCOUNT_ID || '123456789012';
 
 // AWS Service Clients
-const configClient = new ConfigServiceClient({ region });
-const lambdaClient = new LambdaClient({ region });
-const s3Client = new S3Client({ region });
-const iamClient = new IAMClient({ region });
-const logsClient = new CloudWatchLogsClient({ region });
-const eventBridgeClient = new EventBridgeClient({ region });
+const config = new AWS.ConfigService({ region });
+const lambda = new AWS.Lambda({ region });
+const s3 = new AWS.S3({ region });
+const iam = new AWS.IAM({ region });
+const logs = new AWS.CloudWatchLogs({ region });
+const eventBridge = new AWS.EventBridge({ region });
 
 // Helper functions to construct resource names
-const getResourceName = (service: string, suffix: string = environmentSuffix) => 
+const getResourceName = (service: string, suffix: string = environmentSuffix) =>
   `tap-${service}-${accountId}-${region}-${suffix}`;
 
-const getRuleName = (ruleType: string, suffix: string = environmentSuffix) => 
+const getRuleName = (ruleType: string, suffix: string = environmentSuffix) =>
   `tap-${ruleType}-rule-${region}-${suffix}`;
 
-const getFunctionName = (funcType: string, suffix: string = environmentSuffix) => 
+const getFunctionName = (funcType: string, suffix: string = environmentSuffix) =>
   `tap-${funcType}-${region}-${suffix}`;
 
 // Test timeout for long-running operations
 const TEST_TIMEOUT = 300000; // 5 minutes
 
 describe('Infrastructure Guardrails Integration Tests', () => {
-  
+
   describe('AWS Config Infrastructure', () => {
     test('Config recorder is active and recording all resources', async () => {
-      const command = new DescribeConfigRulesCommand({});
-      const response = await configClient.send(command);
-      
+      const response = await config.describeConfigRules().promise();
+
       expect(response.ConfigRules).toBeDefined();
       expect(response.ConfigRules!.length).toBeGreaterThan(0);
-      
+
       // Verify our custom rules exist
       const ruleNames = response.ConfigRules!.map(rule => rule.ConfigRuleName);
       expect(ruleNames).toContain(getRuleName('lambda-timeout'));
@@ -92,40 +55,55 @@ describe('Infrastructure Guardrails Integration Tests', () => {
     test('S3 buckets exist with proper lifecycle configuration', async () => {
       // Test compliance bucket
       const complianceBucketName = getResourceName('compliance');
-      await expect(s3Client.send(new HeadBucketCommand({ Bucket: complianceBucketName })))
+      await expect(s3.headBucket({ Bucket: complianceBucketName }).promise())
         .resolves.not.toThrow();
-      
-      const lifecycleResponse = await s3Client.send(
-        new GetBucketLifecycleConfigurationCommand({ Bucket: complianceBucketName })
-      );
-      
+
+      const lifecycleResponse = await s3.getBucketLifecycleConfiguration({
+        Bucket: complianceBucketName
+      }).promise();
+
       expect(lifecycleResponse.Rules).toBeDefined();
       const sevenYearRule = lifecycleResponse.Rules!.find(rule => rule.ID === 'SevenYearRetention');
       expect(sevenYearRule).toBeDefined();
       expect(sevenYearRule!.Status).toBe('Enabled');
       expect(sevenYearRule!.Expiration?.Days).toBe(2555);
-      
+
       // Test audit logs bucket
       const auditBucketName = getResourceName('audit-logs');
-      await expect(s3Client.send(new HeadBucketCommand({ Bucket: auditBucketName })))
+      await expect(s3.headBucket({ Bucket: auditBucketName }).promise())
         .resolves.not.toThrow();
     }, TEST_TIMEOUT);
 
     test('CloudWatch log groups exist with proper retention', async () => {
-      const logGroups = await logsClient.send(new DescribeLogGroupsCommand({
-        logGroupNamePrefix: '/tap/'
-      }));
-      
-      expect(logGroups.logGroups).toBeDefined();
-      expect(logGroups.logGroups!.length).toBeGreaterThanOrEqual(2);
-      
-      const complianceLogGroup = logGroups.logGroups!.find(
-        lg => lg.logGroupName?.includes(`compliance-${region}-${environmentSuffix}`)
+      // Get all log groups with pagination
+      let allLogGroups: any[] = [];
+      let nextToken: string | undefined;
+
+      do {
+        const response = await logs.describeLogGroups({
+          logGroupNamePrefix: '/tap/',
+          nextToken: nextToken
+        }).promise();
+
+        if (response.logGroups) {
+          allLogGroups = allLogGroups.concat(response.logGroups);
+        }
+        nextToken = response.nextToken;
+      } while (nextToken);
+
+      expect(allLogGroups.length).toBeGreaterThanOrEqual(2);
+
+      const complianceLogGroup = allLogGroups.find(
+        lg => lg.logGroupName?.includes(`/tap/compliance-${region}-${environmentSuffix}`)
       );
-      const remediationLogGroup = logGroups.logGroups!.find(
-        lg => lg.logGroupName?.includes(`remediation-${region}-${environmentSuffix}`)
+      const remediationLogGroup = allLogGroups.find(
+        lg => lg.logGroupName?.includes(`/tap/remediation-${region}-${environmentSuffix}`)
       );
-      
+
+      console.log(`Found ${allLogGroups.length} total log groups`);
+      console.log(`Compliance log group: ${complianceLogGroup?.logGroupName || 'NOT FOUND'}`);
+      console.log(`Remediation log group: ${remediationLogGroup?.logGroupName || 'NOT FOUND'}`);
+
       expect(complianceLogGroup).toBeDefined();
       expect(remediationLogGroup).toBeDefined();
       expect(complianceLogGroup!.retentionInDays).toBe(3653); // ~10 years
@@ -136,11 +114,11 @@ describe('Infrastructure Guardrails Integration Tests', () => {
   describe('Lambda Timeout Compliance Rule', () => {
     test('Lambda timeout evaluation function exists and is invokable', async () => {
       const functionName = getFunctionName('lambda-timeout-eval');
-      
-      const functionResponse = await lambdaClient.send(
-        new GetFunctionCommand({ FunctionName: functionName })
-      );
-      
+
+      const functionResponse = await lambda.getFunction({
+        FunctionName: functionName
+      }).promise();
+
       expect(functionResponse.Configuration).toBeDefined();
       expect(functionResponse.Configuration!.Runtime).toBe('python3.12');
       expect(functionResponse.Configuration!.Handler).toBe('index.lambda_handler');
@@ -149,16 +127,14 @@ describe('Infrastructure Guardrails Integration Tests', () => {
 
     test('Lambda timeout compliance rule detects violations', async () => {
       const ruleName = getRuleName('lambda-timeout');
-      
+
       // Get compliance details for Lambda functions
-      const complianceResponse = await configClient.send(
-        new DescribeComplianceByResourceCommand({
-          ResourceType: 'AWS::Lambda::Function',
-          ConfigRuleName: ruleName,
-          Limit: 10
-        })
-      );
-      
+      const complianceResponse = await config.describeComplianceByResource({
+        ResourceType: 'AWS::Lambda::Function',
+        ComplianceTypes: ['NON_COMPLIANT', 'COMPLIANT'],
+        Limit: 10
+      }).promise();
+
       expect(complianceResponse.ComplianceByResources).toBeDefined();
       console.log(`Found ${complianceResponse.ComplianceByResources!.length} Lambda functions evaluated by timeout rule`);
     }, TEST_TIMEOUT);
@@ -167,11 +143,11 @@ describe('Infrastructure Guardrails Integration Tests', () => {
   describe('IAM Access Key Compliance Rule', () => {
     test('IAM access key evaluation function exists and is configured', async () => {
       const functionName = getFunctionName('iam-access-key-eval');
-      
-      const functionResponse = await lambdaClient.send(
-        new GetFunctionCommand({ FunctionName: functionName })
-      );
-      
+
+      const functionResponse = await lambda.getFunction({
+        FunctionName: functionName
+      }).promise();
+
       expect(functionResponse.Configuration).toBeDefined();
       expect(functionResponse.Configuration!.Runtime).toBe('python3.12');
       expect(functionResponse.Configuration!.Handler).toBe('index.lambda_handler');
@@ -179,16 +155,14 @@ describe('Infrastructure Guardrails Integration Tests', () => {
 
     test('IAM access key compliance rule detects access keys', async () => {
       const ruleName = getRuleName('iam-access-key');
-      
+
       // Get compliance details for IAM users
-      const complianceResponse = await configClient.send(
-        new DescribeComplianceByResourceCommand({
-          ResourceType: 'AWS::IAM::User',
-          ConfigRuleName: ruleName,
-          Limit: 10
-        })
-      );
-      
+      const complianceResponse = await config.describeComplianceByResource({
+        ResourceType: 'AWS::IAM::User',
+        ComplianceTypes: ['NON_COMPLIANT', 'COMPLIANT'],
+        Limit: 10
+      }).promise();
+
       expect(complianceResponse.ComplianceByResources).toBeDefined();
       console.log(`Found ${complianceResponse.ComplianceByResources!.length} IAM users evaluated by access key rule`);
     }, TEST_TIMEOUT);
@@ -197,15 +171,15 @@ describe('Infrastructure Guardrails Integration Tests', () => {
   describe('Remediation Workflow', () => {
     test('Remediation function exists with proper configuration', async () => {
       const functionName = getFunctionName('remediation');
-      
-      const functionResponse = await lambdaClient.send(
-        new GetFunctionCommand({ FunctionName: functionName })
-      );
-      
+
+      const functionResponse = await lambda.getFunction({
+        FunctionName: functionName
+      }).promise();
+
       expect(functionResponse.Configuration).toBeDefined();
       expect(functionResponse.Configuration!.Runtime).toBe('python3.12');
       expect(functionResponse.Configuration!.Timeout).toBe(300);
-      
+
       // Check environment variables
       const env = functionResponse.Configuration!.Environment?.Variables;
       expect(env).toBeDefined();
@@ -215,27 +189,27 @@ describe('Infrastructure Guardrails Integration Tests', () => {
 
     test('EventBridge rule exists and targets remediation function', async () => {
       const ruleName = getResourceName('remediation-trigger').replace(`-${accountId}`, '');
-      
-      const ruleResponse = await eventBridgeClient.send(
-        new DescribeRuleCommand({ Name: ruleName })
-      );
-      
+
+      const ruleResponse = await eventBridge.describeRule({
+        Name: ruleName
+      }).promise();
+
       expect(ruleResponse.Name).toBe(ruleName);
       expect(ruleResponse.EventPattern).toBeDefined();
-      
+
       const eventPattern = JSON.parse(ruleResponse.EventPattern!);
       expect(eventPattern.source).toContain('aws.config');
       expect(eventPattern['detail-type']).toContain('Config Rules Compliance Change');
       expect(eventPattern.detail.newEvaluationResult.complianceType).toContain('NON_COMPLIANT');
-      
+
       // Check targets
-      const targetsResponse = await eventBridgeClient.send(
-        new ListTargetsByRuleCommand({ Rule: ruleName })
-      );
-      
+      const targetsResponse = await eventBridge.listTargetsByRule({
+        Rule: ruleName
+      }).promise();
+
       expect(targetsResponse.Targets).toBeDefined();
       expect(targetsResponse.Targets!.length).toBeGreaterThan(0);
-      
+
       const lambdaTarget = targetsResponse.Targets!.find(
         target => target.Arn?.includes('lambda')
       );
@@ -246,21 +220,21 @@ describe('Infrastructure Guardrails Integration Tests', () => {
   describe('Complete End-to-End Compliance Flow', () => {
     let testUserName: string;
     let testAccessKeyId: string;
-    
+
     beforeAll(async () => {
       testUserName = `tap-test-user-${Date.now()}`;
     });
-    
+
     afterAll(async () => {
       // Cleanup: Delete test user and access key
       try {
         if (testAccessKeyId) {
-          await iamClient.send(new DeleteAccessKeyCommand({
+          await iam.deleteAccessKey({
             UserName: testUserName,
             AccessKeyId: testAccessKeyId
-          }));
+          }).promise();
         }
-        await iamClient.send(new DeleteUserCommand({ UserName: testUserName }));
+        await iam.deleteUser({ UserName: testUserName }).promise();
       } catch (error) {
         console.warn('Cleanup error:', error);
       }
@@ -269,49 +243,46 @@ describe('Infrastructure Guardrails Integration Tests', () => {
     test('Complete flow: Create IAM user with access key, detect violation, trigger remediation', async () => {
       // Step 1: Create test IAM user
       console.log(`Creating test IAM user: ${testUserName}`);
-      await iamClient.send(new CreateUserCommand({
+      await iam.createUser({
         UserName: testUserName,
         Tags: [{
           Key: 'Purpose',
           Value: 'TapStackIntegrationTest'
         }]
-      }));
-      
+      }).promise();
+
       // Step 2: Create access key for user
       console.log('Creating access key for test user');
-      const accessKeyResponse = await iamClient.send(new CreateAccessKeyCommand({
+      const accessKeyResponse = await iam.createAccessKey({
         UserName: testUserName
-      }));
-      
+      }).promise();
+
       testAccessKeyId = accessKeyResponse.AccessKey!.AccessKeyId!;
       expect(testAccessKeyId).toBeDefined();
-      
+
       // Step 3: Wait for AWS Config to detect the change
       console.log('Waiting for AWS Config to detect IAM user change...');
       await new Promise(resolve => setTimeout(resolve, 60000)); // Wait 1 minute
-      
+
       // Step 4: Check compliance status
       console.log('Checking compliance status for test user');
       const ruleName = getRuleName('iam-access-key');
-      
+
       let complianceFound = false;
       let attempts = 0;
       const maxAttempts = 10;
-      
+
       while (!complianceFound && attempts < maxAttempts) {
         try {
-          const complianceResponse = await configClient.send(
-            new GetComplianceDetailsByResourceCommand({
-              ResourceType: 'AWS::IAM::User',
-              ResourceId: testUserName,
-              ConfigRuleName: ruleName
-            })
-          );
-          
+          const complianceResponse = await config.getComplianceDetailsByResource({
+            ResourceType: 'AWS::IAM::User',
+            ResourceId: testUserName
+          }).promise();
+
           if (complianceResponse.EvaluationResults && complianceResponse.EvaluationResults.length > 0) {
             const latestEvaluation = complianceResponse.EvaluationResults[0];
             console.log(`Compliance status for ${testUserName}: ${latestEvaluation.ComplianceType}`);
-            
+
             expect(latestEvaluation.ComplianceType).toBe('NON_COMPLIANT');
             expect(latestEvaluation.Annotation).toContain('active access key');
             complianceFound = true;
@@ -319,34 +290,34 @@ describe('Infrastructure Guardrails Integration Tests', () => {
         } catch (error) {
           console.log(`Attempt ${attempts + 1}: Config evaluation not ready yet, retrying...`);
         }
-        
+
         attempts++;
         if (!complianceFound && attempts < maxAttempts) {
           await new Promise(resolve => setTimeout(resolve, 30000)); // Wait 30 seconds
         }
       }
-      
+
       if (!complianceFound) {
         console.warn('Config rule evaluation not completed within timeout, but test user was created successfully');
       }
-      
+
       // Step 5: Check for audit logs in remediation log group
       console.log('Checking for audit logs in CloudWatch');
       const logGroupName = `/tap/remediation-${region}-${environmentSuffix}`;
-      
+
       try {
-        const logsResponse = await logsClient.send(new FilterLogEventsCommand({
+        const logsResponse = await logs.filterLogEvents({
           logGroupName: logGroupName,
           startTime: Date.now() - (10 * 60 * 1000), // Last 10 minutes
           filterPattern: `\"${testUserName}\" OR \"${testAccessKeyId}\"`
-        }));
-        
+        }).promise();
+
         if (logsResponse.events && logsResponse.events.length > 0) {
           console.log(`Found ${logsResponse.events.length} audit log entries`);
           const auditLogEntry = logsResponse.events.find(
             event => event.message?.includes('AUDIT LOG')
           );
-          
+
           if (auditLogEntry) {
             console.log('Audit log entry found:', auditLogEntry.message);
             expect(auditLogEntry.message).toContain('remediation_type');
@@ -357,18 +328,18 @@ describe('Infrastructure Guardrails Integration Tests', () => {
       } catch (error) {
         console.log('Could not retrieve audit logs (may be expected in test environment):', error);
       }
-      
+
       // Step 6: Verify S3 audit logs bucket has activity
       console.log('Checking S3 audit bucket for recent activity');
       const auditBucketName = getResourceName('audit-logs');
-      
+
       try {
-        const s3Objects = await s3Client.send(new ListObjectsV2Command({
+        const s3Objects = await s3.listObjectsV2({
           Bucket: auditBucketName,
           Prefix: 'remediation-audit/',
           MaxKeys: 10
-        }));
-        
+        }).promise();
+
         if (s3Objects.Contents && s3Objects.Contents.length > 0) {
           console.log(`Found ${s3Objects.Contents.length} audit files in S3`);
           expect(s3Objects.Contents.length).toBeGreaterThan(0);
@@ -378,9 +349,9 @@ describe('Infrastructure Guardrails Integration Tests', () => {
       } catch (error) {
         console.log('Could not access S3 audit bucket:', error);
       }
-      
+
       console.log('End-to-end compliance flow test completed successfully');
-      
+
     }, TEST_TIMEOUT * 2); // Extended timeout for complete flow
   });
 
@@ -391,15 +362,15 @@ describe('Infrastructure Guardrails Integration Tests', () => {
         getFunctionName('iam-access-key-eval'),
         getFunctionName('remediation')
       ];
-      
+
       for (const functionName of functionNames) {
-        const response = await lambdaClient.send(
-          new GetFunctionCommand({ FunctionName: functionName })
-        );
-        
+        const response = await lambda.getFunction({
+          FunctionName: functionName
+        }).promise();
+
         expect(response.Configuration?.State).toBe('Active');
         expect(response.Configuration?.LastUpdateStatus).toBe('Successful');
-        
+
         console.log(`Function ${functionName}: State=${response.Configuration?.State}, Status=${response.Configuration?.LastUpdateStatus}`);
       }
     }, TEST_TIMEOUT);
@@ -409,15 +380,15 @@ describe('Infrastructure Guardrails Integration Tests', () => {
         `/tap/compliance-${region}-${environmentSuffix}`,
         `/tap/remediation-${region}-${environmentSuffix}`
       ];
-      
+
       for (const logGroupName of logGroupNames) {
         try {
-          const response = await logsClient.send(new FilterLogEventsCommand({
+          const response = await logs.filterLogEvents({
             logGroupName,
             startTime: Date.now() - (24 * 60 * 60 * 1000), // Last 24 hours
             limit: 1
-          }));
-          
+          }).promise();
+
           console.log(`Log group ${logGroupName}: ${response.events?.length || 0} recent events`);
         } catch (error) {
           console.log(`Log group ${logGroupName} may not have recent activity:`, error);
@@ -430,15 +401,13 @@ describe('Infrastructure Guardrails Integration Tests', () => {
         getRuleName('lambda-timeout'),
         getRuleName('iam-access-key')
       ];
-      
+
       for (const ruleName of ruleNames) {
-        const complianceResponse = await configClient.send(
-          new DescribeComplianceByResourceCommand({
-            ConfigRuleName: ruleName,
-            Limit: 1
-          })
-        );
-        
+        const complianceResponse = await config.describeComplianceByResource({
+          ComplianceTypes: ['NON_COMPLIANT', 'COMPLIANT'],
+          Limit: 1
+        }).promise();
+
         console.log(`Rule ${ruleName}: Evaluated ${complianceResponse.ComplianceByResources?.length || 0} resources`);
       }
     }, TEST_TIMEOUT);
