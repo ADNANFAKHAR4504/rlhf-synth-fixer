@@ -2,7 +2,10 @@ import * as pulumi from '@pulumi/pulumi';
 import { DatabaseStack } from '../lib/database-stack';
 
 pulumi.runtime.setMocks({
-  newResource: (args: pulumi.runtime.MockResourceArgs): { id: string; state: any } => {
+  newResource: (args: pulumi.runtime.MockResourceArgs): {
+    id: string;
+    state: any;
+  } => {
     return {
       id: `${args.name}_id`,
       state: args.inputs,
@@ -10,6 +13,22 @@ pulumi.runtime.setMocks({
   },
   call: (args: pulumi.runtime.MockCallArgs) => {
     if (args.token === 'aws:secretsmanager/getSecretVersion:getSecretVersion') {
+      const secretId = args.inputs.secretId as string;
+      // Return different secrets based on the secretId
+      if (secretId.includes('no-user')) {
+        return {
+          secretString: JSON.stringify({
+            password: 'testpassword123',
+          }),
+        };
+      } else if (secretId.includes('custom')) {
+        return {
+          secretString: JSON.stringify({
+            username: 'customuser',
+            password: 'custompass456',
+          }),
+        };
+      }
       return {
         secretString: JSON.stringify({
           username: 'testuser',
@@ -54,7 +73,8 @@ describe('DatabaseStack', () => {
       environmentSuffix: 'test',
       subnetIds,
       securityGroupId,
-      dbSecretArn: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test-secret',
+      dbSecretArn:
+        'arn:aws:secretsmanager:us-east-1:123456789012:secret:test-secret',
       tags: { Environment: 'test' },
     });
 
@@ -70,5 +90,33 @@ describe('DatabaseStack', () => {
     });
 
     expect(databaseStack.dbEndpoint).toBeDefined();
+  });
+
+  it('should use default username when secret has no username field', () => {
+    const databaseStack = new DatabaseStack('test-database-5', {
+      environmentSuffix: 'test',
+      subnetIds,
+      securityGroupId,
+      dbSecretArn:
+        'arn:aws:secretsmanager:us-east-1:123456789012:secret:test-secret-no-user',
+      tags: { Environment: 'test' },
+    });
+
+    expect(databaseStack.dbEndpoint).toBeDefined();
+    expect(databaseStack.dbInstanceId).toBeDefined();
+  });
+
+  it('should handle secret with explicit username and password', () => {
+    const databaseStack = new DatabaseStack('test-database-6', {
+      environmentSuffix: 'test',
+      subnetIds,
+      securityGroupId,
+      dbSecretArn:
+        'arn:aws:secretsmanager:us-east-1:123456789012:secret:custom-secret',
+      tags: { Environment: 'test' },
+    });
+
+    expect(databaseStack.dbEndpoint).toBeDefined();
+    expect(databaseStack.dbInstanceId).toBeDefined();
   });
 });
