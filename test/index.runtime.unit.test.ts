@@ -1,3 +1,5 @@
+import * as pulumi from '@pulumi/pulumi';
+
 /**
  * Runtime Unit Tests for Pulumi Infrastructure
  * Uses Pulumi's testing framework to validate resource creation
@@ -8,17 +10,18 @@ describe('Pulumi Infrastructure Runtime Tests', () => {
   beforeAll(() => {
     process.env.PULUMI_TEST_MODE = 'true';
     process.env.PULUMI_NODEJS_STACK = 'test-stack';
-    process.env.PULUMI_NODEJS_PROJECT = 'data-processing';
+    process.env.PULUMI_NODEJS_PROJECT = 'TapStack';
     process.env.AWS_REGION = process.env.AWS_REGION || 'us-west-2';
   });
 
-  const basePulumiConfig = {
-    'data-processing:environment': 'dev',
-    'data-processing:environmentSuffix': 'test',
+  const basePulumiConfig: Record<string, string> = {};
+
+  const setPulumiConfig = (configEntries: Record<string, string>) => {
+    process.env.PULUMI_CONFIG = JSON.stringify(configEntries);
   };
 
   beforeEach(() => {
-    process.env.PULUMI_CONFIG = JSON.stringify(basePulumiConfig);
+    setPulumiConfig(basePulumiConfig);
     jest.resetModules();
   });
 
@@ -30,11 +33,38 @@ describe('Pulumi Infrastructure Runtime Tests', () => {
     delete process.env.AWS_REGION;
   });
 
-  const loadStackModule = () => {
+  interface LoadOptions {
+    configOverrides?: Partial<Record<'environment' | 'environmentSuffix', string | undefined>>;
+  }
+
+  const loadStackModule = (options?: LoadOptions) => {
     let moduleExports: Record<string, unknown> | undefined;
     jest.isolateModules(() => {
+      if (options?.configOverrides) {
+        const overrides = options.configOverrides;
+        jest.doMock('@pulumi/pulumi', () => {
+          const actual = jest.requireActual('@pulumi/pulumi');
+
+          class ConfigWithOverrides extends actual.Config {
+            override get(key: string) {
+              if (Object.prototype.hasOwnProperty.call(overrides, key)) {
+                return overrides[key as 'environment' | 'environmentSuffix'];
+              }
+
+              return super.get(key);
+            }
+          }
+
+          return {
+            ...actual,
+            Config: ConfigWithOverrides,
+          };
+        });
+      }
+
       moduleExports = require('../lib/index');
     });
+    jest.dontMock('@pulumi/pulumi');
     return moduleExports;
   };
 
@@ -47,10 +77,81 @@ describe('Pulumi Infrastructure Runtime Tests', () => {
     expect(moduleExports).toHaveProperty('deploymentRegion', process.env.AWS_REGION);
   });
 
+  it('should prefer environment values defined in Pulumi config', async () => {
+    const moduleExports =
+      loadStackModule({
+        configOverrides: {
+          environment: 'staging',
+          environmentSuffix: 'cfgsuffix',
+        },
+      }) || {};
+
+    expect(moduleExports).toHaveProperty('deployedEnvironment', 'staging');
+    expect(moduleExports).toHaveProperty('deploymentSuffix', 'cfgsuffix');
+  });
+
+  it('should derive environment values from process environment variables', async () => {
+    const originalEnvironment = process.env.ENVIRONMENT;
+    const originalEnvironmentSuffix = process.env.ENVIRONMENT_SUFFIX;
+
+    process.env.ENVIRONMENT = 'Staging';
+    process.env.ENVIRONMENT_SUFFIX = 'EnvSuffix';
+
+    const moduleExports =
+      loadStackModule({
+        configOverrides: {
+          environment: undefined,
+          environmentSuffix: undefined,
+        },
+      }) || {};
+
+    expect(moduleExports).toHaveProperty('deployedEnvironment', 'staging');
+    expect(moduleExports).toHaveProperty('deploymentSuffix', 'envsuffix');
+
+    if (originalEnvironment) {
+      process.env.ENVIRONMENT = originalEnvironment;
+    } else {
+      delete process.env.ENVIRONMENT;
+    }
+
+    if (originalEnvironmentSuffix) {
+      process.env.ENVIRONMENT_SUFFIX = originalEnvironmentSuffix;
+    } else {
+      delete process.env.ENVIRONMENT_SUFFIX;
+    }
+  });
+
+  it('should default environment settings when config and environment variables are absent', async () => {
+    const originalEnvironment = process.env.ENVIRONMENT;
+    const originalEnvironmentSuffix = process.env.ENVIRONMENT_SUFFIX;
+
+    delete process.env.ENVIRONMENT;
+    delete process.env.ENVIRONMENT_SUFFIX;
+
+    const moduleExports =
+      loadStackModule({
+        configOverrides: {
+          environment: undefined,
+          environmentSuffix: undefined,
+        },
+      }) || {};
+
+    expect(moduleExports).toHaveProperty('deployedEnvironment', 'dev');
+    expect(moduleExports).toHaveProperty('deploymentSuffix', 'test-stack');
+
+    if (originalEnvironment) {
+      process.env.ENVIRONMENT = originalEnvironment;
+    }
+
+    if (originalEnvironmentSuffix) {
+      process.env.ENVIRONMENT_SUFFIX = originalEnvironmentSuffix;
+    }
+  });
+
   it('should throw when AWS_REGION is not defined', () => {
     const originalRegion = process.env.AWS_REGION;
     delete process.env.AWS_REGION;
-    process.env.PULUMI_CONFIG = JSON.stringify(basePulumiConfig);
+    setPulumiConfig(basePulumiConfig);
 
     expect(() => {
       jest.isolateModules(() => {
@@ -98,20 +199,14 @@ describe('Pulumi Infrastructure Runtime Tests', () => {
   });
 
   it('should throw error for invalid environment', () => {
-    const environment = 'invalid';
-    const envConfig = {
-      dev: { lambdaMemory: 512, logRetentionDays: 7 },
-      staging: { lambdaMemory: 1024, logRetentionDays: 14 },
-      prod: { lambdaMemory: 2048, logRetentionDays: 30 },
-    };
-
-    const currentEnvConfig = envConfig[environment as keyof typeof envConfig];
-
-    expect(() => {
-      if (!currentEnvConfig) {
-        throw new Error(`Invalid environment: ${environment}. Must be dev, staging, or prod`);
-      }
-    }).toThrow('Invalid environment: invalid');
+    expect(() =>
+      loadStackModule({
+        configOverrides: {
+          environment: 'invalid',
+          environmentSuffix: 'badsuffix',
+        },
+      })
+    ).toThrow('Invalid environment: invalid. Must be dev, staging, or prod');
   });
 
   describe('Lambda Handler Logic', () => {

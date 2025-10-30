@@ -354,3 +354,4 @@ export const lambdaFunctionArn = dataProcessor.lambdaArn;
 export const dynamoTableName = dataProcessor.tableName;
 export const deployedEnvironment = environment;
 export const deploymentRegion = awsRegion;
+export const deploymentSuffix = environmentSuffix;
