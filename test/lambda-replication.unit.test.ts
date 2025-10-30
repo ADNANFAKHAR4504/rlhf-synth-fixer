@@ -65,6 +65,87 @@ describe('Lambda Replication Function', () => {
 
       await expect(handler(event)).rejects.toThrow('S3 key not found in event');
     });
+
+    it('successfully replicates S3 object to target environments', async () => {
+      const event = {
+        detail: {
+          eventSource: 's3.amazonaws.com',
+          eventName: 'PutObject',
+          requestParameters: {
+            key: 'test-file.json',
+          },
+        },
+      };
+
+      const mockBody = new Uint8Array([1, 2, 3, 4]);
+      let callCount = 0;
+
+      // Mock S3 calls: GetObject, PutObject, GetObject, PutObject (for dev and staging)
+      mockS3Send.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1 || callCount === 3) {
+          // GetObject calls (for dev and staging)
+          return Promise.resolve({
+            Body: {
+              transformToByteArray: () => Promise.resolve(mockBody),
+            },
+            Metadata: { 'test-key': 'test-value' },
+          });
+        } else {
+          // PutObject calls
+          return Promise.resolve({});
+        }
+      });
+      mockSNSSend.mockResolvedValue({});
+
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(200);
+      expect(mockS3Send).toHaveBeenCalledTimes(4); // 2 gets + 2 puts (dev, staging)
+      expect(mockSNSSend).toHaveBeenCalled();
+    });
+
+    it('throws error when S3 object body is empty', async () => {
+      const event = {
+        detail: {
+          eventSource: 's3.amazonaws.com',
+          eventName: 'PutObject',
+          requestParameters: {
+            key: 'test-file.json',
+          },
+        },
+      };
+
+      mockS3Send.mockResolvedValueOnce({
+        Body: {
+          transformToByteArray: jest.fn().mockResolvedValue(null),
+        },
+      });
+      mockSNSSend.mockResolvedValue({});
+      mockSQSSend.mockResolvedValue({});
+
+      await expect(handler(event)).rejects.toThrow('Empty object body');
+    });
+
+    it('throws error when S3 response has no Body property', async () => {
+      const event = {
+        detail: {
+          eventSource: 's3.amazonaws.com',
+          eventName: 'PutObject',
+          requestParameters: {
+            key: 'test-file.json',
+          },
+        },
+      };
+
+      mockS3Send.mockResolvedValueOnce({
+        Metadata: { 'test-key': 'test-value' },
+      });
+      mockSNSSend.mockResolvedValue({});
+      mockSQSSend.mockResolvedValue({});
+
+      await expect(handler(event)).rejects.toThrow('Empty object body');
+    });
   });
 
   describe('DynamoDB Replication', () => {
@@ -93,6 +174,67 @@ describe('Lambda Replication Function', () => {
       expect(result.statusCode).toBe(200);
       expect(mockDynamoSend).toHaveBeenCalled();
       expect(mockSNSSend).toHaveBeenCalled();
+    });
+
+    it('throws error when DynamoDB item is not found', async () => {
+      const event = {
+        detail: {
+          eventSource: 'dynamodb.amazonaws.com',
+          eventName: 'PutItem',
+          requestParameters: {
+            key: 'missing-id',
+          },
+        },
+      };
+
+      mockDynamoSend.mockResolvedValueOnce({});
+      mockSNSSend.mockResolvedValue({});
+      mockSQSSend.mockResolvedValue({});
+
+      await expect(handler(event)).rejects.toThrow('Item not found');
+    });
+
+    it('handles DynamoDB event without key in requestParameters', async () => {
+      const event = {
+        detail: {
+          eventSource: 'dynamodb.amazonaws.com',
+          eventName: 'PutItem',
+          requestParameters: {},
+        },
+      };
+
+      mockDynamoSend.mockResolvedValueOnce({
+        Item: {
+          id: { S: 'unknown' },
+          data: { S: 'test-data' },
+        },
+      });
+      mockDynamoSend.mockResolvedValue({});
+      mockSNSSend.mockResolvedValue({});
+
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(200);
+      expect(mockDynamoSend).toHaveBeenCalled();
+    });
+  });
+
+  describe('Event Source Handling', () => {
+    it('handles unknown event source gracefully', async () => {
+      const event = {
+        detail: {
+          eventSource: 'unknown.amazonaws.com',
+          eventName: 'UnknownEvent',
+          requestParameters: {},
+        },
+      };
+
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(200);
+      // No replication should happen for unknown sources
+      expect(mockS3Send).not.toHaveBeenCalled();
+      expect(mockDynamoSend).not.toHaveBeenCalled();
     });
   });
 
@@ -137,12 +279,77 @@ describe('Lambda Replication Function', () => {
 
       expect(mockSQSSend).toHaveBeenCalled();
     });
+
+    it('handles non-Error exceptions', async () => {
+      const event = {
+        detail: {
+          eventSource: 's3.amazonaws.com',
+          eventName: 'PutObject',
+          requestParameters: {
+            key: 'test-file.json',
+          },
+        },
+      };
+
+      // Reject with a non-Error value to test the else branch
+      const nonErrorValue = { message: 'Not an Error object' };
+      mockS3Send.mockRejectedValue(nonErrorValue);
+      mockSNSSend.mockResolvedValue({});
+      mockSQSSend.mockResolvedValue({});
+
+      await expect(handler(event)).rejects.toEqual(nonErrorValue);
+
+      expect(mockSNSSend).toHaveBeenCalled();
+      expect(mockSQSSend).toHaveBeenCalled();
+    });
   });
 
   describe('Exponential Backoff', () => {
     it('has backoff configuration defined', () => {
       // Backoff logic is tested in simple-lambda.unit.test.ts
       expect(true).toBe(true);
+    });
+
+    it('successfully retries after transient failure', async () => {
+      const event = {
+        detail: {
+          eventSource: 's3.amazonaws.com',
+          eventName: 'PutObject',
+          requestParameters: {
+            key: 'test-file.json',
+          },
+        },
+      };
+
+      const mockBody = new Uint8Array([1, 2, 3, 4]);
+      let callCount = 0;
+
+      // First GetObject fails, second GetObject succeeds, then PutObjects succeed
+      mockS3Send.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          // First GetObject attempt fails
+          return Promise.reject(new Error('Transient error'));
+        } else if (callCount === 2 || callCount === 4) {
+          // Retry GetObject succeeds (for dev and staging)
+          return Promise.resolve({
+            Body: {
+              transformToByteArray: () => Promise.resolve(mockBody),
+            },
+            Metadata: { 'test-key': 'test-value' },
+          });
+        } else {
+          // PutObject calls
+          return Promise.resolve({});
+        }
+      });
+      mockSNSSend.mockResolvedValue({});
+
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(200);
+      expect(mockS3Send.mock.calls.length).toBeGreaterThan(4); // Should have retry attempts
+      expect(mockSNSSend).toHaveBeenCalled();
     });
   });
 
