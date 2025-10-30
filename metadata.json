@@ -18,6 +18,7 @@
     "cloudfront",
     "iam",
     "mediaconvert",
+    "eventbridge",
     "cloudwatch"
   ],
   "region": "eu-south-1",

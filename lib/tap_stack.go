@@ -165,6 +165,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 		},
 	})
 
+	// Connect status Lambda to EventBridge rule for MediaConvert job state changes
 	mediaConvertRule.AddTarget(awseventstargets.NewLambdaFunction(statusLambda, nil))
 
 	// CloudFront Origin Access Identity
