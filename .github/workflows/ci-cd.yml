@@ -616,9 +616,13 @@ jobs:
           gh pr view ${{ github.event.pull_request.number }} --comments --json comments \
             | jq -r '.comments[].body' > all_comments.txt
 
-          echo "🧩 Searching for quality score pattern..."
-          # Match "Final Score: 8/10", "Training Quality: 9/10", with or without ** or emoji or extra text
-          SCORE=$(grep -Eo '((Final|Training)[[:space:]]*Quality[:space:]]*:?[[:space:]]*[0-9]+/10)' all_comments.txt | tail -1 | grep -Eo '[0-9]+' | head -1)
+          echo "🍀 Searching for quality score pattern..."
+          # Match any of the following:
+          # - "Final Score: 8/10"
+          # - "Training Quality: 9/10"
+          # - "SCORE:10"
+          SCORE=$(grep -Eo '((Final|Training)[[:space:]]*Quality[[:space:]]*:?[[:space:]]*[0-9]+/10|SCORE:[[:space:]]*[0-9]+)' all_comments.txt \
+            | tail -1 | grep -Eo '[0-9]+' | head -1)
 
           if [ -z "$SCORE" ]; then
             echo "⚠️ Could not find any quality score in PR comments. Defaulting to 0."
@@ -627,6 +631,7 @@ jobs:
 
           echo "Claude quality score: $SCORE"
           echo "quality_score=$SCORE" >> $GITHUB_OUTPUT
+
 
       - name: Enforce Quality Threshold
         id: quality_gate
