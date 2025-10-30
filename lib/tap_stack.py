@@ -1,5 +1,6 @@
 """Main CDK stack for HIPAA-compliant medical imaging pipeline."""
 
+import json
 import os
 from aws_cdk import (
     Stack,
@@ -40,6 +41,7 @@ class TapStack(Stack):
         environment_suffix = self.node.try_get_context("environmentSuffix")
         if not environment_suffix:
             environment_suffix = os.environ.get("ENVIRONMENT_SUFFIX", "dev")
+        database_name = f"medical_imaging_{environment_suffix}"
 
         # Create KMS key for encryption
         kms_key = kms.Key(
@@ -184,7 +186,9 @@ class TapStack(Stack):
             secret_name=f"medical-imaging-db-secret-{environment_suffix}",
             description="Database credentials for Aurora PostgreSQL",
             generate_secret_string=secretsmanager.SecretStringGenerator(
-                secret_string_template='{"username": "dbuser"}',
+                secret_string_template=json.dumps(
+                    {"username": "dbuser", "dbname": database_name}
+                ),
                 generate_string_key="password",
                 exclude_characters='"@/\\',
                 password_length=32,
@@ -201,6 +205,7 @@ class TapStack(Stack):
             engine=rds.DatabaseClusterEngine.aurora_postgres(
                 version=rds.AuroraPostgresEngineVersion.VER_16_4
             ),
+            default_database_name=database_name,
             credentials=rds.Credentials.from_secret(db_secret),
             writer=rds.ClusterInstance.serverless_v2(
                 "writer",
@@ -398,11 +403,11 @@ class TapStack(Stack):
                 "REDIS_HOST": redis_cluster.attr_primary_end_point_address,
                 "REDIS_PORT": redis_cluster.attr_primary_end_point_port,
                 "AWS_REGION": self.region,
+                "DB_HOST": db_cluster.cluster_endpoint.hostname,
+                "DB_PORT": str(db_cluster.cluster_endpoint.port),
+                "DB_NAME": database_name,
             },
             secrets={
-                "DB_HOST": ecs.Secret.from_secrets_manager(db_secret, "host"),
-                "DB_PORT": ecs.Secret.from_secrets_manager(db_secret, "port"),
-                "DB_NAME": ecs.Secret.from_secrets_manager(db_secret, "dbname"),
                 "DB_USERNAME": ecs.Secret.from_secrets_manager(db_secret, "username"),
                 "DB_PASSWORD": ecs.Secret.from_secrets_manager(db_secret, "password"),
             },
@@ -442,6 +447,23 @@ class TapStack(Stack):
             removal_policy=RemovalPolicy.DESTROY,
         )
 
+        api_gateway_log_role = iam.Role(
+            self,
+            "ApiGatewayCloudWatchRole",
+            assumed_by=iam.ServicePrincipal("apigateway.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+                )
+            ],
+        )
+
+        api_gateway_account = apigateway.CfnAccount(
+            self,
+            "ApiGatewayAccountConfig",
+            cloud_watch_role_arn=api_gateway_log_role.role_arn,
+        )
+
         api = apigateway.RestApi(
             self,
             "MedicalImagingApi",
@@ -459,6 +481,7 @@ class TapStack(Stack):
                 types=[apigateway.EndpointType.REGIONAL]
             ),
         )
+        api.node.add_dependency(api_gateway_account)
 
         # Add a health check endpoint
         health_resource = api.root.add_resource("health")
