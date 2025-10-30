@@ -733,7 +733,6 @@ Resources:
             Resource: !Sub '${CloudTrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
             Condition:
               StringEquals:
-                s3:x-amz-acl: 'bucket-owner-full-control'
                 aws:SourceAccount: !Ref 'AWS::AccountId'
 
   CloudTrailLogRole:
@@ -785,7 +784,11 @@ Resources:
       EnableLogFileValidation: true
       CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailLogRole.Arn
-      KMSKeyId: !Ref MasterKMSKey
+      # Use the key ARN to ensure CloudTrail references the exact KMS key resource
+      KMSKeyId:
+        Fn::GetAtt:
+          - MasterKMSKey
+          - Arn
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-trail'
