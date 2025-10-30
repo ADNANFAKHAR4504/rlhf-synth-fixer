@@ -136,6 +136,14 @@ Resources:
               - kms:ReEncrypt*
               - kms:DescribeKey
             Resource: '*'
+          - Sid: Allow Account Decrypt Access
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+            Resource: '*'
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-master-key'
