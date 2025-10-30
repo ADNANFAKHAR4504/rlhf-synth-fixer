@@ -1,0 +1,27 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "medium",
+  "team": "synth",
+  "startedAt": "2025-10-30T18:30:00+00:00",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "cicd",
+    "codepipeline",
+    "codebuild"
+  ],
+  "po_id": "11z098",
+  "aws_services": [
+    "s3",
+    "ecr",
+    "codebuild",
+    "codepipeline",
+    "lambda",
+    "cloudwatch",
+    "iam"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 8
+}
