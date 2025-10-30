@@ -86,7 +86,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     this.projectName = pulumi.getProject();
     this.stackName = pulumi.getStack();
-
+    
     // Load environment-specific configuration
     this.config = this.loadConfiguration(args.environmentSuffix);
 
@@ -120,8 +120,14 @@ export class TapStack extends pulumi.ComponentResource {
     // Create S3 bucket for logs
     const s3Bucket = this.createS3Bucket();
 
-    // Create Route53 hosted zone and records
-    const route53 = this.createRoute53(alb);
+    // Skip Route53 for PR environments (example.com is reserved by AWS)
+    let route53: { zone: aws.route53.Zone; record: aws.route53.Record } | null = null;
+    const isPrEnvironment = this.config.environmentSuffix.startsWith("pr");
+    
+    if (!isPrEnvironment) {
+      // Only create Route53 for non-PR environments
+      route53 = this.createRoute53(alb);
+    }
 
     // Create CloudWatch dashboard and alarms
     const cloudwatch = this.createCloudWatch(
@@ -151,8 +157,8 @@ export class TapStack extends pulumi.ComponentResource {
       rdsPort: rds.cluster.port,
       rdsSecretArn: rds.secret.arn,
       s3BucketName: s3Bucket.bucket,
-      route53ZoneId: route53.zone.zoneId,
-      route53ZoneName: route53.zone.name,
+      route53ZoneId: route53 ? route53.zone.zoneId : pulumi.output("N/A-PR-Environment"),
+      route53ZoneName: route53 ? route53.zone.name : pulumi.output(this.config.domain),
       cloudwatchDashboardArn: cloudwatch.dashboard.dashboardArn,
       publicSubnetIds: vpc.publicSubnetIds,
       privateSubnetIds: vpc.privateSubnetIds,
@@ -170,41 +176,53 @@ export class TapStack extends pulumi.ComponentResource {
    */
   private loadConfiguration(environmentSuffix: string): EnvironmentConfig {
     const config = new pulumi.Config();
-
+    
     // Determine VPC CIDR based on environment
     const defaultVpcCidrs: Record<string, string> = {
       dev: "10.1.0.0/16",
       staging: "10.2.0.0/16",
       prod: "10.3.0.0/16",
     };
-
+    
     // Determine ECS task count based on environment
     const defaultTaskCounts: Record<string, number> = {
       dev: 1,
       staging: 2,
       prod: 4,
     };
-
+    
     // Determine S3 log retention based on environment
     const defaultLogRetention: Record<string, number> = {
       dev: 7,
       staging: 30,
       prod: 90,
     };
-
+    
     // Determine CloudWatch log retention based on environment
     const defaultCloudWatchRetention: Record<string, number> = {
       dev: 7,
       staging: 30,
       prod: 90,
     };
-
+    
     // Get config with fallbacks
     const vpcCidr = config.get("vpcCidr") || defaultVpcCidrs[environmentSuffix] || "10.0.0.0/16";
     const ecsTaskCount = config.getNumber("ecsTaskCount") || defaultTaskCounts[environmentSuffix] || 2;
     const s3LogRetentionDays = config.getNumber("s3LogRetentionDays") || defaultLogRetention[environmentSuffix] || 30;
     const cloudwatchLogRetentionDays = config.getNumber("cloudwatchLogRetentionDays") || defaultCloudWatchRetention[environmentSuffix] || 30;
-
+    
+    // For PR environments or testing, use a non-reserved domain or skip Route53
+    let domain = config.get("domain");
+    if (!domain) {
+      // Check if it's a PR environment
+      if (environmentSuffix.startsWith("pr")) {
+        // Use internal domain for PR environments (Route53 will be skipped)
+        domain = `${environmentSuffix}.internal.local`;
+      } else {
+        domain = `${environmentSuffix}.example.com`;
+      }
+    }
+    
     return {
       environmentSuffix,
       vpcCidr,
@@ -217,7 +235,7 @@ export class TapStack extends pulumi.ComponentResource {
         Team: config.get("team") || "platform-team",
         CostCenter: config.get("costCenter") || "eng-12345",
       },
-      domain: config.get("domain") || `${environmentSuffix}.example.com`,
+      domain,
       ecsTaskCpu: config.get("ecsTaskCpu") || (environmentSuffix === "prod" ? "1024" : environmentSuffix === "staging" ? "512" : "256"),
       ecsTaskMemory: config.get("ecsTaskMemory") || (environmentSuffix === "prod" ? "2048" : environmentSuffix === "staging" ? "1024" : "512"),
       rdsAllocatedStorage: config.getNumber("rdsAllocatedStorage") || (environmentSuffix === "prod" ? 100 : 20),
@@ -236,7 +254,7 @@ export class TapStack extends pulumi.ComponentResource {
    */
   private createVpc() {
     const vpcName = this.getResourceName("vpc");
-
+    
     const vpc = new awsx.ec2.Vpc(
       vpcName,
       {
@@ -401,7 +419,7 @@ export class TapStack extends pulumi.ComponentResource {
     const dbSubnetGroup = new aws.rds.SubnetGroup(
       this.getResourceName("db-subnet-group"),
       {
-        name: this.getAwsCompliantName("db-subnet-group"), // FIXED: Explicit lowercase name
+        name: this.getAwsCompliantName("db-subnet-group"),
         subnetIds: vpc.privateSubnetIds,
         tags: {
           ...this.config.tags,
@@ -415,7 +433,7 @@ export class TapStack extends pulumi.ComponentResource {
     const parameterGroup = new aws.rds.ClusterParameterGroup(
       this.getResourceName("db-param-group"),
       {
-        name: this.getAwsCompliantName("db-param-group"), // Already fixed
+        name: this.getAwsCompliantName("db-param-group"),
         family: "aurora-postgresql14",
         description: "RDS cluster parameter group for Aurora PostgreSQL",
         tags: {
@@ -443,7 +461,7 @@ export class TapStack extends pulumi.ComponentResource {
     const cluster = new aws.rds.Cluster(
       this.getResourceName("aurora-cluster"),
       {
-        clusterIdentifier: this.getAwsCompliantName("aurora-cluster"), // Already fixed
+        clusterIdentifier: this.getAwsCompliantName("aurora-cluster"),
         engine: "aurora-postgresql",
         engineVersion: "14.6",
         databaseName: "tradingdb",
@@ -498,7 +516,6 @@ export class TapStack extends pulumi.ComponentResource {
 
     return { cluster, clusterInstance, secret, kmsKey };
   }
-
 
   /**
    * Create ECS Fargate cluster
@@ -1157,12 +1174,12 @@ export class TapStack extends pulumi.ComponentResource {
    */
   private getResourceName(resourceType: string): string {
     const baseName = `${this.projectName}-${this.config.environmentSuffix}-${resourceType}`;
-
+    
     // S3 bucket names must be lowercase and DNS-compliant
     if (resourceType.includes('logs') || resourceType.includes('bucket')) {
       return baseName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
     }
-
+    
     return baseName;
   }
 
@@ -1172,26 +1189,26 @@ export class TapStack extends pulumi.ComponentResource {
    */
   private getAwsCompliantName(resourceType: string): string {
     let name = `${this.projectName}-${this.config.environmentSuffix}-${resourceType}`.toLowerCase();
-
+    
     // Replace any non-alphanumeric characters (except hyphens) with hyphens
     name = name.replace(/[^a-z0-9-]/g, '-');
-
+    
     // Remove consecutive hyphens
     name = name.replace(/-+/g, '-');
-
+    
     // Ensure it starts with a letter
     if (!/^[a-z]/.test(name)) {
       name = 'a' + name;
     }
-
+    
     // Truncate if too long (AWS typically has 63 char limit)
     if (name.length > 63) {
       name = name.substring(0, 63);
     }
-
+    
     // Remove trailing hyphen if present
     name = name.replace(/-$/, '');
-
+    
     return name;
   }
 
