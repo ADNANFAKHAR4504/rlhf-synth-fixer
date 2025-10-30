@@ -859,7 +859,7 @@ Console checks:
 4. Try to create an EBS volume in the EC2 console and verify encryption is automatic
 5. Try to upload an unencrypted file to S3 bucket via console and verify it's rejected
 
-Let me now organize this information into the final response according to the requested format.
+Organize this information into the final response according to the requested format.
 
 ### Answer
 
