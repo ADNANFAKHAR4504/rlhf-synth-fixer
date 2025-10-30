@@ -237,9 +237,7 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
 - [x] Code in ideal response and tapstack are the same" \
      --base main \
      --head ${BRANCH_NAME} \
-     --label "synth" \
-     --label "automated" \
-     --label "complexity-${COMPLEXITY}"
+     --label "Synth-1"
    ```
 
 7. **Capture PR number**:
@@ -310,14 +308,26 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    - ❌ WRONG: `worktree-synth-{task_id}`, `worktrees/`, `IAC-synth-{task_id}`
    - ✅ CORRECT: `worktree/synth-{task_id}`
 
-2. **Immediately change directory**:
+2. **Immediately change directory and verify**:
    ```bash
    cd worktree/synth-{task_id}
+
+   # MANDATORY: Run automated verification
+   bash .claude/scripts/verify-worktree.sh || exit 1
    ```
 
    **From this point forward, ALL commands run from this directory unless explicitly stated.**
 
-3. **Validate worktree setup**:
+3. **Validate worktree setup** (AUTOMATED):
+
+   The `verify-worktree.sh` script automatically checks:
+   - ✅ Location matches pattern: `*/worktree/synth-{task_id}`
+   - ✅ Branch matches directory name
+   - ✅ metadata.json exists
+   - ✅ Not on main/master branch
+   - ✅ Exports environment variables ($WORKTREE_DIR, $TASK_ID, $TASK_BRANCH)
+
+   **Manual verification (only if automated script fails)**:
    ```bash
    # Verify location
    pwd  # Must end with: /worktree/synth-{task_id}
@@ -391,9 +401,12 @@ Example metadata.json:
   "team": "synth",
   "startedAt": "2025-08-12T13:19:10-05:00",
   "subtask": "Application Deployment",
-  "subject_labels": ["CI/CD Pipeline", "Security Configuration"]
+  "subject_labels": ["CI/CD Pipeline", "Security Configuration"],
+  "aws_services": [],
 }
 ```
+
+**CRITICAL**: `aws_services` must be initialized as an empty array `[]`. It will be populated by iac-code-reviewer based on implemented services.
 
 **Validate immediately**:
 ```bash
