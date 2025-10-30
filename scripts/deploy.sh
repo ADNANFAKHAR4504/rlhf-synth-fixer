@@ -54,6 +54,19 @@ echo "=== Bootstrap Phase ==="
 echo "=== Deploy Phase ==="
 if [ "$PLATFORM" = "cdk" ]; then
   echo "✅ CDK project detected, running CDK deploy..."
+
+  # Check if stack is in failed state and needs cleanup
+  STACK_NAME="TapStack${ENVIRONMENT_SUFFIX}"
+  STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "NOT_FOUND")
+
+  if [[ "$STACK_STATUS" =~ ^(ROLLBACK_COMPLETE|UPDATE_ROLLBACK_COMPLETE|CREATE_FAILED|DELETE_FAILED)$ ]]; then
+    echo "⚠️ Stack is in $STACK_STATUS state. Deleting stack before redeployment..."
+    npm run cdk:destroy -- --force
+    echo "✅ Stack deleted successfully"
+    # Wait a bit for resources to fully delete
+    sleep 10
+  fi
+
   npm run cdk:deploy
 
 elif [ "$PLATFORM" = "cdktf" ]; then
