@@ -1132,6 +1132,6 @@ Outputs:
 
   ApiKey:
     Description: API Key for accessing the payment API
-    Value: !Ref ApiKey
+    Value: !GetAtt ApiKey.Value
     Export:
       Name: !Sub ${AWS::StackName}-ApiKey-${Environment}

@@ -1535,7 +1535,10 @@
         "ApiKey": {
             "Description": "API Key for accessing the payment API",
             "Value": {
-                "Ref": "ApiKey"
+                "Fn::GetAtt": [
+                    "ApiKey",
+                    "Value"
+                ]
             },
             "Export": {
                 "Name": {
