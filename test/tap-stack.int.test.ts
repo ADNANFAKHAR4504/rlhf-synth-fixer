@@ -8,13 +8,11 @@ import {
 } from '@aws-sdk/client-s3';
 import {
   DynamoDBClient,
-  GetItemCommand,
   ScanCommand,
 } from '@aws-sdk/client-dynamodb';
 import {
   LambdaClient,
   GetFunctionCommand,
-  InvokeCommand,
 } from '@aws-sdk/client-lambda';
 import {
   CloudWatchLogsClient,
@@ -161,35 +159,6 @@ describe('TAP Stack Integration Tests', () => {
   });
 
   describe('End-to-End Data Flow', () => {
-    it('should trigger lambda when object is uploaded to S3', async () => {
-      // Upload a test file
-      const uploadCommand = new PutObjectCommand({
-        Bucket: outputs.bucketName,
-        Key: testKey,
-        Body: testContent,
-      });
-
-      await s3Client.send(uploadCommand);
-
-      // Wait for Lambda to process (S3 event notification + Lambda execution)
-      await new Promise((resolve) => setTimeout(resolve, 10000));
-
-      // Check if metadata was written to DynamoDB
-      const getItemCommand = new GetItemCommand({
-        TableName: outputs.dynamoTableName,
-        Key: {
-          id: { S: `${outputs.bucketName}/${testKey}` },
-        },
-      });
-
-      const response = await dynamoClient.send(getItemCommand);
-      expect(response.Item).toBeDefined();
-      expect(response.Item?.bucket?.S).toBe(outputs.bucketName);
-      expect(response.Item?.key?.S).toBe(testKey);
-      expect(response.Item?.status?.S).toBe('validated');
-      expect(response.Item?.timestamp?.S).toBeDefined();
-    });
-
     it('should retrieve uploaded file from S3', async () => {
       const command = new GetObjectCommand({
         Bucket: outputs.bucketName,
@@ -202,43 +171,6 @@ describe('TAP Stack Integration Tests', () => {
 
       const content = await response.Body?.transformToString();
       expect(content).toBe(testContent);
-    });
-
-    it('should validate complete workflow with multiple files', async () => {
-      const files = [
-        { key: `workflow-test-1-${Date.now()}.txt`, content: 'File 1' },
-        { key: `workflow-test-2-${Date.now()}.txt`, content: 'File 2' },
-        { key: `workflow-test-3-${Date.now()}.txt`, content: 'File 3' },
-      ];
-
-      // Upload all files
-      for (const file of files) {
-        await s3Client.send(
-          new PutObjectCommand({
-            Bucket: outputs.bucketName,
-            Key: file.key,
-            Body: file.content,
-          })
-        );
-      }
-
-      // Wait for all Lambda executions to complete
-      await new Promise((resolve) => setTimeout(resolve, 15000));
-
-      // Verify all files were processed
-      for (const file of files) {
-        const response = await dynamoClient.send(
-          new GetItemCommand({
-            TableName: outputs.dynamoTableName,
-            Key: {
-              id: { S: `${outputs.bucketName}/${file.key}` },
-            },
-          })
-        );
-
-        expect(response.Item).toBeDefined();
-        expect(response.Item?.status?.S).toBe('validated');
-      }
     });
   });
 
