@@ -1,16 +1,16 @@
-We are a rapidly growing FinSecure Bank, a leading financial services company undergoing a digital transformation. Our team is responsible for deploying a new, highly secure application infrastructure on AWS to handle sensitive financial data. The project, codenamed "Project Nova," requires full automation using AWS CloudFormation to ensure repeatability, compliance, and resilience. The infrastructure must meet rigorous security standards aligned with financial regulations (e.g., PCI DSS, SOX).
+We are a rapidly growing FinSecure Bank, a leading financial services company undergoing a digital transformation. Our team is responsible for deploying a new, highly secure application infrastructure to handle sensitive financial data. The project, codenamed "Project Nova," requires full automation using AWS CloudFormation to ensure repeatability, compliance, and resilience. The infrastructure must meet rigorous security standards aligned with financial regulations (e.g., PCI DSS, SOX).
 
-Your primary objective is to design and implement a comprehensive CloudFormation YAML template that automates the deployment of a secure, resilient, and compliant infrastructure in the us-east-1 region. The template should serve as the foundation for the application, enabling easy validation through integration tests and continuous monitoring.
+Your primary objective is to design and implement a comprehensive CloudFormation YAML template that automates the deployment of a secure, resilient, and compliant infrastructure.
 
 Key Infrastructure Objectives:
 
 Secure Network Foundation:
 
-Deploy a VPC with CIDR 10.0.0.0/16 in us-east-1, and ensure all compute resources (e.g., EC2 instances) operate within this VPC.
+Deploy a VPC with CIDR 10.0.0.0/16, and ensure all compute resources (e.g., EC2 instances) operate within this VPC.
 
 Implement auto-scaling for EC2 instances to handle load fluctuations while maintaining cost efficiency.
 
-Remove default VPCs from all AWS regions except us-east-1 to minimize security risks.
+Remove default VPCs from all AWS regions except the deployment region.
 
 Identity and Access Management (IAM):
 
@@ -50,5 +50,4 @@ Include log retention policies for RDS and other services as per compliance requ
 
 Expected Deliverables:
 
-A Single CloudFormation YAML template named finsecure_infrastructure.yaml that passes AWS CloudFormation validation (aws cloudformation validate-template).
-The template must produce stack outputs that expose critical resource identifiers and endpoints.
+A Single CloudFormation YAML template named finsecure_infrastructure.yaml that passes AWS CloudFormation validation.
