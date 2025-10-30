@@ -162,7 +162,7 @@ export class TapStack extends cdk.Stack {
       functionName: `tap-application-function-${envSuffix}`,
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'handler.main',
-      code: lambda.Code.fromAsset('lambda/serverless-ci-cd-function'),
+      code: lambda.Code.fromAsset('lib/lambda/serverless-ci-cd-function'),
       role: lambdaRole,
       environment: {
         APPLICATION_BUCKET: this.applicationBucket.bucketName,
@@ -519,7 +519,7 @@ export class LambdaWithCanary extends Construct {
 
 ## Lambda Function Handler
 
-### `lambda/serverless-ci-cd-function/handler.ts`
+### `lib/lambda/serverless-ci-cd-function/handler.ts`
 
 ```typescript
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';

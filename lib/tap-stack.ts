@@ -156,7 +156,7 @@ export class TapStack extends cdk.Stack {
       functionName: `tap-application-function-${envSuffix}`,
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'handler.main',
-      code: lambda.Code.fromAsset('lambda/serverless-ci-cd-function'),
+      code: lambda.Code.fromAsset('lib/lambda/serverless-ci-cd-function'),
       role: lambdaRole,
       environment: {
         APPLICATION_BUCKET: this.applicationBucket.bucketName,
