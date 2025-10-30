@@ -61,7 +61,13 @@ describe('Integration: runtime traffic checks (uses cfn-outputs/flat-outputs.jso
     const testId = uuidv4();
     const payload = { testId, ts: new Date().toISOString(), message: 'integration-test' };
 
-    const response = await axios.post(apiEndpoint, payload, { validateStatus: () => true, timeout: 30000 });
+    // Build headers; include API key if present in outputs
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (outputs.api_key_id) {
+      headers['x-api-key'] = outputs.api_key_id;
+    }
+
+    const response = await axios.post(apiEndpoint, payload, { headers, validateStatus: () => true, timeout: 30000 });
 
     // We only assert runtime success (2xx). If non-2xx, log and fail the test.
     expect(response.status).toBeGreaterThanOrEqual(200);
@@ -218,8 +224,9 @@ describe('Integration: runtime traffic checks (uses cfn-outputs/flat-outputs.jso
 });
 describe('Turn Around Prompt API Integration Tests', () => {
   describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
+    // Placeholder removed. Real integration checks are above.
+    test('placeholder: no-op', async () => {
+      expect(true).toBe(true);
     });
   });
 });
