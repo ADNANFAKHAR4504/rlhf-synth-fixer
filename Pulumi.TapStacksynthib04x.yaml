@@ -1,0 +1,4 @@
+encryptionsalt: v1:qooyv5yawq0=:v1:+Wwlbdc5g06G80RB:oWO8NtfbqQQ1Ae0bHhFJMkcf/YO+vQ==
+config:
+  aws:region: ap-southeast-2
+  TapStack:environmentSuffix: synthib04x
