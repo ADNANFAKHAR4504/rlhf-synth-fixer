@@ -7,7 +7,6 @@ describe('TapStack CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // Load the security compliance template in JSON format
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
@@ -71,7 +70,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have KMS key aliases with environment suffix', () => {
       const s3Alias = template.Resources.S3KMSKeyAlias;
       const ebsAlias = template.Resources.EBSKMSKeyAlias;
-      
+
       expect(s3Alias).toBeDefined();
       expect(ebsAlias).toBeDefined();
       expect(s3Alias.Properties.AliasName['Fn::Sub']).toBe('alias/s3-encryption-key-${EnvironmentSuffix}');
@@ -89,18 +88,18 @@ describe('TapStack CloudFormation Template', () => {
       expect(bucket.Type).toBe('AWS::S3::Bucket');
       expect(bucket.DeletionPolicy).toBe('Delete');
       expect(bucket.UpdateReplacePolicy).toBe('Delete');
-      
+
       // Check encryption
       expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration).toBeDefined();
       const encryption = bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0];
       expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
-      
+
       // Check public access block
       expect(bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
       expect(bucket.Properties.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(true);
       expect(bucket.Properties.PublicAccessBlockConfiguration.IgnorePublicAcls).toBe(true);
       expect(bucket.Properties.PublicAccessBlockConfiguration.RestrictPublicBuckets).toBe(true);
-      
+
       // Check versioning
       expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
     });
@@ -286,7 +285,7 @@ describe('TapStack CloudFormation Template', () => {
 
   describe('Security Best Practices', () => {
     test('all S3 buckets should have DeletionPolicy Delete', () => {
-      const buckets = Object.values(template.Resources).filter((resource: any) => 
+      const buckets = Object.values(template.Resources).filter((resource: any) =>
         resource.Type === 'AWS::S3::Bucket'
       );
       buckets.forEach((bucket: any) => {
@@ -296,7 +295,7 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('Config rules should have unique names with environment suffix', () => {
-      const configRules = Object.values(template.Resources).filter((resource: any) => 
+      const configRules = Object.values(template.Resources).filter((resource: any) =>
         resource.Type === 'AWS::Config::ConfigRule'
       );
       configRules.forEach((rule: any) => {
@@ -313,7 +312,7 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('all KMS keys should have key rotation enabled', () => {
-      const kmsKeys = Object.values(template.Resources).filter((resource: any) => 
+      const kmsKeys = Object.values(template.Resources).filter((resource: any) =>
         resource.Type === 'AWS::KMS::Key'
       );
       expect(kmsKeys).toHaveLength(2);
@@ -323,7 +322,7 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('S3 buckets should block all public access', () => {
-      const buckets = Object.values(template.Resources).filter((resource: any) => 
+      const buckets = Object.values(template.Resources).filter((resource: any) =>
         resource.Type === 'AWS::S3::Bucket'
       );
       buckets.forEach((bucket: any) => {
@@ -337,7 +336,7 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('Config rules should not have MaximumExecutionFrequency', () => {
-      const configRules = Object.values(template.Resources).filter((resource: any) => 
+      const configRules = Object.values(template.Resources).filter((resource: any) =>
         resource.Type === 'AWS::Config::ConfigRule'
       );
       configRules.forEach((rule: any) => {
@@ -346,7 +345,7 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('Config rules should depend on recorder and delivery channel', () => {
-      const configRules = Object.values(template.Resources).filter((resource: any) => 
+      const configRules = Object.values(template.Resources).filter((resource: any) =>
         resource.Type === 'AWS::Config::ConfigRule'
       );
       configRules.forEach((rule: any) => {
@@ -386,7 +385,7 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('IAM roles should have assume role policy documents', () => {
-      const roles = Object.values(template.Resources).filter((resource: any) => 
+      const roles = Object.values(template.Resources).filter((resource: any) =>
         resource.Type === 'AWS::IAM::Role'
       );
       roles.forEach((role: any) => {
@@ -411,7 +410,7 @@ describe('TapStack CloudFormation Template', () => {
     test('KMS key aliases should reference correct keys', () => {
       const s3Alias = template.Resources.S3KMSKeyAlias;
       const ebsAlias = template.Resources.EBSKMSKeyAlias;
-      
+
       expect(s3Alias.Properties.TargetKeyId.Ref).toBe('S3KMSKey');
       expect(ebsAlias.Properties.TargetKeyId.Ref).toBe('EBSKMSKey');
     });
@@ -448,22 +447,22 @@ describe('TapStack CloudFormation Template', () => {
     test('all named resources should use environment suffix', () => {
       const namedResources = [
         'S3KMSKeyAlias',
-        'EBSKMSKeyAlias', 
+        'EBSKMSKeyAlias',
         'MFARequiredPolicy',
         'AllUsersGroup',
         'ConfigRecorder',
         'S3EncryptionRule',
         'EBSEncryptionRule'
       ];
-      
+
       namedResources.forEach(resourceName => {
         const resource = template.Resources[resourceName];
-        const nameProperty = resource.Properties.AliasName || 
-                            resource.Properties.ManagedPolicyName ||
-                            resource.Properties.GroupName ||
-                            resource.Properties.Name ||
-                            resource.Properties.ConfigRuleName;
-        
+        const nameProperty = resource.Properties.AliasName ||
+          resource.Properties.ManagedPolicyName ||
+          resource.Properties.GroupName ||
+          resource.Properties.Name ||
+          resource.Properties.ConfigRuleName;
+
         if (nameProperty && nameProperty['Fn::Sub']) {
           expect(nameProperty['Fn::Sub']).toContain('${EnvironmentSuffix}');
         }
@@ -473,14 +472,14 @@ describe('TapStack CloudFormation Template', () => {
     test('KMS keys should have compliance tags', () => {
       const s3Key = template.Resources.S3KMSKey;
       const ebsKey = template.Resources.EBSKMSKey;
-      
+
       [s3Key, ebsKey].forEach(key => {
         expect(key.Properties.Tags).toBeDefined();
         const tags = key.Properties.Tags.reduce((acc: any, tag: any) => {
           acc[tag.Key] = tag.Value;
           return acc;
         }, {});
-        
+
         expect(tags.ComplianceControl).toBe('DataEncryption');
         expect(tags.Environment).toBeDefined();
         expect(tags.Purpose).toBeDefined();
@@ -492,13 +491,13 @@ describe('TapStack CloudFormation Template', () => {
     test('should have all critical AWS Config components', () => {
       const requiredConfigResources = [
         'ConfigRole',
-        'ConfigBucket', 
+        'ConfigBucket',
         'ConfigRecorder',
         'ConfigDeliveryChannel',
         'S3EncryptionRule',
         'EBSEncryptionRule'
       ];
-      
+
       requiredConfigResources.forEach(resourceName => {
         expect(template.Resources[resourceName]).toBeDefined();
       });
@@ -508,14 +507,14 @@ describe('TapStack CloudFormation Template', () => {
       const requiredEncryptionResources = [
         'S3KMSKey',
         'S3KMSKeyAlias',
-        'EBSKMSKey', 
+        'EBSKMSKey',
         'EBSKMSKeyAlias',
         'EncryptedS3Bucket',
         'EncryptedS3BucketPolicy',
         'EBSEncryptionLambda',
         'EBSEncryptionCustomResource'
       ];
-      
+
       requiredEncryptionResources.forEach(resourceName => {
         expect(template.Resources[resourceName]).toBeDefined();
       });
@@ -526,7 +525,7 @@ describe('TapStack CloudFormation Template', () => {
         'MFARequiredPolicy',
         'AllUsersGroup'
       ];
-      
+
       requiredIAMResources.forEach(resourceName => {
         expect(template.Resources[resourceName]).toBeDefined();
       });
@@ -535,12 +534,12 @@ describe('TapStack CloudFormation Template', () => {
     test('should have comprehensive outputs for integration testing', () => {
       const requiredOutputs = [
         'S3KMSKeyArn',
-        'EBSKMSKeyArn', 
+        'EBSKMSKeyArn',
         'EncryptedS3BucketName',
         'MFARequiredPolicyArn',
         'ConfigBucketName'
       ];
-      
+
       requiredOutputs.forEach(outputName => {
         expect(template.Outputs[outputName]).toBeDefined();
         expect(template.Outputs[outputName].Description).toBeDefined();
