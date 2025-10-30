@@ -88,9 +88,33 @@ describe('Integration: runtime traffic checks (uses cfn-outputs/flat-outputs.jso
       }
     }
 
-    const response = await axios.post(apiEndpoint, payload, { headers, validateStatus: () => true, timeout: 30000 });
+    let response = await axios.post(apiEndpoint, payload, { headers, validateStatus: () => true, timeout: 30000 });
 
-    // We only assert runtime success (2xx). If non-2xx, log and fail the test.
+    // If we received 403 (API key likely incorrect or missing), try to resolve the API key value (includeValue)
+    // and retry once. This helps when outputs.api_key_id contains the key resource id but we can programmatically
+    // retrieve the generated value via the API Gateway GetApiKey includeValue flag (requires permission).
+    if (response.status === 403 && outputs.api_key_id && apiGateway) {
+      try {
+        const getKey = new GetApiKeyCommand({ apiKey: outputs.api_key_id, includeValue: true });
+        const res = await apiGateway.send(getKey);
+        const realValue = (res as any).value as string | undefined;
+        const enabled = (res as any).enabled;
+        console.warn('API POST returned 403 — fetched ApiKey enabled=', enabled ? 'true' : 'false');
+        if (realValue) {
+          headers['x-api-key'] = realValue;
+          // retry once with the retrieved key value
+          response = await axios.post(apiEndpoint, payload, { headers, validateStatus: () => true, timeout: 30000 });
+        }
+      } catch (err) {
+        console.warn('Failed to fetch API key value via GetApiKey:', err);
+      }
+    }
+
+    // We only assert runtime success (2xx). If non-2xx, log the response body for debugging and fail the test.
+    if (!(response.status >= 200 && response.status < 300)) {
+      console.warn('API POST failed', { status: response.status, data: response.data });
+    }
+
     expect(response.status).toBeGreaterThanOrEqual(200);
     expect(response.status).toBeLessThan(300);
 
