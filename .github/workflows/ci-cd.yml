@@ -607,15 +607,20 @@ jobs:
 
             Once your review is complete, post the summary comment and finish execution successfully.
             Do not exit with a non-zero code unless explicitly instructed by the workflow.
-      - name: Extract Claude Quality Score
+      - name: Extract Claude Quality Score from PR Comment
         id: extract
-        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "🔍 Extracting Claude quality score from output..."
-          SCORE=$(grep -Eo 'SCORE:[0-9]+' "$GITHUB_STEP_SUMMARY" | tail -1 | cut -d':' -f2)
+          echo "🔍 Fetching latest Claude review comment..."
+          gh pr view ${{ github.event.pull_request.number }} --comments --json comments \
+            | jq -r '.comments[].body' > all_comments.txt
+
+          # Find the most recent "Final Score" pattern
+          SCORE=$(grep -Eo '\*\*Final Score:[[:space:]]*[0-9]+/10\*\*' all_comments.txt | tail -1 | grep -Eo '[0-9]+' | head -1)
 
           if [ -z "$SCORE" ]; then
-            echo "⚠️ No SCORE found in Claude output. Defaulting to 0."
+            echo "⚠️ Could not find Final Score in PR comments. Defaulting to 0."
             SCORE=0
           fi
 
@@ -640,7 +645,8 @@ jobs:
           name: updated-metadata
           path: metadata.json
           if-no-files-found: warn
-
+    outputs:
+      quality_score: ${{ steps.extract.outputs.quality_score }}
   cleanup:
     name: Cleanup (Destroy Resources)
     runs-on: ubuntu-24.04
