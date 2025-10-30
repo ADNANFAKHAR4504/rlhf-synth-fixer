@@ -511,7 +511,6 @@ jobs:
     runs-on: ubuntu-24.04
     name: "Claude Review"
     needs: [integration-tests-live, analysis]
-    # if: ${{ !cancelled() && (needs.analysis.result == 'success' || needs.integration-tests-live.result == 'success') }}
     permissions:
       contents: write
       pull-requests: write
