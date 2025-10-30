@@ -87,28 +87,28 @@ jobs:
       - name: Validate commit message
         run: npx commitlint --last
 
-  # build:
-  #   name: Build
-  #   runs-on: ubuntu-24.04
-  #   needs: detect-metadata
-  #   if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization'}}
-  #   environment: dev
+  build:
+    name: Build
+    runs-on: ubuntu-24.04
+    needs: detect-metadata
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization'}}
+    environment: dev
 
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-  #     - name: Setup Environment
-  #       uses: ./.github/actions/setup-environment
-  #       with:
-  #         node-version: ${{ env.NODE_VERSION }}
-  #         download-artifacts: "false"
-  #         upload-artifacts: "true"
-  #         platform: ${{ needs.detect-metadata.outputs.platform }}
-  #         language: ${{ needs.detect-metadata.outputs.language }}
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          download-artifacts: "false"
+          upload-artifacts: "true"
+          platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
-  #     - name: Build
-  #       run: ./scripts/build.sh
+      - name: Build
+        run: ./scripts/build.sh
 
   # synth:
   #   name: Synth
@@ -693,7 +693,7 @@ jobs:
           # show raw JSON of all needs (for advanced debugging)
           echo "---- full needs json ----"
           echo '${{ toJson(needs) }}'
-          
+
   archive-folders:
     name: Archive Folders and Reset Repository
     runs-on: ubuntu-24.04
