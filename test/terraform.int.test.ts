@@ -56,7 +56,7 @@ try {
   console.log('Warning: flat-outputs.json not found. Integration tests will be skipped.');
 }
 
-const AWS_REGION = outputs.aws_region || process.env.AWS_REGION || 'us-east-1';
+const AWS_REGION = outputs.aws_region || process.env.AWS_REGION || 'us-west-1';
 const hasOutputs = Object.keys(outputs).length > 0;
 
 // AWS SDK Clients

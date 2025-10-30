@@ -2,7 +2,7 @@ Hey team,
 
 We're building out the infrastructure for our fintech payment processing app and need your help getting this deployed on AWS. The product team has been pushing hard for this, and we need a solid, production-ready setup that can handle real traffic without breaking a sweat.
 
-So here's the deal - we're going with a containerized approach using ECS Fargate. The app container is already sitting in ECR (fintech-app:latest), and we need to get it running across 3 availability zones in us-east-1. Each task should have 4 vCPUs and 8GB of memory since this thing processes payments and needs some horsepower.
+So here's the deal - we're going with a containerized approach using ECS Fargate. The app container is already sitting in ECR (fintech-app:latest), and we need to get it running across 3 availability zones in us-west-1. Each task should have 4 vCPUs and 8GB of memory since this thing processes payments and needs some horsepower.
 
 For the frontend, we need an Application Load Balancer handling HTTPS traffic on port 443. We already have an ACM certificate ready to go, so just reference that. The ALB should forward traffic to our ECS tasks running on port 8080. Oh, and health checks need to hit the /health endpoint every 30 seconds - the devs have that endpoint ready.
 

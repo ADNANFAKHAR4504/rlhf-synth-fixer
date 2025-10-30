@@ -20,7 +20,7 @@ variable "environment" {
 variable "region" {
   description = "AWS region"
   type        = string
-  default     = "us-east-1"
+  default     = "us-west-1"
 }
 
 variable "vpc_id" {
@@ -1374,8 +1374,8 @@ output "ecr_repository_url" {
 vpc_id              = "vpc-xxxxxxxxx"
 private_subnet_ids  = ["subnet-xxx", "subnet-yyy", "subnet-zzz"]
 public_subnet_ids   = ["subnet-aaa", "subnet-bbb", "subnet-ccc"]
-acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/xxxxxxxx"
-ecr_repository_url  = "123456789012.dkr.ecr.us-east-1.amazonaws.com/fintech-app"
+acm_certificate_arn = "arn:aws:acm:us-west-1:123456789012:certificate/xxxxxxxx"
+ecr_repository_url  = "123456789012.dkr.ecr.us-west-1.amazonaws.com/fintech-app"
 route53_zone_id     = "Z1234567890ABC"
 ```
 

@@ -157,7 +157,7 @@ Used variable `region` but provider.tf expects `aws_region`:
 variable "region" {
   description = "AWS region"
   type        = string
-  default     = "us-east-1"
+  default     = "us-west-1"
 }
 
 # provider.tf (existing file)
@@ -171,7 +171,7 @@ provider "aws" {
 variable "aws_region" {
   description = "AWS region for deployment"
   type        = string
-  default     = "us-east-1"
+  default     = "us-west-1"
 }
 ```
 

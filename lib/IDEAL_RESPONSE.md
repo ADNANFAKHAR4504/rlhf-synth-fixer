@@ -64,7 +64,7 @@ provider "aws" {
 variable "aws_region" {
   description = "AWS region for deployment"
   type        = string
-  default     = "us-east-1"
+  default     = "us-west-1"
 }
 
 variable "project_name" {
@@ -2086,7 +2086,7 @@ export ENVIRONMENT_SUFFIX="test01"
 terraform -chdir=lib init \
   -backend-config="bucket=your-terraform-state-bucket" \
   -backend-config="key=fintech-app/${ENVIRONMENT_SUFFIX}/terraform.tfstate" \
-  -backend-config="region=us-east-1"
+  -backend-config="region=us-west-1"
 
 # Plan deployment
 terraform -chdir=lib plan -out=tfplan
@@ -2100,7 +2100,7 @@ terraform -chdir=lib apply tfplan
 Create a `terraform.tfvars` file:
 
 ```hcl
-aws_region           = "us-east-1"
+aws_region           = "us-west-1"
 project_name         = "fintech-app"
 environment          = "production"
 environment_suffix   = "prod01"
@@ -2116,7 +2116,7 @@ cpu_target_value     = 70
 
 # Optional: Enable HTTPS
 enable_https         = false
-# acm_certificate_arn  = "arn:aws:acm:us-east-1:123456789012:certificate/xxxxx"
+# acm_certificate_arn  = "arn:aws:acm:us-west-1:123456789012:certificate/xxxxx"
 
 # Optional: Enable Route53
 enable_route53       = false
@@ -2139,14 +2139,14 @@ After deployment, get the ALB URL:
 
 ```bash
 terraform -chdir=lib output alb_url
-# Output: http://fintech-app-abc123-alb-1234567890.us-east-1.elb.amazonaws.com
+# Output: http://fintech-app-abc123-alb-1234567890.us-west-1.elb.amazonaws.com
 ```
 
 ### Push Container Image to ECR
 
 ```bash
 # Get ECR login
-aws ecr get-login-password --region us-east-1 | \
+aws ecr get-login-password --region us-west-1 | \
   docker login --username AWS --password-stdin $(terraform -chdir=lib output -raw ecr_repository_url)
 
 # Build and push image
@@ -2159,7 +2159,7 @@ aws ecs update-service \
   --cluster $(terraform -chdir=lib output -raw ecs_cluster_name) \
   --service $(terraform -chdir=lib output -raw ecs_service_name) \
   --force-new-deployment \
-  --region us-east-1
+  --region us-west-1
 ```
 
 ### Cleanup
