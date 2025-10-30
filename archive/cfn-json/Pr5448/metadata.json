@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-10-30T11:31:28+00:00",
+  "subtask": "Environment Migration",
+  "subject_labels": [
+    "iac",
+    "cfn",
+    "migration"
+  ],
+  "po_id": "101000769",
+  "aws_services": [
+    "RDS",
+    "Lambda",
+    "API Gateway",
+    "SQS",
+    "CloudWatch",
+    "Secrets Manager",
+    "KMS",
+    "SSM Parameter Store",
+    "VPC",
+    "NAT Gateway",
+    "IAM"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}
