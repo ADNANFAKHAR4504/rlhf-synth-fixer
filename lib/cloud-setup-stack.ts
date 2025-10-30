@@ -288,10 +288,10 @@ EOF`,
     // Only configure alternate domain names (CNAMEs) if a certificate ARN is provided.
     const cfCert = props.cloudFrontCertificateArn
       ? acm.Certificate.fromCertificateArn(
-        this,
-        `cf-cert-${this.suffix}`,
-        props.cloudFrontCertificateArn
-      )
+          this,
+          `cf-cert-${this.suffix}`,
+          props.cloudFrontCertificateArn
+        )
       : undefined;
     const domainNames =
       cfCert && props.domainName ? [props.domainName] : undefined;
