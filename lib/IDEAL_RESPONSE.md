@@ -1,4 +1,4 @@
-```
+```yml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Multi-Environment Infrastructure Template - Dev/Staging/Production'
 
