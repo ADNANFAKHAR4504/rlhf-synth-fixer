@@ -1,0 +1,22 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350113",
+  "team": "4",
+  "startedAt": "2025-10-29T09:59:04.010Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": "VPC, IAM, S3, KMS, CloudTrail, EC2, Auto Scaling, ALB, CloudWatch, NAT Gateway, Internet Gateway, Security Groups, VPC Endpoints",
+  "training_quality": 9,
+  "background": "Multi-region secure AWS infrastructure deployment using Terraform with comprehensive security controls. Implements AWS Well-Architected Framework principles across us-west-1 and us-east-1 regions. Features include KMS encryption with automatic key rotation, IAM security with MFA enforcement and least privilege policies, multi-AZ high availability with auto scaling, CloudTrail auditing with multi-region coverage, VPC networking with public/private subnet isolation, Application Load Balancers with TLS 1.2+ enforcement, S3 buckets with encryption and VPC endpoint restrictions, IMDSv2 enforcement for EC2 instances, and CloudWatch logging with KMS encryption. The solution includes 193 comprehensive tests (113 unit + 80 integration) with 100% pass rate and zero mocking, validating security best practices, compliance requirements, and infrastructure reliability.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}
