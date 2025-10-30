@@ -308,14 +308,26 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    - ❌ WRONG: `worktree-synth-{task_id}`, `worktrees/`, `IAC-synth-{task_id}`
    - ✅ CORRECT: `worktree/synth-{task_id}`
 
-2. **Immediately change directory**:
+2. **Immediately change directory and verify**:
    ```bash
    cd worktree/synth-{task_id}
+
+   # MANDATORY: Run automated verification
+   bash .claude/scripts/verify-worktree.sh || exit 1
    ```
 
    **From this point forward, ALL commands run from this directory unless explicitly stated.**
 
-3. **Validate worktree setup**:
+3. **Validate worktree setup** (AUTOMATED):
+
+   The `verify-worktree.sh` script automatically checks:
+   - ✅ Location matches pattern: `*/worktree/synth-{task_id}`
+   - ✅ Branch matches directory name
+   - ✅ metadata.json exists
+   - ✅ Not on main/master branch
+   - ✅ Exports environment variables ($WORKTREE_DIR, $TASK_ID, $TASK_BRANCH)
+
+   **Manual verification (only if automated script fails)**:
    ```bash
    # Verify location
    pwd  # Must end with: /worktree/synth-{task_id}
