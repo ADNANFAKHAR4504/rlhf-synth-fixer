@@ -414,6 +414,9 @@ Resources:
   #----------------------------------------
   S3EncryptionRule:
     Type: AWS::Config::ConfigRule
+    DependsOn:
+      - ConfigRecorder
+      - ConfigDeliveryChannel
     Properties:
       ConfigRuleName: !Sub s3-bucket-server-side-encryption-enabled-${EnvironmentSuffix}
       Description: Checks if S3 buckets have encryption enabled
@@ -426,6 +429,9 @@ Resources:
 
   EBSEncryptionRule:
     Type: AWS::Config::ConfigRule
+    DependsOn:
+      - ConfigRecorder
+      - ConfigDeliveryChannel
     Properties:
       ConfigRuleName: !Sub encrypted-volumes-${EnvironmentSuffix}
       Description: Checks if EBS volumes are encrypted

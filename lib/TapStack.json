@@ -586,6 +586,10 @@
         },
         "S3EncryptionRule": {
             "Type": "AWS::Config::ConfigRule",
+            "DependsOn": [
+                "ConfigRecorder",
+                "ConfigDeliveryChannel"
+            ],
             "Properties": {
                 "ConfigRuleName": {
                     "Fn::Sub": "s3-bucket-server-side-encryption-enabled-${EnvironmentSuffix}"
@@ -604,6 +608,10 @@
         },
         "EBSEncryptionRule": {
             "Type": "AWS::Config::ConfigRule",
+            "DependsOn": [
+                "ConfigRecorder",
+                "ConfigDeliveryChannel"
+            ],
             "Properties": {
                 "ConfigRuleName": {
                     "Fn::Sub": "encrypted-volumes-${EnvironmentSuffix}"
