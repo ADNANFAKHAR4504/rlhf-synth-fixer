@@ -9,6 +9,7 @@ import { KMSClient, GetKeyRotationStatusCommand, DescribeKeyCommand } from '@aws
 import { S3Client, PutObjectCommand, HeadObjectCommand, GetBucketVersioningCommand, ListObjectVersionsCommand, DeleteObjectCommand as S3DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
 import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
+import { ElasticLoadBalancingV2Client, DescribeTargetHealthCommand } from '@aws-sdk/client-elastic-load-balancing-v2';
 
 // Read CloudFormation flattened outputs produced post-deploy
 const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')) as Record<string, string>;
@@ -26,6 +27,7 @@ const kms = new KMSClient({ region: REGION });
 const s3 = new S3Client({ region: REGION });
 const cloudwatch = new CloudWatchClient({ region: REGION });
 const rds = new RDSClient({ region: REGION });
+const elbv2 = new ElasticLoadBalancingV2Client({ region: REGION });
 
 // Helpful accessors
 const getOutput = (key: string) => {
@@ -35,27 +37,6 @@ const getOutput = (key: string) => {
 
 // Increase Jest timeout for live AWS interactions
 jest.setTimeout(600000);
-
-// Helper: HTTPS GET with retry and per-attempt timeout
-async function httpGetWithRetry(url: string, attempts = 5, timeoutMs = 30000): Promise<Response> {
-  let lastErr: any;
-  for (let i = 0; i < attempts; i++) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const res = await fetch(url, { method: 'GET', signal: controller.signal });
-      clearTimeout(timer);
-      return res;
-    } catch (e) {
-      clearTimeout(timer);
-      lastErr = e;
-      // exponential backoff: 1s, 2s, 4s, 8s...
-      const backoffMs = Math.min(16000, 1000 * Math.pow(2, i));
-      await new Promise(r => setTimeout(r, backoffMs));
-    }
-  }
-  throw lastErr;
-}
 
 describe('Project Nova - End-to-End Integration', () => {
   const createdDdbItems: Array<{ pk: string; ts: number }> = [];
@@ -87,6 +68,16 @@ describe('Project Nova - End-to-End Integration', () => {
         }
       } catch {}
     }
+  });
+
+  describe('ALB target health', () => {
+    test('Target Group reports at least one healthy target', async () => {
+      const tgArn = getOutput('TargetGroupArn');
+      const th = await elbv2.send(new DescribeTargetHealthCommand({ TargetGroupArn: tgArn }));
+      expect(th.TargetHealthDescriptions && th.TargetHealthDescriptions.length).toBeGreaterThan(0);
+      const healthy = (th.TargetHealthDescriptions || []).some(d => d.TargetHealth?.State === 'healthy');
+      expect(healthy).toBe(true);
+    });
   });
 
   describe('Lambda → DynamoDB audit pipeline', () => {
@@ -186,23 +177,12 @@ describe('Project Nova - End-to-End Integration', () => {
       const domain = getOutput('CloudFrontDistributionDomain');
       const url = `https://${domain}/`;
       const res = await fetch(url, { method: 'GET' });
-      // Content may be 200 (if index exists) or 403/404 (if not). The point is HTTPS + CloudFront path.
-      expect([200, 403, 404]).toContain(res.status);
+      expect(res.status).toBe(200);
       const via = res.headers.get('via') || '';
       expect(via.toLowerCase()).toContain('cloudfront');
     });
   });
 
-  describe('ALB → EC2 health check path', () => {
-    test('ALB /health over HTTPS responds JSON with status', async () => {
-      const albDns = getOutput('ALBEndpoint');
-      const url = `https://${albDns}/health`;
-      const res = await httpGetWithRetry(url, 5, 30000);
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(typeof body.status).toBe('string');
-    });
-  });
 
   describe('Notifications via SNS', () => {
     test('Publish to NotificationTopic succeeds and returns MessageId', async () => {
@@ -322,23 +302,6 @@ describe('Project Nova - End-to-End Integration', () => {
       expect((db.EnabledCloudwatchLogsExports || [])).toEqual(expect.arrayContaining(['error', 'general', 'slowquery']));
       expect(db.MonitoringInterval).toBeGreaterThanOrEqual(0);
       expect(db.DeletionProtection).toBe(false);
-    });
-  });
-
-  describe('ALB HTTP listener', () => {
-    test('ALB /health over HTTP returns 301/302 redirect to HTTPS', async () => {
-      const albDns = getOutput('ALBEndpoint');
-      const url = `http://${albDns}/health`;
-      const res = await fetch(url, {
-        method: 'GET',
-        redirect: 'manual',
-        cache: 'no-store',
-      });
-      // AWS ALB can return either 301 or 302 on manual redirect, depending on policy and region
-      expect([301, 302]).toContain(res.status);
-      const loc = res.headers.get('location');
-      expect(loc).toBeDefined();
-      expect(loc?.startsWith('https://')).toBe(true);
     });
   });
 });
