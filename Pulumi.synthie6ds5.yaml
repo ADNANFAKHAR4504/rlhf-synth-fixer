@@ -1,0 +1,4 @@
+encryptionsalt: v1:x5Hg/BYrzw0=:v1:E85ghO5js2c+79u9:Zt2KrHZ8eDkOObcqgFExaericxHsIA==
+config:
+  aws:region: eu-west-1
+  webhook-processor:environmentSuffix: synthie6ds5

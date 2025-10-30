@@ -1,0 +1,4 @@
+name: webhook-processor
+runtime: nodejs
+description: Serverless webhook processing system with Pulumi TypeScript
+main: index.ts
