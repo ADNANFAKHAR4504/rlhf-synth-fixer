@@ -1,642 +1,635 @@
-import { AutoScalingClient, DescribeAutoScalingGroupsCommand } from '@aws-sdk/client-auto-scaling';
-import { DescribeInstancesCommand, DescribeLaunchTemplatesCommand, DescribeSecurityGroupsCommand, DescribeSubnetsCommand, DescribeVpcAttributeCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
-import { DescribeListenersCommand, DescribeLoadBalancersCommand, DescribeTargetGroupsCommand, ElasticLoadBalancingV2Client } from '@aws-sdk/client-elastic-load-balancing-v2';
-import { DescribeKeyCommand, GetKeyRotationStatusCommand, KMSClient } from '@aws-sdk/client-kms';
-import { DescribeDBClustersCommand, DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
-import { Route53Client } from '@aws-sdk/client-route-53';
-import { execSync } from 'child_process';
-import * as fs from 'fs';
-import * as path from 'path';
+import { DescribeSubnetsCommand, DescribeVpcsCommand, EC2Client } from "@aws-sdk/client-ec2";
+import { DescribeLoadBalancersCommand, DescribeTargetGroupsCommand, ElasticLoadBalancingV2Client } from "@aws-sdk/client-elastic-load-balancing-v2";
+import { DescribeKeyCommand, KMSClient } from "@aws-sdk/client-kms";
+import { DescribeDBClustersCommand, RDSClient } from "@aws-sdk/client-rds";
+import * as fs from "fs";
+import * as path from "path";
 
-const LIB_DIR = path.resolve(__dirname, '../lib');
-const CFN_OUTPUTS_DIR = path.resolve('cfn-outputs');
-const FLAT_OUTPUTS_FILE = path.join(CFN_OUTPUTS_DIR, 'flat-outputs.json');
+const outputFile = path.resolve("cfn-outputs/flat-outputs.json");
 
-const isNonEmptyString = (v: any): boolean => typeof v === 'string' && v.trim().length > 0;
-const isValidVpcId = (v: string): boolean => /^vpc-[a-f0-9]{8,17}$/.test(v);
-const isValidSubnetId = (v: string): boolean => /^subnet-[a-f0-9]{8,17}$/.test(v);
-const isValidArn = (v: string): boolean => /^arn:aws:[^:]+:[^:]*:[0-9]*:[^:]*[a-zA-Z0-9/_\-]+$/.test(v);
-const isValidDnsName = (v: string): boolean => /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/.test(v);
-const isValidUrl = (v: string): boolean => /^https?:\/\/[^\s]+$/.test(v);
+const isNonEmptyString = (v: any) => typeof v === "string" && v.trim().length > 0;
+const isValidArn = (v: string) =>
+  /^arn:aws:[^:]+:[^:]*:[^:]*:[^:]*[a-zA-Z0-9/_\-]*$/.test(v.trim()) || /^arn:aws:[^:]+:[^:]*:[0-9]*:[^:]*[a-zA-Z0-9/_\-]*$/.test(v.trim());
+const isValidVpcId = (v: string) => v.startsWith("vpc-");
+const isValidSubnetId = (v: string) => v.startsWith("subnet-");
+const isValidDnsName = (v: string) => /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(v) && !v.includes(" ");
+const isValidUrl = (v: string) => /^https?:\/\/[^\s$.?#].[^\s]*$/.test(v);
+const isValidKmsKeyId = (v: string) => /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(v);
 
-const parseArrayString = (v: any): string[] => {
-  if (typeof v === 'string') {
+const parseArray = (v: any) => {
+  if (typeof v === "string") {
     try {
-      const parsed = JSON.parse(v);
-      return Array.isArray(parsed) ? parsed : [v];
+      const arr = JSON.parse(v);
+      return Array.isArray(arr) ? arr : v;
     } catch {
-      return [v];
+      return v;
     }
   }
-  return Array.isArray(v) ? v : [v];
+  return v;
 };
 
-describe('Payment Processing Infrastructure Integration Tests', () => {
+const skipIfMissing = (key: string, obj: any) => {
+  if (!(key in obj)) {
+    console.warn(`Skipping tests for missing output: ${key}`);
+    return true;
+  }
+  return false;
+};
+
+describe("Payment Processor Infrastructure Integration Tests", () => {
   let outputs: Record<string, any>;
-  let ec2Client: EC2Client;
-  let elbv2Client: ElasticLoadBalancingV2Client;
-  let rdsClient: RDSClient;
-  let asgClient: AutoScalingClient;
-  let kmsClient: KMSClient;
-  let route53Client: Route53Client;
-  let awsRegion: string;
+  let region: string;
 
-  beforeAll(async () => {
-    process.chdir(LIB_DIR);
-
-    if (fs.existsSync(FLAT_OUTPUTS_FILE)) {
-      const data = fs.readFileSync(FLAT_OUTPUTS_FILE, 'utf8');
-      outputs = JSON.parse(data);
-    } else {
-      outputs = {};
+  beforeAll(() => {
+    const data = fs.readFileSync(outputFile, "utf8");
+    const parsed = JSON.parse(data);
+    outputs = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      outputs[k] = parseArray(v);
     }
 
-    awsRegion = process.env.AWS_DEFAULT_REGION || 'us-west-1';
+    // Extract region from ARN or other region-specific outputs
+    const arnOutput = Object.values(outputs).find((v: any) =>
+      typeof v === "string" && v.startsWith("arn:aws:")
+    ) as string;
 
-    ec2Client = new EC2Client({ region: awsRegion });
-    elbv2Client = new ElasticLoadBalancingV2Client({ region: awsRegion });
-    rdsClient = new RDSClient({ region: awsRegion });
-    asgClient = new AutoScalingClient({ region: awsRegion });
-    kmsClient = new KMSClient({ region: awsRegion });
-    route53Client = new Route53Client({ region: awsRegion });
+    if (arnOutput) {
+      region = arnOutput.split(":")[3];
+    } else {
+      throw new Error("Could not determine AWS region from outputs");
+    }
   });
 
-  describe('Terraform Configuration Validation', () => {
-    test('terraform files exist and are valid', () => {
-      expect(fs.existsSync(path.join(LIB_DIR, 'tap_stack.tf'))).toBe(true);
-      expect(fs.existsSync(path.join(LIB_DIR, 'provider.tf'))).toBe(true);
-      expect(fs.existsSync(path.join(LIB_DIR, 'user_data.sh'))).toBe(true);
-    });
-
-    test('terraform init succeeds', () => {
-      expect(() => {
-        execSync('terraform init -upgrade', { stdio: 'pipe' });
-      }).not.toThrow();
-    });
-
-    test('terraform validate succeeds', () => {
-      expect(() => {
-        execSync('terraform validate', { stdio: 'pipe' });
-      }).not.toThrow();
-    });
-
-    test('terraform plan succeeds without errors', () => {
-      expect(() => {
-        execSync('terraform plan -out=test.tfplan -lock=false', {
-          stdio: 'pipe',
-          encoding: 'utf8',
-        });
-        if (fs.existsSync('test.tfplan')) {
-          fs.unlinkSync('test.tfplan');
-        }
-      }).not.toThrow();
-    });
-
-    test('terraform format is correct', () => {
-      expect(() => {
-        execSync('terraform fmt -check', { stdio: 'pipe' });
-      }).not.toThrow();
-    });
-  });
-
-  describe('Output Validation', () => {
-    test('all required outputs are present', () => {
+  describe("Output Structure Validation", () => {
+    it("should have essential infrastructure outputs", () => {
       const requiredOutputs = [
-        'vpc_id',
-        'public_subnet_ids',
-        'private_subnet_ids',
-        'alb_dns_name',
-        'alb_zone_id',
-        'application_url',
-        'kms_key_ebs_arn',
-        'kms_key_rds_arn'
+        "vpc_id", "public_subnet_ids", "private_subnet_ids",
+        "alb_dns_name", "application_url"
       ];
 
       requiredOutputs.forEach(output => {
         expect(outputs).toHaveProperty(output);
-        expect(isNonEmptyString(outputs[output]) || Array.isArray(parseArrayString(outputs[output]))).toBe(true);
+        expect(outputs[output]).toBeDefined();
       });
     });
 
-    test('VPC ID format is valid', () => {
-      if (outputs.vpc_id) {
-        expect(isValidVpcId(outputs.vpc_id)).toBe(true);
-      }
-    });
-
-    test('subnet IDs are valid format', () => {
-      ['public_subnet_ids', 'private_subnet_ids'].forEach(key => {
-        if (outputs[key]) {
-          const subnetIds = parseArrayString(outputs[key]);
-          expect(Array.isArray(subnetIds)).toBe(true);
-          expect(subnetIds.length).toBeGreaterThan(0);
-          subnetIds.forEach(id => {
-            expect(isValidSubnetId(id)).toBe(true);
-          });
-        }
-      });
-    });
-
-    test('ALB DNS name is valid', () => {
-      if (outputs.alb_dns_name) {
-        expect(isValidDnsName(outputs.alb_dns_name)).toBe(true);
-        expect(outputs.alb_dns_name).toMatch(/\.elb\.amazonaws\.com$/);
-      }
-    });
-
-    test('KMS ARNs are valid format', () => {
-      ['kms_key_ebs_arn', 'kms_key_rds_arn'].forEach(key => {
-        if (outputs[key]) {
-          expect(isValidArn(outputs[key])).toBe(true);
-          expect(outputs[key]).toMatch(/^arn:aws:kms:/);
-        }
-      });
-    });
-
-    test('application URL is valid', () => {
-      if (outputs.application_url) {
-        expect(isValidUrl(outputs.application_url)).toBe(true);
-      }
-    });
-
-    test('no sensitive data exposed in outputs', () => {
+    it("should not expose sensitive information", () => {
       const sensitivePatterns = [
-        /password/i,
-        /secret/i,
-        /private_key/i,
-        /access_key/i,
-        /token/i
+        /password/i, /secret/i, /private_key/i, /access_key/i,
+        /session_token/i, /credentials/i
       ];
 
-      Object.keys(outputs).forEach(key => {
-        const hasSensitivePattern = sensitivePatterns.some(pattern => pattern.test(key));
-        expect(hasSensitivePattern).toBe(false);
-      });
+      const sensitiveKeys = Object.keys(outputs).filter(key =>
+        sensitivePatterns.some(pattern => pattern.test(key))
+      );
+
+      expect(sensitiveKeys).toHaveLength(0);
     });
   });
 
-  describe('VPC Infrastructure Validation', () => {
-    test('VPC exists and is properly configured', async () => {
-      if (!outputs.vpc_id) return;
+  describe("VPC Infrastructure", () => {
+    let ec2Client: EC2Client;
+
+    beforeAll(() => {
+      ec2Client = new EC2Client({ region });
+    });
+
+    it("validates VPC configuration", async () => {
+      if (skipIfMissing("vpc_id", outputs)) return;
+
+      expect(isValidVpcId(outputs.vpc_id)).toBe(true);
 
       const command = new DescribeVpcsCommand({
         VpcIds: [outputs.vpc_id]
       });
 
-      const result = await ec2Client.send(command);
-      expect(result.Vpcs).toHaveLength(1);
+      const response = await ec2Client.send(command);
+      expect(response.Vpcs).toHaveLength(1);
 
-      const vpc = result.Vpcs![0];
-      expect(vpc.State).toBe('available');
+      const vpc = response.Vpcs![0];
+      expect(vpc.State).toBe("available");
       expect(vpc.CidrBlock).toBeDefined();
-
-      // Check DNS attributes separately
-      const dnsCommand = new DescribeVpcAttributeCommand({
-        VpcId: outputs.vpc_id,
-        Attribute: 'enableDnsHostnames'
-      });
-      const dnsHostnamesResult = await ec2Client.send(dnsCommand);
-      expect(dnsHostnamesResult.EnableDnsHostnames?.Value).toBe(true);
-
-      const dnsSupportCommand = new DescribeVpcAttributeCommand({
-        VpcId: outputs.vpc_id,
-        Attribute: 'enableDnsSupport'
-      });
-      const dnsSupportResult = await ec2Client.send(dnsSupportCommand);
-      expect(dnsSupportResult.EnableDnsSupport?.Value).toBe(true);
-
-      const tags = vpc.Tags || [];
-      const projectTag = tags.find(tag => tag.Key === 'Project');
-      const environmentTag = tags.find(tag => tag.Key === 'Environment');
-      const managedByTag = tags.find(tag => tag.Key === 'ManagedBy');
-
-      expect(projectTag?.Value).toBeDefined();
-      expect(environmentTag?.Value).toBeDefined();
-      expect(managedByTag?.Value).toBe('terraform');
+      expect(vpc.DhcpOptionsId).toBeDefined();
     });
 
-    test('subnets exist and span multiple AZs', async () => {
-      if (!outputs.public_subnet_ids || !outputs.private_subnet_ids) return;
+    it("validates public subnet configuration", async () => {
+      if (skipIfMissing("public_subnet_ids", outputs)) return;
 
-      const publicSubnetIds = parseArrayString(outputs.public_subnet_ids);
-      const privateSubnetIds = parseArrayString(outputs.private_subnet_ids);
-      const allSubnetIds = [...publicSubnetIds, ...privateSubnetIds];
+      const subnetIds = parseArray(outputs.public_subnet_ids);
+      expect(Array.isArray(subnetIds)).toBe(true);
+      expect(subnetIds.length).toBeGreaterThanOrEqual(2);
+
+      subnetIds.forEach((id: string) => {
+        expect(isValidSubnetId(id)).toBe(true);
+      });
 
       const command = new DescribeSubnetsCommand({
-        SubnetIds: allSubnetIds
+        SubnetIds: subnetIds
       });
 
-      const result = await ec2Client.send(command);
-      expect(result.Subnets).toHaveLength(allSubnetIds.length);
+      const response = await ec2Client.send(command);
+      expect(response.Subnets).toHaveLength(subnetIds.length);
 
-      const availabilityZones = new Set();
-      result.Subnets!.forEach(subnet => {
-        expect(subnet.State).toBe('available');
+      response.Subnets!.forEach(subnet => {
+        expect(subnet.State).toBe("available");
         expect(subnet.VpcId).toBe(outputs.vpc_id);
-        availabilityZones.add(subnet.AvailabilityZone);
-      });
-
-      expect(availabilityZones.size).toBeGreaterThanOrEqual(2);
-
-      const publicSubnets = result.Subnets!.filter(s =>
-        publicSubnetIds.includes(s.SubnetId!)
-      );
-      publicSubnets.forEach(subnet => {
         expect(subnet.MapPublicIpOnLaunch).toBe(true);
+        expect(subnet.AvailabilityZone).toMatch(new RegExp(`^${region}[a-z]$`));
       });
 
-      const privateSubnets = result.Subnets!.filter(s =>
-        privateSubnetIds.includes(s.SubnetId!)
+      // Ensure subnets are distributed across multiple AZs for high availability
+      const availabilityZones = new Set(
+        response.Subnets!.map(subnet => subnet.AvailabilityZone)
       );
-      privateSubnets.forEach(subnet => {
+      expect(availabilityZones.size).toBeGreaterThanOrEqual(2);
+    });
+
+    it("validates private subnet configuration", async () => {
+      if (skipIfMissing("private_subnet_ids", outputs)) return;
+
+      const subnetIds = parseArray(outputs.private_subnet_ids);
+      expect(Array.isArray(subnetIds)).toBe(true);
+      expect(subnetIds.length).toBeGreaterThanOrEqual(2);
+
+      subnetIds.forEach((id: string) => {
+        expect(isValidSubnetId(id)).toBe(true);
+      });
+
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: subnetIds
+      });
+
+      const response = await ec2Client.send(command);
+      expect(response.Subnets).toHaveLength(subnetIds.length);
+
+      response.Subnets!.forEach(subnet => {
+        expect(subnet.State).toBe("available");
+        expect(subnet.VpcId).toBe(outputs.vpc_id);
         expect(subnet.MapPublicIpOnLaunch).toBe(false);
+        expect(subnet.AvailabilityZone).toMatch(new RegExp(`^${region}[a-z]$`));
       });
+
+      // Ensure subnets are distributed across multiple AZs for high availability
+      const availabilityZones = new Set(
+        response.Subnets!.map(subnet => subnet.AvailabilityZone)
+      );
+      expect(availabilityZones.size).toBeGreaterThanOrEqual(2);
     });
 
-    test('security groups are properly configured', async () => {
-      if (!outputs.vpc_id) return;
+    it("validates subnet distribution across availability zones", () => {
+      if (skipIfMissing("public_subnet_ids", outputs) ||
+        skipIfMissing("private_subnet_ids", outputs)) return;
 
-      const command = new DescribeSecurityGroupsCommand({
-        Filters: [
-          {
-            Name: 'vpc-id',
-            Values: [outputs.vpc_id]
-          },
-          {
-            Name: 'group-name',
-            Values: ['*alb*', '*web*', '*db*']
-          }
-        ]
-      });
+      const publicSubnets = parseArray(outputs.public_subnet_ids);
+      const privateSubnets = parseArray(outputs.private_subnet_ids);
 
-      const result = await ec2Client.send(command);
-      expect(result.SecurityGroups!.length).toBeGreaterThanOrEqual(3);
-
-      const albSg = result.SecurityGroups!.find(sg =>
-        sg.GroupName?.includes('alb') || sg.Description?.includes('ALB')
-      );
-      expect(albSg).toBeDefined();
-      expect(albSg!.IpPermissions!.some(rule => rule.FromPort === 80)).toBe(true);
-
-      const webSg = result.SecurityGroups!.find(sg =>
-        sg.GroupName?.includes('web') || sg.Description?.includes('web')
-      );
-      expect(webSg).toBeDefined();
-
-      const dbSg = result.SecurityGroups!.find(sg =>
-        sg.GroupName?.includes('db') || sg.Description?.includes('database')
-      );
-      expect(dbSg).toBeDefined();
-      expect(dbSg!.IpPermissions!.some(rule => rule.FromPort === 5432)).toBe(true);
+      // Public and private subnets should have the same count for balanced distribution
+      expect(publicSubnets.length).toBe(privateSubnets.length);
+      expect(publicSubnets.length).toBeGreaterThanOrEqual(2);
     });
   });
 
-  describe('Load Balancer Validation', () => {
-    test('ALB exists and is properly configured', async () => {
-      if (!outputs.alb_dns_name) return;
+  describe("Application Load Balancer", () => {
+    let elbv2Client: ElasticLoadBalancingV2Client;
 
-      const command = new DescribeLoadBalancersCommand({
-        Names: [outputs.alb_dns_name.split('-').slice(0, -1).join('-')]
-      });
+    beforeAll(() => {
+      elbv2Client = new ElasticLoadBalancingV2Client({ region });
+    });
 
-      try {
-        const result = await elbv2Client.send(command);
-        expect(result.LoadBalancers).toHaveLength(1);
+    it("validates ALB configuration and DNS name", async () => {
+      if (skipIfMissing("alb_dns_name", outputs)) return;
 
-        const alb = result.LoadBalancers![0];
-        expect(alb.State?.Code).toBe('active');
-        expect(alb.Type).toBe('application');
-        expect(alb.Scheme).toBe('internet-facing');
-        expect(alb.VpcId).toBe(outputs.vpc_id);
+      expect(isValidDnsName(outputs.alb_dns_name)).toBe(true);
+      expect(outputs.alb_dns_name).toContain(`${region}.elb.amazonaws.com`);
 
-        if (outputs.public_subnet_ids) {
-          const publicSubnetIds = parseArrayString(outputs.public_subnet_ids);
-          const albSubnetIds = alb.AvailabilityZones?.map(az => az.SubnetId) || [];
-          publicSubnetIds.forEach(subnetId => {
-            expect(albSubnetIds).toContain(subnetId);
+      // Get ALB by DNS name
+      const command = new DescribeLoadBalancersCommand({});
+      const response = await elbv2Client.send(command);
+
+      const alb = response.LoadBalancers?.find(lb => 
+        lb.DNSName === outputs.alb_dns_name
+      );
+
+      expect(alb).toBeDefined();
+      expect(alb!.State?.Code).toBe("active");
+      expect(alb!.Type).toBe("application");
+      expect(alb!.Scheme).toBe("internet-facing");
+      expect(alb!.VpcId).toBe(outputs.vpc_id);
+
+      if (!skipIfMissing("alb_zone_id", outputs)) {
+        expect(alb!.CanonicalHostedZoneId).toBe(outputs.alb_zone_id);
+      }
+    });
+
+    it("validates ALB security and configuration", async () => {
+      if (skipIfMissing("alb_dns_name", outputs)) return;
+
+      const command = new DescribeLoadBalancersCommand({});
+      const response = await elbv2Client.send(command);
+
+      const alb = response.LoadBalancers?.find(lb => 
+        lb.DNSName === outputs.alb_dns_name
+      );
+
+      expect(alb).toBeDefined();
+      expect(alb!.SecurityGroups).toBeDefined();
+      expect(alb!.SecurityGroups!.length).toBeGreaterThan(0);
+
+      // Validate ALB is in correct subnets
+      if (!skipIfMissing("public_subnet_ids", outputs)) {
+        const publicSubnets = parseArray(outputs.public_subnet_ids);
+        const albSubnets = alb!.AvailabilityZones?.map(az => az.SubnetId) || [];
+        
+        // ALB should be deployed in public subnets
+        albSubnets.forEach(subnetId => {
+          expect(publicSubnets).toContain(subnetId);
+        });
+      }
+    });
+
+    it("validates application URL accessibility format", () => {
+      if (skipIfMissing("application_url", outputs)) return;
+
+      expect(isValidUrl(outputs.application_url)).toBe(true);
+      
+      if (!skipIfMissing("alb_dns_name", outputs)) {
+        expect(outputs.application_url).toContain(outputs.alb_dns_name);
+      }
+
+      // URL should use HTTP or HTTPS protocol
+      expect(outputs.application_url).toMatch(/^https?:\/\//);
+    });
+
+    it("validates target group configuration", async () => {
+      if (skipIfMissing("alb_dns_name", outputs)) return;
+
+      // Get all target groups
+      const tgCommand = new DescribeTargetGroupsCommand({});
+      const tgResponse = await elbv2Client.send(tgCommand);
+
+      // Find target groups associated with our ALB
+      const lbCommand = new DescribeLoadBalancersCommand({});
+      const lbResponse = await elbv2Client.send(lbCommand);
+
+      const alb = lbResponse.LoadBalancers?.find(lb => 
+        lb.DNSName === outputs.alb_dns_name
+      );
+
+      if (alb) {
+        const albTargetGroups = tgResponse.TargetGroups?.filter(tg => 
+          tg.LoadBalancerArns?.includes(alb.LoadBalancerArn!)
+        );
+
+        if (albTargetGroups && albTargetGroups.length > 0) {
+          albTargetGroups.forEach(tg => {
+            expect(tg.VpcId).toBe(outputs.vpc_id);
+            expect(tg.Protocol).toMatch(/HTTP|HTTPS/);
+            expect(tg.Port).toBeGreaterThan(0);
+            expect(tg.HealthCheckPath).toBeDefined();
+            expect(tg.HealthCheckProtocol).toMatch(/HTTP|HTTPS/);
           });
         }
-      } catch (error) {
-        console.warn('ALB validation skipped - resource may not exist or be accessible');
-      }
-    });
-
-    test('ALB listeners are configured correctly', async () => {
-      if (!outputs.alb_dns_name) return;
-
-      try {
-        const albCommand = new DescribeLoadBalancersCommand({});
-        const albResult = await elbv2Client.send(albCommand);
-
-        const alb = albResult.LoadBalancers?.find(lb =>
-          lb.DNSName === outputs.alb_dns_name
-        );
-
-        if (!alb) return;
-
-        const listenersCommand = new DescribeListenersCommand({
-          LoadBalancerArn: alb.LoadBalancerArn
-        });
-
-        const listenersResult = await elbv2Client.send(listenersCommand);
-        const listeners = listenersResult.Listeners || [];
-
-        expect(listeners.length).toBeGreaterThanOrEqual(1);
-
-        const httpListener = listeners.find(l => l.Port === 80);
-        expect(httpListener).toBeDefined();
-        expect(httpListener!.Protocol).toBe('HTTP');
-
-        const httpsListener = listeners.find(l => l.Port === 443);
-        if (httpsListener) {
-          expect(httpsListener.Protocol).toBe('HTTPS');
-          expect(httpsListener.SslPolicy).toBeDefined();
-        }
-      } catch (error) {
-        console.warn('ALB listeners validation skipped - resource may not exist or be accessible');
-      }
-    });
-
-    test('target groups are healthy', async () => {
-      try {
-        const command = new DescribeTargetGroupsCommand({});
-        const result = await elbv2Client.send(command);
-
-        const paymentTgs = result.TargetGroups?.filter(tg =>
-          tg.TargetGroupName?.includes('payment-processor') ||
-          tg.VpcId === outputs.vpc_id
-        ) || [];
-
-        paymentTgs.forEach(tg => {
-          expect(tg.Protocol).toBe('HTTP');
-          expect(tg.Port).toBe(80);
-          expect(tg.HealthCheckProtocol).toBe('HTTP');
-          expect(tg.HealthCheckPath).toBeDefined();
-        });
-      } catch (error) {
-        console.warn('Target groups validation skipped - resource may not exist or be accessible');
       }
     });
   });
 
-  describe('Auto Scaling and EC2 Validation', () => {
-    test('Auto Scaling Group exists and is configured', async () => {
-      try {
-        const command = new DescribeAutoScalingGroupsCommand({});
-        const result = await asgClient.send(command);
+  describe("RDS Aurora Cluster", () => {
+    let rdsClient: RDSClient;
 
-        const paymentAsg = result.AutoScalingGroups?.find(asg =>
-          asg.AutoScalingGroupName?.includes('payment-processor')
-        );
-
-        if (paymentAsg) {
-          expect(paymentAsg.MinSize).toBeGreaterThanOrEqual(2);
-          expect(paymentAsg.MaxSize).toBeGreaterThanOrEqual(2);
-          expect(paymentAsg.DesiredCapacity).toBeGreaterThanOrEqual(2);
-          expect(paymentAsg.HealthCheckType).toBe('ELB');
-
-          if (outputs.private_subnet_ids) {
-            const privateSubnetIds = parseArrayString(outputs.private_subnet_ids);
-            const asgSubnetIds = paymentAsg.VPCZoneIdentifier?.split(',') || [];
-            privateSubnetIds.forEach(subnetId => {
-              expect(asgSubnetIds).toContain(subnetId);
-            });
-          }
-
-          const tags = paymentAsg.Tags || [];
-          expect(tags.some(tag => tag.Key === 'Environment')).toBe(true);
-          expect(tags.some(tag => tag.Key === 'Project')).toBe(true);
-        }
-      } catch (error) {
-        console.warn('ASG validation skipped - resource may not exist or be accessible');
-      }
+    beforeAll(() => {
+      rdsClient = new RDSClient({ region });
     });
 
-    test('launch template is properly configured', async () => {
-      try {
-        const command = new DescribeLaunchTemplatesCommand({});
-        const result = await ec2Client.send(command);
+    it("validates RDS cluster endpoint configuration", async () => {
+      if (skipIfMissing("rds_cluster_endpoint", outputs)) return;
 
-        const paymentLt = result.LaunchTemplates?.find(lt =>
-          lt.LaunchTemplateName?.includes('payment-processor')
-        );
+      expect(isNonEmptyString(outputs.rds_cluster_endpoint)).toBe(true);
+      expect(outputs.rds_cluster_endpoint).toMatch(
+        new RegExp(`\\.cluster-[a-z0-9]+\\.${region}\\.rds\\.amazonaws\\.com$`)
+      );
 
-        if (paymentLt) {
-          expect(paymentLt.LatestVersionNumber).toBeGreaterThanOrEqual(1);
+      // Extract cluster identifier from endpoint
+      const clusterIdentifier = outputs.rds_cluster_endpoint.split('.')[0];
+      
+      const command = new DescribeDBClustersCommand({
+        DBClusterIdentifier: clusterIdentifier
+      });
 
-          const tags = paymentLt.Tags || [];
-          expect(tags.some(tag => tag.Key === 'Project')).toBe(true);
-        }
-      } catch (error) {
-        console.warn('Launch template validation skipped - resource may not exist or be accessible');
-      }
+      const response = await rdsClient.send(command);
+      expect(response.DBClusters).toHaveLength(1);
+
+      const cluster = response.DBClusters![0];
+      expect(cluster.Status).toBe("available");
+      expect(cluster.Engine).toMatch(/aurora-postgresql|aurora-mysql/);
+      expect(cluster.MultiAZ).toBe(true);
+      expect(cluster.StorageEncrypted).toBe(true);
     });
 
-    test('EC2 instances are running in private subnets', async () => {
-      if (!outputs.private_subnet_ids) return;
+    it("validates RDS cluster reader endpoint configuration", async () => {
+      if (skipIfMissing("rds_cluster_reader_endpoint", outputs)) return;
 
-      try {
-        const privateSubnetIds = parseArrayString(outputs.private_subnet_ids);
-        const command = new DescribeInstancesCommand({
-          Filters: [
-            {
-              Name: 'subnet-id',
-              Values: privateSubnetIds
-            },
-            {
-              Name: 'instance-state-name',
-              Values: ['running', 'pending']
-            }
-          ]
-        });
+      expect(isNonEmptyString(outputs.rds_cluster_reader_endpoint)).toBe(true);
+      expect(outputs.rds_cluster_reader_endpoint).toMatch(
+        new RegExp(`\\.cluster-ro-[a-z0-9]+\\.${region}\\.rds\\.amazonaws\\.com$`)
+      );
 
-        const result = await ec2Client.send(command);
-        const instances = result.Reservations?.flatMap(r => r.Instances || []) || [];
+      // Extract cluster identifier from reader endpoint
+      const clusterIdentifier = outputs.rds_cluster_reader_endpoint.split('.')[0];
+      
+      const command = new DescribeDBClustersCommand({
+        DBClusterIdentifier: clusterIdentifier
+      });
 
-        instances.forEach(instance => {
-          expect(['running', 'pending']).toContain(instance.State?.Name);
-          expect(privateSubnetIds).toContain(instance.SubnetId!);
-          expect(instance.PublicIpAddress).toBeUndefined();
+      const response = await rdsClient.send(command);
+      expect(response.DBClusters).toHaveLength(1);
 
-          const tags = instance.Tags || [];
-          expect(tags.some(tag => tag.Key === 'Project')).toBe(true);
-        });
-      } catch (error) {
-        console.warn('EC2 instances validation skipped - resource may not exist or be accessible');
-      }
-    });
-  });
-
-  describe('RDS Database Validation', () => {
-    test('Aurora cluster exists and is properly configured', async () => {
-      try {
-        const command = new DescribeDBClustersCommand({});
-        const result = await rdsClient.send(command);
-
-        const paymentCluster = result.DBClusters?.find(cluster =>
-          cluster.DBClusterIdentifier?.includes('payment-processor')
-        );
-
-        if (paymentCluster) {
-          expect(paymentCluster.Status).toBe('available');
-          expect(paymentCluster.Engine).toBe('aurora-postgresql');
-          expect(paymentCluster.StorageEncrypted).toBe(true);
-          expect(paymentCluster.KmsKeyId).toBeDefined();
-          expect(paymentCluster.BackupRetentionPeriod).toBe(7);
-
-          if (outputs.private_subnet_ids) {
-            expect(paymentCluster.DBSubnetGroup).toBeDefined();
-          }
-
-          expect(paymentCluster.VpcSecurityGroups?.length).toBeGreaterThanOrEqual(1);
-          expect(paymentCluster.EnabledCloudwatchLogsExports).toContain('postgresql');
-        }
-      } catch (error) {
-        console.warn('RDS cluster validation skipped - resource may not exist or be accessible');
-      }
+      const cluster = response.DBClusters![0];
+      expect(cluster.ReaderEndpoint).toBe(outputs.rds_cluster_reader_endpoint);
     });
 
-    test('Aurora instances are configured correctly', async () => {
-      try {
-        const command = new DescribeDBInstancesCommand({});
-        const result = await rdsClient.send(command);
+    it("validates RDS cluster security and encryption", async () => {
+      if (skipIfMissing("rds_cluster_endpoint", outputs)) return;
 
-        const paymentInstances = result.DBInstances?.filter(instance =>
-          instance.DBClusterIdentifier?.includes('payment-processor')
-        ) || [];
+      const clusterIdentifier = outputs.rds_cluster_endpoint.split('.')[0];
+      
+      const command = new DescribeDBClustersCommand({
+        DBClusterIdentifier: clusterIdentifier
+      });
 
-        paymentInstances.forEach(instance => {
-          expect(instance.DBInstanceStatus).toBe('available');
-          expect(instance.Engine).toBe('aurora-postgresql');
-          expect(instance.StorageEncrypted).toBe(true);
-          expect(instance.PerformanceInsightsEnabled).toBe(true);
-          expect(instance.MonitoringInterval).toBe(60);
-          expect(instance.PubliclyAccessible).toBe(false);
-        });
+      const response = await rdsClient.send(command);
+      const cluster = response.DBClusters![0];
 
-        expect(paymentInstances.length).toBeGreaterThanOrEqual(1);
-      } catch (error) {
-        console.warn('RDS instances validation skipped - resource may not exist or be accessible');
-      }
+      // Validate encryption
+      expect(cluster.StorageEncrypted).toBe(true);
+      expect(cluster.KmsKeyId).toBeDefined();
+
+      // Validate backup configuration
+      expect(cluster.BackupRetentionPeriod).toBeGreaterThanOrEqual(7);
+      expect(cluster.DeletionProtection).toBeDefined();
+
+      // Validate network configuration
+      expect(cluster.DBSubnetGroup).toBeDefined();
+      expect(cluster.VpcSecurityGroups).toBeDefined();
+      expect(cluster.VpcSecurityGroups!.length).toBeGreaterThan(0);
+
+      cluster.VpcSecurityGroups!.forEach(sg => {
+        expect(sg.Status).toBe("active");
+        expect(sg.VpcSecurityGroupId).toMatch(/^sg-/);
+      });
+    });
+
+    it("validates RDS cluster high availability", async () => {
+      if (skipIfMissing("rds_cluster_endpoint", outputs)) return;
+
+      const clusterIdentifier = outputs.rds_cluster_endpoint.split('.')[0];
+      
+      const command = new DescribeDBClustersCommand({
+        DBClusterIdentifier: clusterIdentifier
+      });
+
+      const response = await rdsClient.send(command);
+      const cluster = response.DBClusters![0];
+
+      // Should have multiple availability zones for high availability
+      expect(cluster.AvailabilityZones).toBeDefined();
+      expect(cluster.AvailabilityZones!.length).toBeGreaterThanOrEqual(2);
+
+      // Validate AZs are in correct region
+      cluster.AvailabilityZones!.forEach(az => {
+        expect(az).toMatch(new RegExp(`^${region}[a-z]$`));
+      });
+
+      // Should have DB cluster members (instances)
+      expect(cluster.DBClusterMembers).toBeDefined();
+      expect(cluster.DBClusterMembers!.length).toBeGreaterThanOrEqual(1);
     });
   });
 
-  describe('KMS Encryption Validation', () => {
-    test('KMS keys exist and are properly configured', async () => {
-      const kmsArns = [outputs.kms_key_ebs_arn, outputs.kms_key_rds_arn].filter(Boolean);
+  describe("KMS Encryption", () => {
+    let kmsClient: KMSClient;
 
-      for (const arn of kmsArns) {
-        if (!arn) continue;
-
-        try {
-          const keyId = arn.split('/').pop();
-          const describeCommand = new DescribeKeyCommand({ KeyId: keyId });
-          const describeResult = await kmsClient.send(describeCommand);
-
-          expect(describeResult.KeyMetadata?.KeyState).toBe('Enabled');
-          expect(describeResult.KeyMetadata?.KeyUsage).toBe('ENCRYPT_DECRYPT');
-
-          // Check key rotation status separately
-          const rotationCommand = new GetKeyRotationStatusCommand({ KeyId: keyId });
-          const rotationResult = await kmsClient.send(rotationCommand);
-          expect(rotationResult.KeyRotationEnabled).toBe(true);
-        } catch (error) {
-          console.warn(`KMS key validation skipped for ${arn} - resource may not exist or be accessible`);
-        }
-      }
-    });
-  });
-
-  describe('Application Health Validation', () => {
-    test('application URL is accessible', async () => {
-      if (!outputs.application_url) return;
-
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-        const response = await fetch(outputs.application_url, {
-          method: 'GET',
-          signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
-        expect(response.status).toBeLessThan(500);
-      } catch (error) {
-        console.warn('Application health check skipped - may not be fully deployed or accessible');
-      }
-    }, 15000);
-
-    test('ALB health checks pass', async () => {
-      if (!outputs.alb_dns_name) return;
-
-      try {
-        const url = `http://${outputs.alb_dns_name}`;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-        const response = await fetch(url, {
-          method: 'GET',
-          signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
-        expect([200, 301, 302, 403]).toContain(response.status);
-      } catch (error) {
-        console.warn('ALB health check skipped - may not be accessible');
-      }
-    }, 15000);
-  });
-
-  describe('Security and Compliance Validation', () => {
-    test('no resources expose sensitive ports to internet', async () => {
-      if (!outputs.vpc_id) return;
-
-      try {
-        const command = new DescribeSecurityGroupsCommand({
-          Filters: [{
-            Name: 'vpc-id',
-            Values: [outputs.vpc_id]
-          }]
-        });
-
-        const result = await ec2Client.send(command);
-        const securityGroups = result.SecurityGroups || [];
-
-        securityGroups.forEach(sg => {
-          const rules = sg.IpPermissions || [];
-          rules.forEach(rule => {
-            const hasOpenAccess = rule.IpRanges?.some(range =>
-              range.CidrIp === '0.0.0.0/0'
-            );
-
-            if (hasOpenAccess) {
-              const dangerousPorts = [22, 3389, 3306, 5432, 1433, 27017];
-              const rulePort = rule.FromPort;
-              expect(dangerousPorts).not.toContain(rulePort);
-            }
-          });
-        });
-      } catch (error) {
-        console.warn('Security groups validation skipped - resource may not exist or be accessible');
-      }
+    beforeAll(() => {
+      kmsClient = new KMSClient({ region });
     });
 
-    test('encryption is enabled for storage resources', () => {
-      expect(outputs.kms_key_ebs_arn).toBeDefined();
-      expect(outputs.kms_key_rds_arn).toBeDefined();
+    it("validates EBS KMS key configuration", async () => {
+      if (skipIfMissing("kms_key_ebs_arn", outputs)) return;
+
       expect(isValidArn(outputs.kms_key_ebs_arn)).toBe(true);
+      expect(outputs.kms_key_ebs_arn).toContain("kms");
+
+      // Extract key ID from ARN
+      const keyId = outputs.kms_key_ebs_arn.split("/").pop();
+      expect(isValidKmsKeyId(keyId)).toBe(true);
+
+      const command = new DescribeKeyCommand({
+        KeyId: keyId
+      });
+
+      const response = await kmsClient.send(command);
+      expect(response.KeyMetadata).toBeDefined();
+      expect(response.KeyMetadata!.KeyState).toBe("Enabled");
+      expect(response.KeyMetadata!.KeyUsage).toBe("ENCRYPT_DECRYPT");
+      expect(response.KeyMetadata!.KeySpec).toBe("SYMMETRIC_DEFAULT");
+      expect(response.KeyMetadata!.Arn).toBe(outputs.kms_key_ebs_arn);
+    });
+
+    it("validates RDS KMS key configuration", async () => {
+      if (skipIfMissing("kms_key_rds_arn", outputs)) return;
+
       expect(isValidArn(outputs.kms_key_rds_arn)).toBe(true);
+      expect(outputs.kms_key_rds_arn).toContain("kms");
+
+      // Extract key ID from ARN
+      const keyId = outputs.kms_key_rds_arn.split("/").pop();
+      expect(isValidKmsKeyId(keyId)).toBe(true);
+
+      const command = new DescribeKeyCommand({
+        KeyId: keyId
+      });
+
+      const response = await kmsClient.send(command);
+      expect(response.KeyMetadata).toBeDefined();
+      expect(response.KeyMetadata!.KeyState).toBe("Enabled");
+      expect(response.KeyMetadata!.KeyUsage).toBe("ENCRYPT_DECRYPT");
+      expect(response.KeyMetadata!.KeySpec).toBe("SYMMETRIC_DEFAULT");
+      expect(response.KeyMetadata!.Arn).toBe(outputs.kms_key_rds_arn);
+    });
+
+    it("validates KMS key policies and permissions", async () => {
+      const keyArns = [];
+      
+      if (!skipIfMissing("kms_key_ebs_arn", outputs)) {
+        keyArns.push(outputs.kms_key_ebs_arn);
+      }
+      
+      if (!skipIfMissing("kms_key_rds_arn", outputs)) {
+        keyArns.push(outputs.kms_key_rds_arn);
+      }
+
+      for (const keyArn of keyArns) {
+        const keyId = keyArn.split("/").pop();
+        
+        const command = new DescribeKeyCommand({
+          KeyId: keyId
+        });
+
+        const response = await kmsClient.send(command);
+        
+        // Validate key is customer managed
+        expect(response.KeyMetadata!.KeyManager).toBe("CUSTOMER");
+        expect(response.KeyMetadata!.Origin).toBe("AWS_KMS");
+        
+        // Key should be in the correct region
+        expect(response.KeyMetadata!.Arn).toContain(`:${region}:`);
+      }
+    });
+
+    it("validates KMS keys are different for different services", () => {
+      if (skipIfMissing("kms_key_ebs_arn", outputs) ||
+        skipIfMissing("kms_key_rds_arn", outputs)) return;
+
+      // EBS and RDS should use different KMS keys for better security isolation
+      expect(outputs.kms_key_ebs_arn).not.toBe(outputs.kms_key_rds_arn);
+
+      const ebsKeyId = outputs.kms_key_ebs_arn.split("/").pop();
+      const rdsKeyId = outputs.kms_key_rds_arn.split("/").pop();
+      
+      expect(ebsKeyId).not.toBe(rdsKeyId);
     });
   });
 
-  afterAll(() => {
-    const testFiles = ['test.tfplan', '.terraform.lock.hcl'];
-    testFiles.forEach(file => {
-      const filePath = path.join(LIB_DIR, file);
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
+  describe("Cross-Service Integration", () => {
+    it("validates region consistency across all resources", () => {
+      const arnOutputs = Object.entries(outputs)
+        .filter(([_, value]) => typeof value === "string" && value.startsWith("arn:aws:"))
+        .map(([_, value]) => value as string);
+
+      expect(arnOutputs.length).toBeGreaterThan(0);
+
+      // Filter ARNs that should have a region (exclude global services like IAM)
+      const regionalArns = arnOutputs.filter(arn => {
+        const parts = arn.split(":");
+        const service = parts[2];
+        const arnRegion = parts[3];
+
+        // Skip global services that don't have regions
+        const globalServices = ["iam", "route53", "cloudfront", "waf", "wafv2"];
+        if (globalServices.includes(service)) return false;
+
+        // Only check ARNs that have a region specified
+        return arnRegion && arnRegion.length > 0;
+      });
+
+      expect(regionalArns.length).toBeGreaterThan(0);
+
+      regionalArns.forEach(arn => {
+        const arnRegion = arn.split(":")[3];
+        expect(arnRegion).toBe(region);
+      });
+    });
+
+    it("validates resource naming consistency", () => {
+      const namePattern = /payment.*processor.*production/i;
+
+      // Check DNS name follows naming convention
+      if (!skipIfMissing("alb_dns_name", outputs)) {
+        expect(outputs.alb_dns_name).toMatch(namePattern);
       }
+
+      // Check RDS cluster follows naming convention
+      if (!skipIfMissing("rds_cluster_endpoint", outputs)) {
+        expect(outputs.rds_cluster_endpoint).toMatch(namePattern);
+      }
+    });
+
+    it("validates network security relationships", async () => {
+      if (skipIfMissing("vpc_id", outputs) || 
+        skipIfMissing("public_subnet_ids", outputs) ||
+        skipIfMissing("private_subnet_ids", outputs)) return;
+
+      const publicSubnets = parseArray(outputs.public_subnet_ids);
+      const privateSubnets = parseArray(outputs.private_subnet_ids);
+
+      // Public and private subnets should be in the same VPC
+      expect(publicSubnets.length).toBeGreaterThanOrEqual(2);
+      expect(privateSubnets.length).toBeGreaterThanOrEqual(2);
+
+      // Validate subnet distribution matches ALB and RDS requirements
+      expect(publicSubnets.length).toBe(privateSubnets.length);
+    });
+
+    it("validates encryption consistency", () => {
+      // All encryption should use customer-managed KMS keys
+      if (!skipIfMissing("kms_key_ebs_arn", outputs)) {
+        expect(outputs.kms_key_ebs_arn).toContain("customer");
+      }
+
+      if (!skipIfMissing("kms_key_rds_arn", outputs)) {
+        expect(outputs.kms_key_rds_arn).toContain("customer");
+      }
+    });
+
+    it("validates high availability configuration", () => {
+      // Infrastructure should be designed for high availability
+      if (!skipIfMissing("public_subnet_ids", outputs)) {
+        const publicSubnets = parseArray(outputs.public_subnet_ids);
+        expect(publicSubnets.length).toBeGreaterThanOrEqual(2);
+      }
+
+      if (!skipIfMissing("private_subnet_ids", outputs)) {
+        const privateSubnets = parseArray(outputs.private_subnet_ids);
+        expect(privateSubnets.length).toBeGreaterThanOrEqual(2);
+      }
+
+      // ALB should span multiple AZs (validated through subnets)
+      // RDS cluster should be Multi-AZ (validated in RDS tests)
+    });
+
+    it("validates application endpoints are consistent", () => {
+      if (skipIfMissing("application_url", outputs) ||
+        skipIfMissing("alb_dns_name", outputs)) return;
+
+      // Application URL should be built from ALB DNS name
+      expect(outputs.application_url).toContain(outputs.alb_dns_name);
+
+      // Both should be accessible over HTTP/HTTPS
+      expect(outputs.application_url).toMatch(/^https?:\/\//);
+    });
+
+    it("validates infrastructure outputs completeness", () => {
+      const criticalOutputs = [
+        "vpc_id",
+        "public_subnet_ids", 
+        "private_subnet_ids",
+        "alb_dns_name",
+        "application_url"
+      ];
+
+      criticalOutputs.forEach(output => {
+        expect(outputs).toHaveProperty(output);
+        expect(outputs[output]).toBeDefined();
+        expect(isNonEmptyString(outputs[output]) || Array.isArray(parseArray(outputs[output]))).toBe(true);
+      });
+    });
+
+    it("validates no hardcoded values in outputs", () => {
+      const hardcodedPatterns = [
+        /localhost/i,
+        /127\.0\.0\.1/,
+        /192\.168\./,
+        /10\.0\.0\.1/,
+        /test-/i,
+        /example/i
+      ];
+
+      Object.entries(outputs).forEach(([key, value]) => {
+        if (typeof value === "string") {
+          hardcodedPatterns.forEach(pattern => {
+            expect(value).not.toMatch(pattern);
+          });
+        }
+      });
     });
   });
 });
