@@ -90,7 +90,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "failed_messages" {
     filter { prefix = "" }
 
     transition {
-      days          = 7
+      # AWS requires STANDARD_IA transitions to be >= 30 days
+      days          = 30
       storage_class = "STANDARD_IA"
     }
 
