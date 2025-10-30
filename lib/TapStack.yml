@@ -1489,62 +1489,51 @@ Resources:
         ZipFile: |
           import boto3
           import json
-          import time
+          import urllib3
           
+          def send_response(event, context, response_status, response_data):
+              response_body = json.dumps({
+                  'Status': response_status,
+                  'Reason': 'See CloudWatch logs for details',
+                  'PhysicalResourceId': context.log_stream_name,
+                  'StackId': event['StackId'],
+                  'RequestId': event['RequestId'],
+                  'LogicalResourceId': event['LogicalResourceId'],
+                  'Data': response_data
+              })
+              http = urllib3.PoolManager()
+              http.request('PUT', event['ResponseURL'], body=response_body, headers={'content-type': ''})
+
           def handler(event, context):
-              ec2 = boto3.client('ec2')
-              regions = [region['RegionName'] for region in ec2.describe_regions()['Regions']]
-              
-              results = []
-              
-              for region in regions:
-                  if region == 'us-east-1':  # Skip primary region as per requirement
-                      continue
-                      
-                  try:
-                      regional_ec2 = boto3.client('ec2', region_name=region)
-                      vpcs = regional_ec2.describe_vpcs(
-                          Filters=[{'Name': 'is-default', 'Values': ['true']}]
-                      )['Vpcs']
-                      
-                      for vpc in vpcs:
-                          vpc_id = vpc['VpcId']
-                          
-                          # Delete default VPC components first
-                          try:
-                              # Delete internet gateways
-                              igws = regional_ec2.describe_internet_gateways(
-                                  Filters=[{'Name': 'attachment.vpc-id', 'Values': [vpc_id]}]
-                              )['InternetGateways']
-                              
-                              for igw in igws:
-                                  regional_ec2.detach_internet_gateway(
-                                      InternetGatewayId=igw['InternetGatewayId'],
-                                      VpcId=vpc_id
-                                  )
-                                  regional_ec2.delete_internet_gateway(
-                                      InternetGatewayId=igw['InternetGatewayId']
-                                  )
-                          except Exception as e:
-                              print(f"Error cleaning IGWs in {region}: {str(e)}")
-                          
-                          # Delete the VPC
-                          try:
-                              regional_ec2.delete_vpc(VpcId=vpc_id)
-                              results.append(f"Successfully deleted default VPC {vpc_id} in {region}")
-                          except Exception as e:
-                              results.append(f"Failed to delete default VPC {vpc_id} in {region}: {str(e)}")
-                              
-                  except Exception as e:
-                      results.append(f"Error processing region {region}: {str(e)}")
-              
-              return {
-                  'statusCode': 200,
-                  'body': json.dumps({
-                      'message': 'Default VPC cleanup completed',
-                      'results': results
-                  })
-              }
+              try:
+                  ec2 = boto3.client('ec2')
+                  regions = [region['RegionName'] for region in ec2.describe_regions()['Regions']]
+                  results = []
+                  for region in regions:
+                      if region == 'us-east-1':
+                          continue
+                      try:
+                          regional_ec2 = boto3.client('ec2', region_name=region)
+                          vpcs = regional_ec2.describe_vpcs(Filters=[{'Name': 'is-default', 'Values': ['true']}])['Vpcs']
+                          for vpc in vpcs:
+                              vpc_id = vpc['VpcId']
+                              try:
+                                  igws = regional_ec2.describe_internet_gateways(Filters=[{'Name': 'attachment.vpc-id', 'Values': [vpc_id]}])['InternetGateways']
+                                  for igw in igws:
+                                      regional_ec2.detach_internet_gateway(InternetGatewayId=igw['InternetGatewayId'], VpcId=vpc_id)
+                                      regional_ec2.delete_internet_gateway(InternetGatewayId=igw['InternetGatewayId'])
+                              except Exception as e:
+                                  pass
+                              try:
+                                  regional_ec2.delete_vpc(VpcId=vpc_id)
+                                  results.append(f"Successfully deleted default VPC {vpc_id} in {region}")
+                              except Exception as e:
+                                  results.append(f"Failed to delete default VPC {vpc_id} in {region}: {str(e)}")
+                      except Exception as e:
+                          results.append(f"Error processing region {region}: {str(e)}")
+                  send_response(event, context, 'SUCCESS', {'Message': 'Default VPC cleanup completed', 'Results': results})
+              except Exception as e:
+                  send_response(event, context, 'FAILED', {'Message': str(e)})
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-DefaultVPC-Cleanup'
