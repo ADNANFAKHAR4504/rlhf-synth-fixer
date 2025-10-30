@@ -455,14 +455,12 @@ export class TapStack extends pulumi.ComponentResource {
           sourceRegion: migrationConfig.sourceRegion,
           targetRegion: migrationConfig.targetRegion,
           resources: {
-            s3Buckets: bucketInfo.map(
-              (b: { name: string; arn: string }) => ({
-                name: b.name,
-                arn: b.arn,
-                replicationStatus: 'ACTIVE',
-                region: migrationConfig.targetRegion,
-              })
-            ),
+            s3Buckets: bucketInfo.map((b: { name: string; arn: string }) => ({
+              name: b.name,
+              arn: b.arn,
+              replicationStatus: 'ACTIVE',
+              region: migrationConfig.targetRegion,
+            })),
             dynamodbTables: tableInfo.map(
               (t: { name: string; arn: string }) => ({
                 name: t.name,
