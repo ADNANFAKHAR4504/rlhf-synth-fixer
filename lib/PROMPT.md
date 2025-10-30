@@ -4,9 +4,6 @@ Core Requirements & Strict Constraints:
 You must generate a CloudFormation YAML template that provisions resources adhering to every one of the following constraints. Do not deviate from these specifications.
 
 Region & Tagging:
-
-The entire stack must be deployable in the us-east-1 region.
-
 All provisioned resources must be tagged with Environment: Production.
 
 VPC and Networking:

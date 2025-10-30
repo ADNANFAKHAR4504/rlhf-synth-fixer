@@ -197,6 +197,8 @@ Resources:
           Value: PrivateSubnet1
         - Key: Environment
           Value: Production
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -209,6 +211,8 @@ Resources:
           Value: PrivateSubnet2
         - Key: Environment
           Value: Production
+        - Key: rlhf-iac-amazon
+          Value: 'true'
 
   # NAT Gateways for private subnets
   NATGateway1EIP:
