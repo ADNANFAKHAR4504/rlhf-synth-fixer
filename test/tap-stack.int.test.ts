@@ -28,7 +28,7 @@ import {
   DescribeNatGatewaysCommand,
 } from '@aws-sdk/client-ec2';
 import {
-  ELBv2Client,
+  ElasticLoadBalancingV2Client,
   DescribeLoadBalancersCommand,
   DescribeTargetHealthCommand,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
@@ -55,7 +55,7 @@ const ssmClient = new SSMClient({ region: awsRegion });
 const cloudwatchLogsClient = new CloudWatchLogsClient({ region: awsRegion });
 const cloudwatchClient = new CloudWatchClient({ region: awsRegion });
 const ec2Client = new EC2Client({ region: awsRegion });
-const elbv2Client = new ELBv2Client({ region: awsRegion });
+const elbv2Client = new ElasticLoadBalancingV2Client({ region: awsRegion });
 const cloudtrailClient = new CloudTrailClient({ region: awsRegion });
 
 // Helper function to wait for SSM command completion
@@ -247,13 +247,13 @@ describe('Comprehensive Cloud Environment Integration Tests', () => {
     describe('CloudWatch Logs Tests', () => {
       test('should verify VPC Flow Logs are being created in CloudWatch Logs', async () => {
         const vpcId = outputs.VPCId;
-        const logGroupName = `/aws/vpc/${environmentSuffix}-*`;
+        const logGroupName = `/aws/vpc/${environmentSuffix}-TapStack${environmentSuffix}`;
 
         try {
           // ACTION: Check if log streams exist for VPC Flow Logs
           const response = await cloudwatchLogsClient.send(
             new DescribeLogStreamsCommand({
-              logGroupName: logGroupName.replace('*', 'TapStack'),
+              logGroupName: logGroupName,
               limit: 5,
             })
           );
@@ -267,13 +267,13 @@ describe('Comprehensive Cloud Environment Integration Tests', () => {
       }, 60000);
 
       test('should read actual VPC Flow Log data from CloudWatch Logs', async () => {
-        const logGroupName = `/aws/vpc/${environmentSuffix}-*`;
+        const logGroupName = `/aws/vpc/${environmentSuffix}-TapStack${environmentSuffix}`;
 
         try {
           // ACTION: Read flow log events
           const response = await cloudwatchLogsClient.send(
             new FilterLogEventsCommand({
-              logGroupName: logGroupName.replace('*', 'TapStack'),
+              logGroupName: logGroupName,
               limit: 10,
             })
           );
@@ -490,10 +490,10 @@ describe('Comprehensive Cloud Environment Integration Tests', () => {
           expect(result.StandardOutputContent).toContain('Network traffic generated');
 
           // Verify VPC Flow Logs captured the traffic
-          const logGroupName = `/aws/vpc/${environmentSuffix}-*`;
+          const logGroupName = `/aws/vpc/${environmentSuffix}-TapStack${environmentSuffix}`;
           const logsResponse = await cloudwatchLogsClient.send(
             new DescribeLogStreamsCommand({
-              logGroupName: logGroupName.replace('*', 'TapStack'),
+              logGroupName: logGroupName,
               limit: 5,
             })
           );
