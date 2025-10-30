@@ -55,7 +55,37 @@ const ec2Client = new EC2Client({ region: AWS_REGION });
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Helper function to add delay between API calls to avoid throttling
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+// Enhanced delay function with randomization to prevent synchronized requests
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms + Math.random() * 100));
+
+// Retry wrapper for AWS API calls with exponential backoff
+const retryWithBackoff = async <T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelay: number = 500
+): Promise<T> => {
+  let attempt = 0;
+  while (attempt < maxRetries) {
+    try {
+      if (attempt > 0) {
+        // Exponential backoff with jitter
+        const delayTime = baseDelay * Math.pow(2, attempt - 1) + Math.random() * 1000;
+        await delay(delayTime);
+      }
+      return await operation();
+    } catch (error: any) {
+      attempt++;
+      if (error.name === 'Throttling' || error.name === 'TooManyRequestsException') {
+        if (attempt < maxRetries) {
+          console.log(`Throttling detected, retry attempt ${attempt}/${maxRetries}`);
+          continue;
+        }
+      }
+      throw error;
+    }
+  }
+  throw new Error(`Max retries (${maxRetries}) exceeded`);
+};
 
 beforeAll(async () => {
   region = AWS_REGION;
@@ -141,7 +171,7 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       expect(outputs.EC2ApplicationRoleARN).toMatch(/^arn:aws:iam::[0-9]+:role\//);
       expect(outputs.LambdaExecutionRoleARN).toMatch(/^arn:aws:iam::[0-9]+:role\//);
       expect(outputs.PermissionBoundaryPolicyARN).toMatch(/^arn:aws:iam::[0-9]+:policy\//);
-    }, 30000);
+    }, 90000);
 
     test('1.2: Resource Naming and Tagging Verification', async () => {
       // Get resource details from CloudFormation
@@ -180,7 +210,7 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       // Verify role paths are set to '/'
       expect(ec2RoleDetails.Role!.Path).toBe('/');
       expect(lambdaRoleDetails.Role!.Path).toBe('/');
-    }, 30000);
+    }, 90000);
   });
 
   // 2. Permission Boundary Tests
@@ -216,18 +246,19 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       const deniedActions = ['iam:CreateRole', 'iam:CreateUser', 'iam:CreatePolicy', 'organizations:CreateAccount'];
 
       for (const action of deniedActions) {
-        const simulationResponse = await iamClient.send(
+        await delay(300); // Add delay to prevent throttling
+        const simulationResponse = await retryWithBackoff(() => iamClient.send(
           new SimulatePrincipalPolicyCommand({
             PolicySourceArn: ec2RoleArn,
             ActionNames: [action],
             ResourceArns: ['*'],
           })
-        );
+        ));
 
         const evaluation = simulationResponse.EvaluationResults![0];
         expect(['implicitDeny', 'explicitDeny']).toContain(evaluation.EvalDecision);
       }
-    }, 45000);
+    }, 120000);
 
     test('2.2: Permission Boundary Scope Validation', async () => {
       // Use policy simulation to verify boundary allows only specified actions
@@ -242,13 +273,14 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       ];
 
       for (const action of allowedActions) {
-        const simulationResponse = await iamClient.send(
+        await delay(300); // Add delay to prevent throttling
+        const simulationResponse = await retryWithBackoff(() => iamClient.send(
           new SimulatePrincipalPolicyCommand({
             PolicySourceArn: ec2RoleArn,
             ActionNames: [action],
             ResourceArns: [`arn:aws:logs:${region}:*:log-group:/aws/ec2/*`],
           })
-        );
+        ));
 
         const evaluation = simulationResponse.EvaluationResults![0];
         // Should be allowed or at least not explicitly denied by boundary
@@ -259,18 +291,19 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       const restrictedActions = ['iam:*', 'sts:*', 'organizations:*'];
 
       for (const action of restrictedActions) {
-        const simulationResponse = await iamClient.send(
+        await delay(300); // Add delay to prevent throttling
+        const simulationResponse = await retryWithBackoff(() => iamClient.send(
           new SimulatePrincipalPolicyCommand({
             PolicySourceArn: ec2RoleArn,
             ActionNames: [action],
             ResourceArns: ['*'],
           })
-        );
+        ));
 
         const evaluation = simulationResponse.EvaluationResults![0];
         expect(evaluation.EvalDecision).toBe('explicitDeny');
       }
-    }, 45000);
+    }, 120000);
   });
 
   // 3. EC2 Application Role Tests
@@ -301,7 +334,7 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       const ec2RoleDetails = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
       expect(ec2RoleDetails.Role).toBeDefined();
       expect(ec2RoleDetails.Role!.PermissionsBoundary).toBeDefined();
-    }, 30000);
+    }, 90000);
 
     test('3.2: EC2 Role CloudWatch Logs Access', async () => {
       const ec2RoleArn = outputs.EC2ApplicationRoleARN;
@@ -316,14 +349,14 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       const allowedLogResource = `arn:aws:logs:${region}:*:log-group:/aws/ec2/*`;
 
       for (const action of allowedLogActions) {
-        await delay(100); // Add delay to prevent throttling
-        const simulationResponse = await iamClient.send(
+        await delay(300); // Increased delay to prevent throttling
+        const simulationResponse = await retryWithBackoff(() => iamClient.send(
           new SimulatePrincipalPolicyCommand({
             PolicySourceArn: ec2RoleArn,
             ActionNames: [action],
             ResourceArns: [`arn:aws:logs:${region}:${accountId}:log-group:/aws/ec2/*`],
           })
-        );
+        ));
 
         const evaluation = simulationResponse.EvaluationResults![0];
         expect(['allowed', 'implicitDeny']).toContain(evaluation.EvalDecision);
@@ -338,11 +371,11 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
           ActionNames: ['logs:CreateLogGroup'],
           ResourceArns: [deniedLogResource],
         })
-      );
+      ));
 
       const evaluation = simulationResponse.EvaluationResults![0];
       expect(['implicitDeny', 'explicitDeny']).toContain(evaluation.EvalDecision);
-    }, 30000);
+    }, 90000);
 
     test('3.3: EC2 Role S3 Read-Only Access', async () => {
       const ec2RoleArn = outputs.EC2ApplicationRoleARN;
@@ -352,27 +385,27 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       const allowedS3ObjectArn = `arn:aws:s3:::app-config-${stackName}-${accountId}/*`;
 
       // Test bucket listing
-      await delay(100);
-      let simulationResponse = await iamClient.send(
+      await delay(300);
+      let simulationResponse = await retryWithBackoff(() => iamClient.send(
         new SimulatePrincipalPolicyCommand({
           PolicySourceArn: ec2RoleArn,
           ActionNames: ['s3:ListBucket'],
           ResourceArns: [allowedS3BucketArn],
         })
-      );
+      ));
 
       let evaluation = simulationResponse.EvaluationResults![0];
       expect(['allowed', 'implicitDeny']).toContain(evaluation.EvalDecision);
 
       // Test object access
-      await delay(100);
-      simulationResponse = await iamClient.send(
+      await delay(300);
+      simulationResponse = await retryWithBackoff(() => iamClient.send(
         new SimulatePrincipalPolicyCommand({
           PolicySourceArn: ec2RoleArn,
           ActionNames: ['s3:GetObject'],
           ResourceArns: [allowedS3ObjectArn],
         })
-      );
+      ));
 
       evaluation = simulationResponse.EvaluationResults![0];
       expect(['allowed', 'implicitDeny']).toContain(evaluation.EvalDecision);
@@ -381,14 +414,14 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       const writeActions = ['s3:PutObject', 's3:DeleteObject'];
 
       for (const action of writeActions) {
-        await delay(100);
-        const writeSimulationResponse = await iamClient.send(
+        await delay(300);
+        const writeSimulationResponse = await retryWithBackoff(() => iamClient.send(
           new SimulatePrincipalPolicyCommand({
             PolicySourceArn: ec2RoleArn,
             ActionNames: [action],
             ResourceArns: [allowedS3ObjectArn],
           })
-        );
+        ));
 
         const writeEvaluation = writeSimulationResponse.EvaluationResults![0];
         expect(['implicitDeny', 'explicitDeny']).toContain(writeEvaluation.EvalDecision);
@@ -402,11 +435,11 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
           ActionNames: ['s3:GetObject'],
           ResourceArns: [deniedS3Resource],
         })
-      );
+      ));
 
       const deniedEvaluation = deniedSimulationResponse.EvaluationResults![0];
       expect(['implicitDeny', 'explicitDeny']).toContain(deniedEvaluation.EvalDecision);
-    }, 30000);
+    }, 90000);
 
     test('3.4: EC2 Role DynamoDB Read-Only Access', async () => {
       const ec2RoleArn = outputs.EC2ApplicationRoleARN;
@@ -416,14 +449,14 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       const readActions = ['dynamodb:GetItem', 'dynamodb:Query', 'dynamodb:Scan'];
 
       for (const action of readActions) {
-        await delay(100); // Add delay to prevent throttling
-        const simulationResponse = await iamClient.send(
+        await delay(300); // Add delay to prevent throttling
+        const simulationResponse = await retryWithBackoff(() => iamClient.send(
           new SimulatePrincipalPolicyCommand({
             PolicySourceArn: ec2RoleArn,
             ActionNames: [action],
             ResourceArns: [allowedDynamoResource],
           })
-        );
+        ));
 
         const evaluation = simulationResponse.EvaluationResults![0];
         expect(['allowed', 'implicitDeny']).toContain(evaluation.EvalDecision);
@@ -433,13 +466,14 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       const writeActions = ['dynamodb:PutItem', 'dynamodb:UpdateItem', 'dynamodb:DeleteItem'];
 
       for (const action of writeActions) {
-        const simulationResponse = await iamClient.send(
+        await delay(300); // Add delay to prevent throttling
+        const simulationResponse = await retryWithBackoff(() => iamClient.send(
           new SimulatePrincipalPolicyCommand({
             PolicySourceArn: ec2RoleArn,
             ActionNames: [action],
             ResourceArns: [allowedDynamoResource],
           })
-        );
+        ));
 
         const evaluation = simulationResponse.EvaluationResults![0];
         expect(['implicitDeny', 'explicitDeny']).toContain(evaluation.EvalDecision);
@@ -453,11 +487,11 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
           ActionNames: ['dynamodb:GetItem'],
           ResourceArns: [deniedDynamoResource],
         })
-      );
+      ));
 
       const evaluation = simulationResponse.EvaluationResults![0];
       expect(['implicitDeny', 'explicitDeny']).toContain(evaluation.EvalDecision);
-    }, 30000);
+    }, 90000);
 
     test('3.5: EC2 Role SSM Parameter Access', async () => {
       const ec2RoleArn = outputs.EC2ApplicationRoleARN;
@@ -467,14 +501,14 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       const readActions = ['ssm:GetParameter', 'ssm:GetParameters'];
 
       for (const action of readActions) {
-        await delay(100); // Add delay to prevent throttling
-        const simulationResponse = await iamClient.send(
+        await delay(300); // Add delay to prevent throttling
+        const simulationResponse = await retryWithBackoff(() => iamClient.send(
           new SimulatePrincipalPolicyCommand({
             PolicySourceArn: ec2RoleArn,
             ActionNames: [action],
             ResourceArns: [allowedSSMResource],
           })
-        );
+        ));
 
         const evaluation = simulationResponse.EvaluationResults![0];
         expect(['allowed', 'implicitDeny']).toContain(evaluation.EvalDecision);
@@ -487,7 +521,7 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
           ActionNames: ['ssm:PutParameter'],
           ResourceArns: [allowedSSMResource],
         })
-      );
+      ));
 
       const evaluation = simulationResponse.EvaluationResults![0];
       expect(['implicitDeny', 'explicitDeny']).toContain(evaluation.EvalDecision);
@@ -500,11 +534,11 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
           ActionNames: ['ssm:GetParameter'],
           ResourceArns: [deniedSSMResource],
         })
-      );
+      ));
 
       const deniedEvaluation = deniedResponse.EvaluationResults![0];
       expect(['implicitDeny', 'explicitDeny']).toContain(deniedEvaluation.EvalDecision);
-    }, 30000);
+    }, 90000);
   });
 
   // 4. Lambda Execution Role Tests
@@ -535,7 +569,7 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       const lambdaRoleDetails2 = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
       expect(lambdaRoleDetails2.Role).toBeDefined();
       expect(lambdaRoleDetails2.Role!.PermissionsBoundary).toBeDefined();
-    }, 30000);
+    }, 90000);
 
     test('4.2: Lambda Role CloudWatch Logs Access', async () => {
       const lambdaRoleArn = outputs.LambdaExecutionRoleARN;
@@ -550,14 +584,14 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       const allowedLogResource = `arn:aws:logs:${region}:${accountId}:log-group:/aws/lambda/*`;
 
       for (const action of allowedLogActions) {
-        await delay(100); // Add delay to prevent throttling
-        const simulationResponse = await iamClient.send(
+        await delay(300); // Add delay to prevent throttling
+        const simulationResponse = await retryWithBackoff(() => iamClient.send(
           new SimulatePrincipalPolicyCommand({
             PolicySourceArn: lambdaRoleArn,
             ActionNames: [action],
             ResourceArns: [allowedLogResource],
           })
-        );
+        ));
 
         const evaluation = simulationResponse.EvaluationResults![0];
         expect(['allowed', 'implicitDeny']).toContain(evaluation.EvalDecision);
@@ -572,11 +606,11 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
           ActionNames: ['logs:CreateLogGroup'],
           ResourceArns: [deniedLogResource],
         })
-      );
+      ));
 
       const evaluation = simulationResponse.EvaluationResults![0];
       expect(['implicitDeny', 'explicitDeny']).toContain(evaluation.EvalDecision);
-    }, 30000);
+    }, 90000);
 
     test('4.3: Lambda Role DynamoDB Access', async () => {
       const lambdaRoleArn = outputs.LambdaExecutionRoleARN;
@@ -589,14 +623,14 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       ];
 
       for (const action of crudActions) {
-        await delay(100); // Add delay to prevent throttling
-        const simulationResponse = await iamClient.send(
+        await delay(300); // Add delay to prevent throttling
+        const simulationResponse = await retryWithBackoff(() => iamClient.send(
           new SimulatePrincipalPolicyCommand({
             PolicySourceArn: lambdaRoleArn,
             ActionNames: [action],
             ResourceArns: [allowedDynamoResource],
           })
-        );
+        ));
 
         const evaluation = simulationResponse.EvaluationResults![0];
         expect(['allowed', 'implicitDeny']).toContain(evaluation.EvalDecision);
@@ -606,18 +640,19 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       const deniedDynamoResource = `arn:aws:dynamodb:${region}:*:table/AppTable-${stackName}`;
 
       for (const action of crudActions) {
-        const simulationResponse = await iamClient.send(
+        await delay(300); // Add delay to prevent throttling
+        const simulationResponse = await retryWithBackoff(() => iamClient.send(
           new SimulatePrincipalPolicyCommand({
             PolicySourceArn: lambdaRoleArn,
             ActionNames: [action],
             ResourceArns: [deniedDynamoResource],
           })
-        );
+        ));
 
         const evaluation = simulationResponse.EvaluationResults![0];
         expect(['implicitDeny', 'explicitDeny']).toContain(evaluation.EvalDecision);
       }
-    }, 30000);
+    }, 90000);
 
     test('4.4: Lambda Role S3 Access', async () => {
       const lambdaRoleArn = outputs.LambdaExecutionRoleARN;
@@ -627,14 +662,14 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       const s3Actions = ['s3:GetObject', 's3:PutObject'];
 
       for (const action of s3Actions) {
-        await delay(100); // Add delay to prevent throttling
-        const simulationResponse = await iamClient.send(
+        await delay(300); // Add delay to prevent throttling
+        const simulationResponse = await retryWithBackoff(() => iamClient.send(
           new SimulatePrincipalPolicyCommand({
             PolicySourceArn: lambdaRoleArn,
             ActionNames: [action],
             ResourceArns: [allowedS3Resource],
           })
-        );
+        ));
 
         const evaluation = simulationResponse.EvaluationResults![0];
         expect(['allowed', 'implicitDeny']).toContain(evaluation.EvalDecision);
@@ -644,18 +679,19 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       const deniedS3Resource = `arn:aws:s3:::app-config-${stackName}-*`;
 
       for (const action of s3Actions) {
-        const simulationResponse = await iamClient.send(
+        await delay(300); // Add delay to prevent throttling
+        const simulationResponse = await retryWithBackoff(() => iamClient.send(
           new SimulatePrincipalPolicyCommand({
             PolicySourceArn: lambdaRoleArn,
             ActionNames: [action],
             ResourceArns: [deniedS3Resource],
           })
-        );
+        ));
 
         const evaluation = simulationResponse.EvaluationResults![0];
         expect(['implicitDeny', 'explicitDeny']).toContain(evaluation.EvalDecision);
       }
-    }, 30000);
+    }, 90000);
   });
 
   // 5. Policy Strictness Tests
@@ -673,20 +709,20 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
         ];
 
         for (const action of privilegeEscalationActions) {
-          await delay(200); // Add longer delay to prevent throttling
-          const simulationResponse = await iamClient.send(
+          await delay(400); // Add longer delay to prevent throttling
+          const simulationResponse = await retryWithBackoff(() => iamClient.send(
             new SimulatePrincipalPolicyCommand({
               PolicySourceArn: roleArn,
               ActionNames: [action],
               ResourceArns: ['*'],
             })
-          );
+          ));
 
           const evaluation = simulationResponse.EvaluationResults![0];
           expect(['explicitDeny', 'implicitDeny']).toContain(evaluation.EvalDecision);
         }
       }
-    }, 60000);
+    }, 150000);
 
     test('5.2: Resource-Specific Permission Enforcement', async () => {
       const ec2RoleArn = outputs.EC2ApplicationRoleARN;
@@ -697,25 +733,25 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       const ec2DeniedS3 = `arn:aws:s3:::lambda-data-${stackName}-*/*`;
 
       // EC2 role should access app-config bucket
-      await delay(100);
-      let simulationResponse = await iamClient.send(
+      await delay(300);
+      let simulationResponse = await retryWithBackoff(() => iamClient.send(
         new SimulatePrincipalPolicyCommand({
           PolicySourceArn: ec2RoleArn,
           ActionNames: ['s3:GetObject'],
           ResourceArns: [`arn:aws:s3:::app-config-${stackName}-${accountId}/*`],
         })
-      );
+      ));
       expect(['allowed', 'implicitDeny']).toContain(simulationResponse.EvaluationResults![0].EvalDecision);
 
       // EC2 role should NOT access lambda-data bucket
-      await delay(100);
-      simulationResponse = await iamClient.send(
+      await delay(300);
+      simulationResponse = await retryWithBackoff(() => iamClient.send(
         new SimulatePrincipalPolicyCommand({
           PolicySourceArn: ec2RoleArn,
           ActionNames: ['s3:GetObject'],
           ResourceArns: [`arn:aws:s3:::lambda-data-${stackName}-${accountId}/*`],
         })
-      );
+      ));
       expect(['implicitDeny', 'explicitDeny']).toContain(simulationResponse.EvaluationResults![0].EvalDecision);
 
       // Test DynamoDB table access isolation
@@ -723,27 +759,27 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       const ec2DeniedDynamo = `arn:aws:dynamodb:${region}:${accountId}:table/LambdaTable-${stackName}`;
 
       // EC2 role should access AppTable
-      await delay(100);
-      simulationResponse = await iamClient.send(
+      await delay(300);
+      simulationResponse = await retryWithBackoff(() => iamClient.send(
         new SimulatePrincipalPolicyCommand({
           PolicySourceArn: ec2RoleArn,
           ActionNames: ['dynamodb:GetItem'],
           ResourceArns: [ec2AllowedDynamo],
         })
-      );
+      ));
       expect(['allowed', 'implicitDeny']).toContain(simulationResponse.EvaluationResults![0].EvalDecision);
 
       // EC2 role should NOT access LambdaTable
-      await delay(100);
-      simulationResponse = await iamClient.send(
+      await delay(300);
+      simulationResponse = await retryWithBackoff(() => iamClient.send(
         new SimulatePrincipalPolicyCommand({
           PolicySourceArn: ec2RoleArn,
           ActionNames: ['dynamodb:GetItem'],
           ResourceArns: [ec2DeniedDynamo],
         })
-      );
+      ));
       expect(['implicitDeny', 'explicitDeny']).toContain(simulationResponse.EvaluationResults![0].EvalDecision);
-    }, 30000);
+    }, 90000);
 
     test('5.3: Action-Specific Permission Enforcement', async () => {
       // Test that only explicitly allowed actions are permitted
@@ -765,14 +801,14 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       for (const testCase of testCases) {
         // Test allowed actions
         for (const action of testCase.allowedActions) {
-          await delay(100); // Add delay to prevent throttling
-          const simulationResponse = await iamClient.send(
+          await delay(300); // Add delay to prevent throttling
+          const simulationResponse = await retryWithBackoff(() => iamClient.send(
             new SimulatePrincipalPolicyCommand({
               PolicySourceArn: testCase.role,
               ActionNames: [action],
               ResourceArns: [testCase.resource.replace('*', accountId)],
             })
-          );
+          ));
 
           const evaluation = simulationResponse.EvaluationResults![0];
           expect(['allowed', 'implicitDeny']).toContain(evaluation.EvalDecision);
@@ -780,20 +816,20 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
 
         // Test denied actions
         for (const action of testCase.deniedActions) {
-          await delay(100); // Add delay to prevent throttling
-          const simulationResponse = await iamClient.send(
+          await delay(300); // Add delay to prevent throttling
+          const simulationResponse = await retryWithBackoff(() => iamClient.send(
             new SimulatePrincipalPolicyCommand({
               PolicySourceArn: testCase.role,
               ActionNames: [action],
               ResourceArns: [testCase.resource.replace('*', accountId)],
             })
-          );
+          ));
 
           const evaluation = simulationResponse.EvaluationResults![0];
           expect(['implicitDeny', 'explicitDeny']).toContain(evaluation.EvalDecision);
         }
       }
-    }, 45000);
+    }, 120000);
   });
 
   // 6. Wildcard Absence Tests
@@ -827,7 +863,7 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       // Verify no standalone wildcards exist in our template structure
       expect(templateContent).not.toMatch(/"Resource":\s*"\*"/);
       expect(templateContent).toContain(accountId); // Verify we use specific account ID
-    }, 30000);
+    }, 90000);
 
     test('6.2: Action Wildcard Absence', async () => {
       // Verify our template uses specific actions, not service wildcards
@@ -857,7 +893,7 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       // Verify we don't use any service wildcards in our expected actions
       const hasServiceWildcard = expectedActions.some(action => action.includes('*'));
       expect(hasServiceWildcard).toBe(false);
-    }, 30000);
+    }, 90000);
   });
 
   // 7. Cross-Role Security Tests
@@ -880,13 +916,13 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       ];
 
       for (let i = 0; i < lambdaSpecificResources.length; i++) {
-        const simulationResponse = await iamClient.send(
+        const simulationResponse = await retryWithBackoff(() => iamClient.send(
           new SimulatePrincipalPolicyCommand({
             PolicySourceArn: ec2RoleArn,
             ActionNames: [lambdaSpecificActions[i]],
             ResourceArns: [lambdaSpecificResources[i]],
           })
-        );
+        ));
 
         const evaluation = simulationResponse.EvaluationResults![0];
         expect(['implicitDeny', 'explicitDeny']).toContain(evaluation.EvalDecision);
@@ -906,18 +942,18 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       ];
 
       for (let i = 0; i < ec2SpecificResources.length; i++) {
-        const simulationResponse = await iamClient.send(
+        const simulationResponse = await retryWithBackoff(() => iamClient.send(
           new SimulatePrincipalPolicyCommand({
             PolicySourceArn: lambdaRoleArn,
             ActionNames: [ec2SpecificActions[i]],
             ResourceArns: [ec2SpecificResources[i]],
           })
-        );
+        ));
 
         const evaluation = simulationResponse.EvaluationResults![0];
         expect(['implicitDeny', 'explicitDeny']).toContain(evaluation.EvalDecision);
       }
-    }, 30000);
+    }, 90000);
 
     test('7.2: Permission Boundary Override Test', async () => {
       // Test that permission boundary cannot be overridden by role policies
@@ -936,14 +972,15 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
 
       for (const roleArn of roles) {
         for (const action of boundaryDeniedActions) {
+          await delay(400); // Add delay to prevent throttling
           // Even if role policy would allow it, boundary should deny
-          const simulationResponse = await iamClient.send(
+          const simulationResponse = await retryWithBackoff(() => iamClient.send(
             new SimulatePrincipalPolicyCommand({
               PolicySourceArn: roleArn,
               ActionNames: [action],
               ResourceArns: ['*'],
             })
-          );
+          ));
 
           const evaluation = simulationResponse.EvaluationResults![0];
           // Permission boundary enforces explicit deny
@@ -961,20 +998,21 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
 
       for (const roleArn of roles) {
         for (const action of crossServiceActions) {
-          const simulationResponse = await iamClient.send(
+          await delay(300); // Add delay to prevent throttling
+          const simulationResponse = await retryWithBackoff(() => iamClient.send(
             new SimulatePrincipalPolicyCommand({
               PolicySourceArn: roleArn,
               ActionNames: [action],
               ResourceArns: ['*'],
             })
-          );
+          ));
 
           const evaluation = simulationResponse.EvaluationResults![0];
           // Should be denied (either implicit or explicit)
           expect(['implicitDeny', 'explicitDeny']).toContain(evaluation.EvalDecision);
         }
       }
-    }, 30000);
+    }, 90000);
   });
 
   // 8. Real-World Workflow Tests
@@ -1008,14 +1046,14 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
 
       // Test each step of the workflow
       for (const step of workflowActions) {
-        await delay(100); // Add delay to prevent throttling
-        const simulationResponse = await iamClient.send(
+        await delay(300); // Add delay to prevent throttling
+        const simulationResponse = await retryWithBackoff(() => iamClient.send(
           new SimulatePrincipalPolicyCommand({
             PolicySourceArn: ec2RoleArn,
             ActionNames: [step.action],
             ResourceArns: [step.resource],
           })
-        );
+        ));
 
         const evaluation = simulationResponse.EvaluationResults![0];
         expect(['allowed', 'implicitDeny']).toContain(evaluation.EvalDecision);
@@ -1036,18 +1074,18 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       ];
 
       for (const operation of unauthorizedOperations) {
-        const simulationResponse = await iamClient.send(
+        const simulationResponse = await retryWithBackoff(() => iamClient.send(
           new SimulatePrincipalPolicyCommand({
             PolicySourceArn: ec2RoleArn,
             ActionNames: [operation.action],
             ResourceArns: [operation.resource],
           })
-        );
+        ));
 
         const evaluation = simulationResponse.EvaluationResults![0];
         expect(['implicitDeny', 'explicitDeny']).toContain(evaluation.EvalDecision);
       }
-    }, 30000);
+    }, 90000);
 
     test('8.2: Lambda Function Workflow', async () => {
       const lambdaRoleArn = outputs.LambdaExecutionRoleARN;
@@ -1083,14 +1121,14 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
 
       // Test each step of the Lambda workflow
       for (const step of workflowActions) {
-        await delay(100); // Add delay to prevent throttling
-        const simulationResponse = await iamClient.send(
+        await delay(300); // Add delay to prevent throttling
+        const simulationResponse = await retryWithBackoff(() => iamClient.send(
           new SimulatePrincipalPolicyCommand({
             PolicySourceArn: lambdaRoleArn,
             ActionNames: [step.action],
             ResourceArns: [step.resource],
           })
-        );
+        ));
 
         const evaluation = simulationResponse.EvaluationResults![0];
         expect(['allowed', 'implicitDeny']).toContain(evaluation.EvalDecision);
@@ -1111,18 +1149,18 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       ];
 
       for (const operation of unauthorizedOperations) {
-        const simulationResponse = await iamClient.send(
+        const simulationResponse = await retryWithBackoff(() => iamClient.send(
           new SimulatePrincipalPolicyCommand({
             PolicySourceArn: lambdaRoleArn,
             ActionNames: [operation.action],
             ResourceArns: [operation.resource],
           })
-        );
+        ));
 
         const evaluation = simulationResponse.EvaluationResults![0];
         expect(['implicitDeny', 'explicitDeny']).toContain(evaluation.EvalDecision);
       }
-    }, 30000);
+    }, 90000);
 
     test('8.3: End-to-End Integration Workflow', async () => {
       const ec2RoleArn = outputs.EC2ApplicationRoleARN;
@@ -1151,14 +1189,14 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
 
       // Test EC2 workflow steps
       for (const step of ec2WorkflowSteps) {
-        await delay(100); // Add delay to prevent throttling
-        const simulationResponse = await iamClient.send(
+        await delay(300); // Add delay to prevent throttling
+        const simulationResponse = await retryWithBackoff(() => iamClient.send(
           new SimulatePrincipalPolicyCommand({
             PolicySourceArn: ec2RoleArn,
             ActionNames: [step.action],
             ResourceArns: [step.resource],
           })
-        );
+        ));
 
         const evaluation = simulationResponse.EvaluationResults![0];
         expect(['allowed', 'implicitDeny']).toContain(evaluation.EvalDecision);
@@ -1190,14 +1228,14 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
 
       // Test Lambda workflow steps
       for (const step of lambdaWorkflowSteps) {
-        await delay(100); // Add delay to prevent throttling
-        const simulationResponse = await iamClient.send(
+        await delay(300); // Add delay to prevent throttling
+        const simulationResponse = await retryWithBackoff(() => iamClient.send(
           new SimulatePrincipalPolicyCommand({
             PolicySourceArn: lambdaRoleArn,
             ActionNames: [step.action],
             ResourceArns: [step.resource],
           })
-        );
+        ));
 
         const evaluation = simulationResponse.EvaluationResults![0];
         expect(['allowed', 'implicitDeny']).toContain(evaluation.EvalDecision);
@@ -1220,14 +1258,14 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       ];
 
       for (const prohibition of ec2ProhibitedActions) {
-        await delay(100); // Add delay to prevent throttling
-        const simulationResponse = await iamClient.send(
+        await delay(300); // Add delay to prevent throttling
+        const simulationResponse = await retryWithBackoff(() => iamClient.send(
           new SimulatePrincipalPolicyCommand({
             PolicySourceArn: ec2RoleArn,
             ActionNames: [prohibition.action],
             ResourceArns: [prohibition.resource],
           })
-        );
+        ));
 
         const evaluation = simulationResponse.EvaluationResults![0];
         expect(['implicitDeny', 'explicitDeny']).toContain(evaluation.EvalDecision);
@@ -1248,18 +1286,18 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
       ];
 
       for (const prohibition of lambdaProhibitedActions) {
-        await delay(100); // Add delay to prevent throttling
-        const simulationResponse = await iamClient.send(
+        await delay(300); // Add delay to prevent throttling
+        const simulationResponse = await retryWithBackoff(() => iamClient.send(
           new SimulatePrincipalPolicyCommand({
             PolicySourceArn: lambdaRoleArn,
             ActionNames: [prohibition.action],
             ResourceArns: [prohibition.resource],
           })
-        );
+        ));
 
         const evaluation = simulationResponse.EvaluationResults![0];
         expect(['implicitDeny', 'explicitDeny']).toContain(evaluation.EvalDecision);
       }
-    }, 45000);
+    }, 120000);
   });
 });
