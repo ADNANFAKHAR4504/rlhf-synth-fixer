@@ -324,4 +324,21 @@ describe('Project Nova - End-to-End Integration', () => {
       expect(db.DeletionProtection).toBe(false);
     });
   });
+
+  describe('ALB HTTP listener', () => {
+    test('ALB /health over HTTP returns 301/302 redirect to HTTPS', async () => {
+      const albDns = getOutput('ALBEndpoint');
+      const url = `http://${albDns}/health`;
+      const res = await fetch(url, {
+        method: 'GET',
+        redirect: 'manual',
+        cache: 'no-store',
+      });
+      // AWS ALB can return either 301 or 302 on manual redirect, depending on policy and region
+      expect([301, 302]).toContain(res.status);
+      const loc = res.headers.get('location');
+      expect(loc).toBeDefined();
+      expect(loc?.startsWith('https://')).toBe(true);
+    });
+  });
 });

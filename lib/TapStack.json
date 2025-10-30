@@ -632,6 +632,15 @@
                             "Ref": "CorporateIPRange"
                         },
                         "Description": "HTTPS from corporate network"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": {
+                            "Ref": "CorporateIPRange"
+                        },
+                        "Description": "HTTP redirect to HTTPS from corporate network"
                     }
                 ],
                 "Tags": [
@@ -1507,6 +1516,26 @@
                     }
                 ],
                 "SslPolicy": "ELBSecurityPolicy-TLS13-1-2-2021-06"
+            }
+        },
+        "ALBHTTPListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "LoadBalancerArn": {
+                    "Ref": "ApplicationLoadBalancer"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "DefaultActions": [
+                    {
+                        "Type": "redirect",
+                        "RedirectConfig": {
+                            "Protocol": "HTTPS",
+                            "Port": "443",
+                            "StatusCode": "HTTP_301"
+                        }
+                    }
+                ]
             }
         },
         "AutoScalingGroup": {

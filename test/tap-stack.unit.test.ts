@@ -109,17 +109,16 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Security Groups', () => {
-    test('ALB security group only allows 443 from corporate CIDR', () => {
+    test('ALB security group allows 443 and 80 (redirect) from corporate CIDR', () => {
       const sg = getResource('ALBSecurityGroup');
       expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
       const ingress = sg.Properties.SecurityGroupIngress;
       expect(ingress).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ IpProtocol: 'tcp', FromPort: 443, ToPort: 443 })
+          expect.objectContaining({ IpProtocol: 'tcp', FromPort: 443, ToPort: 443 }),
+          expect.objectContaining({ IpProtocol: 'tcp', FromPort: 80, ToPort: 80 })
         ])
       );
-      // Inverse check: port 80 not allowed
-      expect(ingress.find((r: any) => r.FromPort === 80 || r.ToPort === 80)).toBeFalsy();
     });
 
     test('WebServerSecurityGroup allows 443 from ALB and 22 from corp', () => {
@@ -255,6 +254,18 @@ describe('TapStack CloudFormation Template', () => {
       expect(listener.Properties.Port).toBe(443);
       expect(listener.Properties.Protocol).toBe('HTTPS');
       expect(listener.Properties.SslPolicy).toMatch(/TLS13/);
+    });
+
+    test('HTTP listener redirects to HTTPS', () => {
+      const httpL = getResource('ALBHTTPListener');
+      expect(httpL.Type).toBe('AWS::ElasticLoadBalancingV2::Listener');
+      expect(httpL.Properties.Port).toBe(80);
+      expect(httpL.Properties.Protocol).toBe('HTTP');
+      const action = httpL.Properties.DefaultActions[0];
+      expect(action.Type).toBe('redirect');
+      expect(action.RedirectConfig.Protocol).toBe('HTTPS');
+      expect(action.RedirectConfig.Port).toBe('443');
+      expect(action.RedirectConfig.StatusCode).toBe('HTTP_301');
     });
 
     test('AutoScalingGroup in private subnets targets the TG', () => {
