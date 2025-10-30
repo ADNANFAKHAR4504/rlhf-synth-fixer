@@ -336,10 +336,10 @@ async function main(): Promise<void> {
         : {}),
       ...(deployEnv
         ? {
-          task_config: {
-            deploy_env: deployEnv,
-          },
-        }
+            task_config: {
+              deploy_env: deployEnv,
+            },
+          }
         : {}),
     };
 
