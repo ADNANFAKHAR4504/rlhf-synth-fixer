@@ -5,6 +5,13 @@ import * as aws from '@pulumi/aws';
 const config = new pulumi.Config();
 const environment = config.require('environment');
 const environmentSuffix = config.require('environmentSuffix');
+const awsRegion = process.env.AWS_REGION;
+
+if (!awsRegion) {
+  throw new Error(
+    'AWS_REGION environment variable must be set to select the deployment region.'
+  );
+}
 
 // Environment-specific configurations
 const envConfig = {
@@ -30,6 +37,14 @@ if (!currentEnvConfig) {
   );
 }
 
+interface DataProcessingComponentArgs {
+  environment: string;
+  environmentSuffix: string;
+  lambdaMemory: number;
+  logRetentionDays: number;
+  awsRegion: string;
+}
+
 // ComponentResource for Data Processing Pipeline
 class DataProcessingComponent extends pulumi.ComponentResource {
   public readonly bucket: aws.s3.Bucket;
@@ -41,23 +56,22 @@ class DataProcessingComponent extends pulumi.ComponentResource {
 
   constructor(
     name: string,
-    args: {
-      environment: string;
-      environmentSuffix: string;
-      lambdaMemory: number;
-      logRetentionDays: number;
-    },
+    args: DataProcessingComponentArgs,
     opts?: pulumi.ComponentResourceOptions
   ) {
     super('custom:DataProcessingComponent', name, {}, opts);
 
     const componentOpts = { parent: this };
+    const defaultTags = {
+      Environment: args.environment,
+      ManagedBy: 'Pulumi',
+      Region: args.awsRegion,
+    };
 
     // DynamoDB Table
     this.table = new aws.dynamodb.Table(
       `data-table-${args.environment}-${args.environmentSuffix}`,
       {
-        name: `data-table-${args.environment}-${args.environmentSuffix}`,
         billingMode: 'PAY_PER_REQUEST',
         hashKey: 'id',
         attributes: [
@@ -66,10 +80,7 @@ class DataProcessingComponent extends pulumi.ComponentResource {
             type: 'S',
           },
         ],
-        tags: {
-          Environment: args.environment,
-          ManagedBy: 'Pulumi',
-        },
+        tags: defaultTags,
       },
       componentOpts
     );
@@ -78,7 +89,6 @@ class DataProcessingComponent extends pulumi.ComponentResource {
     const lambdaRole = new aws.iam.Role(
       `lambda-role-${args.environment}-${args.environmentSuffix}`,
       {
-        name: `lambda-role-${args.environment}-${args.environmentSuffix}`,
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
           Statement: [
@@ -91,10 +101,7 @@ class DataProcessingComponent extends pulumi.ComponentResource {
             },
           ],
         }),
-        tags: {
-          Environment: args.environment,
-          ManagedBy: 'Pulumi',
-        },
+        tags: defaultTags,
       },
       componentOpts
     );
@@ -103,7 +110,6 @@ class DataProcessingComponent extends pulumi.ComponentResource {
     this.bucket = new aws.s3.Bucket(
       `data-processor-${args.environment}-${args.environmentSuffix}`,
       {
-        bucket: `data-processor-${args.environment}-${args.environmentSuffix}`,
         versioning: {
           enabled: true,
         },
@@ -114,10 +120,7 @@ class DataProcessingComponent extends pulumi.ComponentResource {
             },
           },
         },
-        tags: {
-          Environment: args.environment,
-          ManagedBy: 'Pulumi',
-        },
+        tags: defaultTags,
       },
       componentOpts
     );
@@ -179,25 +182,10 @@ exports.handler = async (event) => {
 };
 `;
 
-    // CloudWatch Log Group
-    const logGroup = new aws.cloudwatch.LogGroup(
-      `lambda-logs-${args.environment}-${args.environmentSuffix}`,
-      {
-        name: `/aws/lambda/s3-processor-${args.environment}-${args.environmentSuffix}`,
-        retentionInDays: args.logRetentionDays,
-        tags: {
-          Environment: args.environment,
-          ManagedBy: 'Pulumi',
-        },
-      },
-      componentOpts
-    );
-
     // Lambda function
     this.lambdaFunction = new aws.lambda.Function(
       `s3-processor-${args.environment}-${args.environmentSuffix}`,
       {
-        name: `s3-processor-${args.environment}-${args.environmentSuffix}`,
         runtime: 'nodejs18.x',
         role: lambdaRole.arn,
         handler: 'index.handler',
@@ -212,12 +200,21 @@ exports.handler = async (event) => {
             ENVIRONMENT: args.environment,
           },
         },
-        tags: {
-          Environment: args.environment,
-          ManagedBy: 'Pulumi',
-        },
+        tags: defaultTags,
       },
-      { ...componentOpts, dependsOn: [logGroup] }
+      componentOpts
+    );
+
+    const logGroup = new aws.cloudwatch.LogGroup(
+      `lambda-logs-${args.environment}-${args.environmentSuffix}`,
+      {
+        name: this.lambdaFunction.name.apply(
+          (functionName) => `/aws/lambda/${functionName}`
+        ),
+        retentionInDays: args.logRetentionDays,
+        tags: defaultTags,
+      },
+      { ...componentOpts, dependsOn: [this.lambdaFunction] }
     );
 
     // IAM Policy for Lambda to access S3
@@ -340,6 +337,7 @@ const dataProcessor = new DataProcessingComponent('data-processor', {
   environmentSuffix,
   lambdaMemory: currentEnvConfig.lambdaMemory,
   logRetentionDays: currentEnvConfig.logRetentionDays,
+  awsRegion,
 });
 
 // Export stack outputs
@@ -347,3 +345,4 @@ export const s3BucketName = dataProcessor.bucketName;
 export const lambdaFunctionArn = dataProcessor.lambdaArn;
 export const dynamoTableName = dataProcessor.tableName;
 export const deployedEnvironment = environment;
+export const deploymentRegion = awsRegion;

@@ -35,7 +35,13 @@ const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
 const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
 
 // AWS Clients
-const region = 'ap-northeast-2';
+const resolvedRegion = process.env.AWS_REGION || outputs.deploymentRegion;
+if (!resolvedRegion) {
+  throw new Error(
+    'AWS region must be provided via AWS_REGION environment variable or deployment outputs.'
+  );
+}
+const region = resolvedRegion;
 const s3Client = new S3Client({ region });
 const lambdaClient = new LambdaClient({ region });
 const dynamoClient = new DynamoDBClient({ region });
@@ -48,12 +54,14 @@ describe('Data Processing Infrastructure Integration Tests', () => {
       expect(outputs).toHaveProperty('lambdaFunctionArn');
       expect(outputs).toHaveProperty('dynamoTableName');
       expect(outputs).toHaveProperty('deployedEnvironment');
+      expect(outputs).toHaveProperty('deploymentRegion');
     });
 
     it('should have valid resource names with environmentSuffix', () => {
       expect(outputs.s3BucketName).toMatch(/^data-processor-/);
       expect(outputs.dynamoTableName).toMatch(/^data-table-/);
       expect(outputs.lambdaFunctionArn).toContain('s3-processor-');
+      expect(outputs.deploymentRegion).toBe(region);
     });
   });
 
@@ -230,6 +238,7 @@ describe('Data Processing Infrastructure Integration Tests', () => {
       expect(response.Tags).toBeDefined();
       expect(response.Tags?.Environment).toBe(outputs.deployedEnvironment);
       expect(response.Tags?.ManagedBy).toBe('Pulumi');
+      expect(response.Tags?.Region).toBe(region);
     });
 
     it('should have Environment tag on DynamoDB table', async () => {
@@ -250,9 +259,11 @@ describe('Data Processing Infrastructure Integration Tests', () => {
       const tags = tagsResponse.Tags || [];
       const environmentTag = tags.find((tag) => tag.Key === 'Environment');
       const managedByTag = tags.find((tag) => tag.Key === 'ManagedBy');
+      const regionTag = tags.find((tag) => tag.Key === 'Region');
 
       expect(environmentTag?.Value).toBe(outputs.deployedEnvironment);
       expect(managedByTag?.Value).toBe('Pulumi');
+      expect(regionTag?.Value).toBe(region);
     });
   });
 

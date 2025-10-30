@@ -9,21 +9,60 @@ describe('Pulumi Infrastructure Runtime Tests', () => {
     process.env.PULUMI_TEST_MODE = 'true';
     process.env.PULUMI_NODEJS_STACK = 'test-stack';
     process.env.PULUMI_NODEJS_PROJECT = 'data-processing';
+    process.env.AWS_REGION = process.env.AWS_REGION || 'us-west-2';
   });
 
-  it('should load module without errors', () => {
-    // Set required config before importing
-    process.env.PULUMI_CONFIG = JSON.stringify({
-      'data-processing:environment': 'dev',
-      'data-processing:environmentSuffix': 'test',
+  const basePulumiConfig = {
+    'data-processing:environment': 'dev',
+    'data-processing:environmentSuffix': 'test',
+  };
+
+  beforeEach(() => {
+    process.env.PULUMI_CONFIG = JSON.stringify(basePulumiConfig);
+    jest.resetModules();
+  });
+
+  afterAll(() => {
+    delete process.env.PULUMI_TEST_MODE;
+    delete process.env.PULUMI_NODEJS_STACK;
+    delete process.env.PULUMI_NODEJS_PROJECT;
+    delete process.env.PULUMI_CONFIG;
+    delete process.env.AWS_REGION;
+  });
+
+  const loadStackModule = () => {
+    let moduleExports: Record<string, unknown> | undefined;
+    jest.isolateModules(() => {
+      moduleExports = require('../lib/index');
     });
+    return moduleExports;
+  };
+
+  it('should load module without errors', () => {
+    expect(() => loadStackModule()).not.toThrow();
+  });
+
+  it('should expose deploymentRegion output derived from AWS_REGION', () => {
+    const moduleExports = loadStackModule() || {};
+    expect(moduleExports).toHaveProperty('deploymentRegion', process.env.AWS_REGION);
+  });
+
+  it('should throw when AWS_REGION is not defined', () => {
+    const originalRegion = process.env.AWS_REGION;
+    delete process.env.AWS_REGION;
+    process.env.PULUMI_CONFIG = JSON.stringify(basePulumiConfig);
 
     expect(() => {
-      // This will execute the module and create resources (in test mode)
       jest.isolateModules(() => {
         require('../lib/index');
       });
-    }).not.toThrow();
+    }).toThrow('AWS_REGION environment variable must be set to select the deployment region.');
+
+    if (originalRegion) {
+      process.env.AWS_REGION = originalRegion;
+    } else {
+      delete process.env.AWS_REGION;
+    }
   });
 
   it('should validate environment configuration logic', () => {
@@ -251,6 +290,7 @@ describe('Pulumi Infrastructure Runtime Tests', () => {
       const tags = {
         Environment: environment,
         ManagedBy: 'Pulumi',
+        Region: 'us-west-2',
       };
       expect(tags.Environment).toBe('dev');
     });
@@ -259,8 +299,18 @@ describe('Pulumi Infrastructure Runtime Tests', () => {
       const tags = {
         Environment: 'dev',
         ManagedBy: 'Pulumi',
+        Region: 'us-west-2',
       };
       expect(tags.ManagedBy).toBe('Pulumi');
+    });
+
+    it('should include Region tag definition in stack source', () => {
+      const fs = require('fs');
+      const path = require('path');
+      const indexPath = path.join(__dirname, '../lib/index.ts');
+      const content = fs.readFileSync(indexPath, 'utf-8');
+
+      expect(content).toContain('Region: args.awsRegion');
     });
   });
 
@@ -340,13 +390,15 @@ describe('Pulumi Infrastructure Runtime Tests', () => {
         'lambdaFunctionArn',
         'dynamoTableName',
         'deployedEnvironment',
+        'deploymentRegion',
       ];
 
       expect(outputs).toContain('s3BucketName');
       expect(outputs).toContain('lambdaFunctionArn');
       expect(outputs).toContain('dynamoTableName');
       expect(outputs).toContain('deployedEnvironment');
-      expect(outputs).toHaveLength(4);
+      expect(outputs).toContain('deploymentRegion');
+      expect(outputs).toHaveLength(5);
     });
   });
 });
