@@ -555,7 +555,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/vpc/${EnvironmentSuffix}${ResourceSuffix}'
+      LogGroupName: !Sub '/aws/vpc/flowlogs-${EnvironmentSuffix}${ResourceSuffix}'
       RetentionInDays: 90
 
   VPCFlowLog:

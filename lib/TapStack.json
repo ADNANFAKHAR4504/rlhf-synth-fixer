@@ -1034,7 +1034,7 @@
             "UpdateReplacePolicy": "Delete",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/vpc/${EnvironmentSuffix}${ResourceSuffix}"
+                    "Fn::Sub": "/aws/vpc/flowlogs-${EnvironmentSuffix}${ResourceSuffix}"
                 },
                 "RetentionInDays": 90
             }
