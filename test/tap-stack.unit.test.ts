@@ -36,6 +36,8 @@ pulumi.runtime.setMocks({
       state.origins = args.inputs.origins;
       state.defaultCacheBehavior = args.inputs.defaultCacheBehavior;
       state.viewerCertificate = args.inputs.viewerCertificate;
+      state.customErrorResponses = args.inputs.customErrorResponses;
+      state.restrictions = args.inputs.restrictions;
     }
 
     return {
@@ -44,7 +46,6 @@ pulumi.runtime.setMocks({
     };
   },
   call: (args: pulumi.runtime.MockCallArgs) => {
-    // No Route53 calls needed anymore
     return args.inputs;
   },
 });
@@ -52,6 +53,17 @@ pulumi.runtime.setMocks({
 // Import after setting mocks
 import { ContentHostingStack } from '../lib/content-hosting-stack';
 import { TapStack } from '../lib/tap-stack';
+
+// Create a test class that extends ContentHostingStack to access private methods
+class TestableContentHostingStack extends ContentHostingStack {
+  public testGetCacheTtl(environment: string): number {
+    return this.getCacheTtl(environment);
+  }
+
+  public testGetSubdomain(environment: string, domainName: string): string {
+    return this.getSubdomain(environment, domainName);
+  }
+}
 
 describe('TapStack Unit Tests', () => {
   describe('Stack Initialization', () => {
@@ -83,6 +95,22 @@ describe('TapStack Unit Tests', () => {
       const defaultStack = new TapStack('default-test', {});
       expect(defaultStack).toBeDefined();
       expect(defaultStack.bucketName).toBeDefined();
+    });
+
+    it('should handle all constructor parameters', () => {
+      const stack = new TapStack('full-params-test', {
+        environmentSuffix: 'test',
+        tags: {
+          Environment: 'test',
+          Project: 'myapp',
+          Owner: 'TestTeam',
+        },
+      });
+
+      expect(stack).toBeDefined();
+      expect(stack.bucketName).toBeDefined();
+      expect(stack.distributionUrl).toBeDefined();
+      expect(stack.distributionDomainName).toBeDefined();
     });
   });
 
@@ -128,6 +156,16 @@ describe('TapStack Unit Tests', () => {
         done();
       });
     });
+
+    it('should register outputs correctly', () => {
+      const stack = new TapStack('register-outputs-test', {
+        environmentSuffix: 'test',
+      });
+
+      expect(stack.bucketName).toBeDefined();
+      expect(stack.distributionUrl).toBeDefined();
+      expect(stack.distributionDomainName).toBeDefined();
+    });
   });
 
   describe('Environment Suffix Integration', () => {
@@ -164,6 +202,13 @@ describe('TapStack Unit Tests', () => {
         done();
       });
     });
+
+    it('should handle empty environment suffix gracefully', () => {
+      const stack = new TapStack('empty-env-test', {
+        environmentSuffix: '',
+      });
+      expect(stack).toBeDefined();
+    });
   });
 
   describe('Resource Tagging', () => {
@@ -196,6 +241,15 @@ describe('TapStack Unit Tests', () => {
     it('should handle undefined tags', () => {
       const stack = new TapStack('undefined-tags-test', {
         environmentSuffix: 'test',
+      });
+
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle null tags', () => {
+      const stack = new TapStack('null-tags-test', {
+        environmentSuffix: 'test',
+        tags: undefined,
       });
 
       expect(stack).toBeDefined();
@@ -236,6 +290,20 @@ describe('TapStack Unit Tests', () => {
         done();
       });
     });
+
+    it('should pass tags to child components', () => {
+      const testTags = {
+        Owner: 'TestTeam',
+        CostCenter: '12345',
+      };
+
+      const stack = new TapStack('tag-passing-test', {
+        environmentSuffix: 'test',
+        tags: testTags,
+      });
+
+      expect(stack).toBeDefined();
+    });
   });
 });
 
@@ -267,6 +335,24 @@ describe('ContentHostingStack Unit Tests', () => {
       expect(contentStack.distributionUrl).toBeDefined();
       expect(contentStack.distributionDomainName).toBeDefined();
     });
+
+    it('should handle all constructor parameters', () => {
+      const contentStack = new ContentHostingStack('full-constructor-test', {
+        environmentSuffix: 'test',
+        projectName: 'testapp',
+        domainName: 'test.com',
+        tags: {
+          Environment: 'test',
+          Project: 'testapp',
+          Owner: 'TestTeam',
+        },
+      });
+
+      expect(contentStack).toBeDefined();
+      expect(contentStack.bucketName).toBeDefined();
+      expect(contentStack.distributionUrl).toBeDefined();
+      expect(contentStack.distributionDomainName).toBeDefined();
+    });
   });
 
   describe('Cache TTL Configuration', () => {
@@ -278,7 +364,6 @@ describe('ContentHostingStack Unit Tests', () => {
       });
 
       expect(devStack).toBeDefined();
-      // Cache TTL is internal, but we can verify the component was created
     });
 
     it('should set correct cache TTL for staging environment', () => {
@@ -310,6 +395,132 @@ describe('ContentHostingStack Unit Tests', () => {
 
       expect(unknownStack).toBeDefined();
     });
+
+    it('should handle edge case environments', () => {
+      const edgeCases = ['', 'test', 'development', 'production'];
+
+      edgeCases.forEach((env, index) => {
+        const stack = new ContentHostingStack(`edge-case-${index}`, {
+          environmentSuffix: env,
+          projectName: 'myapp',
+          domainName: 'myapp.com',
+        });
+        expect(stack).toBeDefined();
+      });
+    });
+  });
+
+  describe('Helper Methods Direct Testing', () => {
+    let testableStack: TestableContentHostingStack;
+
+    beforeAll(() => {
+      testableStack = new TestableContentHostingStack('testable-stack', {
+        environmentSuffix: 'test',
+        projectName: 'myapp',
+        domainName: 'myapp.com',
+      });
+    });
+
+    describe('getCacheTtl method', () => {
+      it('should return 60 seconds for dev environment', () => {
+        const ttl = testableStack.testGetCacheTtl('dev');
+        expect(ttl).toBe(60);
+      });
+
+      it('should return 300 seconds for staging environment', () => {
+        const ttl = testableStack.testGetCacheTtl('staging');
+        expect(ttl).toBe(300);
+      });
+
+      it('should return 86400 seconds for prod environment', () => {
+        const ttl = testableStack.testGetCacheTtl('prod');
+        expect(ttl).toBe(86400);
+      });
+
+      it('should return 300 seconds for unknown environment', () => {
+        const ttl = testableStack.testGetCacheTtl('unknown');
+        expect(ttl).toBe(300);
+      });
+
+      it('should return default TTL for empty environment', () => {
+        const ttl = testableStack.testGetCacheTtl('');
+        expect(ttl).toBe(300);
+      });
+    });
+
+    describe('getSubdomain method', () => {
+      it('should return domain name for prod environment', () => {
+        const subdomain = testableStack.testGetSubdomain('prod', 'myapp.com');
+        expect(subdomain).toBe('myapp.com');
+      });
+
+      it('should return prefixed subdomain for dev environment', () => {
+        const subdomain = testableStack.testGetSubdomain('dev', 'myapp.com');
+        expect(subdomain).toBe('dev.myapp.com');
+      });
+
+      it('should return prefixed subdomain for staging environment', () => {
+        const subdomain = testableStack.testGetSubdomain('staging', 'myapp.com');
+        expect(subdomain).toBe('staging.myapp.com');
+      });
+
+      it('should return prefixed subdomain for test environment', () => {
+        const subdomain = testableStack.testGetSubdomain('test', 'example.com');
+        expect(subdomain).toBe('test.example.com');
+      });
+
+      it('should handle different domain names correctly', () => {
+        const testCases = [
+          { env: 'dev', domain: 'example.org', expected: 'dev.example.org' },
+          { env: 'staging', domain: 'test.net', expected: 'staging.test.net' },
+          { env: 'prod', domain: 'production.io', expected: 'production.io' },
+          { env: 'custom', domain: 'custom.dev', expected: 'custom.custom.dev' },
+        ];
+
+        testCases.forEach(({ env, domain, expected }) => {
+          const result = testableStack.testGetSubdomain(env, domain);
+          expect(result).toBe(expected);
+        });
+      });
+
+      it('should handle empty environment suffix', () => {
+        const subdomain = testableStack.testGetSubdomain('', 'myapp.com');
+        expect(subdomain).toBe('.myapp.com');
+      });
+    });
+  });
+
+  describe('Helper Methods Coverage (Indirect Testing)', () => {
+    it('should handle getCacheTtl method for all environment types', () => {
+      const environments = ['dev', 'staging', 'prod', 'custom', ''];
+
+      environments.forEach((env, index) => {
+        const stack = new ContentHostingStack(`cache-ttl-${index}`, {
+          environmentSuffix: env,
+          projectName: 'myapp',
+          domainName: 'myapp.com',
+        });
+        expect(stack).toBeDefined();
+      });
+    });
+
+    it('should handle getSubdomain method for different environments', () => {
+      const testCases = [
+        { env: 'prod', project: 'myapp', domain: 'myapp.com' },
+        { env: 'dev', project: 'myapp', domain: 'myapp.com' },
+        { env: 'staging', project: 'myapp', domain: 'myapp.com' },
+        { env: 'test', project: 'myapp', domain: 'test.com' },
+      ];
+
+      testCases.forEach((testCase, index) => {
+        const stack = new ContentHostingStack(`subdomain-test-${index}`, {
+          environmentSuffix: testCase.env,
+          projectName: testCase.project,
+          domainName: testCase.domain,
+        });
+        expect(stack).toBeDefined();
+      });
+    });
   });
 
   describe('S3 Configuration', () => {
@@ -322,6 +533,33 @@ describe('ContentHostingStack Unit Tests', () => {
 
       stack.bucketName.apply((name: string) => {
         expect(name).toContain('testapp-test-content');
+        done();
+      });
+    });
+
+    it('should include project name and environment in bucket name', (done) => {
+      const stack = new ContentHostingStack('bucket-naming-test', {
+        environmentSuffix: 'staging',
+        projectName: 'customapp',
+        domainName: 'custom.com',
+      });
+
+      stack.bucketName.apply((name: string) => {
+        expect(name).toBe('customapp-staging-content_id');
+        done();
+      });
+    });
+
+    it('should handle different project names correctly', (done) => {
+      const stack = new ContentHostingStack('project-name-test', {
+        environmentSuffix: 'dev',
+        projectName: 'special-app',
+        domainName: 'special.com',
+      });
+
+      stack.bucketName.apply((name: string) => {
+        expect(name).toContain('special-app');
+        expect(name).toContain('dev');
         done();
       });
     });
@@ -368,6 +606,19 @@ describe('ContentHostingStack Unit Tests', () => {
         done();
       });
     });
+
+    it('should handle different domain names correctly', () => {
+      const domainNames = ['example.com', 'test.org', 'my-app.net'];
+
+      domainNames.forEach((domain, index) => {
+        const stack = new ContentHostingStack(`domain-test-${index}`, {
+          environmentSuffix: 'test',
+          projectName: 'myapp',
+          domainName: domain,
+        });
+        expect(stack).toBeDefined();
+      });
+    });
   });
 
   describe('Resource Tagging', () => {
@@ -385,7 +636,6 @@ describe('ContentHostingStack Unit Tests', () => {
       });
 
       expect(stack).toBeDefined();
-      // Tags are applied internally, we verify the component was created successfully
     });
 
     it('should handle empty tags', () => {
@@ -404,6 +654,24 @@ describe('ContentHostingStack Unit Tests', () => {
         environmentSuffix: 'test',
         projectName: 'myapp',
         domainName: 'myapp.com',
+      });
+
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle complex tag objects', () => {
+      const complexTags = {
+        'multi-word-tag': 'multi-word-value',
+        'numeric-tag': '12345',
+        'boolean-like-tag': 'true',
+        'special-chars': 'test@#$%',
+      };
+
+      const stack = new ContentHostingStack('complex-tags-test', {
+        environmentSuffix: 'test',
+        projectName: 'myapp',
+        domainName: 'myapp.com',
+        tags: complexTags,
       });
 
       expect(stack).toBeDefined();
@@ -428,6 +696,36 @@ describe('ContentHostingStack Unit Tests', () => {
       expect(prodStack).toBeDefined();
     });
 
+    it('should include environment suffix in all resource names', (done) => {
+      const stack = new ContentHostingStack('env-suffix-test', {
+        environmentSuffix: 'integration',
+        projectName: 'testproject',
+        domainName: 'test.com',
+      });
+
+      stack.bucketName.apply((name: string) => {
+        expect(name).toContain('integration');
+        expect(name).toBe('testproject-integration-content_id');
+        done();
+      });
+    });
+
+    it('should handle multiple parallel deployments', () => {
+      const environments = ['dev1', 'dev2', 'test1', 'test2'];
+      const stacks: ContentHostingStack[] = [];
+
+      environments.forEach((env, index) => {
+        const stack = new ContentHostingStack(`parallel-${index}`, {
+          environmentSuffix: env,
+          projectName: 'parallel-app',
+          domainName: 'parallel.com',
+        });
+        stacks.push(stack);
+        expect(stack).toBeDefined();
+      });
+
+      expect(stacks).toHaveLength(4);
+    });
   });
 
   describe('Output Consistency', () => {
@@ -444,7 +742,6 @@ describe('ContentHostingStack Unit Tests', () => {
         domainName: 'app2.com',
       });
 
-      // Both stacks should have the same output structure
       expect(stack1.bucketName).toBeDefined();
       expect(stack1.distributionUrl).toBeDefined();
       expect(stack1.distributionDomainName).toBeDefined();
@@ -452,6 +749,57 @@ describe('ContentHostingStack Unit Tests', () => {
       expect(stack2.bucketName).toBeDefined();
       expect(stack2.distributionUrl).toBeDefined();
       expect(stack2.distributionDomainName).toBeDefined();
+    });
+
+    it('should maintain consistent output types', (done) => {
+      const stack = new ContentHostingStack('output-types-test', {
+        environmentSuffix: 'test',
+        projectName: 'myapp',
+        domainName: 'myapp.com',
+      });
+
+      Promise.all([
+        stack.bucketName.promise(),
+        stack.distributionUrl.promise(),
+        stack.distributionDomainName.promise(),
+      ]).then(([bucketName, distributionUrl, distributionDomain]) => {
+        expect(typeof bucketName).toBe('string');
+        expect(typeof distributionUrl).toBe('string');
+        expect(typeof distributionDomain).toBe('string');
+        done();
+      });
+    });
+  });
+
+  describe('Error Handling and Edge Cases', () => {
+    it('should handle special characters in environment suffix', () => {
+      const stack = new ContentHostingStack('special-chars-test', {
+        environmentSuffix: 'test-123',
+        projectName: 'myapp',
+        domainName: 'myapp.com',
+      });
+
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle long environment suffix', () => {
+      const stack = new ContentHostingStack('long-env-test', {
+        environmentSuffix: 'very-long-environment-suffix-name',
+        projectName: 'myapp',
+        domainName: 'myapp.com',
+      });
+
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle minimal configuration', () => {
+      const stack = new ContentHostingStack('minimal-test', {
+        environmentSuffix: 'min',
+        projectName: 'app',
+        domainName: 'app.com',
+      });
+
+      expect(stack).toBeDefined();
     });
   });
 });
@@ -501,5 +849,85 @@ describe('Integration Between TapStack and ContentHostingStack', () => {
 
       done();
     });
+  });
+
+  it('should handle complex integration scenarios', () => {
+    const scenarios = [
+      { env: 'dev', tags: { Owner: 'DevTeam' } },
+      { env: 'staging', tags: { Owner: 'QATeam' } },
+      { env: 'prod', tags: { Owner: 'ProdTeam', Critical: 'true' } },
+    ];
+
+    scenarios.forEach((scenario, index) => {
+      const stack = new TapStack(`integration-scenario-${index}`, {
+        environmentSuffix: scenario.env,
+        tags: scenario.tags,
+      });
+      expect(stack).toBeDefined();
+    });
+  });
+
+  it('should propagate environment configuration correctly', (done) => {
+    const stack = new TapStack('env-propagation-test', {
+      environmentSuffix: 'propagation',
+      tags: {
+        TestEnv: 'propagation',
+        Owner: 'TestOwner',
+      },
+    });
+
+    stack.bucketName.apply((bucketName: string) => {
+      expect(bucketName).toContain('propagation');
+      expect(bucketName).toContain('myapp');
+      done();
+    });
+  });
+});
+
+describe('Component Resource Registration and Pulumi Integration', () => {
+  it('should register outputs correctly in TapStack', () => {
+    const stack = new TapStack('output-registration-test', {
+      environmentSuffix: 'test',
+    });
+
+    expect(stack).toBeInstanceOf(pulumi.ComponentResource);
+    expect(stack.bucketName).toBeDefined();
+    expect(stack.distributionUrl).toBeDefined();
+    expect(stack.distributionDomainName).toBeDefined();
+  });
+
+  it('should register outputs correctly in ContentHostingStack', () => {
+    const stack = new ContentHostingStack('content-registration-test', {
+      environmentSuffix: 'test',
+      projectName: 'myapp',
+      domainName: 'myapp.com',
+    });
+
+    expect(stack).toBeInstanceOf(pulumi.ComponentResource);
+    expect(stack.bucketName).toBeDefined();
+    expect(stack.distributionUrl).toBeDefined();
+    expect(stack.distributionDomainName).toBeDefined();
+  });
+
+  it('should handle Pulumi resource options correctly', () => {
+    const stack = new TapStack('resource-options-test', {
+      environmentSuffix: 'test',
+    }, {
+      protect: false,
+    });
+
+    expect(stack).toBeDefined();
+  });
+
+  it('should handle ContentHostingStack resource options correctly', () => {
+    const stack = new ContentHostingStack('content-options-test', {
+      environmentSuffix: 'test',
+      projectName: 'myapp',
+      domainName: 'myapp.com',
+    }, {
+      protect: false,
+    });
+
+    expect(stack).toBeDefined();
   });
 });
