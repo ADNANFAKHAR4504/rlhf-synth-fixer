@@ -5,7 +5,7 @@
 variable "aws_region" {
   description = "AWS region for resource deployment"
   type        = string
-  default     = "us-west-2"
+  default     = "us-west-1"
 }
 
 variable "environment" {
@@ -533,7 +533,7 @@ resource "aws_rds_cluster_parameter_group" "main" {
 resource "aws_rds_cluster" "main" {
   cluster_identifier              = "${local.name_prefix}-aurora-cluster"
   engine                         = "aurora-postgresql"
-  engine_version                 = "15.4"
+  engine_version                 = "15.6"
   database_name                  = var.db_name
   master_username                = var.db_username
   master_password                = var.db_password
