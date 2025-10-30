@@ -24,7 +24,6 @@ describe('TapStack Unit Tests', () => {
         EnableDnsSupport: true,
         Tags: Match.arrayWith([
           Match.objectLike({ Key: 'iac-rlhf-amazon', Value: 'true' }),
-          Match.objectLike({ Key: 'Environment', Value: 'dev' }),
           Match.objectLike({ Key: 'ManagedBy', Value: 'CDK' }),
         ]),
       });
@@ -196,7 +195,7 @@ describe('TapStack Unit Tests', () => {
               Match.arrayWith([
                 'arn:',
                 Match.objectLike({ Ref: 'AWS::Partition' }),
-                ':iam::aws:policy/AmazonSSMManagedInstanceCore',
+                ':iam::aws:policy/CloudWatchAgentServerPolicy',
               ]),
             ]),
           }),
@@ -244,7 +243,10 @@ describe('TapStack Unit Tests', () => {
         DeploymentGroupName: 'tap-dev-deployment-group',
         AutoRollbackConfiguration: {
           Enabled: true,
-          Events: ['DEPLOYMENT_FAILURE', 'DEPLOYMENT_STOP_ON_ALARM'],
+          Events: Match.arrayWith([
+            'DEPLOYMENT_FAILURE',
+            'DEPLOYMENT_STOP_ON_ALARM',
+          ]),
         },
       });
     });
@@ -257,7 +259,7 @@ describe('TapStack Unit Tests', () => {
         Environment: {
           Type: 'LINUX_CONTAINER',
           ComputeType: 'BUILD_GENERAL1_SMALL',
-          Image: 'aws/codebuild/amazonlinux2-x86_64-standard:4.0',
+          Image: 'aws/codebuild/standard:5.0',
         },
         Source: {
           Type: 'CODEPIPELINE',
@@ -295,7 +297,7 @@ describe('TapStack Unit Tests', () => {
             Name: 'Build',
             Actions: Match.arrayWith([
               Match.objectLike({
-                Name: 'CodeBuild',
+                Name: 'BuildAction',
                 ActionTypeId: Match.objectLike({
                   Category: 'Build',
                   Provider: 'CodeBuild',

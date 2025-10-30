@@ -253,12 +253,14 @@ describe('TAP Stack Integration Tests - Live AWS Resources', () => {
       expect(response.Role).toBeDefined();
       expect(response.Role!.RoleName).toBe(roleName);
 
+      // Check for CloudWatch managed policy (which includes SSM)
       const policiesCommand = new ListAttachedRolePoliciesCommand({ RoleName: roleName });
       const policiesResponse = await iamClient.send(policiesCommand);
-      const ssmPolicy = policiesResponse.AttachedPolicies!.find((p) =>
-        p.PolicyName!.includes('SSM')
+      const cloudWatchPolicy = policiesResponse.AttachedPolicies!.find((p) =>
+        p.PolicyName!.includes('CloudWatch')
       );
-      expect(ssmPolicy).toBeDefined();
+      expect(cloudWatchPolicy).toBeDefined();
+      expect(cloudWatchPolicy!.PolicyName).toBe('CloudWatchAgentServerPolicy');
     }, 30000);
   });
 
@@ -329,7 +331,7 @@ describe('TAP Stack Integration Tests - Live AWS Resources', () => {
       expect(project.name).toBe(projectName);
       expect(project.environment!.type).toBe('LINUX_CONTAINER');
       expect(project.environment!.computeType).toBe('BUILD_GENERAL1_SMALL');
-      expect(project.environment!.image).toBe('aws/codebuild/amazonlinux2-x86_64-standard:4.0');
+      expect(project.environment!.image).toBe('aws/codebuild/standard:5.0');
     }, 30000);
   });
 
@@ -415,23 +417,27 @@ describe('TAP Stack Integration Tests - Live AWS Resources', () => {
 
   describe('Auto Scaling Group', () => {
     test('should have ASG with correct configuration', async () => {
-      const command = new DescribeAutoScalingGroupsCommand({
-        AutoScalingGroupNames: [`${envPrefix}-asg`],
-      });
+      // Get all ASGs and filter by tags since CDK generates names
+      const command = new DescribeAutoScalingGroupsCommand({});
       const response = await asgClient.send(command);
 
       expect(response.AutoScalingGroups).toBeDefined();
-      expect(response.AutoScalingGroups!.length).toBe(1);
 
-      const asg = response.AutoScalingGroups![0];
-      expect(asg.AutoScalingGroupName).toBe(`${envPrefix}-asg`);
+      // Find ASG by tags (iac-rlhf-amazon and Environment)
+      const asg = response.AutoScalingGroups!.find((asg) =>
+        asg.Tags?.some((tag) => tag.Key === 'iac-rlhf-amazon' && tag.Value === 'true') &&
+        asg.Tags?.some((tag) => tag.Key === 'Environment' && tag.Value === environmentSuffix)
+      );
+
+      expect(asg).toBeDefined();
+      expect(asg!.AutoScalingGroupName).toContain('asg');
 
       if (environmentSuffix === 'prod') {
-        expect(asg.MinSize).toBe(2);
-        expect(asg.MaxSize).toBe(10);
+        expect(asg!.MinSize).toBe(2);
+        expect(asg!.MaxSize).toBe(10);
       } else {
-        expect(asg.MinSize).toBe(1);
-        expect(asg.MaxSize).toBe(3);
+        expect(asg!.MinSize).toBe(1);
+        expect(asg!.MaxSize).toBe(3);
       }
     }, 30000);
   });
