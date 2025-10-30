@@ -209,7 +209,7 @@ exports.handler = async (event) => {
       `lambda-logs-${args.environment}-${args.environmentSuffix}`,
       {
         name: this.lambdaFunction.name.apply(
-          (functionName) => `/aws/lambda/${functionName}`
+          functionName => `/aws/lambda/${functionName}`
         ),
         retentionInDays: args.logRetentionDays,
         tags: defaultTags,

@@ -23,8 +23,7 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
     global: {
-      // Note: Branch coverage not enforced for Pulumi IaC as it's declarative
-      // and Jest cannot detect branches in module-level resource definitions
+      branches: 90, 
       functions: 90,
       lines: 90,
       statements: 90,
