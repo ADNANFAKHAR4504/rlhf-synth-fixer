@@ -1,6 +1,6 @@
-import fs from 'fs';
-import axios from 'axios';
 import AWS from 'aws-sdk';
+import axios from 'axios';
+import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 
 const outputs = JSON.parse(
@@ -12,6 +12,7 @@ const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
 
 AWS.config.update({ region: AWS_REGION });
 const dynamodb = new AWS.DynamoDB.DocumentClient();
+const dynamodbRaw = new AWS.DynamoDB();
 const s3 = new AWS.S3();
 const stepfunctions = new AWS.StepFunctions();
 const sns = new AWS.SNS();
@@ -75,6 +76,7 @@ describe('Serverless Payment Workflow Integration Tests', () => {
       }).promise();
 
       expect(transactionRecord.Item).toBeDefined();
+      if (!transactionRecord.Item) throw new Error('Transaction record not found');
       expect(transactionRecord.Item.merchant_id).toBe(merchantId);
       expect(transactionRecord.Item.amount).toBe(amount);
       expect(transactionRecord.Item.status).toBe('COMPLETED');
@@ -91,8 +93,8 @@ describe('Serverless Payment Workflow Integration Tests', () => {
         }
       }).promise();
 
-      expect(merchantQuery.Items.length).toBeGreaterThan(0);
-      expect(merchantQuery.Items[0].transaction_id).toBe(transactionId);
+      expect(merchantQuery.Items && merchantQuery.Items.length > 0).toBe(true);
+      expect(merchantQuery.Items && merchantQuery.Items[0].transaction_id).toBe(transactionId);
 
       const auditQuery = await dynamodb.scan({
         TableName: AUDIT_LOGS_TABLE,
@@ -102,8 +104,8 @@ describe('Serverless Payment Workflow Integration Tests', () => {
         }
       }).promise();
 
-      expect(auditQuery.Items.length).toBeGreaterThan(0);
-      auditQuery.Items.forEach(item => {
+      expect((auditQuery.Items ?? []).length).toBeGreaterThan(0);
+      (auditQuery.Items ?? []).forEach(item => {
         expect(item).toHaveProperty('ttl');
         expect(item.ttl).toBeGreaterThan(Math.floor(Date.now() / 1000));
       });
@@ -114,7 +116,7 @@ describe('Serverless Payment Workflow Integration Tests', () => {
         EndTime: new Date()
       }).promise();
 
-      expect(traces.TraceSummaries.length).toBeGreaterThan(0);
+      expect((traces.TraceSummaries ?? []).length).toBeGreaterThan(0);
     }, 70000);
   });
 
@@ -123,7 +125,7 @@ describe('Serverless Payment Workflow Integration Tests', () => {
       const transactionId = `fraud-${uuidv4()}`;
       const requestPayload = {
         transaction_id: transactionId,
-        merchant_id: 'M999', 
+        merchant_id: 'M999',
         customer_id: 'C999',
         amount: 50000,
         payment_method: 'credit_card',
@@ -152,6 +154,8 @@ describe('Serverless Payment Workflow Integration Tests', () => {
         Key: { transaction_id: transactionId }
       }).promise();
 
+      expect(transactionRecord.Item).toBeDefined();
+      if (!transactionRecord.Item) throw new Error('Transaction record not found');
       expect(transactionRecord.Item.status).toBe('REJECTED');
       expect(transactionRecord.Item.fraud_result.is_fraudulent).toBe(true);
       expect(transactionRecord.Item.fraud_result.risk_score).toBeGreaterThan(0.7);
@@ -167,7 +171,10 @@ describe('Serverless Payment Workflow Integration Tests', () => {
         }
       }).promise();
 
-      expect(auditQuery.Items.length).toBeGreaterThan(0);
+      expect((auditQuery.Items ?? []).length).toBeGreaterThan(0);
+      if (!auditQuery.Items || auditQuery.Items.length === 0) {
+        throw new Error('Audit log items not found');
+      }
       const details = JSON.parse(auditQuery.Items[0].details);
       expect(details.reason).toBe('FRAUD_DETECTED');
     }, 30000);
@@ -200,12 +207,12 @@ describe('Serverless Payment Workflow Integration Tests', () => {
       }
 
       const responses = await Promise.all(promises);
-      
+
       const successful = responses.filter(r => r.status === 202);
       const throttled = responses.filter(r => r.status === 429);
 
       expect(successful.length).toBeGreaterThan(0);
-      
+
       if (throttled.length > 0) {
         expect(throttled.length).toBeGreaterThan(0);
         expect(throttled[0].status).toBe(429);
@@ -252,19 +259,21 @@ describe('Serverless Payment Workflow Integration Tests', () => {
       const execution = await stepfunctions.describeExecution({
         executionArn
       }).promise();
-      
+
       const history = await stepfunctions.getExecutionHistory({
         executionArn,
         maxResults: 1000
       }).promise();
 
-      const taskScheduledEvents = history.events.filter(e => 
+      const taskScheduledEvents = history.events.filter(e =>
         e.type === 'TaskScheduled' || e.type === 'TaskRetryScheduled'
       );
-      
+
       expect(taskScheduledEvents.length).toBeGreaterThan(3);
 
-      const executionTime = new Date(execution.stopDate).getTime() - new Date(execution.startDate).getTime();
+      const stopDate = execution.stopDate ? new Date(execution.stopDate).getTime() : 0;
+      const startDate = execution.startDate ? new Date(execution.startDate).getTime() : 0;
+      const executionTime = stopDate - startDate;
       expect(executionTime).toBeLessThan(60000);
     }, 35000);
   });
@@ -296,17 +305,26 @@ describe('Serverless Payment Workflow Integration Tests', () => {
         Prefix: `transactions/${transactionId}/`
       }).promise();
 
-      expect(objects.Contents.length).toBeGreaterThan(0);
+      expect((objects.Contents ?? []).length).toBeGreaterThan(0);
 
+      if (!objects.Contents || objects.Contents.length === 0) {
+        throw new Error('No archive objects found in S3 bucket');
+      }
       const archiveKey = objects.Contents[0].Key;
+      if (!ARCHIVE_BUCKET || !archiveKey) {
+        throw new Error('Archive bucket or key is undefined');
+      }
       const archiveObject = await s3.getObject({
-        Bucket: ARCHIVE_BUCKET,
-        Key: archiveKey
+        Bucket: ARCHIVE_BUCKET as string,
+        Key: archiveKey as string
       }).promise();
 
       expect(archiveObject.ServerSideEncryption).toBe('AES256');
       expect(archiveObject.ContentType).toBe('application/json');
 
+      if (!archiveObject.Body) {
+        throw new Error('Archive object Body is undefined');
+      }
       const archiveData = JSON.parse(archiveObject.Body.toString());
       expect(archiveData.transaction_id).toBe(transactionId);
       expect(archiveData).toHaveProperty('validation_result');
@@ -322,13 +340,13 @@ describe('Serverless Payment Workflow Integration Tests', () => {
       const lifecycleConfig = await s3.getBucketLifecycleConfiguration({
         Bucket: ARCHIVE_BUCKET
       }).promise();
-      expect(lifecycleConfig.Rules.length).toBeGreaterThan(0);
-      
-      const glacierRule = lifecycleConfig.Rules.find(rule => 
+      expect(lifecycleConfig.Rules && lifecycleConfig.Rules.length > 0).toBe(true);
+
+      const glacierRule = lifecycleConfig.Rules?.find(rule =>
         rule.Transitions && rule.Transitions.some(t => t.StorageClass === 'GLACIER')
       );
       expect(glacierRule).toBeDefined();
-      expect(glacierRule.Transitions[0].Days).toBe(30);
+      expect(glacierRule?.Transitions?.[0]?.Days).toBe(30);
     }, 40000);
   });
 
@@ -359,7 +377,7 @@ describe('Serverless Payment Workflow Integration Tests', () => {
       }
 
       const responses = await Promise.all(promises);
-      
+
       const accepted = responses.filter(r => r.status === 202);
       expect(accepted.length).toBeGreaterThan(0);
 
@@ -392,12 +410,12 @@ describe('Serverless Payment Workflow Integration Tests', () => {
     test('Merchant Transaction Lookup via GSI', async () => {
       const merchantId = `M-${Date.now()}`;
       const transactionCount = 5;
-      const transactionIds = [];
+      const transactionIds: string[] = [];
 
       for (let i = 0; i < transactionCount; i++) {
         const transactionId = `gsi-${i}-${uuidv4()}`;
         transactionIds.push(transactionId);
-        
+
         const requestPayload = {
           transaction_id: transactionId,
           merchant_id: merchantId,
@@ -412,7 +430,7 @@ describe('Serverless Payment Workflow Integration Tests', () => {
             'Content-Type': 'application/json'
           }
         });
-        
+
         await sleep(2000);
       }
 
@@ -429,16 +447,16 @@ describe('Serverless Payment Workflow Integration Tests', () => {
       }).promise();
       const queryTime = Date.now() - startTime;
 
-      expect(results.Items.length).toBe(transactionCount);
+      expect((results.Items ?? []).length).toBe(transactionCount);
       expect(queryTime).toBeLessThan(1000);
       expect(results.ScannedCount).toBe(results.Count);
-      
-      results.Items.forEach(item => {
+
+      (results.Items ?? []).forEach(item => {
         expect(item.merchant_id).toBe(merchantId);
         expect(transactionIds).toContain(item.transaction_id);
       });
 
-      if (results.Items.length > 1) {
+      if ((results.Items ?? []).length > 1) {
         const paginatedResults = await dynamodb.query({
           TableName: TRANSACTIONS_TABLE,
           IndexName: 'MerchantIndex',
@@ -448,8 +466,8 @@ describe('Serverless Payment Workflow Integration Tests', () => {
           },
           Limit: 2
         }).promise();
-        
-        expect(paginatedResults.Items.length).toBe(2);
+
+        expect((paginatedResults.Items ?? []).length).toBe(2);
         expect(paginatedResults).toHaveProperty('LastEvaluatedKey');
       }
     }, 90000);
@@ -480,11 +498,11 @@ describe('Serverless Payment Workflow Integration Tests', () => {
         TableName: TRANSACTIONS_TABLE,
         Key: { transaction_id: transactionId }
       }).promise();
-      
+
       expect(transactionCheck.Item).toBeUndefined();
 
       await sleep(5000);
-      
+
       const metrics = await cloudwatch.getMetricStatistics({
         Namespace: 'AWS/ApiGateway',
         MetricName: '4XXError',
@@ -501,22 +519,29 @@ describe('Serverless Payment Workflow Integration Tests', () => {
   describe('9. SSM Parameter Integration', () => {
     test('Environment Variables from Lambda Functions', async () => {
       const lambda = new AWS.Lambda();
-      
+
       const validatorFunction = await lambda.getFunction({
         FunctionName: `TapStack${environmentSuffix}-validator-prod`
       }).promise();
 
+      if (!validatorFunction.Configuration || !validatorFunction.Configuration.Environment) {
+        throw new Error('Lambda function configuration or environment variables are undefined');
+      }
       const envVars = validatorFunction.Configuration.Environment.Variables;
+      expect(envVars).toBeDefined();
       expect(envVars).toHaveProperty('TRANSACTIONS_TABLE');
       expect(envVars).toHaveProperty('AUDIT_LOGS_TABLE');
       expect(envVars).toHaveProperty('ENVIRONMENT');
       expect(envVars).toHaveProperty('TTL_DAYS');
-      expect(envVars.TTL_DAYS).toBe('90');
+      expect(envVars?.TTL_DAYS).toBe('90');
 
       const fraudFunction = await lambda.getFunction({
         FunctionName: `TapStack${environmentSuffix}-fraud-detector-prod`
       }).promise();
 
+      if (!fraudFunction.Configuration || !fraudFunction.Configuration.Environment) {
+        throw new Error('Fraud function configuration or environment variables are undefined');
+      }
       expect(fraudFunction.Configuration.Environment.Variables).toHaveProperty('TRANSACTIONS_TABLE');
 
       const transactionId = `param-${uuidv4()}`;
@@ -547,8 +572,8 @@ describe('Serverless Payment Workflow Integration Tests', () => {
         }
       }).promise();
 
-      expect(auditQuery.Items.length).toBeGreaterThan(0);
-      auditQuery.Items.forEach(item => {
+      expect((auditQuery.Items ?? []).length).toBeGreaterThan(0);
+      (auditQuery.Items ?? []).forEach(item => {
         expect(item.ttl).toBeGreaterThan(Math.floor(Date.now() / 1000) + (89 * 24 * 60 * 60));
       });
     }, 30000);
@@ -566,7 +591,7 @@ describe('Serverless Payment Workflow Integration Tests', () => {
       };
 
       const startTime = new Date();
-      
+
       const response = await axios.post(API_ENDPOINT, requestPayload, {
         headers: {
           'x-api-key': API_KEY,
@@ -584,26 +609,43 @@ describe('Serverless Payment Workflow Integration Tests', () => {
         EndTime: new Date()
       }).promise();
 
-      expect(traces.TraceSummaries.length).toBeGreaterThan(0);
-      
+      expect((traces.TraceSummaries ?? []).length).toBeGreaterThan(0);
+
+      if (!traces.TraceSummaries || traces.TraceSummaries.length === 0) {
+        throw new Error('No trace summaries found');
+      }
       const traceId = traces.TraceSummaries[0].Id;
+      if (!traceId) {
+        throw new Error('Trace ID is undefined');
+      }
       const traceDetails = await xray.getTraceGraph({
-        TraceIds: [traceId]
+        TraceIds: [traceId as string]
       }).promise();
 
-      expect(traceDetails.Services.length).toBeGreaterThan(0);
-      
-      const serviceNames = traceDetails.Services.map(s => s.Name);
+      expect(traceDetails.Services && traceDetails.Services.length > 0).toBe(true);
+
+      const serviceNames = traceDetails.Services ? traceDetails.Services.map(s => s.Name) : [];
       expect(serviceNames).toContain(expect.stringContaining('lambda'));
       expect(serviceNames).toContain(expect.stringContaining('states'));
 
-      const segments = traceDetails.Services.flatMap(s => s.Edges || []);
+      const segments = (traceDetails.Services ?? []).flatMap(s => s.Edges || []);
       expect(segments.length).toBeGreaterThan(0);
 
       const latencyStats = traces.TraceSummaries.map(t => t.ResponseTime);
-      const p99 = latencyStats.sort((a, b) => b - a)[Math.floor(latencyStats.length * 0.01)];
-      const p50 = latencyStats.sort((a, b) => a - b)[Math.floor(latencyStats.length * 0.5)];
-      
+      const p99 = latencyStats.sort((a, b) => {
+        if (typeof a === 'undefined' && typeof b === 'undefined') return 0;
+        if (typeof a === 'undefined') return 1;
+        if (typeof b === 'undefined') return -1;
+        return b - a;
+      })[Math.floor(latencyStats.length * 0.01)];
+      const p50 = latencyStats
+        .sort((a, b) => {
+          if (typeof a === 'undefined' && typeof b === 'undefined') return 0;
+          if (typeof a === 'undefined') return 1;
+          if (typeof b === 'undefined') return -1;
+          return a - b;
+        })[Math.floor(latencyStats.length * 0.5)];
+
       expect(p50).toBeLessThan(30);
       expect(p99).toBeLessThan(60);
     }, 45000);
@@ -637,27 +679,30 @@ describe('Serverless Payment Workflow Integration Tests', () => {
       }).promise();
 
       expect(transactionRecord.Item).toBeDefined();
-
-      const tableDescription = await dynamodb.describeTable({
+      const tableDescription = await dynamodbRaw.describeTable({
         TableName: TRANSACTIONS_TABLE
       }).promise();
 
-      expect(tableDescription.Table.RestoreSummary || 
-             tableDescription.Table.PointInTimeRecoveryDescription.PointInTimeRecoveryStatus).toBe('ENABLED');
+      expect(
+        tableDescription.Table &&
+        tableDescription.Table.RestoreSummary
+      ).toBe('ENABLED');
 
-      const continuousBackups = await dynamodb.describeContinuousBackups({
+      const continuousBackups = await dynamodbRaw.describeContinuousBackups({
         TableName: TRANSACTIONS_TABLE
       }).promise();
 
-      expect(continuousBackups.ContinuousBackupsDescription.PointInTimeRecoveryDescription.PointInTimeRecoveryStatus).toBe('ENABLED');
-      expect(continuousBackups.ContinuousBackupsDescription.PointInTimeRecoveryDescription.EarliestRestorableDateTime).toBeDefined();
+      expect(continuousBackups.ContinuousBackupsDescription).toBeDefined();
+      expect(continuousBackups.ContinuousBackupsDescription?.PointInTimeRecoveryDescription).toBeDefined();
+      expect(continuousBackups.ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus).toBe('ENABLED');
+      expect(continuousBackups.ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.EarliestRestorableDateTime).toBeDefined();
 
       const objects = await s3.listObjectsV2({
         Bucket: ARCHIVE_BUCKET,
         Prefix: `transactions/${transactionId}/`
       }).promise();
 
-      expect(objects.Contents.length).toBeGreaterThan(0);
+      expect((objects.Contents ?? []).length).toBeGreaterThan(0);
 
       const auditQuery = await dynamodb.scan({
         TableName: AUDIT_LOGS_TABLE,
@@ -667,9 +712,9 @@ describe('Serverless Payment Workflow Integration Tests', () => {
         }
       }).promise();
 
-      expect(auditQuery.Items.length).toBeGreaterThan(0);
-      
-      const auditActions = auditQuery.Items.map(item => item.action);
+      expect((auditQuery.Items ?? []).length).toBeGreaterThan(0);
+
+      const auditActions = (auditQuery.Items ?? []).map(item => item.action);
       expect(auditActions).toContain('VALIDATION_ATTEMPT');
       expect(auditActions).toContain('FRAUD_DETECTION_ATTEMPT');
       expect(auditActions).toContain('SETTLEMENT_ATTEMPT');
