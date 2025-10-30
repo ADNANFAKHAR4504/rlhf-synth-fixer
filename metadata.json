@@ -6,7 +6,11 @@
   "team": "synth",
   "startedAt": "2025-10-30T11:31:28+00:00",
   "subtask": "Environment Migration",
-  "subject_labels": [],
+  "subject_labels": [
+    "iac",
+    "cfn",
+    "migration"
+  ],
   "po_id": "101000769",
   "aws_services": [
     "RDS",
