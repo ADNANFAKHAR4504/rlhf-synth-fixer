@@ -838,32 +838,6 @@ Use the provided deployment script for automated deployments:
 ./scripts/deploy.sh
 ```
 
-## Testing
-
-### Unit Tests
-
-Run unit tests to validate the infrastructure code:
-
-```bash
-npm run test:unit
-```
-
-### Integration Tests
-
-Run integration tests against deployed infrastructure:
-
-```bash
-npm run test:integration
-```
-
-The integration tests validate:
-- S3 bucket configuration (versioning, encryption, lifecycle)
-- S3 public access blocking
-- CloudWatch Event Rule configuration
-- Resource naming conventions
-- AWS region configuration
-- Output validation
-
 ## Stack Outputs
 
 After deployment, the following outputs are available:
