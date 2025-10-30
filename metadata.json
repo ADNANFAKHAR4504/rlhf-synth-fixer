@@ -17,10 +17,8 @@
   "aws_services": [
     "S3",
     "CloudFront",
-    "Route53",
-    "ACM",
     "IAM"
   ],
-  "region": "eu-west-1",
+  "region": "us-east-1",
   "training_quality": 9
 }
