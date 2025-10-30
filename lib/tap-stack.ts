@@ -7,7 +7,6 @@ import { Construct } from 'constructs';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { TlsProvider } from '@cdktf/provider-tls/lib/provider';
 
-
 // Import the constructs from modules
 import {
   NetworkingConstruct,
@@ -55,7 +54,6 @@ export class TapStack extends TerraformStack {
     });
 
     new TlsProvider(this, 'tls', {});
-
 
     // Configure S3 Backend with native state locking
     new S3Backend(this, {
