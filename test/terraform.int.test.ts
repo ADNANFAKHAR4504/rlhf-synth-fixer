@@ -13,7 +13,7 @@ import * as path from 'path';
 // Test configuration
 const TEST_TIMEOUT = 90000; // 90 seconds
 let deployedResources: any = {};
-let awsRegion: string = 'us-west-2';
+let awsRegion: string = process.env.AWS_REGION || 'us-west-2';  // ✅ From env variable
 
 // AWS SDK service clients
 let ec2: AWS.EC2;
@@ -359,6 +359,258 @@ describe('Terraform Integration Tests - Three-Tier VPC Architecture', () => {
       expect(tagMap['Project']).toBeDefined();
       expect(tagMap['ManagedBy']).toBe('Terraform');
       console.log('✓ VPC has proper compliance tags');
+    });
+  });
+  
+  describe('End-to-End Network Flow Tests', () => {
+    test('should verify complete three-tier network architecture connectivity', async () => {
+      // Validate complete architecture: Public → Private → Database tiers
+      console.log('✓ Starting E2E network architecture validation...');
+      
+      // 1. Verify all 3 tiers exist and are properly isolated
+      const allSubnetIds = [
+        ...deployedResources.public_subnet_ids,
+        ...deployedResources.private_subnet_ids,
+        ...deployedResources.database_subnet_ids
+      ];
+      
+      const response = await ec2.describeSubnets({
+        SubnetIds: allSubnetIds
+      }).promise();
+      
+      expect(response.Subnets!.length).toBe(9);
+      console.log('✓ All 9 subnets (3 tiers × 3 AZs) verified');
+    });
+
+    test('should verify public tier has internet access via IGW', async () => {
+      // Public subnets should have route to IGW for 0.0.0.0/0
+      const response = await ec2.describeRouteTables({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [deployedResources.vpc_id]
+          },
+          {
+            Name: 'association.subnet-id',
+            Values: deployedResources.public_subnet_ids
+          }
+        ]
+      }).promise();
+      
+      expect(response.RouteTables).toBeDefined();
+      expect(response.RouteTables!.length).toBe(1);
+      
+      const publicRt = response.RouteTables![0];
+      const igwRoute = publicRt.Routes?.find(r => 
+        r.GatewayId === deployedResources.internet_gateway_id && 
+        r.DestinationCidrBlock === '0.0.0.0/0'
+      );
+      
+      expect(igwRoute).toBeDefined();
+      console.log('✓ Public tier has direct internet access via IGW');
+    });
+
+    test('should verify private tier routes internet traffic through NAT', async () => {
+      // Private subnets should have routes to NAT gateways for 0.0.0.0/0
+      const response = await ec2.describeRouteTables({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [deployedResources.vpc_id]
+          }
+        ]
+      }).promise();
+      
+      const privateRts = response.RouteTables!.filter(rt => {
+        const subnet = rt.Associations?.find(a => 
+          deployedResources.private_subnet_ids.includes(a.SubnetId || '')
+        );
+        return !!subnet;
+      });
+      
+      expect(privateRts.length).toBe(3);
+      
+      privateRts.forEach((rt, index) => {
+        const natRoute = rt.Routes?.find(r => 
+          deployedResources.nat_gateway_ids.includes(r.NatGatewayId || '') && 
+          r.DestinationCidrBlock === '0.0.0.0/0'
+        );
+        expect(natRoute).toBeDefined();
+      });
+      
+      console.log('✓ Private tier routes internet traffic through NAT gateways');
+    });
+
+    test('should verify database tier is isolated (no internet routes)', async () => {
+      // Database subnets should have NO routes to IGW or NAT (only local)
+      const response = await ec2.describeRouteTables({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [deployedResources.vpc_id]
+          },
+          {
+            Name: 'association.subnet-id',
+            Values: deployedResources.database_subnet_ids
+          }
+        ]
+      }).promise();
+      
+      const dbRt = response.RouteTables![0];
+      const internetRoutes = dbRt.Routes?.filter(r => 
+        r.DestinationCidrBlock !== '10.0.0.0/16' &&  // ✅ FIXED - hardcoded VPC CIDR
+        r.GatewayId !== 'local'  // Exclude local routes
+      );
+      
+      // Should only have local route to VPC CIDR
+      expect(internetRoutes?.length).toBe(0);
+      console.log('✓ Database tier is properly isolated (no internet access)');
+    });
+
+
+    test('should verify NAT gateway placement in public subnets', async () => {
+      // Each NAT gateway must be in a public subnet
+      const response = await ec2.describeNatGateways({
+        NatGatewayIds: deployedResources.nat_gateway_ids
+      }).promise();
+      
+      response.NatGateways!.forEach((nat, index) => {
+        expect(deployedResources.public_subnet_ids).toContain(nat.SubnetId);
+        // NAT should have an Elastic IP
+        expect(nat.NatGatewayAddresses).toBeDefined();
+        expect(nat.NatGatewayAddresses!.length).toBeGreaterThan(0);
+      });
+      
+      console.log('✓ All NAT gateways are in public subnets with Elastic IPs');
+    });
+
+    test('should verify multi-AZ high availability setup', async () => {
+      // Resources should be distributed across 3 AZs for HA
+      const allSubnetIds = [
+        ...deployedResources.public_subnet_ids,
+        ...deployedResources.private_subnet_ids,
+        ...deployedResources.database_subnet_ids
+      ];
+      
+      const subnetResponse = await ec2.describeSubnets({
+        SubnetIds: allSubnetIds
+      }).promise();
+      
+      const azs = new Set(subnetResponse.Subnets!.map(s => s.AvailabilityZone));
+      expect(azs.size).toBe(3);
+      
+      const natResponse = await ec2.describeNatGateways({
+        NatGatewayIds: deployedResources.nat_gateway_ids
+      }).promise();
+      
+      const natAzs = new Set(natResponse.NatGateways!.map(nat => 
+        subnetResponse.Subnets?.find(s => s.SubnetId === nat.SubnetId)?.AvailabilityZone
+      ));
+      
+      expect(natAzs.size).toBe(3);
+      console.log('✓ High availability verified: Resources across 3 AZs');
+    });
+
+    test('should verify database subnet group connectivity for RDS', async () => {
+      // DB subnet group should be ready for RDS deployment
+      const response = await rds.describeDBSubnetGroups({
+        DBSubnetGroupName: deployedResources.db_subnet_group_name
+      }).promise();
+      
+      const dbSubnetGroup = response.DBSubnetGroups![0];
+      expect(dbSubnetGroup.VpcId).toBe(deployedResources.vpc_id);
+      expect(dbSubnetGroup.SubnetGroupStatus).toBe('Complete');
+      expect(dbSubnetGroup.Subnets!.length).toBe(3);
+      
+      // All subnets should be in database tier
+      dbSubnetGroup.Subnets!.forEach(subnet => {
+        expect(deployedResources.database_subnet_ids).toContain(subnet.SubnetIdentifier);
+      });
+      
+      console.log('✓ DB subnet group ready for RDS deployment');
+    });
+
+    test('should verify network ACL database tier isolation', async () => {
+      // Database subnets should have restrictive NACLs
+      const response = await ec2.describeNetworkAcls({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [deployedResources.vpc_id]
+          },
+          {
+            Name: 'association.subnet-id',
+            Values: deployedResources.database_subnet_ids
+          }
+        ]
+      }).promise();
+      
+      expect(response.NetworkAcls!.length).toBe(1);
+      const dbNacl = response.NetworkAcls![0];
+      
+      // Should have explicit deny for 0.0.0.0/0
+      const denyRules = dbNacl.Entries?.filter(e => e.RuleAction === 'deny' && !e.Egress);
+      expect(denyRules!.length).toBeGreaterThan(0);
+      
+      console.log('✓ Database tier network ACL has proper isolation');
+    });
+
+    test('should verify VPC CIDR consistency across all resources', async () => {
+      // All subnets should be within VPC CIDR (10.0.0.0/16)
+      const vpcResponse = await ec2.describeVpcs({
+        VpcIds: [deployedResources.vpc_id]
+      }).promise();
+      
+      const vpcCidr = vpcResponse.Vpcs![0].CidrBlock;
+      expect(vpcCidr).toBe('10.0.0.0/16');
+      
+      const allSubnetIds = [
+        ...deployedResources.public_subnet_ids,
+        ...deployedResources.private_subnet_ids,
+        ...deployedResources.database_subnet_ids
+      ];
+      
+      const subnetResponse = await ec2.describeSubnets({
+        SubnetIds: allSubnetIds
+      }).promise();
+      
+      subnetResponse.Subnets!.forEach(subnet => {
+        expect(subnet.CidrBlock).toMatch(/^10\.0\.\d+\.0\/24$/);
+      });
+      
+      console.log('✓ All resources within VPC CIDR (10.0.0.0/16)');
+    });
+
+    test('should verify complete three-tier architecture deployment', async () => {
+      // Final comprehensive E2E validation
+      console.log('\n=== THREE-TIER VPC ARCHITECTURE E2E VALIDATION ===\n');
+      
+      const vpcResponse = await ec2.describeVpcs({
+        VpcIds: [deployedResources.vpc_id]
+      }).promise();
+      
+      const vpc = vpcResponse.Vpcs![0];
+      
+      console.log(`✓ VPC: ${deployedResources.vpc_id}`);
+      console.log(`  CIDR: ${vpc.CidrBlock}`);
+      console.log(`  DNS Support: ${vpc.EnableDnsSupport}`);
+      console.log(`  DNS Hostnames: ${vpc.EnableDnsHostnames}`);
+      
+      console.log(`\n✓ Public Subnets (Web Tier): ${deployedResources.public_subnet_ids.length}`);
+      console.log(`✓ Private Subnets (App Tier): ${deployedResources.private_subnet_ids.length}`);
+      console.log(`✓ Database Subnets (Data Tier): ${deployedResources.database_subnet_ids.length}`);
+      
+      console.log(`\n✓ Internet Gateway: ${deployedResources.internet_gateway_id}`);
+      console.log(`✓ NAT Gateways: ${deployedResources.nat_gateway_ids.length}`);
+      console.log(`✓ DB Subnet Group: ${deployedResources.db_subnet_group_name}`);
+      
+      console.log('\n=== ARCHITECTURE VALIDATION COMPLETE ===\n');
+      
+      expect(vpc).toBeDefined();
+      expect(deployedResources.public_subnet_ids.length).toBe(3);
+      expect(deployedResources.private_subnet_ids.length).toBe(3);
+      expect(deployedResources.database_subnet_ids.length).toBe(3);
+      expect(deployedResources.nat_gateway_ids.length).toBe(3);
     });
   });
 });

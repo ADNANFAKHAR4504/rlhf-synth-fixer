@@ -13,7 +13,7 @@ terraform {
 }
 
 provider "aws" {
-  region = "us-west-2"
+  region = var.aws_region # ✅ Now uses variable
 
   default_tags {
     tags = {
@@ -42,4 +42,10 @@ variable "costCenter" {
   description = "Cost center for billing and cost allocation"
   type        = string
   default     = "finance-dept"
+}
+
+variable "aws_region" {
+  description = "AWS region for resources"
+  type        = string
+  default     = "us-west-2"
 }

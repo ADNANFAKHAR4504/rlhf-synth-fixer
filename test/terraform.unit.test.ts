@@ -99,9 +99,13 @@ describe('Terraform Three-Tier VPC - Unit Tests', () => {
       expect(content).toContain('ManagedBy');
     });
 
-    test('should configure us-west-2 region', () => {
+    test('should configure aws_region variable', () => {
       const content = readFileContent(providerTfPath);
-      expect(content).toMatch(/region\s*=\s*"us-west-2"/);
+      // Check that region uses variable (not hardcoded)
+      expect(content).toMatch(/region\s*=\s*var\.aws_region/);
+      // Check that aws_region variable has us-west-2 default
+      expect(content).toMatch(/variable\s+"aws_region"/);
+      expect(content).toMatch(/default\s*=\s*"us-west-2"/);
     });
 
     test('should have required variables defined', () => {
