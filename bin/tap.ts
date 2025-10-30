@@ -41,9 +41,29 @@ const stack = new TapStack('pulumi-infra', {
 });
 
 // Export stack outputs for integration testing
-export const kmsKeyArn = stack.kmsKeyArn;
-export const bucketArns = stack.bucketArns;
-export const tableArns = stack.tableArns;
-export const lambdaArns = stack.lambdaArns;
-export const apiEndpoint = stack.apiEndpoint;
-export const dashboardName = stack.dashboardName;
+export const KmsKeyArn = stack.kmsKeyArn;
+
+// Export specific S3 bucket names
+export const PaymentDocumentsBucketName = pulumi.interpolate`payment-documents-${environmentSuffix}`;
+export const PaymentReceiptsBucketName = pulumi.interpolate`payment-receipts-${environmentSuffix}`;
+export const LambdaCodeBucketName = pulumi.interpolate`lambda-code-${environmentSuffix}`;
+
+// Export specific DynamoDB table names
+export const TransactionsTableName = pulumi.interpolate`transactions-${environmentSuffix}`;
+export const CustomersTableName = pulumi.interpolate`customers-${environmentSuffix}`;
+
+// Export specific Lambda function names
+export const PaymentProcessorLambdaName = pulumi.interpolate`payment-processor-${environmentSuffix}`;
+export const PaymentValidatorLambdaName = pulumi.interpolate`payment-validator-${environmentSuffix}`;
+
+// Export Lambda function ARNs
+export const PaymentProcessorLambdaArn = stack.lambdaArns[0];
+export const PaymentValidatorLambdaArn = stack.lambdaArns[1];
+
+// Export DynamoDB table ARNs
+export const TransactionsTableArn = stack.tableArns[0];
+export const CustomersTableArn = stack.tableArns[1];
+
+// Export API Gateway endpoint and dashboard
+export const ApiEndpoint = stack.apiEndpoint;
+export const DashboardName = stack.dashboardName;
