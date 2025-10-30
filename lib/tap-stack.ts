@@ -308,12 +308,12 @@ export class TapStack extends cdk.Stack {
         protocol: elbv2.ApplicationProtocol.HTTP,
         targetType: elbv2.TargetType.IP,
         healthCheck: {
-          path: '/',
+          path: '/health',
           interval: Duration.seconds(30),
           timeout: Duration.seconds(5),
           healthyThresholdCount: 2,
           unhealthyThresholdCount: 3,
-          healthyHttpCodes: '200,301,302',
+          healthyHttpCodes: '200',
         },
         deregistrationDelay: Duration.seconds(30),
       }
@@ -328,12 +328,12 @@ export class TapStack extends cdk.Stack {
         protocol: elbv2.ApplicationProtocol.HTTP,
         targetType: elbv2.TargetType.IP,
         healthCheck: {
-          path: '/',
+          path: '/health',
           interval: Duration.seconds(30),
           timeout: Duration.seconds(5),
           healthyThresholdCount: 2,
           unhealthyThresholdCount: 3,
-          healthyHttpCodes: '200,301,302',
+          healthyHttpCodes: '200',
         },
         deregistrationDelay: Duration.seconds(30),
       }
@@ -434,6 +434,16 @@ export class TapStack extends cdk.Stack {
         DATABASE_CREDENTIALS:
           ecs.Secret.fromSecretsManager(dbCredentialsSecret),
       },
+      healthCheck: {
+        command: [
+          'CMD-SHELL',
+          'curl -fsS http://localhost:8080/health || exit 1',
+        ],
+        interval: Duration.seconds(30),
+        timeout: Duration.seconds(5),
+        retries: 3,
+        startPeriod: Duration.seconds(60),
+      },
     });
 
     container.addPortMappings({
@@ -451,6 +461,7 @@ export class TapStack extends cdk.Stack {
       maxHealthyPercent: 200,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       assignPublicIp: false,
+      healthCheckGracePeriod: Duration.seconds(60),
       circuitBreaker: { rollback: true },
       enableExecuteCommand: true,
     });

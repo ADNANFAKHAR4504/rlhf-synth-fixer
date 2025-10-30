@@ -311,13 +311,13 @@ describe('TapStack', () => {
         Port: 8080,
         Protocol: 'HTTP',
         TargetType: 'ip',
-        HealthCheckPath: '/',
+        HealthCheckPath: '/health',
         HealthCheckIntervalSeconds: 30,
         HealthCheckTimeoutSeconds: 5,
         HealthyThresholdCount: 2,
         UnhealthyThresholdCount: 3,
         Matcher: {
-          HttpCode: '200,301,302',
+          HttpCode: '200',
         },
       });
     });
