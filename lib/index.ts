@@ -1,8 +1,11 @@
 import * as pulumi from '@pulumi/pulumi';
-import { DataPipelineEnvironment } from './lib/environment-component';
+import { DataPipelineEnvironment } from './environment-component';
 
 const config = new pulumi.Config();
-const environmentSuffix = config.require('environmentSuffix');
+const environmentSuffix =
+  config.get('environmentSuffix') ||
+  process.env.ENVIRONMENT_SUFFIX ||
+  pulumi.getStack();
 const environment = pulumi.getStack();
 const awsRegion = 'us-east-1';
 
