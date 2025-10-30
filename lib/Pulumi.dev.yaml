@@ -1,6 +1,0 @@
-config:
-  migration-infrastructure:environmentSuffix: synth1gtk5t
-  migration-infrastructure:dbPassword:
-    secure: v1:IYd9qisxFsqWVuwf:TszHuoZBTCWXS34VRJCKlr+fwrPQdBujMrNOxnvO3xA=
-  aws:region: us-east-1
-encryptionsalt: v1:zZCiwPTOur4=:v1:NxfIP4QD4/Ubyilq:0WICocwEy8RkoVyq8BjHLP1OIJ7XJg==

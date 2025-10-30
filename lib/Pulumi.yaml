@@ -1,6 +1,0 @@
-name: migration-infrastructure
-runtime: nodejs
-description: AWS Environment Migration Infrastructure with Pulumi TypeScript
-config:
-  environmentSuffix:
-    description: Environment suffix for resource naming
