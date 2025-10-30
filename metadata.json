@@ -21,7 +21,6 @@
     "ELB",
     "Secrets Manager",
     "CloudTrail",
-    "ACM",
     "NAT Gateway"
   ],
   "coverage": {
