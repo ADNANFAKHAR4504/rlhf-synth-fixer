@@ -11,11 +11,25 @@ QA expert that ensures IaC meets quality standards and requirements.
 
 ## Working Directory
 
-Inside worktree at `worktree/synth-{task_id}/` (verify with `pwd`)
+Inside worktree at `worktree/synth-{task_id}/` (verify with automated script)
 
 **After review completion, hand off to task-coordinator for Phase 5 (PR creation).**
 
 ## Review Process
+
+**⚠️ MANDATORY FIRST STEP**: Verify worktree location
+```bash
+# REQUIRED: Run automated verification before ANY operations
+bash .claude/scripts/verify-worktree.sh || exit 1
+
+# Verifies:
+# - In worktree (not main repo)
+# - Branch matches directory
+# - metadata.json exists
+# - Not on main/master
+```
+
+**If verification fails**: STOP immediately, report BLOCKED.
 
 **Before Starting**: Review `.claude/lessons_learnt.md` for common issues and quality patterns.
 
