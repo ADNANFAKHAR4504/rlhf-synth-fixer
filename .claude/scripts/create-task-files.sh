@@ -115,10 +115,26 @@ fi
 
 # Extract fields using grep (no jq dependency)
 TASK_ID=$(json_val "$TASK_JSON" "task_id")
+# Convert to lowercase first (CRITICAL: platform and language must be lowercase)
 PLATFORM=$(json_val "$TASK_JSON" "platform" | tr '[:upper:]' '[:lower:]')
 LANGUAGE=$(json_val "$TASK_JSON" "language" | tr '[:upper:]' '[:lower:]')
 DIFFICULTY=$(json_val "$TASK_JSON" "difficulty" | tr '[:upper:]' '[:lower:]')
 SUBTASK=$(json_val "$TASK_JSON" "subtask")
+
+# Normalize platform to match CLI tool format (must be lowercase abbreviated form)
+case "$PLATFORM" in
+    cloudformation) PLATFORM="cfn" ;;
+    # cdk, cdktf, pulumi, tf, cfn remain as-is (already lowercase)
+esac
+
+# Normalize language to match CLI tool format (must be lowercase abbreviated form)
+case "$LANGUAGE" in
+    typescript) LANGUAGE="ts" ;;
+    python) LANGUAGE="py" ;;
+    javascript) LANGUAGE="js" ;;
+    terraform) LANGUAGE="hcl" ;;
+    # go, java, yaml, json, hcl remain as-is (already lowercase)
+esac
 
 # CRITICAL: Use exact difficulty value as complexity (no mapping)
 # This ensures PR body shows the same complexity as tasks.csv
