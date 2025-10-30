@@ -45,28 +45,34 @@ import {
 } from '@aws-sdk/client-cloudformation';
 import fs from 'fs';
 
-// Create dummy outputs file if it doesn't exist (for testing)
+// Load outputs from CloudFormation deployment - REQUIRED for integration tests
 const outputsPath = 'cfn-outputs/flat-outputs.json';
 let outputs: any = {};
 
+// Validate outputs exist before proceeding with integration tests
+if (!fs.existsSync(outputsPath)) {
+  throw new Error(`Integration tests require CloudFormation outputs at ${outputsPath}. Please ensure the infrastructure is deployed and outputs are saved.`);
+}
+
 try {
   outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
-} catch (error) {
-  // Create directory if it doesn't exist
-  if (!fs.existsSync('cfn-outputs')) {
-    fs.mkdirSync('cfn-outputs', { recursive: true });
+  
+  // Validate required outputs exist
+  const requiredOutputs = ['S3KMSKeyArn', 'EBSKMSKeyArn', 'EncryptedS3BucketName', 'MFARequiredPolicyArn', 'ConfigBucketName'];
+  const missingOutputs = requiredOutputs.filter(key => !outputs[key]);
+  
+  if (missingOutputs.length > 0) {
+    throw new Error(`Missing required outputs in ${outputsPath}: ${missingOutputs.join(', ')}`);
   }
-
-  // Create dummy outputs for testing
-  outputs = {
-    S3KMSKeyArn: 'arn:aws:kms:eu-west-1:123456789012:key/12345678-1234-1234-1234-123456789012',
-    EBSKMSKeyArn: 'arn:aws:kms:eu-west-1:123456789012:key/87654321-4321-4321-4321-210987654321',
-    EncryptedS3BucketName: 'encrypted-s3-bucket-dev-123456789012',
-    MFARequiredPolicyArn: 'arn:aws:iam::123456789012:policy/RequireMFAForPrivilegedActions-dev',
-    ConfigBucketName: 'config-bucket-dev-123456789012'
-  };
-
-  fs.writeFileSync(outputsPath, JSON.stringify(outputs, null, 2));
+  
+  console.log('Integration tests using live deployment outputs:', Object.keys(outputs));
+} catch (error: any) {
+  if (error.code === 'ENOENT') {
+    throw new Error(`CloudFormation outputs file not found at ${outputsPath}. Integration tests require live deployment.`);
+  } else if (error instanceof SyntaxError) {
+    throw new Error(`Invalid JSON in ${outputsPath}. Please check the file format.`);
+  }
+  throw error;
 }
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
