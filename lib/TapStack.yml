@@ -41,6 +41,11 @@ Parameters:
     Default: 30
     Description: CloudWatch Logs retention period in days
 
+  EnvironmentSuffix:
+    Type: String
+    Default: ""
+    Description: Unique suffix for resource naming (e.g., pr1234, synth123) for deployment isolation
+
 Resources:
   # IAM Roles - Permissions for the services
   ValidatorLambdaRole:
@@ -182,7 +187,7 @@ Resources:
   ValidatorFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub ${AWS::StackName}-validator-${Environment}
+      FunctionName: !Sub ${AWS::StackName}-validator-${Environment}-${EnvironmentSuffix}
       Handler: index.lambda_handler
       Role: !GetAtt ValidatorLambdaRole.Arn
       Code:
@@ -276,7 +281,7 @@ Resources:
   FraudDetectorFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub ${AWS::StackName}-fraud-detector-${Environment}
+      FunctionName: !Sub ${AWS::StackName}-fraud-detector-${Environment}-${EnvironmentSuffix}
       Handler: index.lambda_handler
       Role: !GetAtt FraudDetectorLambdaRole.Arn
       Code:
@@ -352,7 +357,7 @@ Resources:
   SettlementFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub ${AWS::StackName}-settlement-${Environment}
+      FunctionName: !Sub ${AWS::StackName}-settlement-${Environment}-${EnvironmentSuffix}
       Handler: index.lambda_handler
       Role: !GetAtt SettlementLambdaRole.Arn
       Code:
@@ -468,7 +473,7 @@ Resources:
   NotificationFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub ${AWS::StackName}-notification-${Environment}
+      FunctionName: !Sub ${AWS::StackName}-notification-${Environment}-${EnvironmentSuffix}
       Handler: index.lambda_handler
       Role: !GetAtt NotificationLambdaRole.Arn
       Code:
@@ -565,32 +570,32 @@ Resources:
   ValidatorLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/lambda/${AWS::StackName}-validator-${Environment}
+      LogGroupName: !Sub /aws/lambda/${AWS::StackName}-validator-${Environment}-${EnvironmentSuffix}
       RetentionInDays: !Ref LogRetentionInDays
 
   FraudDetectorLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/lambda/${AWS::StackName}-fraud-detector-${Environment}
+      LogGroupName: !Sub /aws/lambda/${AWS::StackName}-fraud-detector-${Environment}-${EnvironmentSuffix}
       RetentionInDays: !Ref LogRetentionInDays
 
   SettlementLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/lambda/${AWS::StackName}-settlement-${Environment}
+      LogGroupName: !Sub /aws/lambda/${AWS::StackName}-settlement-${Environment}-${EnvironmentSuffix}
       RetentionInDays: !Ref LogRetentionInDays
 
   NotificationLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/lambda/${AWS::StackName}-notification-${Environment}
+      LogGroupName: !Sub /aws/lambda/${AWS::StackName}-notification-${Environment}-${EnvironmentSuffix}
       RetentionInDays: !Ref LogRetentionInDays
 
   # DynamoDB Tables (On-Demand, PITR Enabled)
   TransactionsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub ${AWS::StackName}-transactions-${Environment}
+      TableName: !Sub ${AWS::StackName}-transactions-${Environment}-${EnvironmentSuffix}
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: transaction_id
@@ -615,7 +620,7 @@ Resources:
   AuditLogsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub ${AWS::StackName}-audit-logs-${Environment}
+      TableName: !Sub ${AWS::StackName}-audit-logs-${Environment}-${EnvironmentSuffix}
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: audit_id
@@ -638,7 +643,7 @@ Resources:
     Properties:
       # IMPORTANT: AWS S3 bucket names must be lowercase. Ensure stack name and environment are lowercase.
       BucketName:
-        Fn::Sub: "${Environment}-transaction-archives-${AWS::AccountId}"
+        Fn::Sub: "${Environment}-transaction-archives-${EnvironmentSuffix}-${AWS::AccountId}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -679,12 +684,12 @@ Resources:
   AlertsTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub ${AWS::StackName}-alerts-${Environment}
+      TopicName: !Sub ${AWS::StackName}-alerts-${Environment}-${EnvironmentSuffix}
 
   FailedTransactionsTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub ${AWS::StackName}-failed-transactions-${Environment}
+      TopicName: !Sub ${AWS::StackName}-failed-transactions-${Environment}-${EnvironmentSuffix}
 
   AlertsSubscription:
     Type: AWS::SNS::Subscription
@@ -760,7 +765,7 @@ Resources:
   PaymentWorkflow:
     Type: AWS::StepFunctions::StateMachine
     Properties:
-      StateMachineName: !Sub ${AWS::StackName}-payment-workflow-${Environment}
+      StateMachineName: !Sub ${AWS::StackName}-payment-workflow-${Environment}-${EnvironmentSuffix}
       RoleArn: !GetAtt StateMachineRole.Arn
       StateMachineType: STANDARD
       TracingConfiguration:
@@ -838,7 +843,7 @@ Resources:
   StateMachineLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/states/${AWS::StackName}-payment-workflow-${Environment}
+      LogGroupName: !Sub /aws/states/${AWS::StackName}-payment-workflow-${Environment}-${EnvironmentSuffix}
       RetentionInDays: !Ref LogRetentionInDays
 
   # API Gateway (REST, Key Auth, 10k RPS, X-Ray)
@@ -870,7 +875,7 @@ Resources:
   PaymentApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: !Sub ${AWS::StackName}-payment-api-${Environment}
+      Name: !Sub ${AWS::StackName}-payment-api-${Environment}-${EnvironmentSuffix}
       EndpointConfiguration:
         Types:
           - REGIONAL
@@ -884,7 +889,7 @@ Resources:
   ApiGatewayUsagePlan:
     Type: AWS::ApiGateway::UsagePlan
     Properties:
-      UsagePlanName: !Sub ${AWS::StackName}-usage-plan-${Environment}
+      UsagePlanName: !Sub ${AWS::StackName}-usage-plan-${Environment}-${EnvironmentSuffix}
       ApiStages:
         - ApiId: !Ref PaymentApi
           Stage: !Ref ApiStage
@@ -895,7 +900,7 @@ Resources:
   ApiKey:
     Type: AWS::ApiGateway::ApiKey
     Properties:
-      Name: !Sub ${AWS::StackName}-api-key-${Environment}
+      Name: !Sub ${AWS::StackName}-api-key-${Environment}-${EnvironmentSuffix}
       Enabled: true
 
   ApiKeyUsagePlanAssociation:
@@ -937,7 +942,7 @@ Resources:
   TransactionRequestValidator:
     Type: AWS::ApiGateway::RequestValidator
     Properties:
-      Name: !Sub ${AWS::StackName}-transaction-validator
+      Name: !Sub ${AWS::StackName}-transaction-validator-${EnvironmentSuffix}
       RestApiId: !Ref PaymentApi
       ValidateRequestBody: true
       ValidateRequestParameters: true
