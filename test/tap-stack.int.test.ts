@@ -32,35 +32,8 @@ const outputs = JSON.parse(
 );
 debugLog('SETUP', 'CloudFormation outputs loaded', outputs);
 
-// Detect if this is a mock environment for development/CI
-const isMockEnvironment = !outputs.ApiEndpoint ||
-  outputs.ApiEndpoint.includes('mock') ||
-  outputs.ApiKey.includes('mock') ||
-  outputs.ApiKey.length < 20; // Real AWS API keys are typically 20+ characters
-
-debugLog('SETUP', 'Environment detection', {
-  isMockEnvironment,
-  hasApiEndpoint: !!outputs.ApiEndpoint,
-  hasApiKey: !!outputs.ApiKey,
-  apiKeyLength: outputs.ApiKey ? outputs.ApiKey.length : 0,
-  apiEndpointSample: outputs.ApiEndpoint ? outputs.ApiEndpoint.substring(0, 50) + '...' : 'undefined',
-  apiKeySample: outputs.ApiKey ? outputs.ApiKey.substring(0, 10) + '...' : 'undefined'
-});
-
-if (isMockEnvironment) {
-  debugLog('SETUP', 'Mock environment detected - tests will demonstrate expected behavior with 403 responses');
-  debugLog('SETUP', 'For live deployment testing:', {
-    steps: [
-      '1. Deploy infrastructure: npm run cfn:deploy-yaml',
-      '2. Get real API key: aws cloudformation describe-stacks --stack-name [StackName] --query "Stacks[0].Outputs[?OutputKey==`ApiKey`].OutputValue" --output text',
-      '3. Update cfn-outputs/flat-outputs.json with real API key',
-      '4. Run tests: npm run test:integration'
-    ]
-  });
-}
-
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
+const AWS_REGION = process.env.AWS_REGION || 'eu-west-1';
 
 debugLog('SETUP', 'Environment configuration', {
   environmentSuffix,
