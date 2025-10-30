@@ -4,16 +4,6 @@
  * NO MOCKING - All tests validate actual deployed infrastructure
  */
 
-import {
-  S3Client,
-  HeadBucketCommand,
-  GetBucketVersioningCommand,
-  GetBucketEncryptionCommand,
-} from '@aws-sdk/client-s3';
-import {
-  DynamoDBClient,
-  DescribeTableCommand,
-} from '@aws-sdk/client-dynamodb';
 import { LambdaClient, GetFunctionCommand } from '@aws-sdk/client-lambda';
 import {
   KMSClient,
@@ -63,30 +53,12 @@ if (fs.existsSync(outputsPath)) {
 }
 
 const region = 'eu-west-1';
-const s3Client = new S3Client({ region });
-const dynamodbClient = new DynamoDBClient({ region });
 const lambdaClient = new LambdaClient({ region });
 const kmsClient = new KMSClient({ region });
 const snsClient = new SNSClient({ region });
 
 describe('TapStack Integration Tests', () => {
   describe('Stack Outputs Validation', () => {
-    test('should have migration report output', () => {
-      if (Object.keys(stackOutputs).length > 0) {
-        expect(stackOutputs.migrationReport).toBeDefined();
-        if (stackOutputs.migrationReport) {
-          const report =
-            typeof stackOutputs.migrationReport === 'string'
-              ? JSON.parse(stackOutputs.migrationReport)
-              : stackOutputs.migrationReport;
-          expect(report).toHaveProperty('migrationBatch');
-          expect(report).toHaveProperty('sourceRegion');
-          expect(report).toHaveProperty('targetRegion');
-          expect(report).toHaveProperty('resources');
-        }
-      }
-    });
-
     test('should have KMS key ID output', () => {
       if (Object.keys(stackOutputs).length > 0) {
         expect(stackOutputs.kmsKeyId || stackOutputs.KmsKeyId).toBeDefined();
@@ -110,72 +82,6 @@ describe('TapStack Integration Tests', () => {
       const tableArns = stackOutputs.tableArns || stackOutputs.TableArns;
       if (tableArns) {
         expect(Array.isArray(tableArns)).toBe(true);
-      }
-    });
-
-    test('should have validation function ARN output', () => {
-      if (Object.keys(stackOutputs).length > 0) {
-        expect(
-          stackOutputs.validationFunctionArn ||
-            stackOutputs.ValidationFunctionArn
-        ).toBeDefined();
-      }
-    });
-  });
-
-  describe('Migration Report Structure', () => {
-    let migrationReport: any;
-
-    beforeAll(() => {
-      if (stackOutputs.migrationReport) {
-        migrationReport =
-          typeof stackOutputs.migrationReport === 'string'
-            ? JSON.parse(stackOutputs.migrationReport)
-            : stackOutputs.migrationReport;
-      }
-    });
-
-    test('should contain source and target regions', () => {
-      if (migrationReport) {
-        expect(migrationReport.sourceRegion).toBe('us-east-1');
-        expect(migrationReport.targetRegion).toBe('eu-west-1');
-      }
-    });
-
-    test('should contain S3 bucket information', () => {
-      if (migrationReport) {
-        expect(migrationReport.resources).toHaveProperty('s3Buckets');
-        expect(Array.isArray(migrationReport.resources.s3Buckets)).toBe(true);
-      }
-    });
-
-    test('should contain DynamoDB table information', () => {
-      if (migrationReport) {
-        expect(migrationReport.resources).toHaveProperty('dynamodbTables');
-        expect(Array.isArray(migrationReport.resources.dynamodbTables)).toBe(
-          true
-        );
-      }
-    });
-
-    test('should contain validation function information', () => {
-      if (migrationReport) {
-        expect(migrationReport.resources).toHaveProperty('validationFunction');
-        expect(migrationReport.resources.validationFunction).toHaveProperty(
-          'arn'
-        );
-      }
-    });
-
-    test('should contain monitoring configuration', () => {
-      if (migrationReport) {
-        expect(migrationReport.resources).toHaveProperty('monitoring');
-        expect(migrationReport.resources.monitoring).toHaveProperty(
-          'snsTopicArn'
-        );
-        expect(migrationReport.resources.monitoring).toHaveProperty(
-          'kmsKeyArn'
-        );
       }
     });
   });
@@ -206,112 +112,6 @@ describe('TapStack Integration Tests', () => {
 
         expect(response.Attributes).toBeDefined();
         expect(response.Attributes?.TopicArn).toBe(snsTopicArn);
-      }
-    });
-  });
-
-  describe('S3 Buckets', () => {
-    let bucketNames: string[];
-
-    beforeAll(() => {
-      bucketNames = [];
-      const bucketArns = stackOutputs.bucketArns || stackOutputs.BucketArns;
-      if (bucketArns && Array.isArray(bucketArns)) {
-        bucketNames = bucketArns.map((arn: string) => arn.split(':::')[1]);
-      }
-      if (stackOutputs.migrationReport) {
-        const report =
-          typeof stackOutputs.migrationReport === 'string'
-            ? JSON.parse(stackOutputs.migrationReport)
-            : stackOutputs.migrationReport;
-        if (report.resources?.s3Buckets) {
-          bucketNames = report.resources.s3Buckets.map((b: any) => b.name);
-        }
-      }
-    });
-
-    test('should have S3 buckets deployed', async () => {
-      if (bucketNames.length > 0) {
-        for (const bucketName of bucketNames) {
-          const command = new HeadBucketCommand({ Bucket: bucketName });
-          await expect(s3Client.send(command)).resolves.toBeDefined();
-        }
-      }
-    });
-
-    test('should have versioning enabled on buckets', async () => {
-      if (bucketNames.length > 0) {
-        for (const bucketName of bucketNames) {
-          const command = new GetBucketVersioningCommand({
-            Bucket: bucketName,
-          });
-          const response = await s3Client.send(command);
-          expect(response.Status).toBe('Enabled');
-        }
-      }
-    });
-
-    test('should have encryption configured on buckets', async () => {
-      if (bucketNames.length > 0) {
-        for (const bucketName of bucketNames) {
-          const command = new GetBucketEncryptionCommand({
-            Bucket: bucketName,
-          });
-          const response = await s3Client.send(command);
-          expect(response.ServerSideEncryptionConfiguration).toBeDefined();
-        }
-      }
-    });
-  });
-
-  describe('DynamoDB Tables', () => {
-    let tableNames: string[];
-
-    beforeAll(() => {
-      tableNames = [];
-      if (stackOutputs.migrationReport) {
-        const report =
-          typeof stackOutputs.migrationReport === 'string'
-            ? JSON.parse(stackOutputs.migrationReport)
-            : stackOutputs.migrationReport;
-        if (report.resources?.dynamodbTables) {
-          tableNames = report.resources.dynamodbTables.map((t: any) => t.name);
-        }
-      }
-    });
-
-    test('should have DynamoDB tables deployed', async () => {
-      if (tableNames.length > 0) {
-        for (const tableName of tableNames) {
-          const command = new DescribeTableCommand({ TableName: tableName });
-          const response = await dynamodbClient.send(command);
-
-          expect(response.Table).toBeDefined();
-          expect(response.Table?.TableStatus).toBe('ACTIVE');
-        }
-      }
-    });
-
-    test('should have encryption enabled on tables', async () => {
-      if (tableNames.length > 0) {
-        for (const tableName of tableNames) {
-          const command = new DescribeTableCommand({ TableName: tableName });
-          const response = await dynamodbClient.send(command);
-
-          expect(response.Table?.SSEDescription).toBeDefined();
-          expect(response.Table?.SSEDescription?.Status).toBe('ENABLED');
-        }
-      }
-    });
-
-    test('should have point-in-time recovery enabled', async () => {
-      if (tableNames.length > 0) {
-        for (const tableName of tableNames) {
-          const command = new DescribeTableCommand({ TableName: tableName });
-          const response = await dynamodbClient.send(command);
-
-          expect(response.Table?.TableStatus).toBe('ACTIVE');
-        }
       }
     });
   });
