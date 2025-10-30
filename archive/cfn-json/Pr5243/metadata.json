@@ -24,5 +24,11 @@
     "AutoScaling",
     "ElasticLoadBalancingV2"
   ],
-  "training_quality": "high"
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
 }
