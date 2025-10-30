@@ -1,17 +1,15 @@
 /* eslint-disable quotes */
 /* eslint-disable @typescript-eslint/quotes */
 /* eslint-disable prettier/prettier */
-
 /**
- * tap-stack.ts
- * 
- * This module defines the TapStack class, the main Pulumi ComponentResource for
- * the TAP (Test Automation Platform) project.
- * 
- * It orchestrates the instantiation of other resource-specific components
- * and manages environment-specific configurations.
- */
-
+* tap-stack.ts
+*
+* This module defines the TapStack class, the main Pulumi ComponentResource for
+* the TAP (Test Automation Platform) project.
+*
+* It orchestrates the instantiation of other resource-specific components
+* and manages environment-specific configurations.
+*/
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as awsx from "@pulumi/awsx";
@@ -19,8 +17,8 @@ import * as fs from "fs";
 import * as path from "path";
 
 /**
- * Configuration interface for environment-specific settings
- */
+* Configuration interface for environment-specific settings
+*/
 interface EnvironmentConfig {
   environmentSuffix: string;
   vpcCidr: string;
@@ -47,8 +45,8 @@ interface EnvironmentConfig {
 }
 
 /**
- * Stack outputs interface
- */
+* Stack outputs interface
+*/
 interface TapStackOutputs {
   vpcId: pulumi.Output<string>;
   vpcCidr: pulumi.Output<string>;
@@ -63,14 +61,14 @@ interface TapStackOutputs {
   route53ZoneId: pulumi.Output<string>;
   route53ZoneName: pulumi.Output<string>;
   cloudwatchDashboardArn: pulumi.Output<string>;
-  publicSubnetIds: pulumi.Output<string[]>;
-  privateSubnetIds: pulumi.Output<string[]>;
+  publicSubnetIds: pulumi.Output<string[]>;  // Changed from Output<string> to Output<string[]>
+  privateSubnetIds: pulumi.Output<string[]>; // Changed from Output<string> to Output<string[]>
   vpcPeeringConnectionIds: pulumi.Output<string[]>;
 }
 
 /**
- * Main TapStack class implementing multi-environment ECS infrastructure
- */
+* Main TapStack class implementing multi-environment ECS infrastructure
+*/
 export class TapStack extends pulumi.ComponentResource {
   public readonly outputs: TapStackOutputs;
   private config: EnvironmentConfig;
@@ -86,7 +84,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     this.projectName = pulumi.getProject();
     this.stackName = pulumi.getStack();
-    
+
     // Load environment-specific configuration
     this.config = this.loadConfiguration(args.environmentSuffix);
 
@@ -123,7 +121,7 @@ export class TapStack extends pulumi.ComponentResource {
     // Skip Route53 for PR environments (example.com is reserved by AWS)
     let route53: { zone: aws.route53.Zone; record: aws.route53.Record } | null = null;
     const isPrEnvironment = this.config.environmentSuffix.startsWith("pr");
-    
+
     if (!isPrEnvironment) {
       // Only create Route53 for non-PR environments
       route53 = this.createRoute53(alb);
@@ -140,7 +138,7 @@ export class TapStack extends pulumi.ComponentResource {
     // Create VPC Peering connections if enabled
     const vpcPeering = this.createVpcPeering(vpc);
 
-    // Convert VPC peering array to Output<string[]>
+    // Convert VPC peering array to Output
     const vpcPeeringIds = pulumi.output(
       Promise.all(vpcPeering.map(p => p.id.apply(id => id)))
     );
@@ -172,45 +170,45 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-   * Load environment-specific configuration with defaults
-   */
+  * Load environment-specific configuration with defaults
+  */
   private loadConfiguration(environmentSuffix: string): EnvironmentConfig {
     const config = new pulumi.Config();
-    
+
     // Determine VPC CIDR based on environment
     const defaultVpcCidrs: Record<string, string> = {
       dev: "10.1.0.0/16",
       staging: "10.2.0.0/16",
       prod: "10.3.0.0/16",
     };
-    
+
     // Determine ECS task count based on environment
     const defaultTaskCounts: Record<string, number> = {
       dev: 1,
       staging: 2,
       prod: 4,
     };
-    
+
     // Determine S3 log retention based on environment
     const defaultLogRetention: Record<string, number> = {
       dev: 7,
       staging: 30,
       prod: 90,
     };
-    
+
     // Determine CloudWatch log retention based on environment
     const defaultCloudWatchRetention: Record<string, number> = {
       dev: 7,
       staging: 30,
       prod: 90,
     };
-    
+
     // Get config with fallbacks
     const vpcCidr = config.get("vpcCidr") || defaultVpcCidrs[environmentSuffix] || "10.0.0.0/16";
     const ecsTaskCount = config.getNumber("ecsTaskCount") || defaultTaskCounts[environmentSuffix] || 2;
     const s3LogRetentionDays = config.getNumber("s3LogRetentionDays") || defaultLogRetention[environmentSuffix] || 30;
     const cloudwatchLogRetentionDays = config.getNumber("cloudwatchLogRetentionDays") || defaultCloudWatchRetention[environmentSuffix] || 30;
-    
+
     // For PR environments or testing, use a non-reserved domain or skip Route53
     let domain = config.get("domain");
     if (!domain) {
@@ -222,7 +220,7 @@ export class TapStack extends pulumi.ComponentResource {
         domain = `${environmentSuffix}.example.com`;
       }
     }
-    
+
     return {
       environmentSuffix,
       vpcCidr,
@@ -250,11 +248,11 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-   * Create VPC with public and private subnets
-   */
+  * Create VPC with public and private subnets
+  */
   private createVpc() {
     const vpcName = this.getResourceName("vpc");
-    
+
     const vpc = new awsx.ec2.Vpc(
       vpcName,
       {
@@ -287,8 +285,8 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-   * Create security groups for ALB, ECS, and RDS
-   */
+  * Create security groups for ALB, ECS, and RDS
+  */
   private createSecurityGroups(vpc: awsx.ec2.Vpc) {
     // ALB Security Group
     const albSecurityGroup = new aws.ec2.SecurityGroup(
@@ -409,8 +407,8 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-   * Create RDS Aurora PostgreSQL cluster with Secrets Manager
-   */
+  * Create RDS Aurora PostgreSQL cluster with Secrets Manager
+  */
   private createRdsCluster(
     vpc: awsx.ec2.Vpc,
     securityGroup: aws.ec2.SecurityGroup
@@ -518,8 +516,8 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-   * Create ECS Fargate cluster
-   */
+  * Create ECS Fargate cluster
+  */
   private createEcsCluster() {
     const cluster = new aws.ecs.Cluster(
       this.getResourceName("ecs-cluster"),
@@ -543,8 +541,8 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-   * Create Application Load Balancer with ACM certificate
-   */
+  * Create Application Load Balancer with ACM certificate
+  */
   private createApplicationLoadBalancer(
     vpc: awsx.ec2.Vpc,
     securityGroup: aws.ec2.SecurityGroup
@@ -615,8 +613,8 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-   * Create ECS Fargate service
-   */
+  * Create ECS Fargate service
+  */
   private createEcsService(
     cluster: aws.ecs.Cluster,
     vpc: awsx.ec2.Vpc,
@@ -833,8 +831,8 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-   * Create S3 bucket with lifecycle policies
-   */
+  * Create S3 bucket with lifecycle policies
+  */
   private createS3Bucket() {
     const bucket = new aws.s3.Bucket(
       this.getResourceName("logs"),
@@ -860,7 +858,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Configure lifecycle rules
+    // Configure lifecycle rules with AWS minimum 30-day requirement for STANDARD_IA
     new aws.s3.BucketLifecycleConfiguration(
       this.getResourceName("logs-lifecycle"),
       {
@@ -878,7 +876,8 @@ export class TapStack extends pulumi.ComponentResource {
             status: "Enabled",
             transitions: [
               {
-                days: Math.floor(this.config.s3LogRetentionDays / 2),
+                // AWS requires minimum 30 days for STANDARD_IA transition
+                days: Math.max(30, Math.floor(this.config.s3LogRetentionDays / 2)),
                 storageClass: "STANDARD_IA",
               },
             ],
@@ -922,8 +921,8 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-   * Create Route53 hosted zone and records
-   */
+  * Create Route53 hosted zone and records
+  */
   private createRoute53(alb: any) {
     const zone = new aws.route53.Zone(
       this.getResourceName("zone"),
@@ -959,8 +958,8 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-   * Create CloudWatch dashboard and alarms
-   */
+  * Create CloudWatch dashboard and alarms
+  */
   private createCloudWatch(
     cluster: aws.ecs.Cluster,
     service: any,
@@ -1143,8 +1142,8 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-   * Create VPC peering connections
-   */
+  * Create VPC peering connections
+  */
   private createVpcPeering(vpc: awsx.ec2.Vpc): aws.ec2.VpcPeeringConnection[] {
     if (!this.config.enableVpcPeering || !this.config.peeringVpcIds) {
       return [];
@@ -1170,51 +1169,51 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-   * Get resource name with environment suffix
-   */
+  * Get resource name with environment suffix
+  */
   private getResourceName(resourceType: string): string {
     const baseName = `${this.projectName}-${this.config.environmentSuffix}-${resourceType}`;
-    
+
     // S3 bucket names must be lowercase and DNS-compliant
     if (resourceType.includes('logs') || resourceType.includes('bucket')) {
       return baseName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
     }
-    
+
     return baseName;
   }
 
   /**
-   * Get AWS-compliant resource name for resources with strict naming rules
-   * (RDS, ElastiCache, etc. - lowercase alphanumeric and hyphens only, must start with letter)
-   */
+  * Get AWS-compliant resource name for resources with strict naming rules
+  * (RDS, ElastiCache, etc. - lowercase alphanumeric and hyphens only, must start with letter)
+  */
   private getAwsCompliantName(resourceType: string): string {
     let name = `${this.projectName}-${this.config.environmentSuffix}-${resourceType}`.toLowerCase();
-    
+
     // Replace any non-alphanumeric characters (except hyphens) with hyphens
     name = name.replace(/[^a-z0-9-]/g, '-');
-    
+
     // Remove consecutive hyphens
     name = name.replace(/-+/g, '-');
-    
+
     // Ensure it starts with a letter
     if (!/^[a-z]/.test(name)) {
       name = 'a' + name;
     }
-    
+
     // Truncate if too long (AWS typically has 63 char limit)
     if (name.length > 63) {
       name = name.substring(0, 63);
     }
-    
+
     // Remove trailing hyphen if present
     name = name.replace(/-$/, '');
-    
+
     return name;
   }
 
   /**
-   * Write outputs to JSON file
-   */
+  * Write outputs to JSON file
+  */
   private writeOutputsToFile(outputs: TapStackOutputs): void {
     const outputDir = path.join(process.cwd(), "cfn-outputs");
     const outputFile = path.join(outputDir, "flat-outputs.json");
