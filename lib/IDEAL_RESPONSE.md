@@ -22,7 +22,7 @@ Security is implemented at multiple layers using AWS security best practices wit
 
 ### IAM Roles and Policies
 
-The EC2InstanceRole provides instances with permissions following the principle of least privilege. The role includes CloudWatchAgentServerPolicy for metrics and logs publishing, and AmazonSSMManagedInstanceCore for Systems Manager capabilities including Session Manager, Patch Manager, and Run Command. An inline policy grants CloudWatch Logs access scoped to /aws/ec2/ log groups. This approach eliminates hard-coded credentials and provides temporary security credentials automatically rotated by AWS.
+The EC2InstanceRole provides instances with permissions following the principle of least privilege. The role includes CloudWatchAgentServerPolicy for metrics and logs publishing, and AmazonSSMManagedInstanceCore for Systems Manager capabilities including Session Manager, Patch Manager, and Run Command. Inline policies grant CloudWatch Logs access scoped to /aws/ec2/ log groups and CloudWatch alarms read access for monitoring verification. This approach eliminates hard-coded credentials and provides temporary security credentials automatically rotated by AWS.
 
 ### Monitoring and Logging
 
@@ -1255,6 +1255,21 @@ The architecture achieves high availability through multiple mechanisms. Two NAT
                   "Resource": {
                     "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/*"
                   }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "CloudWatchAlarmsReadAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:DescribeAlarms"
+                  ],
+                  "Resource": "*"
                 }
               ]
             }
