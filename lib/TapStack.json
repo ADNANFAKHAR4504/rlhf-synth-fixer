@@ -1,0 +1,356 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Least-Privilege IAM Design with Permission Boundaries",
+    "Resources": {
+        "PermissionBoundaryPolicy": {
+            "Type": "AWS::IAM::ManagedPolicy",
+            "Properties": {
+                "Description": "Permission boundary that prevents privilege escalation",
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "DenyPrivilegeEscalation",
+                            "Effect": "Deny",
+                            "Action": [
+                                "iam:*",
+                                "sts:*",
+                                "organizations:*"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "AllowLogging",
+                            "Effect": "Allow",
+                            "Action": [
+                                "logs:CreateLogGroup",
+                                "logs:CreateLogStream",
+                                "logs:PutLogEvents"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/*"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/*:*"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*:*"
+                                }
+                            ]
+                        },
+                        {
+                            "Sid": "AllowS3Access",
+                            "Effect": "Allow",
+                            "Action": [
+                                "s3:GetObject",
+                                "s3:ListBucket",
+                                "s3:PutObject"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::app-config-${AWS::StackName}-${AWS::AccountId}"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::app-config-${AWS::StackName}-${AWS::AccountId}/*"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::lambda-data-${AWS::StackName}-${AWS::AccountId}"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::lambda-data-${AWS::StackName}-${AWS::AccountId}/*"
+                                }
+                            ]
+                        },
+                        {
+                            "Sid": "AllowDynamoDBAccess",
+                            "Effect": "Allow",
+                            "Action": [
+                                "dynamodb:GetItem",
+                                "dynamodb:PutItem",
+                                "dynamodb:Query",
+                                "dynamodb:Scan",
+                                "dynamodb:UpdateItem",
+                                "dynamodb:DeleteItem"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/AppTable-${AWS::StackName}"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/LambdaTable-${AWS::StackName}"
+                                }
+                            ]
+                        },
+                        {
+                            "Sid": "AllowSSMAccess",
+                            "Effect": "Allow",
+                            "Action": [
+                                "ssm:GetParameter",
+                                "ssm:GetParameters"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${AWS::StackName}/*"
+                            }
+                        }
+                    ]
+                },
+                "ManagedPolicyName": {
+                    "Fn::Sub": "PermissionBoundary-${AWS::StackName}"
+                }
+            }
+        },
+        "EC2ApplicationRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Path": "/",
+                "PermissionsBoundary": {
+                    "Ref": "PermissionBoundaryPolicy"
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "EC2ApplicationPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "CloudWatchLogsAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/*:*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "S3ReadOnlyAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::app-config-${AWS::StackName}-${AWS::AccountId}"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::app-config-${AWS::StackName}-${AWS::AccountId}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "DynamoDBReadAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/AppTable-${AWS::StackName}"
+                                    }
+                                },
+                                {
+                                    "Sid": "SSMParameterAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ssm:GetParameter",
+                                        "ssm:GetParameters"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/app/${AWS::StackName}/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-EC2ApplicationRole"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "AWS::StackName"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "Application"
+                    },
+                    {
+                        "Key": "SecurityCompliance",
+                        "Value": "LeastPrivilege"
+                    }
+                ]
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Path": "/",
+                "PermissionsBoundary": {
+                    "Ref": "PermissionBoundaryPolicy"
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "LambdaExecutionPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "CloudWatchLogsAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*:*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "DynamoDBAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:DeleteItem"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/LambdaTable-${AWS::StackName}"
+                                    }
+                                },
+                                {
+                                    "Sid": "S3Access",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::lambda-data-${AWS::StackName}-${AWS::AccountId}"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::lambda-data-${AWS::StackName}-${AWS::AccountId}/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-LambdaExecutionRole"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "AWS::StackName"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "Serverless"
+                    },
+                    {
+                        "Key": "SecurityCompliance",
+                        "Value": "LeastPrivilege"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "EC2ApplicationRoleARN": {
+            "Description": "ARN of the EC2 Application Role with least privilege",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EC2ApplicationRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EC2ApplicationRoleARN"
+                }
+            }
+        },
+        "LambdaExecutionRoleARN": {
+            "Description": "ARN of the Lambda Execution Role with least privilege",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LambdaExecutionRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaExecutionRoleARN"
+                }
+            }
+        },
+        "PermissionBoundaryPolicyARN": {
+            "Description": "ARN of the Permission Boundary Policy",
+            "Value": {
+                "Ref": "PermissionBoundaryPolicy"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PermissionBoundaryPolicyARN"
+                }
+            }
+        }
+    }
+}
