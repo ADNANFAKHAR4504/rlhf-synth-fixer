@@ -599,8 +599,7 @@
                     "ComplianceResourceTypes": [
                         "AWS::S3::Bucket"
                     ]
-                },
-                "MaximumExecutionFrequency": "Six_Hours"
+                }
             }
         },
         "EBSEncryptionRule": {
@@ -618,8 +617,7 @@
                     "ComplianceResourceTypes": [
                         "AWS::EC2::Volume"
                     ]
-                },
-                "MaximumExecutionFrequency": "Six_Hours"
+                }
             }
         }
     },
