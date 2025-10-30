@@ -1,5 +1,5 @@
 aws_region         = "us-east-1"
-environment_suffix = "pr5433"
+environment_suffix = "synth101000770"
 migration_phase    = "transition"
 
 vpc_id     = "vpc-084784fec817a2784"
