@@ -1,6 +1,7 @@
 import boto3
 from datetime import datetime, timedelta
 import json
+import os
 from tabulate import tabulate
 from typing import List, Dict, Any, Optional
 import sys
@@ -9,10 +10,15 @@ class FinOpsAnalyzer:
     def __init__(self, region='us-east-1'):
         self.region = region
         self.session = boto3.Session(region_name=region)
-        self.ec2_client = self.session.client('ec2')
-        self.elb_client = self.session.client('elbv2')
-        self.cloudwatch_client = self.session.client('cloudwatch')
-        self.s3_client = self.session.client('s3')
+
+        # Get endpoint URL from environment for testing (Moto support)
+        endpoint_url = os.environ.get('AWS_ENDPOINT_URL')
+
+        # Create clients with optional endpoint URL
+        self.ec2_client = self.session.client('ec2', endpoint_url=endpoint_url)
+        self.elb_client = self.session.client('elbv2', endpoint_url=endpoint_url)
+        self.cloudwatch_client = self.session.client('cloudwatch', endpoint_url=endpoint_url)
+        self.s3_client = self.session.client('s3', endpoint_url=endpoint_url)
         self.findings = []
 
     def has_rd_tag(self, tags: List[Dict]) -> bool:
@@ -167,6 +173,9 @@ class FinOpsAnalyzer:
                         continue
                 except self.s3_client.exceptions.NoSuchTagSet:
                     pass
+                except Exception:
+                    # Catch any other tag-related exceptions
+                    pass
 
                 # Check versioning status
                 versioning = self.s3_client.get_bucket_versioning(Bucket=bucket_name)
@@ -193,47 +202,46 @@ class FinOpsAnalyzer:
                         })
 
                 # Check bucket size for large buckets without Glacier policy
-                try:
-                    # Get bucket size from CloudWatch
-                    dimensions = [
-                        {'Name': 'BucketName', 'Value': bucket_name},
-                        {'Name': 'StorageType', 'Value': 'StandardStorage'}
-                    ]
+                # Get bucket size from CloudWatch
+                dimensions = [
+                    {'Name': 'BucketName', 'Value': bucket_name},
+                    {'Name': 'StorageType', 'Value': 'StandardStorage'}
+                ]
 
-                    bucket_size = self.get_cloudwatch_metric_sum(
-                        'AWS/S3',
-                        'BucketSizeBytes',
-                        dimensions,
-                        1
-                    )
+                bucket_size = self.get_cloudwatch_metric_sum(
+                    'AWS/S3',
+                    'BucketSizeBytes',
+                    dimensions,
+                    1
+                )
 
-                    if bucket_size > 1e12:  # Over 1 TB
-                        # Check for Glacier Deep Archive lifecycle
-                        has_glacier = False
-                        try:
-                            lifecycle = self.s3_client.get_bucket_lifecycle_configuration(Bucket=bucket_name)
-                            has_glacier = any(
-                                any(t.get('StorageClass') == 'DEEP_ARCHIVE'
-                                    for t in rule.get('Transitions', []))
-                                for rule in lifecycle.get('Rules', [])
-                                if rule.get('Status') == 'Enabled'
-                            )
-                        except self.s3_client.exceptions.NoSuchLifecycleConfiguration:
-                            pass
+                if bucket_size > 1e12:  # Over 1 TB
+                    # Check for Glacier Deep Archive lifecycle
+                    has_glacier = False
+                    try:
+                        lifecycle = self.s3_client.get_bucket_lifecycle_configuration(Bucket=bucket_name)
+                        has_glacier = any(
+                            any(t.get('StorageClass') == 'DEEP_ARCHIVE'
+                                for t in rule.get('Transitions', []))
+                            for rule in lifecycle.get('Rules', [])
+                            if rule.get('Status') == 'Enabled'
+                        )
+                    except self.s3_client.exceptions.NoSuchLifecycleConfiguration:
+                        pass
 
-                        if not has_glacier:
-                            # Estimate savings: ~90% reduction for Deep Archive
-                            standard_cost = (bucket_size / 1e12) * 23  # $0.023/GB/month
-                            deep_archive_cost = (bucket_size / 1e12) * 0.99  # $0.00099/GB/month
-                            savings = standard_cost - deep_archive_cost
+                    if not has_glacier:
+                        # Estimate savings: ~90% reduction for Deep Archive
+                        standard_cost = (bucket_size / 1e12) * 23  # $0.023/GB/month
+                        deep_archive_cost = (bucket_size / 1e12) * 0.99  # $0.00099/GB/month
+                        savings = standard_cost - deep_archive_cost
 
-                            self.findings.append({
-                                'ResourceId': f's3://{bucket_name}',
-                                'Region': self.region,
-                                'WasteType': 'LargeBucketWithoutGlacierPolicy',
-                                'EstimatedMonthlySavings': round(savings, 2),
-                                'Details': f'Size: {bucket_size/1e12:.2f} TB without Deep Archive lifecycle'
-                            })
+                        self.findings.append({
+                            'ResourceId': f's3://{bucket_name}',
+                            'Region': self.region,
+                            'WasteType': 'LargeBucketWithoutGlacierPolicy',
+                            'EstimatedMonthlySavings': round(savings, 2),
+                            'Details': f'Size: {bucket_size/1e12:.2f} TB without Deep Archive lifecycle'
+                        })
 
             except Exception as e:
                 print(f"Warning: Error analyzing bucket {bucket_name}: {e}", file=sys.stderr)
