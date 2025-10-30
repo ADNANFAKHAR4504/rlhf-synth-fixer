@@ -1,0 +1,35 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000174",
+  "team": "4",
+  "startedAt": "2025-10-29T14:06:40.595Z",
+  "subtask": "Security, Compliance and Governance",
+  "background": "A financial services company needs to establish a new AWS environment for their payment processing application. The environment requires strict network isolation, monitoring capabilities, and secure access patterns to meet PCI DSS compliance requirements.",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Table",
+    "Route",
+    "Security Group",
+    "VPC Endpoint",
+    "IAM Role",
+    "CloudWatch Logs",
+    "Flow Logs",
+    "Elastic IP"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
+}
