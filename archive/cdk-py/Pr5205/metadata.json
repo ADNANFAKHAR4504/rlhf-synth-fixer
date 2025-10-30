@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "medium",
+  "team": "synth",
+  "startedAt": "2025-10-28T14:15:41+05:30",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation",
+    "Security Configuration as Code"
+  ],
+  "po_id": "7561442766",
+  "aws_services": [
+    "Amazon VPC",
+    "Amazon EC2",
+    "Amazon RDS",
+    "AWS KMS",
+    "AWS Secrets Manager",
+    "Amazon EFS",
+    "AWS Backup",
+    "Amazon CloudWatch",
+    "Amazon SNS",
+    "AWS IAM",
+    "CloudWatch Logs"
+  ],
+  "region": "eu-central-2",
+  "turn_type": "single",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

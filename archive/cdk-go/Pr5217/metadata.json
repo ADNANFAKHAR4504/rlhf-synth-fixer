@@ -1,0 +1,22 @@
+{
+  "platform": "cdk",
+  "language": "go",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "8382156259",
+  "team": "synth",
+  "startedAt": "2025-10-28T15:16:05.696662",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Cloud Environment Setup"
+  ],
+  "training_quality": 9,
+  "aws_services": "API Gateway, Lambda, SQS, DynamoDB, SNS, CloudWatch, IAM, X-Ray",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

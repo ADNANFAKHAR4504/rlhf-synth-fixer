@@ -16,7 +16,7 @@ team: synth
 subtask: <task_category>
 subject_labels: <array>
 startedAt: <ISO_timestamp>
-aws_services: <string>
+aws_services: <array>
 ```
 
 ## Platform-Language Compatibility Matrix
