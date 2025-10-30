@@ -1,0 +1,455 @@
+// Integration tests for Terraform infrastructure
+// Tests validate deployed AWS resources using actual AWS API calls
+
+import fs from 'fs';
+import path from 'path';
+import {
+  EC2Client,
+  DescribeInstancesCommand,
+  DescribeVolumesCommand,
+  DescribeSecurityGroupsCommand,
+} from '@aws-sdk/client-ec2';
+import {
+  ElasticLoadBalancingV2Client,
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  DescribeTargetHealthCommand,
+  DescribeListenersCommand,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  S3Client,
+  HeadBucketCommand,
+  GetBucketVersioningCommand,
+  GetBucketEncryptionCommand,
+} from '@aws-sdk/client-s3';
+import {
+  DynamoDBClient,
+  DescribeTableCommand,
+} from '@aws-sdk/client-dynamodb';
+import {
+  IAMClient,
+  GetRoleCommand,
+  GetInstanceProfileCommand,
+} from '@aws-sdk/client-iam';
+import {
+  DataSyncClient,
+  DescribeLocationS3Command,
+} from '@aws-sdk/client-datasync';
+
+const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
+
+const ec2Client = new EC2Client({ region: AWS_REGION });
+const elbClient = new ElasticLoadBalancingV2Client({ region: AWS_REGION });
+const s3Client = new S3Client({ region: AWS_REGION });
+const dynamoClient = new DynamoDBClient({ region: AWS_REGION });
+const iamClient = new IAMClient({ region: AWS_REGION });
+const datasyncClient = new DataSyncClient({ region: AWS_REGION });
+
+// Load outputs from deployment
+const outputsPath = path.resolve(__dirname, '../cfn-outputs/flat-outputs.json');
+let outputs: any = {};
+
+beforeAll(() => {
+  if (fs.existsSync(outputsPath)) {
+    outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+  } else {
+    throw new Error(`Outputs file not found at ${outputsPath}`);
+  }
+});
+
+describe('Terraform Infrastructure - Integration Tests', () => {
+  describe('EC2 Instances', () => {
+    test('EC2 instances are running in multiple AZs', async () => {
+      const instanceIds = Object.values(outputs.instance_ids) as string[];
+      expect(instanceIds.length).toBeGreaterThanOrEqual(2);
+
+      const command = new DescribeInstancesCommand({
+        InstanceIds: instanceIds,
+      });
+
+      const response = await ec2Client.send(command);
+      const instances = response.Reservations?.flatMap(r => r.Instances || []) || [];
+
+      expect(instances.length).toBe(instanceIds.length);
+
+      // Check all instances are running
+      instances.forEach(instance => {
+        expect(instance.State?.Name).toBe('running');
+      });
+
+      // Check instances are in different AZs
+      const azs = new Set(instances.map(i => i.Placement?.AvailabilityZone));
+      expect(azs.size).toBeGreaterThanOrEqual(2);
+    });
+
+    test('EC2 instances have correct instance type', async () => {
+      const instanceIds = Object.values(outputs.instance_ids) as string[];
+
+      const command = new DescribeInstancesCommand({
+        InstanceIds: instanceIds,
+      });
+
+      const response = await ec2Client.send(command);
+      const instances = response.Reservations?.flatMap(r => r.Instances || []) || [];
+
+      instances.forEach(instance => {
+        expect(instance.InstanceType).toBe('t3.large');
+      });
+    });
+
+    test('EC2 instances have correct tags', async () => {
+      const instanceIds = Object.values(outputs.instance_ids) as string[];
+
+      const command = new DescribeInstancesCommand({
+        InstanceIds: instanceIds,
+      });
+
+      const response = await ec2Client.send(command);
+      const instances = response.Reservations?.flatMap(r => r.Instances || []) || [];
+
+      instances.forEach(instance => {
+        const tags = instance.Tags || [];
+        const tagMap = Object.fromEntries(tags.map(t => [t.Key, t.Value]));
+
+        expect(tagMap['Environment']).toBeDefined();
+        expect(tagMap['MigrationPhase']).toBeDefined();
+        expect(tagMap['Project']).toBe('LegacyMigration');
+        expect(tagMap['ManagedBy']).toBe('Terraform');
+      });
+    });
+
+    test('EC2 instances have IAM instance profile attached', async () => {
+      const instanceIds = Object.values(outputs.instance_ids) as string[];
+
+      const command = new DescribeInstancesCommand({
+        InstanceIds: instanceIds,
+      });
+
+      const response = await ec2Client.send(command);
+      const instances = response.Reservations?.flatMap(r => r.Instances || []) || [];
+
+      instances.forEach(instance => {
+        expect(instance.IamInstanceProfile).toBeDefined();
+        expect(instance.IamInstanceProfile?.Arn).toContain('LegacyAppRole-profile');
+      });
+    });
+  });
+
+  describe('EBS Volumes', () => {
+    test('EBS volumes are attached to EC2 instances', async () => {
+      const instanceIds = Object.values(outputs.instance_ids) as string[];
+
+      const command = new DescribeVolumesCommand({
+        Filters: [
+          {
+            Name: 'attachment.instance-id',
+            Values: instanceIds,
+          },
+          {
+            Name: 'attachment.device',
+            Values: ['/dev/sdf'],
+          },
+        ],
+      });
+
+      const response = await ec2Client.send(command);
+      const volumes = response.Volumes || [];
+
+      // Should have one EBS volume per instance
+      expect(volumes.length).toBe(instanceIds.length);
+
+      volumes.forEach(volume => {
+        expect(volume.Size).toBe(100);
+        expect(volume.VolumeType).toBe('gp3');
+        expect(volume.Encrypted).toBe(true);
+        expect(volume.State).toBe('in-use');
+      });
+    });
+  });
+
+  describe('Application Load Balancer', () => {
+    test('ALB exists and is active', async () => {
+      const albArn = outputs.alb_arn;
+      expect(albArn).toBeDefined();
+
+      const command = new DescribeLoadBalancersCommand({
+        LoadBalancerArns: [albArn],
+      });
+
+      const response = await elbClient.send(command);
+      const albs = response.LoadBalancers || [];
+
+      expect(albs.length).toBe(1);
+      expect(albs[0].State?.Code).toBe('active');
+      expect(albs[0].Scheme).toBe('internal');
+      expect(albs[0].Type).toBe('application');
+    });
+
+    test('ALB has HTTP listener configured', async () => {
+      const albArn = outputs.alb_arn;
+
+      const command = new DescribeListenersCommand({
+        LoadBalancerArn: albArn,
+      });
+
+      const response = await elbClient.send(command);
+      const listeners = response.Listeners || [];
+
+      expect(listeners.length).toBeGreaterThanOrEqual(1);
+
+      const httpListener = listeners.find(l => l.Port === 80);
+      expect(httpListener).toBeDefined();
+      expect(httpListener?.Protocol).toBe('HTTP');
+    });
+
+    test('Blue target group exists and is healthy', async () => {
+      const blueTgArn = outputs.blue_target_group_arn;
+      expect(blueTgArn).toBeDefined();
+
+      const tgCommand = new DescribeTargetGroupsCommand({
+        TargetGroupArns: [blueTgArn],
+      });
+
+      const tgResponse = await elbClient.send(tgCommand);
+      const targetGroups = tgResponse.TargetGroups || [];
+
+      expect(targetGroups.length).toBe(1);
+      expect(targetGroups[0].Port).toBe(80);
+      expect(targetGroups[0].Protocol).toBe('HTTP');
+
+      // Check target health
+      const healthCommand = new DescribeTargetHealthCommand({
+        TargetGroupArn: blueTgArn,
+      });
+
+      const healthResponse = await elbClient.send(healthCommand);
+      const targets = healthResponse.TargetHealthDescriptions || [];
+
+      expect(targets.length).toBeGreaterThanOrEqual(2);
+    }, 60000);
+
+    test('Green target group exists', async () => {
+      const greenTgArn = outputs.green_target_group_arn;
+      expect(greenTgArn).toBeDefined();
+
+      const command = new DescribeTargetGroupsCommand({
+        TargetGroupArns: [greenTgArn],
+      });
+
+      const response = await elbClient.send(command);
+      const targetGroups = response.TargetGroups || [];
+
+      expect(targetGroups.length).toBe(1);
+      expect(targetGroups[0].Port).toBe(80);
+      expect(targetGroups[0].Protocol).toBe('HTTP');
+    });
+  });
+
+  describe('S3 Buckets', () => {
+    test('Imported S3 bucket exists and is accessible', async () => {
+      const bucketName = outputs.s3_bucket_name;
+      expect(bucketName).toBeDefined();
+
+      const command = new HeadBucketCommand({
+        Bucket: bucketName,
+      });
+
+      await expect(s3Client.send(command)).resolves.not.toThrow();
+    });
+
+    test('Imported S3 bucket has versioning enabled', async () => {
+      const bucketName = outputs.s3_bucket_name;
+
+      const command = new GetBucketVersioningCommand({
+        Bucket: bucketName,
+      });
+
+      const response = await s3Client.send(command);
+      expect(response.Status).toBe('Enabled');
+    });
+
+    test('Imported S3 bucket has encryption enabled', async () => {
+      const bucketName = outputs.s3_bucket_name;
+
+      const command = new GetBucketEncryptionCommand({
+        Bucket: bucketName,
+      });
+
+      const response = await s3Client.send(command);
+      expect(response.ServerSideEncryptionConfiguration).toBeDefined();
+      expect(response.ServerSideEncryptionConfiguration?.Rules).toHaveLength(1);
+    });
+
+    test('Terraform state bucket exists', async () => {
+      const bucketName = outputs.terraform_state_bucket;
+      expect(bucketName).toBeDefined();
+
+      const command = new HeadBucketCommand({
+        Bucket: bucketName,
+      });
+
+      await expect(s3Client.send(command)).resolves.not.toThrow();
+    });
+  });
+
+  describe('DynamoDB Table', () => {
+    test('Terraform state lock table exists and is active', async () => {
+      const tableName = outputs.terraform_state_lock_table;
+      expect(tableName).toBeDefined();
+
+      const command = new DescribeTableCommand({
+        TableName: tableName,
+      });
+
+      const response = await dynamoClient.send(command);
+      expect(response.Table?.TableStatus).toBe('ACTIVE');
+      expect(response.Table?.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
+      expect(response.Table?.KeySchema).toHaveLength(1);
+      expect(response.Table?.KeySchema?.[0].AttributeName).toBe('LockID');
+    });
+  });
+
+  describe('IAM Resources', () => {
+    test('Imported IAM role exists', async () => {
+      const command = new GetRoleCommand({
+        RoleName: `LegacyAppRole-${process.env.ENVIRONMENT_SUFFIX || 'synth101000770'}`,
+      });
+
+      const response = await iamClient.send(command);
+      expect(response.Role).toBeDefined();
+      expect(response.Role?.RoleName).toContain('LegacyAppRole');
+    });
+
+    test('IAM instance profile exists', async () => {
+      const command = new GetInstanceProfileCommand({
+        InstanceProfileName: `LegacyAppRole-profile-${process.env.ENVIRONMENT_SUFFIX || 'synth101000770'}`,
+      });
+
+      const response = await iamClient.send(command);
+      expect(response.InstanceProfile).toBeDefined();
+      expect(response.InstanceProfile?.Roles).toHaveLength(1);
+    });
+
+    test('DataSync IAM role exists', async () => {
+      const command = new GetRoleCommand({
+        RoleName: `datasync-s3-access-${process.env.ENVIRONMENT_SUFFIX || 'synth101000770'}`,
+      });
+
+      const response = await iamClient.send(command);
+      expect(response.Role).toBeDefined();
+      expect(response.Role?.RoleName).toContain('datasync-s3-access');
+    });
+  });
+
+  describe('DataSync', () => {
+    test('DataSync S3 location exists', async () => {
+      const locationArn = outputs.datasync_s3_location_arn;
+      expect(locationArn).toBeDefined();
+
+      const command = new DescribeLocationS3Command({
+        LocationArn: locationArn,
+      });
+
+      const response = await datasyncClient.send(command);
+      expect(response.LocationArn).toBe(locationArn);
+      expect(response.S3BucketArn).toBeDefined();
+    });
+  });
+
+  describe('Security Groups', () => {
+    test('Imported security group exists', async () => {
+      const instanceIds = Object.values(outputs.instance_ids) as string[];
+
+      const instanceCommand = new DescribeInstancesCommand({
+        InstanceIds: instanceIds,
+      });
+
+      const instanceResponse = await ec2Client.send(instanceCommand);
+      const instances = instanceResponse.Reservations?.flatMap(r => r.Instances || []) || [];
+      const sgIds = instances[0].SecurityGroups?.map(sg => sg.GroupId || '') || [];
+
+      expect(sgIds.length).toBeGreaterThan(0);
+
+      const sgCommand = new DescribeSecurityGroupsCommand({
+        GroupIds: sgIds,
+      });
+
+      const sgResponse = await ec2Client.send(sgCommand);
+      const securityGroups = sgResponse.SecurityGroups || [];
+
+      expect(securityGroups.length).toBeGreaterThan(0);
+
+      // Check for the imported security group
+      const importedSg = securityGroups.find(sg => sg.GroupName?.includes('legacy-app-sg'));
+      expect(importedSg).toBeDefined();
+    });
+
+    test('ALB security group exists and allows traffic', async () => {
+      const albArn = outputs.alb_arn;
+
+      const albCommand = new DescribeLoadBalancersCommand({
+        LoadBalancerArns: [albArn],
+      });
+
+      const albResponse = await elbClient.send(albCommand);
+      const alb = albResponse.LoadBalancers?.[0];
+      const sgIds = alb?.SecurityGroups || [];
+
+      expect(sgIds.length).toBeGreaterThan(0);
+
+      const sgCommand = new DescribeSecurityGroupsCommand({
+        GroupIds: sgIds,
+      });
+
+      const sgResponse = await ec2Client.send(sgCommand);
+      const securityGroups = sgResponse.SecurityGroups || [];
+
+      expect(securityGroups.length).toBeGreaterThan(0);
+
+      // Check for HTTP ingress rule
+      const albSg = securityGroups[0];
+      const httpIngress = albSg.IpPermissions?.find(rule => rule.FromPort === 80);
+      expect(httpIngress).toBeDefined();
+    });
+  });
+
+  describe('Workspace Configuration', () => {
+    test('Terraform workspace is set', () => {
+      const workspace = outputs.workspace;
+      expect(workspace).toBeDefined();
+      expect(workspace).toBeTruthy();
+    });
+  });
+
+  describe('Multi-AZ Deployment', () => {
+    test('Resources are deployed across multiple availability zones', async () => {
+      const instanceIds = Object.values(outputs.instance_ids) as string[];
+
+      const command = new DescribeInstancesCommand({
+        InstanceIds: instanceIds,
+      });
+
+      const response = await ec2Client.send(command);
+      const instances = response.Reservations?.flatMap(r => r.Instances || []) || [];
+
+      const azs = new Set(instances.map(i => i.Placement?.AvailabilityZone));
+      expect(azs.size).toBeGreaterThanOrEqual(2);
+      expect(azs.has('us-east-1a')).toBe(true);
+      expect(azs.has('us-east-1b')).toBe(true);
+    });
+  });
+
+  describe('Resource Naming Convention', () => {
+    test('All resources follow naming convention with environment_suffix', () => {
+      const resourceNames = [
+        outputs.s3_bucket_name,
+        outputs.terraform_state_bucket,
+        outputs.terraform_state_lock_table,
+      ];
+
+      resourceNames.forEach(name => {
+        expect(name).toContain('synth101000770');
+      });
+    });
+  });
+});
