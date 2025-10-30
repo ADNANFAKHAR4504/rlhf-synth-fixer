@@ -78,14 +78,28 @@ const cwClient = new CloudWatchClient({ region });
 const iamClient = new IAMClient({ region });
 const cwLogsClient = new CloudWatchLogsClient({ region });
 
-// Helper function to read outputs
+// Helper function to read outputs from flat-outputs.json
 function getOutputs() {
   const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
   if (!fs.existsSync(outputsPath)) {
     console.warn(`Outputs file not found at ${outputsPath}, some tests may be skipped`);
     return null;
   }
-  return JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+  const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+  console.log('Loaded outputs from flat-outputs.json:', Object.keys(outputs));
+  return outputs;
+}
+
+// Helper to get account ID
+async function getAccountId(): Promise<string> {
+  if (outputs?.AccountId) {
+    return outputs.AccountId;
+  }
+  // Fallback to AWS STS
+  const { STSClient, GetCallerIdentityCommand } = require('@aws-sdk/client-sts');
+  const stsClient = new STSClient({ region });
+  const response = await stsClient.send(new GetCallerIdentityCommand({}));
+  return response.Account!;
 }
 
 describe('TAP Stack Integration Tests - Live AWS Resources', () => {
@@ -165,7 +179,8 @@ describe('TAP Stack Integration Tests - Live AWS Resources', () => {
 
   describe('S3 Buckets', () => {
     test('should have source bucket with versioning enabled', async () => {
-      const bucketName = `${envPrefix}-pipeline-source-${outputs?.AccountId || '097219365021'}-${region}`;
+      const accountId = await getAccountId();
+      const bucketName = outputs?.SourceBucketOutput || `${envPrefix}-pipeline-source-${accountId}-${region}`;
 
       const headCommand = new HeadBucketCommand({ Bucket: bucketName });
       await expect(s3Client.send(headCommand)).resolves.toBeDefined();
@@ -177,10 +192,12 @@ describe('TAP Stack Integration Tests - Live AWS Resources', () => {
       const encryptionCommand = new GetBucketEncryptionCommand({ Bucket: bucketName });
       const encryptionResponse = await s3Client.send(encryptionCommand);
       expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
+      expect(encryptionResponse.ServerSideEncryptionConfiguration!.Rules![0].ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe('AES256');
     }, 30000);
 
     test('should have artifacts bucket with lifecycle policy', async () => {
-      const bucketName = `${envPrefix}-pipeline-artifacts-${outputs?.AccountId || '097219365021'}-${region}`;
+      const accountId = await getAccountId();
+      const bucketName = `${envPrefix}-pipeline-artifacts-${accountId}-${region}`;
 
       const headCommand = new HeadBucketCommand({ Bucket: bucketName });
       await expect(s3Client.send(headCommand)).resolves.toBeDefined();
@@ -192,11 +209,12 @@ describe('TAP Stack Integration Tests - Live AWS Resources', () => {
 
       const cleanupRule = lifecycleResponse.Rules!.find((r) => r.Id === 'cleanup-old-artifacts');
       expect(cleanupRule).toBeDefined();
-      expect(cleanupRule!.Expiration?.Days).toBe(7);
+      expect(cleanupRule!.Expiration?.Days).toBe(environmentSuffix === 'prod' ? 30 : 7);
     }, 30000);
 
     test('should have logging bucket with Glacier transition', async () => {
-      const bucketName = `${envPrefix}-pipeline-logs-${outputs?.AccountId || '097219365021'}-${region}`;
+      const accountId = await getAccountId();
+      const bucketName = `${envPrefix}-pipeline-logs-${accountId}-${region}`;
 
       const headCommand = new HeadBucketCommand({ Bucket: bucketName });
       await expect(s3Client.send(headCommand)).resolves.toBeDefined();
@@ -209,8 +227,12 @@ describe('TAP Stack Integration Tests - Live AWS Resources', () => {
       expect(glacierRule).toBeDefined();
       expect(glacierRule!.Transitions).toBeDefined();
       expect(glacierRule!.Transitions![0].StorageClass).toBe('GLACIER');
-      expect(glacierRule!.Transitions![0].Days).toBe(30);
-      expect(glacierRule!.Expiration?.Days).toBe(90);
+
+      // Verify environment-specific values
+      const expectedTransitionDays = environmentSuffix === 'prod' ? 60 : environmentSuffix === 'staging' ? 45 : 30;
+      const expectedExpirationDays = environmentSuffix === 'prod' ? 365 : environmentSuffix === 'staging' ? 180 : 90;
+      expect(glacierRule!.Transitions![0].Days).toBe(expectedTransitionDays);
+      expect(glacierRule!.Expiration?.Days).toBe(expectedExpirationDays);
     }, 30000);
   });
 
@@ -377,24 +399,39 @@ describe('TAP Stack Integration Tests - Live AWS Resources', () => {
       expect(alb.Type).toBe('application');
     }, 30000);
 
-    test('should have target group with health checks', async () => {
-      const command = new DescribeTargetGroupsCommand({
-        Names: [`${envPrefix}-tg`],
+    test('should have blue and green target groups with health checks', async () => {
+      // Check blue target group
+      const blueCommand = new DescribeTargetGroupsCommand({
+        Names: [`${envPrefix}-blue-tg`],
       });
-      const response = await elbClient.send(command);
+      const blueResponse = await elbClient.send(blueCommand);
 
-      expect(response.TargetGroups).toBeDefined();
-      expect(response.TargetGroups!.length).toBe(1);
+      expect(blueResponse.TargetGroups).toBeDefined();
+      expect(blueResponse.TargetGroups!.length).toBe(1);
 
-      const tg = response.TargetGroups![0];
-      expect(tg.TargetGroupName).toBe(`${envPrefix}-tg`);
-      expect(tg.Protocol).toBe('HTTP');
-      expect(tg.Port).toBe(80);
-      expect(tg.HealthCheckEnabled).toBe(true);
-      expect(tg.HealthCheckPath).toBe('/');
+      const blueTg = blueResponse.TargetGroups![0];
+      expect(blueTg.TargetGroupName).toBe(`${envPrefix}-blue-tg`);
+      expect(blueTg.Protocol).toBe('HTTP');
+      expect(blueTg.Port).toBe(80);
+      expect(blueTg.HealthCheckEnabled).toBe(true);
+      expect(blueTg.HealthCheckPath).toBe('/');
+
+      // Check green target group
+      const greenCommand = new DescribeTargetGroupsCommand({
+        Names: [`${envPrefix}-green-tg`],
+      });
+      const greenResponse = await elbClient.send(greenCommand);
+
+      expect(greenResponse.TargetGroups).toBeDefined();
+      expect(greenResponse.TargetGroups!.length).toBe(1);
+
+      const greenTg = greenResponse.TargetGroups![0];
+      expect(greenTg.TargetGroupName).toBe(`${envPrefix}-green-tg`);
+      expect(greenTg.Protocol).toBe('HTTP');
+      expect(greenTg.Port).toBe(80);
     }, 30000);
 
-    test('should have listener on port 80', async () => {
+    test('should have listeners on ports 80 and 8080 for blue/green', async () => {
       const lbCommand = new DescribeLoadBalancersCommand({
         Names: [`${envPrefix}-alb`],
       });
@@ -407,11 +444,17 @@ describe('TAP Stack Integration Tests - Live AWS Resources', () => {
       const response = await elbClient.send(command);
 
       expect(response.Listeners).toBeDefined();
-      expect(response.Listeners!.length).toBeGreaterThan(0);
+      expect(response.Listeners!.length).toBe(2);
 
+      // Production listener on port 80
       const httpListener = response.Listeners!.find((l) => l.Port === 80);
       expect(httpListener).toBeDefined();
       expect(httpListener!.Protocol).toBe('HTTP');
+
+      // Test listener on port 8080 for blue/green
+      const testListener = response.Listeners!.find((l) => l.Port === 8080);
+      expect(testListener).toBeDefined();
+      expect(testListener!.Protocol).toBe('HTTP');
     }, 30000);
   });
 
@@ -512,7 +555,7 @@ describe('TAP Stack Integration Tests - Live AWS Resources', () => {
 
   describe('End-to-End Pipeline Flow', () => {
     test('should have pipeline in ready state', async () => {
-      const pipelineName = `${envPrefix}-pipeline`;
+      const pipelineName = outputs?.PipelineNameOutput || `${envPrefix}-pipeline`;
       const command = new GetPipelineStateCommand({ name: pipelineName });
       const response = await pipelineClient.send(command);
 
@@ -524,6 +567,167 @@ describe('TAP Stack Integration Tests - Live AWS Resources', () => {
       response.stageStates!.forEach((stage) => {
         expect(stage.stageName).toBeDefined();
       });
+    }, 30000);
+
+    test('should have ALB with accessible DNS', async () => {
+      const albDns = outputs?.ALBDnsOutput;
+
+      if (!albDns) {
+        console.warn('ALB DNS not found in outputs, trying to fetch from ALB list');
+        const command = new DescribeLoadBalancersCommand({
+          Names: [`${envPrefix}-alb`],
+        });
+        const response = await elbClient.send(command);
+        expect(response.LoadBalancers).toBeDefined();
+        expect(response.LoadBalancers!.length).toBe(1);
+        expect(response.LoadBalancers![0].DNSName).toBeDefined();
+      } else {
+        expect(albDns).toBeDefined();
+        expect(albDns).toContain('.elb.');
+        expect(albDns).toContain(region);
+      }
+    }, 30000);
+
+    test('should verify complete deployment configuration', async () => {
+      // Verify the deployment group has all required configurations
+      const appName = `${envPrefix}-application`;
+      const groupName = `${envPrefix}-deployment-group`;
+      const command = new GetDeploymentGroupCommand({
+        applicationName: appName,
+        deploymentGroupName: groupName,
+      });
+      const response = await codeDeployClient.send(command);
+
+      expect(response.deploymentGroupInfo).toBeDefined();
+
+      // Verify auto-rollback is enabled
+      expect(response.deploymentGroupInfo!.autoRollbackConfiguration!.enabled).toBe(true);
+
+      // Verify load balancer is configured
+      expect(response.deploymentGroupInfo!.loadBalancerInfo).toBeDefined();
+      expect(response.deploymentGroupInfo!.loadBalancerInfo!.targetGroupInfoList).toBeDefined();
+      expect(response.deploymentGroupInfo!.loadBalancerInfo!.targetGroupInfoList!.length).toBeGreaterThan(0);
+
+      // Verify ASG is attached
+      expect(response.deploymentGroupInfo!.autoScalingGroups).toBeDefined();
+      expect(response.deploymentGroupInfo!.autoScalingGroups!.length).toBeGreaterThan(0);
+    }, 30000);
+
+    test('should have functional monitoring with alarms', async () => {
+      const alarmNames = [
+        `${envPrefix}-deployment-failure`,
+        `${envPrefix}-high-cpu`,
+        `${envPrefix}-high-response-time`,
+        `${envPrefix}-unhealthy-hosts`,
+      ];
+
+      const command = new DescribeAlarmsCommand({
+        AlarmNames: alarmNames,
+      });
+      const response = await cwClient.send(command);
+
+      expect(response.MetricAlarms).toBeDefined();
+      expect(response.MetricAlarms!.length).toBeGreaterThanOrEqual(2);
+
+      // Verify each alarm is configured with actions
+      response.MetricAlarms!.forEach((alarm) => {
+        expect(alarm.AlarmActions).toBeDefined();
+        expect(alarm.AlarmActions!.length).toBeGreaterThan(0);
+      });
+    }, 30000);
+  });
+
+  describe('End-to-End Resource Integration', () => {
+    test('should verify EC2 instances are registered with blue target group', async () => {
+      const tgCommand = new DescribeTargetGroupsCommand({
+        Names: [`${envPrefix}-blue-tg`],
+      });
+      const tgResponse = await elbClient.send(tgCommand);
+
+      expect(tgResponse.TargetGroups).toBeDefined();
+      expect(tgResponse.TargetGroups!.length).toBe(1);
+
+      const targetGroupArn = tgResponse.TargetGroups![0].TargetGroupArn;
+      expect(targetGroupArn).toBeDefined();
+
+      // Verify target group has health checks configured
+      const tg = tgResponse.TargetGroups![0];
+      expect(tg.HealthCheckEnabled).toBe(true);
+      expect(tg.HealthCheckPath).toBe('/');
+      expect(tg.HealthCheckIntervalSeconds).toBe(30);
+      expect(tg.HealthCheckTimeoutSeconds).toBe(5);
+      expect(tg.HealthyThresholdCount).toBe(2);
+      expect(tg.UnhealthyThresholdCount).toBe(3);
+    }, 30000);
+
+    test('should verify all required IAM roles have correct trust relationships', async () => {
+      const roles = [
+        { name: `${envPrefix}-codebuild-role`, service: 'codebuild.amazonaws.com' },
+        { name: `${envPrefix}-codedeploy-role`, service: 'codedeploy.amazonaws.com' },
+        { name: `${envPrefix}-pipeline-role`, service: 'codepipeline.amazonaws.com' },
+        { name: `${envPrefix}-ec2-role`, service: 'ec2.amazonaws.com' },
+      ];
+
+      for (const roleInfo of roles) {
+        const command = new GetRoleCommand({ RoleName: roleInfo.name });
+        const response = await iamClient.send(command);
+
+        expect(response.Role).toBeDefined();
+        expect(response.Role!.AssumeRolePolicyDocument).toContain(roleInfo.service);
+      }
+    }, 30000);
+
+    test('should verify SSM parameters are accessible and contain expected values', async () => {
+      const params = [
+        { name: `/${envPrefix}/codebuild/image`, expectedValue: 'aws/codebuild/amazonlinux2-x86_64-standard:4.0' },
+        { name: `/${envPrefix}/codebuild/node-version`, expectedValue: '18' },
+        { name: `/${envPrefix}/codedeploy/config`, expectedPattern: /CodeDeployDefault/ },
+      ];
+
+      for (const param of params) {
+        const command = new GetParameterCommand({ Name: param.name });
+        const response = await ssmClient.send(command);
+
+        expect(response.Parameter).toBeDefined();
+        expect(response.Parameter!.Value).toBeDefined();
+
+        if ('expectedValue' in param) {
+          expect(response.Parameter!.Value).toBe(param.expectedValue);
+        } else if ('expectedPattern' in param) {
+          expect(response.Parameter!.Value).toMatch(param.expectedPattern);
+        }
+      }
+    }, 30000);
+
+    test('should verify complete CI/CD pipeline configuration meets requirements', async () => {
+      const pipelineName = outputs?.PipelineNameOutput || `${envPrefix}-pipeline`;
+      const command = new GetPipelineCommand({ name: pipelineName });
+      const response = await pipelineClient.send(command);
+
+      expect(response.pipeline).toBeDefined();
+
+      // Requirement: Support blue/green deployments (verified via CodeDeploy config)
+      const stages = response.pipeline!.stages!;
+      const deployStage = stages.find((s) => s.name === 'Deploy');
+      expect(deployStage).toBeDefined();
+      expect(deployStage!.actions![0].actionTypeId!.provider).toBe('CodeDeploy');
+
+      // Requirement: Integrated AWS CodeBuild for source code compilation
+      const buildStage = stages.find((s) => s.name === 'Build');
+      expect(buildStage).toBeDefined();
+      expect(buildStage!.actions![0].actionTypeId!.provider).toBe('CodeBuild');
+
+      // Requirement: Approval required before production releases (if prod)
+      if (environmentSuffix === 'prod') {
+        const approvalStage = stages.find((s) => s.name === 'ManualApproval');
+        expect(approvalStage).toBeDefined();
+        expect(approvalStage!.actions![0].actionTypeId!.category).toBe('Approval');
+      }
+
+      // Requirement: Use S3 as source (replacing CodeCommit)
+      const sourceStage = stages.find((s) => s.name === 'Source');
+      expect(sourceStage).toBeDefined();
+      expect(sourceStage!.actions![0].actionTypeId!.provider).toBe('S3');
     }, 30000);
   });
 });

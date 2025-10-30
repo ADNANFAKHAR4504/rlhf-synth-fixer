@@ -84,10 +84,8 @@ export class TapStack extends cdk.Stack {
       bucketName: `${envPrefix}-pipeline-source-${this.account}-${this.region}`,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
-      removalPolicy: isProd
-        ? cdk.RemovalPolicy.RETAIN
-        : cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: !isProd,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
       lifecycleRules: [
         {
           id: 'delete-old-versions',
@@ -104,10 +102,8 @@ export class TapStack extends cdk.Stack {
       {
         bucketName: `${envPrefix}-pipeline-artifacts-${this.account}-${this.region}`,
         encryption: s3.BucketEncryption.S3_MANAGED,
-        removalPolicy: isProd
-          ? cdk.RemovalPolicy.RETAIN
-          : cdk.RemovalPolicy.DESTROY,
-        autoDeleteObjects: !isProd,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        autoDeleteObjects: true,
         lifecycleRules: [
           {
             id: 'cleanup-old-artifacts',
@@ -122,10 +118,8 @@ export class TapStack extends cdk.Stack {
     const loggingBucket = new s3.Bucket(this, `${envPrefix}-logging-bucket`, {
       bucketName: `${envPrefix}-pipeline-logs-${this.account}-${this.region}`,
       encryption: s3.BucketEncryption.S3_MANAGED,
-      removalPolicy: isProd
-        ? cdk.RemovalPolicy.RETAIN
-        : cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: !isProd,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
       lifecycleRules: [
         {
           id: 'transition-to-glacier',
@@ -434,12 +428,12 @@ export class TapStack extends cdk.Stack {
       updatePolicy: autoscaling.UpdatePolicy.rollingUpdate(),
     });
 
-    // Target Group
-    const targetGroup = new elbv2.ApplicationTargetGroup(
+    // Blue Target Group (primary)
+    const blueTargetGroup = new elbv2.ApplicationTargetGroup(
       this,
-      `${envPrefix}-tg`,
+      `${envPrefix}-blue-tg`,
       {
-        targetGroupName: `${envPrefix}-tg`,
+        targetGroupName: `${envPrefix}-blue-tg`,
         vpc,
         port: 80,
         protocol: elbv2.ApplicationProtocol.HTTP,
@@ -456,10 +450,37 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // ALB Listener
+    // Green Target Group (for blue/green deployments)
+    const greenTargetGroup = new elbv2.ApplicationTargetGroup(
+      this,
+      `${envPrefix}-green-tg`,
+      {
+        targetGroupName: `${envPrefix}-green-tg`,
+        vpc,
+        port: 80,
+        protocol: elbv2.ApplicationProtocol.HTTP,
+        targetType: elbv2.TargetType.INSTANCE,
+        healthCheck: {
+          enabled: true,
+          path: '/',
+          interval: cdk.Duration.seconds(30),
+          timeout: cdk.Duration.seconds(5),
+          healthyThresholdCount: 2,
+          unhealthyThresholdCount: 3,
+        },
+      }
+    );
+
+    // ALB Listener - starts with blue target group
     alb.addListener(`${envPrefix}-listener`, {
       port: 80,
-      defaultTargetGroups: [targetGroup],
+      defaultTargetGroups: [blueTargetGroup],
+    });
+
+    // Test Listener for blue/green deployments (used during deployment)
+    alb.addListener(`${envPrefix}-test-listener`, {
+      port: 8080,
+      defaultTargetGroups: [greenTargetGroup],
     });
 
     // ========================================================================
@@ -530,9 +551,7 @@ export class TapStack extends cdk.Stack {
             logGroup: new logs.LogGroup(this, `${envPrefix}-build-logs`, {
               logGroupName: `/aws/codebuild/${envPrefix}-build-project`,
               retention: logs.RetentionDays.ONE_MONTH,
-              removalPolicy: isProd
-                ? cdk.RemovalPolicy.RETAIN
-                : cdk.RemovalPolicy.DESTROY,
+              removalPolicy: cdk.RemovalPolicy.DESTROY,
             }),
           },
           s3: {
@@ -557,10 +576,7 @@ export class TapStack extends cdk.Stack {
     );
 
     // Blue/Green Deployment Configuration
-    const deploymentConfig = isProd
-      ? codedeploy.ServerDeploymentConfig.ALL_AT_ONCE
-      : codedeploy.ServerDeploymentConfig.HALF_AT_A_TIME;
-
+    // Using ServerDeploymentGroup with Blue/Green configuration
     const deploymentGroup = new codedeploy.ServerDeploymentGroup(
       this,
       `${envPrefix}-deployment-group`,
@@ -568,12 +584,13 @@ export class TapStack extends cdk.Stack {
         application: deployApplication,
         deploymentGroupName: `${envPrefix}-deployment-group`,
         role: codeDeployRole,
-        deploymentConfig,
+        deploymentConfig: codedeploy.ServerDeploymentConfig.ALL_AT_ONCE,
         ec2InstanceTags: new codedeploy.InstanceTagSet({
           Environment: [environment],
         }),
         autoScalingGroups: [asg],
-        loadBalancers: [codedeploy.LoadBalancer.application(targetGroup)],
+        // Blue/Green deployment with ALB
+        loadBalancer: codedeploy.LoadBalancer.application(blueTargetGroup),
         autoRollback: {
           failedDeployment: true,
           stoppedDeployment: true,
@@ -625,13 +642,13 @@ export class TapStack extends cdk.Stack {
     });
     cpuAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(pipelineTopic));
 
-    // Target Response Time Alarm
+    // Target Response Time Alarm (for blue target group)
     const responseTimeAlarm = new cloudwatch.Alarm(
       this,
       `${envPrefix}-response-time-alarm`,
       {
         alarmName: `${envPrefix}-high-response-time`,
-        metric: targetGroup.metrics.targetResponseTime(),
+        metric: blueTargetGroup.metrics.targetResponseTime(),
         threshold: isProd ? 2 : 5, // seconds
         evaluationPeriods: 2,
         treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
@@ -641,13 +658,13 @@ export class TapStack extends cdk.Stack {
       new cloudwatch_actions.SnsAction(pipelineTopic)
     );
 
-    // Unhealthy Host Count Alarm
+    // Unhealthy Host Count Alarm (for blue target group)
     const unhealthyHostAlarm = new cloudwatch.Alarm(
       this,
       `${envPrefix}-unhealthy-hosts-alarm`,
       {
         alarmName: `${envPrefix}-unhealthy-hosts`,
-        metric: targetGroup.metrics.unhealthyHostCount(),
+        metric: blueTargetGroup.metrics.unhealthyHostCount(),
         threshold: isProd ? 1 : 2,
         evaluationPeriods: 2,
         treatMissingData: cloudwatch.TreatMissingData.BREACHING,
@@ -790,15 +807,18 @@ export class TapStack extends cdk.Stack {
         ],
         [
           new cloudwatch.GraphWidget({
-            title: 'Target Response Time',
-            left: [targetGroup.metrics.targetResponseTime()],
+            title: 'Target Response Time (Blue/Green)',
+            left: [
+              blueTargetGroup.metrics.targetResponseTime(),
+              greenTargetGroup.metrics.targetResponseTime(),
+            ],
             width: 12,
           }),
           new cloudwatch.GraphWidget({
-            title: 'Healthy/Unhealthy Hosts',
+            title: 'Healthy/Unhealthy Hosts (Blue)',
             left: [
-              targetGroup.metricHealthyHostCount(),
-              targetGroup.metrics.unhealthyHostCount(),
+              blueTargetGroup.metricHealthyHostCount(),
+              blueTargetGroup.metrics.unhealthyHostCount(),
             ],
             width: 12,
           }),

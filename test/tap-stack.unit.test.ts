@@ -397,8 +397,12 @@ describe('TapStack Unit Tests', () => {
       });
     });
 
-    test('should create target group with health checks', () => {
+    test('should create blue and green target groups with health checks', () => {
+      template.resourceCountIs('AWS::ElasticLoadBalancingV2::TargetGroup', 2);
+
+      // Blue target group
       template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
+        Name: 'tap-dev-blue-tg',
         Port: 80,
         Protocol: 'HTTP',
         HealthCheckPath: '/',
@@ -407,11 +411,32 @@ describe('TapStack Unit Tests', () => {
         HealthyThresholdCount: 2,
         UnhealthyThresholdCount: 3,
       });
+
+      // Green target group
+      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
+        Name: 'tap-dev-green-tg',
+        Port: 80,
+        Protocol: 'HTTP',
+      });
     });
 
-    test('should create listener on port 80', () => {
+    test('should create listeners on ports 80 and 8080 for blue/green', () => {
+      template.resourceCountIs('AWS::ElasticLoadBalancingV2::Listener', 2);
+
+      // Production listener on port 80
       template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
         Port: 80,
+        Protocol: 'HTTP',
+        DefaultActions: Match.arrayWith([
+          Match.objectLike({
+            Type: 'forward',
+          }),
+        ]),
+      });
+
+      // Test listener on port 8080
+      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
+        Port: 8080,
         Protocol: 'HTTP',
         DefaultActions: Match.arrayWith([
           Match.objectLike({
@@ -523,6 +548,156 @@ describe('TapStack Unit Tests', () => {
         MaxSize: '10',
         DesiredCapacity: '2',
       });
+    });
+
+    test('should include manual approval stage for production', () => {
+      const prodApp = new cdk.App();
+      const prodStack = new TapStack(prodApp, 'ProdTestStack', {
+        environmentSuffix: 'prod',
+        env: { region: 'ap-northeast-1', account: '097219365021' },
+      });
+      const prodTemplate = Template.fromStack(prodStack);
+
+      prodTemplate.hasResourceProperties('AWS::CodePipeline::Pipeline', {
+        Stages: Match.arrayWith([
+          Match.objectLike({
+            Name: 'ManualApproval',
+            Actions: Match.arrayWith([
+              Match.objectLike({
+                Name: 'ApproveDeployment',
+                ActionTypeId: Match.objectLike({
+                  Category: 'Approval',
+                  Provider: 'Manual',
+                }),
+              }),
+            ]),
+          }),
+        ]),
+      });
+    });
+
+    test('should use different lifecycle policies for production', () => {
+      const prodApp = new cdk.App();
+      const prodStack = new TapStack(prodApp, 'ProdTestStack', {
+        environmentSuffix: 'prod',
+        env: { region: 'ap-northeast-1', account: '097219365021' },
+      });
+      const prodTemplate = Template.fromStack(prodStack);
+
+      prodTemplate.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: 'tap-prod-pipeline-logs-097219365021-ap-northeast-1',
+        LifecycleConfiguration: {
+          Rules: [
+            {
+              Id: 'transition-to-glacier',
+              Status: 'Enabled',
+              ExpirationInDays: 365,
+              Transitions: [
+                {
+                  StorageClass: 'GLACIER',
+                  TransitionInDays: 60,
+                },
+              ],
+            },
+          ],
+        },
+      });
+    });
+  });
+
+  describe('Staging Environment Configuration', () => {
+    test('should use appropriate instances for staging', () => {
+      const stagingApp = new cdk.App();
+      const stagingStack = new TapStack(stagingApp, 'StagingTestStack', {
+        environmentSuffix: 'staging',
+        env: { region: 'ap-northeast-1', account: '097219365021' },
+      });
+      const stagingTemplate = Template.fromStack(stagingStack);
+
+      stagingTemplate.hasResourceProperties('AWS::EC2::LaunchTemplate', {
+        LaunchTemplateData: Match.objectLike({
+          InstanceType: 't3.small',
+        }),
+      });
+    });
+
+    test('should use appropriate capacity for staging', () => {
+      const stagingApp = new cdk.App();
+      const stagingStack = new TapStack(stagingApp, 'StagingTestStack', {
+        environmentSuffix: 'staging',
+        env: { region: 'ap-northeast-1', account: '097219365021' },
+      });
+      const stagingTemplate = Template.fromStack(stagingStack);
+
+      stagingTemplate.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
+        MinSize: '2',
+        MaxSize: '5',
+        DesiredCapacity: '2',
+      });
+    });
+  });
+
+  describe('Context Configuration', () => {
+    test('should add email subscription when notificationEmail is provided', () => {
+      const emailApp = new cdk.App({ context: { notificationEmail: 'test@example.com' } });
+      const emailStack = new TapStack(emailApp, 'EmailTestStack', {
+        environmentSuffix: 'dev',
+        env: { region: 'ap-northeast-1', account: '097219365021' },
+      });
+      const emailTemplate = Template.fromStack(emailStack);
+
+      emailTemplate.hasResourceProperties('AWS::SNS::Subscription', {
+        Protocol: 'email',
+        Endpoint: 'test@example.com',
+      });
+    });
+
+    test('should not add email subscription when notificationEmail is not provided', () => {
+      // This is the default test case (emailStack without context)
+      const noEmailApp = new cdk.App();
+      const noEmailStack = new TapStack(noEmailApp, 'NoEmailTestStack', {
+        environmentSuffix: 'dev',
+        env: { region: 'ap-northeast-1', account: '097219365021' },
+      });
+      const noEmailTemplate = Template.fromStack(noEmailStack);
+
+      // Should not have email subscription
+      expect(() => {
+        noEmailTemplate.hasResourceProperties('AWS::SNS::Subscription', {
+          Protocol: 'email',
+        });
+      }).toThrow();
+    });
+  });
+
+  describe('CloudWatch Dashboard', () => {
+    test('should create CloudWatch Dashboard with pipeline widgets', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+        DashboardName: 'tap-dev-pipeline-dashboard',
+      });
+    });
+  });
+
+  describe('Stack Outputs', () => {
+    test('should export environment output', () => {
+      const outputs = template.toJSON().Outputs;
+      expect(outputs).toHaveProperty('EnvironmentOutput');
+      expect(outputs.EnvironmentOutput.Description).toContain('environment');
+    });
+
+    test('should export pipeline name output', () => {
+      const outputs = template.toJSON().Outputs;
+      expect(outputs).toHaveProperty('PipelineNameOutput');
+    });
+
+    test('should export source bucket output', () => {
+      const outputs = template.toJSON().Outputs;
+      expect(outputs).toHaveProperty('SourceBucketOutput');
+    });
+
+    test('should export ALB DNS output', () => {
+      const outputs = template.toJSON().Outputs;
+      expect(outputs).toHaveProperty('ALBDnsOutput');
     });
   });
 });
