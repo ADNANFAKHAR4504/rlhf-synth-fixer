@@ -25,12 +25,12 @@ from botocore.exceptions import ClientError
 
 # Load deployment flat outputs
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-FLAT_OUTPUTS_PATH = os.path.join(BASE_DIR, '..', '..', 'flat-outputs.json')
+FLAT_OUTPUTS_PATH = os.path.join(BASE_DIR, '..', '..', 'cfn-outputs', 'flat-outputs.json')
 
 
 def load_outputs() -> Dict[str, Any]:
     """
-    Load and return flat deployment outputs from flat-outputs.json.
+    Load and return flat deployment outputs from cfn-outputs/flat-outputs.json.
     
     This file is generated after Pulumi deployment and contains all stack outputs
     in a flattened JSON structure for easy consumption by integration tests.
