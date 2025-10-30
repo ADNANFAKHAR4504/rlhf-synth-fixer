@@ -846,8 +846,6 @@ AuditLogsTable:
       Enabled: true
 ```
 
-Now, let's define the S3 bucket for transaction archives:
-
 ```yaml
 # S3 Bucket for Transaction Archives
 TransactionArchivesBucket:

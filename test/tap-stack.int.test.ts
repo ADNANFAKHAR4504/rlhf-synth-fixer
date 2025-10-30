@@ -33,8 +33,8 @@ const outputs = JSON.parse(
 debugLog('SETUP', 'CloudFormation outputs loaded', outputs);
 
 // Detect if this is a mock environment for development/CI
-const isMockEnvironment = !outputs.ApiEndpoint || 
-  outputs.ApiEndpoint.includes('mock') || 
+const isMockEnvironment = !outputs.ApiEndpoint ||
+  outputs.ApiEndpoint.includes('mock') ||
   outputs.ApiKey.includes('mock') ||
   outputs.ApiKey.length < 20; // Real AWS API keys are typically 20+ characters
 
@@ -788,9 +788,9 @@ describe('Serverless Payment Workflow Integration Tests', () => {
         throw new Error('Lambda function configuration or environment variables are undefined');
       }
       const envVars = validatorFunction.Configuration.Environment.Variables;
-      
+
       debugLog('TEST_9', 'Validator function environment variables', envVars);
-      
+
       expect(envVars).toBeDefined();
       expect(envVars).toHaveProperty('TRANSACTIONS_TABLE');
       expect(envVars).toHaveProperty('AUDIT_LOGS_TABLE');
