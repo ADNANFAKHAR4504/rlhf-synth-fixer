@@ -422,10 +422,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(encryptionConfig.ServerSideEncryptionByDefault.KMSMasterKeyID['Fn::GetAtt']).toEqual(['S3KMSKey', 'Arn']);
     });
 
-    test('EBS encryption lambda should reference EBS KMS key', () => {
-      const lambda = template.Resources.EBSEncryptionLambda;
-      const kmsKeyId = lambda.Properties.Environment.Variables.KMS_KEY_ID;
-      expect(kmsKeyId['Fn::GetAtt']).toEqual(['EBSKMSKey', 'Arn']);
+    test('EBS encryption custom resource should reference EBS KMS key', () => {
+      const customResource = template.Resources.EBSEncryptionCustomResource;
+      const kmsKeyId = customResource.Properties.KmsKeyId;
+      expect(kmsKeyId.Ref).toBe('EBSKMSKey');
     });
 
     test('Config delivery channel should reference Config bucket', () => {
@@ -435,12 +435,12 @@ describe('TapStack CloudFormation Template', () => {
 
     test('Config recorder should reference Config role', () => {
       const recorder = template.Resources.ConfigRecorder;
-      expect(recorder.Properties.RoleArn['Fn::GetAtt']).toEqual(['ConfigRole', 'Arn']);
+      expect(recorder.Properties.RoleARN['Fn::GetAtt']).toEqual(['ConfigRole', 'Arn']);
     });
 
     test('AllUsersGroup should have MFA policy attached', () => {
       const group = template.Resources.AllUsersGroup;
-      expect(group.Properties.ManagedPolicyArns).toContain({ Ref: 'MFARequiredPolicy' });
+      expect(group.Properties.ManagedPolicyArns).toContainEqual({ Ref: 'MFARequiredPolicy' });
     });
   });
 
