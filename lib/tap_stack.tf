@@ -1633,7 +1633,7 @@ resource "aws_neptune_cluster" "main" {
   vpc_security_group_ids               = [aws_security_group.neptune[0].id]
   
   storage_encrypted                   = true
-  kms_key_id                          = aws_kms_key.master.arn
+  kms_key_arn                         = aws_kms_key.master.arn
   iam_database_authentication_enabled = true
   
   backup_retention_period      = var.env == "prod" ? 30 : 7
