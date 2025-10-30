@@ -127,7 +127,7 @@ def write_audit_log(audit_data):
 **Requirement**: Keep the code single-file, well-commented
 
 **Implementation**:
-- Complete implementation in single `lib/tap-stack.ts` file (1,105 lines)
+- Complete implementation in single `lib/tap-stack.ts` file (1,167 lines)
 - Comprehensive inline documentation for every major component
 - Clear architectural sections with separating comments
 - Detailed function and class-level documentation
