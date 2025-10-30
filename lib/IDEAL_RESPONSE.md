@@ -6,6 +6,8 @@ This implementation provides a complete HIPAA-compliant medical imaging processi
 
 ```python
 """Main CDK stack for HIPAA-compliant medical imaging pipeline."""
+
+import json
 import os
 from aws_cdk import (
     Stack,
@@ -20,6 +22,8 @@ from aws_cdk import (
     aws_iam as iam,
     aws_apigateway as apigateway,
     aws_logs as logs,
+    aws_cloudwatch as aws_cloudwatch,
+    ArnFormat,
     CfnOutput,
     RemovalPolicy,
     Duration,
@@ -44,6 +48,7 @@ class TapStack(Stack):
         environment_suffix = self.node.try_get_context("environmentSuffix")
         if not environment_suffix:
             environment_suffix = os.environ.get("ENVIRONMENT_SUFFIX", "dev")
+        database_name = f"medical_imaging_{environment_suffix}"
 
         # Create KMS key for encryption
         kms_key = kms.Key(
@@ -52,6 +57,50 @@ class TapStack(Stack):
             description=f"KMS key for medical imaging pipeline {environment_suffix}",
             enable_key_rotation=True,
             removal_policy=RemovalPolicy.DESTROY,
+        )
+        log_service_principal = iam.ServicePrincipal(
+            f"logs.{Stack.of(self).region}.amazonaws.com"
+        )
+        log_group_arn_pattern = self.format_arn(
+            service="logs",
+            resource="log-group",
+            resource_name="*",
+            arn_format=ArnFormat.COLON_RESOURCE_NAME,
+        )
+        kms_key.add_to_resource_policy(
+            iam.PolicyStatement(
+                sid="AllowCloudWatchLogsEncryption",
+                effect=iam.Effect.ALLOW,
+                principals=[log_service_principal],
+                actions=[
+                    "kms:Encrypt",
+                    "kms:Decrypt",
+                    "kms:ReEncrypt*",
+                    "kms:GenerateDataKey*",
+                ],
+                resources=["*"],
+                conditions={
+                    "ArnLike": {
+                        "kms:EncryptionContext:aws:logs:arn": [
+                            log_group_arn_pattern,
+                            f"{log_group_arn_pattern}:*",
+                        ]
+                    },
+                },
+            )
+        )
+        kms_key.add_to_resource_policy(
+            iam.PolicyStatement(
+                sid="AllowCloudWatchLogsGrant",
+                effect=iam.Effect.ALLOW,
+                principals=[log_service_principal],
+                actions=[
+                    "kms:DescribeKey",
+                    "kms:CreateGrant",
+                ],
+                resources=["*"],
+                conditions={"Bool": {"kms:GrantIsForAWSResource": True}},
+            )
         )
 
         # Create VPC with multi-AZ configuration
@@ -144,9 +193,11 @@ class TapStack(Stack):
             secret_name=f"medical-imaging-db-secret-{environment_suffix}",
             description="Database credentials for Aurora PostgreSQL",
             generate_secret_string=secretsmanager.SecretStringGenerator(
-                secret_string_template='{"username": "admin"}',
+                secret_string_template=json.dumps(
+                    {"username": "dbuser", "dbname": database_name}
+                ),
                 generate_string_key="password",
-                exclude_characters="\"@/\\",
+                exclude_characters='"@/\\',
                 password_length=32,
             ),
             encryption_key=kms_key,
@@ -159,8 +210,9 @@ class TapStack(Stack):
             "AuroraCluster",
             cluster_identifier=f"medical-imaging-db-{environment_suffix}",
             engine=rds.DatabaseClusterEngine.aurora_postgres(
-                version=rds.AuroraPostgresEngineVersion.VER_15_4
+                version=rds.AuroraPostgresEngineVersion.VER_16_4
             ),
+            default_database_name=database_name,
             credentials=rds.Credentials.from_secret(db_secret),
             writer=rds.ClusterInstance.serverless_v2(
                 "writer",
@@ -178,7 +230,9 @@ class TapStack(Stack):
             serverless_v2_min_capacity=0.5,
             serverless_v2_max_capacity=2,
             vpc=vpc,
-            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_ISOLATED),
+            vpc_subnets=ec2.SubnetSelection(
+                subnet_type=ec2.SubnetType.PRIVATE_ISOLATED
+            ),
             security_groups=[rds_security_group],
             storage_encrypted=True,
             storage_encryption_key=kms_key,
@@ -198,7 +252,9 @@ class TapStack(Stack):
             lifecycle_policy=efs.LifecyclePolicy.AFTER_7_DAYS,
             performance_mode=efs.PerformanceMode.GENERAL_PURPOSE,
             throughput_mode=efs.ThroughputMode.BURSTING,
-            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
+            vpc_subnets=ec2.SubnetSelection(
+                subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
+            ),
             security_group=efs_security_group,
             removal_policy=RemovalPolicy.DESTROY,
         )
@@ -228,7 +284,7 @@ class TapStack(Stack):
             replication_group_description="Redis cluster for medical imaging queue",
             engine="redis",
             engine_version="7.0",
-            cache_node_type="cache.t4g.micro",
+            cache_node_type="cache.t3.small",
             num_cache_clusters=2,
             automatic_failover_enabled=True,
             multi_az_enabled=True,
@@ -251,6 +307,7 @@ class TapStack(Stack):
             encryption_key=kms_key,
             retention_period=Duration.hours(24),
         )
+        kinesis_stream.apply_removal_policy(RemovalPolicy.DESTROY)
 
         # Create ECS cluster
         ecs_cluster = ecs.Cluster(
@@ -341,7 +398,9 @@ class TapStack(Stack):
         # Add container to task definition
         container = task_definition.add_container(
             "ProcessorContainer",
-            image=ecs.ContainerImage.from_registry("public.ecr.aws/docker/library/python:3.11-slim"),
+            image=ecs.ContainerImage.from_registry(
+                "public.ecr.aws/docker/library/python:3.11-slim"
+            ),
             logging=ecs.LogDriver.aws_logs(
                 stream_prefix="medical-imaging",
                 log_group=log_group,
@@ -351,11 +410,11 @@ class TapStack(Stack):
                 "REDIS_HOST": redis_cluster.attr_primary_end_point_address,
                 "REDIS_PORT": redis_cluster.attr_primary_end_point_port,
                 "AWS_REGION": self.region,
+                "DB_HOST": db_cluster.cluster_endpoint.hostname,
+                "DB_PORT": str(db_cluster.cluster_endpoint.port),
+                "DB_NAME": database_name,
             },
             secrets={
-                "DB_HOST": ecs.Secret.from_secrets_manager(db_secret, "host"),
-                "DB_PORT": ecs.Secret.from_secrets_manager(db_secret, "port"),
-                "DB_NAME": ecs.Secret.from_secrets_manager(db_secret, "dbname"),
                 "DB_USERNAME": ecs.Secret.from_secrets_manager(db_secret, "username"),
                 "DB_PASSWORD": ecs.Secret.from_secrets_manager(db_secret, "password"),
             },
@@ -378,7 +437,9 @@ class TapStack(Stack):
             task_definition=task_definition,
             service_name=f"medical-imaging-service-{environment_suffix}",
             desired_count=1,
-            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
+            vpc_subnets=ec2.SubnetSelection(
+                subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
+            ),
             security_groups=[ecs_security_group],
             enable_execute_command=True,
         )
@@ -393,6 +454,23 @@ class TapStack(Stack):
             removal_policy=RemovalPolicy.DESTROY,
         )
 
+        api_gateway_log_role = iam.Role(
+            self,
+            "ApiGatewayCloudWatchRole",
+            assumed_by=iam.ServicePrincipal("apigateway.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+                )
+            ],
+        )
+
+        api_gateway_account = apigateway.CfnAccount(
+            self,
+            "ApiGatewayAccountConfig",
+            cloud_watch_role_arn=api_gateway_log_role.role_arn,
+        )
+
         api = apigateway.RestApi(
             self,
             "MedicalImagingApi",
@@ -404,12 +482,13 @@ class TapStack(Stack):
                 data_trace_enabled=True,
                 metrics_enabled=True,
                 access_log_destination=apigateway.LogGroupLogDestination(api_log_group),
-                access_log_format=apigateway.AccessLogFormat.json_with_standard_fields(),
+                access_log_format=apigateway.AccessLogFormat.clf(),
             ),
             endpoint_configuration=apigateway.EndpointConfiguration(
                 types=[apigateway.EndpointType.REGIONAL]
             ),
         )
+        api.node.add_dependency(api_gateway_account)
 
         # Add a health check endpoint
         health_resource = api.root.add_resource("health")
@@ -447,8 +526,8 @@ class TapStack(Stack):
             method_responses=[apigateway.MethodResponse(status_code="200")],
         )
 
-        # CloudWatch alarms for monitoring
-        db_cluster.metric_cpuutilization().create_alarm(
+        # # CloudWatch alarms for monitoring
+        db_cluster.metric_cpu_utilization().create_alarm(
             self,
             "DatabaseCpuAlarm",
             alarm_name=f"medical-imaging-db-cpu-{environment_suffix}",
@@ -464,7 +543,7 @@ class TapStack(Stack):
             alarm_description="Kinesis stream processing issues",
             threshold=0.95,
             evaluation_periods=2,
-            comparison_operator=logs.ComparisonOperator.LESS_THAN_THRESHOLD,
+            comparison_operator=aws_cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
         )
 
         # Outputs
@@ -539,6 +618,7 @@ class TapStack(Stack):
             description="KMS key ID for encryption",
             export_name=f"MedicalImagingKmsKeyId-{environment_suffix}",
         )
+
 ```
 
 ## File: tap.py
