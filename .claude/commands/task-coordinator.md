@@ -237,9 +237,7 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
 - [x] Code in ideal response and tapstack are the same" \
      --base main \
      --head ${BRANCH_NAME} \
-     --label "synth" \
-     --label "automated" \
-     --label "complexity-${COMPLEXITY}"
+     --label "Synth-2"
    ```
 
 7. **Capture PR number**:
@@ -391,9 +389,12 @@ Example metadata.json:
   "team": "synth",
   "startedAt": "2025-08-12T13:19:10-05:00",
   "subtask": "Application Deployment",
-  "subject_labels": ["CI/CD Pipeline", "Security Configuration"]
+  "subject_labels": ["CI/CD Pipeline", "Security Configuration"],
+  "aws_services": [],
 }
 ```
+
+**CRITICAL**: `aws_services` must be initialized as an empty array `[]`. It will be populated by iac-code-reviewer based on implemented services.
 
 **Validate immediately**:
 ```bash
