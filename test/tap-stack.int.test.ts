@@ -109,14 +109,14 @@ describeIf(cfnOutputsExist)('Secure Baseline Stack Integration Tests', () => {
   });
 
   describe('KMS Key Validation', () => {
-    it('KMS Key ARN should be in us-east-1 region', () => {
-      expect(outputs.KmsKeyArn).toContain(':us-east-1:');
+    it('KMS Key ARN should be in us-east-2 region', () => {
+      expect(outputs.KmsKeyArn).toContain(':us-east-2:');
     });
   });
 
   describe('Secrets Manager Validation', () => {
-    it('Secret ARN should be in us-east-1 region', () => {
-      expect(outputs.SecretArn).toContain(':us-east-1:');
+    it('Secret ARN should be in us-east-2 region', () => {
+      expect(outputs.SecretArn).toContain(':us-east-2:');
     });
   });
 });

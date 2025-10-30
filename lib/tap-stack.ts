@@ -28,7 +28,7 @@ export class TapStack extends TerraformStack {
     super(scope, id);
 
     const { environmentSuffix } = props;
-    const region = 'us-east-1';
+    const region = 'us-east-2';
 
     // Provider
     new AwsProvider(this, 'aws', {

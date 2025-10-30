@@ -17,10 +17,10 @@ describe('TapStack Unit Tests (Secure Baseline)', () => {
   const findResources = (type: string) => synthesized.resource[type] || {};
   const countResources = (type: string) => Object.keys(findResources(type)).length;
 
-  it('should create one AWS provider in us-east-1', () => {
+  it('should create one AWS provider in us-east-2', () => {
     const providers = synthesized.provider.aws;
     expect(Array.isArray(providers)).toBe(true);
-    expect(providers[0]).toEqual(expect.objectContaining({ region: 'us-east-1' }));
+    expect(providers[0]).toEqual(expect.objectContaining({ region: 'us-east-2' }));
     expect(providers.length).toBe(1);
   });
 

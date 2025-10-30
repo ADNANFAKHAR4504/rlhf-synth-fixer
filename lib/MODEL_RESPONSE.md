@@ -27,7 +27,7 @@ class SecureAwsBaselineStack extends TerraformStack {
 
     // Provider configuration
     new AwsProvider(this, 'aws', {
-      region: 'us-east-1',
+      region: 'us-east-2',
       defaultTags: [
         {
           tags: {

@@ -4,7 +4,7 @@ import { TapStack } from '../lib/tap-stack';
 
 const app = new App();
 
-const environmentSuffix = process.env.ENV_SUFFIX || 'prod-soc-v2';
+const environmentSuffix = process.env.ENV_SUFFIX || 'prod-soc-v3';
 
 new TapStack(app, 'Soc2BaselineStack', {
   environmentSuffix: environmentSuffix,

@@ -4,4 +4,4 @@ Develop a CDKTF (TypeScript) program code that provisions a secure AWS baseline 
 - Ensure all resources are properly tagged and output the KMS key ARNs, IAM role ARN, and Config rule names for integration with external monitoring tools.
 - The deployment should be fully automated with minimal user input and reusable for multiple environments.
 - All code should be in one main file.
-- Use us-east-1 as the region.
+- Use us-east-2 as the region.
