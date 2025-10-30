@@ -551,7 +551,7 @@ jobs:
           fi
       
       - name: Verify IaC Program Optimization script exists
-        if: ${{ contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) }}
+        if: ${{ contains(needs.detect-metadata.outputs.subject_labels, 'Infrastructure Analysis/Monitoring') }}
         run: |
           if [ ! -f "lib/analyse.py" ] && [ ! -f "lib/analyse.sh" ]; then
             echo "❌ Expected lib/analyse.py or lib/analyse.sh for IaC Program Optimization task"
