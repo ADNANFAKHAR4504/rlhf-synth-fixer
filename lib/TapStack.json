@@ -1,15 +1,17 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "RDS PostgreSQL 14.7 database infrastructure for multi-environment deployment (dev, staging, prod) with environment-specific configurations",
-
   "Parameters": {
     "EnvironmentType": {
       "Type": "String",
       "Default": "dev",
-      "AllowedValues": ["dev", "staging", "prod"],
+      "AllowedValues": [
+        "dev",
+        "staging",
+        "prod"
+      ],
       "Description": "Environment type that controls instance sizing, Multi-AZ, and backup retention settings"
     },
-
     "EnvironmentSuffix": {
       "Type": "String",
       "Description": "Unique suffix to append to all resource names for environment isolation",
@@ -18,22 +20,18 @@
       "AllowedPattern": "[a-z0-9-]+",
       "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
     },
-
     "SubnetId1": {
       "Type": "AWS::EC2::Subnet::Id",
       "Description": "First subnet ID in an existing VPC (must be in different AZ from SubnetId2)"
     },
-
     "SubnetId2": {
       "Type": "AWS::EC2::Subnet::Id",
       "Description": "Second subnet ID in an existing VPC (must be in different AZ from SubnetId1)"
     },
-
     "VpcId": {
       "Type": "AWS::EC2::VPC::Id",
       "Description": "VPC ID where the RDS instance will be deployed"
     },
-
     "MasterUsername": {
       "Type": "String",
       "Default": "dbadmin",
@@ -43,14 +41,12 @@
       "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
       "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters"
     },
-
     "MigrationDate": {
       "Type": "String",
       "Default": "2025-10-30",
       "Description": "Date of database migration for tagging purposes"
     }
   },
-
   "Mappings": {
     "EnvironmentConfig": {
       "dev": {
@@ -73,13 +69,14 @@
       }
     }
   },
-
   "Resources": {
     "DBSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupDescription": "Security group for RDS PostgreSQL database access",
-        "VpcId": {"Ref": "VpcId"},
+        "VpcId": {
+          "Ref": "VpcId"
+        },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
@@ -99,15 +96,21 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "rds-sg-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "rds-sg-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "MigrationDate",
-            "Value": {"Ref": "MigrationDate"}
+            "Value": {
+              "Ref": "MigrationDate"
+            }
           },
           {
             "Key": "Project",
@@ -116,28 +119,41 @@
         ]
       }
     },
-
     "DBSubnetGroup": {
       "Type": "AWS::RDS::DBSubnetGroup",
       "Properties": {
-        "DBSubnetGroupName": {"Fn::Sub": "rds-subnet-group-${EnvironmentType}-${EnvironmentSuffix}"},
-        "DBSubnetGroupDescription": {"Fn::Sub": "Subnet group for RDS PostgreSQL ${EnvironmentType} environment"},
+        "DBSubnetGroupName": {
+          "Fn::Sub": "rds-subnet-group-${EnvironmentType}-${EnvironmentSuffix}"
+        },
+        "DBSubnetGroupDescription": {
+          "Fn::Sub": "Subnet group for RDS PostgreSQL ${EnvironmentType} environment"
+        },
         "SubnetIds": [
-          {"Ref": "SubnetId1"},
-          {"Ref": "SubnetId2"}
+          {
+            "Ref": "SubnetId1"
+          },
+          {
+            "Ref": "SubnetId2"
+          }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "rds-subnet-group-${EnvironmentType}-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "rds-subnet-group-${EnvironmentType}-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "MigrationDate",
-            "Value": {"Ref": "MigrationDate"}
+            "Value": {
+              "Ref": "MigrationDate"
+            }
           },
           {
             "Key": "Project",
@@ -146,14 +162,19 @@
         ]
       }
     },
-
     "DBMasterPassword": {
       "Type": "AWS::SecretsManager::Secret",
       "Properties": {
-        "Name": {"Fn::Sub": "/rds/${EnvironmentType}/master-password-${EnvironmentSuffix}"},
-        "Description": {"Fn::Sub": "Master password for RDS PostgreSQL ${EnvironmentType} database"},
+        "Name": {
+          "Fn::Sub": "/rds/${EnvironmentType}/master-password-${EnvironmentSuffix}"
+        },
+        "Description": {
+          "Fn::Sub": "Master password for RDS PostgreSQL ${EnvironmentType} database"
+        },
         "GenerateSecretString": {
-          "SecretStringTemplate": {"Fn::Sub": "{\"username\":\"${MasterUsername}\"}"},
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\":\"${MasterUsername}\"}"
+          },
           "GenerateStringKey": "password",
           "PasswordLength": 32,
           "ExcludeCharacters": "\"@/\\",
@@ -162,11 +183,15 @@
         "Tags": [
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "MigrationDate",
-            "Value": {"Ref": "MigrationDate"}
+            "Value": {
+              "Ref": "MigrationDate"
+            }
           },
           {
             "Key": "Project",
@@ -175,28 +200,73 @@
         ]
       }
     },
-
     "PostgreSQLInstance": {
       "Type": "AWS::RDS::DBInstance",
-      "DependsOn": ["DBSubnetGroup", "DBMasterPassword"],
       "Properties": {
-        "DBInstanceIdentifier": {"Fn::Sub": "migrated-rds-${EnvironmentType}-${EnvironmentSuffix}"},
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "migrated-rds-${EnvironmentType}-${EnvironmentSuffix}"
+        },
         "DBName": "migrated_app_db",
         "Engine": "postgres",
         "EngineVersion": "14.12",
-        "DBInstanceClass": {"Fn::FindInMap": ["EnvironmentConfig", {"Ref": "EnvironmentType"}, "InstanceClass"]},
-        "AllocatedStorage": {"Fn::FindInMap": ["EnvironmentConfig", {"Ref": "EnvironmentType"}, "AllocatedStorage"]},
+        "DBInstanceClass": {
+          "Fn::FindInMap": [
+            "EnvironmentConfig",
+            {
+              "Ref": "EnvironmentType"
+            },
+            "InstanceClass"
+          ]
+        },
+        "AllocatedStorage": {
+          "Fn::FindInMap": [
+            "EnvironmentConfig",
+            {
+              "Ref": "EnvironmentType"
+            },
+            "AllocatedStorage"
+          ]
+        },
         "StorageType": "gp3",
         "StorageEncrypted": true,
-        "MasterUsername": {"Ref": "MasterUsername"},
-        "MasterUserPassword": {"Fn::Sub": "{{resolve:secretsmanager:${DBMasterPassword}:SecretString:password}}"},
-        "MultiAZ": {"Fn::FindInMap": ["EnvironmentConfig", {"Ref": "EnvironmentType"}, "MultiAZ"]},
-        "DBSubnetGroupName": {"Ref": "DBSubnetGroup"},
-        "VPCSecurityGroups": [{"Ref": "DBSecurityGroup"}],
-        "BackupRetentionPeriod": {"Fn::FindInMap": ["EnvironmentConfig", {"Ref": "EnvironmentType"}, "BackupRetention"]},
+        "MasterUsername": {
+          "Ref": "MasterUsername"
+        },
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DBMasterPassword}:SecretString:password}}"
+        },
+        "MultiAZ": {
+          "Fn::FindInMap": [
+            "EnvironmentConfig",
+            {
+              "Ref": "EnvironmentType"
+            },
+            "MultiAZ"
+          ]
+        },
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "VPCSecurityGroups": [
+          {
+            "Ref": "DBSecurityGroup"
+          }
+        ],
+        "BackupRetentionPeriod": {
+          "Fn::FindInMap": [
+            "EnvironmentConfig",
+            {
+              "Ref": "EnvironmentType"
+            },
+            "BackupRetention"
+          ]
+        },
         "PreferredBackupWindow": "03:00-04:00",
         "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
-        "EnableCloudwatchLogsExports": ["postgresql", "upgrade"],
+        "EnableCloudwatchLogsExports": [
+          "postgresql",
+          "upgrade"
+        ],
         "DeletionProtection": false,
         "DeleteAutomatedBackups": true,
         "PubliclyAccessible": false,
@@ -205,15 +275,21 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migrated-rds-${EnvironmentType}-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "migrated-rds-${EnvironmentType}-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "MigrationDate",
-            "Value": {"Ref": "MigrationDate"}
+            "Value": {
+              "Ref": "MigrationDate"
+            }
           },
           {
             "Key": "Project",
@@ -223,47 +299,65 @@
       }
     }
   },
-
   "Outputs": {
     "RDSEndpoint": {
       "Description": "RDS PostgreSQL instance endpoint address for application configuration",
-      "Value": {"Fn::GetAtt": ["PostgreSQLInstance", "Endpoint.Address"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "PostgreSQLInstance",
+          "Endpoint.Address"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-RDSEndpoint"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RDSEndpoint"
+        }
       }
     },
-
     "RDSPort": {
       "Description": "RDS PostgreSQL instance port number",
-      "Value": {"Fn::GetAtt": ["PostgreSQLInstance", "Endpoint.Port"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "PostgreSQLInstance",
+          "Endpoint.Port"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-RDSPort"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RDSPort"
+        }
       }
     },
-
     "DBInstanceIdentifier": {
       "Description": "RDS database instance identifier",
-      "Value": {"Ref": "PostgreSQLInstance"}
-    },
-
-    "DBSecretArn": {
-      "Description": "ARN of the Secrets Manager secret containing the master password",
-      "Value": {"Ref": "DBMasterPassword"},
-      "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-DBSecretArn"}
+      "Value": {
+        "Ref": "PostgreSQLInstance"
       }
     },
-
+    "DBSecretArn": {
+      "Description": "ARN of the Secrets Manager secret containing the master password",
+      "Value": {
+        "Ref": "DBMasterPassword"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBSecretArn"
+        }
+      }
+    },
     "DBName": {
       "Description": "Database name",
       "Value": "migrated_app_db"
     },
-
     "SecurityGroupId": {
       "Description": "Security group ID for database access",
-      "Value": {"Ref": "DBSecurityGroup"},
+      "Value": {
+        "Ref": "DBSecurityGroup"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-SecurityGroupId"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SecurityGroupId"
+        }
       }
     }
   }
