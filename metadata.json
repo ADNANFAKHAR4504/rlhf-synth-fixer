@@ -11,6 +11,6 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "[\"s3\", \"dynamodb\", \"kms\", \"iam\", \"cloudwatch\", \"sns\"]",
+  "aws_services": ["s3", "dynamodb", "kms", "iam", "cloudwatch", "sns"],
    "training_quality": 9.5
 }
