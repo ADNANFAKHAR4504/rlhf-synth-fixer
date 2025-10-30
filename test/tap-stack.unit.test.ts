@@ -308,16 +308,16 @@ describe('TapStack', () => {
   describe('Target Groups', () => {
     test('creates blue target group with health check', () => {
       template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
-        Port: 8080,
+        Port: 80,
         Protocol: 'HTTP',
         TargetType: 'ip',
-        HealthCheckPath: '/health',
+        HealthCheckPath: '/',
         HealthCheckIntervalSeconds: 30,
         HealthCheckTimeoutSeconds: 5,
         HealthyThresholdCount: 2,
         UnhealthyThresholdCount: 3,
         Matcher: {
-          HttpCode: '200',
+          HttpCode: '200,301,302',
         },
       });
     });
@@ -360,7 +360,7 @@ describe('TapStack', () => {
             Image: Match.anyValue(),
             PortMappings: [
               {
-                ContainerPort: 8080,
+                ContainerPort: 80,
                 Protocol: 'tcp',
               },
             ],

@@ -99,7 +99,7 @@ export class TapStack extends cdk.Stack {
       description: 'Security group for ECS tasks',
       allowAllOutbound: true,
     });
-    ecsSg.addIngressRule(albSg, ec2.Port.tcp(8080), 'Allow traffic from ALB');
+    ecsSg.addIngressRule(albSg, ec2.Port.tcp(80), 'Allow traffic from ALB');
 
     const dbSg = new ec2.SecurityGroup(this, 'DatabaseSecurityGroup', {
       vpc: this.vpc,
@@ -304,16 +304,16 @@ export class TapStack extends cdk.Stack {
       'BlueTargetGroup',
       {
         vpc: this.vpc,
-        port: 8080,
+        port: 80,
         protocol: elbv2.ApplicationProtocol.HTTP,
         targetType: elbv2.TargetType.IP,
         healthCheck: {
-          path: '/health',
+          path: '/',
           interval: Duration.seconds(30),
           timeout: Duration.seconds(5),
           healthyThresholdCount: 2,
           unhealthyThresholdCount: 3,
-          healthyHttpCodes: '200',
+          healthyHttpCodes: '200,301,302',
         },
         deregistrationDelay: Duration.seconds(30),
       }
@@ -324,16 +324,16 @@ export class TapStack extends cdk.Stack {
       'GreenTargetGroup',
       {
         vpc: this.vpc,
-        port: 8080,
+        port: 80,
         protocol: elbv2.ApplicationProtocol.HTTP,
         targetType: elbv2.TargetType.IP,
         healthCheck: {
-          path: '/health',
+          path: '/',
           interval: Duration.seconds(30),
           timeout: Duration.seconds(5),
           healthyThresholdCount: 2,
           unhealthyThresholdCount: 3,
-          healthyHttpCodes: '200',
+          healthyHttpCodes: '200,301,302',
         },
         deregistrationDelay: Duration.seconds(30),
       }
@@ -435,10 +435,7 @@ export class TapStack extends cdk.Stack {
           ecs.Secret.fromSecretsManager(dbCredentialsSecret),
       },
       healthCheck: {
-        command: [
-          'CMD-SHELL',
-          'curl -fsS http://localhost:8080/health || exit 1',
-        ],
+        command: ['CMD-SHELL', 'curl -fsS http://localhost/ || exit 1'],
         interval: Duration.seconds(30),
         timeout: Duration.seconds(5),
         retries: 3,
@@ -447,7 +444,7 @@ export class TapStack extends cdk.Stack {
     });
 
     container.addPortMappings({
-      containerPort: 8080,
+      containerPort: 80,
       protocol: ecs.Protocol.TCP,
     });
 
