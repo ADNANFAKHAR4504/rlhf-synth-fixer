@@ -129,7 +129,7 @@ export class LambdaApiConstruct extends Construct {
       },
       tracing: lambda.Tracing.ACTIVE,
       logGroup: this.logGroup,
-      reservedConcurrentExecutions: 100,
+      reservedConcurrentExecutions: isProd ? 100 : 0,
       currentVersionOptions: {
         removalPolicy: cdk.RemovalPolicy.RETAIN,
         retryAttempts: 2,

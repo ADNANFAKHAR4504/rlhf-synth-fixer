@@ -223,6 +223,28 @@ The current codebase intentionally diverges from the reference implementation in
 12. Response encoding configuration
     - Explicitly sets `serverless(app, { response: { isBase64Encoded: true } })` to ensure predictable encoding; its absence previously caused base64-encoded responses.
 
+## 4. Operational and Configuration Issues
+
+### Lambda reservedConcurrentExecutions Misconfiguration
+
+**Problem**: Setting `reservedConcurrentExecutions` to `0` for non-production environments disables function invocations and can cause outages due to hard throttling.
+
+```typescript
+// INCORRECT
+reservedConcurrentExecutions: isProd ? 100 : 0,
+```
+
+**Solution**: Use a sane non-zero minimum or omit the setting to rely on account-level limits. Current implementation uses a fixed concurrency limit to ensure availability.
+
+```typescript
+// CORRECT
+reservedConcurrentExecutions: 100;
+```
+
+**Affected References**:
+
+- `lib/constructs/lambda-api-construct.ts` sets a fixed value (`100`) ensuring consistent availability across environments.
+
 ## Summary
 
 The implementation now compiles cleanly and addresses prior construct-level issues. Key points:
