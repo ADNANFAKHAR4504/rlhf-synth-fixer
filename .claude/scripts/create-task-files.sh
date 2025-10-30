@@ -58,19 +58,19 @@ csv_to_json() {
     
     {
         n = parse_csv_line($0, fields)
-        
-        # CSV header: task_id,status,platform,difficulty,subtask,background,problem,language,environment,constraints,subject_labels
+
+        # CSV header: task_id,status,platform,language,difficulty,subtask,subject_labels,problem,background,environment,constraints
         task_id = fields[1]
         status = fields[2]
         platform = fields[3]
-        difficulty = fields[4]
-        subtask = fields[5]
-        background = fields[6]
-        problem = fields[7]
-        language = fields[8]
-        environment = fields[9]
-        constraints = fields[10]
-        subject_labels = fields[11]
+        language = fields[4]
+        difficulty = fields[5]
+        subtask = fields[6]
+        subject_labels = fields[7]
+        problem = fields[8]
+        background = fields[9]
+        environment = fields[10]
+        constraints = fields[11]
         
         # Clean quotes from fields
         gsub(/^"|"$/, "", task_id)
