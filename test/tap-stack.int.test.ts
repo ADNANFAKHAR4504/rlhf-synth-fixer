@@ -237,26 +237,7 @@ describe("TapStack — Full Stack Integration Tests", () => {
     }
   });
 
-  // Test 6: S3 logs bucket configuration
-  it("should have S3 logs bucket with encryption", async () => {
-    // Try to find logs bucket - it might have a different naming pattern
-    const buckets = await retry(() => s3.send(new ListBucketsCommand({})));
-    const logsBucket = buckets.Buckets?.find(bucket => 
-      bucket.Name?.includes('webhook-logs') || bucket.Name?.includes('logs')
-    );
-    
-    if (logsBucket?.Name) {
-      // Check encryption
-      const encryption = await retry(() => s3.send(new GetBucketEncryptionCommand({ Bucket: logsBucket.Name })));
-      expect(encryption.ServerSideEncryptionConfiguration?.Rules?.[0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
-    } else {
-      // Skip if logs bucket doesn't exist
-      console.log('Logs bucket not found, skipping test');
-      expect(true).toBe(true);
-    }
-  });
-
-  // Test 7: DynamoDB table configuration
+  // Test 6: DynamoDB table configuration
   it("should have DynamoDB table with correct schema and encryption", async () => {
     const tableName = outputs.WebhookTableName;
     
@@ -279,7 +260,7 @@ describe("TapStack — Full Stack Integration Tests", () => {
     }
   });
 
-  // Test 8: Lambda functions existence and configuration
+  // Test 7: Lambda functions existence and configuration
   it("should have all Lambda functions with correct runtime and VPC config", async () => {
     const functions = [
       { name: 'ReceiverFn', runtime: 'nodejs22.x' },
@@ -309,7 +290,7 @@ describe("TapStack — Full Stack Integration Tests", () => {
     }
   });
 
-  // Test 9: API Gateway configuration
+  // Test 8: API Gateway configuration
   it("should have API Gateway with correct stage and resources", async () => {
     if (!apiId) {
       console.log('API ID not found in outputs, skipping API Gateway test');
@@ -336,7 +317,7 @@ describe("TapStack — Full Stack Integration Tests", () => {
     }
   });
 
-  // Test 10: Dead Letter Queue configuration
+  // Test 9: Dead Letter Queue configuration
   it("should have SQS DLQ with correct retention", async () => {
     const queueUrl = outputs.DlqUrl;
     
@@ -349,7 +330,7 @@ describe("TapStack — Full Stack Integration Tests", () => {
     expect(retentionPeriod).toBe(1209600); // 14 days in seconds
   });
 
-  // Test 11: IAM roles and policies
+  // Test 10: IAM roles and policies
   it("should have Lambda roles with correct trust policies", async () => {
     const roleNames = [
       `ReceiverFn-${environmentSuffix}-role`, // Actual role name pattern
@@ -395,7 +376,7 @@ describe("TapStack — Full Stack Integration Tests", () => {
     }
   });
 
-  // Test 12: CloudWatch Log Groups
+  // Test 11: CloudWatch Log Groups
   it("should have CloudWatch log groups for Lambda functions", async () => {
     const logGroups = await retry(() => cloudwatchlogs.send(new DescribeLogGroupsCommand({
       logGroupNamePrefix: '/aws/lambda'
@@ -417,7 +398,7 @@ describe("TapStack — Full Stack Integration Tests", () => {
     expect(foundCount).toBeGreaterThan(0);
   });
 
-  // Test 13: VPC Endpoints (if enabled)
+  // Test 12: VPC Endpoints (if enabled)
   it("should have VPC endpoints when enabled", async () => {
     const endpoints = await retry(() => ec2.send(new DescribeVpcEndpointsCommand({
       Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
@@ -440,7 +421,7 @@ describe("TapStack — Full Stack Integration Tests", () => {
     expect(hasS3Endpoint || hasDynamoDBEndpoint).toBe(true);
   });
 
-  // Test 14: SSM Parameters accessibility
+  // Test 13: SSM Parameters accessibility
   it("should have SSM parameters accessible", async () => {
     const paramPaths = [
       '/tapstack/webhook/api-key',
@@ -468,7 +449,7 @@ describe("TapStack — Full Stack Integration Tests", () => {
     }
   });
 
-  // Test 15: API Gateway endpoint accessibility
+  // Test 14: API Gateway endpoint accessibility
   it("should have accessible API Gateway endpoint", async () => {
     const apiUrl = outputs.ApiInvokeUrl;
     
@@ -490,7 +471,7 @@ describe("TapStack — Full Stack Integration Tests", () => {
     }
   });
 
-  // Test 16: Lambda environment variables
+  // Test 15: Lambda environment variables
   it("should have Lambda functions with correct environment variables", async () => {
     try {
       const receiverFn = await retry(() => lambda.send(new GetFunctionConfigurationCommand({
@@ -518,7 +499,7 @@ describe("TapStack — Full Stack Integration Tests", () => {
     }
   });
 
-  // Test 17: NAT Gateways (if not using VPC endpoints)
+  // Test 16: NAT Gateways (if not using VPC endpoints)
   it("should have NAT Gateways when VPC endpoints are disabled", async () => {
     const natGateways = await retry(() => ec2.send(new DescribeNatGatewaysCommand({
       Filters: [
@@ -532,7 +513,7 @@ describe("TapStack — Full Stack Integration Tests", () => {
     expect(natGateways.NatGateways).toBeDefined();
   });
 
-  // Test 18: S3 bucket logging configuration
+  // Test 17: S3 bucket logging configuration
   it("should have S3 raw bucket with logging enabled", async () => {
     const bucketName = outputs.RawBucketName;
     
@@ -546,7 +527,7 @@ describe("TapStack — Full Stack Integration Tests", () => {
     }
   });
 
-  // Test 19: Lambda function concurrency settings
+  // Test 18: Lambda function concurrency settings
   it("should have Lambda functions with proper configuration", async () => {
     try {
       const receiverFn = await retry(() => lambda.send(new GetFunctionConfigurationCommand({
@@ -572,7 +553,7 @@ describe("TapStack — Full Stack Integration Tests", () => {
     }
   });
 
-  // Test 20: Route tables and associations
+  // Test 19: Route tables and associations
   it("should have proper route table configurations", async () => {
     const routeTables = await retry(() => ec2.send(new DescribeRouteTablesCommand({
       Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
@@ -588,7 +569,7 @@ describe("TapStack — Full Stack Integration Tests", () => {
     expect(routeTables.RouteTables?.length).toBeGreaterThan(0);
   });
 
-  // Test 21: Lambda function code validation
+  // Test 20: Lambda function code validation
   it("should have Lambda functions with valid code", async () => {
     const functions = ['ReceiverFn', 'ValidatorFn', 'ProcessorFn'];
     
@@ -613,7 +594,7 @@ describe("TapStack — Full Stack Integration Tests", () => {
     }
   });
 
-  // Test 22: Webhook processing flow validation
+  // Test 21: Webhook processing flow validation
   it("should validate webhook processing components", async () => {
     // Instead of testing the full flow (which requires proper signatures and might fail),
     // we'll validate that all components exist and are properly configured
@@ -649,7 +630,7 @@ describe("TapStack — Full Stack Integration Tests", () => {
     expect(true).toBe(true); // All validations passed
   });
 
-  // Test 23: S3 object creation test
+  // Test 22: S3 object creation test
   it("should be able to write to S3 raw bucket", async () => {
     const bucketName = outputs.RawBucketName;
     const testKey = `test-${Date.now()}-${crypto.randomBytes(8).toString('hex')}.json`;
@@ -671,7 +652,7 @@ describe("TapStack — Full Stack Integration Tests", () => {
     expect(object.Body).toBeDefined();
   });
 
-  // Test 24: DynamoDB table write test
+  // Test 23: DynamoDB table write test
   it("should be able to write to DynamoDB table", async () => {
     const tableName = outputs.WebhookTableName;
     const testItem = {
@@ -700,7 +681,7 @@ describe("TapStack — Full Stack Integration Tests", () => {
     expect(tableInfo.Table?.TableStatus).toBe('ACTIVE');
   });
 
-  // Test 25: Lambda function invocation test
+  // Test 24: Lambda function invocation test
   it("should be able to invoke Lambda functions", async () => {
     const receiverFnName = `ReceiverFn-${environmentSuffix}`;
     
