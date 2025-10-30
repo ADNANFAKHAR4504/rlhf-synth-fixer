@@ -50,6 +50,7 @@ Parameters:
 
 Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
+  HasACMCertificate: !Not [!Equals [!Ref ACMCertificateArn, '']]
 
 Resources:
   # ============================================
@@ -881,6 +882,7 @@ Resources:
   # HTTPS Listener
   ALBHTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasACMCertificate
     Properties:
       DefaultActions:
         - Type: forward
