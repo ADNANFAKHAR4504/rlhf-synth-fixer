@@ -1,0 +1,27 @@
+{
+  "platform": "Pulumi",
+  "language": "TypeScript",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "hhfsa",
+  "team": "synth",
+  "startedAt": "2025-10-30T18:37:20+05:30",
+  "subtask": "",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "cicd",
+    "codepipeline",
+    "automation"
+  ],
+  "aws_services": [
+    "CodePipeline",
+    "CodeBuild",
+    "ECR",
+    "S3",
+    "IAM",
+    "SNS",
+    "KMS"
+  ],
+  "training_quality": 9
+}
