@@ -125,41 +125,15 @@ Resources:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
             Resource: '*'
-          - Sid: Allow services to use the key
-            Effect: Allow
-            Principal:
-              Service:
-                - s3.amazonaws.com
-                - rds.amazonaws.com
-                - logs.amazonaws.com
-                - cloudtrail.amazonaws.com
-                - lambda.amazonaws.com
-                - !Sub 'logs.${AWS::Region}.amazonaws.com'
-            Action:
-              - 'kms:Decrypt'
-              - 'kms:GenerateDataKey'
-              - 'kms:CreateGrant'
-            Resource: '*'
-          - Sid: Allow CloudTrail Service
+          - Sid: Allow CloudTrail KMS Usage
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action:
+              - kms:GenerateDataKey*
               - kms:Encrypt
               - kms:Decrypt
               - kms:ReEncrypt*
-              - kms:GenerateDataKey*
-              - kms:DescribeKey
-            Resource: '*'
-          - Sid: Allow CloudTrail Root
-            Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action:
-              - kms:Encrypt
-              - kms:Decrypt
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey*
               - kms:DescribeKey
             Resource: '*'
       Tags:
@@ -754,16 +728,7 @@ Resources:
               Service: cloudtrail.amazonaws.com
             Action: 's3:GetBucketAcl'
             Resource: !GetAtt CloudTrailBucket.Arn
-          - Sid: AWSCloudTrailWriteRoot
-            Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 's3:PutObject'
-            Resource: !Sub '${CloudTrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
-            Condition:
-              StringEquals:
-                's3:x-amz-acl': 'bucket-owner-full-control'
-          - Sid: AWSCloudTrailWriteService
+          - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
