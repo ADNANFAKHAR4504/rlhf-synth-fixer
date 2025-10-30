@@ -1148,7 +1148,10 @@
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-api-key-${Environment}-${EnvironmentSuffix}"
                 },
-                "Enabled": true
+                "Enabled": true,
+                "Value": {
+                    "Fn::Sub": "${AWS::StackName}-${Environment}-${EnvironmentSuffix}-${AWS::AccountId}"
+                }
             }
         },
         "ApiKeyUsagePlanAssociation": {
@@ -1535,10 +1538,7 @@
         "ApiKey": {
             "Description": "API Key for accessing the payment API",
             "Value": {
-                "Fn::GetAtt": [
-                    "ApiKey",
-                    "Value"
-                ]
+                "Fn::Sub": "${AWS::StackName}-${Environment}-${EnvironmentSuffix}-${AWS::AccountId}"
             },
             "Export": {
                 "Name": {

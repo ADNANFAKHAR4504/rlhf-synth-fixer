@@ -902,6 +902,7 @@ Resources:
     Properties:
       Name: !Sub ${AWS::StackName}-api-key-${Environment}-${EnvironmentSuffix}
       Enabled: true
+      Value: !Sub ${AWS::StackName}-${Environment}-${EnvironmentSuffix}-${AWS::AccountId}
 
   ApiKeyUsagePlanAssociation:
     Type: AWS::ApiGateway::UsagePlanKey
@@ -1132,6 +1133,6 @@ Outputs:
 
   ApiKey:
     Description: API Key for accessing the payment API
-    Value: !GetAtt ApiKey.Value
+    Value: !Sub ${AWS::StackName}-${Environment}-${EnvironmentSuffix}-${AWS::AccountId}
     Export:
       Name: !Sub ${AWS::StackName}-ApiKey-${Environment}
