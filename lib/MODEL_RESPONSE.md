@@ -2,8 +2,6 @@
 
 ---
 
-Let me break down the task and make sure I understand all the requirements:
-
 ### Overall Task
 
 I need to create a CloudFormation YAML template that enforces encryption and compliance across an AWS account.
