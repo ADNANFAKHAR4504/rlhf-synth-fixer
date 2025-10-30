@@ -22,7 +22,7 @@ import { v4 as uuidv4 } from 'uuid';
 // Test configuration
 const TEST_TIMEOUT = 90000; // 90 seconds
 let deployedResources: any = {};
-let awsRegion: string = process.env.AWS_REGION || 'eu-west-1'; // Default fallback
+let awsRegion: string = process.env.AWS_REGION || 'us-east-1'; // Default fallback
 
 // AWS SDK service clients (initialized after region detection)
 let s3: AWS.S3;
