@@ -168,31 +168,15 @@ class TapStack extends Stack {
                 .build();
 
         // Create VPC endpoints for S3 and DynamoDB to avoid NAT Gateway charges
-        // Gateway endpoints are automatically added to route tables
+        // Gateway endpoints are automatically added to ALL route tables in the VPC
         GatewayVpcEndpoint s3Endpoint = GatewayVpcEndpoint.Builder.create(this, "S3Endpoint")
                 .vpc(newVpc)
                 .service(GatewayVpcEndpointAwsService.S3)
-                .subnets(Arrays.asList(
-                        software.amazon.awscdk.services.ec2.SubnetSelection.builder()
-                                .subnetType(SubnetType.PRIVATE_WITH_EGRESS)
-                                .build(),
-                        software.amazon.awscdk.services.ec2.SubnetSelection.builder()
-                                .subnetType(SubnetType.PUBLIC)
-                                .build()
-                ))
                 .build();
 
         GatewayVpcEndpoint dynamoEndpoint = GatewayVpcEndpoint.Builder.create(this, "DynamoDbEndpoint")
                 .vpc(newVpc)
                 .service(GatewayVpcEndpointAwsService.DYNAMODB)
-                .subnets(Arrays.asList(
-                        software.amazon.awscdk.services.ec2.SubnetSelection.builder()
-                                .subnetType(SubnetType.PRIVATE_WITH_EGRESS)
-                                .build(),
-                        software.amazon.awscdk.services.ec2.SubnetSelection.builder()
-                                .subnetType(SubnetType.PUBLIC)
-                                .build()
-                ))
                 .build();
 
         return newVpc;

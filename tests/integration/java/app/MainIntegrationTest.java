@@ -2,6 +2,7 @@ package app;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -478,6 +479,7 @@ public class MainIntegrationTest {
      * Test Lambda function invocation with real S3 interaction.
      */
     @Test
+    @Timeout(90)
     public void testLambdaFunctionInvocation() {
         String functionArn = getStackOutput("FunctionArnOutput");
         String functionName = functionArn.substring(functionArn.lastIndexOf(":") + 1);
@@ -628,6 +630,7 @@ public class MainIntegrationTest {
      * End-to-end test: Upload file, trigger Lambda, verify processing.
      */
     @Test
+    @Timeout(90)
     public void testEndToEndDataProcessing() throws IOException {
         String bucketName = getStackOutput("BucketNameOutput");
         String functionArn = getStackOutput("FunctionArnOutput");
