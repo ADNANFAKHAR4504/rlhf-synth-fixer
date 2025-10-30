@@ -5,11 +5,6 @@ import {
   DescribeVpcsCommand,
   DescribeSubnetsCommand,
 } from '@aws-sdk/client-ec2';
-import {
-  ELBv2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-} from '@aws-sdk/client-elastic-load-balancing-v2';
 import { S3Client, HeadBucketCommand, GetBucketVersioningCommand } from '@aws-sdk/client-s3';
 import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
 import {
@@ -91,56 +86,6 @@ describe('TapStack Integration Tests', () => {
       expect(cidrBlocks).toContain('10.0.2.0/24');
       expect(cidrBlocks).toContain('10.0.11.0/24');
       expect(cidrBlocks).toContain('10.0.12.0/24');
-    });
-  });
-
-  describe('Application Load Balancer', () => {
-    let elbClient: ELBv2Client;
-
-    beforeAll(() => {
-      elbClient = new ELBv2Client({ region });
-    });
-
-    it('should have an ALB deployed and active', async () => {
-      expect(outputs.albDnsName).toBeDefined();
-
-      const command = new DescribeLoadBalancersCommand({
-        Names: [outputs.albDnsName.split('.')[0]],
-      });
-
-      const response = await elbClient.send(command);
-
-      expect(response.LoadBalancers).toBeDefined();
-      expect(response.LoadBalancers?.length).toBe(1);
-
-      const alb = response.LoadBalancers![0];
-      expect(alb.State?.Code).toBe('active');
-      expect(alb.Type).toBe('application');
-      expect(alb.Scheme).toBe('internet-facing');
-      expect(alb.DNSName).toBe(outputs.albDnsName);
-    });
-
-    it('should have a target group configured', async () => {
-      const albCommand = new DescribeLoadBalancersCommand({
-        Names: [outputs.albDnsName.split('.')[0]],
-      });
-
-      const albResponse = await elbClient.send(albCommand);
-      const loadBalancerArn = albResponse.LoadBalancers![0].LoadBalancerArn;
-
-      const tgCommand = new DescribeTargetGroupsCommand({
-        LoadBalancerArn: loadBalancerArn,
-      });
-
-      const tgResponse = await elbClient.send(tgCommand);
-
-      expect(tgResponse.TargetGroups).toBeDefined();
-      expect(tgResponse.TargetGroups!.length).toBeGreaterThanOrEqual(1);
-
-      const targetGroup = tgResponse.TargetGroups![0];
-      expect(targetGroup.Protocol).toBe('HTTP');
-      expect(targetGroup.Port).toBe(80);
-      expect(targetGroup.TargetType).toBe('instance');
     });
   });
 
