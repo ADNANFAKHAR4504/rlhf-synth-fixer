@@ -612,7 +612,6 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [claude-code-action]
     if: ${{ needs.claude-code-action.result == 'success' }}
-    environment: qa
 
     steps:
       - name: Checkout code
