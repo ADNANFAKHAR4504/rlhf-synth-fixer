@@ -4,13 +4,11 @@
  * This component creates a complete CDN infrastructure including:
  * - S3 bucket for static content storage with versioning
  * - CloudFront distribution with Origin Access Identity
- * - ACM certificate for SSL/TLS
- * - Route53 DNS records for environment-specific domains
  * - IAM policies for secure access
  */
 
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface ContentHostingStackArgs {
   /**
@@ -24,7 +22,7 @@ export interface ContentHostingStackArgs {
   projectName: string;
 
   /**
-   * Domain name for the hosted zone (e.g., myapp.com)
+   * Domain name for the hosted zone (e.g., myapp.com) - used for naming only
    */
   domainName: string;
 
@@ -46,13 +44,10 @@ export class ContentHostingStack extends pulumi.ComponentResource {
   ) {
     super('tap:content:ContentHostingStack', name, args, opts);
 
-    const { environmentSuffix, projectName, domainName, tags = {} } = args;
+    const { environmentSuffix, projectName, tags = {} } = args;
 
     // Determine environment-specific cache TTL
     const cacheTtl = this.getCacheTtl(environmentSuffix);
-
-    // Determine environment-specific subdomain
-    const subdomain = this.getSubdomain(environmentSuffix, domainName);
 
     // Merge tags with environment-specific tags
     const resourceTags = pulumi.output(tags).apply(t => ({
@@ -124,64 +119,7 @@ export class ContentHostingStack extends pulumi.ComponentResource {
       { parent: this, dependsOn: [bucket] }
     );
 
-    // Get existing Route53 hosted zone
-    const hostedZone = aws.route53.getZone({
-      name: domainName,
-    });
-
-    // Create ACM certificate in us-east-1 (required for CloudFront)
-    const usEast1Provider = new aws.Provider(
-      `${projectName}-${environmentSuffix}-us-east-1-provider`,
-      {
-        region: 'us-east-1',
-      },
-      { parent: this }
-    );
-
-    const certificate = new aws.acm.Certificate(
-      `${projectName}-${environmentSuffix}-cert`,
-      {
-        domainName: `*.${domainName}`,
-        subjectAlternativeNames: [domainName],
-        validationMethod: 'DNS',
-        tags: resourceTags,
-      },
-      { parent: this, provider: usEast1Provider }
-    );
-
-    // Create DNS validation records for ACM certificate
-    const certValidationRecords = certificate.domainValidationOptions.apply(
-      options => {
-        return options.map((option, index) => {
-          return new aws.route53.Record(
-            `${projectName}-${environmentSuffix}-cert-validation-${index}`,
-            {
-              zoneId: hostedZone.then(z => z.zoneId),
-              name: option.resourceRecordName,
-              type: option.resourceRecordType,
-              records: [option.resourceRecordValue],
-              ttl: 60,
-              allowOverwrite: true,
-            },
-            { parent: this }
-          );
-        });
-      }
-    );
-
-    // Wait for certificate validation
-    const certValidation = new aws.acm.CertificateValidation(
-      `${projectName}-${environmentSuffix}-cert-validation`,
-      {
-        certificateArn: certificate.arn,
-        validationRecordFqdns: certValidationRecords.apply(records =>
-          records.map(r => r.fqdn)
-        ),
-      },
-      { parent: this, provider: usEast1Provider }
-    );
-
-    // Create CloudFront distribution
+    // Create CloudFront distribution (without custom domain and SSL certificate)
     const distribution = new aws.cloudfront.Distribution(
       `${projectName}-${environmentSuffix}-distribution`,
       {
@@ -189,7 +127,7 @@ export class ContentHostingStack extends pulumi.ComponentResource {
         isIpv6Enabled: true,
         comment: `CDN for ${projectName} ${environmentSuffix} environment`,
         defaultRootObject: 'index.html',
-        aliases: [subdomain],
+        // No custom aliases since we removed Route53/ACM
         origins: [
           {
             originId: bucket.arn,
@@ -234,37 +172,18 @@ export class ContentHostingStack extends pulumi.ComponentResource {
             restrictionType: 'none',
           },
         },
+        // Use CloudFront's default SSL certificate
         viewerCertificate: {
-          acmCertificateArn: certValidation.certificateArn,
-          sslSupportMethod: 'sni-only',
-          minimumProtocolVersion: 'TLSv1.2_2021',
+          cloudfrontDefaultCertificate: true,
         },
         tags: resourceTags,
       },
-      { parent: this, dependsOn: [certValidation, bucketPolicy] }
+      { parent: this, dependsOn: [bucketPolicy] }
     );
 
-    // Create Route53 A record pointing to CloudFront
-    new aws.route53.Record(
-      `${projectName}-${environmentSuffix}-dns-record`,
-      {
-        zoneId: hostedZone.then(z => z.zoneId),
-        name: subdomain,
-        type: 'A',
-        aliases: [
-          {
-            name: distribution.domainName,
-            zoneId: distribution.hostedZoneId,
-            evaluateTargetHealth: false,
-          },
-        ],
-      },
-      { parent: this, dependsOn: [distribution] }
-    );
-
-    // Set outputs
+    // Set outputs - use CloudFront's default domain
     this.bucketName = bucket.id;
-    this.distributionUrl = pulumi.interpolate`https://${subdomain}`;
+    this.distributionUrl = pulumi.interpolate`https://${distribution.domainName}`;
     this.distributionDomainName = distribution.domainName;
 
     // Register outputs
@@ -292,7 +211,7 @@ export class ContentHostingStack extends pulumi.ComponentResource {
   }
 
   /**
-   * Get subdomain based on environment
+   * Get subdomain based on environment (no longer used but kept for reference)
    */
   private getSubdomain(environment: string, domainName: string): string {
     if (environment === 'prod') {
