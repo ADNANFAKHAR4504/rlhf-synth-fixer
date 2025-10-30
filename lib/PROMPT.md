@@ -1,18 +1,1 @@
-Generate production-ready AWS CDKTF code in TypeScript for a fast-growing e-commerce startup, implementing the following:
-
-Requirements:
-Deploy a Node.js web application to AWS in us-west-2 using CDKTF and TypeScript.
-Multi-AZ architecture with high availability and security best practices.
-Infrastructure:
-VPC spanning 2 Availability Zones.
-Public subnets for ALB and NAT Gateway.
-Private subnets for EC2 application servers and RDS PostgreSQL database.
-NAT Gateway for outbound internet access from private subnets.
-Application Load Balancer (ALB) in public subnets with SSL termination using AWS Certificate Manager.
-EC2 instances running in private subnets, deployed across at least 2 AZs.
-RDS PostgreSQL database in private subnets, with automated backups (7-day retention), credentials in AWS Secrets Manager.
-Security groups using least privilege principle.
-Environment variables for database connections and third-party API integrations.
-All resources must have consistent tagging with 'Environment' and 'Project'.
-Clean, modular, parameterized TypeScript code, following AWS best practices for security, HA, and maintainability.
-
+Create a production-ready AWS infrastructure using CDKTF (Cloud Development Kit for Terraform) in TypeScript for an e-commerce application. Build a modular, multi-environment system that provisions a VPC with public/private subnets across multiple availability zones, NAT and Internet Gateways, security groups for ALB/application/database tiers, an RDS PostgreSQL instance with automated secret management, an Application Load Balancer with optional HTTPS support, and an EC2 Auto Scaling Group using Amazon Linux 2023. Include IAM roles for Secrets Manager and CloudWatch access, SSH key pair management with secure private key storage, S3 backend for state management with locking, and comprehensive tagging. The infrastructure should support environment-specific configurations (dev/staging/production) with conditional logic for instance sizes, backup retention, deletion protection, and scaling parameters. Follow AWS best practices for security, high availability, and implement proper resource dependencies throughout the stack.

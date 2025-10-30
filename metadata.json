@@ -10,5 +10,5 @@
   "subject_labels": [
     "Web Application Deployment"
   ],
-  "aws_services": "S3, RDS, Internet Gateway, RDS, SSM, ALB Route Table, Subnets, EIP, Security Groups, EC2, IAM, VPC"
+  "aws_services": "S3, RDS, Internet Gateway, RDS, ALB Route Table, Subnets, EIP, Security Groups, EC2, IAM, VPC"
 }
