@@ -689,11 +689,15 @@ describe("Payment Processor Infrastructure Integration Tests", () => {
       expect(isValidArn(outputs.waf_web_acl_arn)).toBe(true);
       expect(outputs.waf_web_acl_arn).toContain("webacl");
 
-      // Extract Web ACL ID from ARN
-      const webAclId = outputs.waf_web_acl_arn.split("/").pop();
+      // Extract Web ACL name and ID from ARN
+      // ARN format: arn:aws:wafv2:region:account-id:regional/webacl/name/id
+      const arnParts = outputs.waf_web_acl_arn.split("/");
+      const webAclName = arnParts[arnParts.length - 2];
+      const webAclId = arnParts[arnParts.length - 1];
 
       const command = new GetWebACLCommand({
         Scope: "REGIONAL",
+        Name: webAclName,
         Id: webAclId
       });
 
