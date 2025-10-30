@@ -12,7 +12,7 @@ const app = new cdk.App();
 
 // Set default region if not provided
 if (!process.env.CDK_DEFAULT_REGION) {
-  process.env.CDK_DEFAULT_REGION = 'us-east-2';
+  process.env.CDK_DEFAULT_REGION = 'us-east-1';
 }
 
 // Get environment suffix from context or default to 'dev'
@@ -20,7 +20,7 @@ const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
 
 new TapStack(app, `TapStack${environmentSuffix}`, {
   env: {
-    region: process.env.CDK_DEFAULT_REGION || 'us-east-2',
+    region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
   },
   description: `Hub and Spoke Network Architecture - ${environmentSuffix}`,
   environmentSuffix,

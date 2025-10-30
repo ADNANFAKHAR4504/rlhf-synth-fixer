@@ -21,7 +21,7 @@ new TapStack(app, stackName, {
   environmentSuffix: environmentSuffix, // Pass the suffix to the stack
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION || 'us-east-2', // Default to us-east-2 as specified in requirements
+    region: process.env.CDK_DEFAULT_REGION,
   },
   description:
     'Hub-and-spoke network architecture with centralized egress and DNS',

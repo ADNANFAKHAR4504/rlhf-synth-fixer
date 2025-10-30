@@ -41,7 +41,7 @@ const app = new cdk.App();
 new TapStack(app, 'HubSpokeNetworkStack', {
   env: { 
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-east-2'
+    region: 'us-east-1'
   },
   description: 'Hub-and-spoke network architecture with centralized egress and DNS',
 });
@@ -572,7 +572,7 @@ export class TapStack extends cdk.Stack {
         'Allow HTTPS from VPC'
       );
 
-      ['com.amazonaws.us-east-2.ssm', 'com.amazonaws.us-east-2.ssmmessages', 'com.amazonaws.us-east-2.ec2messages'].forEach((service) => {
+      ['com.amazonaws.us-east-1.ssm', 'com.amazonaws.us-east-1.ssmmessages', 'com.amazonaws.us-east-1.ec2messages'].forEach((service) => {
         vpc.addInterfaceEndpoint(`${name}${service.split('.').pop()}Endpoint`, {
           service: new ec2.InterfaceVpcEndpointService(service),
           subnets: { subnetGroupName: 'Private' },

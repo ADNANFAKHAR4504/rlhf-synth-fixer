@@ -691,20 +691,30 @@ export class TapStack extends cdk.Stack {
         'Allow HTTPS from VPC'
       );
 
-      [
-        'com.amazonaws.us-east-2.ssm',
-        'com.amazonaws.us-east-2.ssmmessages',
-        'com.amazonaws.us-east-2.ec2messages',
-      ].forEach(service => {
-        vpc.addInterfaceEndpoint(
-          `${name}${service.split('.').pop()}Endpoint${environmentSuffix}`,
-          {
-            service: new ec2.InterfaceVpcEndpointService(service),
-            subnets: { subnetGroupName: 'Private' },
-            securityGroups: [endpointSecurityGroup],
-          }
-        );
+      // Use CDK's built-in VPC endpoint services which handle region availability
+      vpc.addInterfaceEndpoint(`${name}SsmEndpoint${environmentSuffix}`, {
+        service: ec2.InterfaceVpcEndpointAwsService.SSM,
+        subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+        securityGroups: [endpointSecurityGroup],
       });
+
+      vpc.addInterfaceEndpoint(
+        `${name}SsmMessagesEndpoint${environmentSuffix}`,
+        {
+          service: ec2.InterfaceVpcEndpointAwsService.SSM_MESSAGES,
+          subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+          securityGroups: [endpointSecurityGroup],
+        }
+      );
+
+      vpc.addInterfaceEndpoint(
+        `${name}Ec2MessagesEndpoint${environmentSuffix}`,
+        {
+          service: ec2.InterfaceVpcEndpointAwsService.EC2_MESSAGES,
+          subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+          securityGroups: [endpointSecurityGroup],
+        }
+      );
     };
 
     createSsmEndpoints(hubVpc, 'Hub');

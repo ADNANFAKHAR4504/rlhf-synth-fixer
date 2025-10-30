@@ -13,7 +13,7 @@ describe('TapStack', () => {
       app = new cdk.App();
       stack = new TapStack(app, 'TestTapStackDev', {
         environmentSuffix: 'dev',
-        env: { account: '123456789012', region: 'us-east-2' },
+        env: { account: '123456789012', region: 'us-east-1' },
       });
       template = Template.fromStack(stack);
     });
@@ -202,7 +202,7 @@ describe('TapStack', () => {
       app = new cdk.App();
       stack = new TapStack(app, 'TestTapStackProd', {
         environmentSuffix: 'prod',
-        env: { account: '123456789012', region: 'us-east-2' },
+        env: { account: '123456789012', region: 'us-east-1' },
       });
       template = Template.fromStack(stack);
     });
@@ -256,7 +256,7 @@ describe('TapStack', () => {
       app = new cdk.App();
       stack = new TapStack(app, 'TestTapStackSecurity', {
         environmentSuffix: 'dev',
-        env: { account: '123456789012', region: 'us-east-2' },
+        env: { account: '123456789012', region: 'us-east-1' },
       });
       template = Template.fromStack(stack);
     });
@@ -295,7 +295,7 @@ describe('TapStack', () => {
       app = new cdk.App();
       stack = new TapStack(app, 'TestTapStackRoutes', {
         environmentSuffix: 'dev',
-        env: { account: '123456789012', region: 'us-east-2' },
+        env: { account: '123456789012', region: 'us-east-1' },
       });
       template = Template.fromStack(stack);
     });
@@ -318,7 +318,7 @@ describe('TapStack', () => {
       app = new cdk.App();
       stack = new TapStack(app, 'TestTapStackTags', {
         environmentSuffix: 'dev',
-        env: { account: '123456789012', region: 'us-east-2' },
+        env: { account: '123456789012', region: 'us-east-1' },
       });
       template = Template.fromStack(stack);
     });
@@ -337,7 +337,7 @@ describe('TapStack', () => {
       const appEmpty = new cdk.App();
       const stackEmpty = new TapStack(appEmpty, 'TestTapStackEmpty', {
         environmentSuffix: '',
-        env: { account: '123456789012', region: 'us-east-2' },
+        env: { account: '123456789012', region: 'us-east-1' },
       });
       const templateEmpty = Template.fromStack(stackEmpty);
 
@@ -351,7 +351,7 @@ describe('TapStack', () => {
         appUndefined,
         'TestTapStackUndefined',
         {
-          env: { account: '123456789012', region: 'us-east-2' },
+          env: { account: '123456789012', region: 'us-east-1' },
         }
       );
       const templateUndefined = Template.fromStack(stackUndefined);
@@ -368,7 +368,7 @@ describe('TapStack', () => {
       const appProd = new cdk.App();
       const stackProd = new TapStack(appProd, 'TestTapStackProdBranch', {
         environmentSuffix: 'prod',
-        env: { account: '123456789012', region: 'us-east-2' },
+        env: { account: '123456789012', region: 'us-east-1' },
       });
       const templateProd = Template.fromStack(stackProd);
 
@@ -386,7 +386,7 @@ describe('TapStack', () => {
         'TestTapStackNonProdBranch',
         {
           environmentSuffix: 'staging',
-          env: { account: '123456789012', region: 'us-east-2' },
+          env: { account: '123456789012', region: 'us-east-1' },
         }
       );
       const templateNonProd = Template.fromStack(stackNonProd);
@@ -403,7 +403,7 @@ describe('TapStack', () => {
       const appProd = new cdk.App();
       const stackProd = new TapStack(appProd, 'TestTapStackProdVpc', {
         environmentSuffix: 'prod',
-        env: { account: '123456789012', region: 'us-east-2' },
+        env: { account: '123456789012', region: 'us-east-1' },
       });
       const templateProd = Template.fromStack(stackProd);
 
@@ -419,7 +419,7 @@ describe('TapStack', () => {
       const appNonProd = new cdk.App();
       const stackNonProd = new TapStack(appNonProd, 'TestTapStackNonProdVpc', {
         environmentSuffix: 'staging',
-        env: { account: '123456789012', region: 'us-east-2' },
+        env: { account: '123456789012', region: 'us-east-1' },
       });
       const templateNonProd = Template.fromStack(stackNonProd);
 
@@ -432,7 +432,7 @@ describe('TapStack', () => {
       const appProd = new cdk.App();
       const stackProd = new TapStack(appProd, 'TestTapStackProdNat', {
         environmentSuffix: 'prod',
-        env: { account: '123456789012', region: 'us-east-2' },
+        env: { account: '123456789012', region: 'us-east-1' },
       });
       const templateProd = Template.fromStack(stackProd);
 
@@ -444,7 +444,7 @@ describe('TapStack', () => {
       const appProd = new cdk.App();
       const stackProd = new TapStack(appProd, 'TestTapStackProdIam', {
         environmentSuffix: 'prod',
-        env: { account: '123456789012', region: 'us-east-2' },
+        env: { account: '123456789012', region: 'us-east-1' },
       });
       const templateProd = Template.fromStack(stackProd);
 
@@ -456,7 +456,7 @@ describe('TapStack', () => {
       const appTest = new cdk.App();
       const stackTest = new TapStack(appTest, 'TestTapStackTestEnv', {
         environmentSuffix: 'test',
-        env: { account: '123456789012', region: 'us-east-2' },
+        env: { account: '123456789012', region: 'us-east-1' },
       });
       const templateTest = Template.fromStack(stackTest);
 
@@ -486,7 +486,7 @@ describe('TapStack', () => {
       const appAll = new cdk.App();
       const stackAll = new TapStack(appAll, 'TestTapStackAllVpcs', {
         environmentSuffix: 'all',
-        env: { account: '123456789012', region: 'us-east-2' },
+        env: { account: '123456789012', region: 'us-east-1' },
       });
       const templateAll = Template.fromStack(stackAll);
 
@@ -510,7 +510,7 @@ describe('TapStack', () => {
       const appRoute = new cdk.App();
       const stackRoute = new TapStack(appRoute, 'TestTapStackRouteRemoval', {
         environmentSuffix: 'route',
-        env: { account: '123456789012', region: 'us-east-2' },
+        env: { account: '123456789012', region: 'us-east-1' },
       });
       const templateRoute = Template.fromStack(stackRoute);
 
@@ -535,7 +535,7 @@ describe('TapStack', () => {
       const appTest = new cdk.App();
       const stackTest = new TapStack(appTest, 'TestTapStackMethodTest', {
         environmentSuffix: 'method',
-        env: { account: '123456789012', region: 'us-east-2' },
+        env: { account: '123456789012', region: 'us-east-1' },
       });
 
       // Create a mock subnet with a default route
