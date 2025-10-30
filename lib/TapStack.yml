@@ -865,6 +865,7 @@ Resources:
                   - states:StartExecution
                 Resource:
                   - !Ref PaymentWorkflow
+                  - !Sub arn:${AWS::Partition}:states:${AWS::Region}:${AWS::AccountId}:execution:${AWS::StackName}-payment-workflow-${Environment}:*
 
   PaymentApi:
     Type: AWS::ApiGateway::RestApi
@@ -976,7 +977,6 @@ Resources:
 
   TransactionPostMethod:
     Type: AWS::ApiGateway::Method
-    DependsOn: ApiGatewayRole
     Properties:
       HttpMethod: POST
       AuthorizationType: NONE
