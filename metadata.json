@@ -1,0 +1,26 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-30T09:14:22+00:00",
+  "subtask": "Environment Migration",
+  "subject_labels": [
+    "networking",
+    "database",
+    "security",
+    "migration",
+    "monitoring"
+  ],
+  "po_id": "101000763",
+  "aws_services": [
+    "EC2",
+    "RDS",
+    "DMS",
+    "ElasticLoadBalancingV2",
+    "SecretsManager",
+    "CloudWatch"
+  ],
+  "training_quality": 9
+}
