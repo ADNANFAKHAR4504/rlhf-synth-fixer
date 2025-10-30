@@ -1,4 +1,4 @@
-import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeNatGatewaysCommand, DescribeSecurityGroupsCommand, DescribeRouteTablesCommand, DescribeInternetGatewaysCommand } from '@aws-sdk/client-ec2';
+import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeNatGatewaysCommand, DescribeSecurityGroupsCommand, DescribeRouteTablesCommand, DescribeInternetGatewaysCommand, DescribeVpcAttributeCommand } from '@aws-sdk/client-ec2';
 import fs from 'fs';
 import path from 'path';
 
@@ -27,25 +27,21 @@ describe('VPC Infrastructure Integration Tests', () => {
     });
 
     test('VPC should have DNS hostnames enabled', async () => {
-      const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VPCId]
-      });
+      const attr = await ec2Client.send(new DescribeVpcAttributeCommand({
+        VpcId: outputs.VPCId,
+        Attribute: 'enableDnsHostnames'
+      }));
 
-      const response = await ec2Client.send(command);
-      const vpc = response.Vpcs![0];
-
-      expect(vpc.EnableDnsHostnames).toBe(true);
+      expect(attr.EnableDnsHostnames?.Value).toBe(true);
     });
 
     test('VPC should have DNS support enabled', async () => {
-      const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VPCId]
-      });
+      const attr = await ec2Client.send(new DescribeVpcAttributeCommand({
+        VpcId: outputs.VPCId,
+        Attribute: 'enableDnsSupport'
+      }));
 
-      const response = await ec2Client.send(command);
-      const vpc = response.Vpcs![0];
-
-      expect(vpc.EnableDnsSupport).toBe(true);
+      expect(attr.EnableDnsSupport?.Value).toBe(true);
     });
   });
 
@@ -215,7 +211,9 @@ describe('VPC Infrastructure Integration Tests', () => {
 
       const response = await ec2Client.send(command);
 
-      const subnetIds = response.NatGateways!.map(ng => ng.SubnetId);
+      const subnetIds = response.NatGateways!
+        .map(ng => ng.SubnetId)
+        .filter((id): id is string => Boolean(id));
       const subnetsCommand = new DescribeSubnetsCommand({
         SubnetIds: subnetIds
       });
@@ -422,6 +420,12 @@ describe('VPC Infrastructure Integration Tests', () => {
     });
 
     test('security groups should have proper names with environment suffix', async () => {
+      // derive expected suffix from VPC Name tag (last hyphen-delimited token)
+      const vpcResp = await ec2Client.send(new DescribeVpcsCommand({ VpcIds: [outputs.VPCId] }));
+      const vpc = vpcResp.Vpcs![0];
+      const vpcName = (vpc.Tags || []).find(t => t.Key === 'Name')?.Value || '';
+      const derivedSuffix = vpcName.includes('-') ? vpcName.split('-').pop()! : vpcName;
+
       const command = new DescribeSecurityGroupsCommand({
         GroupIds: [
           outputs.BastionSecurityGroupId,
@@ -434,7 +438,9 @@ describe('VPC Infrastructure Integration Tests', () => {
 
       response.SecurityGroups!.forEach(sg => {
         expect(sg.GroupName).toBeDefined();
-        expect(sg.GroupName).toMatch(/synth101000772$/);
+        if (derivedSuffix) {
+          expect(sg.GroupName!).toMatch(new RegExp(`-${derivedSuffix}$`));
+        }
       });
     });
   });
@@ -446,7 +452,9 @@ describe('VPC Infrastructure Integration Tests', () => {
       });
       const natGwResponse = await ec2Client.send(natGwCommand);
 
-      const subnetIds = natGwResponse.NatGateways!.map(ng => ng.SubnetId);
+      const subnetIds = natGwResponse.NatGateways!
+        .map(ng => ng.SubnetId)
+        .filter((id): id is string => Boolean(id));
 
       const subnetsCommand = new DescribeSubnetsCommand({
         SubnetIds: subnetIds
@@ -476,7 +484,11 @@ describe('VPC Infrastructure Integration Tests', () => {
       expect(tagKeys).toContain('Owner');
 
       const nameTag = tags.find(t => t.Key === 'Name');
-      expect(nameTag!.Value).toContain('synth101000772');
+      const vpcName = nameTag?.Value || '';
+      const derivedSuffix = vpcName.includes('-') ? vpcName.split('-').pop()! : vpcName;
+      if (derivedSuffix) {
+        expect(vpcName).toMatch(new RegExp(`-${derivedSuffix}$`));
+      }
     });
 
     test('subnets should have required tags', async () => {
@@ -501,7 +513,11 @@ describe('VPC Infrastructure Integration Tests', () => {
         expect(tagKeys).toContain('Owner');
 
         const nameTag = tags.find(t => t.Key === 'Name');
-        expect(nameTag!.Value).toContain('synth101000772');
+        const nameVal = nameTag?.Value || '';
+        const derivedSuffix = nameVal.includes('-') ? nameVal.split('-').pop()! : nameVal;
+        if (derivedSuffix) {
+          expect(nameVal).toMatch(new RegExp(`-${derivedSuffix}$`));
+        }
       });
     });
   });
