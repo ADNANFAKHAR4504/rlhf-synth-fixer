@@ -147,8 +147,8 @@ export class TapStack extends pulumi.ComponentResource {
     this.outputs = {
       vpcId: vpc.vpcId,
       vpcCidr: pulumi.output(this.config.vpcCidr),
-      albDnsName: alb.lb.loadBalancer.dnsName,
-      albArn: alb.lb.loadBalancer.arn,
+      albDnsName: alb.loadBalancer.dnsName,
+      albArn: alb.loadBalancer.arn,
       ecsClusterArn: ecsCluster.arn,
       ecsServiceName: ecsService.service.name,
       rdsEndpoint: rds.cluster.endpoint,
@@ -551,27 +551,13 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-  * Create Application Load Balancer with ACM certificate
+  * Create Application Load Balancer - simplified to use only awsx component
   */
   private createApplicationLoadBalancer(
     vpc: awsx.ec2.Vpc,
     securityGroup: aws.ec2.SecurityGroup
   ) {
-    // Create ALB
-    const lb = new awsx.lb.ApplicationLoadBalancer(
-      this.getResourceName("alb"),
-      {
-        subnetIds: vpc.publicSubnetIds,
-        securityGroups: [securityGroup.id],
-        tags: {
-          ...this.config.tags,
-          Name: this.getResourceName("alb"),
-        },
-      },
-      { parent: this }
-    );
-
-    // Create target group
+    // Create target group for ECS service
     const targetGroup = new aws.lb.TargetGroup(
       this.getResourceName("tg"),
       {
@@ -598,11 +584,30 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // Create ALB using raw AWS resources instead of awsx to avoid conflicts
+    const loadBalancer = new aws.lb.LoadBalancer(
+      this.getResourceName("alb"),
+      {
+        name: this.getResourceName("alb"),
+        loadBalancerType: "application",
+        subnets: vpc.publicSubnetIds,
+        securityGroups: [securityGroup.id],
+        enableDeletionProtection: false,
+        enableHttp2: true,
+        enableCrossZoneLoadBalancing: true,
+        tags: {
+          ...this.config.tags,
+          Name: this.getResourceName("alb"),
+        },
+      },
+      { parent: this }
+    );
+
     // Create HTTP listener
     const httpListener = new aws.lb.Listener(
       this.getResourceName("http-listener"),
       {
-        loadBalancerArn: lb.loadBalancer.arn,
+        loadBalancerArn: loadBalancer.arn,
         port: 80,
         protocol: "HTTP",
         defaultActions: [
@@ -619,7 +624,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    return { lb, targetGroup, httpListener };
+    return { loadBalancer, targetGroup, httpListener };
   }
 
   /**
@@ -957,8 +962,8 @@ export class TapStack extends pulumi.ComponentResource {
         type: "A",
         aliases: [
           {
-            name: alb.lb.loadBalancer.dnsName,
-            zoneId: alb.lb.loadBalancer.zoneId,
+            name: alb.loadBalancer.dnsName,
+            zoneId: alb.loadBalancer.zoneId,
             evaluateTargetHealth: true,
           },
         ],
@@ -989,8 +994,9 @@ export class TapStack extends pulumi.ComponentResource {
             service.service.name,
             alb.targetGroup.arn,
             rds.cluster.id,
+            alb.loadBalancer.arnSuffix,
           ])
-          .apply(([clusterName, serviceName, tgArn, rdsId]) =>
+          .apply(([clusterName, serviceName, tgArn, rdsId, lbArnSuffix]) =>
             JSON.stringify({
               widgets: [
                 {
@@ -1021,7 +1027,7 @@ export class TapStack extends pulumi.ComponentResource {
                         "AWS/ApplicationELB",
                         "TargetResponseTime",
                         "LoadBalancer",
-                        alb.lb.loadBalancer.arnSuffix,
+                        lbArnSuffix,
                       ],
                       [".", "RequestCount", ".", "."],
                       [".", "HTTPCode_Target_2XX_Count", ".", "."],
@@ -1114,7 +1120,7 @@ export class TapStack extends pulumi.ComponentResource {
         alarmDescription: "ALB has no healthy targets",
         dimensions: {
           TargetGroup: alb.targetGroup.arnSuffix,
-          LoadBalancer: alb.lb.loadBalancer.arnSuffix,
+          LoadBalancer: alb.loadBalancer.arnSuffix,
         },
         alarmActions: [alarmTopic.arn],
         tags: {
