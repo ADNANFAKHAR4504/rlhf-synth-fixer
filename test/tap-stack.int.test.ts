@@ -3,9 +3,27 @@ import axios from 'axios';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 
+// Validate that CloudFormation outputs exist for live deployment
+if (!fs.existsSync('cfn-outputs/flat-outputs.json')) {
+  throw new Error(
+    'Integration tests require live AWS deployment. CloudFormation outputs file not found: cfn-outputs/flat-outputs.json\n' +
+    'Please deploy the infrastructure first using:\n' +
+    '1. npm run cfn:deploy-yaml\n' +
+    '2. Generate outputs: aws cloudformation describe-stacks --stack-name TapStackdev --query "Stacks[0].Outputs" > cfn-outputs/raw-outputs.json'
+  );
+}
+
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
+
+// Validate outputs contain live deployment data (not mock values)
+if (!outputs.ApiEndpoint || !outputs.ApiKey || outputs.ApiEndpoint.includes('mock') || outputs.ApiKey.includes('mock')) {
+  throw new Error(
+    'Integration tests require live AWS deployment outputs. Found mock or missing data in cfn-outputs/flat-outputs.json\n' +
+    'Please ensure you have deployed the infrastructure and generated real CloudFormation outputs.'
+  );
+}
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
@@ -28,22 +46,17 @@ describe('Serverless Payment Workflow Integration Tests', () => {
   const AUDIT_LOGS_TABLE = outputs.AuditLogsTableArn.split('/').pop();
   const ARCHIVE_BUCKET = outputs.TransactionArchivesBucketArn.split(':::').pop();
 
-  const isMockEnvironment = API_ENDPOINT.includes('mock-api') || API_KEY.includes('mock');
-
-  beforeEach(() => {
-    if (isMockEnvironment) {
-      console.log('⚠️  Running with mock CloudFormation outputs - tests will be skipped for live deployment validation');
-    }
-  });
+  // Validate all required outputs are present
+  if (!API_ENDPOINT || !API_KEY || !STATE_MACHINE_ARN || !TRANSACTIONS_TABLE || !AUDIT_LOGS_TABLE || !ARCHIVE_BUCKET) {
+    throw new Error(
+      'Missing required CloudFormation outputs for integration tests. Required: ApiEndpoint, ApiKey, StateMachineArn, TransactionsTableArn, AuditLogsTableArn, TransactionArchivesBucketArn'
+    );
+  }
 
   const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
   describe('1. Happy Path Transaction Flow', () => {
     test('Valid Payment Transaction - Complete E2E Flow', async () => {
-      if (isMockEnvironment) {
-        console.log('⚠️  Skipping test - requires live AWS deployment');
-        return;
-      }
       const transactionId = `txn-${uuidv4()}`;
       const merchantId = 'M123';
       const amount = 1000;
@@ -134,10 +147,6 @@ describe('Serverless Payment Workflow Integration Tests', () => {
 
   describe('2. Fraud Detection Failure Path', () => {
     test('High-Risk Transaction Blocked', async () => {
-      if (isMockEnvironment) {
-        console.log('⚠️  Skipping test - requires live AWS deployment');
-        return;
-      }
       const transactionId = `fraud-${uuidv4()}`;
       const requestPayload = {
         transaction_id: transactionId,
@@ -198,10 +207,6 @@ describe('Serverless Payment Workflow Integration Tests', () => {
 
   describe('3. API Throttling Scenario', () => {
     test('Rate Limit Enforcement', async () => {
-      if (isMockEnvironment) {
-        console.log('⚠️  Skipping test - requires live AWS deployment');
-        return;
-      }
       const concurrentRequests = 50;
       const promises = [];
 
@@ -255,10 +260,6 @@ describe('Serverless Payment Workflow Integration Tests', () => {
 
   describe('4. Lambda Timeout & Retry Path', () => {
     test('Step Functions Retry Mechanism', async () => {
-      if (isMockEnvironment) {
-        console.log('⚠️  Skipping test - requires live AWS deployment');
-        return;
-      }
       const transactionId = `retry-${uuidv4()}`;
       const requestPayload = {
         transaction_id: transactionId,
@@ -304,10 +305,6 @@ describe('Serverless Payment Workflow Integration Tests', () => {
 
   describe('5. Data Archival & Retrieval', () => {
     test('S3 Archive Storage with Proper Encryption', async () => {
-      if (isMockEnvironment) {
-        console.log('⚠️  Skipping test - requires live AWS deployment');
-        return;
-      }
       const transactionId = `archive-${uuidv4()}`;
       const requestPayload = {
         transaction_id: transactionId,
@@ -380,10 +377,6 @@ describe('Serverless Payment Workflow Integration Tests', () => {
 
   describe('6. Concurrent Execution Limits', () => {
     test('Reserved Concurrency Handling', async () => {
-      if (isMockEnvironment) {
-        console.log('⚠️  Skipping test - requires live AWS deployment');
-        return;
-      }
       const concurrentRequests = 15;
       const promises = [];
 
@@ -440,10 +433,6 @@ describe('Serverless Payment Workflow Integration Tests', () => {
 
   describe('7. GSI Query Performance', () => {
     test('Merchant Transaction Lookup via GSI', async () => {
-      if (isMockEnvironment) {
-        console.log('⚠️  Skipping test - requires live AWS deployment');
-        return;
-      }
       const merchantId = `M-${Date.now()}`;
       const transactionCount = 5;
       const transactionIds: string[] = [];
@@ -511,10 +500,6 @@ describe('Serverless Payment Workflow Integration Tests', () => {
 
   describe('8. Missing API Key Authentication', () => {
     test('Unauthorized Request Handling', async () => {
-      if (isMockEnvironment) {
-        console.log('⚠️  Skipping test - requires live AWS deployment');
-        return;
-      }
       const transactionId = `unauth-${uuidv4()}`;
       const requestPayload = {
         transaction_id: transactionId,
@@ -558,10 +543,6 @@ describe('Serverless Payment Workflow Integration Tests', () => {
 
   describe('9. SSM Parameter Integration', () => {
     test('Environment Variables from Lambda Functions', async () => {
-      if (isMockEnvironment) {
-        console.log('⚠️  Skipping test - requires live AWS deployment');
-        return;
-      }
       const lambda = new AWS.Lambda();
 
       const validatorFunction = await lambda.getFunction({
@@ -625,10 +606,6 @@ describe('Serverless Payment Workflow Integration Tests', () => {
 
   describe('10. End-to-End Observability', () => {
     test('Complete Transaction Tracing with X-Ray', async () => {
-      if (isMockEnvironment) {
-        console.log('⚠️  Skipping test - requires live AWS deployment');
-        return;
-      }
       const transactionId = `trace-${uuidv4()}`;
       const requestPayload = {
         transaction_id: transactionId,
@@ -701,10 +678,6 @@ describe('Serverless Payment Workflow Integration Tests', () => {
 
   describe('11. Disaster Recovery', () => {
     test('Point-in-Time Recovery Validation', async () => {
-      if (isMockEnvironment) {
-        console.log('⚠️  Skipping test - requires live AWS deployment');
-        return;
-      }
       const transactionId = `pitr-${uuidv4()}`;
       const requestPayload = {
         transaction_id: transactionId,
