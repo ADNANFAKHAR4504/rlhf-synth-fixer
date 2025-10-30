@@ -9,5 +9,13 @@
   "subtask": "IaC Program Optimization",
   "subject_labels": [
     "Infrastructure Analysis/Monitoring"
-  ]
+  ],
+  "aws_services": [
+    "ApplicationELB",
+    "EC2",
+    "CloudWatch",
+    "S3",
+    "EIP"
+  ],
+  "training_quality": 8
 }
