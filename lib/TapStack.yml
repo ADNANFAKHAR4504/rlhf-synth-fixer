@@ -140,7 +140,7 @@ Resources:
               - 'kms:GenerateDataKey'
               - 'kms:CreateGrant'
             Resource: '*'
-          - Sid: Allow CloudTrail to use key
+          - Sid: Allow CloudTrail Service
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
@@ -151,7 +151,7 @@ Resources:
               - kms:GenerateDataKey*
               - kms:DescribeKey
             Resource: '*'
-          - Sid: Allow all CloudTrail logging for root
+          - Sid: Allow CloudTrail Root
             Effect: Allow
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
@@ -754,7 +754,7 @@ Resources:
               Service: cloudtrail.amazonaws.com
             Action: 's3:GetBucketAcl'
             Resource: !GetAtt CloudTrailBucket.Arn
-          - Sid: AWSCloudTrailWrite
+          - Sid: AWSCloudTrailWriteRoot
             Effect: Allow
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
@@ -763,7 +763,7 @@ Resources:
             Condition:
               StringEquals:
                 's3:x-amz-acl': 'bucket-owner-full-control'
-          - Sid: AWSCloudTrailWriteOrg
+          - Sid: AWSCloudTrailWriteService
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
