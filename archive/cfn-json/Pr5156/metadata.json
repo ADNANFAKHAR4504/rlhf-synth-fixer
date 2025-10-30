@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-10-28T01:44:24+05:30",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "po_id": "9190762080",
+  "aws_services": [
+    "KMS",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "SNS",
+    "IAM"
+  ],
+  "region": "eu-west-2",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

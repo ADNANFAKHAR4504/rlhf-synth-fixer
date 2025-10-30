@@ -1,6 +1,0 @@
-encryptionsalt: v1:R9++EoausPM=:v1:bXDLhZg6uLYZHlBg:Tc7KkWzObnhzVNCVVXGzGD2Z33cb3g==
-config:
-  aws:region: us-east-1
-  pulumi-infra:env: synth6981431077
-  python:virtualenv: /Users/mayanksethi/.local/share/virtualenvs/synth-6981431077-GlDsCiWB
-  python:interpreter: /Users/mayanksethi/.local/share/virtualenvs/synth-6981431077-GlDsCiWB/bin/python

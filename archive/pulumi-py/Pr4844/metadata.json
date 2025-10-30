@@ -1,0 +1,28 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "410123",
+  "team": "4",
+  "startedAt": "2025-10-11T18:24:50.847Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "SNS",
+    "EventBridge",
+    "Lambda",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
+}

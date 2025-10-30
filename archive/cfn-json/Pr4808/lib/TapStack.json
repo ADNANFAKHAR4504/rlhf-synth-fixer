@@ -1,0 +1,529 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Serverless application with API Gateway and Lambda for logging to S3 and CloudWatch",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Environment Configuration"
+          },
+          "Parameters": [
+            "EnvironmentSuffix",
+            "ProjectName"
+          ]
+        }
+      ]
+    },
+    "DeploymentInstructions": {
+      "Validation": "aws cloudformation validate-template --template-body file://serverless_setup.json",
+      "Deployment": "aws cloudformation deploy --template-file serverless_setup.json --stack-name serverless-app-stack --parameter-overrides Environment=dev ProjectName=serverless-demo --capabilities CAPABILITY_IAM --region us-east-1",
+      "Verification": {
+        "TestAPI": "curl -X GET https://<api-id>.execute-api.us-east-1.amazonaws.com/prod/v1/resource",
+        "CheckCloudWatchLogs": "aws logs describe-log-groups --log-group-name-prefix '/aws/lambda/serverless-' --region us-east-1",
+        "CheckS3Logs": "aws s3 ls s3://project-logs-<environment>/ --region us-east-1"
+      },
+      "Cleanup": "aws cloudformation delete-stack --stack-name serverless-app-stack --region us-east-1"
+    }
+  },
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
+    "ProjectName": {
+      "Type": "String",
+      "Default": "serverless-demo",
+      "Description": "Project name for tagging"
+    }
+  },
+  "Resources": {
+    "LogsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "project-logs-${EnvironmentSuffix}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldLogs",
+              "Status": "Enabled",
+              "ExpirationInDays": 30
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "serverless-lambda-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "LambdaExecutionPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/serverless-lambda-${EnvironmentSuffix}:*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::${LogsBucket}/*"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "serverless-lambda-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.9",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Environment": {
+          "Variables": {
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffix"
+            },
+            "LOGS_BUCKET": {
+              "Ref": "LogsBucket"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": {
+            "Fn::Join": [
+              "\n",
+              [
+                "import json",
+                "import boto3",
+                "import os",
+                "from datetime import datetime",
+                "",
+                "s3 = boto3.client('s3')",
+                "",
+                "def handler(event, context):",
+                "    print(f'Received event: {json.dumps(event)}')",
+                "    ",
+                "    # Log to S3",
+                "    log_entry = {",
+                "        'timestamp': datetime.utcnow().isoformat(),",
+                "        'method': event.get('httpMethod'),",
+                "        'path': event.get('path'),",
+                "        'headers': event.get('headers'),",
+                "        'body': event.get('body')",
+                "    }",
+                "    ",
+                "    try:",
+                "        bucket_name = os.environ['LOGS_BUCKET']",
+                "        key = f\"logs/{datetime.utcnow().strftime('%Y/%m/%d')}/{context.request_id}.json\"",
+                "        ",
+                "        s3.put_object(",
+                "            Bucket=bucket_name,",
+                "            Key=key,",
+                "            Body=json.dumps(log_entry),",
+                "            ContentType='application/json'",
+                "        )",
+                "        print(f'Log written to S3: {bucket_name}/{key}')",
+                "    except Exception as e:",
+                "        print(f'Error writing to S3: {str(e)}')",
+                "    ",
+                "    # Response",
+                "    response_body = {",
+                "        'message': 'Request processed successfully',",
+                "        'method': event.get('httpMethod'),",
+                "        'timestamp': datetime.utcnow().isoformat()",
+                "    }",
+                "    ",
+                "    return {",
+                "        'statusCode': 200,",
+                "        'headers': {",
+                "            'Content-Type': 'application/json'",
+                "        },",
+                "        'body': json.dumps(response_body)",
+                "    }"
+              ]
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/serverless-lambda-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 7,
+        "Tags": [
+          {
+            "Key": "environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          }
+        ]
+      }
+    },
+    "ApiGatewayCloudWatchRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "serverless-apigateway-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "apigateway.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+        ],
+        "Tags": [
+          {
+            "Key": "environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          }
+        ]
+      }
+    },
+    "ApiGatewayAccount": {
+      "Type": "AWS::ApiGateway::Account",
+      "Properties": {
+        "CloudWatchRoleArn": {
+          "Fn::GetAtt": [
+            "ApiGatewayCloudWatchRole",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "ApiGateway": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "serverless-api-${EnvironmentSuffix}"
+        },
+        "Description": "Serverless API Gateway",
+        "EndpointConfiguration": {
+          "Types": [
+            "REGIONAL"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          }
+        ]
+      }
+    },
+    "ApiGatewayV1Resource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "ParentId": {
+          "Fn::GetAtt": [
+            "ApiGateway",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "v1"
+      }
+    },
+    "ApiGatewayResourceResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "ParentId": {
+          "Ref": "ApiGatewayV1Resource"
+        },
+        "PathPart": "resource"
+      }
+    },
+    "LambdaInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "LambdaFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*/*"
+        }
+      }
+    },
+    "ApiGatewayMethodGet": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "ResourceId": {
+          "Ref": "ApiGatewayResourceResource"
+        },
+        "HttpMethod": "GET",
+        "AuthorizationType": "NONE",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations"
+          }
+        }
+      }
+    },
+    "ApiGatewayMethodPost": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "ResourceId": {
+          "Ref": "ApiGatewayResourceResource"
+        },
+        "HttpMethod": "POST",
+        "AuthorizationType": "NONE",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations"
+          }
+        }
+      }
+    },
+    "ApiGatewayDeployment": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "DependsOn": [
+        "ApiGatewayMethodGet",
+        "ApiGatewayMethodPost"
+      ],
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "Description": "Production deployment"
+      }
+    },
+    "ApiGatewayStage": {
+      "Type": "AWS::ApiGateway::Stage",
+      "Properties": {
+        "StageName": "prod",
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "DeploymentId": {
+          "Ref": "ApiGatewayDeployment"
+        },
+        "MethodSettings": [
+          {
+            "ResourcePath": "/*",
+            "HttpMethod": "*",
+            "LoggingLevel": "INFO",
+            "DataTraceEnabled": true,
+            "MetricsEnabled": true
+          }
+        ],
+        "AccessLogSetting": {
+          "DestinationArn": {
+            "Fn::GetAtt": [
+              "ApiGatewayLogGroup",
+              "Arn"
+            ]
+          },
+          "Format": "$context.requestId $context.error.message $context.error.messageString $context.extendedRequestId $context.identity.sourceIp $context.requestTime $context.routeKey $context.status"
+        },
+        "Tags": [
+          {
+            "Key": "environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          }
+        ]
+      }
+    },
+    "ApiGatewayLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/apigateway/serverless-api-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 7,
+        "Tags": [
+          {
+            "Key": "environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "ApiEndpoint": {
+      "Description": "API Gateway endpoint URL",
+      "Value": {
+        "Fn::Sub": "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/v1/resource"
+      }
+    },
+    "LambdaFunctionArn": {
+      "Description": "Lambda function ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "LambdaFunction",
+          "Arn"
+        ]
+      }
+    },
+    "S3BucketName": {
+      "Description": "S3 bucket name for logs",
+      "Value": {
+        "Ref": "LogsBucket"
+      }
+    }
+  }
+}

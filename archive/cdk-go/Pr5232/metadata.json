@@ -1,0 +1,37 @@
+{
+  "platform": "cdk",
+  "language": "go",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "9614802552",
+  "team": "synth",
+  "startedAt": "2025-10-28T15:51:00-07:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Failure Recovery Automation",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2 (Security Groups, NAT Gateway)",
+    "ECS",
+    "EFS",
+    "RDS Aurora PostgreSQL",
+    "ElastiCache Redis",
+    "Kinesis Data Streams",
+    "API Gateway",
+    "Secrets Manager",
+    "KMS",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

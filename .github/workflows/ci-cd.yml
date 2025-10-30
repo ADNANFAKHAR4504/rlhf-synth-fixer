@@ -13,12 +13,12 @@ on:
   workflow_dispatch:
     inputs:
       environment_suffix:
-        description: 'Environment suffix for resource naming (e.g., pr123, dev, test)'
+        description: "Environment suffix for resource naming (e.g., pr123, dev, test)"
         required: false
-        default: 'manual'
+        default: "manual"
         type: string
       skip_cleanup:
-        description: 'Skip cleanup/destroy step after deployment'
+        description: "Skip cleanup/destroy step after deployment"
         required: false
         default: false
         type: boolean
@@ -45,10 +45,11 @@ env:
   CURRENT_ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  MODEL_S3_URI: 's3://social-platform-sagemaker-342597974367-dev/model.tar.gz'
+  MODEL_S3_URI: "s3://social-platform-sagemaker-342597974367-dev/model.tar.gz"
   # Go caching optimization
   GOCACHE: ${{ github.workspace }}/.cache/go-build
   GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
+  IAC_ANALYSIS_SUBTASK: 'IaC Program Optimization'
 
 jobs:
   detect-metadata:
@@ -59,6 +60,7 @@ jobs:
       platform: ${{ steps.metadata.outputs.platform }}
       language: ${{ steps.metadata.outputs.language }}
       po_id: ${{ steps.metadata.outputs.po_id }}
+      subtask: ${{ steps.metadata.outputs.subtask }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -80,7 +82,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'false'
+          download-artifacts: "false"
 
       - name: Validate commit message
         run: npx commitlint --last
@@ -89,7 +91,7 @@ jobs:
     name: Build
     runs-on: ubuntu-24.04
     needs: detect-metadata
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization'}}
     environment: dev
 
     steps:
@@ -112,7 +114,7 @@ jobs:
     name: Synth
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch' && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization' }}
     environment: dev
     permissions:
       contents: read
@@ -241,12 +243,52 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ env.AWS_REGION || 'us-east-1' }}
+  analysis:
+    name: Analysis
+    runs-on: ubuntu-24.04
+    needs: detect-metadata
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask == 'IaC Program Optimization' }}
+    environment: dev
+    env:
+      AWS_ENDPOINT_URL: http://127.0.0.1:5001
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          ref: ${{ github.head_ref }}
 
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          download-artifacts: 'false'
+          is-analysis: 'true'
+
+      - name: Run analysis
+        run: ./scripts/analysis.sh
+        env:
+          IAC_ANALYSIS_SUBTASK: ${{ env.IAC_ANALYSIS_SUBTASK }}
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+
+      - name: Upload analysis results as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: analysis-results
+          path: lib/analysis-results.txt
+          if-no-files-found: warn
   deploy:
     name: Deploy
     runs-on: ubuntu-24.04
     needs: [detect-metadata, synth]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization'}}
     environment: dev
 
     steps:
@@ -310,7 +352,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization'}}
     environment: qa
     outputs:
       platform: ${{ needs.detect-metadata.outputs.platform }}
@@ -337,7 +379,7 @@ jobs:
     name: Unit Testing
     runs-on: ubuntu-24.04
     needs: [detect-metadata, lint]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization' }}
     environment: qa
 
     steps:
@@ -430,7 +472,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [detect-metadata, lint, unit-tests, deploy]
     environment: qa
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization'}}
 
     steps:
       - name: Checkout code
@@ -468,7 +510,8 @@ jobs:
   claude-code-action:
     runs-on: ubuntu-24.04
     name: "Claude Review"
-    needs: [integration-tests-live]
+    needs: [integration-tests-live, analysis]
+    if: always() && !cancelled() && (needs.analysis.result == 'success' || needs.integration-tests-live.result == 'success')
     permissions:
       contents: write
       pull-requests: write
@@ -504,14 +547,22 @@ jobs:
             echo "❌ lib/MODEL_FAILURES.md not found, exiting with failure"
             exit 1
           fi
+      
+      - name: Verify IaC Program Optimization script exists
+        if: ${{ needs.detect-metadata.outputs.subtask == env.IAC_ANALYSIS_SUBTASK }}
+        run: |
+          if [ ! -f "lib/analyse.py" ] && [ ! -f "lib/analyse.sh" ]; then
+            echo "❌ Expected lib/analyse.py or lib/analyse.sh for IaC Program Optimization task"
+            exit 1
+          fi
 
       - name: Run Claude PR Review Action
         uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
-          trigger_phrase: ''
+          allowed_tools: "Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite"
+          trigger_phrase: ""
           custom_instructions: |
             CRITICAL: you MUST validate the latest PROMPT file format, and add a github comment if it appears to be AI-generated rather than human-written:
             1. Identify all the PROMPT file (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) - always use the highest numbered one
@@ -524,7 +575,7 @@ jobs:
                 - Logs are allowed when we have multiple prompt files. 
                 - Perfect formatting that suggests AI assistance
                 - LLM Flavoured text, such as: "Here is a **comprehensive and high-level prompt** for your use..."
-            5. If  any PROMPT file appears to be AI-generated rather than human-written, add a github comment indicating the issue.
+            5. If  any PROMPT file appears to be AI-generated rather than human-written, fail the job by exiting with code 1.
             6. Also validate that for each PROMPT file, there is a corresponding MODEL_RESPONSE file (e.g., PROMPT.md -> MODEL_RESPONSE.md, PROMPT2.md -> MODEL_RESPONSE2.md, etc.) and that it is well-formatted.
             7. PROMPT2.md and PROMPT3.md are optional, but if they exist, they must also be validated and it can contain Deployment/Test/Error logs as well.
 
@@ -534,18 +585,20 @@ jobs:
             3. Important: There should not be code outside proper code blocks (```python, ```bash, etc.)
             4. Every code file inside lib/ folder should be represented in lib/IDEAL_RESPONSE.md in code_blocks.
             5. There should not be references in the lib/IDEAL_RESPONSE.md to the QA process, unit tests or integration tests.
-            6. If the lib/IDEAL_RESPONSE.md does not meet the above criteria, add a github comment indicating the issue.
+            6. If the lib/IDEAL_RESPONSE.md does not meet the above criteria, fail the job by exiting with code 1.
 
             Follow instructions in .claude/agents/iac-code-reviewer.md. Do not commit any changes, but allow the metadata.json file to be updated.
             Important: The Metadata Enhancement phase in .claude/agents/iac-code-reviewer.md is very important for this project. Make sure that the
             metadata.json file is updated with the fields stated there. If the metadata.json file after the review does not contain the fields:
             - training_quality
             - aws_services
-            then add a github comment indicating the issue.
+            then add a github comment indicating the issue
 
             This validation is mandatory and must be completed before any other review activities.
 
-            Once the above is done Follow instructions in .claude/agents/iac-code-reviewer.md
+            Now follow the instructions in .claude/agents/iac-code-reviewer.md 
+
+            once review is done and you are satisfied with the results, then fail the job by exiting with code 1
 
       - name: Upload updated metadata.json
         uses: actions/upload-artifact@v4
@@ -557,9 +610,9 @@ jobs:
   cleanup:
     name: Cleanup (Destroy Resources)
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, integration-tests-live]
-    if: ${{ ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch' && !inputs.skip_cleanup)) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
-    environment: stage
+    needs: [detect-metadata, integration-tests-live, claude-code-action]
+    if: ${{ ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch' && !inputs.skip_cleanup)) && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization' }}
+    environment: qa
 
     steps:
       - name: Checkout code
@@ -594,7 +647,7 @@ jobs:
     name: Archive Folders and Reset Repository
     runs-on: ubuntu-24.04
     needs: [detect-metadata, cleanup]
-    environment: release
+    environment: stage
     if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     permissions:
       contents: write
@@ -619,6 +672,13 @@ jobs:
         with:
           name: updated-metadata
           path: .
+
+      - name: Download analysis results
+        if: ${{ needs.detect-metadata.outputs.subtask == 'IaC Program Optimization' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: analysis-results
+          path: lib/
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
@@ -914,7 +974,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'false'
+          download-artifacts: "false"
 
       - name: Run semantic-release
         run: npm run release
