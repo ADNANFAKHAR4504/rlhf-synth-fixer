@@ -2,6 +2,7 @@
   "platform": "pulumi",
   "language": "ts",
   "complexity": "medium",
+  "turn_type": "single",
   "team": "synth",
   "startedAt": "2025-10-30T18:30:00+00:00",
   "subtask": "CI/CD Pipeline Integration",
