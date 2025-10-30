@@ -616,11 +616,12 @@ jobs:
           gh pr view ${{ github.event.pull_request.number }} --comments --json comments \
             | jq -r '.comments[].body' > all_comments.txt
 
-          SCORE=$(grep -Eo '\*\*Final Score:[[:space:]]*[0-9]+/10\*\*' all_comments.txt | tail -1 | grep -Eo '[0-9]+' | head -1)
+          echo "🧩 Searching for quality score pattern..."
+          # Match both "**Final Score: 9/10**" and "Training Quality: 9/10"
+          SCORE=$(grep -Eo '((Final|Training) Quality:[[:space:]]*[0-9]+/10)' all_comments.txt | tail -1 | grep -Eo '[0-9]+' | head -1)
 
-          SCORE=$(echo "$SCORE" | tr -d '[:space:]')
           if [ -z "$SCORE" ]; then
-            echo "⚠️ Could not find Final Score in PR comments. Defaulting to 0."
+            echo "⚠️ Could not find any quality score in PR comments. Defaulting to 0."
             SCORE=0
           fi
 
