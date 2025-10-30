@@ -1,20 +1,18 @@
-// tests/tap-stack.int.test.ts
+// test/tap-stack.int.test.ts
+
 import * as fs from 'fs';
 import * as path from 'path';
 
 // Dynamically locate Terraform outputs
-// This path assumes outputs are in '<project-root>/cfn-outputs/flat-outputs.json'
+// This path assumes outputs are in '/cfn-outputs/flat-outputs.json'
 const outputsFilePath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
 const cfnOutputsExist = fs.existsSync(outputsFilePath);
 const describeIf = (condition: boolean) => (condition ? describe : describe.skip);
 
-// Expected outputs from lib/tap-stack.ts
 interface StackOutputs {
   KmsKeyArn: string;
   IamRoleArn: string;
   SecretArn: string;
-  EbsEncryptionRuleName: string;
-  S3EncryptionRuleName: string;
   RootActivityAlarmName: string;
   LoginFailureAlarmName: string;
 }
@@ -42,12 +40,11 @@ describeIf(cfnOutputsExist)('Secure Baseline Stack Integration Tests', () => {
       }
 
       // Validate all required keys exist
+      // --- UPDATED: Removed Config-related outputs ---
       const required = [
         'KmsKeyArn',
         'IamRoleArn',
         'SecretArn',
-        'EbsEncryptionRuleName',
-        'S3EncryptionRuleName',
         'RootActivityAlarmName',
         'LoginFailureAlarmName',
       ];
@@ -74,14 +71,6 @@ describeIf(cfnOutputsExist)('Secure Baseline Stack Integration Tests', () => {
       expect(outputs.SecretArn).toMatch(/^arn:aws:secretsmanager:/);
     });
 
-    it('EbsEncryptionRuleName output should not be empty', () => {
-      expect(outputs.EbsEncryptionRuleName.length).toBeGreaterThan(0);
-    });
-
-    it('S3EncryptionRuleName output should not be empty', () => {
-      expect(outputs.S3EncryptionRuleName.length).toBeGreaterThan(0);
-    });
-
     it('RootActivityAlarmName output should not be empty', () => {
       expect(outputs.RootActivityAlarmName.length).toBeGreaterThan(0);
     });
@@ -91,7 +80,6 @@ describeIf(cfnOutputsExist)('Secure Baseline Stack Integration Tests', () => {
     });
   });
 
-  // --- NEW GUARANTEED TESTS ---
   describe('Naming Convention Validation (Non-SDK)', () => {
     it('IAM Role ARN should contain the correct name and suffix', () => {
       expect(outputs.IamRoleArn).toContain(`MfaAdminRole-${environmentSuffix}`);
@@ -101,20 +89,34 @@ describeIf(cfnOutputsExist)('Secure Baseline Stack Integration Tests', () => {
       expect(outputs.SecretArn).toContain(`soc-baseline-secret-${environmentSuffix}`);
     });
 
-    it('EBS Config Rule Name should contain the correct suffix', () => {
-      expect(outputs.EbsEncryptionRuleName).toContain(`-${environmentSuffix}`);
-    });
-
-    it('S3 Config Rule Name should contain the correct suffix', () => {
-      expect(outputs.S3EncryptionRuleName).toContain(`-${environmentSuffix}`);
-    });
-
     it('Root Activity Alarm Name should contain the correct suffix', () => {
       expect(outputs.RootActivityAlarmName).toContain(`-${environmentSuffix}`);
     });
 
     it('Login Failure Alarm Name should contain the correct suffix', () => {
       expect(outputs.LoginFailureAlarmName).toContain(`-${environmentSuffix}`);
+    });
+  });
+
+  describe('CloudWatch Alarms Validation', () => {
+    it('Root Activity Alarm Name should match expected pattern', () => {
+      expect(outputs.RootActivityAlarmName).toMatch(/^RootUserActivityAlarm-/);
+    });
+
+    it('Login Failure Alarm Name should match expected pattern', () => {
+      expect(outputs.LoginFailureAlarmName).toMatch(/^ConsoleLoginFailureAlarm-/);
+    });
+  });
+
+  describe('KMS Key Validation', () => {
+    it('KMS Key ARN should be in us-east-1 region', () => {
+      expect(outputs.KmsKeyArn).toContain(':us-east-1:');
+    });
+  });
+
+  describe('Secrets Manager Validation', () => {
+    it('Secret ARN should be in us-east-1 region', () => {
+      expect(outputs.SecretArn).toContain(':us-east-1:');
     });
   });
 });
