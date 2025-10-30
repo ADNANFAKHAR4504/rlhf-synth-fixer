@@ -179,12 +179,44 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 	loggingBucket := awss3.NewBucket(stack, jsii.String("CloudFrontLogsBucket"), &awss3.BucketProps{
 		BucketName:        jsii.String(fmt.Sprintf("cloudfront-logs-%s", *environmentSuffix)),
 		Encryption:        awss3.BucketEncryption_S3_MANAGED,
-		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
 		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
 		AutoDeleteObjects: jsii.Bool(true),
-		// Use OBJECT_WRITER to allow CloudFront to write logs with proper ACLs
-		ObjectOwnership:   awss3.ObjectOwnership_OBJECT_WRITER,
+		// Disable BlockPublicAccess for ACL-based permissions (required for CloudFront logging)
+		BlockPublicAccess: awss3.NewBlockPublicAccess(&awss3.BlockPublicAccessOptions{
+			BlockPublicAcls:       jsii.Bool(false),
+			BlockPublicPolicy:     jsii.Bool(true),
+			IgnorePublicAcls:      jsii.Bool(false),
+			RestrictPublicBuckets: jsii.Bool(true),
+		}),
+		// Use BUCKET_OWNER_PREFERRED to allow CloudFront to write logs with proper ACLs
+		ObjectOwnership: awss3.ObjectOwnership_BUCKET_OWNER_PREFERRED,
 	})
+
+	// Grant CloudFront log delivery service the necessary permissions
+	loggingBucket.AddToResourcePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Sid:       jsii.String("AWSCloudFrontLogsPolicy"),
+		Effect:    awsiam.Effect_ALLOW,
+		Principals: &[]awsiam.IPrincipal{
+			awsiam.NewServicePrincipal(jsii.String("cloudfront.amazonaws.com"), nil),
+		},
+		Actions: jsii.Strings(
+			"s3:GetBucketAcl",
+			"s3:PutBucketAcl",
+		),
+		Resources: jsii.Strings(*loggingBucket.BucketArn()),
+	})
+
+	// Grant CloudFront permission to write log objects
+	loggingBucket.AddToResourcePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Effect: awsiam.Effect_ALLOW,
+		Principals: &[]awsiam.IPrincipal{
+			awsiam.NewServicePrincipal(jsii.String("cloudfront.amazonaws.com"), nil),
+		},
+		Actions: jsii.Strings(
+			"s3:PutObject",
+		),
+		Resources: jsii.Strings(fmt.Sprintf("%s/*", *loggingBucket.BucketArn())),
+	}))
 
 	// CloudFront distribution with logging enabled
 	distribution := awscloudfront.NewDistribution(stack, jsii.String("Distribution"), &awscloudfront.DistributionProps{

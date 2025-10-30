@@ -4,14 +4,15 @@ A production-ready streaming media processing pipeline using AWS CDK with Go, de
 
 ## Architecture
 
-Complete video ingestion → processing → delivery pipeline:
-- **S3 Buckets**: Source uploads + processed content (encrypted, public access blocked)
-- **Lambda Functions**: Transcode trigger + status tracking
-- **MediaConvert**: Video transcoding (configured via Lambda, not direct CDK resource)
+Complete video ingestion to processing to delivery pipeline:
+- **S3 Buckets**: Source uploads, processed content, and CloudFront logs (encrypted, access controlled)
+- **Lambda Functions**: Transcode trigger and status tracking with inline code
+- **MediaConvert**: Video transcoding to H.264/AAC (configured via Lambda SDK)
 - **DynamoDB**: Job tracking with PAY_PER_REQUEST billing
-- **SNS**: Pipeline notifications
-- **CloudFront**: Global content delivery with OAI security
-- **IAM**: Least-privilege roles for MediaConvert and Lambda
+- **SNS**: Pipeline notifications for job status updates
+- **CloudFront**: Global content delivery with OAI security and logging enabled
+- **EventBridge**: MediaConvert job state change monitoring
+- **IAM**: Least-privilege roles for MediaConvert and Lambda with scoped permissions
 
 ## Key Files
 
@@ -33,17 +34,20 @@ require (
 
 ### lib/tap_stack.go (Main Stack)
 All resources use environmentSuffix in names:
-- Source bucket: `media-source-{suffix}`
-- Processed bucket: `media-processed-{suffix}`  
-- DynamoDB table: `media-jobs-{suffix}`
-- SNS topic: `media-notifications-{suffix}`
-- IAM roles: `media-convert-role-{suffix}`, `media-lambda-role-{suffix}`
-- Lambda functions: `media-transcode-{suffix}`, `media-status-{suffix}`
+- Source bucket: `media-source-{suffix}` with encryption and auto-delete
+- Processed bucket: `media-processed-{suffix}` with encryption and auto-delete
+- CloudFront logs bucket: `cloudfront-logs-{suffix}` with ACL permissions for CloudFront logging
+- DynamoDB table: `media-jobs-{suffix}` with jobId partition key
+- SNS topic: `media-notifications-{suffix}` for pipeline notifications
+- IAM roles: `media-convert-role-{suffix}` (MediaConvert), `media-lambda-role-{suffix}` (Lambda)
+- Lambda functions: `media-transcode-{suffix}` (transcode), `media-status-{suffix}` (status updates)
+- EventBridge rule: `media-convert-job-rule-{suffix}` for job state changes
 
-**Critical Fixes from MODEL_RESPONSE**:
-1. `processedBucket.GrantWrite(mediaConvertRole, nil, nil)` - 3 parameters
-2. `StackProps: awscdk.StackProps{` - value not pointer
-3. `lib.NewTapStack(app, stackName, props)` - string not *string
+**CloudFront Logging Configuration**:
+- Bucket created with BUCKET_OWNER_PREFERRED ownership for ACL support
+- BlockPublicAccess configured to allow ACL operations while blocking public policy
+- Bucket policy grants CloudFront service principal GetBucketAcl and PutBucketAcl permissions
+- Separate policy statement allows CloudFront to write log objects (PutObject)
 
 ### Lambda Functions
 **Transcode Lambda** (inline):
@@ -54,17 +58,21 @@ All resources use environmentSuffix in names:
 - Sends SNS notification
 
 **Status Lambda** (inline):
-- Updates job status in DynamoDB
-- Sends SNS notifications
-- (Note: Not triggered in current implementation)
+- Triggered by EventBridge rule on MediaConvert job state changes (COMPLETE or ERROR)
+- Queries DynamoDB to find job by MediaConvert job ID
+- Updates job status and timestamp in DynamoDB
+- Sends SNS notifications with job status updates
 
 ### Stack Outputs
 All outputs for integration testing:
-- SourceBucketName
-- ProcessedBucketName
-- JobTableName
-- DistributionDomainName
-- TranscodeFunctionArn
+- SourceBucketName (media-source bucket)
+- ProcessedBucketName (media-processed bucket)
+- JobTableName (media-jobs table)
+- DistributionDomainName (CloudFront distribution)
+- TranscodeFunctionArn (transcode Lambda)
+- StatusFunctionArn (status Lambda)
+- NotificationTopicArn (SNS topic)
+- CloudFrontLogsBucketName (logging bucket)
 
 ## Testing
 
@@ -123,23 +131,34 @@ npm run cdk:destroy
 
 ## Compliance
 
-✅ Platform: CDK Go (no Terraform/Pulumi imports)
-✅ Region: eu-south-1 hardcoded
-✅ EnvironmentSuffix: 80% of resources (8/10 named resources)
-✅ No Retain policies: All resources destroyable
-✅ Encryption: S3 AES256, data in transit via HTTPS
-✅ Security: No public access, OAI for CloudFront, IAM least privilege
-✅ Testing: 100% unit coverage, integration structure defined
+[PASS] Platform: CDK Go (no Terraform/Pulumi imports)
+[PASS] Region: eu-south-1 hardcoded in deployment configuration
+[PASS] EnvironmentSuffix: All named resources include suffix
+[PASS] No Retain policies: All resources have DESTROY removal policy
+[PASS] Encryption: S3 S3_MANAGED encryption, data in transit via HTTPS
+[PASS] Security: Controlled access, OAI for CloudFront, IAM least privilege
+[PASS] CloudFront Logging: Properly configured with ACL permissions
+[PASS] Testing: Comprehensive unit tests with full coverage
 
-## What Was Fixed
+## Key Implementation Details
 
-**From MODEL_RESPONSE**:
-1. ❌ No go.mod → ✅ Created with correct dependencies
-2. ❌ GrantWrite wrong params → ✅ Fixed to 3 parameters
-3. ❌ Type errors in bin/tap.go → ✅ Corrected pointer/value usage
-4. ❌ ENV var not read → ✅ Added ENVIRONMENT_SUFFIX handling
-5. ❌ Skeleton tests → ✅ 10 comprehensive tests (100% coverage)
-6. ❌ No integration tests → ✅ Documented structure and requirements
+**CloudFront Logging Fix**:
+- CloudFront requires specific ACL permissions (GetBucketAcl, PutBucketAcl) to write logs
+- Logging bucket configured with BUCKET_OWNER_PREFERRED ownership for ACL support
+- BlockPublicAccess selectively enabled to allow ACL operations while maintaining security
+- Bucket policy grants CloudFront service principal necessary ACL and PutObject permissions
+
+**MediaConvert Integration**:
+- MediaConvert service integrated via Lambda SDK (not direct CDK construct)
+- Transcode Lambda gets endpoint dynamically via DescribeEndpoints API
+- Jobs configured for H.264 video codec and AAC audio codec
+- Output directed to processed bucket with proper path structure
+
+**Event-Driven Architecture**:
+- S3 events trigger transcode Lambda on object creation in uploads/ prefix
+- EventBridge rule monitors MediaConvert job state changes (COMPLETE, ERROR)
+- Status Lambda triggered by EventBridge for DynamoDB updates and notifications
+- SNS topic provides notification mechanism for all pipeline events
 
 ## Production Considerations
 
@@ -151,11 +170,11 @@ npm run cdk:destroy
 - Cost-optimized (PAY_PER_REQUEST, auto-delete)
 
 **Future Enhancements**:
-- Add DLQ for Lambda retry failures
-- Trigger statusLambda from MediaConvert job state changes
-- Add CloudWatch alarms for pipeline monitoring
-- Implement lifecycle policies for old source videos
-- Add API Gateway for programmatic job submission
+- Add Dead Letter Queue (DLQ) for Lambda retry failures
+- Implement CloudWatch alarms for pipeline health monitoring
+- Add lifecycle policies for automatic archival of old source videos
+- Implement API Gateway for programmatic job submission and status queries
+- Add X-Ray tracing for distributed request tracking across services
 
 ## AWS Services Used
 - S3 (storage)

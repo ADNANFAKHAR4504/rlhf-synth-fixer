@@ -3,7 +3,7 @@
   "language": "go",
   "complexity": "medium",
   "team": "synth",
-  "startedAt": "2025-10-28T14:15:25+05:30",
+  "startedAt": "2025-10-28T08:45:25Z",
   "subtask": "Application Deployment",
   "subject_labels": [
     "CI/CD Pipeline",
