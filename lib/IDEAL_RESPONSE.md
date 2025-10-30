@@ -176,7 +176,7 @@ app.use((req: Request, res: Response, next: any): void => {
 });
 
 // Middleware for logging
-app.use((req: Request, _, next: any) => {
+app.use((req: Request, _: Response, next: any) => {
   console.log(`${req.method} ${req.path}`, {
     headers: req.headers,
     query: req.query,
@@ -187,7 +187,7 @@ app.use((req: Request, _, next: any) => {
 });
 
 // Health check endpoint
-app.get('/health', (_, res: Response) => {
+app.get('/health', (_: Request, res: Response) => {
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
