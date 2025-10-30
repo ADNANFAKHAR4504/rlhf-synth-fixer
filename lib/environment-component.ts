@@ -27,7 +27,7 @@ export class DataPipelineEnvironment extends pulumi.ComponentResource {
     this.bucket = new aws.s3.Bucket(
       `company-data-${environment}-${suffix}`,
       {
-        bucket: `company-data-${environment}-${config.region}-${suffix}`,
+        bucket: `company-data-${environment}-${config.region}-${suffix}`.toLowerCase(),
         versioning: {
           enabled: true,
         },
