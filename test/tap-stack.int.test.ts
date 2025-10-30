@@ -3,8 +3,21 @@ import axios from 'axios';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 
+// Debug logging helper function
+const debugLog = (category: string, message: string, data?: any) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] [${category}] ${message}`);
+  if (data !== undefined) {
+    console.log(`[${timestamp}] [${category}] Data:`, JSON.stringify(data, null, 2));
+  }
+};
+
 // Validate that CloudFormation outputs exist for live deployment
+debugLog('SETUP', 'Checking for CloudFormation outputs file');
 if (!fs.existsSync('cfn-outputs/flat-outputs.json')) {
+  debugLog('ERROR', 'CloudFormation outputs file not found: cfn-outputs/flat-outputs.json');
+  debugLog('ERROR', 'Current working directory', process.cwd());
+  debugLog('ERROR', 'Files in current directory', fs.readdirSync('.'));
   throw new Error(
     'Integration tests require live AWS deployment. CloudFormation outputs file not found: cfn-outputs/flat-outputs.json\n' +
     'Please deploy the infrastructure first using:\n' +
@@ -12,13 +25,22 @@ if (!fs.existsSync('cfn-outputs/flat-outputs.json')) {
     '2. Generate outputs: aws cloudformation describe-stacks --stack-name TapStackdev --query "Stacks[0].Outputs" > cfn-outputs/raw-outputs.json'
   );
 }
+debugLog('SETUP', 'CloudFormation outputs file found, reading contents');
 
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
+debugLog('SETUP', 'CloudFormation outputs loaded', outputs);
 
 // Validate outputs contain live deployment data (not mock values)
+debugLog('SETUP', 'Validating CloudFormation outputs for live deployment data');
 if (!outputs.ApiEndpoint || !outputs.ApiKey || outputs.ApiEndpoint.includes('mock') || outputs.ApiKey.includes('mock')) {
+  debugLog('ERROR', 'Invalid CloudFormation outputs detected', {
+    hasApiEndpoint: !!outputs.ApiEndpoint,
+    hasApiKey: !!outputs.ApiKey,
+    apiEndpointSample: outputs.ApiEndpoint ? outputs.ApiEndpoint.substring(0, 50) + '...' : 'undefined',
+    apiKeySample: outputs.ApiKey ? outputs.ApiKey.substring(0, 10) + '...' : 'undefined'
+  });
   throw new Error(
     'Integration tests require live AWS deployment outputs. Found mock or missing data in cfn-outputs/flat-outputs.json\n' +
     'Please ensure you have deployed the infrastructure and generated real CloudFormation outputs.'
@@ -27,6 +49,12 @@ if (!outputs.ApiEndpoint || !outputs.ApiKey || outputs.ApiEndpoint.includes('moc
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
+
+debugLog('SETUP', 'Environment configuration', {
+  environmentSuffix,
+  AWS_REGION,
+  NODE_ENV: process.env.NODE_ENV
+});
 
 AWS.config.update({ region: AWS_REGION });
 const dynamodb = new AWS.DynamoDB.DocumentClient();
@@ -46,8 +74,28 @@ describe('Serverless Payment Workflow Integration Tests', () => {
   const AUDIT_LOGS_TABLE = outputs.AuditLogsTableArn.split('/').pop();
   const ARCHIVE_BUCKET = outputs.TransactionArchivesBucketArn.split(':::').pop();
 
+  // Debug log all extracted resource identifiers
+  debugLog('SETUP', 'Extracted AWS resource identifiers', {
+    API_ENDPOINT,
+    API_KEY: API_KEY ? `${API_KEY.substring(0, 10)}...` : 'undefined',
+    STATE_MACHINE_ARN,
+    TRANSACTIONS_TABLE,
+    AUDIT_LOGS_TABLE,
+    ARCHIVE_BUCKET
+  });
+
   // Validate all required outputs are present
   if (!API_ENDPOINT || !API_KEY || !STATE_MACHINE_ARN || !TRANSACTIONS_TABLE || !AUDIT_LOGS_TABLE || !ARCHIVE_BUCKET) {
+    debugLog('ERROR', 'Missing required CloudFormation outputs', {
+      missingOutputs: {
+        API_ENDPOINT: !API_ENDPOINT,
+        API_KEY: !API_KEY,
+        STATE_MACHINE_ARN: !STATE_MACHINE_ARN,
+        TRANSACTIONS_TABLE: !TRANSACTIONS_TABLE,
+        AUDIT_LOGS_TABLE: !AUDIT_LOGS_TABLE,
+        ARCHIVE_BUCKET: !ARCHIVE_BUCKET
+      }
+    });
     throw new Error(
       'Missing required CloudFormation outputs for integration tests. Required: ApiEndpoint, ApiKey, StateMachineArn, TransactionsTableArn, AuditLogsTableArn, TransactionArchivesBucketArn'
     );
@@ -70,14 +118,48 @@ describe('Serverless Payment Workflow Integration Tests', () => {
         description: 'Test transaction'
       };
 
+      debugLog('TEST_1', 'Starting Happy Path Transaction Flow test', {
+        transactionId,
+        merchantId,
+        amount,
+        API_ENDPOINT,
+        API_KEY: API_KEY ? `${API_KEY.substring(0, 10)}...` : 'undefined'
+      });
+
+      debugLog('TEST_1', 'Request payload', requestPayload);
+
       const startTime = Date.now();
 
-      const response = await axios.post(API_ENDPOINT, requestPayload, {
-        headers: {
-          'x-api-key': API_KEY,
-          'Content-Type': 'application/json'
-        }
-      });
+      debugLog('TEST_1', 'Making API request to create transaction');
+      let response;
+      try {
+        response = await axios.post(API_ENDPOINT, requestPayload, {
+          headers: {
+            'x-api-key': API_KEY,
+            'Content-Type': 'application/json'
+          }
+        });
+        debugLog('TEST_1', 'API request successful', {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
+          data: response.data
+        });
+      } catch (error: any) {
+        debugLog('ERROR', 'API request failed', {
+          message: error.message,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          headers: error.response?.headers,
+          config: {
+            url: error.config?.url,
+            method: error.config?.method,
+            headers: error.config?.headers
+          }
+        });
+        throw error;
+      }
 
       expect(response.status).toBe(202);
       expect(response.data).toHaveProperty('executionArn');
@@ -157,12 +239,35 @@ describe('Serverless Payment Workflow Integration Tests', () => {
         new_merchant: true
       };
 
-      const response = await axios.post(API_ENDPOINT, requestPayload, {
-        headers: {
-          'x-api-key': API_KEY,
-          'Content-Type': 'application/json'
-        }
+      debugLog('TEST_2', 'Starting Fraud Detection test', {
+        transactionId,
+        requestPayload,
+        API_ENDPOINT,
+        API_KEY: API_KEY ? `${API_KEY.substring(0, 10)}...` : 'undefined'
       });
+
+      debugLog('TEST_2', 'Making API request for high-risk transaction');
+      let response;
+      try {
+        response = await axios.post(API_ENDPOINT, requestPayload, {
+          headers: {
+            'x-api-key': API_KEY,
+            'Content-Type': 'application/json'
+          }
+        });
+        debugLog('TEST_2', 'API request successful', {
+          status: response.status,
+          data: response.data
+        });
+      } catch (error: any) {
+        debugLog('ERROR', 'TEST_2 API request failed', {
+          message: error.message,
+          status: error.response?.status,
+          data: error.response?.data,
+          headers: error.response?.headers
+        });
+        throw error;
+      }
 
       expect(response.status).toBe(202);
       const executionArn = response.data.executionArn;
@@ -210,6 +315,12 @@ describe('Serverless Payment Workflow Integration Tests', () => {
       const concurrentRequests = 50;
       const promises = [];
 
+      debugLog('TEST_3', 'Starting API Throttling Scenario test', {
+        concurrentRequests,
+        API_ENDPOINT,
+        API_KEY: API_KEY ? `${API_KEY.substring(0, 10)}...` : 'undefined'
+      });
+
       for (let i = 0; i < concurrentRequests; i++) {
         const transactionId = `throttle-${i}-${uuidv4()}`;
         const requestPayload = {
@@ -231,10 +342,29 @@ describe('Serverless Payment Workflow Integration Tests', () => {
         );
       }
 
+      debugLog('TEST_3', `Created ${concurrentRequests} concurrent requests, executing...`);
+
       const responses = await Promise.all(promises);
 
       const successful = responses.filter(r => r.status === 202);
       const throttled = responses.filter(r => r.status === 429);
+      const otherErrors = responses.filter(r => r.status !== 202 && r.status !== 429);
+
+      debugLog('TEST_3', 'Concurrent requests completed', {
+        totalRequests: responses.length,
+        successful: successful.length,
+        throttled: throttled.length,
+        otherErrors: otherErrors.length,
+        statusCodes: responses.map(r => r.status)
+      });
+
+      if (otherErrors.length > 0) {
+        debugLog('TEST_3', 'Unexpected error responses', otherErrors.map(r => ({
+          status: r.status,
+          statusText: r.statusText,
+          data: r.data
+        })));
+      }
 
       expect(successful.length).toBeGreaterThan(0);
 
@@ -437,6 +567,14 @@ describe('Serverless Payment Workflow Integration Tests', () => {
       const transactionCount = 5;
       const transactionIds: string[] = [];
 
+      debugLog('TEST_7', 'Starting GSI Query Performance test', {
+        merchantId,
+        transactionCount,
+        TRANSACTIONS_TABLE,
+        API_ENDPOINT,
+        API_KEY: API_KEY ? `${API_KEY.substring(0, 10)}...` : 'undefined'
+      });
+
       for (let i = 0; i < transactionCount; i++) {
         const transactionId = `gsi-${i}-${uuidv4()}`;
         transactionIds.push(transactionId);
@@ -449,32 +587,74 @@ describe('Serverless Payment Workflow Integration Tests', () => {
           payment_method: 'credit_card'
         };
 
-        await axios.post(API_ENDPOINT, requestPayload, {
-          headers: {
-            'x-api-key': API_KEY,
-            'Content-Type': 'application/json'
-          }
+        debugLog('TEST_7', `Creating transaction ${i + 1}/${transactionCount}`, {
+          transactionId,
+          requestPayload
         });
+
+        try {
+          const response = await axios.post(API_ENDPOINT, requestPayload, {
+            headers: {
+              'x-api-key': API_KEY,
+              'Content-Type': 'application/json'
+            }
+          });
+          debugLog('TEST_7', `Transaction ${i + 1} created successfully`, {
+            status: response.status,
+            data: response.data
+          });
+        } catch (error: any) {
+          debugLog('ERROR', `Failed to create transaction ${i + 1}`, {
+            transactionId,
+            error: error.message,
+            status: error.response?.status,
+            data: error.response?.data
+          });
+          throw error;
+        }
 
         await sleep(2000);
       }
 
+      debugLog('TEST_7', 'All transactions created, waiting for processing...');
+
       await sleep(30000);
 
+      debugLog('TEST_7', 'Querying GSI for merchant transactions');
       const startTime = Date.now();
-      const results = await dynamodb.query({
-        TableName: TRANSACTIONS_TABLE,
-        IndexName: 'MerchantIndex',
-        KeyConditionExpression: 'merchant_id = :merchant_id',
-        ExpressionAttributeValues: {
-          ':merchant_id': merchantId
-        }
-      }).promise();
-      const queryTime = Date.now() - startTime;
+      let results;
+      try {
+        results = await dynamodb.query({
+          TableName: TRANSACTIONS_TABLE,
+          IndexName: 'MerchantIndex',
+          KeyConditionExpression: 'merchant_id = :merchant_id',
+          ExpressionAttributeValues: {
+            ':merchant_id': merchantId
+          }
+        }).promise();
+        const queryTime = Date.now() - startTime;
 
-      expect((results.Items ?? []).length).toBe(transactionCount);
-      expect(queryTime).toBeLessThan(1000);
-      expect(results.ScannedCount).toBe(results.Count);
+        debugLog('TEST_7', 'GSI query completed', {
+          queryTime: `${queryTime}ms`,
+          itemsFound: results.Items?.length || 0,
+          scannedCount: results.ScannedCount,
+          count: results.Count,
+          lastEvaluatedKey: results.LastEvaluatedKey
+        });
+
+        expect((results.Items ?? []).length).toBe(transactionCount);
+        expect(queryTime).toBeLessThan(1000);
+        expect(results.ScannedCount).toBe(results.Count);
+      } catch (error: any) {
+        debugLog('ERROR', 'GSI query failed', {
+          error: error.message,
+          code: error.code,
+          statusCode: error.statusCode,
+          tableName: TRANSACTIONS_TABLE,
+          merchantId
+        });
+        throw error;
+      }
 
       (results.Items ?? []).forEach(item => {
         expect(item.merchant_id).toBe(merchantId);
@@ -509,11 +689,26 @@ describe('Serverless Payment Workflow Integration Tests', () => {
         payment_method: 'credit_card'
       };
 
+      debugLog('TEST_8', 'Starting Missing API Key Authentication test', {
+        transactionId,
+        requestPayload,
+        API_ENDPOINT,
+        note: 'Intentionally omitting API key header'
+      });
+
+      debugLog('TEST_8', 'Making API request without API key');
       const response = await axios.post(API_ENDPOINT, requestPayload, {
         headers: {
           'Content-Type': 'application/json'
         },
         validateStatus: () => true
+      });
+
+      debugLog('TEST_8', 'API request completed', {
+        status: response.status,
+        statusText: response.statusText,
+        data: response.data,
+        headers: response.headers
       });
 
       expect(response.status).toBe(403);
@@ -544,15 +739,46 @@ describe('Serverless Payment Workflow Integration Tests', () => {
   describe('9. SSM Parameter Integration', () => {
     test('Environment Variables from Lambda Functions', async () => {
       const lambda = new AWS.Lambda();
+      const validatorFunctionName = `TapStack${environmentSuffix}-validator-prod`;
 
-      const validatorFunction = await lambda.getFunction({
-        FunctionName: `TapStack${environmentSuffix}-validator-prod`
-      }).promise();
+      debugLog('TEST_9', 'Starting SSM Parameter Integration test', {
+        environmentSuffix,
+        validatorFunctionName,
+        AWS_REGION
+      });
+
+      debugLog('TEST_9', 'Getting validator Lambda function configuration');
+      let validatorFunction;
+      try {
+        validatorFunction = await lambda.getFunction({
+          FunctionName: validatorFunctionName
+        }).promise();
+        debugLog('TEST_9', 'Validator function retrieved', {
+          functionName: validatorFunction.Configuration?.FunctionName,
+          runtime: validatorFunction.Configuration?.Runtime,
+          environment: validatorFunction.Configuration?.Environment
+        });
+      } catch (error: any) {
+        debugLog('ERROR', 'Failed to get validator function', {
+          functionName: validatorFunctionName,
+          error: error.message,
+          code: error.code,
+          statusCode: error.statusCode
+        });
+        throw error;
+      }
 
       if (!validatorFunction.Configuration || !validatorFunction.Configuration.Environment) {
+        debugLog('ERROR', 'Lambda function configuration missing', {
+          hasConfiguration: !!validatorFunction.Configuration,
+          hasEnvironment: !!validatorFunction.Configuration?.Environment
+        });
         throw new Error('Lambda function configuration or environment variables are undefined');
       }
       const envVars = validatorFunction.Configuration.Environment.Variables;
+      
+      debugLog('TEST_9', 'Validator function environment variables', envVars);
+      
       expect(envVars).toBeDefined();
       expect(envVars).toHaveProperty('TRANSACTIONS_TABLE');
       expect(envVars).toHaveProperty('AUDIT_LOGS_TABLE');
@@ -560,9 +786,25 @@ describe('Serverless Payment Workflow Integration Tests', () => {
       expect(envVars).toHaveProperty('TTL_DAYS');
       expect(envVars?.TTL_DAYS).toBe('90');
 
-      const fraudFunction = await lambda.getFunction({
-        FunctionName: `TapStack${environmentSuffix}-fraud-detector-prod`
-      }).promise();
+      const fraudFunctionName = `TapStack${environmentSuffix}-fraud-detector-prod`;
+      debugLog('TEST_9', 'Getting fraud detector Lambda function configuration');
+      let fraudFunction;
+      try {
+        fraudFunction = await lambda.getFunction({
+          FunctionName: fraudFunctionName
+        }).promise();
+        debugLog('TEST_9', 'Fraud detector function retrieved', {
+          functionName: fraudFunction.Configuration?.FunctionName,
+          environment: fraudFunction.Configuration?.Environment
+        });
+      } catch (error: any) {
+        debugLog('ERROR', 'Failed to get fraud detector function', {
+          functionName: fraudFunctionName,
+          error: error.message,
+          code: error.code
+        });
+        throw error;
+      }
 
       if (!fraudFunction.Configuration || !fraudFunction.Configuration.Environment) {
         throw new Error('Fraud function configuration or environment variables are undefined');
@@ -578,12 +820,31 @@ describe('Serverless Payment Workflow Integration Tests', () => {
         payment_method: 'credit_card'
       };
 
-      const response = await axios.post(API_ENDPOINT, requestPayload, {
-        headers: {
-          'x-api-key': API_KEY,
-          'Content-Type': 'application/json'
-        }
+      debugLog('TEST_9', 'Creating test transaction to verify parameter integration', {
+        transactionId,
+        requestPayload
       });
+
+      let response;
+      try {
+        response = await axios.post(API_ENDPOINT, requestPayload, {
+          headers: {
+            'x-api-key': API_KEY,
+            'Content-Type': 'application/json'
+          }
+        });
+        debugLog('TEST_9', 'Test transaction created successfully', {
+          status: response.status,
+          data: response.data
+        });
+      } catch (error: any) {
+        debugLog('ERROR', 'Failed to create test transaction for parameter testing', {
+          error: error.message,
+          status: error.response?.status,
+          data: error.response?.data
+        });
+        throw error;
+      }
 
       expect(response.status).toBe(202);
 
@@ -615,24 +876,66 @@ describe('Serverless Payment Workflow Integration Tests', () => {
         payment_method: 'credit_card'
       };
 
-      const startTime = new Date();
-
-      const response = await axios.post(API_ENDPOINT, requestPayload, {
-        headers: {
-          'x-api-key': API_KEY,
-          'Content-Type': 'application/json'
-        }
+      debugLog('TEST_10', 'Starting End-to-End Observability test', {
+        transactionId,
+        requestPayload,
+        xrayEnabled: true
       });
+
+      const startTime = new Date();
+      debugLog('TEST_10', 'Creating transaction for X-Ray tracing');
+
+      let response;
+      try {
+        response = await axios.post(API_ENDPOINT, requestPayload, {
+          headers: {
+            'x-api-key': API_KEY,
+            'Content-Type': 'application/json'
+          }
+        });
+        debugLog('TEST_10', 'Transaction created for tracing', {
+          status: response.status,
+          data: response.data
+        });
+      } catch (error: any) {
+        debugLog('ERROR', 'Failed to create transaction for X-Ray tracing', {
+          error: error.message,
+          status: error.response?.status,
+          data: error.response?.data
+        });
+        throw error;
+      }
 
       expect(response.status).toBe(202);
 
       await sleep(20000);
 
-      const traces = await xray.getTraceSummaries({
-        TimeRangeType: 'TimeRangeByStartTime',
-        StartTime: startTime,
-        EndTime: new Date()
-      }).promise();
+      debugLog('TEST_10', 'Querying X-Ray for trace summaries', {
+        timeRange: {
+          startTime: startTime.toISOString(),
+          endTime: new Date().toISOString()
+        }
+      });
+
+      let traces;
+      try {
+        traces = await xray.getTraceSummaries({
+          TimeRangeType: 'TimeRangeByStartTime',
+          StartTime: startTime,
+          EndTime: new Date()
+        }).promise();
+        debugLog('TEST_10', 'X-Ray trace summaries retrieved', {
+          traceCount: traces.TraceSummaries?.length || 0,
+          hasTraces: (traces.TraceSummaries?.length || 0) > 0
+        });
+      } catch (error: any) {
+        debugLog('ERROR', 'Failed to get X-Ray trace summaries', {
+          error: error.message,
+          code: error.code,
+          statusCode: error.statusCode
+        });
+        throw error;
+      }
 
       expect((traces.TraceSummaries ?? []).length).toBeGreaterThan(0);
 
@@ -687,12 +990,35 @@ describe('Serverless Payment Workflow Integration Tests', () => {
         payment_method: 'credit_card'
       };
 
-      const response = await axios.post(API_ENDPOINT, requestPayload, {
-        headers: {
-          'x-api-key': API_KEY,
-          'Content-Type': 'application/json'
-        }
+      debugLog('TEST_11', 'Starting Disaster Recovery test', {
+        transactionId,
+        requestPayload,
+        TRANSACTIONS_TABLE,
+        AUDIT_LOGS_TABLE,
+        ARCHIVE_BUCKET
       });
+
+      debugLog('TEST_11', 'Creating transaction for PITR testing');
+      let response;
+      try {
+        response = await axios.post(API_ENDPOINT, requestPayload, {
+          headers: {
+            'x-api-key': API_KEY,
+            'Content-Type': 'application/json'
+          }
+        });
+        debugLog('TEST_11', 'Transaction created for PITR testing', {
+          status: response.status,
+          data: response.data
+        });
+      } catch (error: any) {
+        debugLog('ERROR', 'Failed to create transaction for PITR testing', {
+          error: error.message,
+          status: error.response?.status,
+          data: error.response?.data
+        });
+        throw error;
+      }
 
       expect(response.status).toBe(202);
 
@@ -704,18 +1030,51 @@ describe('Serverless Payment Workflow Integration Tests', () => {
       }).promise();
 
       expect(transactionRecord.Item).toBeDefined();
-      const tableDescription = await dynamodbRaw.describeTable({
-        TableName: TRANSACTIONS_TABLE
-      }).promise();
+      debugLog('TEST_11', 'Checking DynamoDB table configuration');
+      let tableDescription;
+      try {
+        tableDescription = await dynamodbRaw.describeTable({
+          TableName: TRANSACTIONS_TABLE
+        }).promise();
+        debugLog('TEST_11', 'DynamoDB table description retrieved', {
+          tableName: tableDescription.Table?.TableName,
+          tableStatus: tableDescription.Table?.TableStatus,
+          billingMode: tableDescription.Table?.BillingModeSummary?.BillingMode,
+          hasRestoreSummary: !!tableDescription.Table?.RestoreSummary
+        });
+      } catch (error: any) {
+        debugLog('ERROR', 'Failed to describe DynamoDB table', {
+          tableName: TRANSACTIONS_TABLE,
+          error: error.message,
+          code: error.code
+        });
+        throw error;
+      }
 
       expect(
         tableDescription.Table &&
         tableDescription.Table.RestoreSummary
       ).toBe('ENABLED');
 
-      const continuousBackups = await dynamodbRaw.describeContinuousBackups({
-        TableName: TRANSACTIONS_TABLE
-      }).promise();
+      debugLog('TEST_11', 'Checking DynamoDB continuous backups configuration');
+      let continuousBackups;
+      try {
+        continuousBackups = await dynamodbRaw.describeContinuousBackups({
+          TableName: TRANSACTIONS_TABLE
+        }).promise();
+        debugLog('TEST_11', 'Continuous backups description retrieved', {
+          pitrStatus: continuousBackups.ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus,
+          earliestRestorableDateTime: continuousBackups.ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.EarliestRestorableDateTime,
+          latestRestorableDateTime: continuousBackups.ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.LatestRestorableDateTime
+        });
+      } catch (error: any) {
+        debugLog('ERROR', 'Failed to describe continuous backups', {
+          tableName: TRANSACTIONS_TABLE,
+          error: error.message,
+          code: error.code
+        });
+        throw error;
+      }
 
       expect(continuousBackups.ContinuousBackupsDescription).toBeDefined();
       expect(continuousBackups.ContinuousBackupsDescription?.PointInTimeRecoveryDescription).toBeDefined();
