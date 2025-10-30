@@ -13,23 +13,33 @@ export function canonicalResourceName(
   baseEnv?: string,
   suffix?: string
 ): string | cdk.Token {
-  const envPart = baseEnv
+  // envPart may be a provided literal string or a CDK token (from stack id).
+  const envPart: string | cdk.Token = baseEnv
     ? baseEnv.toLowerCase().replace(/[^a-z0-9-]/g, '-')
     : cdk.Fn.select(2, cdk.Fn.split('-', cdk.Aws.STACK_ID));
 
-  const suffixPart = suffix
-    ? suffix.toLowerCase().replace(/[^a-z0-9-]/g, '-')
-    : cdk.Aws.NO_VALUE;
+  // suffix can be either a literal string or a CDK token. If it's a
+  // literal string, normalize it; if it's a token, pass it through
+  // unchanged so we don't attempt string operations on token objects.
+  const suffixPart: string | cdk.Token | undefined =
+    typeof suffix === 'string' && suffix.length > 0
+      ? suffix.toLowerCase().replace(/[^a-z0-9-]/g, '-')
+      : suffix && (suffix as unknown as cdk.Token);
 
   // component should be normalized too
   const comp = component.toLowerCase().replace(/[^a-z0-9-]/g, '-');
 
-  // Place the region last to avoid generating names that end with a
-  // trailing '-' when the suffix is not provided (CDK may render
-  // Aws.NO_VALUE as an empty token). Putting the region at the end
-  // guarantees the resulting CloudFormation value does not end with
-  // '-' and is less likely to violate service-specific naming rules.
-  return cdk.Fn.join('-', [comp, envPart, suffixPart, cdk.Aws.REGION]);
+  // Build the parts array and only include optional pieces when
+  // provided. Avoid inserting Aws.NO_VALUE into the join list which
+  // results in extra separators ("--") when CloudFormation renders
+  // tokens as empty strings.
+  const parts: Array<string | cdk.Token> = [comp, envPart as any];
+  if (suffixPart) {
+    parts.push(suffixPart as any);
+  }
+  parts.push(cdk.Aws.REGION);
+
+  return cdk.Fn.join('-', parts as any);
 }
 
 export default canonicalResourceName;

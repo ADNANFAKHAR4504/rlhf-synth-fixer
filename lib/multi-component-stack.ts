@@ -54,10 +54,25 @@ export class MultiComponentApplicationConstruct extends Construct {
   // Expose a small helper to compute the sanitized suffix used for Lambda names.
   // This is intentionally simple and useful to call from unit tests to exercise
   // the branches (defined vs falsy suffix).
-  public computeSafeSuffixForLambda(input?: string): string | cdk.Aws {
-    return input
-      ? input.toLowerCase().replace(/[^a-z0-9-_]/g, '-')
-      : cdk.Aws.NO_VALUE;
+  public computeSafeSuffixForLambda(
+    input?: string | cdk.Token
+  ): string | cdk.Aws {
+    // If caller provided an explicit empty string, return Aws.NO_VALUE
+    // so callers that embed the result into CFN-friendly names can
+    // detect omitted values. If the input is a literal string, normalize
+    // it; if it's a CDK token (e.g. derived from the stack id), pass the
+    // token through unchanged.
+    if (input === '') {
+      return cdk.Aws.NO_VALUE;
+    }
+
+    if (typeof input === 'string' && input.length > 0) {
+      return input.toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+    }
+
+    // For token inputs (non-string), return as-is so downstream helpers
+    // can include the token rather than attempting string ops on it.
+    return input as unknown as cdk.Aws;
   }
 
   constructor(scope: Construct, id: string, props?: MultiComponentProps) {
@@ -161,10 +176,10 @@ export class MultiComponentApplicationConstruct extends Construct {
       this.node.tryGetContext('rdsSubnetGroupName');
     const importedSubnetGroup = importedSubnetGroupName
       ? rds.SubnetGroup.fromSubnetGroupName(
-        this,
-        'ImportedRdsSubnetGroup',
-        String(importedSubnetGroupName)
-      )
+          this,
+          'ImportedRdsSubnetGroup',
+          String(importedSubnetGroupName)
+        )
       : undefined;
 
     const rdsInstance = new rds.DatabaseInstance(this, 'PostgresDatabase', {
@@ -876,7 +891,11 @@ export class MultiComponentApplicationConstruct extends Construct {
     // ========================================
     // Lambda errors alarm
     new cdk.aws_cloudwatch.Alarm(this, 'LambdaErrorsAlarm', {
-      alarmName: `prod-cloudwatch-lambda-errors-${safeSuffixForLambda}`,
+      alarmName: canonicalResourceName(
+        'prod-cloudwatch-lambda-errors',
+        props?.baseEnvironmentSuffix as string | undefined,
+        safeSuffixForLambda as string
+      ) as string,
       metric: lambdaFunction.metricErrors(),
       threshold: 5,
       evaluationPeriods: 2,
@@ -886,7 +905,11 @@ export class MultiComponentApplicationConstruct extends Construct {
 
     // RDS CPU utilization alarm
     new cdk.aws_cloudwatch.Alarm(this, 'RdsCpuAlarm', {
-      alarmName: `prod-cloudwatch-rds-cpu-${safeSuffixForLambda}`,
+      alarmName: canonicalResourceName(
+        'prod-cloudwatch-rds-cpu',
+        props?.baseEnvironmentSuffix as string | undefined,
+        safeSuffixForLambda as string
+      ) as string,
       metric: rdsInstance.metricCPUUtilization(),
       threshold: 80,
       evaluationPeriods: 2,
@@ -896,7 +919,11 @@ export class MultiComponentApplicationConstruct extends Construct {
 
     // API Gateway 5xx errors alarm
     new cdk.aws_cloudwatch.Alarm(this, 'ApiGateway5xxAlarm', {
-      alarmName: `prod-cloudwatch-apigateway-5xx-${safeSuffixForLambda}`,
+      alarmName: canonicalResourceName(
+        'prod-cloudwatch-apigateway-5xx',
+        props?.baseEnvironmentSuffix as string | undefined,
+        safeSuffixForLambda as string
+      ) as string,
       metric: api.metricServerError(),
       threshold: 5,
       evaluationPeriods: 2,
@@ -912,7 +939,11 @@ export class MultiComponentApplicationConstruct extends Construct {
     // outputs in the guarded block and avoid creating duplicate constructs here.
 
     new cloudwatch.Alarm(this, 'VpcSshAttemptsAlarm', {
-      alarmName: `prod-vpc-ssh-attempts-${this.stringSuffix}`,
+      alarmName: canonicalResourceName(
+        'prod-vpc-ssh-attempts',
+        props?.baseEnvironmentSuffix as string | undefined,
+        this.stringSuffix
+      ) as string,
       metric: sshAttemptsMetric,
       threshold: 20,
       evaluationPeriods: 1,
@@ -920,7 +951,11 @@ export class MultiComponentApplicationConstruct extends Construct {
     }).addAlarmAction(new cw_actions.SnsAction(alarmsTopic));
 
     new cloudwatch.Alarm(this, 'VpcRdpAttemptsAlarm', {
-      alarmName: `prod-vpc-rdp-attempts-${this.stringSuffix}`,
+      alarmName: canonicalResourceName(
+        'prod-vpc-rdp-attempts',
+        props?.baseEnvironmentSuffix as string | undefined,
+        this.stringSuffix
+      ) as string,
       metric: rdpAttemptsMetric,
       threshold: 10,
       evaluationPeriods: 1,
@@ -929,7 +964,11 @@ export class MultiComponentApplicationConstruct extends Construct {
 
     // SQS alarms
     new cloudwatch.Alarm(this, 'SqsVisibleMessagesAlarm', {
-      alarmName: `prod-cloudwatch-sqs-visible-${safeSuffixForLambda}`,
+      alarmName: canonicalResourceName(
+        'prod-cloudwatch-sqs-visible',
+        props?.baseEnvironmentSuffix as string | undefined,
+        safeSuffixForLambda as string
+      ) as string,
       metric: asyncQueue.metricApproximateNumberOfMessagesVisible(),
       threshold: 100,
       evaluationPeriods: 2,
@@ -937,7 +976,11 @@ export class MultiComponentApplicationConstruct extends Construct {
     });
 
     new cloudwatch.Alarm(this, 'SqsOldestMessageAlarm', {
-      alarmName: `prod-cloudwatch-sqs-oldest-${safeSuffixForLambda}`,
+      alarmName: canonicalResourceName(
+        'prod-cloudwatch-sqs-oldest',
+        props?.baseEnvironmentSuffix as string | undefined,
+        safeSuffixForLambda as string
+      ) as string,
       metric: asyncQueue.metricApproximateAgeOfOldestMessage(),
       threshold: 300, // seconds
       evaluationPeriods: 1,
@@ -960,7 +1003,11 @@ export class MultiComponentApplicationConstruct extends Construct {
     });
 
     new cloudwatch.Alarm(this, 'S34xxAlarm', {
-      alarmName: `prod-cloudwatch-s3-4xx-${safeSuffixForLambda}`,
+      alarmName: canonicalResourceName(
+        'prod-cloudwatch-s3-4xx',
+        props?.baseEnvironmentSuffix as string | undefined,
+        safeSuffixForLambda as string
+      ) as string,
       metric: s34xx,
       threshold: 10,
       evaluationPeriods: 1,
@@ -968,7 +1015,11 @@ export class MultiComponentApplicationConstruct extends Construct {
     });
 
     new cloudwatch.Alarm(this, 'S35xxAlarm', {
-      alarmName: `prod-cloudwatch-s3-5xx-${safeSuffixForLambda}`,
+      alarmName: canonicalResourceName(
+        'prod-cloudwatch-s3-5xx',
+        props?.baseEnvironmentSuffix as string | undefined,
+        safeSuffixForLambda as string
+      ) as string,
       metric: s35xx,
       threshold: 5,
       evaluationPeriods: 1,
@@ -977,7 +1028,11 @@ export class MultiComponentApplicationConstruct extends Construct {
 
     // Lambda duration and throttles
     new cloudwatch.Alarm(this, 'LambdaDurationAlarm', {
-      alarmName: `prod-cloudwatch-lambda-duration-${safeSuffixForLambda}`,
+      alarmName: canonicalResourceName(
+        'prod-cloudwatch-lambda-duration',
+        props?.baseEnvironmentSuffix as string | undefined,
+        safeSuffixForLambda as string
+      ) as string,
       metric: lambdaFunction.metricDuration(),
       threshold: 300000, // milliseconds (5m) - very high, tune as needed
       evaluationPeriods: 1,
@@ -985,7 +1040,11 @@ export class MultiComponentApplicationConstruct extends Construct {
     });
 
     new cloudwatch.Alarm(this, 'LambdaThrottlesAlarm', {
-      alarmName: `prod-cloudwatch-lambda-throttles-${safeSuffixForLambda}`,
+      alarmName: canonicalResourceName(
+        'prod-cloudwatch-lambda-throttles',
+        props?.baseEnvironmentSuffix as string | undefined,
+        safeSuffixForLambda as string
+      ) as string,
       metric: lambdaFunction.metricThrottles(),
       threshold: 1,
       evaluationPeriods: 1,
@@ -1098,7 +1157,11 @@ export class MultiComponentApplicationConstruct extends Construct {
 
     // RDS additional alarm: free storage space low
     new cloudwatch.Alarm(this, 'RdsFreeStorageAlarm', {
-      alarmName: `prod-cloudwatch-rds-free-storage-${safeSuffixForLambda}`,
+      alarmName: canonicalResourceName(
+        'prod-cloudwatch-rds-free-storage',
+        props?.baseEnvironmentSuffix as string | undefined,
+        safeSuffixForLambda as string
+      ) as string,
       metric: rdsInstance.metricFreeStorageSpace(),
       threshold: 20 * 1024 * 1024 * 1024, // 20 GiB
       evaluationPeriods: 1,
@@ -1115,7 +1178,11 @@ export class MultiComponentApplicationConstruct extends Construct {
       this,
       'LambdaErrorsAlarmWithAction',
       {
-        alarmName: `prod-cloudwatch-lambda-errors-${safeSuffixForLambda}-with-action`,
+        alarmName: canonicalResourceName(
+          'prod-cloudwatch-lambda-errors-with-action',
+          props?.baseEnvironmentSuffix as string | undefined,
+          safeSuffixForLambda as string
+        ) as string,
         metric: lambdaFunction.metricErrors(),
         threshold: 5,
         evaluationPeriods: 2,
@@ -1131,7 +1198,11 @@ export class MultiComponentApplicationConstruct extends Construct {
       this,
       'RdsCpuAlarmWithAction',
       {
-        alarmName: `prod-cloudwatch-rds-cpu-${safeSuffixForLambda}-with-action`,
+        alarmName: canonicalResourceName(
+          'prod-cloudwatch-rds-cpu-with-action',
+          props?.baseEnvironmentSuffix as string | undefined,
+          safeSuffixForLambda as string
+        ) as string,
         metric: rdsInstance.metricCPUUtilization(),
         threshold: 80,
         evaluationPeriods: 2,
