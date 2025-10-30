@@ -391,9 +391,12 @@ Example metadata.json:
   "team": "synth",
   "startedAt": "2025-08-12T13:19:10-05:00",
   "subtask": "Application Deployment",
-  "subject_labels": ["CI/CD Pipeline", "Security Configuration"]
+  "subject_labels": ["CI/CD Pipeline", "Security Configuration"],
+  "aws_services": [],
 }
 ```
+
+**CRITICAL**: `aws_services` must be initialized as an empty array `[]`. It will be populated by iac-code-reviewer based on implemented services.
 
 **Validate immediately**:
 ```bash

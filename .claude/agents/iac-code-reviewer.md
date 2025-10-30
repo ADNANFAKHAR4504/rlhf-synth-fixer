@@ -145,11 +145,31 @@ If < 80% resources have suffix:
 
 #### Step 8: Add Enhanced Fields to metadata.json
 
+**Extract AWS Services from IDEAL_RESPONSE.md**:
+
+Scan IDEAL_RESPONSE.md and create a JSON array of unique AWS services mentioned. Examples:
+- RDS → "RDS"
+- Amazon S3 → "S3"
+- AWS Lambda → "Lambda"
+- DynamoDB → "DynamoDB"
+
 ```bash
+# Create AWS services array from IDEAL_RESPONSE.md
+# Extract unique AWS service names and format as JSON array
+# Example: AWS_SERVICES_ARRAY='["S3", "Lambda", "DynamoDB", "IAM"]'
+
+# CRITICAL: Must be a valid JSON array (not a string)
+AWS_SERVICES_ARRAY='["service1", "service2", "service3"]'  # Replace with actual extracted services
+
 # Update metadata.json with training quality and AWS services
 jq --arg tq "$TRAINING_QUALITY" --argjson services "$AWS_SERVICES_ARRAY" \
   '.training_quality = ($tq | tonumber) | .aws_services = $services' \
   metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json
+```
+
+**Validation**: Verify `aws_services` is an array:
+```bash
+jq -e '.aws_services | type == "array"' metadata.json || echo "❌ ERROR: aws_services must be an array"
 ```
 
 Report: "✅ metadata.json enhanced with training_quality: {SCORE}/10"
