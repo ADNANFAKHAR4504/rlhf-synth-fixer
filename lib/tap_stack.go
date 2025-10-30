@@ -174,9 +174,19 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 
 	processedBucket.GrantRead(originAccessIdentity.GrantPrincipal(), nil)
 
-	// CloudFront distribution (logging disabled to avoid ACL permission issues)
-	// CloudFront standard logging requires ACLs which conflicts with modern S3 security best practices
-	// For production, consider using CloudFront real-time logs to Kinesis or CloudWatch instead
+	// CloudFront logging bucket with ACLs enabled for CloudFront log delivery
+	// Note: ACLs are required for CloudFront standard logging
+	loggingBucket := awss3.NewBucket(stack, jsii.String("CloudFrontLogsBucket"), &awss3.BucketProps{
+		BucketName:        jsii.String(fmt.Sprintf("cloudfront-logs-%s", *environmentSuffix)),
+		Encryption:        awss3.BucketEncryption_S3_MANAGED,
+		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
+		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
+		AutoDeleteObjects: jsii.Bool(true),
+		// Enable ACLs for CloudFront logging (required by CloudFront)
+		ObjectOwnership:   awss3.ObjectOwnership_BUCKET_OWNER_PREFERRED,
+	})
+
+	// CloudFront distribution with logging enabled
 	distribution := awscloudfront.NewDistribution(stack, jsii.String("Distribution"), &awscloudfront.DistributionProps{
 		Comment: jsii.String(fmt.Sprintf("Media delivery CDN %s", *environmentSuffix)),
 		DefaultBehavior: &awscloudfront.BehaviorOptions{
@@ -186,10 +196,11 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 			ViewerProtocolPolicy: awscloudfront.ViewerProtocolPolicy_REDIRECT_TO_HTTPS,
 			CachePolicy:          awscloudfront.CachePolicy_CACHING_OPTIMIZED(),
 		},
-		PriceClass:  awscloudfront.PriceClass_PRICE_CLASS_100,
-		HttpVersion: awscloudfront.HttpVersion_HTTP2_AND_3,
-		// Disable standard logging to avoid ACL permission issues
-		EnableLogging: jsii.Bool(false),
+		PriceClass:    awscloudfront.PriceClass_PRICE_CLASS_100,
+		HttpVersion:   awscloudfront.HttpVersion_HTTP2_AND_3,
+		EnableLogging: jsii.Bool(true),
+		LogBucket:     loggingBucket,
+		LogFilePrefix: jsii.String("cloudfront/"),
 	})
 
 	// Stack outputs
@@ -233,6 +244,12 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 		Value:       notificationTopic.TopicArn(),
 		Description: jsii.String("SNS notification topic ARN"),
 		ExportName:  jsii.String(fmt.Sprintf("NotificationTopic-%s", *environmentSuffix)),
+	})
+
+	awscdk.NewCfnOutput(stack, jsii.String("CloudFrontLogsBucketName"), &awscdk.CfnOutputProps{
+		Value:       loggingBucket.BucketName(),
+		Description: jsii.String("CloudFront logs bucket"),
+		ExportName:  jsii.String(fmt.Sprintf("CloudFrontLogsBucket-%s", *environmentSuffix)),
 	})
 
 	return stack
