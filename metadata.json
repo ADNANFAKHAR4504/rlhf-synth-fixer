@@ -1,0 +1,17 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "5011",
+  "team": "stf",
+  "startedAt": "2025-10-30T12:55:52.892Z",
+  "subtask": "IaC-Multi-Environment-Management",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC",
+  "task_config": {
+    "deploy_env": "dev.tfvars"
+  }
+}
