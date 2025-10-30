@@ -114,13 +114,11 @@ class DataProcessingComponent extends pulumi.ComponentResource {
           enabled: true,
         },
         serverSideEncryptionConfiguration: {
-          rules: [
-            {
-              applyServerSideEncryptionByDefault: {
-                sseAlgorithm: 'AES256',
-              },
+          rule: {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'AES256',
             },
-          ],
+          },
         },
         tags: defaultTags,
       },
