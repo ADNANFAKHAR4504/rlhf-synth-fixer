@@ -105,11 +105,19 @@ describe('TapStack CloudFormation Template - VPC Infrastructure', () => {
       expect(template.Resources.PrivateSubnet2.Properties.MapPublicIpOnLaunch).toBe(false);
     });
 
-    test('subnets should be in ap-southeast-1 region', () => {
-      expect(template.Resources.PublicSubnet1.Properties.AvailabilityZone).toBe('ap-southeast-1a');
-      expect(template.Resources.PublicSubnet2.Properties.AvailabilityZone).toBe('ap-southeast-1b');
-      expect(template.Resources.PrivateSubnet1.Properties.AvailabilityZone).toBe('ap-southeast-1a');
-      expect(template.Resources.PrivateSubnet2.Properties.AvailabilityZone).toBe('ap-southeast-1b');
+    test('subnets should use dynamic availability zones', () => {
+      expect(template.Resources.PublicSubnet1.Properties.AvailabilityZone).toEqual({
+        'Fn::Select': [0, { 'Fn::GetAZs': '' }]
+      });
+      expect(template.Resources.PublicSubnet2.Properties.AvailabilityZone).toEqual({
+        'Fn::Select': [1, { 'Fn::GetAZs': '' }]
+      });
+      expect(template.Resources.PrivateSubnet1.Properties.AvailabilityZone).toEqual({
+        'Fn::Select': [0, { 'Fn::GetAZs': '' }]
+      });
+      expect(template.Resources.PrivateSubnet2.Properties.AvailabilityZone).toEqual({
+        'Fn::Select': [1, { 'Fn::GetAZs': '' }]
+      });
     });
   });
 
