@@ -93,22 +93,25 @@ export class TapStack extends cdk.Stack {
     // Helper to append region and env suffix
     const name = (base: string) => `${base}-${region}-${environmentSuffix}`;
     // S3 buckets additionally append account id for global uniqueness
-    const s3Name = (base: string) => `${base}-${account}-${region}-${environmentSuffix}`;
+    const s3Name = (base: string) =>
+      `${base}-${account}-${region}-${environmentSuffix}`;
 
     // Lambda Layer (shared dependencies). Provide directory with layer content (e.g., nodejs/node_modules)
     const layerAssetPath = props?.layerAssetPath ?? 'lib/lambda-layer';
     const resolvedLayerPath = path.resolve(layerAssetPath);
     const layerExists = fs.existsSync(resolvedLayerPath);
-    const layerHasFiles = layerExists && fs.readdirSync(resolvedLayerPath).length > 0;
-    const sharedLayer = layerHasFiles
-      ? new lambda.LayerVersion(this, 'SharedDepsLayer', {
+    const layerHasFiles =
+      layerExists && fs.readdirSync(resolvedLayerPath).length > 0;
+    let sharedLayer: lambda.ILayerVersion | undefined;
+    if (layerHasFiles) {
+      sharedLayer = new lambda.LayerVersion(this, 'SharedDepsLayer', {
         layerVersionName: name('shared-deps-layer'),
         code: lambda.Code.fromAsset(layerAssetPath),
         compatibleRuntimes: [lambda.Runtime.NODEJS_16_X],
         description: 'Shared dependencies for consolidated Lambda',
         removalPolicy: RemovalPolicy.RETAIN,
-      })
-      : undefined;
+      });
+    }
 
     // DynamoDB — on-demand with partitioning guidance and conditional PITR
     const transactionsTable = new dynamodb.Table(this, 'TransactionsTable', {
@@ -143,7 +146,9 @@ export class TapStack extends cdk.Stack {
           transitions: [
             {
               storageClass: s3.StorageClass.GLACIER,
-              transitionAfter: Duration.days(props?.glacierTransitionDays ?? 90),
+              transitionAfter: Duration.days(
+                props?.glacierTransitionDays ?? 90
+              ),
             },
           ],
           expiration: props?.archiveRetentionDays
@@ -206,11 +211,15 @@ export class TapStack extends cdk.Stack {
     const httpApi = new apigwv2.HttpApi(this, 'HttpApi', {
       apiName: name('http-api'),
       createDefaultStage: true,
-      corsPreflight: { allowOrigins: ['*'], allowMethods: [apigwv2.CorsHttpMethod.ANY] },
+      corsPreflight: {
+        allowOrigins: ['*'],
+        allowMethods: [apigwv2.CorsHttpMethod.ANY],
+      },
     });
 
     // Default stage access logs
-    const defaultStage = httpApi.defaultStage?.node.defaultChild as apigwv2.CfnStage;
+    const defaultStage = httpApi.defaultStage?.node
+      .defaultChild as apigwv2.CfnStage;
     if (defaultStage) {
       defaultStage.accessLogSettings = {
         destinationArn: apiAccessLogGroup.logGroupArn,
@@ -261,7 +270,7 @@ export class TapStack extends cdk.Stack {
     if (authType === 'IAM') {
       for (const child of httpApi.node.children) {
         const cfn = child.node.defaultChild as apigwv2.CfnRoute | undefined;
-        if (cfn && (cfn as any).cfnResourceType === 'AWS::ApiGatewayV2::Route') {
+        if (cfn && cfn.cfnResourceType === 'AWS::ApiGatewayV2::Route') {
           cfn.authorizationType = 'AWS_IAM';
         }
       }
@@ -278,7 +287,8 @@ export class TapStack extends cdk.Stack {
       metric: consolidatedFn.metricThrottles({ period: Duration.minutes(5) }),
       threshold: props?.lambdaThrottleThreshold ?? 1,
       evaluationPeriods: 1,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
     throttlesAlarm.addAlarmAction(new cw_actions.SnsAction(alarmTopic));
@@ -289,19 +299,27 @@ export class TapStack extends cdk.Stack {
       metric: consolidatedFn.metricErrors({ period: Duration.minutes(5) }),
       threshold: props?.lambdaErrorsThreshold ?? 1,
       evaluationPeriods: 1,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
     errorsAlarm.addAlarmAction(new cw_actions.SnsAction(alarmTopic));
 
-    const ddbThrottleAlarm = new cloudwatch.Alarm(this, 'DdbThrottledReqAlarm', {
-      alarmName: name('ddb-throttled'),
-      metric: transactionsTable.metricThrottledRequests({ period: Duration.minutes(5) }),
-      threshold: props?.ddbThrottledRequestsThreshold ?? 1,
-      evaluationPeriods: 1,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
+    const ddbThrottleAlarm = new cloudwatch.Alarm(
+      this,
+      'DdbThrottledReqAlarm',
+      {
+        alarmName: name('ddb-throttled'),
+        metric: transactionsTable.metricThrottledRequests({
+          period: Duration.minutes(5),
+        }),
+        threshold: props?.ddbThrottledRequestsThreshold ?? 1,
+        evaluationPeriods: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }
+    );
     ddbThrottleAlarm.addAlarmAction(new cw_actions.SnsAction(alarmTopic));
 
     // Mandatory p90 latency alarm (> 1.1x baseline)
@@ -311,14 +329,19 @@ export class TapStack extends cdk.Stack {
     });
     const p90BaselineMs = props?.p90DurationMsBaseline ?? 1000; // default 1s baseline if not provided
     const p90Threshold = Math.ceil(p90BaselineMs * 1.1);
-    const p90LatencyAlarm = new cloudwatch.Alarm(this, 'LambdaP90LatencyAlarm', {
-      alarmName: name('lambda-p90-latency'),
-      metric: p90Duration,
-      threshold: p90Threshold,
-      evaluationPeriods: 1,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
+    const p90LatencyAlarm = new cloudwatch.Alarm(
+      this,
+      'LambdaP90LatencyAlarm',
+      {
+        alarmName: name('lambda-p90-latency'),
+        metric: p90Duration,
+        threshold: p90Threshold,
+        evaluationPeriods: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }
+    );
     p90LatencyAlarm.addAlarmAction(new cw_actions.SnsAction(alarmTopic));
 
     // Minimal CloudWatch dashboard
@@ -347,10 +370,11 @@ export class TapStack extends cdk.Stack {
       aliasName: 'live',
       version,
     });
-    const deploymentGroup = new codedeploy.LambdaDeploymentGroup(this, 'DeploymentGroup', {
+    new codedeploy.LambdaDeploymentGroup(this, 'DeploymentGroup', {
       alias,
       deploymentGroupName: name('lambda-dg'),
-      deploymentConfig: codedeploy.LambdaDeploymentConfig.CANARY_10PERCENT_5MINUTES,
+      deploymentConfig:
+        codedeploy.LambdaDeploymentConfig.CANARY_10PERCENT_5MINUTES,
       alarms: [throttlesAlarm, errorsAlarm, p90LatencyAlarm, ddbThrottleAlarm],
       autoRollback: {
         failedDeployment: true,

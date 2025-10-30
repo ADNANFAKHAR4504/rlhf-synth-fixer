@@ -1,3 +1,5 @@
+Consolidate three Lambda functions into one optimized Lambda and apply a set of cost, reliability, and monitoring improvements so the infrastructure maintains performance
+
 Required deliverables (single-file TypeScript CDK app)
 • A single cdk TypeScript file (one file only) that declares all resources below and is runnable with CDK v2.
 • Inline comments that explain design decisions and where to edit values (memory sizing, concurrency, table names).
