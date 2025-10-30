@@ -57,7 +57,7 @@ describe('Migration Infrastructure CloudFormation Template', () => {
 
     test('should have database configuration parameters', () => {
       expect(template.Parameters.DBMasterUsername).toBeDefined();
-      expect(template.Parameters.DBMasterPassword).toBeDefined();
+      expect(template.Resources.DBMasterPasswordSecret).toBeDefined();
       expect(template.Parameters.OnPremisesDBEndpoint).toBeDefined();
       expect(template.Parameters.OnPremisesDBPort).toBeDefined();
       expect(template.Parameters.OnPremisesDBName).toBeDefined();
@@ -66,7 +66,7 @@ describe('Migration Infrastructure CloudFormation Template', () => {
     });
 
     test('password parameters should have NoEcho enabled', () => {
-      expect(template.Parameters.DBMasterPassword.NoEcho).toBe(true);
+      expect(template.Resources.DBMasterPasswordSecret.Type).toBe('AWS::SecretsManager::Secret');
       expect(template.Parameters.OnPremisesDBPassword.NoEcho).toBe(true);
     });
   });
@@ -499,7 +499,8 @@ describe('Migration Infrastructure CloudFormation Template', () => {
           resource.Properties.DBInstanceIdentifier ||
           resource.Properties.ReplicationInstanceIdentifier;
 
-        if (nameProperty) {
+        // Skip properties that are references to other resources
+        if (nameProperty && !nameProperty.Ref) {
           expect(nameProperty).toEqual({
             'Fn::Sub': expect.stringContaining('${EnvironmentSuffix}'),
           });
