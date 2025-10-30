@@ -35,6 +35,43 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as rds from 'aws-cdk-lib/aws-rds';
+## Snapshot of files in lib/
+
+The following is a current source snapshot of the top-level files under `lib/`.
+Each file is embedded as a fenced code block with the appropriate language hint.
+
+This document intentionally contains only short file descriptions and the exact file contents; it does not include QA/test commentary or procedural notes.
+
+Included files:
+- `multi-component-stack.ts` — main construct composing VPC, RDS, Lambda, API Gateway, CloudFront, Route53, S3, SQS and monitoring.
+- `tap-stack.ts` — top-level CDK stack that instantiates the construct and emits prefixed outputs.
+- `name-utils.ts` — canonical resource name helper used across the stack.
+- `string-utils.ts` — small string helper for safe suffix normalization.
+- `PROMPT.md` — the user-visible prompt template.
+- `AWS_REGION` — plain text specifying the default region.
+- `MODEL_RESPONSE.md` — model-generated response artifact (kept as source here).
+- `MODEL_FAILURES.md` — model-generated failures artifact (kept as source here).
+- `lambda/api/index.js` — Lambda handler source used as an asset.
+- `lambda/api/package.json` — Lambda asset package manifest.
+
+---
+
+### lib/multi-component-stack.ts
+
+```typescript
+// multi-component-stack.ts
+import * as cdk from 'aws-cdk-lib';
+import { Duration, RemovalPolicy } from 'aws-cdk-lib';
+import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as cloudfrontOrigins from 'aws-cdk-lib/aws-cloudfront-origins';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cw_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as rds from 'aws-cdk-lib/aws-rds';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -46,134 +83,6 @@ import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
 import path from 'path';
 import canonicalResourceName from './name-utils';
-
-export interface MultiComponentProps extends cdk.StackProps {
-  secondaryRegion?: string;
-  baseEnvironmentSuffix?: string;
-  isPrimary?: boolean;
-}
-
-export class MultiComponentApplicationConstruct extends Construct {
-  // String suffix for unique resource naming
-  private readonly stringSuffix: string;
-  // Expose important resource tokens as public properties so other stacks
-  // in the same CDK app can reference them without requiring manual
-  // CloudFormation exports/imports.
-  public readonly vpcId!: string;
-  public readonly apiUrl!: string;
-  public readonly lambdaFunctionArn!: string;
-  public readonly rdsEndpoint!: string;
-  public readonly s3BucketName!: string;
-  public readonly sqsQueueUrl!: string;
-  public readonly cloudFrontDomainName!: string;
-  public readonly hostedZoneId!: string;
-  public readonly databaseSecretArn!: string;
-  public readonly lambdaRoleArn!: string;
-  public readonly databaseSecurityGroupId!: string;
-  public readonly lambdaSecurityGroupId!: string;
-  public readonly lambdaLogGroupName!: string;
-  // Indicate whether WAF creation was skipped (so callers/stacks can emit
-  // equivalent CFN outputs at the stack level if desired).
-  public readonly wafWasSkipped: boolean = false;
-
-  // Expose a small helper to compute the sanitized suffix used for Lambda names.
-  // This is intentionally simple and useful to call from unit tests to exercise
-  // the branches (defined vs falsy suffix).
-  public computeSafeSuffixForLambda(input?: string): string | cdk.Aws {
-    return input
-      ? input.toLowerCase().replace(/[^a-z0-9-_]/g, '-')
-      : cdk.Aws.NO_VALUE;
-  }
-
-  constructor(scope: Construct, id: string, props?: MultiComponentProps) {
-    // Construct (not a NestedStack) - call Construct's constructor and
-    // accept a superset of the previous NestedStack props so callers can
-    // continue forwarding stack-like options.
-    super(scope, id);
-
-    // Read isPrimary flag forwarded from TapStack props. Default to true
-    // to preserve single-region behavior.
-    const isPrimary = props?.isPrimary;
-    const createPrimaryResources =
-      isPrimary === undefined || isPrimary === true;
-
-    // Generate unique string suffix
-    this.stringSuffix = cdk.Fn.select(2, cdk.Fn.split('-', cdk.Aws.STACK_ID));
-
-    // Allow destructive removal only when explicitly enabled (CI or developer opt-in).
-    // By default keep destructive actions off in production to avoid data loss.
-    const allowDestroy =
-      this.node.tryGetContext('allowDestroy') === true ||
-      this.node.tryGetContext('allowDestroy') === 'true' ||
-      process.env.ALLOW_DESTROY === 'true';
-
-    // ========================================
-    // VPC Configuration
-    // ========================================
-    const vpc = new ec2.Vpc(this, 'AppVpc', {
-      // Use a consistent, human-friendly VPC name across code and docs.
-      // Use the canonicalResourceName helper to ensure deterministic names.
-      vpcName: canonicalResourceName(
-        'prod-app-vpc',
-        props?.baseEnvironmentSuffix as string | undefined,
-        this.stringSuffix
-      ) as string,
-      cidr: '10.0.0.0/16',
-      maxAzs: 2,
-      natGateways: 2,
-      enableDnsHostnames: true,
-      enableDnsSupport: true,
-      subnetConfiguration: [
-        {
-          name: 'prod-public-subnet',
-          subnetType: ec2.SubnetType.PUBLIC,
-          cidrMask: 24,
-        },
-        {
-          name: 'prod-private-subnet',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-          cidrMask: 24,
-        },
-      ],
-    });
-
-    // ========================================
-    // Secrets Manager - RDS Credentials
-    // ========================================
-    const databaseSecret = new secretsmanager.Secret(this, 'DatabaseSecret', {
-      secretName: canonicalResourceName(
-        'prod-secretsmanager-db',
-        props?.baseEnvironmentSuffix as string | undefined,
-        this.stringSuffix
-      ) as string,
-      description: 'RDS PostgreSQL database credentials',
-      generateSecretString: {
-        secretStringTemplate: JSON.stringify({
-          username: 'dbadmin',
-        }),
-        generateStringKey: 'password',
-        excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
-        passwordLength: 32,
-      },
-    });
-
-    // ========================================
-    // RDS PostgreSQL Database
-    // ========================================
-    const databaseSecurityGroup = new ec2.SecurityGroup(
-      this,
-      'DatabaseSecurityGroup',
-      {
-        securityGroupName: canonicalResourceName(
-          'prod-ec2-sg-db',
-          props?.baseEnvironmentSuffix as string | undefined,
-          this.stringSuffix
-        ) as string,
-        vpc,
-        description: 'Security group for RDS PostgreSQL',
-        allowAllOutbound: false,
-      }
-    );
 
     // Use a generally-available Postgres engine version. Some regions may not have
     // older minor versions (e.g. 13.7). Prefer Postgres 15.x which has wider availability.
