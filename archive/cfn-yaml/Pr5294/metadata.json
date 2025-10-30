@@ -31,5 +31,12 @@
     "WAF",
     "SQS"
   ],
-  "background": "CI/CD Pipeline with ECS Fargate for Web Application with comprehensive security, monitoring, and compliance features"
+  "background": "CI/CD Pipeline with ECS Fargate for Web Application with comprehensive security, monitoring, and compliance features",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mithilesh-turing",
+  "dockerS3Location": ""
 }
