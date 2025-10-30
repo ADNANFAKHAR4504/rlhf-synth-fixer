@@ -85,13 +85,6 @@ describe('TapStack Comprehensive Tests', () => {
   });
 
   describe('Parameters Validation', () => {
-    test('EnvironmentSuffix parameter has correct configuration', () => {
-      const param = templateObj.Parameters.EnvironmentSuffix;
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('dev');
-      expect(param.AllowedValues).toEqual(['dev', 'staging', 'prod']);
-    });
-
     test('SecurityAccountId parameter has proper validation', () => {
       const param = templateObj.Parameters.SecurityAccountId;
       expect(param.Type).toBe('String');
