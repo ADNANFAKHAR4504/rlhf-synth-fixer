@@ -2,9 +2,7 @@
 
 ---
 
-Let's break down this request:
-
-1. I need to create a CloudFormation YAML template for a serverless payment workflow.
+1. Create a CloudFormation YAML template for a serverless payment workflow.
 2. The workflow includes API Gateway, Lambda functions, Step Functions, DynamoDB tables, S3 bucket, SNS topics, and monitoring capabilities.
 3. The solution needs to be presented in 5 specific sections:
    - Reference Architecture (ASCII)
