@@ -23,7 +23,22 @@ All file operations are relative to this directory.
 
 ### PHASE 0: Pre-Generation Validation (CRITICAL)
 
-**FIRST**: Verify worktree location
+**⚠️ MANDATORY FIRST STEP**: Verify worktree location with automated script
+```bash
+# REQUIRED: Run this before ANY file operations
+bash .claude/scripts/verify-worktree.sh || exit 1
+
+# This automatically verifies:
+# - You're in worktree directory (not main repo)
+# - Branch matches directory name (synth-{task_id})
+# - metadata.json exists
+# - Not on main/master branch
+# - Exports $WORKTREE_DIR, $TASK_ID, $TASK_BRANCH
+```
+
+**If verification fails**: STOP immediately, report error, do NOT proceed.
+
+**Manual verification (fallback only)**:
 ```bash
 pwd  # MUST end with: /worktree/synth-{task_id}
 ```
