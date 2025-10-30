@@ -4,13 +4,10 @@
   "complexity": "medium",
   "team": "synth",
   "startedAt": "2025-10-30T13:36:48+05:30",
-  "subtask": "Web Application Deployment",
+  "subtask": "Application Deployment",
   "subject_labels": [
-    "aws",
-    "infrastructure",
-    "web-app",
-    "ecs",
-    "alb"
+    "Web Application Deployment",
+    "Cloud Environment Setup"
   ],
   "po_id": "6fbzyf",
   "aws_services": [

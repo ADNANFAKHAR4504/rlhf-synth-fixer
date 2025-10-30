@@ -13,10 +13,18 @@ pulumi.runtime.setMocks({
     id: string;
     state: any;
   } {
+    const resourceName =
+      (args.inputs && (args.inputs.name || args.inputs.arn || args.inputs.id)) ||
+      args.name;
+    const physicalId = `${resourceName}_id`;
+
     return {
-      id: args.inputs.name + '_id',
+      id: physicalId,
       state: {
         ...args.inputs,
+        arn: `arn:aws:mock:::${resourceName}`,
+        dnsName: `${resourceName}.mock.aws`,
+        id: physicalId,
       },
     };
   },

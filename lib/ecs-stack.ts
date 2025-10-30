@@ -122,18 +122,11 @@ export class EcsStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create Task Definition
-    const taskDefinition = new aws.ecs.TaskDefinition(
-      `task-def-${args.environmentSuffix}`,
-      {
-        family: `payment-api-${args.environmentSuffix}`,
-        networkMode: 'awsvpc',
-        requiresCompatibilities: ['FARGATE'],
-        cpu: '512',
-        memory: '1024',
-        executionRoleArn: executionRole.arn,
-        taskRoleArn: taskRole.arn,
-        containerDefinitions: JSON.stringify([
+    // Define container configuration after log group is created
+    const containerDefinitions = pulumi
+      .all([logGroup.name])
+      .apply(([logGroupName]) =>
+        JSON.stringify([
           {
             name: `payment-api-container-${args.environmentSuffix}`,
             image: args.containerImage,
@@ -147,7 +140,7 @@ export class EcsStack extends pulumi.ComponentResource {
             logConfiguration: {
               logDriver: 'awslogs',
               options: {
-                'awslogs-group': `/ecs/payment-api-${args.environmentSuffix}`,
+                'awslogs-group': logGroupName,
                 'awslogs-region': aws.config.region!,
                 'awslogs-stream-prefix': 'ecs',
               },
@@ -159,7 +152,21 @@ export class EcsStack extends pulumi.ComponentResource {
               },
             ],
           },
-        ]),
+        ])
+      );
+
+    // Create Task Definition
+    const taskDefinition = new aws.ecs.TaskDefinition(
+      `task-def-${args.environmentSuffix}`,
+      {
+        family: `payment-api-${args.environmentSuffix}`,
+        networkMode: 'awsvpc',
+        requiresCompatibilities: ['FARGATE'],
+        cpu: '512',
+        memory: '1024',
+        executionRoleArn: executionRole.arn,
+        taskRoleArn: taskRole.arn,
+        containerDefinitions,
         tags: {
           Name: `task-def-${args.environmentSuffix}`,
           ...args.tags,

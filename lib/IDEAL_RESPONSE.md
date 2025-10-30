@@ -1,243 +1,788 @@
-# ECS Web Application Deployment with Pulumi TypeScript - Ideal Solution
+# Source Code from `lib/`
 
-## Overview
-
-This implementation creates a production-ready containerized web application infrastructure on AWS using ECS Fargate with Application Load Balancer, auto-scaling, and comprehensive monitoring capabilities for a payment processing API service.
-
-## Architecture
-
-The solution consists of three modular component stacks:
-
-1. **VpcStack**: Network infrastructure with public/private subnets across 2 AZs and NAT gateways
-2. **AlbStack**: Application Load Balancer with security groups and target groups
-3. **EcsStack**: ECS cluster, task definitions, service, and CPU-based auto-scaling
-
-## Implementation Files
-
-### bin/tap.ts
+## `alb-stack.ts`
 
 ```typescript
 /**
- * Pulumi application entry point for the Payment API ECS infrastructure.
+ * Application Load Balancer Stack Component
+ *
+ * Creates an Application Load Balancer with security groups, target groups,
+ * listeners, and ACM certificate for HTTPS traffic.
  */
 import * as pulumi from '@pulumi/pulumi';
-import { TapStack } from '../lib/tap-stack';
+import * as aws from '@pulumi/aws';
+import { ResourceOptions } from '@pulumi/pulumi';
 
-const config = new pulumi.Config();
+export interface AlbStackArgs {
+  environmentSuffix: string;
+  vpcId: pulumi.Output<string>;
+  publicSubnetIds: pulumi.Output<string[]>;
+  tags?: pulumi.Input<{ [key: string]: string }>;
+}
 
-// Get the environment suffix from environment variable, Pulumi config, or default to 'dev'
-const environmentSuffix =
-  process.env.ENVIRONMENT_SUFFIX || config.get('env') || 'dev';
+export class AlbStack extends pulumi.ComponentResource {
+  public readonly albArn: pulumi.Output<string>;
+  public readonly albDns: pulumi.Output<string>;
+  public readonly albSecurityGroupId: pulumi.Output<string>;
+  public readonly targetGroupArn: pulumi.Output<string>;
+  public readonly ecsTaskSecurityGroupId: pulumi.Output<string>;
+  public readonly httpListener: aws.lb.Listener;
 
-// Get metadata from environment variables for tagging
-const repository = config.get('repository') || 'unknown';
-const commitAuthor = config.get('commitAuthor') || 'unknown';
+  constructor(name: string, args: AlbStackArgs, opts?: ResourceOptions) {
+    super('tap:alb:AlbStack', name, args, opts);
 
-// Get container image from config or use default nginx
-const containerImage =
-  config.get('containerImage') || 'public.ecr.aws/nginx/nginx:latest';
+    // Create Security Group for ALB
+    const albSecurityGroup = new aws.ec2.SecurityGroup(
+      `alb-sg-${args.environmentSuffix}`,
+      {
+        name: `alb-sg-${args.environmentSuffix}`,
+        vpcId: args.vpcId,
+        description: 'Security group for Application Load Balancer',
+        ingress: [
+          {
+            protocol: 'tcp',
+            fromPort: 443,
+            toPort: 443,
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'Allow HTTPS from anywhere',
+          },
+          {
+            protocol: 'tcp',
+            fromPort: 80,
+            toPort: 80,
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'Allow HTTP from anywhere',
+          },
+        ],
+        egress: [
+          {
+            protocol: '-1',
+            fromPort: 0,
+            toPort: 0,
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'Allow all outbound traffic',
+          },
+        ],
+        tags: {
+          Name: `alb-sg-${args.environmentSuffix}`,
+          ...args.tags,
+        },
+      },
+      { parent: this }
+    );
 
-// Define default tags for all resources
-const defaultTags = {
-  Environment: 'production',
-  Project: 'payment-api',
-  Repository: repository,
-  Author: commitAuthor,
-  ManagedBy: 'Pulumi',
-};
+    // Create Security Group for ECS Tasks
+    const ecsTaskSecurityGroup = new aws.ec2.SecurityGroup(
+      `ecs-task-sg-${args.environmentSuffix}`,
+      {
+        name: `ecs-task-sg-${args.environmentSuffix}`,
+        vpcId: args.vpcId,
+        description: 'Security group for ECS tasks',
+        ingress: [
+          {
+            protocol: 'tcp',
+            fromPort: 80,
+            toPort: 80,
+            securityGroups: [albSecurityGroup.id],
+            description: 'Allow traffic from ALB',
+          },
+        ],
+        egress: [
+          {
+            protocol: '-1',
+            fromPort: 0,
+            toPort: 0,
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'Allow all outbound traffic',
+          },
+        ],
+        tags: {
+          Name: `ecs-task-sg-${args.environmentSuffix}`,
+          ...args.tags,
+        },
+      },
+      { parent: this }
+    );
 
-// Instantiate the main stack component
-const stack = new TapStack('payment-api-infra', {
-  environmentSuffix: environmentSuffix,
-  tags: defaultTags,
-  containerImage: containerImage,
-});
+    // Create Target Group for ECS tasks
+    const targetGroup = new aws.lb.TargetGroup(
+      `tg-${args.environmentSuffix}`,
+      {
+        name: `payment-api-tg-${args.environmentSuffix}`.substring(0, 32),
+        port: 80,
+        protocol: 'HTTP',
+        vpcId: args.vpcId,
+        targetType: 'ip',
+        deregistrationDelay: 30,
+        healthCheck: {
+          enabled: true,
+          path: '/health',
+          protocol: 'HTTP',
+          matcher: '200',
+          interval: 30,
+          timeout: 5,
+          healthyThreshold: 2,
+          unhealthyThreshold: 3,
+        },
+        tags: {
+          Name: `tg-${args.environmentSuffix}`,
+          ...args.tags,
+        },
+      },
+      { parent: this }
+    );
 
-// Export stack outputs
-export const vpcId = stack.vpcId;
-export const albDnsName = stack.albDns;
-export const ecsClusterArn = stack.clusterArn;
-export const ecsServiceArn = stack.serviceArn;
-```
+    // Create Application Load Balancer
+    const alb = new aws.lb.LoadBalancer(
+      `alb-${args.environmentSuffix}`,
+      {
+        name: `payment-api-alb-${args.environmentSuffix}`.substring(0, 32),
+        internal: false,
+        loadBalancerType: 'application',
+        securityGroups: [albSecurityGroup.id],
+        subnets: args.publicSubnetIds,
+        enableDeletionProtection: false,
+        enableHttp2: true,
+        enableCrossZoneLoadBalancing: true,
+        tags: {
+          Name: `alb-${args.environmentSuffix}`,
+          ...args.tags,
+        },
+      },
+      { parent: this }
+    );
 
-## Key Components
+    // Create HTTP Listener
+    const httpListener = new aws.lb.Listener(
+      `listener-http-${args.environmentSuffix}`,
+      {
+        loadBalancerArn: alb.arn,
+        port: 80,
+        protocol: 'HTTP',
+        defaultActions: [
+          {
+            type: 'forward',
+            targetGroupArn: targetGroup.arn,
+          },
+        ],
+        tags: args.tags,
+      },
+      { parent: this }
+    );
 
-### VPC Stack
-- VPC with 10.0.0.0/16 CIDR
-- 2 public subnets (10.0.0.0/24, 10.0.1.0/24) across 2 AZs
-- 2 private subnets (10.0.10.0/24, 10.0.11.0/24) across 2 AZs
-- Internet Gateway for public subnet access
-- 2 NAT Gateways (one per AZ) for private subnet outbound access
-- Route tables properly configured
-- All resources named with environmentSuffix
+    this.albArn = alb.arn;
+    this.albDns = alb.dnsName;
+    this.albSecurityGroupId = albSecurityGroup.id;
+    this.targetGroupArn = targetGroup.arn;
+    this.ecsTaskSecurityGroupId = ecsTaskSecurityGroup.id;
+    this.httpListener = httpListener;
 
-### ALB Stack
-- ALB security group allowing HTTP (port 80) inbound from anywhere
-- ECS task security group allowing traffic only from ALB on port 80
-- Target group with /health health checks, 30s deregistration delay
-- HTTP listener on port 80 forwarding to target group
-- All resources named with environmentSuffix
-- No retention policies or deletion protection
-
-### ECS Stack
-- CloudWatch log group (/ecs/payment-api-${environmentSuffix}) with 7-day retention
-- ECS cluster with Container Insights enabled
-- IAM execution role with AmazonECSTaskExecutionRolePolicy
-- IAM task role for application permissions
-- Task definition: Fargate, 512 CPU units, 1024 MB memory
-- Container: nginx (public.ecr.aws/nginx/nginx:latest)
-- ECS service: 3 desired tasks in private subnets
-- Auto-scaling target: min 3, max 10 tasks
-- Auto-scaling policy: 70% CPU utilization target
-- 60s scale-in and scale-out cooldowns
-- All resources named with environmentSuffix
-- Proper dependency on ALB listener to prevent deployment race conditions
-
-## Key Features
-
-1. **Production-Ready Architecture**
-   - Multi-AZ deployment for high availability
-   - Private subnets for ECS tasks with NAT gateway access
-   - Public ALB for internet-facing traffic
-   - Proper security group isolation
-
-2. **Auto-Scaling**
-   - CPU-based auto-scaling (70% target)
-   - Min 3, max 10 tasks
-   - Fast scale-in/out (60s cooldown)
-
-3. **Observability**
-   - Container Insights enabled at cluster level
-   - CloudWatch logs with 7-day retention
-   - All container stdout/stderr captured
-
-4. **Best Practices**
-   - All resources use environmentSuffix for uniqueness
-   - Consistent tagging (Environment=production, Project=payment-api)
-   - No retention policies (fully destroyable)
-   - No hardcoded environment values
-   - Modular component design with clear separation of concerns
-   - Proper TypeScript types and interfaces
-   - Resource dependencies explicitly defined
-
-5. **Deployment Success**
-   - Successfully deploys 39 AWS resources
-   - Outputs: VPC ID, ALB DNS, ECS Cluster ARN, ECS Service ARN
-   - Clean deployment with proper resource dependencies
-   - All resources created in ap-southeast-1 region
-
-## Critical Fixes Applied
-
-The original MODEL_RESPONSE had two deployment-blocking issues:
-
-### 1. CloudWatch Log Group Reference (Critical)
-**Problem**: ECS task definition referenced `logGroup.name` (a Pulumi Output) directly in containerDefinitions JSON string, causing AWS API error: "Log driver awslogs option 'awslogs-group' contains invalid characters"
-
-**Fix**: Changed to hardcoded log group name matching the actual resource:
-```typescript
-'awslogs-group': `/ecs/payment-api-${args.environmentSuffix}`,
-```
-
-### 2. ACM Certificate Domain Length (Critical)
-**Problem**: ACM certificate used ALB DNS name as domain, which exceeded 64-character limit (payment-api-alb-synth6fbzyf-161012242.ap-southeast-1.elb.amazonaws.com is 71 characters)
-
-**Fix**: Removed HTTPS listener and ACM certificate entirely. For demo purposes, HTTP listener is sufficient. In production, would use an existing certificate with a proper domain name.
-
-### 3. ECS Service Race Condition (High)
-**Problem**: ECS service attempted to attach to target group before ALB listener was created, causing error: "The target group...does not have an associated load balancer"
-
-**Fix**: Added explicit dependency on ALB listener:
-```typescript
-{ parent: this, dependsOn: [taskDefinition, args.albListener] }
-```
-
-## Testing Strategy
-
-### Unit Tests
-- Test each stack component in isolation using Pulumi mocks
-- Verify resource creation and configuration
-- Check environmentSuffix usage in resource names
-- Validate outputs are exposed correctly
-- Test with different environmentSuffix values
-
-### Integration Tests
-- Use actual deployment outputs from cfn-outputs/flat-outputs.json
-- Test ALB endpoint accessibility (HTTP GET to albDnsName)
-- Verify ECS tasks are running (AWS ECS API)
-- Check auto-scaling configuration
-- Validate CloudWatch logs are being written
-- No mocking - all tests use real AWS resources
-
-## Deployment Instructions
-
-```bash
-# Install dependencies
-npm install
-
-# Build TypeScript
-npm run build
-
-# Configure AWS region and stack
-export AWS_REGION=ap-southeast-1
-export ENVIRONMENT_SUFFIX=synth6fbzyf
-export PULUMI_CONFIG_PASSPHRASE=""
-
-# Create and select stack
-pulumi stack select TapStacksynth6fbzyf --create
-
-# Configure region
-pulumi config set aws:region ap-southeast-1
-
-# Preview changes
-pulumi preview
-
-# Deploy infrastructure
-pulumi up --yes
-
-# Get outputs
-pulumi stack output --json > cfn-outputs/flat-outputs.json
-```
-
-## Deployment Outputs
-
-```json
-{
-  "albDnsName": "payment-api-alb-synth6fbzyf-161012242.ap-southeast-1.elb.amazonaws.com",
-  "ecsClusterArn": "arn:aws:ecs:ap-southeast-1:342597974367:cluster/payment-api-cluster-synth6fbzyf",
-  "ecsServiceArn": "arn:aws:ecs:ap-southeast-1:342597974367:service/payment-api-cluster-synth6fbzyf/payment-api-service-synth6fbzyf",
-  "vpcId": "vpc-02c601ceb3e19250c"
+    this.registerOutputs({
+      albArn: this.albArn,
+      albDns: this.albDns,
+      albSecurityGroupId: this.albSecurityGroupId,
+      targetGroupArn: this.targetGroupArn,
+      ecsTaskSecurityGroupId: this.ecsTaskSecurityGroupId,
+    });
+  }
 }
 ```
 
-## Cleanup
+## `ecs-stack.ts`
 
-```bash
-# Destroy all resources
-export ENVIRONMENT_SUFFIX=synth6fbzyf
-export PULUMI_CONFIG_PASSPHRASE=""
-pulumi destroy --yes
+```typescript
+/**
+ * ECS Stack Component
+ *
+ * Creates an ECS cluster with Fargate support, task definitions, and ECS service
+ * with auto-scaling capabilities based on CPU utilization.
+ */
+import * as pulumi from '@pulumi/pulumi';
+import * as aws from '@pulumi/aws';
+import { ResourceOptions } from '@pulumi/pulumi';
+
+export interface EcsStackArgs {
+  environmentSuffix: string;
+  vpcId: pulumi.Output<string>;
+  privateSubnetIds: pulumi.Output<string[]>;
+  targetGroupArn: pulumi.Output<string>;
+  ecsTaskSecurityGroupId: pulumi.Output<string>;
+  containerImage: string;
+  tags?: pulumi.Input<{ [key: string]: string }>;
+  albListener: aws.lb.Listener;
+}
+
+export class EcsStack extends pulumi.ComponentResource {
+  public readonly clusterArn: pulumi.Output<string>;
+  public readonly clusterName: pulumi.Output<string>;
+  public readonly serviceArn: pulumi.Output<string>;
+  public readonly serviceName: pulumi.Output<string>;
+
+  constructor(name: string, args: EcsStackArgs, opts?: ResourceOptions) {
+    super('tap:ecs:EcsStack', name, args, opts);
+
+    // Create CloudWatch Log Group for container logs
+    const logGroup = new aws.cloudwatch.LogGroup(
+      `ecs-logs-${args.environmentSuffix}`,
+      {
+        name: `/ecs/payment-api-${args.environmentSuffix}`,
+        retentionInDays: 7,
+        tags: {
+          Name: `ecs-logs-${args.environmentSuffix}`,
+          ...args.tags,
+        },
+      },
+      { parent: this }
+    );
+
+    // Create ECS Cluster with Container Insights enabled
+    const cluster = new aws.ecs.Cluster(
+      `ecs-cluster-${args.environmentSuffix}`,
+      {
+        name: `payment-api-cluster-${args.environmentSuffix}`,
+        settings: [
+          {
+            name: 'containerInsights',
+            value: 'enabled',
+          },
+        ],
+        tags: {
+          Name: `ecs-cluster-${args.environmentSuffix}`,
+          ...args.tags,
+        },
+      },
+      { parent: this }
+    );
+
+    // Create IAM role for ECS task execution
+    const executionRole = new aws.iam.Role(
+      `ecs-execution-role-${args.environmentSuffix}`,
+      {
+        name: `ecs-execution-role-${args.environmentSuffix}`,
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: {
+                Service: 'ecs-tasks.amazonaws.com',
+              },
+              Action: 'sts:AssumeRole',
+            },
+          ],
+        }),
+        tags: {
+          Name: `ecs-execution-role-${args.environmentSuffix}`,
+          ...args.tags,
+        },
+      },
+      { parent: this }
+    );
+
+    // Attach AWS managed policy for ECS task execution
+    new aws.iam.RolePolicyAttachment(
+      `ecs-execution-policy-${args.environmentSuffix}`,
+      {
+        role: executionRole.name,
+        policyArn:
+          'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy',
+      },
+      { parent: this }
+    );
+
+    // Create IAM role for ECS task
+    const taskRole = new aws.iam.Role(
+      `ecs-task-role-${args.environmentSuffix}`,
+      {
+        name: `ecs-task-role-${args.environmentSuffix}`,
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: {
+                Service: 'ecs-tasks.amazonaws.com',
+              },
+              Action: 'sts:AssumeRole',
+            },
+          ],
+        }),
+        tags: {
+          Name: `ecs-task-role-${args.environmentSuffix}`,
+          ...args.tags,
+        },
+      },
+      { parent: this }
+    );
+
+    // Define container configuration after log group is created
+    const containerDefinitions = pulumi
+      .all([logGroup.name])
+      .apply(([logGroupName]) =>
+        JSON.stringify([
+          {
+            name: `payment-api-container-${args.environmentSuffix}`,
+            image: args.containerImage,
+            essential: true,
+            portMappings: [
+              {
+                containerPort: 80,
+                protocol: 'tcp',
+              },
+            ],
+            logConfiguration: {
+              logDriver: 'awslogs',
+              options: {
+                'awslogs-group': logGroupName,
+                'awslogs-region': aws.config.region!,
+                'awslogs-stream-prefix': 'ecs',
+              },
+            },
+            environment: [
+              {
+                name: 'ENVIRONMENT',
+                value: args.environmentSuffix,
+              },
+            ],
+          },
+        ])
+      );
+
+    // Create Task Definition
+    const taskDefinition = new aws.ecs.TaskDefinition(
+      `task-def-${args.environmentSuffix}`,
+      {
+        family: `payment-api-${args.environmentSuffix}`,
+        networkMode: 'awsvpc',
+        requiresCompatibilities: ['FARGATE'],
+        cpu: '512',
+        memory: '1024',
+        executionRoleArn: executionRole.arn,
+        taskRoleArn: taskRole.arn,
+        containerDefinitions,
+        tags: {
+          Name: `task-def-${args.environmentSuffix}`,
+          ...args.tags,
+        },
+      },
+      { parent: this }
+    );
+
+    // Create ECS Service
+    const service = new aws.ecs.Service(
+      `ecs-service-${args.environmentSuffix}`,
+      {
+        name: `payment-api-service-${args.environmentSuffix}`,
+        cluster: cluster.arn,
+        taskDefinition: taskDefinition.arn,
+        desiredCount: 3,
+        launchType: 'FARGATE',
+        networkConfiguration: {
+          assignPublicIp: false,
+          subnets: args.privateSubnetIds,
+          securityGroups: [args.ecsTaskSecurityGroupId],
+        },
+        loadBalancers: [
+          {
+            targetGroupArn: args.targetGroupArn,
+            containerName: `payment-api-container-${args.environmentSuffix}`,
+            containerPort: 80,
+          },
+        ],
+        healthCheckGracePeriodSeconds: 60,
+        tags: {
+          Name: `ecs-service-${args.environmentSuffix}`,
+          ...args.tags,
+        },
+      },
+      { parent: this, dependsOn: [taskDefinition, args.albListener] }
+    );
+
+    // Create Auto Scaling Target
+    const scalingTarget = new aws.appautoscaling.Target(
+      `ecs-scaling-target-${args.environmentSuffix}`,
+      {
+        maxCapacity: 10,
+        minCapacity: 3,
+        resourceId: pulumi.interpolate`service/${cluster.name}/${service.name}`,
+        scalableDimension: 'ecs:service:DesiredCount',
+        serviceNamespace: 'ecs',
+      },
+      { parent: this }
+    );
+
+    // Create Auto Scaling Policy based on CPU utilization
+    new aws.appautoscaling.Policy(
+      `ecs-scaling-policy-${args.environmentSuffix}`,
+      {
+        name: `ecs-cpu-scaling-${args.environmentSuffix}`,
+        policyType: 'TargetTrackingScaling',
+        resourceId: scalingTarget.resourceId,
+        scalableDimension: scalingTarget.scalableDimension,
+        serviceNamespace: scalingTarget.serviceNamespace,
+        targetTrackingScalingPolicyConfiguration: {
+          predefinedMetricSpecification: {
+            predefinedMetricType: 'ECSServiceAverageCPUUtilization',
+          },
+          targetValue: 70,
+          scaleInCooldown: 60,
+          scaleOutCooldown: 60,
+        },
+      },
+      { parent: this }
+    );
+
+    this.clusterArn = cluster.arn;
+    this.clusterName = cluster.name;
+    this.serviceArn = service.id;
+    this.serviceName = service.name;
+
+    this.registerOutputs({
+      clusterArn: this.clusterArn,
+      clusterName: this.clusterName,
+      serviceArn: this.serviceArn,
+      serviceName: this.serviceName,
+    });
+  }
+}
 ```
 
-## Quality Metrics
+## `tap-stack.ts`
 
-- **Platform Compliance**: PASS - Pulumi TypeScript as required
-- **environmentSuffix Usage**: PASS - 100% of resources include suffix
-- **Lint**: PASS
-- **Build**: PASS
-- **Preview**: PASS - 41 resources planned
-- **Deployment**: PASS - 39 resources created successfully
-- **Region**: ap-southeast-1 as specified
-- **Deployment Attempts**: 3 (2 failures fixed, 1 success)
+```typescript
+/**
+ * tap-stack.ts
+ *
+ * Main Pulumi ComponentResource for the Payment API ECS deployment.
+ * Orchestrates VPC, ALB, and ECS components to create a complete containerized
+ * web application infrastructure with auto-scaling and load balancing.
+ */
+import * as pulumi from '@pulumi/pulumi';
+import { ResourceOptions } from '@pulumi/pulumi';
+import { VpcStack } from './vpc-stack';
+import { AlbStack } from './alb-stack';
+import { EcsStack } from './ecs-stack';
 
-## Success Criteria Met
+/**
+ * TapStackArgs defines the input arguments for the TapStack Pulumi component.
+ */
+export interface TapStackArgs {
+  /**
+   * An optional suffix for identifying the deployment environment (e.g., 'dev', 'prod').
+   * Defaults to 'dev' if not provided.
+   */
+  environmentSuffix?: string;
 
-- ECS service successfully deploys 3 tasks running containerized application
-- ALB distributes traffic to healthy tasks with working health checks
-- Tasks run in private subnets with NAT gateway for outbound connections
-- Service auto-scales between 3-10 tasks based on 70% CPU utilization
-- Container logs appear in CloudWatch with 7-day retention
-- Application accessible via ALB DNS endpoint over HTTP
-- All resources include environmentSuffix in their names
-- Proper security groups isolate ALB and ECS tasks
-- Clean TypeScript code, well-typed, follows Pulumi best practices
-- All resources can be cleanly destroyed without manual intervention
+  /**
+   * Optional default tags to apply to resources.
+   */
+  tags?: pulumi.Input<{ [key: string]: string }>;
+
+  /**
+   * Container image to deploy (ECR image URI).
+   * Defaults to nginx for demo purposes.
+   */
+  containerImage?: string;
+}
+
+/**
+ * Represents the main Pulumi component resource for the Payment API ECS deployment.
+ *
+ * This component orchestrates VPC networking, Application Load Balancer,
+ * and ECS Fargate service with auto-scaling capabilities.
+ */
+export class TapStack extends pulumi.ComponentResource {
+  public readonly vpcId: pulumi.Output<string>;
+  public readonly albDns: pulumi.Output<string>;
+  public readonly clusterArn: pulumi.Output<string>;
+  public readonly serviceArn: pulumi.Output<string>;
+
+  /**
+   * Creates a new TapStack component.
+   * @param name The logical name of this Pulumi component.
+   * @param args Configuration arguments including environment suffix and tags.
+   * @param opts Pulumi options.
+   */
+  constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
+    super('tap:stack:TapStack', name, args, opts);
+
+    const environmentSuffix = args.environmentSuffix || 'dev';
+    const tags = args.tags || {};
+    const containerImage =
+      args.containerImage || 'public.ecr.aws/nginx/nginx:latest'; // Default to public nginx for demo
+
+    // Create VPC with public and private subnets, NAT gateways
+    const vpcStack = new VpcStack(
+      'vpc',
+      {
+        environmentSuffix: environmentSuffix,
+        tags: tags,
+      },
+      { parent: this }
+    );
+
+    // Create Application Load Balancer with security groups and target group
+    const albStack = new AlbStack(
+      'alb',
+      {
+        environmentSuffix: environmentSuffix,
+        vpcId: vpcStack.vpcId,
+        publicSubnetIds: vpcStack.publicSubnetIds,
+        tags: tags,
+      },
+      { parent: this }
+    );
+
+    // Create ECS Cluster, Task Definition, and Service with auto-scaling
+    const ecsStack = new EcsStack(
+      'ecs',
+      {
+        environmentSuffix: environmentSuffix,
+        vpcId: vpcStack.vpcId,
+        privateSubnetIds: vpcStack.privateSubnetIds,
+        targetGroupArn: albStack.targetGroupArn,
+        ecsTaskSecurityGroupId: albStack.ecsTaskSecurityGroupId,
+        containerImage: containerImage,
+        tags: tags,
+        albListener: albStack.httpListener,
+      },
+      { parent: this }
+    );
+
+    // Expose key outputs
+    this.vpcId = vpcStack.vpcId;
+    this.albDns = albStack.albDns;
+    this.clusterArn = ecsStack.clusterArn;
+    this.serviceArn = ecsStack.serviceArn;
+
+    // Register outputs
+    this.registerOutputs({
+      vpcId: this.vpcId,
+      albDns: this.albDns,
+      clusterArn: this.clusterArn,
+      serviceArn: this.serviceArn,
+    });
+  }
+}
+```
+
+## `vpc-stack.ts`
+
+```typescript
+/**
+ * VPC Stack Component
+ *
+ * Creates a VPC with public and private subnets across multiple availability zones,
+ * NAT gateways for private subnet internet access, and an internet gateway for public access.
+ */
+import * as pulumi from '@pulumi/pulumi';
+import * as aws from '@pulumi/aws';
+import { ResourceOptions } from '@pulumi/pulumi';
+
+export interface VpcStackArgs {
+  environmentSuffix: string;
+  tags?: pulumi.Input<{ [key: string]: string }>;
+}
+
+export class VpcStack extends pulumi.ComponentResource {
+  public readonly vpcId: pulumi.Output<string>;
+  public readonly publicSubnetIds: pulumi.Output<string[]>;
+  public readonly privateSubnetIds: pulumi.Output<string[]>;
+  public readonly internetGatewayId: pulumi.Output<string>;
+
+  constructor(name: string, args: VpcStackArgs, opts?: ResourceOptions) {
+    super('tap:vpc:VpcStack', name, args, opts);
+
+    // Create VPC
+    const vpc = new aws.ec2.Vpc(
+      `vpc-${args.environmentSuffix}`,
+      {
+        cidrBlock: '10.0.0.0/16',
+        enableDnsHostnames: true,
+        enableDnsSupport: true,
+        tags: {
+          Name: `vpc-${args.environmentSuffix}`,
+          ...args.tags,
+        },
+      },
+      { parent: this }
+    );
+
+    // Create Internet Gateway
+    const internetGateway = new aws.ec2.InternetGateway(
+      `igw-${args.environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        tags: {
+          Name: `igw-${args.environmentSuffix}`,
+          ...args.tags,
+        },
+      },
+      { parent: this }
+    );
+
+    // Get available AZs
+    const availabilityZones = aws.getAvailabilityZones({
+      state: 'available',
+    });
+
+    // Create public subnets in 2 AZs
+    const publicSubnets: aws.ec2.Subnet[] = [];
+    for (let i = 0; i < 2; i++) {
+      const subnet = new aws.ec2.Subnet(
+        `public-subnet-${i}-${args.environmentSuffix}`,
+        {
+          vpcId: vpc.id,
+          cidrBlock: `10.0.${i}.0/24`,
+          availabilityZone: availabilityZones.then(azs => azs.names[i]),
+          mapPublicIpOnLaunch: true,
+          tags: {
+            Name: `public-subnet-${i}-${args.environmentSuffix}`,
+            Type: 'Public',
+            ...args.tags,
+          },
+        },
+        { parent: this }
+      );
+      publicSubnets.push(subnet);
+    }
+
+    // Create private subnets in 2 AZs
+    const privateSubnets: aws.ec2.Subnet[] = [];
+    for (let i = 0; i < 2; i++) {
+      const subnet = new aws.ec2.Subnet(
+        `private-subnet-${i}-${args.environmentSuffix}`,
+        {
+          vpcId: vpc.id,
+          cidrBlock: `10.0.${i + 10}.0/24`,
+          availabilityZone: availabilityZones.then(azs => azs.names[i]),
+          tags: {
+            Name: `private-subnet-${i}-${args.environmentSuffix}`,
+            Type: 'Private',
+            ...args.tags,
+          },
+        },
+        { parent: this }
+      );
+      privateSubnets.push(subnet);
+    }
+
+    // Create public route table
+    const publicRouteTable = new aws.ec2.RouteTable(
+      `public-rt-${args.environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        tags: {
+          Name: `public-rt-${args.environmentSuffix}`,
+          ...args.tags,
+        },
+      },
+      { parent: this }
+    );
+
+    // Add route to internet gateway
+    new aws.ec2.Route(
+      `public-route-${args.environmentSuffix}`,
+      {
+        routeTableId: publicRouteTable.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        gatewayId: internetGateway.id,
+      },
+      { parent: this }
+    );
+
+    // Associate public subnets with public route table
+    publicSubnets.forEach((subnet, i) => {
+      new aws.ec2.RouteTableAssociation(
+        `public-rta-${i}-${args.environmentSuffix}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: publicRouteTable.id,
+        },
+        { parent: this }
+      );
+    });
+
+    // Create Elastic IPs for NAT Gateways
+    const eips: aws.ec2.Eip[] = [];
+    for (let i = 0; i < 2; i++) {
+      const eip = new aws.ec2.Eip(
+        `nat-eip-${i}-${args.environmentSuffix}`,
+        {
+          domain: 'vpc',
+          tags: {
+            Name: `nat-eip-${i}-${args.environmentSuffix}`,
+            ...args.tags,
+          },
+        },
+        { parent: this }
+      );
+      eips.push(eip);
+    }
+
+    // Create NAT Gateways in public subnets
+    const natGateways: aws.ec2.NatGateway[] = [];
+    for (let i = 0; i < 2; i++) {
+      const natGateway = new aws.ec2.NatGateway(
+        `nat-gw-${i}-${args.environmentSuffix}`,
+        {
+          allocationId: eips[i].id,
+          subnetId: publicSubnets[i].id,
+          tags: {
+            Name: `nat-gw-${i}-${args.environmentSuffix}`,
+            ...args.tags,
+          },
+        },
+        { parent: this }
+      );
+      natGateways.push(natGateway);
+    }
+
+    // Create private route tables and associate with NAT Gateways
+    privateSubnets.forEach((subnet, i) => {
+      const privateRouteTable = new aws.ec2.RouteTable(
+        `private-rt-${i}-${args.environmentSuffix}`,
+        {
+          vpcId: vpc.id,
+          tags: {
+            Name: `private-rt-${i}-${args.environmentSuffix}`,
+            ...args.tags,
+          },
+        },
+        { parent: this }
+      );
+
+      new aws.ec2.Route(
+        `private-route-${i}-${args.environmentSuffix}`,
+        {
+          routeTableId: privateRouteTable.id,
+          destinationCidrBlock: '0.0.0.0/0',
+          natGatewayId: natGateways[i].id,
+        },
+        { parent: this }
+      );
+
+      new aws.ec2.RouteTableAssociation(
+        `private-rta-${i}-${args.environmentSuffix}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: privateRouteTable.id,
+        },
+        { parent: this }
+      );
+    });
+
+    this.vpcId = vpc.id;
+    this.publicSubnetIds = pulumi.output(publicSubnets.map(s => s.id));
+    this.privateSubnetIds = pulumi.output(privateSubnets.map(s => s.id));
+    this.internetGatewayId = internetGateway.id;
+
+    this.registerOutputs({
+      vpcId: this.vpcId,
+      publicSubnetIds: this.publicSubnetIds,
+      privateSubnetIds: this.privateSubnetIds,
+      internetGatewayId: this.internetGatewayId,
+    });
+  }
+}
+```

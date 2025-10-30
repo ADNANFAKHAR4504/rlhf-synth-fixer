@@ -12,14 +12,22 @@ pulumi.runtime.setMocks({
     id: string;
     state: any;
   } {
+    const resourceName =
+      (args.inputs && (args.inputs.name || args.inputs.arn || args.inputs.id)) ||
+      args.name;
+    const physicalId = `${resourceName}_id`;
+
     return {
-      id: args.inputs.name + '_id',
+      id: physicalId,
       state: {
         ...args.inputs,
+        arn: `arn:aws:mock:::${resourceName}`,
+        dnsName: `${resourceName}.mock.aws`,
+        id: physicalId,
       },
     };
   },
-  call: function (args: pulumi.runtime.MockCallArgs) {
+  call: function () {
     return {};
   },
 });
@@ -85,14 +93,16 @@ describe('AlbStack', () => {
 
   it('should create ALB with environment suffix', (done) => {
     albStack.albArn.apply((arn) => {
-      expect(arn).toContain('_id');
+      expect(arn).toContain('arn:aws:mock');
+      expect(arn).toContain('test');
       done();
     });
   });
 
   it('should create target group with environment suffix', (done) => {
     albStack.targetGroupArn.apply((arn) => {
-      expect(arn).toContain('_id');
+      expect(arn).toContain('arn:aws:mock');
+      expect(arn).toContain('test');
       done();
     });
   });
