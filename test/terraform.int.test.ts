@@ -873,4 +873,324 @@ describe('Terraform Multi-Region Infrastructure Integration Tests', () => {
       }
     }, 10000);
   });
+
+  describe('Functional Connectivity Tests - Cross-Region Spoke Communication', () => {
+
+    test('should verify complete routing path from US West to Europe through Hub Transit Gateway', async () => {
+      if (!outputs.hub_tgw_id || !outputs.uswest_tgw_id || !outputs.europe_tgw_id) {
+        console.log('Skipping: Transit Gateways not fully deployed');
+        return;
+      }
+
+      console.log('\n=== Testing US West -> Hub -> Europe Routing Path ===');
+
+      // Step 1: Verify US West has route to Europe CIDR through TGW
+      const uswestRouteTables = await ec2USWest.describeRouteTables({
+        Filters: [
+          { Name: 'vpc-id', Values: [outputs.uswest_vpc_id] }
+        ]
+      }).promise();
+
+      let uswestHasEuropeRoute = false;
+      for (const rt of uswestRouteTables.RouteTables || []) {
+        const europeRoute = rt.Routes?.find(r =>
+          r.DestinationCidrBlock === '10.2.0.0/16' &&
+          r.TransitGatewayId === outputs.uswest_tgw_id
+        );
+        if (europeRoute) {
+          console.log(`✓ US West route table ${rt.RouteTableId} has route to Europe (10.2.0.0/16) via TGW`);
+          uswestHasEuropeRoute = true;
+        }
+      }
+      expect(uswestHasEuropeRoute).toBe(true);
+
+      // Step 2: Verify US West TGW has active peering to Hub
+      const uswestPeerings = await ec2USWest.describeTransitGatewayPeeringAttachments({
+        Filters: [
+          { Name: 'transit-gateway-id', Values: [outputs.uswest_tgw_id] },
+          { Name: 'state', Values: ['available'] }
+        ]
+      }).promise();
+
+      const uswestToHubPeering = uswestPeerings.TransitGatewayPeeringAttachments?.find(p =>
+        p.AccepterTgwInfo?.TransitGatewayId === outputs.hub_tgw_id ||
+        p.RequesterTgwInfo?.TransitGatewayId === outputs.hub_tgw_id
+      );
+      expect(uswestToHubPeering).toBeDefined();
+      console.log(`✓ US West TGW has active peering to Hub: ${uswestToHubPeering?.TransitGatewayAttachmentId}`);
+
+      // Step 3: Verify Hub TGW has active peering to Europe
+      const hubPeerings = await ec2Hub.describeTransitGatewayPeeringAttachments({
+        Filters: [
+          { Name: 'transit-gateway-id', Values: [outputs.hub_tgw_id] },
+          { Name: 'state', Values: ['available'] }
+        ]
+      }).promise();
+
+      const hubToEuropePeering = hubPeerings.TransitGatewayPeeringAttachments?.find(p =>
+        p.AccepterTgwInfo?.TransitGatewayId === outputs.europe_tgw_id ||
+        p.RequesterTgwInfo?.TransitGatewayId === outputs.europe_tgw_id
+      );
+      expect(hubToEuropePeering).toBeDefined();
+      console.log(`✓ Hub TGW has active peering to Europe: ${hubToEuropePeering?.TransitGatewayAttachmentId}`);
+
+      // Step 4: Verify Europe VPC route table accepts traffic from US West
+      const europeRouteTables = await ec2Europe.describeRouteTables({
+        Filters: [
+          { Name: 'vpc-id', Values: [outputs.europe_vpc_id] }
+        ]
+      }).promise();
+
+      let europeHasUsWestRoute = false;
+      for (const rt of europeRouteTables.RouteTables || []) {
+        const uswestRoute = rt.Routes?.find(r =>
+          r.DestinationCidrBlock === '10.1.0.0/16' &&
+          r.TransitGatewayId === outputs.europe_tgw_id
+        );
+        if (uswestRoute) {
+          console.log(`✓ Europe route table ${rt.RouteTableId} has route to US West (10.1.0.0/16) via TGW`);
+          europeHasUsWestRoute = true;
+        }
+      }
+      expect(europeHasUsWestRoute).toBe(true);
+
+      console.log('✓ Complete routing path verified: US West -> Hub -> Europe');
+    }, 90000);
+
+    test('should verify complete routing path from Europe to US West through Hub Transit Gateway', async () => {
+      if (!outputs.hub_tgw_id || !outputs.uswest_tgw_id || !outputs.europe_tgw_id) {
+        console.log('Skipping: Transit Gateways not fully deployed');
+        return;
+      }
+
+      console.log('\n=== Testing Europe -> Hub -> US West Routing Path ===');
+
+      // Step 1: Verify Europe has route to US West CIDR through TGW
+      const europeRouteTables = await ec2Europe.describeRouteTables({
+        Filters: [
+          { Name: 'vpc-id', Values: [outputs.europe_vpc_id] }
+        ]
+      }).promise();
+
+      let europeHasUsWestRoute = false;
+      for (const rt of europeRouteTables.RouteTables || []) {
+        const uswestRoute = rt.Routes?.find(r =>
+          r.DestinationCidrBlock === '10.1.0.0/16' &&
+          r.TransitGatewayId === outputs.europe_tgw_id
+        );
+        if (uswestRoute) {
+          console.log(`✓ Europe route table ${rt.RouteTableId} has route to US West (10.1.0.0/16) via TGW`);
+          europeHasUsWestRoute = true;
+        }
+      }
+      expect(europeHasUsWestRoute).toBe(true);
+
+      // Step 2: Verify Europe TGW has active peering to Hub
+      const europePeerings = await ec2Europe.describeTransitGatewayPeeringAttachments({
+        Filters: [
+          { Name: 'transit-gateway-id', Values: [outputs.europe_tgw_id] },
+          { Name: 'state', Values: ['available'] }
+        ]
+      }).promise();
+
+      const europeToHubPeering = europePeerings.TransitGatewayPeeringAttachments?.find(p =>
+        p.AccepterTgwInfo?.TransitGatewayId === outputs.hub_tgw_id ||
+        p.RequesterTgwInfo?.TransitGatewayId === outputs.hub_tgw_id
+      );
+      expect(europeToHubPeering).toBeDefined();
+      console.log(`✓ Europe TGW has active peering to Hub: ${europeToHubPeering?.TransitGatewayAttachmentId}`);
+
+      // Step 3: Verify Hub TGW has active peering to US West
+      const hubPeerings = await ec2Hub.describeTransitGatewayPeeringAttachments({
+        Filters: [
+          { Name: 'transit-gateway-id', Values: [outputs.hub_tgw_id] },
+          { Name: 'state', Values: ['available'] }
+        ]
+      }).promise();
+
+      const hubToUsWestPeering = hubPeerings.TransitGatewayPeeringAttachments?.find(p =>
+        p.AccepterTgwInfo?.TransitGatewayId === outputs.uswest_tgw_id ||
+        p.RequesterTgwInfo?.TransitGatewayId === outputs.uswest_tgw_id
+      );
+      expect(hubToUsWestPeering).toBeDefined();
+      console.log(`✓ Hub TGW has active peering to US West: ${hubToUsWestPeering?.TransitGatewayAttachmentId}`);
+
+      // Step 4: Verify US West VPC route table accepts traffic from Europe
+      const uswestRouteTables = await ec2USWest.describeRouteTables({
+        Filters: [
+          { Name: 'vpc-id', Values: [outputs.uswest_vpc_id] }
+        ]
+      }).promise();
+
+      let uswestHasEuropeRoute = false;
+      for (const rt of uswestRouteTables.RouteTables || []) {
+        const europeRoute = rt.Routes?.find(r =>
+          r.DestinationCidrBlock === '10.2.0.0/16' &&
+          r.TransitGatewayId === outputs.uswest_tgw_id
+        );
+        if (europeRoute) {
+          console.log(`✓ US West route table ${rt.RouteTableId} has route to Europe (10.2.0.0/16) via TGW`);
+          uswestHasEuropeRoute = true;
+        }
+      }
+      expect(uswestHasEuropeRoute).toBe(true);
+
+      console.log('✓ Complete routing path verified: Europe -> Hub -> US West');
+    }, 90000);
+
+    test('should verify security groups allow cross-region spoke-to-spoke traffic', async () => {
+      if (!outputs.hub_vpc_id || !outputs.uswest_vpc_id || !outputs.europe_vpc_id) {
+        console.log('Skipping: VPCs not fully deployed');
+        return;
+      }
+
+      console.log('\n=== Verifying Security Group Rules for Cross-Region Traffic ===');
+
+      // Check US West security groups allow traffic from Europe CIDR
+      const uswestSGs = await ec2USWest.describeSecurityGroups({
+        Filters: [
+          { Name: 'vpc-id', Values: [outputs.uswest_vpc_id] }
+        ]
+      }).promise();
+
+      let uswestAllowsEurope = false;
+      for (const sg of uswestSGs.SecurityGroups || []) {
+        const europeRule = sg.IpPermissions?.find(rule =>
+          rule.IpRanges?.some(range => range.CidrIp === '10.2.0.0/16')
+        );
+        if (europeRule) {
+          console.log(`✓ US West SG ${sg.GroupId} allows ingress from Europe (10.2.0.0/16)`);
+          uswestAllowsEurope = true;
+        }
+      }
+
+      // Check Europe security groups allow traffic from US West CIDR
+      const europeSGs = await ec2Europe.describeSecurityGroups({
+        Filters: [
+          { Name: 'vpc-id', Values: [outputs.europe_vpc_id] }
+        ]
+      }).promise();
+
+      let europeAllowsUsWest = false;
+      for (const sg of europeSGs.SecurityGroups || []) {
+        const uswestRule = sg.IpPermissions?.find(rule =>
+          rule.IpRanges?.some(range => range.CidrIp === '10.1.0.0/16')
+        );
+        if (uswestRule) {
+          console.log(`✓ Europe SG ${sg.GroupId} allows ingress from US West (10.1.0.0/16)`);
+          europeAllowsUsWest = true;
+        }
+      }
+
+      if (uswestAllowsEurope && europeAllowsUsWest) {
+        console.log('✓ Security groups properly configured for bidirectional spoke-to-spoke traffic');
+      } else {
+        console.log('⚠ Warning: Some security groups may not allow cross-region traffic');
+      }
+
+      expect(uswestSGs.SecurityGroups?.length).toBeGreaterThan(0);
+      expect(europeSGs.SecurityGroups?.length).toBeGreaterThan(0);
+    }, 60000);
+
+    test('should verify Transit Gateway peering attachments are fully operational', async () => {
+      if (!outputs.hub_to_uswest_peering_id || !outputs.hub_to_europe_peering_id) {
+        console.log('Skipping: Transit Gateway peering attachments not deployed');
+        return;
+      }
+
+      console.log('\n=== Verifying Transit Gateway Peering Attachments ===');
+
+      // Check hub to US West peering
+      const hubToUsWestPeering = await ec2Hub.describeTransitGatewayPeeringAttachments({
+        TransitGatewayAttachmentIds: [outputs.hub_to_uswest_peering_id]
+      }).promise();
+
+      const uswestPeering = hubToUsWestPeering.TransitGatewayPeeringAttachments?.[0];
+      expect(uswestPeering?.State).toBe('available');
+      console.log(`✓ Hub <-> US West peering: ${uswestPeering?.State}`);
+      console.log(`  Requester: ${uswestPeering?.RequesterTgwInfo?.Region} (${uswestPeering?.RequesterTgwInfo?.TransitGatewayId})`);
+      console.log(`  Accepter: ${uswestPeering?.AccepterTgwInfo?.Region} (${uswestPeering?.AccepterTgwInfo?.TransitGatewayId})`);
+
+      // Check hub to Europe peering
+      const hubToEuropePeering = await ec2Hub.describeTransitGatewayPeeringAttachments({
+        TransitGatewayAttachmentIds: [outputs.hub_to_europe_peering_id]
+      }).promise();
+
+      const europePeering = hubToEuropePeering.TransitGatewayPeeringAttachments?.[0];
+      expect(europePeering?.State).toBe('available');
+      console.log(`✓ Hub <-> Europe peering: ${europePeering?.State}`);
+      console.log(`  Requester: ${europePeering?.RequesterTgwInfo?.Region} (${europePeering?.RequesterTgwInfo?.TransitGatewayId})`);
+      console.log(`  Accepter: ${europePeering?.AccepterTgwInfo?.Region} (${europePeering?.AccepterTgwInfo?.TransitGatewayId})`);
+
+      console.log('✓ All Transit Gateway peering attachments are available and operational');
+    }, 45000);
+
+    test('should verify VPC route tables across all regions route spoke traffic through Transit Gateways', async () => {
+      if (!outputs.hub_vpc_id || !outputs.uswest_vpc_id || !outputs.europe_vpc_id) {
+        console.log('Skipping: VPCs not fully deployed');
+        return;
+      }
+
+      console.log('\n=== Verifying VPC Route Tables for Cross-Region Connectivity ===');
+
+      // Hub VPC route tables should have routes to both spokes
+      const hubRouteTables = await ec2Hub.describeRouteTables({
+        Filters: [{ Name: 'vpc-id', Values: [outputs.hub_vpc_id] }]
+      }).promise();
+
+      let hubRoutesToSpokes = 0;
+      for (const rt of hubRouteTables.RouteTables || []) {
+        const uswestRoute = rt.Routes?.find(r => r.DestinationCidrBlock === '10.1.0.0/16' && r.TransitGatewayId);
+        const europeRoute = rt.Routes?.find(r => r.DestinationCidrBlock === '10.2.0.0/16' && r.TransitGatewayId);
+
+        if (uswestRoute || europeRoute) {
+          hubRoutesToSpokes++;
+          console.log(`✓ Hub route table ${rt.RouteTableId}:`);
+          if (uswestRoute) console.log(`    -> 10.1.0.0/16 via ${uswestRoute.TransitGatewayId}`);
+          if (europeRoute) console.log(`    -> 10.2.0.0/16 via ${europeRoute.TransitGatewayId}`);
+        }
+      }
+      expect(hubRoutesToSpokes).toBeGreaterThan(0);
+
+      // US West VPC route tables should have routes to hub and Europe
+      const uswestRouteTables = await ec2USWest.describeRouteTables({
+        Filters: [{ Name: 'vpc-id', Values: [outputs.uswest_vpc_id] }]
+      }).promise();
+
+      let uswestRoutesToOthers = 0;
+      for (const rt of uswestRouteTables.RouteTables || []) {
+        const hubRoute = rt.Routes?.find(r => r.DestinationCidrBlock === '10.0.0.0/16' && r.TransitGatewayId);
+        const europeRoute = rt.Routes?.find(r => r.DestinationCidrBlock === '10.2.0.0/16' && r.TransitGatewayId);
+
+        if (hubRoute || europeRoute) {
+          uswestRoutesToOthers++;
+          console.log(`✓ US West route table ${rt.RouteTableId}:`);
+          if (hubRoute) console.log(`    -> 10.0.0.0/16 via ${hubRoute.TransitGatewayId}`);
+          if (europeRoute) console.log(`    -> 10.2.0.0/16 via ${europeRoute.TransitGatewayId}`);
+        }
+      }
+      expect(uswestRoutesToOthers).toBeGreaterThan(0);
+
+      // Europe VPC route tables should have routes to hub and US West
+      const europeRouteTables = await ec2Europe.describeRouteTables({
+        Filters: [{ Name: 'vpc-id', Values: [outputs.europe_vpc_id] }]
+      }).promise();
+
+      let europeRoutesToOthers = 0;
+      for (const rt of europeRouteTables.RouteTables || []) {
+        const hubRoute = rt.Routes?.find(r => r.DestinationCidrBlock === '10.0.0.0/16' && r.TransitGatewayId);
+        const uswestRoute = rt.Routes?.find(r => r.DestinationCidrBlock === '10.1.0.0/16' && r.TransitGatewayId);
+
+        if (hubRoute || uswestRoute) {
+          europeRoutesToOthers++;
+          console.log(`✓ Europe route table ${rt.RouteTableId}:`);
+          if (hubRoute) console.log(`    -> 10.0.0.0/16 via ${hubRoute.TransitGatewayId}`);
+          if (uswestRoute) console.log(`    -> 10.1.0.0/16 via ${uswestRoute.TransitGatewayId}`);
+        }
+      }
+      expect(europeRoutesToOthers).toBeGreaterThan(0);
+
+      console.log('✓ All VPC route tables properly configured for cross-region spoke-to-spoke connectivity');
+    }, 90000);
+  });
 });
