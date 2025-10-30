@@ -1,35 +1,169 @@
 ### main.tf
 
 ``` hcl
-terraform {
-  required_version = ">= 1.0"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
+# Variables
+variable "aws_region" {
+  description = "AWS region for resources"
+  type        = string
+  default     = "us-west-2"
 }
 
-# Primary provider for the new region (us-west-2)
-provider "aws" {
-  region = var.aws_region
-  
-  default_tags {
-    tags = {
-      Environment   = var.environment
-      Project       = var.project_name
-      ManagedBy     = "terraform"
-      MigratedFrom  = "us-west-1"
-      MigrationDate = var.migration_date
-    }
-  }
+variable "environment" {
+  description = "Environment name"
+  type        = string
+  default     = "production"
 }
 
-# Alias provider for the old region (for reference/cleanup)
-provider "aws" {
-  alias  = "old_region"
-  region = "us-west-1"
+variable "project_name" {
+  description = "Project name for resource naming"
+  type        = string
+  default     = "myapp"
+}
+
+variable "migration_date" {
+  description = "Date of migration for tagging"
+  type        = string
+  default     = "2024-01-15"
+}
+
+variable "vpc_cidr" {
+  description = "CIDR block for VPC"
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "public_subnet_cidrs" {
+  description = "CIDR blocks for public subnets"
+  type        = list(string)
+  default     = ["10.0.1.0/24", "10.0.2.0/24"]
+}
+
+variable "private_subnet_cidrs" {
+  description = "CIDR blocks for private subnets"
+  type        = list(string)
+  default     = ["10.0.10.0/24", "10.0.20.0/24"]
+}
+
+variable "ami_id" {
+  description = "AMI ID for EC2 instances"
+  type        = string
+  default     = "ami-0c02fb55956c7d316" # Amazon Linux 2 in us-west-2
+}
+
+variable "instance_type" {
+  description = "EC2 instance type"
+  type        = string
+  default     = "t3.medium"
+}
+
+variable "key_pair_name" {
+  description = "EC2 Key Pair name"
+  type        = string
+  default     = "myapp-keypair"
+}
+
+variable "user_data_script" {
+  description = "User data script for EC2 instances"
+  type        = string
+  default     = <<-EOF
+    #!/bin/bash
+    yum update -y
+    yum install -y docker
+    service docker start
+    usermod -a -G docker ec2-user
+    # Add your application startup commands here
+  EOF
+}
+
+variable "asg_min_size" {
+  description = "Minimum size of Auto Scaling Group"
+  type        = number
+  default     = 2
+}
+
+variable "asg_max_size" {
+  description = "Maximum size of Auto Scaling Group"
+  type        = number
+  default     = 6
+}
+
+variable "asg_desired_capacity" {
+  description = "Desired capacity of Auto Scaling Group"
+  type        = number
+  default     = 2
+}
+
+variable "db_engine_version" {
+  description = "RDS engine version"
+  type        = string
+  default     = "8.0.35"
+}
+
+variable "db_instance_class" {
+  description = "RDS instance class"
+  type        = string
+  default     = "db.t3.micro"
+}
+
+variable "db_allocated_storage" {
+  description = "RDS allocated storage in GB"
+  type        = number
+  default     = 20
+}
+
+variable "db_max_allocated_storage" {
+  description = "RDS maximum allocated storage in GB"
+  type        = number
+  default     = 100
+}
+
+variable "db_name" {
+  description = "Database name"
+  type        = string
+  default     = "myappdb"
+}
+
+variable "db_username" {
+  description = "Database username"
+  type        = string
+  default     = "admin"
+  sensitive   = true
+}
+
+variable "db_password" {
+  description = "Database password"
+  type        = string
+  sensitive   = true
+}
+
+variable "db_backup_retention_period" {
+  description = "Database backup retention period in days"
+  type        = number
+  default     = 7
+}
+
+variable "db_backup_window" {
+  description = "Database backup window"
+  type        = string
+  default     = "03:00-04:00"
+}
+
+variable "db_maintenance_window" {
+  description = "Database maintenance window"
+  type        = string
+  default     = "sun:04:00-sun:05:00"
+}
+
+variable "enable_deletion_protection" {
+  description = "Enable deletion protection for critical resources"
+  type        = bool
+  default     = true
+}
+
+variable "skip_final_snapshot" {
+  description = "Skip final snapshot when destroying RDS instance"
+  type        = bool
+  default     = false
 }
 
 # Data sources for existing resources in new region
@@ -46,7 +180,12 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name = "${var.project_name}-vpc"
+    Name        = "${var.project_name}-vpc"
+    Environment = var.environment
+    Project     = var.project_name
+    ManagedBy   = "terraform"
+    MigratedFrom = "us-west-1"
+    MigrationDate = var.migration_date
   }
 }
 
@@ -324,236 +463,5 @@ resource "aws_db_instance" "main" {
   tags = {
     Name = "${var.project_name}-database"
   }
-}
-```
-
-```hcl
-# variables.tf
-variable "aws_region" {
-  description = "AWS region for resources"
-  type        = string
-  default     = "us-west-2"
-}
-
-variable "environment" {
-  description = "Environment name"
-  type        = string
-  default     = "production"
-}
-
-variable "project_name" {
-  description = "Project name for resource naming"
-  type        = string
-  default     = "myapp"
-}
-
-variable "migration_date" {
-  description = "Date of migration for tagging"
-  type        = string
-  default     = "2024-01-15"
-}
-
-# Network Configuration
-variable "vpc_cidr" {
-  description = "CIDR block for VPC"
-  type        = string
-  default     = "10.0.0.0/16"
-}
-
-variable "public_subnet_cidrs" {
-  description = "CIDR blocks for public subnets"
-  type        = list(string)
-  default     = ["10.0.1.0/24", "10.0.2.0/24"]
-}
-
-variable "private_subnet_cidrs" {
-  description = "CIDR blocks for private subnets"
-  type        = list(string)
-  default     = ["10.0.10.0/24", "10.0.20.0/24"]
-}
-
-# EC2 Configuration
-variable "ami_id" {
-  description = "AMI ID for EC2 instances"
-  type        = string
-  default     = "ami-0c02fb55956c7d316" # Amazon Linux 2 in us-west-2
-}
-
-variable "instance_type" {
-  description = "EC2 instance type"
-  type        = string
-  default     = "t3.medium"
-}
-
-variable "key_pair_name" {
-  description = "EC2 Key Pair name"
-  type        = string
-  default     = "myapp-keypair"
-}
-
-variable "user_data_script" {
-  description = "User data script for EC2 instances"
-  type        = string
-  default     = <<-EOF
-    #!/bin/bash
-    yum update -y
-    yum install -y docker
-    service docker start
-    usermod -a -G docker ec2-user
-    # Add your application startup commands here
-  EOF
-}
-
-# Auto Scaling Configuration
-variable "asg_min_size" {
-  description = "Minimum size of Auto Scaling Group"
-  type        = number
-  default     = 2
-}
-
-variable "asg_max_size" {
-  description = "Maximum size of Auto Scaling Group"
-  type        = number
-  default     = 6
-}
-
-variable "asg_desired_capacity" {
-  description = "Desired capacity of Auto Scaling Group"
-  type        = number
-  default     = 2
-}
-
-# Database Configuration
-variable "db_engine_version" {
-  description = "RDS engine version"
-  type        = string
-  default     = "8.0.35"
-}
-
-variable "db_instance_class" {
-  description = "RDS instance class"
-  type        = string
-  default     = "db.t3.micro"
-}
-
-variable "db_allocated_storage" {
-  description = "RDS allocated storage in GB"
-  type        = number
-  default     = 20
-}
-
-variable "db_max_allocated_storage" {
-  description = "RDS maximum allocated storage in GB"
-  type        = number
-  default     = 100
-}
-
-variable "db_name" {
-  description = "Database name"
-  type        = string
-  default     = "myappdb"
-}
-
-variable "db_username" {
-  description = "Database username"
-  type        = string
-  default     = "admin"
-  sensitive   = true
-}
-
-variable "db_password" {
-  description = "Database password"
-  type        = string
-  sensitive   = true
-}
-
-variable "db_backup_retention_period" {
-  description = "Database backup retention period in days"
-  type        = number
-  default     = 7
-}
-
-variable "db_backup_window" {
-  description = "Database backup window"
-  type        = string
-  default     = "03:00-04:00"
-}
-
-variable "db_maintenance_window" {
-  description = "Database maintenance window"
-  type        = string
-  default     = "sun:04:00-sun:05:00"
-}
-
-# General Configuration
-variable "enable_deletion_protection" {
-  description = "Enable deletion protection for critical resources"
-  type        = bool
-  default     = true
-}
-
-variable "skip_final_snapshot" {
-  description = "Skip final snapshot when destroying RDS instance"
-  type        = bool
-  default     = false
-}
-```
-
-```hcl
-# backend.tf
-terraform {
-  backend "s3" {
-    bucket         = "PLACEHOLDER-terraform-state-bucket"
-    key            = "myapp/us-west-2/terraform.tfstate"
-    region         = "us-west-2"
-    encrypt        = true
-    dynamodb_table = "PLACEHOLDER-terraform-locks"
-    
-    # Optional: Use assume role for cross-account access
-    # role_arn = "arn:aws:iam::ACCOUNT-ID:role/TerraformRole"
-  }
-}
-
-# Alternative backend configuration for remote state management
-# terraform {
-#   backend "remote" {
-#     hostname     = "app.terraform.io"
-#     organization = "PLACEHOLDER-ORG-NAME"
-#
-#     workspaces {
-#       name = "myapp-us-west-2"
-#     }
-#   }
-# }
-
-# Local backend for testing (not recommended for production)
-# terraform {
-#   backend "local" {
-#     path = "terraform.tfstate"
-#   }
-# }
-```
-### provider.tf
-
-``` hcl
-# provider.tf
-
-terraform {
-  required_version = ">= 1.4.0"
-
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = ">= 5.0"
-    }
-  }
-
-  # Partial backend config: values are injected at `terraform init` time
-  backend "s3" {}
-}
-
-# Primary AWS provider for general resources
-provider "aws" {
-  region = var.aws_region
 }
 ```

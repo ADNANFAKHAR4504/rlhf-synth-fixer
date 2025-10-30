@@ -10,5 +10,6 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "(\"EC2, VPC, ALB, RDS\")"
+  "aws_services": ["EC2", "VPC", "ALB", "RDS", "S3", "IAM", "SecretsManager", "CloudWatch"],
+  "training_quality": 8
 }
