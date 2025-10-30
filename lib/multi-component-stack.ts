@@ -161,18 +161,13 @@ export class MultiComponentApplicationConstruct extends Construct {
       this.node.tryGetContext('rdsSubnetGroupName');
     const importedSubnetGroup = importedSubnetGroupName
       ? rds.SubnetGroup.fromSubnetGroupName(
-          this,
-          'ImportedRdsSubnetGroup',
-          String(importedSubnetGroupName)
-        )
+        this,
+        'ImportedRdsSubnetGroup',
+        String(importedSubnetGroupName)
+      )
       : undefined;
 
     const rdsInstance = new rds.DatabaseInstance(this, 'PostgresDatabase', {
-      instanceIdentifier: canonicalResourceName(
-        'prod-rds-postgres',
-        props?.baseEnvironmentSuffix as string | undefined,
-        this.stringSuffix
-      ) as string,
       engine: rds.DatabaseInstanceEngine.postgres({
         // Use the major Postgres 15 engine constant so CDK/RDS will pick a supported
         // minor version available in the target region. Pinning to a minor (e.g. 15.3)
