@@ -32,6 +32,9 @@ export class CloudSetupStack extends Construct {
   public readonly bucketName?: string;
   public readonly albDns?: string;
   public readonly cloudFrontUrl?: string;
+  public readonly lambdaFunctionName?: string;
+  public readonly lambdaLogGroupName?: string;
+  public readonly rdsSecurityGroupId?: string;
 
   private readonly suffix: string;
 
@@ -120,6 +123,9 @@ export class CloudSetupStack extends Construct {
       timeout: cdk.Duration.minutes(1),
       memorySize: 256,
     });
+    // expose function name and expected log group name for integration tests
+    this.lambdaFunctionName = fn.functionName;
+    this.lambdaLogGroupName = `/aws/lambda/${fn.functionName}`;
     bucket.addEventNotification(
       s3.EventType.OBJECT_CREATED,
       new s3n.LambdaDestination(fn)
@@ -131,6 +137,7 @@ export class CloudSetupStack extends Construct {
       description: 'RDS security group',
       securityGroupName: `rds-sg-${this.suffix}`,
     });
+    this.rdsSecurityGroupId = rdsSg.securityGroupId;
     rdsSg.addIngressRule(httpsSg, ec2.Port.tcp(3306), 'Allow from app SG');
 
     const db = new rds.DatabaseInstance(this, `rds-${this.suffix}`, {
@@ -288,10 +295,10 @@ EOF`,
     // Only configure alternate domain names (CNAMEs) if a certificate ARN is provided.
     const cfCert = props.cloudFrontCertificateArn
       ? acm.Certificate.fromCertificateArn(
-          this,
-          `cf-cert-${this.suffix}`,
-          props.cloudFrontCertificateArn
-        )
+        this,
+        `cf-cert-${this.suffix}`,
+        props.cloudFrontCertificateArn
+      )
       : undefined;
     const domainNames =
       cfCert && props.domainName ? [props.domainName] : undefined;

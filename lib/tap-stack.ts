@@ -47,6 +47,16 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'UsEast_CloudFrontUrl', {
       value: usEast.cloudFrontUrl ?? '',
     });
+    // Helpful additional outputs for integration tests
+    new cdk.CfnOutput(this, 'UsEast_LambdaFunctionName', {
+      value: usEast.lambdaFunctionName ?? '',
+    });
+    new cdk.CfnOutput(this, 'UsEast_LambdaLogGroup', {
+      value: usEast.lambdaLogGroupName ?? '',
+    });
+    new cdk.CfnOutput(this, 'UsEast_RdsSecurityGroupId', {
+      value: usEast.rdsSecurityGroupId ?? '',
+    });
 
     /*
     new cdk.CfnOutput(this, 'EuWest_VpcId', { value: euWest.vpcId });
