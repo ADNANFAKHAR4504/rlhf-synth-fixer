@@ -1,4 +1,4 @@
-## 📁 lib/modules.ts
+## lib/modules.ts
 
 ```typescript
 import { Construct } from 'constructs';
@@ -762,7 +762,7 @@ export class ComputeConstruct extends Construct {
 }
 ```
 
-## 📁 lib/tap-stack.ts
+## lib/tap-stack.ts
 
 ```typescript
 import {

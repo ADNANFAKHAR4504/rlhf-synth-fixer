@@ -1,4 +1,4 @@
-## 📁 lib/modules.ts
+## lib/modules.ts
 
 ```typescript
 import { Construct } from "constructs";
@@ -785,7 +785,7 @@ export class EC2ApplicationConstruct extends Construct {
 }
 ```
 
-## 📁 lib/tap-stack.ts
+## lib/tap-stack.ts
 
 ```typescript
 import { Construct } from "constructs";
