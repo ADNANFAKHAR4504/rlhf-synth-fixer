@@ -1,0 +1,31 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "medium",
+  "team": "synth",
+  "startedAt": "2025-10-30T00:00:00+00:00",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "webapp",
+    "alb",
+    "ecs"
+  ],
+  "po_id": "2x02ti",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "RDS",
+    "ALB",
+    "Route53",
+    "CloudWatch",
+    "KMS",
+    "IAM",
+    "ApplicationAutoScaling",
+    "SecretsManager"
+  ],
+  "region": "ap-northeast-2",
+  "training_quality": 10
+}
