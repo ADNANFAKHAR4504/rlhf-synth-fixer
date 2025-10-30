@@ -1,29 +1,8 @@
 // Configuration - These are coming from cfn-outputs after CloudFormation deployment
-import { 
-  GetPolicyCommand, 
-  IAMClient, 
-  GetUserCommand,
-  ListAttachedUserPoliciesCommand,
-  ListGroupsForUserCommand,
-  GetPolicyVersionCommand,
-  SimulatePrincipalPolicyCommand
-} from '@aws-sdk/client-iam';
-import { 
-  GetBucketEncryptionCommand, 
-  HeadBucketCommand, 
-  S3Client, 
-  PutObjectCommand,
-  GetBucketPolicyCommand,
-  GetBucketVersioningCommand,
-  GetPublicAccessBlockCommand
-} from '@aws-sdk/client-s3';
-import { 
-  EC2Client, 
-  DescribeAccountAttributesCommand,
-  CreateVolumeCommand,
-  DescribeVolumesCommand,
-  DeleteVolumeCommand
-} from '@aws-sdk/client-ec2';
+import {
+  CloudFormationClient,
+  DescribeStacksCommand
+} from '@aws-sdk/client-cloudformation';
 import {
   ConfigServiceClient,
   DescribeConfigRulesCommand,
@@ -33,16 +12,30 @@ import {
   StartConfigRulesEvaluationCommand
 } from '@aws-sdk/client-config-service';
 import {
-  KMSClient,
+  CreateVolumeCommand,
+  DeleteVolumeCommand,
+  DescribeAccountAttributesCommand,
+  DescribeVolumesCommand,
+  EC2Client
+} from '@aws-sdk/client-ec2';
+import {
+  GetPolicyCommand,
+  GetPolicyVersionCommand,
+  IAMClient
+} from '@aws-sdk/client-iam';
+import {
   DescribeKeyCommand,
   GetKeyRotationStatusCommand,
-  ListAliasesCommand
+  KMSClient
 } from '@aws-sdk/client-kms';
 import {
-  CloudFormationClient,
-  DescribeStacksCommand,
-  DescribeStackResourcesCommand
-} from '@aws-sdk/client-cloudformation';
+  GetBucketEncryptionCommand,
+  GetBucketPolicyCommand,
+  GetPublicAccessBlockCommand,
+  HeadBucketCommand,
+  PutObjectCommand,
+  S3Client
+} from '@aws-sdk/client-s3';
 import fs from 'fs';
 
 // Load outputs from CloudFormation deployment - REQUIRED for integration tests
@@ -56,15 +49,15 @@ if (!fs.existsSync(outputsPath)) {
 
 try {
   outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
-  
+
   // Validate required outputs exist
   const requiredOutputs = ['S3KMSKeyArn', 'EBSKMSKeyArn', 'EncryptedS3BucketName', 'MFARequiredPolicyArn', 'ConfigBucketName'];
   const missingOutputs = requiredOutputs.filter(key => !outputs[key]);
-  
+
   if (missingOutputs.length > 0) {
     throw new Error(`Missing required outputs in ${outputsPath}: ${missingOutputs.join(', ')}`);
   }
-  
+
   console.log('Integration tests using live deployment outputs:', Object.keys(outputs));
 } catch (error: any) {
   if (error.code === 'ENOENT') {
@@ -87,15 +80,15 @@ describe('Security Compliance Template Integration Tests', () => {
   const configClient = new ConfigServiceClient({ region });
   const kmsClient = new KMSClient({ region });
   const cfnClient = new CloudFormationClient({ region });
-  
+
   // Test configuration
   const timeoutMs = 15000; // 15 seconds for AWS API calls
-  
+
   // Helper function to check if we're in a real AWS environment
   const isRealAWSEnvironment = () => {
     return process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY;
   };
-  
+
   // Helper function to skip test if not in AWS environment
   const skipIfNotAWS = (testName: string) => {
     if (!isRealAWSEnvironment()) {
@@ -282,12 +275,12 @@ describe('Security Compliance Template Integration Tests', () => {
       try {
         // Try to find the stack by looking for our outputs
         const stacks = await cfnClient.send(new DescribeStacksCommand({}));
-        const targetStack = stacks.Stacks?.find(stack => 
-          stack.Outputs?.some(output => 
+        const targetStack = stacks.Stacks?.find(stack =>
+          stack.Outputs?.some(output =>
             ['S3KMSKeyArn', 'EBSKMSKeyArn', 'EncryptedS3BucketName'].includes(output.OutputKey || '')
           )
         );
-        
+
         if (targetStack) {
           expect(targetStack.StackStatus).toBe('CREATE_COMPLETE');
           expect(targetStack.Outputs).toBeDefined();
@@ -314,14 +307,14 @@ describe('Security Compliance Template Integration Tests', () => {
         });
         const policyResponse = await s3Client.send(policyCommand);
         const policy = JSON.parse(policyResponse.Policy || '{}');
-        
+
         // Check for deny statements that require encryption
         const denyStatements = policy.Statement?.filter((stmt: any) => stmt.Effect === 'Deny') || [];
         expect(denyStatements.length).toBeGreaterThan(0);
-        
+
         // Verify encryption requirement in policy
-        const hasEncryptionRequirement = denyStatements.some((stmt: any) => 
-          JSON.stringify(stmt).includes('aws:SecureTransport') || 
+        const hasEncryptionRequirement = denyStatements.some((stmt: any) =>
+          JSON.stringify(stmt).includes('aws:SecureTransport') ||
           JSON.stringify(stmt).includes('s3:x-amz-server-side-encryption')
         );
         expect(hasEncryptionRequirement).toBe(true);
@@ -345,7 +338,7 @@ describe('Security Compliance Template Integration Tests', () => {
         const ebsEncryptionAttr = response.AccountAttributes?.find(
           attr => attr.AttributeName === 'default-ebs-encryption'
         );
-        
+
         if (ebsEncryptionAttr) {
           expect(ebsEncryptionAttr.AttributeValues?.[0]?.AttributeValue).toBe('enabled');
         } else {
@@ -367,25 +360,25 @@ describe('Security Compliance Template Integration Tests', () => {
         const command = new DescribeConfigRulesCommand({});
         const response = await configClient.send(command);
         const configRules = response.ConfigRules || [];
-        
+
         // Look for our specific rules
-        const s3Rule = configRules.find(rule => 
+        const s3Rule = configRules.find(rule =>
           rule.ConfigRuleName?.includes('s3-bucket-server-side-encryption-enabled')
         );
-        const ebsRule = configRules.find(rule => 
+        const ebsRule = configRules.find(rule =>
           rule.ConfigRuleName?.includes('encrypted-volumes')
         );
-        
+
         if (s3Rule) {
           expect(s3Rule.ConfigRuleState).toBe('ACTIVE');
           expect(s3Rule.ConfigRuleName).toContain(environmentSuffix);
         }
-        
+
         if (ebsRule) {
           expect(ebsRule.ConfigRuleState).toBe('ACTIVE');
           expect(ebsRule.ConfigRuleName).toContain(environmentSuffix);
         }
-        
+
         expect(configRules.length).toBeGreaterThan(0);
       } catch (error: any) {
         console.log('Skipping Config rules test - error:', error.message);
@@ -408,27 +401,27 @@ describe('Security Compliance Template Integration Tests', () => {
           PolicyArn: outputs.MFARequiredPolicyArn
         });
         const policyResponse = await iamClient.send(policyCommand);
-        
+
         if (policyResponse.Policy?.DefaultVersionId) {
           const versionCommand = new GetPolicyVersionCommand({
             PolicyArn: outputs.MFARequiredPolicyArn,
             VersionId: policyResponse.Policy.DefaultVersionId
           });
           const versionResponse = await iamClient.send(versionCommand);
-          
+
           const policyDocument = JSON.parse(
             decodeURIComponent(versionResponse.PolicyVersion?.Document || '{}')
           );
-          
+
           // Check for MFA condition in policy statements
           const statements = policyDocument.Statement || [];
-          const hasMFACondition = statements.some((stmt: any) => 
+          const hasMFACondition = statements.some((stmt: any) =>
             stmt.Condition && (
               stmt.Condition['Bool']?.['aws:MultiFactorAuthPresent'] ||
               stmt.Condition['BoolIfExists']?.['aws:MultiFactorAuthPresent']
             )
           );
-          
+
           expect(hasMFACondition).toBe(true);
           expect(statements.length).toBeGreaterThan(0);
         }
@@ -449,28 +442,28 @@ describe('Security Compliance Template Integration Tests', () => {
           PolicyArn: outputs.MFARequiredPolicyArn
         });
         const policyResponse = await iamClient.send(policyCommand);
-        
+
         if (policyResponse.Policy?.DefaultVersionId) {
           const versionCommand = new GetPolicyVersionCommand({
             PolicyArn: outputs.MFARequiredPolicyArn,
             VersionId: policyResponse.Policy.DefaultVersionId
           });
           const versionResponse = await iamClient.send(versionCommand);
-          
+
           const policyDocument = JSON.parse(
             decodeURIComponent(versionResponse.PolicyVersion?.Document || '{}')
           );
-          
+
           // Check for privileged actions like IAM, security groups, etc.
           const statements = policyDocument.Statement || [];
           const privilegedActions = statements.flatMap((stmt: any) => stmt.Action || []);
-          const hasPrivilegedActions = privilegedActions.some((action: string) => 
-            action.includes('iam:') || 
-            action.includes('ec2:') || 
+          const hasPrivilegedActions = privilegedActions.some((action: string) =>
+            action.includes('iam:') ||
+            action.includes('ec2:') ||
             action.includes('s3:Delete') ||
             action === '*'
           );
-          
+
           expect(hasPrivilegedActions).toBe(true);
         }
       } catch (error: any) {
@@ -495,25 +488,25 @@ describe('Security Compliance Template Integration Tests', () => {
           ConfigRuleName: s3RuleName,
           ComplianceTypes: ['COMPLIANT', 'NON_COMPLIANT']
         });
-        
+
         const s3Response = await configClient.send(s3ComplianceCommand);
         const s3Results = s3Response.EvaluationResults || [];
-        
+
         if (s3Results.length > 0) {
           // Should have at least our compliant S3 bucket
-          const compliantBuckets = s3Results.filter(result => 
+          const compliantBuckets = s3Results.filter(result =>
             result.ComplianceType === 'COMPLIANT'
           );
           expect(compliantBuckets.length).toBeGreaterThan(0);
         }
-        
+
         // Check EBS encryption rule compliance
         const ebsRuleName = `encrypted-volumes-${environmentSuffix}`;
         const ebsComplianceCommand = new GetComplianceDetailsByConfigRuleCommand({
           ConfigRuleName: ebsRuleName,
           ComplianceTypes: ['COMPLIANT', 'NON_COMPLIANT']
         });
-        
+
         const ebsResponse = await configClient.send(ebsComplianceCommand);
         expect(ebsResponse.EvaluationResults).toBeDefined();
       } catch (error: any) {
@@ -533,11 +526,11 @@ describe('Security Compliance Template Integration Tests', () => {
           `s3-bucket-server-side-encryption-enabled-${environmentSuffix}`,
           `encrypted-volumes-${environmentSuffix}`
         ];
-        
+
         const command = new StartConfigRulesEvaluationCommand({
           ConfigRuleNames: configRuleNames
         });
-        
+
         const response = await configClient.send(command);
         expect(response.$metadata.httpStatusCode).toBe(200);
       } catch (error: any) {
@@ -562,7 +555,7 @@ describe('Security Compliance Template Integration Tests', () => {
           Key: 'test-unencrypted-object',
           Body: 'test content'
         });
-        
+
         try {
           await s3Client.send(putCommand);
           // If this succeeds, the bucket policy is not properly configured
@@ -588,7 +581,7 @@ describe('Security Compliance Template Integration Tests', () => {
           Bucket: outputs.EncryptedS3BucketName
         });
         const response = await s3Client.send(command);
-        
+
         expect(response.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
         expect(response.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
         expect(response.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
@@ -616,10 +609,10 @@ describe('Security Compliance Template Integration Tests', () => {
             Tags: [{ Key: 'TestVolume', Value: 'EncryptionTest' }]
           }]
         });
-        
+
         const response = await ec2Client.send(createCommand);
         const volumeId = response.VolumeId;
-        
+
         if (volumeId) {
           // Check if the volume is encrypted
           const describeCommand = new DescribeVolumesCommand({
@@ -627,9 +620,9 @@ describe('Security Compliance Template Integration Tests', () => {
           });
           const describeResponse = await ec2Client.send(describeCommand);
           const volume = describeResponse.Volumes?.[0];
-          
+
           expect(volume?.Encrypted).toBe(true);
-          
+
           // Clean up - delete the test volume
           const deleteCommand = new DeleteVolumeCommand({ VolumeId: volumeId });
           await ec2Client.send(deleteCommand);
@@ -653,13 +646,13 @@ describe('Security Compliance Template Integration Tests', () => {
         // Extract key IDs from ARNs
         const s3KeyId = outputs.S3KMSKeyArn.split('/').pop();
         const ebsKeyId = outputs.EBSKMSKeyArn.split('/').pop();
-        
+
         if (s3KeyId && ebsKeyId) {
           // Verify S3 KMS key
           const s3KeyCommand = new DescribeKeyCommand({ KeyId: s3KeyId });
           const s3KeyResponse = await kmsClient.send(s3KeyCommand);
           expect(s3KeyResponse.KeyMetadata?.Arn).toContain(region);
-          
+
           // Verify EBS KMS key
           const ebsKeyCommand = new DescribeKeyCommand({ KeyId: ebsKeyId });
           const ebsKeyResponse = await kmsClient.send(ebsKeyCommand);
@@ -679,12 +672,12 @@ describe('Security Compliance Template Integration Tests', () => {
 
       try {
         // Verify S3 bucket is in correct region
-        const headCommand = new HeadBucketCommand({ 
-          Bucket: outputs.EncryptedS3BucketName 
+        const headCommand = new HeadBucketCommand({
+          Bucket: outputs.EncryptedS3BucketName
         });
         const response = await s3Client.send(headCommand);
         expect(response.$metadata.httpStatusCode).toBe(200);
-        
+
         // Verify encryption configuration
         const encryptionCommand = new GetBucketEncryptionCommand({
           Bucket: outputs.EncryptedS3BucketName
@@ -712,7 +705,7 @@ describe('Security Compliance Template Integration Tests', () => {
         const command = new DescribeDeliveryChannelsCommand({});
         const response = await configClient.send(command);
         const channels = response.DeliveryChannels || [];
-        
+
         if (channels.length > 0) {
           const channel = channels[0];
           expect(channel.s3BucketName).toBeDefined();
@@ -734,14 +727,14 @@ describe('Security Compliance Template Integration Tests', () => {
         const command = new DescribeConfigurationRecordersCommand({});
         const response = await configClient.send(command);
         const recorders = response.ConfigurationRecorders || [];
-        
+
         if (recorders.length > 0) {
-          const recorder = recorders.find(r => 
+          const recorder = recorders.find(r =>
             r.name?.includes(environmentSuffix) ||
             r.name === 'default' ||
             r.name?.includes('DefaultRecorder')
           );
-          
+
           if (recorder) {
             expect(recorder.recordingGroup?.allSupported).toBe(true);
             expect(recorder.recordingGroup?.includeGlobalResourceTypes).toBe(true);
@@ -767,7 +760,7 @@ describe('Security Compliance Template Integration Tests', () => {
           const s3RotationResponse = await kmsClient.send(s3RotationCommand);
           expect(s3RotationResponse.KeyRotationEnabled).toBe(true);
         }
-        
+
         // Check EBS KMS key rotation
         const ebsKeyId = outputs.EBSKMSKeyArn.split('/').pop();
         if (ebsKeyId) {
