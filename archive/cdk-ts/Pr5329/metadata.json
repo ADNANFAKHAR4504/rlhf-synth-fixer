@@ -10,5 +10,11 @@
   "subject_labels": [
     "Web Application Deployment"
   ],
-  "aws_services": "\"EC2\",    \"AutoScaling\",    \"ApplicationLoadBalancer\",    \"VPC\",    \"S3\",    \"CloudWatch\",    \"IAM\",    \"SecurityGroups\""
+  "aws_services": "\"EC2\",    \"AutoScaling\",    \"ApplicationLoadBalancer\",    \"VPC\",    \"S3\",    \"CloudWatch\",    \"IAM\",    \"SecurityGroups\"",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
 }
