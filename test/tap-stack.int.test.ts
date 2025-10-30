@@ -36,7 +36,28 @@ const outputsPath = path.join(
 let stackOutputs: any;
 
 if (fs.existsSync(outputsPath)) {
-  stackOutputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+  const rawOutputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+  // Parse Pulumi outputs that may be stringified JSON
+  stackOutputs = {};
+  for (const [key, value] of Object.entries(rawOutputs)) {
+    if (typeof value === 'string') {
+      // Try to parse as JSON if it looks like JSON
+      if (
+        (value.startsWith('[') && value.endsWith(']')) ||
+        (value.startsWith('{') && value.endsWith('}'))
+      ) {
+        try {
+          stackOutputs[key] = JSON.parse(value);
+        } catch {
+          stackOutputs[key] = value;
+        }
+      } else {
+        stackOutputs[key] = value;
+      }
+    } else {
+      stackOutputs[key] = value;
+    }
+  }
 } else {
   stackOutputs = {};
 }
@@ -54,7 +75,10 @@ describe('TapStack Integration Tests', () => {
       if (Object.keys(stackOutputs).length > 0) {
         expect(stackOutputs.migrationReport).toBeDefined();
         if (stackOutputs.migrationReport) {
-          const report = JSON.parse(stackOutputs.migrationReport);
+          const report =
+            typeof stackOutputs.migrationReport === 'string'
+              ? JSON.parse(stackOutputs.migrationReport)
+              : stackOutputs.migrationReport;
           expect(report).toHaveProperty('migrationBatch');
           expect(report).toHaveProperty('sourceRegion');
           expect(report).toHaveProperty('targetRegion');
@@ -104,7 +128,10 @@ describe('TapStack Integration Tests', () => {
 
     beforeAll(() => {
       if (stackOutputs.migrationReport) {
-        migrationReport = JSON.parse(stackOutputs.migrationReport);
+        migrationReport =
+          typeof stackOutputs.migrationReport === 'string'
+            ? JSON.parse(stackOutputs.migrationReport)
+            : stackOutputs.migrationReport;
       }
     });
 
@@ -193,7 +220,10 @@ describe('TapStack Integration Tests', () => {
         bucketNames = bucketArns.map((arn: string) => arn.split(':::')[1]);
       }
       if (stackOutputs.migrationReport) {
-        const report = JSON.parse(stackOutputs.migrationReport);
+        const report =
+          typeof stackOutputs.migrationReport === 'string'
+            ? JSON.parse(stackOutputs.migrationReport)
+            : stackOutputs.migrationReport;
         if (report.resources?.s3Buckets) {
           bucketNames = report.resources.s3Buckets.map((b: any) => b.name);
         }
@@ -240,7 +270,10 @@ describe('TapStack Integration Tests', () => {
     beforeAll(() => {
       tableNames = [];
       if (stackOutputs.migrationReport) {
-        const report = JSON.parse(stackOutputs.migrationReport);
+        const report =
+          typeof stackOutputs.migrationReport === 'string'
+            ? JSON.parse(stackOutputs.migrationReport)
+            : stackOutputs.migrationReport;
         if (report.resources?.dynamodbTables) {
           tableNames = report.resources.dynamodbTables.map((t: any) => t.name);
         }
