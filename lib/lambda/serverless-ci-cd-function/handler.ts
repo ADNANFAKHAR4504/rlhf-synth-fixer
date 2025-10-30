@@ -1,5 +1,8 @@
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
+import {
+  GetSecretValueCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 import { APIGatewayProxyResult, Context } from 'aws-lambda';
 import * as AWSXRay from 'aws-xray-sdk-core';
@@ -30,15 +33,16 @@ async function getSecrets(): Promise<AppSecrets> {
   return cachedSecrets;
 }
 
-export async function main(event: any, context: Context): Promise<APIGatewayProxyResult> {
-  const segment = AWSXRay.getSegment();
-
+export async function main(
+  event: unknown,
+  context: Context
+): Promise<APIGatewayProxyResult> {
   try {
     // Log the incoming event
     console.log('Received event:', JSON.stringify(event, null, 2));
 
-    // Get secrets
-    const secrets = await getSecrets();
+    // Get secrets (cache for future invocations)
+    await getSecrets();
 
     // Example: Process data and store in S3
     const data = {
@@ -57,21 +61,27 @@ export async function main(event: any, context: Context): Promise<APIGatewayProx
     await s3Client.send(putCommand);
 
     // Add custom metric
-    console.log(JSON.stringify({
-      _aws: {
-        Timestamp: Date.now(),
-        CloudWatchMetrics: [{
-          Namespace: 'TapApplication',
-          Dimensions: [['Environment']],
-          Metrics: [{
-            Name: 'ProcessedRequests',
-            Unit: 'Count',
-            Value: 1,
-          }],
-        }],
-      },
-      Environment: process.env.NODE_ENV,
-    }));
+    console.log(
+      JSON.stringify({
+        _aws: {
+          Timestamp: Date.now(),
+          CloudWatchMetrics: [
+            {
+              Namespace: 'TapApplication',
+              Dimensions: [['Environment']],
+              Metrics: [
+                {
+                  Name: 'ProcessedRequests',
+                  Unit: 'Count',
+                  Value: 1,
+                },
+              ],
+            },
+          ],
+        },
+        Environment: process.env.NODE_ENV,
+      })
+    );
 
     return {
       statusCode: 200,
@@ -103,4 +113,3 @@ export async function main(event: any, context: Context): Promise<APIGatewayProx
     throw error;
   }
 }
-
