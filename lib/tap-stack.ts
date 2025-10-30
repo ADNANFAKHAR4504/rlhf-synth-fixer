@@ -1,24 +1,25 @@
 /* eslint-disable quotes */
 /* eslint-disable @typescript-eslint/quotes */
 /* eslint-disable prettier/prettier */
-/**
-* tap-stack.ts
-*
-* This module defines the TapStack class, the main Pulumi ComponentResource for
-* the TAP (Test Automation Platform) project.
-*
-* It orchestrates the instantiation of other resource-specific components
-* and manages environment-specific configurations.
-*/
-import * as pulumi from "@pulumi/pulumi";
-import * as aws from "@pulumi/aws";
-import * as awsx from "@pulumi/awsx";
-import * as fs from "fs";
-import * as path from "path";
 
 /**
-* Configuration interface for environment-specific settings
-*/
+ * tap-stack.ts
+ *
+ * This module defines the TapStack class, the main Pulumi ComponentResource for
+ * the TAP (Test Automation Platform) project.
+ *
+ * It orchestrates the instantiation of other resource-specific components
+ * and manages environment-specific configurations.
+ */
+import * as pulumi from '@pulumi/pulumi';
+import * as aws from '@pulumi/aws';
+import * as awsx from '@pulumi/awsx';
+import * as fs from 'fs';
+import * as path from 'path';
+
+/**
+ * Configuration interface for environment-specific settings
+ */
 interface EnvironmentConfig {
   environmentSuffix: string;
   vpcCidr: string;
@@ -45,8 +46,8 @@ interface EnvironmentConfig {
 }
 
 /**
-* Stack outputs interface
-*/
+ * Stack outputs interface
+ */
 interface TapStackOutputs {
   vpcId: pulumi.Output<string>;
   vpcCidr: pulumi.Output<string>;
@@ -67,8 +68,49 @@ interface TapStackOutputs {
 }
 
 /**
-* Main TapStack class implementing multi-environment ECS infrastructure
-*/
+ * RDS cluster return type
+ */
+interface RdsClusterResources {
+  cluster: aws.rds.Cluster;
+  clusterInstance: aws.rds.ClusterInstance;
+  secret: pulumi.Output<aws.secretsmanager.GetSecretResult>;
+  kmsKey: aws.kms.Key;
+}
+
+/**
+ * ALB return type
+ */
+interface AlbResources {
+  loadBalancer: aws.lb.LoadBalancer;
+  targetGroup: aws.lb.TargetGroup;
+  httpListener: aws.lb.Listener;
+}
+
+/**
+ * ECS service return type
+ */
+interface EcsServiceResources {
+  service: aws.ecs.Service;
+  taskDefinition: aws.ecs.TaskDefinition;
+  logGroup: aws.cloudwatch.LogGroup;
+  executionRole: aws.iam.Role;
+  taskRole: aws.iam.Role;
+}
+
+/**
+ * CloudWatch resources return type
+ */
+interface CloudWatchResources {
+  dashboard: aws.cloudwatch.Dashboard;
+  alarmTopic: aws.sns.Topic;
+  ecsCpuAlarm: aws.cloudwatch.MetricAlarm;
+  albHealthAlarm: aws.cloudwatch.MetricAlarm;
+  rdsCpuAlarm: aws.cloudwatch.MetricAlarm;
+}
+
+/**
+ * Main TapStack class implementing multi-environment ECS infrastructure
+ */
 export class TapStack extends pulumi.ComponentResource {
   public readonly outputs: TapStackOutputs;
   private config: EnvironmentConfig;
@@ -80,7 +122,7 @@ export class TapStack extends pulumi.ComponentResource {
     args: { environmentSuffix: string },
     opts?: pulumi.ComponentResourceOptions
   ) {
-    super("custom:infrastructure:TapStack", name, {}, opts);
+    super('custom:infrastructure:TapStack', name, {}, opts);
 
     this.projectName = pulumi.getProject();
     this.stackName = pulumi.getStack();
@@ -119,8 +161,9 @@ export class TapStack extends pulumi.ComponentResource {
     const s3Bucket = this.createS3Bucket();
 
     // Skip Route53 for PR environments (example.com is reserved by AWS)
-    let route53: { zone: aws.route53.Zone; record: aws.route53.Record } | null = null;
-    const isPrEnvironment = this.config.environmentSuffix.startsWith("pr");
+    let route53: { zone: aws.route53.Zone; record: aws.route53.Record } | null =
+      null;
+    const isPrEnvironment = this.config.environmentSuffix.startsWith('pr');
 
     if (!isPrEnvironment) {
       // Only create Route53 for non-PR environments
@@ -128,12 +171,7 @@ export class TapStack extends pulumi.ComponentResource {
     }
 
     // Create CloudWatch dashboard and alarms
-    const cloudwatch = this.createCloudWatch(
-      ecsCluster,
-      ecsService,
-      alb,
-      rds
-    );
+    const cloudwatch = this.createCloudWatch(ecsCluster, ecsService, alb, rds);
 
     // Create VPC Peering connections if enabled
     const vpcPeering = this.createVpcPeering(vpc);
@@ -155,8 +193,12 @@ export class TapStack extends pulumi.ComponentResource {
       rdsPort: rds.cluster.port,
       rdsSecretArn: rds.secret.arn,
       s3BucketName: s3Bucket.bucket,
-      route53ZoneId: route53 ? route53.zone.zoneId : pulumi.output("N/A-PR-Environment"),
-      route53ZoneName: route53 ? route53.zone.name : pulumi.output(this.config.domain),
+      route53ZoneId: route53
+        ? route53.zone.zoneId
+        : pulumi.output('N/A-PR-Environment'),
+      route53ZoneName: route53
+        ? route53.zone.name
+        : pulumi.output(this.config.domain),
       cloudwatchDashboardArn: cloudwatch.dashboard.dashboardArn,
       publicSubnetIds: vpc.publicSubnetIds,
       privateSubnetIds: vpc.privateSubnetIds,
@@ -170,16 +212,16 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-  * Load environment-specific configuration with defaults
-  */
+   * Load environment-specific configuration with defaults
+   */
   private loadConfiguration(environmentSuffix: string): EnvironmentConfig {
     const config = new pulumi.Config();
 
     // Determine VPC CIDR based on environment
     const defaultVpcCidrs: Record<string, string> = {
-      dev: "10.1.0.0/16",
-      staging: "10.2.0.0/16",
-      prod: "10.3.0.0/16",
+      dev: '10.1.0.0/16',
+      staging: '10.2.0.0/16',
+      prod: '10.3.0.0/16',
     };
 
     // Determine ECS task count based on environment
@@ -204,16 +246,28 @@ export class TapStack extends pulumi.ComponentResource {
     };
 
     // Get config with fallbacks
-    const vpcCidr = config.get("vpcCidr") || defaultVpcCidrs[environmentSuffix] || "10.0.0.0/16";
-    const ecsTaskCount = config.getNumber("ecsTaskCount") || defaultTaskCounts[environmentSuffix] || 2;
-    const s3LogRetentionDays = config.getNumber("s3LogRetentionDays") || defaultLogRetention[environmentSuffix] || 30;
-    const cloudwatchLogRetentionDays = config.getNumber("cloudwatchLogRetentionDays") || defaultCloudWatchRetention[environmentSuffix] || 30;
+    const vpcCidr =
+      config.get('vpcCidr') ||
+      defaultVpcCidrs[environmentSuffix] ||
+      '10.0.0.0/16';
+    const ecsTaskCount =
+      config.getNumber('ecsTaskCount') ||
+      defaultTaskCounts[environmentSuffix] ||
+      2;
+    const s3LogRetentionDays =
+      config.getNumber('s3LogRetentionDays') ||
+      defaultLogRetention[environmentSuffix] ||
+      30;
+    const cloudwatchLogRetentionDays =
+      config.getNumber('cloudwatchLogRetentionDays') ||
+      defaultCloudWatchRetention[environmentSuffix] ||
+      30;
 
     // For PR environments or testing, use a non-reserved domain or skip Route53
-    let domain = config.get("domain");
+    let domain = config.get('domain');
     if (!domain) {
       // Check if it's a PR environment
-      if (environmentSuffix.startsWith("pr")) {
+      if (environmentSuffix.startsWith('pr')) {
         // Use internal domain for PR environments (Route53 will be skipped)
         domain = `${environmentSuffix}.internal.local`;
       } else {
@@ -223,12 +277,15 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Determine RDS instance class - db.t3.micro is NOT supported for Aurora PostgreSQL 14.6
     // Minimum supported instance for Aurora PostgreSQL is db.t3.medium
-    let rdsInstanceClass = config.get("rdsInstanceClass");
+    let rdsInstanceClass = config.get('rdsInstanceClass');
     if (!rdsInstanceClass) {
       // Use smaller instance for PR/dev, larger for prod
-      rdsInstanceClass = environmentSuffix === "prod" ? "db.r5.large" : 
-                        environmentSuffix === "staging" ? "db.t3.medium" : 
-                        "db.t3.medium"; // Changed from db.t3.micro to db.t3.medium (minimum for Aurora)
+      rdsInstanceClass =
+        environmentSuffix === 'prod'
+          ? 'db.r5.large'
+          : environmentSuffix === 'staging'
+            ? 'db.t3.medium'
+            : 'db.t3.medium'; // Changed from db.t3.micro to db.t3.medium (minimum for Aurora)
     }
 
     return {
@@ -237,31 +294,49 @@ export class TapStack extends pulumi.ComponentResource {
       ecsTaskCount,
       rdsInstanceClass,
       s3LogRetentionDays,
-      availabilityZones: config.getObject<string[]>("availabilityZones") || ["us-east-1a", "us-east-1b", "us-east-1c"],
+      availabilityZones: config.getObject<string[]>('availabilityZones') || [
+        'us-east-1a',
+        'us-east-1b',
+        'us-east-1c',
+      ],
       tags: {
         Environment: environmentSuffix,
-        Team: config.get("team") || "platform-team",
-        CostCenter: config.get("costCenter") || "eng-12345",
+        Team: config.get('team') || 'platform-team',
+        CostCenter: config.get('costCenter') || 'eng-12345',
       },
       domain,
-      ecsTaskCpu: config.get("ecsTaskCpu") || (environmentSuffix === "prod" ? "1024" : environmentSuffix === "staging" ? "512" : "256"),
-      ecsTaskMemory: config.get("ecsTaskMemory") || (environmentSuffix === "prod" ? "2048" : environmentSuffix === "staging" ? "1024" : "512"),
-      rdsAllocatedStorage: config.getNumber("rdsAllocatedStorage") || (environmentSuffix === "prod" ? 100 : 20),
-      enableVpcPeering: config.getBoolean("enableVpcPeering") || false,
-      peeringVpcIds: config.getObject<string[]>("peeringVpcIds"),
+      ecsTaskCpu:
+        config.get('ecsTaskCpu') ||
+        (environmentSuffix === 'prod'
+          ? '1024'
+          : environmentSuffix === 'staging'
+            ? '512'
+            : '256'),
+      ecsTaskMemory:
+        config.get('ecsTaskMemory') ||
+        (environmentSuffix === 'prod'
+          ? '2048'
+          : environmentSuffix === 'staging'
+            ? '1024'
+            : '512'),
+      rdsAllocatedStorage:
+        config.getNumber('rdsAllocatedStorage') ||
+        (environmentSuffix === 'prod' ? 100 : 20),
+      enableVpcPeering: config.getBoolean('enableVpcPeering') || false,
+      peeringVpcIds: config.getObject<string[]>('peeringVpcIds'),
       cloudwatchLogRetentionDays,
-      albHealthCheckPath: config.get("albHealthCheckPath") || "/health",
-      albHealthCheckInterval: config.getNumber("albHealthCheckInterval") || 30,
-      containerPort: config.getNumber("containerPort") || 8080,
-      containerImage: config.get("containerImage") || "nginx:latest",
+      albHealthCheckPath: config.get('albHealthCheckPath') || '/health',
+      albHealthCheckInterval: config.getNumber('albHealthCheckInterval') || 30,
+      containerPort: config.getNumber('containerPort') || 8080,
+      containerImage: config.get('containerImage') || 'nginx:latest',
     };
   }
 
   /**
-  * Create VPC with public and private subnets
-  */
+   * Create VPC with public and private subnets
+   */
   private createVpc() {
-    const vpcName = this.getResourceName("vpc");
+    const vpcName = this.getResourceName('vpc');
 
     const vpc = new awsx.ec2.Vpc(
       vpcName,
@@ -271,12 +346,12 @@ export class TapStack extends pulumi.ComponentResource {
         subnetSpecs: [
           {
             type: awsx.ec2.SubnetType.Public,
-            name: this.getResourceName("public-subnet"),
+            name: this.getResourceName('public-subnet'),
             cidrMask: 24,
           },
           {
             type: awsx.ec2.SubnetType.Private,
-            name: this.getResourceName("private-subnet"),
+            name: this.getResourceName('private-subnet'),
             cidrMask: 24,
           },
         ],
@@ -295,43 +370,43 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-  * Create security groups for ALB, ECS, and RDS
-  */
+   * Create security groups for ALB, ECS, and RDS
+   */
   private createSecurityGroups(vpc: awsx.ec2.Vpc) {
     // ALB Security Group
     const albSecurityGroup = new aws.ec2.SecurityGroup(
-      this.getResourceName("alb-sg"),
+      this.getResourceName('alb-sg'),
       {
         vpcId: vpc.vpcId,
-        description: "Security group for Application Load Balancer",
+        description: 'Security group for Application Load Balancer',
         ingress: [
           {
-            protocol: "tcp",
+            protocol: 'tcp',
             fromPort: 80,
             toPort: 80,
-            cidrBlocks: ["0.0.0.0/0"],
-            description: "Allow HTTP traffic",
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'Allow HTTP traffic',
           },
           {
-            protocol: "tcp",
+            protocol: 'tcp',
             fromPort: 443,
             toPort: 443,
-            cidrBlocks: ["0.0.0.0/0"],
-            description: "Allow HTTPS traffic",
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'Allow HTTPS traffic',
           },
         ],
         egress: [
           {
-            protocol: "-1",
+            protocol: '-1',
             fromPort: 0,
             toPort: 0,
-            cidrBlocks: ["0.0.0.0/0"],
-            description: "Allow all outbound traffic",
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'Allow all outbound traffic',
           },
         ],
         tags: {
           ...this.config.tags,
-          Name: this.getResourceName("alb-sg"),
+          Name: this.getResourceName('alb-sg'),
         },
       },
       { parent: this }
@@ -339,22 +414,22 @@ export class TapStack extends pulumi.ComponentResource {
 
     // ECS Security Group
     const ecsSecurityGroup = new aws.ec2.SecurityGroup(
-      this.getResourceName("ecs-sg"),
+      this.getResourceName('ecs-sg'),
       {
         vpcId: vpc.vpcId,
-        description: "Security group for ECS tasks",
+        description: 'Security group for ECS tasks',
         egress: [
           {
-            protocol: "-1",
+            protocol: '-1',
             fromPort: 0,
             toPort: 0,
-            cidrBlocks: ["0.0.0.0/0"],
-            description: "Allow all outbound traffic",
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'Allow all outbound traffic',
           },
         ],
         tags: {
           ...this.config.tags,
-          Name: this.getResourceName("ecs-sg"),
+          Name: this.getResourceName('ecs-sg'),
         },
       },
       { parent: this }
@@ -362,37 +437,37 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Add ingress rule to allow traffic from ALB to ECS
     new aws.ec2.SecurityGroupRule(
-      this.getResourceName("ecs-alb-ingress"),
+      this.getResourceName('ecs-alb-ingress'),
       {
-        type: "ingress",
+        type: 'ingress',
         fromPort: this.config.containerPort,
         toPort: this.config.containerPort,
-        protocol: "tcp",
+        protocol: 'tcp',
         sourceSecurityGroupId: albSecurityGroup.id,
         securityGroupId: ecsSecurityGroup.id,
-        description: "Allow traffic from ALB",
+        description: 'Allow traffic from ALB',
       },
       { parent: this }
     );
 
     // RDS Security Group
     const rdsSecurityGroup = new aws.ec2.SecurityGroup(
-      this.getResourceName("rds-sg"),
+      this.getResourceName('rds-sg'),
       {
         vpcId: vpc.vpcId,
-        description: "Security group for RDS Aurora PostgreSQL",
+        description: 'Security group for RDS Aurora PostgreSQL',
         egress: [
           {
-            protocol: "-1",
+            protocol: '-1',
             fromPort: 0,
             toPort: 0,
-            cidrBlocks: ["0.0.0.0/0"],
-            description: "Allow all outbound traffic",
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'Allow all outbound traffic',
           },
         ],
         tags: {
           ...this.config.tags,
-          Name: this.getResourceName("rds-sg"),
+          Name: this.getResourceName('rds-sg'),
         },
       },
       { parent: this }
@@ -400,15 +475,15 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Add ingress rule to allow traffic from ECS to RDS
     new aws.ec2.SecurityGroupRule(
-      this.getResourceName("rds-ecs-ingress"),
+      this.getResourceName('rds-ecs-ingress'),
       {
-        type: "ingress",
+        type: 'ingress',
         fromPort: 5432,
         toPort: 5432,
-        protocol: "tcp",
+        protocol: 'tcp',
         sourceSecurityGroupId: ecsSecurityGroup.id,
         securityGroupId: rdsSecurityGroup.id,
-        description: "Allow PostgreSQL traffic from ECS",
+        description: 'Allow PostgreSQL traffic from ECS',
       },
       { parent: this }
     );
@@ -417,21 +492,21 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-  * Create RDS Aurora PostgreSQL cluster with Secrets Manager
-  */
+   * Create RDS Aurora PostgreSQL cluster with Secrets Manager
+   */
   private createRdsCluster(
     vpc: awsx.ec2.Vpc,
     securityGroup: aws.ec2.SecurityGroup
-  ) {
+  ): RdsClusterResources {
     // Create DB subnet group
     const dbSubnetGroup = new aws.rds.SubnetGroup(
-      this.getResourceName("db-subnet-group"),
+      this.getResourceName('db-subnet-group'),
       {
-        name: this.getAwsCompliantName("db-subnet-group"),
+        name: this.getAwsCompliantName('db-subnet-group'),
         subnetIds: vpc.privateSubnetIds,
         tags: {
           ...this.config.tags,
-          Name: this.getResourceName("db-subnet-group"),
+          Name: this.getResourceName('db-subnet-group'),
         },
       },
       { parent: this }
@@ -439,14 +514,14 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Create RDS cluster parameter group
     const parameterGroup = new aws.rds.ClusterParameterGroup(
-      this.getResourceName("db-param-group"),
+      this.getResourceName('db-param-group'),
       {
-        name: this.getAwsCompliantName("db-param-group"),
-        family: "aurora-postgresql14",
-        description: "RDS cluster parameter group for Aurora PostgreSQL",
+        name: this.getAwsCompliantName('db-param-group'),
+        family: 'aurora-postgresql14',
+        description: 'RDS cluster parameter group for Aurora PostgreSQL',
         tags: {
           ...this.config.tags,
-          Name: this.getResourceName("db-param-group"),
+          Name: this.getResourceName('db-param-group'),
         },
       },
       { parent: this }
@@ -454,12 +529,12 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Create KMS key for encryption
     const kmsKey = new aws.kms.Key(
-      this.getResourceName("rds-kms"),
+      this.getResourceName('rds-kms'),
       {
-        description: "KMS key for RDS encryption",
+        description: 'KMS key for RDS encryption',
         tags: {
           ...this.config.tags,
-          Name: this.getResourceName("rds-kms"),
+          Name: this.getResourceName('rds-kms'),
         },
       },
       { parent: this }
@@ -467,13 +542,13 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Create RDS Aurora cluster with Secrets Manager integration
     const cluster = new aws.rds.Cluster(
-      this.getResourceName("aurora-cluster"),
+      this.getResourceName('aurora-cluster'),
       {
-        clusterIdentifier: this.getAwsCompliantName("aurora-cluster"),
-        engine: "aurora-postgresql",
-        engineVersion: "14.6",
-        databaseName: "tradingdb",
-        masterUsername: "dbadmin",
+        clusterIdentifier: this.getAwsCompliantName('aurora-cluster'),
+        engine: 'aurora-postgresql',
+        engineVersion: '14.6',
+        databaseName: 'tradingdb',
+        masterUsername: 'dbadmin',
         manageMasterUserPassword: true,
         masterUserSecretKmsKeyId: kmsKey.keyId,
         dbSubnetGroupName: dbSubnetGroup.name,
@@ -481,17 +556,18 @@ export class TapStack extends pulumi.ComponentResource {
         vpcSecurityGroupIds: [securityGroup.id],
         storageEncrypted: true,
         kmsKeyId: kmsKey.arn,
-        backupRetentionPeriod: this.config.environmentSuffix === "prod" ? 30 : 7,
-        preferredBackupWindow: "03:00-04:00",
-        preferredMaintenanceWindow: "mon:04:00-mon:05:00",
-        skipFinalSnapshot: this.config.environmentSuffix !== "prod",
+        backupRetentionPeriod:
+          this.config.environmentSuffix === 'prod' ? 30 : 7,
+        preferredBackupWindow: '03:00-04:00',
+        preferredMaintenanceWindow: 'mon:04:00-mon:05:00',
+        skipFinalSnapshot: this.config.environmentSuffix !== 'prod',
         finalSnapshotIdentifier:
-          this.config.environmentSuffix === "prod"
-            ? this.getAwsCompliantName("aurora-final-snapshot")
+          this.config.environmentSuffix === 'prod'
+            ? this.getAwsCompliantName('aurora-final-snapshot')
             : undefined,
         tags: {
           ...this.config.tags,
-          Name: this.getResourceName("aurora-cluster"),
+          Name: this.getResourceName('aurora-cluster'),
         },
       },
       { parent: this }
@@ -499,16 +575,16 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Create RDS cluster instance
     const clusterInstance = new aws.rds.ClusterInstance(
-      this.getResourceName("aurora-instance"),
+      this.getResourceName('aurora-instance'),
       {
         clusterIdentifier: cluster.id,
         instanceClass: this.config.rdsInstanceClass,
-        engine: "aurora-postgresql",
-        engineVersion: "14.6",
+        engine: 'aurora-postgresql',
+        engineVersion: '14.6',
         publiclyAccessible: false,
         tags: {
           ...this.config.tags,
-          Name: this.getResourceName("aurora-instance"),
+          Name: this.getResourceName('aurora-instance'),
         },
       },
       { parent: this, dependsOn: [cluster] }
@@ -516,7 +592,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Get the secret created by RDS
     const secretArn = cluster.masterUserSecrets[0].secretArn;
-    const secret = secretArn.apply((arn) =>
+    const secret = secretArn.apply(arn =>
       aws.secretsmanager.getSecretOutput({
         arn: arn,
       })
@@ -526,22 +602,22 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-  * Create ECS Fargate cluster
-  */
+   * Create ECS Fargate cluster
+   */
   private createEcsCluster() {
     const cluster = new aws.ecs.Cluster(
-      this.getResourceName("ecs-cluster"),
+      this.getResourceName('ecs-cluster'),
       {
-        name: this.getResourceName("ecs-cluster"),
+        name: this.getResourceName('ecs-cluster'),
         settings: [
           {
-            name: "containerInsights",
-            value: "enabled",
+            name: 'containerInsights',
+            value: 'enabled',
           },
         ],
         tags: {
           ...this.config.tags,
-          Name: this.getResourceName("ecs-cluster"),
+          Name: this.getResourceName('ecs-cluster'),
         },
       },
       { parent: this }
@@ -551,34 +627,34 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-  * Create Application Load Balancer - simplified to use only awsx component
-  */
+   * Create Application Load Balancer - simplified to use only awsx component
+   */
   private createApplicationLoadBalancer(
     vpc: awsx.ec2.Vpc,
     securityGroup: aws.ec2.SecurityGroup
-  ) {
+  ): AlbResources {
     // Create target group for ECS service
     const targetGroup = new aws.lb.TargetGroup(
-      this.getResourceName("tg"),
+      this.getResourceName('tg'),
       {
         vpcId: vpc.vpcId,
         port: this.config.containerPort,
-        protocol: "HTTP",
-        targetType: "ip",
+        protocol: 'HTTP',
+        targetType: 'ip',
         healthCheck: {
           enabled: true,
           path: this.config.albHealthCheckPath,
-          protocol: "HTTP",
+          protocol: 'HTTP',
           interval: this.config.albHealthCheckInterval,
           timeout: 5,
           healthyThreshold: 2,
           unhealthyThreshold: 3,
-          matcher: "200",
+          matcher: '200',
         },
         deregistrationDelay: 30,
         tags: {
           ...this.config.tags,
-          Name: this.getResourceName("tg"),
+          Name: this.getResourceName('tg'),
         },
       },
       { parent: this }
@@ -586,10 +662,10 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Create ALB using raw AWS resources instead of awsx to avoid conflicts
     const loadBalancer = new aws.lb.LoadBalancer(
-      this.getResourceName("alb"),
+      this.getResourceName('alb'),
       {
-        name: this.getResourceName("alb"),
-        loadBalancerType: "application",
+        name: this.getResourceName('alb'),
+        loadBalancerType: 'application',
         subnets: vpc.publicSubnetIds,
         securityGroups: [securityGroup.id],
         enableDeletionProtection: false,
@@ -597,7 +673,7 @@ export class TapStack extends pulumi.ComponentResource {
         enableCrossZoneLoadBalancing: true,
         tags: {
           ...this.config.tags,
-          Name: this.getResourceName("alb"),
+          Name: this.getResourceName('alb'),
         },
       },
       { parent: this }
@@ -605,20 +681,20 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Create HTTP listener
     const httpListener = new aws.lb.Listener(
-      this.getResourceName("http-listener"),
+      this.getResourceName('http-listener'),
       {
         loadBalancerArn: loadBalancer.arn,
         port: 80,
-        protocol: "HTTP",
+        protocol: 'HTTP',
         defaultActions: [
           {
-            type: "forward",
+            type: 'forward',
             targetGroupArn: targetGroup.arn,
           },
         ],
         tags: {
           ...this.config.tags,
-          Name: this.getResourceName("http-listener"),
+          Name: this.getResourceName('http-listener'),
         },
       },
       { parent: this }
@@ -628,27 +704,27 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-  * Create ECS Fargate service
-  */
+   * Create ECS Fargate service
+   */
   private createEcsService(
     cluster: aws.ecs.Cluster,
     vpc: awsx.ec2.Vpc,
     securityGroup: aws.ec2.SecurityGroup,
     targetGroup: aws.lb.TargetGroup,
-    rds: any
-  ) {
+    rds: RdsClusterResources
+  ): EcsServiceResources {
     // Create CloudWatch log group with AWS-compliant name (no special characters except hyphen)
-    const logGroupName = `/ecs/${this.getAwsCompliantName("service")}`;
-    
+    const logGroupName = `/ecs/${this.getAwsCompliantName('service')}`;
+
     const logGroup = new aws.cloudwatch.LogGroup(
-      this.getResourceName("ecs-logs"),
+      this.getResourceName('ecs-logs'),
       {
         name: logGroupName,
         retentionInDays: this.config.cloudwatchLogRetentionDays,
         kmsKeyId: undefined, // AWS-managed encryption
         tags: {
           ...this.config.tags,
-          Name: this.getResourceName("ecs-logs"),
+          Name: this.getResourceName('ecs-logs'),
         },
       },
       { parent: this }
@@ -656,23 +732,23 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Create IAM role for ECS task execution
     const executionRole = new aws.iam.Role(
-      this.getResourceName("ecs-execution-role"),
+      this.getResourceName('ecs-execution-role'),
       {
         assumeRolePolicy: JSON.stringify({
-          Version: "2012-10-17",
+          Version: '2012-10-17',
           Statement: [
             {
-              Effect: "Allow",
+              Effect: 'Allow',
               Principal: {
-                Service: "ecs-tasks.amazonaws.com",
+                Service: 'ecs-tasks.amazonaws.com',
               },
-              Action: "sts:AssumeRole",
+              Action: 'sts:AssumeRole',
             },
           ],
         }),
         tags: {
           ...this.config.tags,
-          Name: this.getResourceName("ecs-execution-role"),
+          Name: this.getResourceName('ecs-execution-role'),
         },
       },
       { parent: this }
@@ -680,76 +756,79 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Attach ECS task execution policy
     new aws.iam.RolePolicyAttachment(
-      this.getResourceName("ecs-execution-policy"),
+      this.getResourceName('ecs-execution-policy'),
       {
         role: executionRole.name,
-        policyArn: "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
+        policyArn:
+          'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy',
       },
       { parent: this }
     );
 
     // Create IAM role for ECS task
     const taskRole = new aws.iam.Role(
-      this.getResourceName("ecs-task-role"),
+      this.getResourceName('ecs-task-role'),
       {
         assumeRolePolicy: JSON.stringify({
-          Version: "2012-10-17",
+          Version: '2012-10-17',
           Statement: [
             {
-              Effect: "Allow",
+              Effect: 'Allow',
               Principal: {
-                Service: "ecs-tasks.amazonaws.com",
+                Service: 'ecs-tasks.amazonaws.com',
               },
-              Action: "sts:AssumeRole",
+              Action: 'sts:AssumeRole',
             },
           ],
         }),
         tags: {
           ...this.config.tags,
-          Name: this.getResourceName("ecs-task-role"),
+          Name: this.getResourceName('ecs-task-role'),
         },
       },
       { parent: this }
     );
 
     // Attach policy for Secrets Manager access
-    const secretsPolicy = new aws.iam.RolePolicy(
-      this.getResourceName("ecs-secrets-policy"),
+    new aws.iam.RolePolicy(
+      this.getResourceName('ecs-secrets-policy'),
       {
         role: taskRole.id,
-        policy: pulumi.all([rds.secret.arn, rds.kmsKey.arn]).apply(([secretArn, kmsArn]) =>
-          JSON.stringify({
-            Version: "2012-10-17",
-            Statement: [
-              {
-                Effect: "Allow",
-                Action: [
-                  "secretsmanager:GetSecretValue",
-                  "secretsmanager:DescribeSecret",
-                ],
-                Resource: secretArn,
-              },
-              {
-                Effect: "Allow",
-                Action: ["kms:Decrypt"],
-                Resource: kmsArn,
-              },
-            ],
-          })
-        ),
+        policy: pulumi
+          .all([rds.secret.arn, rds.kmsKey.arn])
+          .apply(([secretArn, kmsArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'secretsmanager:GetSecretValue',
+                    'secretsmanager:DescribeSecret',
+                  ],
+                  Resource: secretArn,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['kms:Decrypt'],
+                  Resource: kmsArn,
+                },
+              ],
+            })
+          ),
       },
       { parent: this }
     );
 
     // Create ECS task definition
     const taskDefinition = new aws.ecs.TaskDefinition(
-      this.getResourceName("task-def"),
+      this.getResourceName('task-def'),
       {
-        family: this.getResourceName("task"),
+        family: this.getResourceName('task'),
         cpu: this.config.ecsTaskCpu,
         memory: this.config.ecsTaskMemory,
-        networkMode: "awsvpc",
-        requiresCompatibilities: ["FARGATE"],
+        networkMode: 'awsvpc',
+        requiresCompatibilities: ['FARGATE'],
         executionRoleArn: executionRole.arn,
         taskRoleArn: taskRole.arn,
         containerDefinitions: pulumi
@@ -757,7 +836,7 @@ export class TapStack extends pulumi.ComponentResource {
           .apply(([endpoint, secretArn, logGroupName]) =>
             JSON.stringify([
               {
-                name: "app",
+                name: 'app',
                 image: this.config.containerImage,
                 cpu: parseInt(this.config.ecsTaskCpu),
                 memory: parseInt(this.config.ecsTaskMemory),
@@ -765,39 +844,39 @@ export class TapStack extends pulumi.ComponentResource {
                 portMappings: [
                   {
                     containerPort: this.config.containerPort,
-                    protocol: "tcp",
+                    protocol: 'tcp',
                   },
                 ],
                 environment: [
                   {
-                    name: "DB_HOST",
+                    name: 'DB_HOST',
                     value: endpoint,
                   },
                   {
-                    name: "DB_PORT",
-                    value: "5432",
+                    name: 'DB_PORT',
+                    value: '5432',
                   },
                   {
-                    name: "DB_NAME",
-                    value: "tradingdb",
+                    name: 'DB_NAME',
+                    value: 'tradingdb',
                   },
                   {
-                    name: "ENVIRONMENT",
+                    name: 'ENVIRONMENT',
                     value: this.config.environmentSuffix,
                   },
                 ],
                 secrets: [
                   {
-                    name: "DB_SECRET_ARN",
+                    name: 'DB_SECRET_ARN',
                     valueFrom: secretArn,
                   },
                 ],
                 logConfiguration: {
-                  logDriver: "awslogs",
+                  logDriver: 'awslogs',
                   options: {
-                    "awslogs-group": logGroupName,
-                    "awslogs-region": aws.config.region!,
-                    "awslogs-stream-prefix": "ecs",
+                    'awslogs-group': logGroupName,
+                    'awslogs-region': aws.config.region!,
+                    'awslogs-stream-prefix': 'ecs',
                   },
                 },
               },
@@ -805,7 +884,7 @@ export class TapStack extends pulumi.ComponentResource {
           ),
         tags: {
           ...this.config.tags,
-          Name: this.getResourceName("task-def"),
+          Name: this.getResourceName('task-def'),
         },
       },
       { parent: this, dependsOn: [executionRole, taskRole] }
@@ -813,13 +892,13 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Create ECS service
     const service = new aws.ecs.Service(
-      this.getResourceName("service"),
+      this.getResourceName('service'),
       {
-        name: this.getResourceName("service"),
+        name: this.getResourceName('service'),
         cluster: cluster.arn,
         taskDefinition: taskDefinition.arn,
         desiredCount: this.config.ecsTaskCount,
-        launchType: "FARGATE",
+        launchType: 'FARGATE',
         networkConfiguration: {
           subnets: vpc.privateSubnetIds,
           securityGroups: [securityGroup.id],
@@ -828,14 +907,14 @@ export class TapStack extends pulumi.ComponentResource {
         loadBalancers: [
           {
             targetGroupArn: targetGroup.arn,
-            containerName: "app",
+            containerName: 'app',
             containerPort: this.config.containerPort,
           },
         ],
         healthCheckGracePeriodSeconds: 60,
         tags: {
           ...this.config.tags,
-          Name: this.getResourceName("service"),
+          Name: this.getResourceName('service'),
         },
       },
       {
@@ -848,16 +927,16 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-  * Create S3 bucket with lifecycle policies
-  */
+   * Create S3 bucket with lifecycle policies
+   */
   private createS3Bucket() {
     const bucket = new aws.s3.Bucket(
-      this.getResourceName("logs"),
+      this.getResourceName('logs'),
       {
-        bucket: this.getResourceName("logs").toLowerCase(),
+        bucket: this.getResourceName('logs').toLowerCase(),
         tags: {
           ...this.config.tags,
-          Name: this.getResourceName("logs"),
+          Name: this.getResourceName('logs'),
         },
       },
       { parent: this }
@@ -865,11 +944,11 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Enable versioning
     new aws.s3.BucketVersioning(
-      this.getResourceName("logs-versioning"),
+      this.getResourceName('logs-versioning'),
       {
         bucket: bucket.id,
         versioningConfiguration: {
-          status: "Enabled",
+          status: 'Enabled',
         },
       },
       { parent: this }
@@ -877,25 +956,28 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Configure lifecycle rules with AWS minimum 30-day requirement for STANDARD_IA
     new aws.s3.BucketLifecycleConfiguration(
-      this.getResourceName("logs-lifecycle"),
+      this.getResourceName('logs-lifecycle'),
       {
         bucket: bucket.id,
         rules: [
           {
-            id: "expire-logs",
-            status: "Enabled",
+            id: 'expire-logs',
+            status: 'Enabled',
             expiration: {
               days: this.config.s3LogRetentionDays,
             },
           },
           {
-            id: "transition-to-ia",
-            status: "Enabled",
+            id: 'transition-to-ia',
+            status: 'Enabled',
             transitions: [
               {
                 // AWS requires minimum 30 days for STANDARD_IA transition
-                days: Math.max(30, Math.floor(this.config.s3LogRetentionDays / 2)),
-                storageClass: "STANDARD_IA",
+                days: Math.max(
+                  30,
+                  Math.floor(this.config.s3LogRetentionDays / 2)
+                ),
+                storageClass: 'STANDARD_IA',
               },
             ],
           },
@@ -906,13 +988,13 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Enable server-side encryption
     new aws.s3.BucketServerSideEncryptionConfiguration(
-      this.getResourceName("logs-encryption"),
+      this.getResourceName('logs-encryption'),
       {
         bucket: bucket.id,
         rules: [
           {
             applyServerSideEncryptionByDefault: {
-              sseAlgorithm: "AES256",
+              sseAlgorithm: 'AES256',
             },
             bucketKeyEnabled: true,
           },
@@ -923,7 +1005,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Block public access
     new aws.s3.BucketPublicAccessBlock(
-      this.getResourceName("logs-public-block"),
+      this.getResourceName('logs-public-block'),
       {
         bucket: bucket.id,
         blockPublicAcls: true,
@@ -938,28 +1020,28 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-  * Create Route53 hosted zone and records
-  */
-  private createRoute53(alb: any) {
+   * Create Route53 hosted zone and records
+   */
+  private createRoute53(alb: AlbResources) {
     const zone = new aws.route53.Zone(
-      this.getResourceName("zone"),
+      this.getResourceName('zone'),
       {
         name: this.config.domain,
         comment: `Hosted zone for ${this.config.environmentSuffix} environment`,
         tags: {
           ...this.config.tags,
-          Name: this.getResourceName("zone"),
+          Name: this.getResourceName('zone'),
         },
       },
       { parent: this }
     );
 
     const record = new aws.route53.Record(
-      this.getResourceName("a-record"),
+      this.getResourceName('a-record'),
       {
         zoneId: zone.zoneId,
         name: this.config.domain,
-        type: "A",
+        type: 'A',
         aliases: [
           {
             name: alb.loadBalancer.dnsName,
@@ -975,88 +1057,87 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-  * Create CloudWatch dashboard and alarms
-  */
+   * Create CloudWatch dashboard and alarms
+   */
   private createCloudWatch(
     cluster: aws.ecs.Cluster,
-    service: any,
-    alb: any,
-    rds: any
-  ) {
+    service: EcsServiceResources,
+    alb: AlbResources,
+    rds: RdsClusterResources
+  ): CloudWatchResources {
     // Create CloudWatch dashboard
     const dashboard = new aws.cloudwatch.Dashboard(
-      this.getResourceName("dashboard"),
+      this.getResourceName('dashboard'),
       {
-        dashboardName: this.getResourceName("dashboard"),
+        dashboardName: this.getResourceName('dashboard'),
         dashboardBody: pulumi
           .all([
             cluster.name,
             service.service.name,
-            alb.targetGroup.arn,
             rds.cluster.id,
             alb.loadBalancer.arnSuffix,
           ])
-          .apply(([clusterName, serviceName, tgArn, rdsId, lbArnSuffix]) =>
+          .apply(([clusterName, serviceName, rdsId, lbArnSuffix]) =>
             JSON.stringify({
               widgets: [
                 {
-                  type: "metric",
+                  type: 'metric',
                   properties: {
                     metrics: [
                       [
-                        "AWS/ECS",
-                        "CPUUtilization",
-                        "ServiceName",
+                        'AWS/ECS',
+                        'CPUUtilization',
+                        'ServiceName',
                         serviceName,
-                        "ClusterName",
+                        'ClusterName',
                         clusterName,
                       ],
-                      [".", "MemoryUtilization", ".", ".", ".", "."],
+                      ['.', 'MemoryUtilization', '.', '.', '.', '.'],
                     ],
                     period: 300,
-                    stat: "Average",
+                    stat: 'Average',
                     region: aws.config.region!,
-                    title: "ECS Task Metrics",
+                    title: 'ECS Task Metrics',
                   },
                 },
                 {
-                  type: "metric",
+                  type: 'metric',
                   properties: {
                     metrics: [
                       [
-                        "AWS/ApplicationELB",
-                        "TargetResponseTime",
-                        "LoadBalancer",
+                        'AWS/ApplicationELB',
+                        'TargetResponseTime',
+                        'LoadBalancer',
                         lbArnSuffix,
                       ],
-                      [".", "RequestCount", ".", "."],
-                      [".", "HTTPCode_Target_2XX_Count", ".", "."],
-                      [".", "HTTPCode_Target_4XX_Count", ".", "."],
-                      [".", "HTTPCode_Target_5XX_Count", ".", "."],
+                      ['.', 'RequestCount', '.', '.'],
+                      ['.', 'HTTPCode_Target_2XX_Count', '.', '.'],
+                      ['.', 'HTTPCode_Target_4XX_Count', '.', '.'],
+                      ['.', 'HTTPCode_Target_5XX_Count', '.', '.'],
                     ],
                     period: 300,
-                    stat: "Sum",
+                    stat: 'Sum',
                     region: aws.config.region!,
-                    title: "ALB Metrics",
+                    title: 'ALB Metrics',
                   },
                 },
                 {
-                  type: "metric",
+                  type: 'metric',
                   properties: {
                     metrics: [
                       [
-                        "AWS/RDS",
-                        "CPUUtilization",
-                        "DBClusterIdentifier",
+                        'AWS/RDS',
+                        'CPUUtilization',
+                        'DBClusterIdentifier',
                         rdsId,
                       ],
-                      [".", "DatabaseConnections", ".", "."],
-                      [".", "FreeableMemory", ".", "."],
+                      ['.', 'DatabaseConnections', '.', '.'],
+                      ['.', 'FreeableMemory', '.', '.'],
                     ],
                     period: 300,
-                    stat: "Average",
+                    stat: 'Average',
                     region: aws.config.region!,
-                    title: "RDS Metrics",
+                    title: 'RDS Metrics',
                   },
                 },
               ],
@@ -1068,12 +1149,12 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Create SNS topic for alarms
     const alarmTopic = new aws.sns.Topic(
-      this.getResourceName("alarm-topic"),
+      this.getResourceName('alarm-topic'),
       {
-        name: this.getResourceName("alarm-topic"),
+        name: this.getResourceName('alarm-topic'),
         tags: {
           ...this.config.tags,
-          Name: this.getResourceName("alarm-topic"),
+          Name: this.getResourceName('alarm-topic'),
         },
       },
       { parent: this }
@@ -1081,17 +1162,17 @@ export class TapStack extends pulumi.ComponentResource {
 
     // ECS CPU alarm
     const ecsCpuAlarm = new aws.cloudwatch.MetricAlarm(
-      this.getResourceName("ecs-cpu-alarm"),
+      this.getResourceName('ecs-cpu-alarm'),
       {
-        name: this.getResourceName("ecs-cpu-alarm"),
-        comparisonOperator: "GreaterThanThreshold",
+        name: this.getResourceName('ecs-cpu-alarm'),
+        comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 2,
-        metricName: "CPUUtilization",
-        namespace: "AWS/ECS",
+        metricName: 'CPUUtilization',
+        namespace: 'AWS/ECS',
         period: 300,
-        statistic: "Average",
-        threshold: this.config.environmentSuffix === "prod" ? 70 : 80,
-        alarmDescription: "ECS CPU utilization is too high",
+        statistic: 'Average',
+        threshold: this.config.environmentSuffix === 'prod' ? 70 : 80,
+        alarmDescription: 'ECS CPU utilization is too high',
         dimensions: {
           ClusterName: cluster.name,
           ServiceName: service.service.name,
@@ -1099,7 +1180,7 @@ export class TapStack extends pulumi.ComponentResource {
         alarmActions: [alarmTopic.arn],
         tags: {
           ...this.config.tags,
-          Name: this.getResourceName("ecs-cpu-alarm"),
+          Name: this.getResourceName('ecs-cpu-alarm'),
         },
       },
       { parent: this }
@@ -1107,17 +1188,17 @@ export class TapStack extends pulumi.ComponentResource {
 
     // ALB target health alarm
     const albHealthAlarm = new aws.cloudwatch.MetricAlarm(
-      this.getResourceName("alb-health-alarm"),
+      this.getResourceName('alb-health-alarm'),
       {
-        name: this.getResourceName("alb-health-alarm"),
-        comparisonOperator: "LessThanThreshold",
+        name: this.getResourceName('alb-health-alarm'),
+        comparisonOperator: 'LessThanThreshold',
         evaluationPeriods: 2,
-        metricName: "HealthyHostCount",
-        namespace: "AWS/ApplicationELB",
+        metricName: 'HealthyHostCount',
+        namespace: 'AWS/ApplicationELB',
         period: 300,
-        statistic: "Average",
+        statistic: 'Average',
         threshold: 1,
-        alarmDescription: "ALB has no healthy targets",
+        alarmDescription: 'ALB has no healthy targets',
         dimensions: {
           TargetGroup: alb.targetGroup.arnSuffix,
           LoadBalancer: alb.loadBalancer.arnSuffix,
@@ -1125,7 +1206,7 @@ export class TapStack extends pulumi.ComponentResource {
         alarmActions: [alarmTopic.arn],
         tags: {
           ...this.config.tags,
-          Name: this.getResourceName("alb-health-alarm"),
+          Name: this.getResourceName('alb-health-alarm'),
         },
       },
       { parent: this }
@@ -1133,24 +1214,24 @@ export class TapStack extends pulumi.ComponentResource {
 
     // RDS CPU alarm
     const rdsCpuAlarm = new aws.cloudwatch.MetricAlarm(
-      this.getResourceName("rds-cpu-alarm"),
+      this.getResourceName('rds-cpu-alarm'),
       {
-        name: this.getResourceName("rds-cpu-alarm"),
-        comparisonOperator: "GreaterThanThreshold",
+        name: this.getResourceName('rds-cpu-alarm'),
+        comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 2,
-        metricName: "CPUUtilization",
-        namespace: "AWS/RDS",
+        metricName: 'CPUUtilization',
+        namespace: 'AWS/RDS',
         period: 300,
-        statistic: "Average",
-        threshold: this.config.environmentSuffix === "prod" ? 75 : 85,
-        alarmDescription: "RDS CPU utilization is too high",
+        statistic: 'Average',
+        threshold: this.config.environmentSuffix === 'prod' ? 75 : 85,
+        alarmDescription: 'RDS CPU utilization is too high',
         dimensions: {
           DBClusterIdentifier: rds.cluster.id,
         },
         alarmActions: [alarmTopic.arn],
         tags: {
           ...this.config.tags,
-          Name: this.getResourceName("rds-cpu-alarm"),
+          Name: this.getResourceName('rds-cpu-alarm'),
         },
       },
       { parent: this }
@@ -1160,8 +1241,8 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-  * Create VPC peering connections
-  */
+   * Create VPC peering connections
+   */
   private createVpcPeering(vpc: awsx.ec2.Vpc): aws.ec2.VpcPeeringConnection[] {
     if (!this.config.enableVpcPeering || !this.config.peeringVpcIds) {
       return [];
@@ -1187,8 +1268,8 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-  * Get resource name with environment suffix
-  */
+   * Get resource name with environment suffix
+   */
   private getResourceName(resourceType: string): string {
     const baseName = `${this.projectName}-${this.config.environmentSuffix}-${resourceType}`;
 
@@ -1201,11 +1282,12 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-  * Get AWS-compliant resource name for resources with strict naming rules
-  * (RDS, ElastiCache, CloudWatch Log Groups, etc. - lowercase alphanumeric and hyphens only, must start with letter)
-  */
+   * Get AWS-compliant resource name for resources with strict naming rules
+   * (RDS, ElastiCache, CloudWatch Log Groups, etc. - lowercase alphanumeric and hyphens only, must start with letter)
+   */
   private getAwsCompliantName(resourceType: string): string {
-    let name = `${this.projectName}-${this.config.environmentSuffix}-${resourceType}`.toLowerCase();
+    let name =
+      `${this.projectName}-${this.config.environmentSuffix}-${resourceType}`.toLowerCase();
 
     // Replace any non-alphanumeric characters (except hyphens) with hyphens
     name = name.replace(/[^a-z0-9-]/g, '-');
@@ -1230,11 +1312,11 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   /**
-  * Write outputs to JSON file
-  */
+   * Write outputs to JSON file
+   */
   private writeOutputsToFile(outputs: TapStackOutputs): void {
-    const outputDir = path.join(process.cwd(), "cfn-outputs");
-    const outputFile = path.join(outputDir, "flat-outputs.json");
+    const outputDir = path.join(process.cwd(), 'cfn-outputs');
+    const outputFile = path.join(outputDir, 'flat-outputs.json');
 
     // Collect all outputs in an object for pulumi.output
     const outputsObject = pulumi.output({
@@ -1257,7 +1339,7 @@ export class TapStack extends pulumi.ComponentResource {
     });
 
     // Apply to write the file
-    outputsObject.apply((flatOutputs) => {
+    outputsObject.apply(flatOutputs => {
       // Ensure directory exists
       if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
