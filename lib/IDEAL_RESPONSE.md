@@ -394,7 +394,7 @@ class TapStack extends Stack {
                 + "            'body': json.dumps({'error': str(e)})\n"
                 + "        }\n";
 
-        Function func = Function.Builder.create(this, "ProcessorFunction")
+        Function func = Function.Builder.create(this, "ProcessorFunctionV2")
                 .functionName(String.format("tap-processor-%s", this.environmentSuffix))
                 .runtime(Runtime.PYTHON_3_11)
                 .handler("index.handler")
