@@ -139,7 +139,7 @@ elif [ "$PLATFORM" = "tf" ]; then
   
   # Determine var-file to use based on metadata.json
   VAR_FILE=""
-  if [ "$(jq -r '.task_sub_category // ""' ../metadata.json)" = "IaC-Multi-Environment-Management" ]; then
+  if [ "$(jq -r '.subtask // ""' ../metadata.json)" = "IaC-Multi-Environment-Management" ]; then
     DEPLOY_ENV_FILE=$(jq -r '.task_config.deploy_env // ""' ../metadata.json)
     if [ -n "$DEPLOY_ENV_FILE" ]; then
       VAR_FILE="-var-file=${DEPLOY_ENV_FILE}"

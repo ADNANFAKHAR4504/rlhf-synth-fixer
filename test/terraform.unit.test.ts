@@ -7,16 +7,23 @@ import fs from "fs";
 import path from "path";
 
 const STACK_REL = "../lib/tap_stack.tf";
+const PROVIDER_REL = "../lib/provider.tf";
 const stackPath = path.resolve(__dirname, STACK_REL);
+const providerPath = path.resolve(__dirname, PROVIDER_REL);
 
-// Helper to read file once and reuse
+// Helper to read files once and reuse
 let stackContent: string;
+let providerContent: string;
 
 beforeAll(() => {
   if (!fs.existsSync(stackPath)) {
     throw new Error(`Stack file not found at: ${stackPath}`);
   }
+  if (!fs.existsSync(providerPath)) {
+    throw new Error(`Provider file not found at: ${providerPath}`);
+  }
   stackContent = fs.readFileSync(stackPath, "utf8");
+  providerContent = fs.readFileSync(providerPath, "utf8");
 });
 
 describe("1. File Structure & Terraform Block", () => {
@@ -25,25 +32,36 @@ describe("1. File Structure & Terraform Block", () => {
     expect(stackContent.length).toBeGreaterThan(1000);
   });
 
-  test("does NOT declare provider blocks (provider.tf owns providers)", () => {
+  test("provider.tf exists and is readable", () => {
+    expect(fs.existsSync(providerPath)).toBe(true);
+    expect(providerContent.length).toBeGreaterThan(0);
+  });
+
+  test("tap_stack.tf does NOT declare provider blocks (provider.tf owns providers)", () => {
     expect(stackContent).not.toMatch(/\bprovider\s+"aws"\s*\{/);
     expect(stackContent).not.toMatch(/\bprovider\s+"archive"\s*\{/);
     expect(stackContent).not.toMatch(/\bprovider\s+"random"\s*\{/);
   });
 
-  test("declares terraform block with required_version >= 1.5", () => {
-    expect(stackContent).toMatch(/terraform\s*\{/);
-    expect(stackContent).toMatch(/required_version\s*=\s*">=\s*1\.5"/);
+  test("tap_stack.tf does NOT declare terraform block (moved to provider.tf)", () => {
+    expect(stackContent).not.toMatch(/terraform\s*\{/);
+    expect(stackContent).not.toMatch(/required_version\s*=/);
+    expect(stackContent).not.toMatch(/required_providers\s*\{/);
   });
 
-  test("declares all required_providers: aws, archive, random", () => {
-    expect(stackContent).toMatch(/required_providers\s*\{/);
-    expect(stackContent).toMatch(/aws\s*=\s*\{[\s\S]*?source\s*=\s*"hashicorp\/aws"/);
-    expect(stackContent).toMatch(/version\s*=\s*"~>\s*5\.0"/);
-    expect(stackContent).toMatch(/archive\s*=\s*\{[\s\S]*?source\s*=\s*"hashicorp\/archive"/);
-    expect(stackContent).toMatch(/version\s*=\s*"~>\s*2\.4"/);
-    expect(stackContent).toMatch(/random\s*=\s*\{[\s\S]*?source\s*=\s*"hashicorp\/random"/);
-    expect(stackContent).toMatch(/version\s*=\s*"~>\s*3\.6"/);
+  test("provider.tf declares terraform block with required_version >= 1.4", () => {
+    expect(providerContent).toMatch(/terraform\s*\{/);
+    expect(providerContent).toMatch(/required_version\s*=\s*">=\s*1\.[4-9]/);
+  });
+
+  test("provider.tf declares all required_providers: aws, archive, random", () => {
+    expect(providerContent).toMatch(/required_providers\s*\{/);
+    expect(providerContent).toMatch(/aws\s*=\s*\{[\s\S]*?source\s*=\s*"hashicorp\/aws"/);
+    expect(providerContent).toMatch(/version\s*=\s*">=\s*5\.0"/);
+    expect(providerContent).toMatch(/archive\s*=\s*\{[\s\S]*?source\s*=\s*"hashicorp\/archive"/);
+    expect(providerContent).toMatch(/version\s*=\s*"~>\s*2\.4"/);
+    expect(providerContent).toMatch(/random\s*=\s*\{[\s\S]*?source\s*=\s*"hashicorp\/random"/);
+    expect(providerContent).toMatch(/version\s*=\s*"~>\s*3\.6"/);
   });
 
   test("no external module sources used (single-file implementation)", () => {
