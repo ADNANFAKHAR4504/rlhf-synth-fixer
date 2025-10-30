@@ -17,8 +17,8 @@ try {
 
   // Create dummy outputs for testing
   outputs = {
-    S3KMSKeyArn: 'arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012',
-    EBSKMSKeyArn: 'arn:aws:kms:us-east-1:123456789012:key/87654321-4321-4321-4321-210987654321',
+    S3KMSKeyArn: 'arn:aws:kms:eu-west-1:123456789012:key/12345678-1234-1234-1234-123456789012',
+    EBSKMSKeyArn: 'arn:aws:kms:eu-west-1:123456789012:key/87654321-4321-4321-4321-210987654321',
     EncryptedS3BucketName: 'encrypted-s3-bucket-dev-123456789012',
     MFARequiredPolicyArn: 'arn:aws:iam::123456789012:policy/RequireMFAForPrivilegedActions-dev',
     ConfigBucketName: 'config-bucket-dev-123456789012'
@@ -32,8 +32,8 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 describe('Security Compliance Template Integration Tests', () => {
   // AWS clients for testing
-  const s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
-  const iamClient = new IAMClient({ region: process.env.AWS_REGION || 'us-east-1' });
+  const s3Client = new S3Client({ region: process.env.AWS_REGION || 'eu-west-1' });
+  const iamClient = new IAMClient({ region: process.env.AWS_REGION || 'eu-west-1' });
 
   describe('Template Outputs Validation', () => {
     test('should have all required outputs', () => {
