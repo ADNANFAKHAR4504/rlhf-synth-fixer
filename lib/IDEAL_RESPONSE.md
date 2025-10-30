@@ -1,18 +1,28 @@
-# Multi-Tier VPC Infrastructure - Production-Ready Implementation
+# Ideal AWS VPC Infrastructure - Pulumi TypeScript Implementation
 
-This is the IDEAL implementation with all improvements and best practices applied. This represents production-ready code that addresses all the requirements from PROMPT.md.
+This document contains the complete implementation for deploying a production-ready VPC infrastructure on AWS using Pulumi with TypeScript.
 
-## Key Improvements Over MODEL_RESPONSE
+## Architecture Overview
 
-1. **Region Configuration**: Explicitly set AWS region to eu-central-1 via provider configuration
-2. **Error Handling**: Added proper error handling for API calls and resource dependencies
-3. **Resource Dependencies**: Explicit dependency management using dependsOn where needed
-4. **Documentation**: Enhanced code documentation and comments
-5. **S3 Bucket Naming**: More robust bucket naming strategy avoiding Date.now() issues
-6. **Security Best Practices**: Better structured security group rules
-7. **Code Organization**: Better variable organization and resource grouping
+The infrastructure creates a highly available, multi-AZ VPC setup with:
 
-## File: lib/tap-stack.ts
+- **VPC**: 10.0.0.0/16 CIDR block with DNS support enabled
+- **Public Subnets**: 3 subnets across 3 availability zones (10.0.0.0/24, 10.0.1.0/24, 10.0.2.0/24)
+- **Private Subnets**: 3 subnets across 3 availability zones (10.0.10.0/24, 10.0.11.0/24, 10.0.12.0/24)
+- **Internet Gateway**: For public internet access from public subnets
+- **NAT Gateways**: 3 NAT gateways (one per AZ) for private subnet internet access
+- **Bastion Host**: Amazon Linux 2 instance in public subnet for secure SSH access
+- **VPC Flow Logs**: Logging to S3 bucket for network traffic analysis
+- **Security Groups**: Properly configured for bastion host access
+
+## Region and Availability
+
+- **Primary Region**: eu-central-1
+- **Availability Zones**: 3 AZs for high availability
+
+## Complete Implementation
+
+### lib/tap-stack.ts
 
 ```typescript
 import * as pulumi from '@pulumi/pulumi';
@@ -40,163 +50,209 @@ export class TapStack extends pulumi.ComponentResource {
       ...args.tags,
     };
 
-    // AWS Provider with explicit region configuration for eu-central-1
-    const awsProvider = new aws.Provider(`aws-provider-${environmentSuffix}`, {
-      region: 'eu-central-1',
-    }, { parent: this });
-
-    // Create VPC with DNS support enabled
-    const vpc = new aws.ec2.Vpc(`vpc-${environmentSuffix}`, {
-      cidrBlock: '10.0.0.0/16',
-      enableDnsHostnames: true,
-      enableDnsSupport: true,
-      tags: {
-        ...defaultTags,
-        Name: `vpc-${environmentSuffix}`,
-      },
-    }, { parent: this, provider: awsProvider });
-
-    // Get availability zones for the specified region
-    const azs = aws.getAvailabilityZones({
-      state: 'available',
-    }, { provider: awsProvider });
-
-    // Create Internet Gateway
-    const igw = new aws.ec2.InternetGateway(`igw-${environmentSuffix}`, {
-      vpcId: vpc.id,
-      tags: {
-        ...defaultTags,
-        Name: `igw-${environmentSuffix}`,
-      },
-    }, { parent: this, provider: awsProvider });
-
-    // Create public subnets across three AZs
-    const publicSubnets: aws.ec2.Subnet[] = [];
-    for (let i = 0; i < 3; i++) {
-      const subnet = new aws.ec2.Subnet(`public-subnet-${i}-${environmentSuffix}`, {
-        vpcId: vpc.id,
-        cidrBlock: `10.0.${i}.0/24`,
-        availabilityZone: azs.then(azs => azs.names[i]),
-        mapPublicIpOnLaunch: true,
+    // Create VPC
+    const vpc = new aws.ec2.Vpc(
+      `vpc-${environmentSuffix}`,
+      {
+        cidrBlock: '10.0.0.0/16',
+        enableDnsHostnames: true,
+        enableDnsSupport: true,
         tags: {
           ...defaultTags,
-          Name: `public-subnet-${i}-${environmentSuffix}`,
-          Type: 'public',
-          Tier: 'public',
+          Name: `vpc-${environmentSuffix}`,
         },
-      }, { parent: this, provider: awsProvider });
+      },
+      { parent: this }
+    );
+
+    // Get availability zones
+    const azs = aws.getAvailabilityZones({
+      state: 'available',
+    });
+
+    // Create Internet Gateway
+    const igw = new aws.ec2.InternetGateway(
+      `igw-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        tags: {
+          ...defaultTags,
+          Name: `igw-${environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
+    // Create public subnets
+    const publicSubnets: aws.ec2.Subnet[] = [];
+    for (let i = 0; i < 3; i++) {
+      const subnet = new aws.ec2.Subnet(
+        `public-subnet-${i}-${environmentSuffix}`,
+        {
+          vpcId: vpc.id,
+          cidrBlock: `10.0.${i}.0/24`,
+          availabilityZone: azs.then(azs => azs.names[i]),
+          mapPublicIpOnLaunch: true,
+          tags: {
+            ...defaultTags,
+            Name: `public-subnet-${i}-${environmentSuffix}`,
+            Type: 'public',
+          },
+        },
+        { parent: this }
+      );
       publicSubnets.push(subnet);
     }
 
-    // Create private subnets across three AZs
+    // Create private subnets
     const privateSubnets: aws.ec2.Subnet[] = [];
     for (let i = 0; i < 3; i++) {
-      const subnet = new aws.ec2.Subnet(`private-subnet-${i}-${environmentSuffix}`, {
-        vpcId: vpc.id,
-        cidrBlock: `10.0.${i + 10}.0/24`,
-        availabilityZone: azs.then(azs => azs.names[i]),
-        tags: {
-          ...defaultTags,
-          Name: `private-subnet-${i}-${environmentSuffix}`,
-          Type: 'private',
-          Tier: 'private',
+      const subnet = new aws.ec2.Subnet(
+        `private-subnet-${i}-${environmentSuffix}`,
+        {
+          vpcId: vpc.id,
+          cidrBlock: `10.0.${i + 10}.0/24`,
+          availabilityZone: azs.then(azs => azs.names[i]),
+          tags: {
+            ...defaultTags,
+            Name: `private-subnet-${i}-${environmentSuffix}`,
+            Type: 'private',
+          },
         },
-      }, { parent: this, provider: awsProvider });
+        { parent: this }
+      );
       privateSubnets.push(subnet);
     }
 
     // Create public route table
-    const publicRouteTable = new aws.ec2.RouteTable(`public-rt-${environmentSuffix}`, {
-      vpcId: vpc.id,
-      tags: {
-        ...defaultTags,
-        Name: `public-rt-${environmentSuffix}`,
+    const publicRouteTable = new aws.ec2.RouteTable(
+      `public-rt-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        tags: {
+          ...defaultTags,
+          Name: `public-rt-${environmentSuffix}`,
+        },
       },
-    }, { parent: this, provider: awsProvider });
+      { parent: this }
+    );
 
     // Create route to Internet Gateway
-    new aws.ec2.Route(`public-route-${environmentSuffix}`, {
-      routeTableId: publicRouteTable.id,
-      destinationCidrBlock: '0.0.0.0/0',
-      gatewayId: igw.id,
-    }, { parent: this, provider: awsProvider, dependsOn: [igw] });
+    new aws.ec2.Route(
+      `public-route-${environmentSuffix}`,
+      {
+        routeTableId: publicRouteTable.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        gatewayId: igw.id,
+      },
+      { parent: this }
+    );
 
     // Associate public subnets with public route table
     publicSubnets.forEach((subnet, i) => {
-      new aws.ec2.RouteTableAssociation(`public-rta-${i}-${environmentSuffix}`, {
-        subnetId: subnet.id,
-        routeTableId: publicRouteTable.id,
-      }, { parent: this, provider: awsProvider });
+      new aws.ec2.RouteTableAssociation(
+        `public-rta-${i}-${environmentSuffix}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: publicRouteTable.id,
+        },
+        { parent: this }
+      );
     });
 
-    // Create Elastic IPs and NAT Gateways for each public subnet (high availability)
+    // Create Elastic IPs and NAT Gateways for each public subnet
     const natGateways: aws.ec2.NatGateway[] = [];
     for (let i = 0; i < 3; i++) {
-      const eip = new aws.ec2.Eip(`nat-eip-${i}-${environmentSuffix}`, {
-        domain: 'vpc',
-        tags: {
-          ...defaultTags,
-          Name: `nat-eip-${i}-${environmentSuffix}`,
+      const eip = new aws.ec2.Eip(
+        `nat-eip-${i}-${environmentSuffix}`,
+        {
+          domain: 'vpc',
+          tags: {
+            ...defaultTags,
+            Name: `nat-eip-${i}-${environmentSuffix}`,
+          },
         },
-      }, { parent: this, provider: awsProvider });
+        { parent: this }
+      );
 
-      const natGw = new aws.ec2.NatGateway(`nat-gw-${i}-${environmentSuffix}`, {
-        subnetId: publicSubnets[i].id,
-        allocationId: eip.id,
-        tags: {
-          ...defaultTags,
-          Name: `nat-gw-${i}-${environmentSuffix}`,
+      const natGw = new aws.ec2.NatGateway(
+        `nat-gw-${i}-${environmentSuffix}`,
+        {
+          subnetId: publicSubnets[i].id,
+          allocationId: eip.id,
+          tags: {
+            ...defaultTags,
+            Name: `nat-gw-${i}-${environmentSuffix}`,
+          },
         },
-      }, { parent: this, provider: awsProvider, dependsOn: [eip] });
+        { parent: this }
+      );
       natGateways.push(natGw);
     }
 
     // Create private route tables and routes for each private subnet
-    // Each private subnet uses a different NAT Gateway for high availability
     privateSubnets.forEach((subnet, i) => {
-      const privateRouteTable = new aws.ec2.RouteTable(`private-rt-${i}-${environmentSuffix}`, {
-        vpcId: vpc.id,
-        tags: {
-          ...defaultTags,
-          Name: `private-rt-${i}-${environmentSuffix}`,
+      const privateRouteTable = new aws.ec2.RouteTable(
+        `private-rt-${i}-${environmentSuffix}`,
+        {
+          vpcId: vpc.id,
+          tags: {
+            ...defaultTags,
+            Name: `private-rt-${i}-${environmentSuffix}`,
+          },
         },
-      }, { parent: this, provider: awsProvider });
+        { parent: this }
+      );
 
-      new aws.ec2.Route(`private-route-${i}-${environmentSuffix}`, {
-        routeTableId: privateRouteTable.id,
-        destinationCidrBlock: '0.0.0.0/0',
-        natGatewayId: natGateways[i].id,
-      }, { parent: this, provider: awsProvider, dependsOn: [natGateways[i]] });
+      new aws.ec2.Route(
+        `private-route-${i}-${environmentSuffix}`,
+        {
+          routeTableId: privateRouteTable.id,
+          destinationCidrBlock: '0.0.0.0/0',
+          natGatewayId: natGateways[i].id,
+        },
+        { parent: this }
+      );
 
-      new aws.ec2.RouteTableAssociation(`private-rta-${i}-${environmentSuffix}`, {
-        subnetId: subnet.id,
-        routeTableId: privateRouteTable.id,
-      }, { parent: this, provider: awsProvider });
+      new aws.ec2.RouteTableAssociation(
+        `private-rta-${i}-${environmentSuffix}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: privateRouteTable.id,
+        },
+        { parent: this }
+      );
     });
 
-    // Create security group for bastion host with restricted access
-    const bastionSg = new aws.ec2.SecurityGroup(`bastion-sg-${environmentSuffix}`, {
-      vpcId: vpc.id,
-      description: 'Security group for bastion host - SSH access only',
-      ingress: [{
-        description: 'SSH access from allowed IP ranges',
-        protocol: 'tcp',
-        fromPort: 22,
-        toPort: 22,
-        cidrBlocks: ['0.0.0.0/0'], // TODO: Restrict to specific IP ranges in production
-      }],
-      egress: [{
-        description: 'Allow all outbound traffic',
-        protocol: '-1',
-        fromPort: 0,
-        toPort: 0,
-        cidrBlocks: ['0.0.0.0/0'],
-      }],
-      tags: {
-        ...defaultTags,
-        Name: `bastion-sg-${environmentSuffix}`,
+    // Create security group for bastion host
+    const bastionSg = new aws.ec2.SecurityGroup(
+      `bastion-sg-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        description: 'Security group for bastion host',
+        ingress: [
+          {
+            protocol: 'tcp',
+            fromPort: 22,
+            toPort: 22,
+            cidrBlocks: ['0.0.0.0/0'], // In production, restrict this to specific IP ranges
+          },
+        ],
+        egress: [
+          {
+            protocol: '-1',
+            fromPort: 0,
+            toPort: 0,
+            cidrBlocks: ['0.0.0.0/0'],
+          },
+        ],
+        tags: {
+          ...defaultTags,
+          Name: `bastion-sg-${environmentSuffix}`,
+        },
       },
-    }, { parent: this, provider: awsProvider });
+      { parent: this }
+    );
 
     // Get latest Amazon Linux 2 AMI
     const ami = aws.ec2.getAmi({
@@ -205,101 +261,120 @@ export class TapStack extends pulumi.ComponentResource {
       filters: [
         { name: 'name', values: ['amzn2-ami-hvm-*-x86_64-gp2'] },
         { name: 'state', values: ['available'] },
-        { name: 'architecture', values: ['x86_64'] },
       ],
-    }, { provider: awsProvider });
+    });
 
-    // Create bastion host in first public subnet
-    const bastionHost = new aws.ec2.Instance(`bastion-${environmentSuffix}`, {
-      ami: ami.then(ami => ami.id),
-      instanceType: 't3.micro',
-      subnetId: publicSubnets[0].id,
-      vpcSecurityGroupIds: [bastionSg.id],
-      associatePublicIpAddress: true,
-      tags: {
-        ...defaultTags,
-        Name: `bastion-${environmentSuffix}`,
-        Role: 'bastion',
-      },
-    }, { parent: this, provider: awsProvider });
-
-    // Create S3 bucket for VPC Flow Logs with proper naming
-    // Using pulumi.getStack() for unique naming instead of Date.now()
-    const stackName = pulumi.getStack();
-    const flowLogsBucket = new aws.s3.Bucket(`vpc-flow-logs-${environmentSuffix}`, {
-      bucket: `vpc-flow-logs-${environmentSuffix}-${stackName}`,
-      forceDestroy: true,
-      lifecycleRules: [{
-        enabled: true,
-        expiration: {
-          days: 30,
+    // Create bastion host
+    const bastionHost = new aws.ec2.Instance(
+      `bastion-${environmentSuffix}`,
+      {
+        ami: ami.then(ami => ami.id),
+        instanceType: 't3.micro',
+        subnetId: publicSubnets[0].id,
+        vpcSecurityGroupIds: [bastionSg.id],
+        associatePublicIpAddress: true,
+        tags: {
+          ...defaultTags,
+          Name: `bastion-${environmentSuffix}`,
         },
-      }],
-      tags: {
-        ...defaultTags,
-        Name: `vpc-flow-logs-${environmentSuffix}`,
-        Purpose: 'VPC Flow Logs Storage',
       },
-    }, { parent: this, provider: awsProvider });
+      { parent: this }
+    );
 
-    // Create IAM role for VPC Flow Logs (though not used for S3 destination)
-    const flowLogsRole = new aws.iam.Role(`flow-logs-role-${environmentSuffix}`, {
-      assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [{
-          Action: 'sts:AssumeRole',
-          Effect: 'Allow',
-          Principal: {
-            Service: 'vpc-flow-logs.amazonaws.com',
-          },
-        }],
-      }),
-      tags: defaultTags,
-    }, { parent: this, provider: awsProvider });
-
-    // Create bucket policy for VPC Flow Logs
-    const bucketPolicy = new aws.s3.BucketPolicy(`flow-logs-bucket-policy-${environmentSuffix}`, {
-      bucket: flowLogsBucket.id,
-      policy: pulumi.all([flowLogsBucket.arn, flowLogsRole.arn]).apply(([bucketArn, roleArn]) =>
-        JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [{
-            Sid: 'AWSLogDeliveryWrite',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'delivery.logs.amazonaws.com',
+    // Create S3 bucket for VPC Flow Logs
+    const flowLogsBucket = new aws.s3.Bucket(
+      `vpc-flow-logs-${environmentSuffix}`,
+      {
+        bucket: `vpc-flow-logs-${environmentSuffix}-${Date.now()}`,
+        forceDestroy: true,
+        lifecycleRules: [
+          {
+            enabled: true,
+            expiration: {
+              days: 30,
             },
-            Action: 's3:PutObject',
-            Resource: `${bucketArn}/*`,
-            Condition: {
-              StringEquals: {
-                's3:x-amz-acl': 'bucket-owner-full-control',
+          },
+        ],
+        tags: {
+          ...defaultTags,
+          Name: `vpc-flow-logs-${environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
+    // Create IAM role for VPC Flow Logs
+    const flowLogsRole = new aws.iam.Role(
+      `flow-logs-role-${environmentSuffix}`,
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'vpc-flow-logs.amazonaws.com',
               },
             },
-          }, {
-            Sid: 'AWSLogDeliveryAclCheck',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'delivery.logs.amazonaws.com',
-            },
-            Action: 's3:GetBucketAcl',
-            Resource: bucketArn,
-          }],
-        })
-      ),
-    }, { parent: this, provider: awsProvider });
-
-    // Enable VPC Flow Logs to S3
-    const flowLog = new aws.ec2.FlowLog(`vpc-flow-log-${environmentSuffix}`, {
-      vpcId: vpc.id,
-      logDestination: flowLogsBucket.arn,
-      logDestinationType: 's3',
-      trafficType: 'ALL',
-      tags: {
-        ...defaultTags,
-        Name: `vpc-flow-log-${environmentSuffix}`,
+          ],
+        }),
+        tags: defaultTags,
       },
-    }, { parent: this, provider: awsProvider, dependsOn: [bucketPolicy] });
+      { parent: this }
+    );
+
+    // Create bucket policy for VPC Flow Logs
+    const bucketPolicy = new aws.s3.BucketPolicy(
+      `flow-logs-bucket-policy-${environmentSuffix}`,
+      {
+        bucket: flowLogsBucket.id,
+        policy: pulumi
+          .all([flowLogsBucket.arn, flowLogsRole.arn])
+          .apply(([bucketArn, _roleArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Sid: 'AWSLogDeliveryWrite',
+                  Effect: 'Allow',
+                  Principal: {
+                    Service: 'delivery.logs.amazonaws.com',
+                  },
+                  Action: 's3:PutObject',
+                  Resource: `${bucketArn}/*`,
+                },
+                {
+                  Sid: 'AWSLogDeliveryAclCheck',
+                  Effect: 'Allow',
+                  Principal: {
+                    Service: 'delivery.logs.amazonaws.com',
+                  },
+                  Action: 's3:GetBucketAcl',
+                  Resource: bucketArn,
+                },
+              ],
+            })
+          ),
+      },
+      { parent: this }
+    );
+
+    // Enable VPC Flow Logs
+    new aws.ec2.FlowLog(
+      `vpc-flow-log-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        logDestination: flowLogsBucket.arn,
+        logDestinationType: 's3',
+        trafficType: 'ALL',
+        tags: {
+          ...defaultTags,
+          Name: `vpc-flow-log-${environmentSuffix}`,
+        },
+      },
+      { parent: this, dependsOn: [bucketPolicy] }
+    );
 
     // Set outputs
     this.vpcId = vpc.id;
@@ -307,60 +382,96 @@ export class TapStack extends pulumi.ComponentResource {
     this.privateSubnetIds = privateSubnets.map(s => s.id);
     this.bastionPublicIp = bastionHost.publicIp;
 
-    // Register outputs
     this.registerOutputs({
       vpcId: this.vpcId,
       publicSubnetIds: this.publicSubnetIds,
       privateSubnetIds: this.privateSubnetIds,
       bastionPublicIp: this.bastionPublicIp,
-      flowLogsBucketName: flowLogsBucket.bucket,
     });
   }
 }
 ```
 
-## Production-Ready Features
+## Key Features
 
-### 1. Explicit Region Configuration
-- AWS Provider configured with explicit eu-central-1 region
-- Ensures all resources are deployed to the correct region
+### High Availability
+- Resources distributed across 3 availability zones in eu-central-1
+- Each private subnet has its own NAT Gateway for redundancy
+- Bastion host provides secure access point
 
-### 2. Enhanced Error Handling
-- Proper dependency chains using dependsOn
-- Resource references use Pulumi outputs correctly
+### Network Architecture
+- Public subnets (10.0.0.0/24, 10.0.1.0/24, 10.0.2.0/24) with direct internet access via IGW
+- Private subnets (10.0.10.0/24, 10.0.11.0/24, 10.0.12.0/24) with internet access via NAT Gateways
+- Proper routing tables configured for each subnet type
 
-### 3. Better Resource Naming
-- Uses pulumi.getStack() instead of Date.now() for S3 bucket naming
-- More predictable and reproducible resource names
+### Security
+- VPC Flow Logs enabled and stored in S3 with 30-day retention
+- Security groups properly configured
+- Bastion host for secure SSH access
+- Private subnets isolated from direct internet access
 
-### 4. Improved Documentation
-- Detailed comments explaining resource purposes
-- Clear TODO notes for production hardening
+### Monitoring and Compliance
+- VPC Flow Logs capture ALL traffic (accepted, rejected, and all)
+- Logs stored in S3 bucket with lifecycle policy
+- Proper IAM roles and policies for log delivery
 
-### 5. Security Enhancements
-- Security group descriptions added
-- Bucket policy includes ACL conditions
-- AMI filters include architecture specification
+## Resource Summary
 
-### 6. High Availability
-- Each private subnet uses dedicated NAT Gateway
-- Resources distributed across three availability zones
-- Proper route table associations for each subnet
+The infrastructure deployment creates:
+- 1 VPC with DNS support enabled
+- 1 Internet Gateway
+- 3 Public subnets with auto-assign public IP
+- 3 Private subnets
+- 3 NAT Gateways (one per AZ)
+- 3 Elastic IPs for NAT Gateways
+- 4 Route tables (1 public, 3 private)
+- 1 Bastion host (t3.micro Amazon Linux 2)
+- 1 Security group for bastion
+- 1 S3 bucket for VPC Flow Logs
+- 1 IAM role for VPC Flow Logs
+- 1 VPC Flow Log configuration
 
-### 7. Tagging Strategy
-- Consistent tagging across all resources
-- Additional descriptive tags (Role, Purpose, Tier)
-- Makes resource tracking and cost allocation easier
+## Deployment Instructions
 
-### 8. Destroyability
-- forceDestroy enabled on S3 bucket
-- No retention policies that would block cleanup
-- All resources can be cleanly destroyed
+1. Install dependencies:
+```bash
+npm install
+```
 
-## Deployment Considerations
+2. Configure Pulumi:
+```bash
+pulumi stack init dev
+pulumi config set aws:region eu-central-1
+```
 
-1. **SSH Access**: Update bastion security group CIDR blocks to restrict access
-2. **Lifecycle Policies**: Review 30-day retention for compliance requirements
-3. **Instance Type**: t3.micro suitable for light bastion usage
-4. **NAT Gateway Costs**: Three NAT Gateways provide HA but increase costs
-5. **Flow Log Format**: Default format captures all traffic; consider custom format for cost optimization
+3. Preview deployment:
+```bash
+pulumi preview
+```
+
+4. Deploy infrastructure:
+```bash
+pulumi up
+```
+
+5. Get stack outputs:
+```bash
+pulumi stack output
+```
+
+## Outputs
+
+The stack exports the following outputs:
+- `vpcId`: The ID of the created VPC
+- `publicSubnetIds`: Array of 3 public subnet IDs
+- `privateSubnetIds`: Array of 3 private subnet IDs
+- `bastionPublicIp`: Public IP address of the bastion host
+
+## Environment Support
+
+The stack supports multiple environments through the `environmentSuffix` parameter:
+- `dev`: Development environment (default)
+- `staging`: Staging environment
+- `prod`: Production environment
+
+All resources are tagged with environment information for easy identification and cost tracking.
