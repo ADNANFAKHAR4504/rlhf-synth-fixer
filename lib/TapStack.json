@@ -1057,11 +1057,28 @@
                     ]
                 },
                 "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs",
+                    "arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess"
+                ],
+                "Policies": [
                     {
-                        "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
-                    },
-                    {
-                        "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/AWSXrayWriteOnlyAccess"
+                        "PolicyName": "AllowStepFunctionsStartExecution",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "states:StartExecution"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Ref": "PaymentWorkflow"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
                     }
                 ]
             }
