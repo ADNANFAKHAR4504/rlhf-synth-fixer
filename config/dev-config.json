@@ -1,0 +1,76 @@
+{
+  "s3Buckets": [
+    {
+      "name": "payment-documents",
+      "tags": {
+        "Purpose": "Document storage"
+      }
+    },
+    {
+      "name": "payment-receipts",
+      "tags": {
+        "Purpose": "Receipt storage"
+      }
+    },
+    {
+      "name": "lambda-code",
+      "tags": {
+        "Purpose": "Lambda deployment packages"
+      }
+    }
+  ],
+  "dynamoTables": [
+    {
+      "name": "transactions",
+      "hashKey": "transactionId",
+      "attributes": [
+        {
+          "name": "transactionId",
+          "type": "S"
+        }
+      ],
+      "tags": {
+        "Purpose": "Transaction records"
+      }
+    },
+    {
+      "name": "customers",
+      "hashKey": "customerId",
+      "attributes": [
+        {
+          "name": "customerId",
+          "type": "S"
+        }
+      ],
+      "tags": {
+        "Purpose": "Customer data"
+      }
+    }
+  ],
+  "lambdaFunctions": [
+    {
+      "name": "payment-processor",
+      "handler": "index.handler",
+      "runtime": "nodejs18.x",
+      "codeS3Key": "payment-processor.zip",
+      "environment": {
+        "LOG_LEVEL": "INFO"
+      },
+      "tags": {
+        "Purpose": "Payment processing"
+      }
+    },
+    {
+      "name": "payment-validator",
+      "handler": "index.handler",
+      "runtime": "nodejs18.x",
+      "codeS3Key": "payment-validator.zip",
+      "environment": {
+        "LOG_LEVEL": "INFO"
+      },
+      "tags": {
+        "Purpose": "Payment validation"
+      }
+    }
+  ]
+}
