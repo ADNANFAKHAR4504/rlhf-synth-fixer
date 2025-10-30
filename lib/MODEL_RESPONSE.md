@@ -37,7 +37,7 @@ CloudFormation YAML template that enforces encryption and compliance across an A
 4. **CloudFormation YAML** (full, deployable template)
 5. **Post-Deploy Validation Steps** (CLI/Console checks)
 
-Let me start by planning the CloudFormation template and then organize the sections accordingly.
+CloudFormation template and then organize the sections accordingly.
 
 ## 1. Planning the CloudFormation Template
 
