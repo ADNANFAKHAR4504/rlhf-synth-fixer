@@ -578,17 +578,27 @@ class TestEndToEnd(unittest.TestCase):
         self.assertEqual(response.status_code, 200, f"API Gateway returned status {response.status_code}")
         print(f"File upload initiated via API Gateway")
         
-        print(f"Waiting for file to appear in S3...")
-        time.sleep(5)
+        print(f"Waiting for file to be uploaded and processed...")
+        time.sleep(3)
+        
+        file_found = False
+        file_location = None
         
         try:
-            s3_response = s3_client.head_object(
-                Bucket=bucket_name,
-                Key=f"incoming/{test_filename}"
-            )
-            print(f"File found in S3: incoming/{test_filename}")
+            s3_client.head_object(Bucket=bucket_name, Key=f"incoming/{test_filename}")
+            file_found = True
+            file_location = f"incoming/{test_filename}"
+            print(f"File found in S3: {file_location}")
         except ClientError:
-            self.fail("File not found in S3 after API Gateway upload")
+            try:
+                s3_client.head_object(Bucket=bucket_name, Key=f"processed/{test_filename}")
+                file_found = True
+                file_location = f"processed/{test_filename}"
+                print(f"File already processed and moved to: {file_location}")
+            except ClientError:
+                pass
+        
+        self.assertTrue(file_found, "File not found in S3 (checked both incoming/ and processed/)")
         
         print(f"Waiting for data to be processed and stored in DynamoDB...")
         item = wait_for_dynamodb_item(
@@ -606,6 +616,13 @@ class TestEndToEnd(unittest.TestCase):
         # Cleanup
         try:
             s3_client.delete_object(Bucket=bucket_name, Key=f"incoming/{test_filename}")
+        except Exception:
+            pass
+        try:
+            s3_client.delete_object(Bucket=bucket_name, Key=f"processed/{test_filename}")
+        except Exception:
+            pass
+        try:
             table = dynamodb_resource.Table(table_name)
             table.delete_item(Key={'symbol': test_symbol, 'timestamp': Decimal(str(test_timestamp))})
         except Exception:
