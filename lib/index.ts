@@ -3,8 +3,14 @@ import * as aws from '@pulumi/aws';
 
 // Configuration
 const config = new pulumi.Config();
-const environment = config.require('environment');
-const environmentSuffix = config.require('environmentSuffix');
+const environment = (
+  config.get('environment') ?? process.env.ENVIRONMENT ?? 'dev'
+).toLowerCase();
+const environmentSuffix = (
+  config.get('environmentSuffix') ??
+  process.env.ENVIRONMENT_SUFFIX ??
+  pulumi.getStack()
+).toLowerCase();
 const awsRegion = process.env.AWS_REGION;
 
 if (!awsRegion) {
