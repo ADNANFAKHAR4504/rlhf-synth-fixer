@@ -8,6 +8,9 @@
 import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
 
+const resolveOutput = async <T>(output: pulumi.Output<T>): Promise<T> =>
+  output.promise();
+
 // Pulumi runtime mocking for unit tests
 pulumi.runtime.setMocks({
   newResource: function (args: pulumi.runtime.MockResourceArgs): { id: string; state: any } {
@@ -80,8 +83,9 @@ describe('TapStack - Three-tier Payment Processing Infrastructure', () => {
   let stack: TapStack;
 
   beforeAll(() => {
-    // Set environment variable for testing
+    // Set environment variables for testing
     process.env.ENVIRONMENT_SUFFIX = 'test';
+    process.env.AWS_REGION = 'us-east-1';
 
     // Create the stack
     stack = new TapStack('test-stack', {
@@ -94,6 +98,7 @@ describe('TapStack - Three-tier Payment Processing Infrastructure', () => {
 
   afterAll(() => {
     delete process.env.ENVIRONMENT_SUFFIX;
+    delete process.env.AWS_REGION;
   });
 
   describe('Stack Creation', () => {
@@ -103,48 +108,57 @@ describe('TapStack - Three-tier Payment Processing Infrastructure', () => {
     });
 
     it('should export required outputs', () => {
+      expect(stack.region).toBeDefined();
       expect(stack.vpcId).toBeDefined();
+      expect(stack.internetGatewayId).toBeDefined();
       expect(stack.publicSubnetIds).toBeDefined();
       expect(stack.privateSubnetIds).toBeDefined();
       expect(stack.databaseSubnetIds).toBeDefined();
+      expect(stack.natGatewayIds).toBeDefined();
+      expect(stack.webInstanceIds).toBeDefined();
       expect(stack.webSecurityGroupId).toBeDefined();
       expect(stack.appSecurityGroupId).toBeDefined();
       expect(stack.dbSecurityGroupId).toBeDefined();
+      expect(stack.dbSubnetGroupName).toBeDefined();
+      expect(stack.flowLogsRoleArn).toBeDefined();
+      expect(stack.flowLogsLogGroupName).toBeDefined();
+      expect(stack.flowLogId).toBeDefined();
       expect(stack.s3BucketName).toBeDefined();
+      expect(stack.s3BucketArn).toBeDefined();
     });
   });
 
   describe('VPC Configuration', () => {
     it('should create VPC with correct CIDR block', async () => {
-      const vpcId = await stack.vpcId;
+      const vpcId = await resolveOutput(stack.vpcId);
       expect(vpcId).toBeDefined();
       expect(typeof vpcId).toBe('string');
     });
 
     it('should enable DNS hostnames and DNS support', async () => {
       // Verify VPC was created (output check)
-      const vpcId = await stack.vpcId;
+      const vpcId = await resolveOutput(stack.vpcId);
       expect(vpcId).toBeTruthy();
     });
   });
 
   describe('Subnet Configuration', () => {
     it('should create public subnets in multiple AZs', async () => {
-      const publicSubnetIds = await stack.publicSubnetIds;
+      const publicSubnetIds = await resolveOutput(stack.publicSubnetIds);
       expect(publicSubnetIds).toBeDefined();
       expect(Array.isArray(publicSubnetIds)).toBe(true);
       expect(publicSubnetIds.length).toBe(2);
     });
 
     it('should create private subnets in multiple AZs', async () => {
-      const privateSubnetIds = await stack.privateSubnetIds;
+      const privateSubnetIds = await resolveOutput(stack.privateSubnetIds);
       expect(privateSubnetIds).toBeDefined();
       expect(Array.isArray(privateSubnetIds)).toBe(true);
       expect(privateSubnetIds.length).toBe(2);
     });
 
     it('should create database subnets in multiple AZs', async () => {
-      const databaseSubnetIds = await stack.databaseSubnetIds;
+      const databaseSubnetIds = await resolveOutput(stack.databaseSubnetIds);
       expect(databaseSubnetIds).toBeDefined();
       expect(Array.isArray(databaseSubnetIds)).toBe(true);
       expect(databaseSubnetIds.length).toBe(2);
@@ -153,19 +167,19 @@ describe('TapStack - Three-tier Payment Processing Infrastructure', () => {
 
   describe('Security Groups', () => {
     it('should create web tier security group', async () => {
-      const webSgId = await stack.webSecurityGroupId;
+      const webSgId = await resolveOutput(stack.webSecurityGroupId);
       expect(webSgId).toBeDefined();
       expect(typeof webSgId).toBe('string');
     });
 
     it('should create application tier security group', async () => {
-      const appSgId = await stack.appSecurityGroupId;
+      const appSgId = await resolveOutput(stack.appSecurityGroupId);
       expect(appSgId).toBeDefined();
       expect(typeof appSgId).toBe('string');
     });
 
     it('should create database tier security group', async () => {
-      const dbSgId = await stack.dbSecurityGroupId;
+      const dbSgId = await resolveOutput(stack.dbSecurityGroupId);
       expect(dbSgId).toBeDefined();
       expect(typeof dbSgId).toBe('string');
     });
@@ -173,7 +187,7 @@ describe('TapStack - Three-tier Payment Processing Infrastructure', () => {
 
   describe('Storage Configuration', () => {
     it('should create S3 bucket with versioning', async () => {
-      const bucketName = await stack.s3BucketName;
+      const bucketName = await resolveOutput(stack.s3BucketName);
       expect(bucketName).toBeDefined();
       expect(typeof bucketName).toBe('string');
     });
@@ -181,7 +195,7 @@ describe('TapStack - Three-tier Payment Processing Infrastructure', () => {
 
   describe('Resource Naming Convention', () => {
     it('should include environment suffix in resource names', async () => {
-      const vpcId = await stack.vpcId;
+      const vpcId = await resolveOutput(stack.vpcId);
       expect(vpcId).toBeDefined();
       // Resources should have been created with environmentSuffix
     });
@@ -189,9 +203,9 @@ describe('TapStack - Three-tier Payment Processing Infrastructure', () => {
 
   describe('High Availability Configuration', () => {
     it('should deploy resources across multiple availability zones', async () => {
-      const publicSubnetIds = await stack.publicSubnetIds;
-      const privateSubnetIds = await stack.privateSubnetIds;
-      const databaseSubnetIds = await stack.databaseSubnetIds;
+      const publicSubnetIds = await resolveOutput(stack.publicSubnetIds);
+      const privateSubnetIds = await resolveOutput(stack.privateSubnetIds);
+      const databaseSubnetIds = await resolveOutput(stack.databaseSubnetIds);
 
       // Verify multiple AZs
       expect(publicSubnetIds.length).toBeGreaterThanOrEqual(2);
@@ -202,13 +216,13 @@ describe('TapStack - Three-tier Payment Processing Infrastructure', () => {
 
   describe('Network Connectivity', () => {
     it('should create Internet Gateway for public internet access', async () => {
-      const vpcId = await stack.vpcId;
+      const vpcId = await resolveOutput(stack.vpcId);
       expect(vpcId).toBeDefined();
       // IGW should be attached to VPC
     });
 
     it('should create NAT Gateways for private subnet outbound access', async () => {
-      const publicSubnetIds = await stack.publicSubnetIds;
+      const publicSubnetIds = await resolveOutput(stack.publicSubnetIds);
       expect(publicSubnetIds).toBeDefined();
       // NAT Gateways should be in public subnets
     });
@@ -216,7 +230,7 @@ describe('TapStack - Three-tier Payment Processing Infrastructure', () => {
 
   describe('Compliance and Monitoring', () => {
     it('should configure VPC flow logs for network traffic auditing', async () => {
-      const vpcId = await stack.vpcId;
+      const vpcId = await resolveOutput(stack.vpcId);
       expect(vpcId).toBeDefined();
       // Flow logs should be configured
     });
@@ -234,9 +248,9 @@ describe('TapStack - Three-tier Payment Processing Infrastructure', () => {
     });
 
     it('should configure security group rules with descriptions', async () => {
-      const webSgId = await stack.webSecurityGroupId;
-      const appSgId = await stack.appSecurityGroupId;
-      const dbSgId = await stack.dbSecurityGroupId;
+      const webSgId = await resolveOutput(stack.webSecurityGroupId);
+      const appSgId = await resolveOutput(stack.appSecurityGroupId);
+      const dbSgId = await resolveOutput(stack.dbSecurityGroupId);
 
       expect(webSgId).toBeDefined();
       expect(appSgId).toBeDefined();
@@ -246,7 +260,7 @@ describe('TapStack - Three-tier Payment Processing Infrastructure', () => {
 
   describe('Database Configuration', () => {
     it('should create RDS subnet group for database tier', async () => {
-      const databaseSubnetIds = await stack.databaseSubnetIds;
+      const databaseSubnetIds = await resolveOutput(stack.databaseSubnetIds);
       expect(databaseSubnetIds).toBeDefined();
       expect(databaseSubnetIds.length).toBe(2);
     });
@@ -254,7 +268,7 @@ describe('TapStack - Three-tier Payment Processing Infrastructure', () => {
 
   describe('Infrastructure as Code Best Practices', () => {
     it('should use environment suffix for resource isolation', async () => {
-      const bucketName = await stack.s3BucketName;
+      const bucketName = await resolveOutput(stack.s3BucketName);
       expect(bucketName).toBeDefined();
       // Resource names should support multiple environments
     });
@@ -263,5 +277,38 @@ describe('TapStack - Three-tier Payment Processing Infrastructure', () => {
       // All resources should be destroyable
       expect(stack).toBeDefined();
     });
+  });
+  
+  describe('Provider Configuration', () => {
+    it('should expose the configured AWS region', async () => {
+      const configuredRegion = await resolveOutput(stack.region);
+      expect(configuredRegion).toBe('us-east-1');
+    });
+  });
+});
+
+describe('TapStack configuration validation', () => {
+  it('should throw if AWS region is not configured', () => {
+    const originalAwsRegion = process.env.AWS_REGION;
+    const originalAwsDefaultRegion = process.env.AWS_DEFAULT_REGION;
+
+    delete process.env.AWS_REGION;
+    delete process.env.AWS_DEFAULT_REGION;
+
+    expect(() => new TapStack('no-region-stack')).toThrow(
+      'AWS region is not configured. Set AWS_REGION env var or configure aws:region.'
+    );
+
+    if (originalAwsRegion) {
+      process.env.AWS_REGION = originalAwsRegion;
+    } else {
+      delete process.env.AWS_REGION;
+    }
+
+    if (originalAwsDefaultRegion) {
+      process.env.AWS_DEFAULT_REGION = originalAwsDefaultRegion;
+    } else {
+      delete process.env.AWS_DEFAULT_REGION;
+    }
   });
 });

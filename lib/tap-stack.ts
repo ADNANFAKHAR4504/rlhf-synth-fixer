@@ -19,14 +19,23 @@ export interface TapStackProps {
 }
 
 export class TapStack extends pulumi.ComponentResource {
+  public readonly region: pulumi.Output<string>;
   public readonly vpcId: pulumi.Output<string>;
+  public readonly internetGatewayId: pulumi.Output<string>;
   public readonly publicSubnetIds: pulumi.Output<string[]>;
   public readonly privateSubnetIds: pulumi.Output<string[]>;
   public readonly databaseSubnetIds: pulumi.Output<string[]>;
+  public readonly natGatewayIds: pulumi.Output<string[]>;
+  public readonly webInstanceIds: pulumi.Output<string[]>;
   public readonly webSecurityGroupId: pulumi.Output<string>;
   public readonly appSecurityGroupId: pulumi.Output<string>;
   public readonly dbSecurityGroupId: pulumi.Output<string>;
+  public readonly dbSubnetGroupName: pulumi.Output<string>;
+  public readonly flowLogsRoleArn: pulumi.Output<string>;
+  public readonly flowLogsLogGroupName: pulumi.Output<string>;
+  public readonly flowLogId: pulumi.Output<string>;
   public readonly s3BucketName: pulumi.Output<string>;
+  public readonly s3BucketArn: pulumi.Output<string>;
 
   constructor(
     name: string,
@@ -37,16 +46,41 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Get environment suffix from environment variable or config
     const config = new pulumi.Config();
+    const stackName = pulumi.getStack();
     const environmentSuffix =
-      process.env.ENVIRONMENT_SUFFIX || config.get('env') || 'dev';
+      process.env.ENVIRONMENT_SUFFIX || config.get('env') || stackName;
 
-    // Get current AWS region (for potential future use)
-    // const currentRegion = aws.getRegionOutput({});
+    // Resolve AWS region from environment or Pulumi config
+    const awsConfig = new pulumi.Config('aws');
+    const region =
+      process.env.AWS_REGION ||
+      awsConfig.get('region') ||
+      process.env.AWS_DEFAULT_REGION;
+
+    if (!region) {
+      throw new Error(
+        'AWS region is not configured. Set AWS_REGION env var or configure aws:region.'
+      );
+    }
+
+    const provider = new aws.Provider(
+      `${name}-provider`,
+      { region },
+      { parent: this }
+    );
+
+    const defaultResourceOptions: pulumi.ResourceOptions = {
+      parent: this,
+      provider,
+    };
 
     // Get availability zones for the region
-    const availabilityZones = aws.getAvailabilityZonesOutput({
-      state: 'available',
-    });
+    const availabilityZones = aws.getAvailabilityZonesOutput(
+      {
+        state: 'available',
+      },
+      { provider }
+    );
 
     // Merge default tags with provided tags
     const defaultTags = {
@@ -68,7 +102,7 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `payment-vpc-${environmentSuffix}`,
         },
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Create Internet Gateway
@@ -81,7 +115,7 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `payment-igw-${environmentSuffix}`,
         },
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Create public subnets (2 AZs)
@@ -98,7 +132,7 @@ export class TapStack extends pulumi.ComponentResource {
           Tier: 'Public',
         },
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     const publicSubnet2 = new aws.ec2.Subnet(
@@ -114,7 +148,7 @@ export class TapStack extends pulumi.ComponentResource {
           Tier: 'Public',
         },
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Create private subnets (2 AZs)
@@ -130,7 +164,7 @@ export class TapStack extends pulumi.ComponentResource {
           Tier: 'Private',
         },
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     const privateSubnet2 = new aws.ec2.Subnet(
@@ -145,7 +179,7 @@ export class TapStack extends pulumi.ComponentResource {
           Tier: 'Private',
         },
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Create database subnets (2 AZs)
@@ -161,7 +195,7 @@ export class TapStack extends pulumi.ComponentResource {
           Tier: 'Database',
         },
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     const databaseSubnet2 = new aws.ec2.Subnet(
@@ -176,7 +210,7 @@ export class TapStack extends pulumi.ComponentResource {
           Tier: 'Database',
         },
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Create Elastic IPs for NAT Gateways
@@ -189,7 +223,9 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `payment-nat-eip-1-${environmentSuffix}`,
         },
       },
-      { parent: this, dependsOn: [internetGateway] }
+      pulumi.mergeOptions(defaultResourceOptions, {
+        dependsOn: [internetGateway],
+      })
     );
 
     const eip2 = new aws.ec2.Eip(
@@ -201,7 +237,9 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `payment-nat-eip-2-${environmentSuffix}`,
         },
       },
-      { parent: this, dependsOn: [internetGateway] }
+      pulumi.mergeOptions(defaultResourceOptions, {
+        dependsOn: [internetGateway],
+      })
     );
 
     // Create NAT Gateways in public subnets
@@ -215,7 +253,7 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `payment-nat-gw-1-${environmentSuffix}`,
         },
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     const natGateway2 = new aws.ec2.NatGateway(
@@ -228,7 +266,7 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `payment-nat-gw-2-${environmentSuffix}`,
         },
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Create route table for public subnets
@@ -241,7 +279,7 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `payment-public-rt-${environmentSuffix}`,
         },
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Create route to Internet Gateway
@@ -252,7 +290,7 @@ export class TapStack extends pulumi.ComponentResource {
         destinationCidrBlock: '0.0.0.0/0',
         gatewayId: internetGateway.id,
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Associate public subnets with public route table
@@ -262,7 +300,7 @@ export class TapStack extends pulumi.ComponentResource {
         subnetId: publicSubnet1.id,
         routeTableId: publicRouteTable.id,
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     new aws.ec2.RouteTableAssociation(
@@ -271,7 +309,7 @@ export class TapStack extends pulumi.ComponentResource {
         subnetId: publicSubnet2.id,
         routeTableId: publicRouteTable.id,
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Create route table for private subnet 1
@@ -284,7 +322,7 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `payment-private-rt-1-${environmentSuffix}`,
         },
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Create route to NAT Gateway 1
@@ -295,7 +333,7 @@ export class TapStack extends pulumi.ComponentResource {
         destinationCidrBlock: '0.0.0.0/0',
         natGatewayId: natGateway1.id,
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Associate private subnet 1 with private route table 1
@@ -305,7 +343,7 @@ export class TapStack extends pulumi.ComponentResource {
         subnetId: privateSubnet1.id,
         routeTableId: privateRouteTable1.id,
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Create route table for private subnet 2
@@ -318,7 +356,7 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `payment-private-rt-2-${environmentSuffix}`,
         },
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Create route to NAT Gateway 2
@@ -329,7 +367,7 @@ export class TapStack extends pulumi.ComponentResource {
         destinationCidrBlock: '0.0.0.0/0',
         natGatewayId: natGateway2.id,
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Associate private subnet 2 with private route table 2
@@ -339,7 +377,7 @@ export class TapStack extends pulumi.ComponentResource {
         subnetId: privateSubnet2.id,
         routeTableId: privateRouteTable2.id,
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Create route table for database subnets
@@ -352,7 +390,7 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `payment-db-rt-${environmentSuffix}`,
         },
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Associate database subnets with database route table
@@ -362,7 +400,7 @@ export class TapStack extends pulumi.ComponentResource {
         subnetId: databaseSubnet1.id,
         routeTableId: databaseRouteTable.id,
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     new aws.ec2.RouteTableAssociation(
@@ -371,7 +409,7 @@ export class TapStack extends pulumi.ComponentResource {
         subnetId: databaseSubnet2.id,
         routeTableId: databaseRouteTable.id,
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Create security group for web tier
@@ -411,7 +449,7 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `payment-web-sg-${environmentSuffix}`,
         },
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Create security group for application tier
@@ -435,7 +473,7 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `payment-app-sg-${environmentSuffix}`,
         },
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Add ingress rule for app tier from web tier
@@ -450,7 +488,7 @@ export class TapStack extends pulumi.ComponentResource {
         securityGroupId: appSecurityGroup.id,
         description: 'Allow traffic from web tier on port 8080',
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Create security group for database tier
@@ -474,7 +512,7 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `payment-db-sg-${environmentSuffix}`,
         },
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Add ingress rule for database tier from app tier
@@ -489,27 +527,29 @@ export class TapStack extends pulumi.ComponentResource {
         securityGroupId: dbSecurityGroup.id,
         description: 'Allow PostgreSQL traffic from application tier',
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Get latest Amazon Linux 2 AMI
-    const ami = aws.ec2.getAmiOutput({
-      mostRecent: true,
-      owners: ['amazon'],
-      filters: [
-        {
-          name: 'name',
-          values: ['amzn2-ami-hvm-*-x86_64-gp2'],
-        },
-        {
-          name: 'state',
-          values: ['available'],
-        },
-      ],
-    });
+    const ami = aws.ec2.getAmiOutput(
+      {
+        mostRecent: true,
+        owners: ['amazon'],
+        filters: [
+          {
+            name: 'name',
+            values: ['amzn2-ami-hvm-*-x86_64-gp2'],
+          },
+          {
+            name: 'state',
+            values: ['available'],
+          },
+        ],
+      },
+      { provider }
+    );
 
     // Create EC2 instance in public subnet 1 with IMDSv2
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const webInstance1 = new aws.ec2.Instance(
       `payment-web-instance-1-${environmentSuffix}`,
       {
@@ -527,11 +567,10 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `payment-web-instance-1-${environmentSuffix}`,
         },
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Create EC2 instance in public subnet 2 with IMDSv2
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const webInstance2 = new aws.ec2.Instance(
       `payment-web-instance-2-${environmentSuffix}`,
       {
@@ -549,11 +588,10 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `payment-web-instance-2-${environmentSuffix}`,
         },
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Create RDS subnet group
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const dbSubnetGroup = new aws.rds.SubnetGroup(
       `payment-db-subnet-group-${environmentSuffix}`,
       {
@@ -564,7 +602,7 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `payment-db-subnet-group-${environmentSuffix}`,
         },
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Create S3 bucket with versioning
@@ -580,7 +618,7 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `payment-data-${environmentSuffix}`,
         },
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Create IAM role for VPC Flow Logs
@@ -604,7 +642,7 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `payment-flow-logs-role-${environmentSuffix}`,
         },
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Create IAM policy for VPC Flow Logs
@@ -629,7 +667,7 @@ export class TapStack extends pulumi.ComponentResource {
           ],
         }),
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Create CloudWatch Log Group for VPC Flow Logs
@@ -642,11 +680,10 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `payment-vpc-flow-logs-${environmentSuffix}`,
         },
       },
-      { parent: this }
+      defaultResourceOptions
     );
 
     // Create VPC Flow Logs
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const flowLog = new aws.ec2.FlowLog(
       `payment-vpc-flow-log-${environmentSuffix}`,
       {
@@ -660,11 +697,15 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `payment-vpc-flow-log-${environmentSuffix}`,
         },
       },
-      { parent: this, dependsOn: [flowLogsPolicy] }
+      pulumi.mergeOptions(defaultResourceOptions, {
+        dependsOn: [flowLogsPolicy],
+      })
     );
 
     // Export outputs
+    this.region = pulumi.output(region);
     this.vpcId = vpc.id;
+    this.internetGatewayId = internetGateway.id;
     this.publicSubnetIds = pulumi.output([publicSubnet1.id, publicSubnet2.id]);
     this.privateSubnetIds = pulumi.output([
       privateSubnet1.id,
@@ -674,21 +715,37 @@ export class TapStack extends pulumi.ComponentResource {
       databaseSubnet1.id,
       databaseSubnet2.id,
     ]);
+    this.natGatewayIds = pulumi.output([natGateway1.id, natGateway2.id]);
+    this.webInstanceIds = pulumi.output([webInstance1.id, webInstance2.id]);
     this.webSecurityGroupId = webSecurityGroup.id;
     this.appSecurityGroupId = appSecurityGroup.id;
     this.dbSecurityGroupId = dbSecurityGroup.id;
+    this.dbSubnetGroupName = dbSubnetGroup.name;
+    this.flowLogsRoleArn = flowLogsRole.arn;
+    this.flowLogsLogGroupName = flowLogsLogGroup.name;
+    this.flowLogId = flowLog.id;
     this.s3BucketName = bucket.id;
+    this.s3BucketArn = bucket.arn;
 
     // Register outputs
     this.registerOutputs({
+      region: this.region,
       vpcId: this.vpcId,
+      internetGatewayId: this.internetGatewayId,
       publicSubnetIds: this.publicSubnetIds,
       privateSubnetIds: this.privateSubnetIds,
       databaseSubnetIds: this.databaseSubnetIds,
+      natGatewayIds: this.natGatewayIds,
+      webInstanceIds: this.webInstanceIds,
       webSecurityGroupId: this.webSecurityGroupId,
       appSecurityGroupId: this.appSecurityGroupId,
       dbSecurityGroupId: this.dbSecurityGroupId,
+      dbSubnetGroupName: this.dbSubnetGroupName,
+      flowLogsRoleArn: this.flowLogsRoleArn,
+      flowLogsLogGroupName: this.flowLogsLogGroupName,
+      flowLogId: this.flowLogId,
       s3BucketName: this.s3BucketName,
+      s3BucketArn: this.s3BucketArn,
     });
   }
 }
