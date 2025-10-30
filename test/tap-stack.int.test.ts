@@ -237,7 +237,7 @@ describe('Project Nova - End-to-End Integration', () => {
       expect(lambdaRot.KeyRotationEnabled).toBe(true);
       expect(trailRot.KeyRotationEnabled).toBe(true);
 
-      // Contract: keys exist and are enabled
+      // keys exist and are enabled
       const [lambdaDesc, trailDesc] = await Promise.all([
         kms.send(new DescribeKeyCommand({ KeyId: lambdaKeyId })),
         kms.send(new DescribeKeyCommand({ KeyId: trailKeyId })),
