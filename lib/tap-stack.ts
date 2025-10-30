@@ -58,7 +58,8 @@ export class TapStack extends pulumi.ComponentResource {
 
     const environmentSuffix = args.environmentSuffix || 'dev';
     const configPath =
-      args.migrationConfigPath || path.join(__dirname, 'migration-config.json');
+      args.migrationConfigPath ||
+      path.join(__dirname, 'lambda', 'migration-config.json');
 
     // Read migration configuration
     const migrationConfig: MigrationConfig = JSON.parse(

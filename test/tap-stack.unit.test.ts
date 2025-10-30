@@ -36,7 +36,13 @@ describe('TapStack - Core Functionality', () => {
 
   beforeAll(() => {
     // Create test migration config if it doesn't exist
-    const testConfigPath = path.join(__dirname, '..', 'lib', 'migration-config.json');
+    const testConfigPath = path.join(
+      __dirname,
+      '..',
+      'lib',
+      'lambda',
+      'migration-config.json'
+    );
     if (!fs.existsSync(testConfigPath)) {
       const testConfig = {
         sourceRegion: 'us-east-1',
@@ -58,6 +64,16 @@ describe('TapStack - Core Functionality', () => {
             readCapacity: 5,
             writeCapacity: 5,
             scalingFactor: 1.5,
+          },
+          {
+            name: 'test-table-with-range',
+            hashKey: 'userId',
+            hashKeyType: 'S',
+            rangeKey: 'timestamp',
+            rangeKeyType: 'N',
+            readCapacity: 10,
+            writeCapacity: 10,
+            scalingFactor: 2.0,
           },
         ],
       };
@@ -100,7 +116,7 @@ describe('TapStack - Core Functionality', () => {
 
   describe('Migration Configuration Loading', () => {
     it('should load migration configuration from file', () => {
-      const configPath = path.join(__dirname, '..', 'lib', 'migration-config.json');
+      const configPath = path.join(__dirname, '..', 'lib', 'lambda', 'migration-config.json');
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
 
       expect(config).toBeDefined();
@@ -111,7 +127,7 @@ describe('TapStack - Core Functionality', () => {
     });
 
     it('should have S3 bucket configuration', () => {
-      const configPath = path.join(__dirname, '..', 'lib', 'migration-config.json');
+      const configPath = path.join(__dirname, '..', 'lib', 'lambda', 'migration-config.json');
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
 
       expect(Array.isArray(config.s3Buckets)).toBe(true);
@@ -124,7 +140,7 @@ describe('TapStack - Core Functionality', () => {
     });
 
     it('should have DynamoDB table configuration', () => {
-      const configPath = path.join(__dirname, '..', 'lib', 'migration-config.json');
+      const configPath = path.join(__dirname, '..', 'lib', 'lambda', 'migration-config.json');
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
 
       expect(Array.isArray(config.dynamodbTables)).toBe(true);
@@ -146,14 +162,14 @@ describe('TapStack - Core Functionality', () => {
     });
 
     it('should follow migration naming pattern for buckets', () => {
-      const configPath = path.join(__dirname, '..', 'lib', 'migration-config.json');
+      const configPath = path.join(__dirname, '..', 'lib', 'lambda', 'migration-config.json');
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       const expectedPattern = `${config.s3Buckets[0].name}-eu-${config.timestamp}-${testEnvironmentSuffix}`;
       expect(expectedPattern).toMatch(/.*-eu-.*-test$/);
     });
 
     it('should follow migration naming pattern for tables', () => {
-      const configPath = path.join(__dirname, '..', 'lib', 'migration-config.json');
+      const configPath = path.join(__dirname, '..', 'lib', 'lambda', 'migration-config.json');
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       const expectedPattern = `${config.dynamodbTables[0].name}-eu-${config.timestamp}-${testEnvironmentSuffix}`;
       expect(expectedPattern).toMatch(/.*-eu-.*-test$/);
@@ -162,7 +178,7 @@ describe('TapStack - Core Functionality', () => {
 
   describe('DynamoDB Capacity Scaling', () => {
     it('should apply scaling factors correctly', () => {
-      const configPath = path.join(__dirname, '..', 'lib', 'migration-config.json');
+      const configPath = path.join(__dirname, '..', 'lib', 'lambda', 'migration-config.json');
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
 
       const table = config.dynamodbTables[0];
@@ -174,7 +190,7 @@ describe('TapStack - Core Functionality', () => {
     });
 
     it('should handle tables with range keys', () => {
-      const configPath = path.join(__dirname, '..', 'lib', 'migration-config.json');
+      const configPath = path.join(__dirname, '..', 'lib', 'lambda', 'migration-config.json');
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
 
       const tableWithRange = config.dynamodbTables.find((t: any) => t.rangeKey);
@@ -288,7 +304,7 @@ describe('TapStack - Core Functionality', () => {
     });
 
     it('should validate required configuration fields', () => {
-      const configPath = path.join(__dirname, '..', 'lib', 'migration-config.json');
+      const configPath = path.join(__dirname, '..', 'lib', 'lambda', 'migration-config.json');
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
 
       expect(config).toHaveProperty('sourceRegion');
@@ -300,7 +316,7 @@ describe('TapStack - Core Functionality', () => {
 
   describe('Resource Tagging', () => {
     it('should apply migration batch tag', () => {
-      const configPath = path.join(__dirname, '..', 'lib', 'migration-config.json');
+      const configPath = path.join(__dirname, '..', 'lib', 'lambda', 'migration-config.json');
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
 
       expect(config.migrationBatch).toBeDefined();
@@ -308,7 +324,7 @@ describe('TapStack - Core Functionality', () => {
     });
 
     it('should include source region in tags', () => {
-      const configPath = path.join(__dirname, '..', 'lib', 'migration-config.json');
+      const configPath = path.join(__dirname, '..', 'lib', 'lambda', 'migration-config.json');
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
 
       expect(config.sourceRegion).toBe('us-east-1');
@@ -333,7 +349,7 @@ describe('TapStack - Edge Cases', () => {
 
   describe('Custom Configuration Path', () => {
     it('should accept custom migration config path', () => {
-      const customPath = path.join(__dirname, '..', 'lib', 'migration-config.json');
+      const customPath = path.join(__dirname, '..', 'lib', 'lambda', 'migration-config.json');
       expect(() => {
         new TapStack('custom-path-test', {
           environmentSuffix: 'test',
