@@ -36,6 +36,27 @@ const getOutput = (key: string) => {
 // Increase Jest timeout for live AWS interactions
 jest.setTimeout(600000);
 
+// Helper: HTTPS GET with retry and per-attempt timeout
+async function httpGetWithRetry(url: string, attempts = 5, timeoutMs = 30000): Promise<Response> {
+  let lastErr: any;
+  for (let i = 0; i < attempts; i++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { method: 'GET', signal: controller.signal });
+      clearTimeout(timer);
+      return res;
+    } catch (e) {
+      clearTimeout(timer);
+      lastErr = e;
+      // exponential backoff: 1s, 2s, 4s, 8s...
+      const backoffMs = Math.min(16000, 1000 * Math.pow(2, i));
+      await new Promise(r => setTimeout(r, backoffMs));
+    }
+  }
+  throw lastErr;
+}
+
 describe('Project Nova - End-to-End Integration', () => {
   const createdDdbItems: Array<{ pk: string; ts: number }> = [];
   const createdS3Objects: Array<{ bucket: string; key: string }> = [];
@@ -176,7 +197,7 @@ describe('Project Nova - End-to-End Integration', () => {
     test('ALB /health over HTTPS responds JSON with status', async () => {
       const albDns = getOutput('ALBEndpoint');
       const url = `https://${albDns}/health`;
-      const res = await fetch(url, { method: 'GET' });
+      const res = await httpGetWithRetry(url, 5, 30000);
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(typeof body.status).toBe('string');
