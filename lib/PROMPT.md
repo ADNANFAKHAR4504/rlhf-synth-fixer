@@ -1,4 +1,4 @@
-Design a production-ready Terraform configuration in HCL that deploys a scalable web application environment on AWS. The implementation must be contained entirely within a single file named main.tf. A default provider.tf file is already provided for AWS configuration, so do not create or modify any provider blocks.
+Design a production-ready Terraform configuration in HCL that deploys a scalable web application environment on AWS.
 
 Infrastructure Requirements
 
@@ -20,7 +20,7 @@ Set up read replicas for high availability and improved performance.
 
 Security
 Define Security Groups that enforce the principle of least privilege.
-Allow only necessary ports (e.g., SSH, HTTP/HTTPS, MySQL).
+Allow only necessary ports.
 
 Ensure isolation between public and private subnets.
 Tagging and Management

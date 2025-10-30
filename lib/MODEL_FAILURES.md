@@ -1,6 +1,6 @@
 ### model failure
 
-### 1. Networking - Missing NAT Gateway and Private Routing
+### 1. Networking - Missing NAT Gateway Config and Private Routing
 
 Model Response:
 The model creates private subnets and a private route table (aws_route_table.private) but never defines a NAT Gateway (aws_nat_gateway) or corresponding Elastic IP (aws_eip). As a result, EC2 instances in private subnets cannot access the internet for updates or package downloads.
