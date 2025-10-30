@@ -10,5 +10,19 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "Codepipeline, CodeBuild, CodeDeploy, ECS, ECR, S3"
+  "aws_services": [
+    "Codepipeline",
+    "CodeBuild",
+    "CodeDeploy",
+    "ECS",
+    "ECR",
+    "S3"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "emmanuel-turing",
+  "dockerS3Location": ""
 }
