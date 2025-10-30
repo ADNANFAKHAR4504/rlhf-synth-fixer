@@ -7,6 +7,7 @@ import {
   DynamoDBClient,
   GetItemCommand,
   PutItemCommand,
+  AttributeValue,
 } from '@aws-sdk/client-dynamodb';
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
@@ -107,7 +108,9 @@ async function replicateS3Object(
   console.log(`Successfully replicated S3 object to ${targetBucket}/${key}`);
 }
 
-async function replicateDynamoDBItem(itemKey: any): Promise<void> {
+async function replicateDynamoDBItem(
+  itemKey: Record<string, AttributeValue>
+): Promise<void> {
   console.log('Replicating DynamoDB item to target environments');
 
   // Get item from production table
@@ -165,7 +168,10 @@ async function publishNotification(
   await snsClient.send(command);
 }
 
-async function sendToDeadLetterQueue(event: any, error: string): Promise<void> {
+async function sendToDeadLetterQueue(
+  event: ReplicationEvent,
+  error: string
+): Promise<void> {
   const command = new SendMessageCommand({
     QueueUrl: DLQ_URL,
     MessageBody: JSON.stringify({
@@ -178,7 +184,9 @@ async function sendToDeadLetterQueue(event: any, error: string): Promise<void> {
   await sqsClient.send(command);
 }
 
-export async function handler(event: ReplicationEvent): Promise<any> {
+export async function handler(
+  event: ReplicationEvent
+): Promise<{ statusCode: number; body: string }> {
   console.log('Received event:', JSON.stringify(event, null, 2));
 
   try {
