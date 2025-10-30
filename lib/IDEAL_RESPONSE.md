@@ -9,7 +9,7 @@ This infrastructure implements a scalable, multi-environment payment processing 
 - **SecurityStack**: Security groups for ALB, ECS, and RDS
 - **DatabaseStack**: PostgreSQL RDS instance with KMS encryption
 - **EcsStack**: ECS Fargate cluster and task definitions
-- **LoadBalancerStack**: Application Load Balancer and target groups
+- **LoadBalancerStack**: Application Load Balancer and target group
 - **DnsStack**: Route53 hosted zone and DNS records (optional)
 - **MonitoringStack**: CloudWatch logs with KMS encryption
 
@@ -30,8 +30,8 @@ This infrastructure implements a scalable, multi-environment payment processing 
 
 ### tap-stack.ts
 
-import * as pulumi from '@pulumi/pulumi';
-import * as aws from '@pulumi/aws';
+import _ as pulumi from '@pulumi/pulumi';
+import _ as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';
 import { NetworkStack } from './network-stack';
 import { SecurityStack } from './security-stack';
@@ -42,21 +42,21 @@ import { DnsStack } from './dns-stack';
 import { MonitoringStack } from './monitoring-stack';
 
 export interface TapStackArgs {
-  environmentSuffix?: string;
-  tags?: pulumi.Input<{ [key: string]: string }>;
-  ecrImageUri?: string;
-  domainName?: string;
-  certificateArn?: string;
-  dbSecretArn?: string;
+environmentSuffix?: string;
+tags?: pulumi.Input<{ [key: string]: string }>;
+ecrImageUri?: string;
+domainName?: string;
+certificateArn?: string;
+dbSecretArn?: string;
 }
 
 export class TapStack extends pulumi.ComponentResource {
-  public readonly albDnsName: pulumi.Output<string>;
-  public readonly dbEndpoint: pulumi.Output<string>;
-  public readonly ecsClusterName: pulumi.Output<string>;
+public readonly albDnsName: pulumi.Output<string>;
+public readonly dbEndpoint: pulumi.Output<string>;
+public readonly ecsClusterName: pulumi.Output<string>;
 
-  constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
-    super('tap:stack:TapStack', name, args, opts);
+constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
+super('tap:stack:TapStack', name, args, opts);
 
     const environmentSuffix = args.environmentSuffix || 'dev';
     const region = pulumi.output(aws.getRegion()).name;
@@ -169,7 +169,8 @@ export class TapStack extends pulumi.ComponentResource {
       ecsClusterName: this.ecsClusterName,
       region: region,
     });
-  }
+
+}
 }
 
 ---
@@ -178,27 +179,27 @@ export class TapStack extends pulumi.ComponentResource {
 
 ### network-stack.ts
 
-import * as pulumi from '@pulumi/pulumi';
-import * as aws from '@pulumi/aws';
+import _ as pulumi from '@pulumi/pulumi';
+import _ as aws from '@pulumi/aws';
 
 export interface NetworkStackArgs {
-  environmentSuffix: string;
-  tags: pulumi.Input<{ [key: string]: string }>;
-  vpcCidr?: string;
+environmentSuffix: string;
+tags: pulumi.Input<{ [key: string]: string }>;
+vpcCidr?: string;
 }
 
 export class NetworkStack extends pulumi.ComponentResource {
-  public readonly vpcId: pulumi.Output<string>;
-  public readonly publicSubnetIds: pulumi.Output<string[]>;
-  public readonly privateSubnetIds: pulumi.Output<string[]>;
-  public readonly availabilityZones: pulumi.Output<string[]>;
+public readonly vpcId: pulumi.Output<string>;
+public readonly publicSubnetIds: pulumi.Output<string[]>;
+public readonly privateSubnetIds: pulumi.Output<string[]>;
+public readonly availabilityZones: pulumi.Output<string[]>;
 
-  constructor(
-    name: string,
-    args: NetworkStackArgs,
-    opts?: pulumi.ComponentResourceOptions
-  ) {
-    super('tap:network:NetworkStack', name, args, opts);
+constructor(
+name: string,
+args: NetworkStackArgs,
+opts?: pulumi.ComponentResourceOptions
+) {
+super('tap:network:NetworkStack', name, args, opts);
 
     const vpcCidr = args.vpcCidr || '10.0.0.0/16';
 
@@ -388,7 +389,8 @@ export class NetworkStack extends pulumi.ComponentResource {
       privateSubnetIds: this.privateSubnetIds,
       availabilityZones: this.availabilityZones,
     });
-  }
+
+}
 }
 
 ---
@@ -397,26 +399,26 @@ export class NetworkStack extends pulumi.ComponentResource {
 
 ### security-stack.ts
 
-import * as pulumi from '@pulumi/pulumi';
-import * as aws from '@pulumi/aws';
+import _ as pulumi from '@pulumi/pulumi';
+import _ as aws from '@pulumi/aws';
 
 export interface SecurityStackArgs {
-  environmentSuffix: string;
-  vpcId: pulumi.Output<string>;
-  tags: pulumi.Input<{ [key: string]: string }>;
+environmentSuffix: string;
+vpcId: pulumi.Output<string>;
+tags: pulumi.Input<{ [key: string]: string }>;
 }
 
 export class SecurityStack extends pulumi.ComponentResource {
-  public readonly albSecurityGroupId: pulumi.Output<string>;
-  public readonly ecsSecurityGroupId: pulumi.Output<string>;
-  public readonly dbSecurityGroupId: pulumi.Output<string>;
+public readonly albSecurityGroupId: pulumi.Output<string>;
+public readonly ecsSecurityGroupId: pulumi.Output<string>;
+public readonly dbSecurityGroupId: pulumi.Output<string>;
 
-  constructor(
-    name: string,
-    args: SecurityStackArgs,
-    opts?: pulumi.ComponentResourceOptions
-  ) {
-    super('tap:security:SecurityStack', name, args, opts);
+constructor(
+name: string,
+args: SecurityStackArgs,
+opts?: pulumi.ComponentResourceOptions
+) {
+super('tap:security:SecurityStack', name, args, opts);
 
     // ALB Security Group
     const albSg = new aws.ec2.SecurityGroup(
@@ -542,7 +544,8 @@ export class SecurityStack extends pulumi.ComponentResource {
       ecsSecurityGroupId: this.ecsSecurityGroupId,
       dbSecurityGroupId: this.dbSecurityGroupId,
     });
-  }
+
+}
 }
 
 ---
@@ -551,27 +554,27 @@ export class SecurityStack extends pulumi.ComponentResource {
 
 ### database-stack.ts
 
-import * as pulumi from '@pulumi/pulumi';
-import * as aws from '@pulumi/aws';
+import _ as pulumi from '@pulumi/pulumi';
+import _ as aws from '@pulumi/aws';
 
 export interface DatabaseStackArgs {
-  environmentSuffix: string;
-  subnetIds: pulumi.Output<string[]>;
-  securityGroupId: pulumi.Output<string>;
-  dbSecretArn?: string;
-  tags: pulumi.Input<{ [key: string]: string }>;
+environmentSuffix: string;
+subnetIds: pulumi.Output<string[]>;
+securityGroupId: pulumi.Output<string>;
+dbSecretArn?: string;
+tags: pulumi.Input<{ [key: string]: string }>;
 }
 
 export class DatabaseStack extends pulumi.ComponentResource {
-  public readonly dbEndpoint: pulumi.Output<string>;
-  public readonly dbInstanceId: pulumi.Output<string>;
+public readonly dbEndpoint: pulumi.Output<string>;
+public readonly dbInstanceId: pulumi.Output<string>;
 
-  constructor(
-    name: string,
-    args: DatabaseStackArgs,
-    opts?: pulumi.ComponentResourceOptions
-  ) {
-    super('tap:database:DatabaseStack', name, args, opts);
+constructor(
+name: string,
+args: DatabaseStackArgs,
+opts?: pulumi.ComponentResourceOptions
+) {
+super('tap:database:DatabaseStack', name, args, opts);
 
     // Create KMS key for RDS encryption
     const kmsKey = new aws.kms.Key(
@@ -680,7 +683,8 @@ export class DatabaseStack extends pulumi.ComponentResource {
       dbEndpoint: this.dbEndpoint,
       dbInstanceId: this.dbInstanceId,
     });
-  }
+
+}
 }
 
 ---
@@ -689,32 +693,32 @@ export class DatabaseStack extends pulumi.ComponentResource {
 
 ### ecs-stack.ts
 
-import * as pulumi from '@pulumi/pulumi';
-import * as aws from '@pulumi/aws';
+import _ as pulumi from '@pulumi/pulumi';
+import _ as aws from '@pulumi/aws';
 
 export interface EcsStackArgs {
-  environmentSuffix: string;
-  vpcId: pulumi.Output<string>;
-  subnetIds: pulumi.Output<string[]>;
-  securityGroupId: pulumi.Output<string>;
-  targetGroupArn: pulumi.Output<string>;
-  ecrImageUri: string;
-  dbSecretArn?: string;
-  dbEndpoint: pulumi.Output<string>;
-  logGroupName: pulumi.Output<string>;
-  tags: pulumi.Input<{ [key: string]: string }>;
+environmentSuffix: string;
+vpcId: pulumi.Output<string>;
+subnetIds: pulumi.Output<string[]>;
+securityGroupId: pulumi.Output<string>;
+targetGroupArn: pulumi.Output<string>;
+ecrImageUri: string;
+dbSecretArn?: string;
+dbEndpoint: pulumi.Output<string>;
+logGroupName: pulumi.Output<string>;
+tags: pulumi.Input<{ [key: string]: string }>;
 }
 
 export class EcsStack extends pulumi.ComponentResource {
-  public readonly clusterName: pulumi.Output<string>;
-  public readonly serviceName: pulumi.Output<string>;
+public readonly clusterName: pulumi.Output<string>;
+public readonly serviceName: pulumi.Output<string>;
 
-  constructor(
-    name: string,
-    args: EcsStackArgs,
-    opts?: pulumi.ComponentResourceOptions
-  ) {
-    super('tap:ecs:EcsStack', name, args, opts);
+constructor(
+name: string,
+args: EcsStackArgs,
+opts?: pulumi.ComponentResourceOptions
+) {
+super('tap:ecs:EcsStack', name, args, opts);
 
     const region = pulumi.output(aws.getRegion()).name;
 
@@ -964,7 +968,8 @@ export class EcsStack extends pulumi.ComponentResource {
       clusterName: this.clusterName,
       serviceName: this.serviceName,
     });
-  }
+
+}
 }
 
 ---
@@ -973,30 +978,30 @@ export class EcsStack extends pulumi.ComponentResource {
 
 ### load-balancer-stack.ts
 
-import * as pulumi from '@pulumi/pulumi';
-import * as aws from '@pulumi/aws';
+import _ as pulumi from '@pulumi/pulumi';
+import _ as aws from '@pulumi/aws';
 
 export interface LoadBalancerStackArgs {
-  environmentSuffix: string;
-  vpcId: pulumi.Output<string>;
-  subnetIds: pulumi.Output<string[]>;
-  securityGroupId: pulumi.Output<string>;
-  certificateArn?: string;
-  tags: pulumi.Input<{ [key: string]: string }>;
+environmentSuffix: string;
+vpcId: pulumi.Output<string>;
+subnetIds: pulumi.Output<string[]>;
+securityGroupId: pulumi.Output<string>;
+certificateArn?: string;
+tags: pulumi.Input<{ [key: string]: string }>;
 }
 
 export class LoadBalancerStack extends pulumi.ComponentResource {
-  public readonly albArn: pulumi.Output<string>;
-  public readonly albDnsName: pulumi.Output<string>;
-  public readonly albZoneId: pulumi.Output<string>;
-  public readonly targetGroupArn: pulumi.Output<string>;
+public readonly albArn: pulumi.Output<string>;
+public readonly albDnsName: pulumi.Output<string>;
+public readonly albZoneId: pulumi.Output<string>;
+public readonly targetGroupArn: pulumi.Output<string>;
 
-  constructor(
-    name: string,
-    args: LoadBalancerStackArgs,
-    opts?: pulumi.ComponentResourceOptions
-  ) {
-    super('tap:loadbalancer:LoadBalancerStack', name, args, opts);
+constructor(
+name: string,
+args: LoadBalancerStackArgs,
+opts?: pulumi.ComponentResourceOptions
+) {
+super('tap:loadbalancer:LoadBalancerStack', name, args, opts);
 
     // Create Application Load Balancer
     const alb = new aws.lb.LoadBalancer(
@@ -1106,7 +1111,8 @@ export class LoadBalancerStack extends pulumi.ComponentResource {
       albZoneId: this.albZoneId,
       targetGroupArn: this.targetGroupArn,
     });
-  }
+
+}
 }
 
 ---
@@ -1115,28 +1121,28 @@ export class LoadBalancerStack extends pulumi.ComponentResource {
 
 ### dns-stack.ts
 
-import * as pulumi from '@pulumi/pulumi';
-import * as aws from '@pulumi/aws';
+import _ as pulumi from '@pulumi/pulumi';
+import _ as aws from '@pulumi/aws';
 
 export interface DnsStackArgs {
-  environmentSuffix: string;
-  domainName?: string;
-  albDnsName: pulumi.Output<string>;
-  albZoneId: pulumi.Output<string>;
-  tags: pulumi.Input<{ [key: string]: string }>;
+environmentSuffix: string;
+domainName?: string;
+albDnsName: pulumi.Output<string>;
+albZoneId: pulumi.Output<string>;
+tags: pulumi.Input<{ [key: string]: string }>;
 }
 
 export class DnsStack extends pulumi.ComponentResource {
-  public readonly hostedZoneId?: pulumi.Output<string>;
-  public readonly nameServers?: pulumi.Output<string[]>;
-  public readonly recordName?: pulumi.Output<string>;
+public readonly hostedZoneId?: pulumi.Output<string>;
+public readonly nameServers?: pulumi.Output<string[]>;
+public readonly recordName?: pulumi.Output<string>;
 
-  constructor(
-    name: string,
-    args: DnsStackArgs,
-    opts?: pulumi.ComponentResourceOptions
-  ) {
-    super('tap:dns:DnsStack', name, args, opts);
+constructor(
+name: string,
+args: DnsStackArgs,
+opts?: pulumi.ComponentResourceOptions
+) {
+super('tap:dns:DnsStack', name, args, opts);
 
     // Only create DNS resources if domain name is provided
     if (args.domainName) {
@@ -1184,7 +1190,8 @@ export class DnsStack extends pulumi.ComponentResource {
     } else {
       this.registerOutputs({});
     }
-  }
+
+}
 }
 
 ---
@@ -1193,23 +1200,23 @@ export class DnsStack extends pulumi.ComponentResource {
 
 ### monitoring-stack.ts
 
-import * as pulumi from '@pulumi/pulumi';
-import * as aws from '@pulumi/aws';
+import _ as pulumi from '@pulumi/pulumi';
+import _ as aws from '@pulumi/aws';
 
 export interface MonitoringStackArgs {
-  environmentSuffix: string;
-  tags: pulumi.Input<{ [key: string]: string }>;
+environmentSuffix: string;
+tags: pulumi.Input<{ [key: string]: string }>;
 }
 
 export class MonitoringStack extends pulumi.ComponentResource {
-  public readonly ecsLogGroupName: pulumi.Output<string>;
+public readonly ecsLogGroupName: pulumi.Output<string>;
 
-  constructor(
-    name: string,
-    args: MonitoringStackArgs,
-    opts?: pulumi.ComponentResourceOptions
-  ) {
-    super('tap:monitoring:MonitoringStack', name, args, opts);
+constructor(
+name: string,
+args: MonitoringStackArgs,
+opts?: pulumi.ComponentResourceOptions
+) {
+super('tap:monitoring:MonitoringStack', name, args, opts);
 
     // Create KMS key for CloudWatch Logs encryption
     const kmsKey = new aws.kms.Key(
@@ -1296,7 +1303,8 @@ export class MonitoringStack extends pulumi.ComponentResource {
     this.registerOutputs({
       ecsLogGroupName: this.ecsLogGroupName,
     });
-  }
+
+}
 }
 
 ---
@@ -1417,4 +1425,3 @@ Tests actual AWS resource deployment and configuration.
 pulumi cancel --yes  # Cancel stuck locks
 pulumi refresh       # Sync state with AWS
 ```
-
