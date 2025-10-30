@@ -510,7 +510,7 @@ jobs:
   claude-code-action:
     runs-on: ubuntu-24.04
     name: "Claude Review"
-    needs: [integration-tests-live, analysis]
+    needs: [integration-tests-live]
     permissions:
       contents: write
       pull-requests: write
