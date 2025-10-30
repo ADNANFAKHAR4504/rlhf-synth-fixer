@@ -1407,7 +1407,8 @@ export default safeSuffix;
 
 ### lib/lambda/api/index.js
 
-```typescript
+```javascript
+
 const AWS = require('aws-sdk');
 const secretsManager = new AWS.SecretsManager();
 const s3 = new AWS.S3();
