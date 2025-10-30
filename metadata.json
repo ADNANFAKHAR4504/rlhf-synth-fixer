@@ -11,5 +11,14 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": "S3, DynamoDB, Lambda, EventBridge, SQS, IAM, CloudWatch, AppAutoscaling"
+  "aws_services": [
+    "S3",
+    "DynamoDB",
+    "Lambda",
+    "EventBridge",
+    "SQS",
+    "IAM",
+    "CloudWatch",
+    "AppAutoscaling"
+  ]
 }
