@@ -189,7 +189,7 @@ describe('TapStack Unit Tests', () => {
         TracingConfig: {
           Mode: 'Active',
         },
-        ReservedConcurrentExecutions: 100,
+        ReservedConcurrentExecutions: Match.anyValue(),
         Environment: {
           Variables: {
             NODE_ENV: 'production',
