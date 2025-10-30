@@ -61,8 +61,8 @@ interface TapStackOutputs {
   route53ZoneId: pulumi.Output<string>;
   route53ZoneName: pulumi.Output<string>;
   cloudwatchDashboardArn: pulumi.Output<string>;
-  publicSubnetIds: pulumi.Output<string[]>;  // Changed from Output<string> to Output<string[]>
-  privateSubnetIds: pulumi.Output<string[]>; // Changed from Output<string> to Output<string[]>
+  publicSubnetIds: pulumi.Output<string[]>;
+  privateSubnetIds: pulumi.Output<string[]>;
   vpcPeeringConnectionIds: pulumi.Output<string[]>;
 }
 
@@ -221,11 +221,21 @@ export class TapStack extends pulumi.ComponentResource {
       }
     }
 
+    // Determine RDS instance class - db.t3.micro is NOT supported for Aurora PostgreSQL 14.6
+    // Minimum supported instance for Aurora PostgreSQL is db.t3.medium
+    let rdsInstanceClass = config.get("rdsInstanceClass");
+    if (!rdsInstanceClass) {
+      // Use smaller instance for PR/dev, larger for prod
+      rdsInstanceClass = environmentSuffix === "prod" ? "db.r5.large" : 
+                        environmentSuffix === "staging" ? "db.t3.medium" : 
+                        "db.t3.medium"; // Changed from db.t3.micro to db.t3.medium (minimum for Aurora)
+    }
+
     return {
       environmentSuffix,
       vpcCidr,
       ecsTaskCount,
-      rdsInstanceClass: config.get("rdsInstanceClass") || "db.t3.micro",
+      rdsInstanceClass,
       s3LogRetentionDays,
       availabilityZones: config.getObject<string[]>("availabilityZones") || ["us-east-1a", "us-east-1b", "us-east-1c"],
       tags: {
@@ -622,11 +632,13 @@ export class TapStack extends pulumi.ComponentResource {
     targetGroup: aws.lb.TargetGroup,
     rds: any
   ) {
-    // Create CloudWatch log group
+    // Create CloudWatch log group with AWS-compliant name (no special characters except hyphen)
+    const logGroupName = `/ecs/${this.getAwsCompliantName("service")}`;
+    
     const logGroup = new aws.cloudwatch.LogGroup(
       this.getResourceName("ecs-logs"),
       {
-        name: `/ecs/${this.getResourceName("service")}`,
+        name: logGroupName,
         retentionInDays: this.config.cloudwatchLogRetentionDays,
         kmsKeyId: undefined, // AWS-managed encryption
         tags: {
@@ -736,8 +748,8 @@ export class TapStack extends pulumi.ComponentResource {
         executionRoleArn: executionRole.arn,
         taskRoleArn: taskRole.arn,
         containerDefinitions: pulumi
-          .all([rds.cluster.endpoint, rds.secret.arn])
-          .apply(([endpoint, secretArn]) =>
+          .all([rds.cluster.endpoint, rds.secret.arn, logGroup.name])
+          .apply(([endpoint, secretArn, logGroupName]) =>
             JSON.stringify([
               {
                 name: "app",
@@ -778,7 +790,7 @@ export class TapStack extends pulumi.ComponentResource {
                 logConfiguration: {
                   logDriver: "awslogs",
                   options: {
-                    "awslogs-group": logGroup.name.apply(n => n),
+                    "awslogs-group": logGroupName,
                     "awslogs-region": aws.config.region!,
                     "awslogs-stream-prefix": "ecs",
                   },
@@ -1184,7 +1196,7 @@ export class TapStack extends pulumi.ComponentResource {
 
   /**
   * Get AWS-compliant resource name for resources with strict naming rules
-  * (RDS, ElastiCache, etc. - lowercase alphanumeric and hyphens only, must start with letter)
+  * (RDS, ElastiCache, CloudWatch Log Groups, etc. - lowercase alphanumeric and hyphens only, must start with letter)
   */
   private getAwsCompliantName(resourceType: string): string {
     let name = `${this.projectName}-${this.config.environmentSuffix}-${resourceType}`.toLowerCase();
