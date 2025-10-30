@@ -1,0 +1,169 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Master stack for payment processing infrastructure migration",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix for resource naming (e.g., prod, staging)",
+      "AllowedPattern": "[a-z0-9-]+",
+      "MinLength": 1,
+      "MaxLength": 20
+    },
+    "Environment": {
+      "Type": "String",
+      "Description": "Environment name",
+      "AllowedValues": ["production", "staging"],
+      "Default": "production"
+    },
+    "VPCStackTemplateURL": {
+      "Type": "String",
+      "Description": "S3 URL for VPC nested stack template"
+    },
+    "DatabaseStackTemplateURL": {
+      "Type": "String",
+      "Description": "S3 URL for Database nested stack template"
+    },
+    "ApplicationStackTemplateURL": {
+      "Type": "String",
+      "Description": "S3 URL for Application nested stack template"
+    },
+    "DBMasterUsername": {
+      "Type": "String",
+      "Description": "Master username for RDS Aurora cluster",
+      "Default": "admin",
+      "NoEcho": true
+    },
+    "DBMasterPassword": {
+      "Type": "String",
+      "Description": "Master password for RDS Aurora cluster",
+      "NoEcho": true,
+      "MinLength": 8
+    }
+  },
+  "Resources": {
+    "VPCStack": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": {
+          "Ref": "VPCStackTemplateURL"
+        },
+        "Parameters": {
+          "EnvironmentSuffix": {
+            "Ref": "EnvironmentSuffix"
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "DatabaseStack": {
+      "Type": "AWS::CloudFormation::Stack",
+      "DependsOn": "VPCStack",
+      "Properties": {
+        "TemplateURL": {
+          "Ref": "DatabaseStackTemplateURL"
+        },
+        "Parameters": {
+          "EnvironmentSuffix": {
+            "Ref": "EnvironmentSuffix"
+          },
+          "VPCId": {
+            "Fn::GetAtt": ["VPCStack", "Outputs.VPCId"]
+          },
+          "PrivateSubnetIds": {
+            "Fn::GetAtt": ["VPCStack", "Outputs.PrivateSubnetIds"]
+          },
+          "DBMasterUsername": {
+            "Ref": "DBMasterUsername"
+          },
+          "DBMasterPassword": {
+            "Ref": "DBMasterPassword"
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "ApplicationStack": {
+      "Type": "AWS::CloudFormation::Stack",
+      "DependsOn": "DatabaseStack",
+      "Properties": {
+        "TemplateURL": {
+          "Ref": "ApplicationStackTemplateURL"
+        },
+        "Parameters": {
+          "EnvironmentSuffix": {
+            "Ref": "EnvironmentSuffix"
+          },
+          "VPCId": {
+            "Fn::GetAtt": ["VPCStack", "Outputs.VPCId"]
+          },
+          "PrivateSubnetIds": {
+            "Fn::GetAtt": ["VPCStack", "Outputs.PrivateSubnetIds"]
+          },
+          "LambdaSecurityGroupId": {
+            "Fn::GetAtt": ["VPCStack", "Outputs.LambdaSecurityGroupId"]
+          },
+          "DBSecretArn": {
+            "Fn::GetAtt": ["DatabaseStack", "Outputs.DBSecretArn"]
+          },
+          "DBClusterEndpoint": {
+            "Fn::GetAtt": ["DatabaseStack", "Outputs.DBClusterEndpoint"]
+          },
+          "KMSKeyId": {
+            "Fn::GetAtt": ["DatabaseStack", "Outputs.KMSKeyId"]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "VPCId": {
+      "Description": "VPC ID",
+      "Value": {
+        "Fn::GetAtt": ["VPCStack", "Outputs.VPCId"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPCId"
+        }
+      }
+    },
+    "APIEndpoint": {
+      "Description": "API Gateway endpoint",
+      "Value": {
+        "Fn::GetAtt": ["ApplicationStack", "Outputs.APIEndpoint"]
+      }
+    },
+    "DBClusterEndpoint": {
+      "Description": "RDS Aurora cluster endpoint",
+      "Value": {
+        "Fn::GetAtt": ["DatabaseStack", "Outputs.DBClusterEndpoint"]
+      }
+    }
+  }
+}

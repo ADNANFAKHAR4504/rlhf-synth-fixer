@@ -1,0 +1,420 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Application infrastructure for payment processing system",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix for resource naming"
+    },
+    "VPCId": {
+      "Type": "String",
+      "Description": "VPC ID"
+    },
+    "PrivateSubnetIds": {
+      "Type": "CommaDelimitedList",
+      "Description": "List of private subnet IDs"
+    },
+    "LambdaSecurityGroupId": {
+      "Type": "String",
+      "Description": "Security group ID for Lambda functions"
+    },
+    "DBSecretArn": {
+      "Type": "String",
+      "Description": "ARN of database credentials secret"
+    },
+    "DBClusterEndpoint": {
+      "Type": "String",
+      "Description": "Aurora cluster endpoint"
+    },
+    "KMSKeyId": {
+      "Type": "String",
+      "Description": "KMS Key ID for encryption"
+    }
+  },
+  "Resources": {
+    "DeadLetterQueue": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "QueueName": {
+          "Fn::Sub": "payment-dlq-${EnvironmentSuffix}"
+        },
+        "MessageRetentionPeriod": 1209600,
+        "KmsMasterKeyId": {
+          "Ref": "KMSKeyId"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-dlq-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "TransactionQueue": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "QueueName": {
+          "Fn::Sub": "payment-transaction-queue-${EnvironmentSuffix}"
+        },
+        "VisibilityTimeout": 300,
+        "MessageRetentionPeriod": 345600,
+        "KmsMasterKeyId": {
+          "Ref": "KMSKeyId"
+        },
+        "RedrivePolicy": {
+          "deadLetterTargetArn": {
+            "Fn::GetAtt": ["DeadLetterQueue", "Arn"]
+          },
+          "maxReceiveCount": 3
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-queue-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "payment-lambda-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "LambdaSecretsAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue",
+                    "secretsmanager:DescribeSecret"
+                  ],
+                  "Resource": {
+                    "Ref": "DBSecretArn"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:Decrypt",
+                    "kms:DescribeKey"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${KMSKeyId}"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameter",
+                    "ssm:GetParameters"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/payment/${EnvironmentSuffix}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sqs:SendMessage",
+                    "sqs:ReceiveMessage",
+                    "sqs:DeleteMessage",
+                    "sqs:GetQueueAttributes"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": ["TransactionQueue", "Arn"]
+                    },
+                    {
+                      "Fn::GetAtt": ["DeadLetterQueue", "Arn"]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-lambda-role-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PaymentProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "payment-processor-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": ["LambdaExecutionRole", "Arn"]
+        },
+        "Code": {
+          "ZipFile": "import json\nimport os\nimport boto3\nfrom botocore.exceptions import ClientError\n\ndef handler(event, context):\n    secrets_client = boto3.client('secretsmanager')\n    ssm_client = boto3.client('ssm')\n    \n    try:\n        secret_arn = os.environ['DB_SECRET_ARN']\n        secret_response = secrets_client.get_secret_value(SecretId=secret_arn)\n        db_credentials = json.loads(secret_response['SecretString'])\n        \n        environment_suffix = os.environ['ENVIRONMENT_SUFFIX']\n        config_response = ssm_client.get_parameter(\n            Name=f'/payment/{environment_suffix}/config'\n        )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Payment processed successfully',\n                'transactionId': context.request_id\n            })\n        }\n    except ClientError as e:\n        print(f'Error: {e}')\n        return {\n            'statusCode': 500,\n            'body': json.dumps({'error': 'Payment processing failed'})\n        }\n"
+        },
+        "Environment": {
+          "Variables": {
+            "DB_SECRET_ARN": {
+              "Ref": "DBSecretArn"
+            },
+            "DB_ENDPOINT": {
+              "Ref": "DBClusterEndpoint"
+            },
+            "ENVIRONMENT_SUFFIX": {
+              "Ref": "EnvironmentSuffix"
+            },
+            "QUEUE_URL": {
+              "Ref": "TransactionQueue"
+            }
+          }
+        },
+        "VpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Ref": "LambdaSecurityGroupId"
+            }
+          ],
+          "SubnetIds": {
+            "Ref": "PrivateSubnetIds"
+          }
+        },
+        "Timeout": 60,
+        "MemorySize": 512,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-processor-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "payment-lambda-errors-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when Lambda errors exceed threshold",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "PaymentProcessorFunction"
+            }
+          }
+        ]
+      }
+    },
+    "ApiGatewayRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "payment-api-gateway-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "apigateway.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "InvokeLambda",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": "lambda:InvokeFunction",
+                  "Resource": {
+                    "Fn::GetAtt": ["PaymentProcessorFunction", "Arn"]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "RestApi": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "payment-api-${EnvironmentSuffix}"
+        },
+        "Description": "Payment processing API",
+        "EndpointConfiguration": {
+          "Types": ["REGIONAL"]
+        }
+      }
+    },
+    "ApiKey": {
+      "Type": "AWS::ApiGateway::ApiKey",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "payment-api-key-${EnvironmentSuffix}"
+        },
+        "Enabled": true
+      }
+    },
+    "UsagePlan": {
+      "Type": "AWS::ApiGateway::UsagePlan",
+      "DependsOn": "ApiDeployment",
+      "Properties": {
+        "UsagePlanName": {
+          "Fn::Sub": "payment-usage-plan-${EnvironmentSuffix}"
+        },
+        "ApiStages": [
+          {
+            "ApiId": {
+              "Ref": "RestApi"
+            },
+            "Stage": "prod"
+          }
+        ],
+        "Throttle": {
+          "BurstLimit": 200,
+          "RateLimit": 100
+        }
+      }
+    },
+    "UsagePlanKey": {
+      "Type": "AWS::ApiGateway::UsagePlanKey",
+      "Properties": {
+        "KeyId": {
+          "Ref": "ApiKey"
+        },
+        "KeyType": "API_KEY",
+        "UsagePlanId": {
+          "Ref": "UsagePlan"
+        }
+      }
+    },
+    "PaymentResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "RestApi"
+        },
+        "ParentId": {
+          "Fn::GetAtt": ["RestApi", "RootResourceId"]
+        },
+        "PathPart": "process"
+      }
+    },
+    "PaymentMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "RestApi"
+        },
+        "ResourceId": {
+          "Ref": "PaymentResource"
+        },
+        "HttpMethod": "POST",
+        "AuthorizationType": "NONE",
+        "ApiKeyRequired": true,
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PaymentProcessorFunction.Arn}/invocations"
+          },
+          "Credentials": {
+            "Fn::GetAtt": ["ApiGatewayRole", "Arn"]
+          }
+        }
+      }
+    },
+    "ApiDeployment": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "DependsOn": "PaymentMethod",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "RestApi"
+        },
+        "StageName": "prod"
+      }
+    },
+    "ConfigParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/payment/${EnvironmentSuffix}/config"
+        },
+        "Type": "String",
+        "Value": "{\"processingTimeout\":30,\"retryAttempts\":3}",
+        "Description": "Payment processing configuration",
+        "Tags": {
+          "Environment": {
+            "Ref": "EnvironmentSuffix"
+          }
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "APIEndpoint": {
+      "Description": "API Gateway endpoint URL",
+      "Value": {
+        "Fn::Sub": "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/process"
+      }
+    },
+    "QueueURL": {
+      "Description": "Transaction queue URL",
+      "Value": {
+        "Ref": "TransactionQueue"
+      }
+    },
+    "LambdaFunctionArn": {
+      "Description": "Lambda function ARN",
+      "Value": {
+        "Fn::GetAtt": ["PaymentProcessorFunction", "Arn"]
+      }
+    }
+  }
+}

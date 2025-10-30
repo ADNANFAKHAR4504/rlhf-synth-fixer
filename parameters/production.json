@@ -1,0 +1,32 @@
+{
+  "Parameters": [
+    {
+      "ParameterKey": "EnvironmentSuffix",
+      "ParameterValue": "prod"
+    },
+    {
+      "ParameterKey": "Environment",
+      "ParameterValue": "production"
+    },
+    {
+      "ParameterKey": "VPCStackTemplateURL",
+      "ParameterValue": "https://s3.amazonaws.com/your-bucket/vpc-stack.json"
+    },
+    {
+      "ParameterKey": "DatabaseStackTemplateURL",
+      "ParameterValue": "https://s3.amazonaws.com/your-bucket/database-stack.json"
+    },
+    {
+      "ParameterKey": "ApplicationStackTemplateURL",
+      "ParameterValue": "https://s3.amazonaws.com/your-bucket/application-stack.json"
+    },
+    {
+      "ParameterKey": "DBMasterUsername",
+      "ParameterValue": "admin"
+    },
+    {
+      "ParameterKey": "DBMasterPassword",
+      "ParameterValue": "CHANGE_ME_SECURE_PASSWORD"
+    }
+  ]
+}
