@@ -1,4 +1,4 @@
-aws_region         = "eu-central-1"
+aws_region         = "us-east-1"
 environment_suffix = "synth101000770"
 migration_phase    = "transition"
 
