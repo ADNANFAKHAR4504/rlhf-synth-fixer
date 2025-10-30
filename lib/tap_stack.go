@@ -194,8 +194,8 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 
 	// Grant CloudFront log delivery service the necessary permissions
 	loggingBucket.AddToResourcePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
-		Sid:       jsii.String("AWSCloudFrontLogsPolicy"),
-		Effect:    awsiam.Effect_ALLOW,
+		Sid:    jsii.String("AWSCloudFrontLogsPolicy"),
+		Effect: awsiam.Effect_ALLOW,
 		Principals: &[]awsiam.IPrincipal{
 			awsiam.NewServicePrincipal(jsii.String("cloudfront.amazonaws.com"), nil),
 		},
@@ -204,7 +204,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 			"s3:PutBucketAcl",
 		),
 		Resources: jsii.Strings(*loggingBucket.BucketArn()),
-	})
+	}))
 
 	// Grant CloudFront permission to write log objects
 	loggingBucket.AddToResourcePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
