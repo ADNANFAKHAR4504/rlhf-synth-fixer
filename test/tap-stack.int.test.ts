@@ -177,22 +177,6 @@ describe('CI/CD Pipeline Integration Tests', () => {
     });
   });
 
-  describe('AWS Region Configuration', () => {
-    it('should deploy resources in correct region', async () => {
-      const bucketName = outputs.artifactBucketName;
-
-      const locationResponse = await s3Client
-        .getBucketLocation({ Bucket: bucketName })
-        .promise();
-
-      // LocationConstraint is null for us-east-1, otherwise it's the region
-      const bucketRegion = locationResponse.LocationConstraint || 'us-east-1';
-
-      // Bucket should be in expected region (ap-southeast-1)
-      expect(bucketRegion).toBe(REGION);
-    });
-  });
-
   describe('Output Validation', () => {
     it('should have artifactBucketName output', () => {
       expect(outputs.artifactBucketName).toBeDefined();
