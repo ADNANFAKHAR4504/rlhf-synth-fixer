@@ -23,8 +23,11 @@ export class MonitoringStack extends pulumi.ComponentResource {
         description: 'KMS key for CloudWatch Logs encryption',
         enableKeyRotation: true,
         policy: pulumi
-          .output(aws.getCallerIdentity())
-          .accountId.apply(accountId =>
+          .all([
+            pulumi.output(aws.getCallerIdentity()).accountId,
+            pulumi.output(aws.getRegion()).name,
+          ])
+          .apply(([accountId, regionName]) =>
             JSON.stringify({
               Version: '2012-10-17',
               Statement: [
@@ -41,7 +44,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
                   Sid: 'Allow CloudWatch Logs',
                   Effect: 'Allow',
                   Principal: {
-                    Service: `logs.${aws.getRegion().then(r => r.name)}.amazonaws.com`,
+                    Service: `logs.${regionName}.amazonaws.com`,
                   },
                   Action: [
                     'kms:Encrypt',
@@ -54,7 +57,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
                   Resource: '*',
                   Condition: {
                     ArnLike: {
-                      'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${aws.getRegion().then(r => r.name)}:${accountId}:*`,
+                      'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${regionName}:${accountId}:*`,
                     },
                   },
                 },
