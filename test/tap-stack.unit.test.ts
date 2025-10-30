@@ -61,8 +61,9 @@ describe('TapStack (unit)', () => {
     // an inline object literal that triggers excess property checks against the typed constructor.
     props.createS3 = true;
     props.createRds = true;
-    const stack = new CloudSetupStack(app, 'CloudSetupDefaultFallback', props as any);
-    const t = Template.fromStack(stack as unknown as cdk.Stack);
+    const parent = new cdk.Stack(app, 'ParentStackDefault', { env: { region: 'us-east-1', account: '111111111111' } });
+    const stack = new CloudSetupStack(parent, 'CloudSetupDefaultFallback', props as any);
+    const t = Template.fromStack(parent as unknown as cdk.Stack);
     // verify stack synthesizes and bucket exists with expected properties
     t.resourceCountIs('AWS::S3::Bucket', 1);
     const buckets = t.findResources('AWS::S3::Bucket');
@@ -72,7 +73,8 @@ describe('TapStack (unit)', () => {
 
   test('minimal CloudSetupStack instantiation compiles resources', () => {
     const app = new cdk.App();
-    const stack = new CloudSetupStack(app, 'CloudSetupMinimal', {
+    const parent = new cdk.Stack(app, 'ParentStackMinimal', { env: { region: 'us-east-1', account: '111111111111' } });
+    const stack = new CloudSetupStack(parent, 'CloudSetupMinimal', {
       env: { region: 'us-east-1', account: '111111111111' },
       domainName: 'minimal.example.com',
       environmentSuffix: 'min',
@@ -80,7 +82,7 @@ describe('TapStack (unit)', () => {
       createS3: true,
       createRds: true,
     } as any);
-    const t = Template.fromStack(stack as unknown as cdk.Stack);
+    const t = Template.fromStack(parent as unknown as cdk.Stack);
     // basic smoke: VPC and ALB exist
     t.resourceCountIs('AWS::EC2::VPC', 1);
     t.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
@@ -88,7 +90,8 @@ describe('TapStack (unit)', () => {
 
   test('when cloudFrontCertificateArn provided but domainName missing, do not set aliases or certificate', () => {
     const app = new cdk.App();
-    const stack = new CloudSetupStack(app, 'CloudSetupCfNoDomain', {
+    const parent = new cdk.Stack(app, 'ParentStackCfNoDomain', { env: { region: 'us-east-1', account: '111111111111' } });
+    const stack = new CloudSetupStack(parent, 'CloudSetupCfNoDomain', {
       env: { region: 'us-east-1', account: '111111111111' },
       // pass empty domainName to simulate missing domain
       domainName: '',
@@ -98,7 +101,7 @@ describe('TapStack (unit)', () => {
       createS3: true,
       createRds: true,
     } as any);
-    const t = Template.fromStack(stack as unknown as cdk.Stack);
+    const t = Template.fromStack(parent as unknown as cdk.Stack);
     const cf = t.findResources('AWS::CloudFront::Distribution');
     const cfRes = cf[Object.keys(cf)[0]];
     expect(cfRes.Properties.DistributionConfig.Aliases).toBeUndefined();
@@ -108,7 +111,8 @@ describe('TapStack (unit)', () => {
 
   test('createHostedZone true but domainName empty => no HostedZone created', () => {
     const app = new cdk.App();
-    const stack = new CloudSetupStack(app, 'CloudSetupHostZoneEmpty', {
+    const parent = new cdk.Stack(app, 'ParentStackHostZoneEmpty', { env: { region: 'us-east-1', account: '111111111111' } });
+    const stack = new CloudSetupStack(parent, 'CloudSetupHostZoneEmpty', {
       env: { region: 'us-east-1', account: '111111111111' },
       domainName: '',
       environmentSuffix: 'branchtest',
@@ -116,19 +120,20 @@ describe('TapStack (unit)', () => {
       createS3: true,
       createRds: true,
     } as any);
-    const t = Template.fromStack(stack as unknown as cdk.Stack);
+    const t = Template.fromStack(parent as unknown as cdk.Stack);
     t.resourceCountIs('AWS::Route53::HostedZone', 0);
   });
 
   test('skip creating RDS and S3 to exercise empty output fallbacks', () => {
     const app = new cdk.App();
-    const stack = new CloudSetupStack(app, 'CloudSetupSkipResources', {
+    const parent = new cdk.Stack(app, 'ParentStackSkipResources', { env: { region: 'us-east-1', account: '111111111111' } });
+    const stack = new CloudSetupStack(parent, 'CloudSetupSkipResources', {
       env: { region: 'us-east-1', account: '111111111111' },
       domainName: '',
       environmentSuffix: 'branchtest',
       createHostedZone: false,
     } as any);
-    const t = Template.fromStack(stack as unknown as cdk.Stack);
+    const t = Template.fromStack(parent as unknown as cdk.Stack);
     // S3 and RDS resources exist in this version of the stack
     t.resourceCountIs('AWS::S3::Bucket', 1);
     t.resourceCountIs('AWS::RDS::DBInstance', 1);
@@ -173,14 +178,15 @@ describe('TapStack (unit)', () => {
 describe('CloudSetupStack branches', () => {
   test('creates HTTPS listener when albCertificateArn is provided', () => {
     const app = new cdk.App();
-    const stack = new CloudSetupStack(app, 'CloudSetupDirectHttps', {
+    const parent = new cdk.Stack(app, 'ParentStackDirectHttps', { env: { region: 'us-east-1', account: '111111111111' } });
+    new CloudSetupStack(parent, 'CloudSetupDirectHttps', {
       env: { region: 'us-east-1', account: '111111111111' },
       domainName: 'test-https.example.com',
       environmentSuffix: 'branchtest',
       albCertificateArn: 'arn:aws:acm:us-east-1:111111111111:certificate/abcd',
       createHostedZone: false,
-    });
-    const t = Template.fromStack(stack as unknown as cdk.Stack);
+    } as any);
+    const t = Template.fromStack(parent as unknown as cdk.Stack);
     // Listener should be on port 443 and have Certificates property set
     const listeners = t.findResources('AWS::ElasticLoadBalancingV2::Listener');
     const listener = listeners[Object.keys(listeners)[0]];
@@ -191,14 +197,15 @@ describe('CloudSetupStack branches', () => {
   test('configures CloudFront aliases and hosted zone when cert and domain provided', () => {
     const app = new cdk.App();
     const domain = 'test-cf.example.com';
-    const stack = new CloudSetupStack(app, 'CloudSetupDirectCf', {
+    const parent = new cdk.Stack(app, 'ParentStackDirectCf', { env: { region: 'us-east-1', account: '111111111111' } });
+    new CloudSetupStack(parent, 'CloudSetupDirectCf', {
       env: { region: 'us-east-1', account: '111111111111' },
       domainName: domain,
       environmentSuffix: 'branchtest',
       cloudFrontCertificateArn: 'arn:aws:acm:us-east-1:111111111111:certificate/cf123',
       createHostedZone: true,
-    });
-    const t = Template.fromStack(stack as unknown as cdk.Stack);
+    } as any);
+    const t = Template.fromStack(parent as unknown as cdk.Stack);
     const cf = t.findResources('AWS::CloudFront::Distribution');
     const cfRes = cf[Object.keys(cf)[0]];
     // Check that Aliases (CNAMEs) contain our domain
@@ -212,14 +219,15 @@ describe('CloudSetupStack branches', () => {
 
   test('creates HTTP listener and CloudFront without CNAMEs when no certs provided', () => {
     const app = new cdk.App();
-    const stack = new CloudSetupStack(app, 'CloudSetupDirectHttp', {
+    const parent = new cdk.Stack(app, 'ParentStackDirectHttp', { env: { region: 'us-east-1', account: '111111111111' } });
+    new CloudSetupStack(parent, 'CloudSetupDirectHttp', {
       env: { region: 'us-east-1', account: '111111111111' },
       domainName: 'no-cert.example.com',
       environmentSuffix: 'branchtest',
       // no albCertificateArn and no cloudFrontCertificateArn
       createHostedZone: false,
-    });
-    const t = Template.fromStack(stack as unknown as cdk.Stack);
+    } as any);
+    const t = Template.fromStack(parent as unknown as cdk.Stack);
     const listeners = t.findResources('AWS::ElasticLoadBalancingV2::Listener');
     const listener = listeners[Object.keys(listeners)[0]];
     expect(listener.Properties.Port).toBe(80);
