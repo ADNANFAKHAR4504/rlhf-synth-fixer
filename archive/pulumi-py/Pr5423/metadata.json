@@ -20,5 +20,12 @@
     "IAM",
     "CloudWatch",
     "AppAutoscaling"
-  ]
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
 }
