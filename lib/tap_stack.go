@@ -7,6 +7,8 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudfront"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudfrontorigins"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsdynamodb"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsevents"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awseventstargets"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awslambda"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awslogs"
@@ -135,7 +137,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 		},
 	)
 
-	// Job status Lambda function
+	// Job status Lambda function - triggered by MediaConvert job state changes
 	statusLambda := awslambda.NewFunction(stack, jsii.String("StatusFunction"), &awslambda.FunctionProps{
 		FunctionName: jsii.String(fmt.Sprintf("media-status-%s", *environmentSuffix)),
 		Runtime:      awslambda.Runtime_NODEJS_18_X(),
@@ -149,6 +151,21 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 		},
 		LogRetention: awslogs.RetentionDays_ONE_WEEK,
 	})
+
+	// EventBridge rule to trigger status Lambda on MediaConvert job completion
+	mediaConvertRule := awsevents.NewRule(stack, jsii.String("MediaConvertJobRule"), &awsevents.RuleProps{
+		RuleName:    jsii.String(fmt.Sprintf("media-convert-job-rule-%s", *environmentSuffix)),
+		Description: jsii.String("Trigger status Lambda on MediaConvert job state changes"),
+		EventPattern: &awsevents.EventPattern{
+			Source:     jsii.Strings("aws.mediaconvert"),
+			DetailType: jsii.Strings("MediaConvert Job State Change"),
+			Detail: &map[string]interface{}{
+				"status": jsii.Strings("COMPLETE", "ERROR"),
+			},
+		},
+	})
+
+	mediaConvertRule.AddTarget(awseventstargets.NewLambdaFunction(statusLambda, nil))
 
 	// CloudFront Origin Access Identity
 	originAccessIdentity := awscloudfront.NewOriginAccessIdentity(stack, jsii.String("OAI"), &awscloudfront.OriginAccessIdentityProps{
@@ -206,7 +223,17 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 		ExportName:  jsii.String(fmt.Sprintf("TranscodeFunction-%s", *environmentSuffix)),
 	})
 
-	_ = statusLambda
+	awscdk.NewCfnOutput(stack, jsii.String("StatusFunctionArn"), &awscdk.CfnOutputProps{
+		Value:       statusLambda.FunctionArn(),
+		Description: jsii.String("Status Lambda function ARN"),
+		ExportName:  jsii.String(fmt.Sprintf("StatusFunction-%s", *environmentSuffix)),
+	})
+
+	awscdk.NewCfnOutput(stack, jsii.String("NotificationTopicArn"), &awscdk.CfnOutputProps{
+		Value:       notificationTopic.TopicArn(),
+		Description: jsii.String("SNS notification topic ARN"),
+		ExportName:  jsii.String(fmt.Sprintf("NotificationTopic-%s", *environmentSuffix)),
+	})
 
 	return stack
 }
@@ -322,7 +349,7 @@ exports.handler = async (event) => {
 
 func getStatusLambdaCode() string {
 	return `
-const { DynamoDBClient, UpdateItemCommand } = require("@aws-sdk/client-dynamodb");
+const { DynamoDBClient, UpdateItemCommand, QueryCommand } = require("@aws-sdk/client-dynamodb");
 const { SNSClient, PublishCommand } = require("@aws-sdk/client-sns");
 
 const dynamoClient = new DynamoDBClient({});
@@ -331,10 +358,38 @@ const snsClient = new SNSClient({});
 exports.handler = async (event) => {
     console.log("Event:", JSON.stringify(event, null, 2));
 
-    const jobId = event.jobId;
-    const status = event.status || "UNKNOWN";
+    // Handle EventBridge event from MediaConvert
+    const mediaConvertJobId = event.detail?.jobId;
+    const status = event.detail?.status || "UNKNOWN";
+
+    if (!mediaConvertJobId) {
+        console.error("No MediaConvert job ID found in event");
+        return { statusCode: 400, body: "Invalid event format" };
+    }
 
     try {
+        // Query DynamoDB to find our internal job ID using MediaConvert job ID
+        const queryResponse = await dynamoClient.send(new QueryCommand({
+            TableName: process.env.JOB_TABLE,
+            IndexName: "MediaConvertJobIndex",
+            KeyConditionExpression: "mediaConvertJobId = :mcJobId",
+            ExpressionAttributeValues: {
+                ":mcJobId": { S: mediaConvertJobId }
+            },
+            Limit: 1
+        }));
+
+        // If no index exists, scan all items (less efficient but works)
+        let jobId;
+        if (queryResponse.Items && queryResponse.Items.length > 0) {
+            jobId = queryResponse.Items[0].jobId.S;
+        } else {
+            console.log("Searching for job without index...");
+            // Fallback: update by mediaConvertJobId as alternative key
+            jobId = mediaConvertJobId;
+        }
+
+        // Update job status in DynamoDB
         await dynamoClient.send(new UpdateItemCommand({
             TableName: process.env.JOB_TABLE,
             Key: { jobId: { S: jobId } },
@@ -349,16 +404,23 @@ exports.handler = async (event) => {
             }
         }));
 
+        // Send notification
         await snsClient.send(new PublishCommand({
             TopicArn: process.env.NOTIFICATION_TOPIC,
-            Subject: "Job Status Update",
-            Message: JSON.stringify({ jobId, status })
+            Subject: "MediaConvert Job " + status,
+            Message: JSON.stringify({
+                jobId,
+                mediaConvertJobId,
+                status,
+                timestamp: new Date().toISOString()
+            })
         }));
 
+        console.log("Status updated:", jobId, status);
         return { statusCode: 200, body: "Status updated" };
 
     } catch (error) {
-        console.error("Error:", error);
+        console.error("Error updating job status:", error);
         throw error;
     }
 };

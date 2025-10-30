@@ -4,6 +4,9 @@ package lib_test
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -12,6 +15,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/lambda"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/jsii-runtime-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -79,9 +85,139 @@ func TestTapStackIntegration(t *testing.T) {
 		// - Validate resource configurations
 	})
 
-	t.Run("Write Integration Tests", func(t *testing.T) {
-		// ARRANGE & ASSERT
-		t.Skip("Integration test for TapStack should be implemented here.")
+	t.Run("validate deployed stack outputs", func(t *testing.T) {
+		// Skip if running in CI without AWS credentials
+		if testing.Short() {
+			t.Skip("Skipping integration test in short mode")
+		}
+
+		// Read outputs from cdk-outputs.json if it exists
+		outputsFile := "../../cdk-outputs.json"
+		if _, err := os.Stat(outputsFile); os.IsNotExist(err) {
+			t.Skip("cdk-outputs.json not found. Run deployment first.")
+		}
+
+		// Read and parse outputs
+		data, err := os.ReadFile(outputsFile)
+		require.NoError(t, err, "Failed to read cdk-outputs.json")
+
+		var outputs map[string]map[string]string
+		err = json.Unmarshal(data, &outputs)
+		require.NoError(t, err, "Failed to parse cdk-outputs.json")
+
+		// Find the stack outputs
+		var stackOutputs map[string]string
+		for stackName, outputs := range outputs {
+			if len(outputs) > 0 {
+				stackOutputs = outputs
+				t.Logf("Testing stack: %s", stackName)
+				break
+			}
+		}
+
+		require.NotEmpty(t, stackOutputs, "No stack outputs found")
+
+		// Validate required outputs exist
+		requiredOutputs := []string{
+			"SourceBucketName",
+			"ProcessedBucketName",
+			"JobTableName",
+			"DistributionDomainName",
+			"TranscodeFunctionArn",
+		}
+
+		for _, outputKey := range requiredOutputs {
+			value, exists := stackOutputs[outputKey]
+			assert.True(t, exists, "Missing required output: %s", outputKey)
+			assert.NotEmpty(t, value, "Output %s is empty", outputKey)
+			t.Logf("✓ %s: %s", outputKey, value)
+		}
+	})
+
+	t.Run("verify deployed resources are functional", func(t *testing.T) {
+		// Skip if running in CI without AWS credentials
+		if testing.Short() {
+			t.Skip("Skipping integration test in short mode")
+		}
+
+		// Read outputs
+		outputsFile := "../../cdk-outputs.json"
+		if _, err := os.Stat(outputsFile); os.IsNotExist(err) {
+			t.Skip("cdk-outputs.json not found. Run deployment first.")
+		}
+
+		data, err := os.ReadFile(outputsFile)
+		require.NoError(t, err)
+
+		var outputs map[string]map[string]string
+		err = json.Unmarshal(data, &outputs)
+		require.NoError(t, err)
+
+		var stackOutputs map[string]string
+		for _, outputs := range outputs {
+			if len(outputs) > 0 {
+				stackOutputs = outputs
+				break
+			}
+		}
+
+		ctx := context.Background()
+		cfg, err := config.LoadDefaultConfig(ctx)
+		require.NoError(t, err)
+
+		// Test S3 buckets exist
+		if sourceBucket, ok := stackOutputs["SourceBucketName"]; ok {
+			s3Client := s3.NewFromConfig(cfg)
+			_, err := s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
+				Bucket: aws.String(sourceBucket),
+			})
+			assert.NoError(t, err, "Source bucket should exist: %s", sourceBucket)
+			t.Logf("✓ Source bucket exists: %s", sourceBucket)
+		}
+
+		if processedBucket, ok := stackOutputs["ProcessedBucketName"]; ok {
+			s3Client := s3.NewFromConfig(cfg)
+			_, err := s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
+				Bucket: aws.String(processedBucket),
+			})
+			assert.NoError(t, err, "Processed bucket should exist: %s", processedBucket)
+			t.Logf("✓ Processed bucket exists: %s", processedBucket)
+		}
+
+		// Test DynamoDB table exists
+		if tableName, ok := stackOutputs["JobTableName"]; ok {
+			dynamoClient := dynamodb.NewFromConfig(cfg)
+			_, err := dynamoClient.DescribeTable(ctx, &dynamodb.DescribeTableInput{
+				TableName: aws.String(tableName),
+			})
+			assert.NoError(t, err, "DynamoDB table should exist: %s", tableName)
+			t.Logf("✓ DynamoDB table exists: %s", tableName)
+		}
+
+		// Test Lambda functions exist
+		if functionArn, ok := stackOutputs["TranscodeFunctionArn"]; ok {
+			lambdaClient := lambda.NewFromConfig(cfg)
+			_, err := lambdaClient.GetFunction(ctx, &lambda.GetFunctionInput{
+				FunctionName: aws.String(functionArn),
+			})
+			assert.NoError(t, err, "Transcode Lambda function should exist")
+			t.Logf("✓ Transcode Lambda function exists")
+		}
+
+		if functionArn, ok := stackOutputs["StatusFunctionArn"]; ok {
+			lambdaClient := lambda.NewFromConfig(cfg)
+			_, err := lambdaClient.GetFunction(ctx, &lambda.GetFunctionInput{
+				FunctionName: aws.String(functionArn),
+			})
+			assert.NoError(t, err, "Status Lambda function should exist")
+			t.Logf("✓ Status Lambda function exists")
+		}
+
+		// Test CloudFront distribution domain
+		if distDomain, ok := stackOutputs["DistributionDomainName"]; ok {
+			assert.Contains(t, distDomain, ".cloudfront.net", "Distribution domain should be a CloudFront domain")
+			t.Logf("✓ CloudFront distribution domain: %s", distDomain)
+		}
 	})
 }
 
