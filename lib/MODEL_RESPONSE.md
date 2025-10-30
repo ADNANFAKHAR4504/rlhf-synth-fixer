@@ -2614,8 +2614,6 @@ And for the Outputs section, I need to export:
 - StateMachine ARN
 - Table ARNs
 
-Let me complete these sections.
-
 Actually, it looks like my full response was already created but got cut off during rendering. Let me provide the complete CloudFormation template again to ensure it's fully delivered.
 
 ### Answer
