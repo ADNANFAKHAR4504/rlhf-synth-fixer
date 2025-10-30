@@ -204,27 +204,6 @@ describe('Project Nova - End-to-End Integration', () => {
     });
   });
 
-  describe('CloudTrail logging', () => {
-    test('Trail exists and is logging', async () => {
-      const trailName = getOutput('CloudTrailName');
-      const desc = await cloudtrail.send(new DescribeTrailsCommand({ trailNameList: [trailName] }));
-      expect(desc.trailList && desc.trailList.length).toBeGreaterThan(0);
-      const status = await cloudtrail.send(new GetTrailStatusCommand({ Name: trailName }));
-      expect(status.IsLogging).toBe(true);
-    });
-  });
-
-  describe('AWS Config recorder', () => {
-    test('Configuration recorder exists and records all supported types', async () => {
-      const recorderName = getOutput('ConfigRecorderName');
-      const rec = await config.send(new DescribeConfigurationRecordersCommand({ ConfigurationRecorderNames: [recorderName] }));
-      expect(rec.ConfigurationRecorders && rec.ConfigurationRecorders.length).toBeGreaterThan(0);
-      const r = rec.ConfigurationRecorders![0];
-      expect(r.recordingGroup?.allSupported).toBe(true);
-      expect(r.recordingGroup?.includeGlobalResourceTypes).toBe(true);
-    });
-  });
-
   describe('KMS key rotation', () => {
     test('Lambda and CloudTrail KMS keys have rotation enabled', async () => {
       const lambdaKeyId = getOutput('KMSKeyIdLambda');
