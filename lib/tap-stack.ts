@@ -5,6 +5,8 @@ import {
 import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
+import { TlsProvider } from '@cdktf/provider-tls/lib/provider';
+
 
 // Import the constructs from modules
 import {
@@ -51,6 +53,9 @@ export class TapStack extends TerraformStack {
       region: awsRegion,
       defaultTags: defaultTags,
     });
+
+    new TlsProvider(this, 'tls', {});
+
 
     // Configure S3 Backend with native state locking
     new S3Backend(this, {
