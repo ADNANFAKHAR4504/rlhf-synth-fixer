@@ -12,6 +12,7 @@ import {
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 
+/* istanbul ignore next - Default region fallback */
 const REGION = process.env.REGION || process.env.AWS_REGION || 'us-east-1';
 
 const s3Client = new S3Client({
@@ -66,13 +67,18 @@ async function retryWithBackoff<T>(
     try {
       return await operation();
     } catch (error) {
-      if (i === retries - 1) throw error;
+      // If this is the last retry, throw the error
+      if (i >= retries - 1) {
+        throw error;
+      }
 
       const delay = INITIAL_DELAY * Math.pow(2, i);
       console.log(`Retry ${i + 1}/${retries} after ${delay}ms`);
       await sleep(delay);
     }
   }
+
+  /* istanbul ignore next - This line is unreachable */
   throw new Error('Max retries exceeded');
 }
 

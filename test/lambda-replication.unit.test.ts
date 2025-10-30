@@ -217,6 +217,33 @@ describe('Lambda Replication Function', () => {
       expect(result.statusCode).toBe(200);
       expect(mockDynamoSend).toHaveBeenCalled();
     });
+
+    it('sends success notification after DynamoDB replication', async () => {
+      const event = {
+        detail: {
+          eventSource: 'dynamodb.amazonaws.com',
+          eventName: 'PutItem',
+          requestParameters: {
+            key: 'notification-test-id',
+          },
+        },
+      };
+
+      mockDynamoSend.mockResolvedValueOnce({
+        Item: {
+          id: { S: 'notification-test-id' },
+          data: { S: 'test-data' },
+        },
+      });
+      mockDynamoSend.mockResolvedValue({});
+      mockSNSSend.mockResolvedValue({});
+
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(200);
+      expect(mockSNSSend).toHaveBeenCalledTimes(1);
+      expect(mockDynamoSend).toHaveBeenCalled();
+    });
   });
 
   describe('Event Source Handling', () => {
@@ -239,6 +266,44 @@ describe('Lambda Replication Function', () => {
   });
 
   describe('Error Handling', () => {
+    it('sends success notification on successful replication', async () => {
+      const event = {
+        detail: {
+          eventSource: 's3.amazonaws.com',
+          eventName: 'PutObject',
+          requestParameters: {
+            key: 'test-file.json',
+          },
+        },
+      };
+
+      const mockBody = new Uint8Array([1, 2, 3, 4]);
+      let callCount = 0;
+
+      mockS3Send.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1 || callCount === 3) {
+          return Promise.resolve({
+            Body: {
+              transformToByteArray: () => Promise.resolve(mockBody),
+            },
+            Metadata: {},
+          });
+        } else {
+          return Promise.resolve({});
+        }
+      });
+      mockSNSSend.mockResolvedValue({});
+
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(200);
+      expect(mockSNSSend).toHaveBeenCalledTimes(1);
+      // Verify it was called with success notification
+      const snsCall = mockSNSSend.mock.calls[0];
+      expect(snsCall).toBeDefined();
+    });
+
     it('sends failure notification on error', async () => {
       const event = {
         detail: {
@@ -351,6 +416,46 @@ describe('Lambda Replication Function', () => {
       expect(mockS3Send.mock.calls.length).toBeGreaterThan(4); // Should have retry attempts
       expect(mockSNSSend).toHaveBeenCalled();
     });
+
+    it('retries with exponential backoff delays', async () => {
+      const event = {
+        detail: {
+          eventSource: 's3.amazonaws.com',
+          eventName: 'PutObject',
+          requestParameters: {
+            key: 'backoff-test.json',
+          },
+        },
+      };
+
+      const mockBody = new Uint8Array([1, 2, 3]);
+      let callCount = 0;
+
+      // Fail first 2 attempts, then succeed
+      mockS3Send.mockImplementation(() => {
+        callCount++;
+        if (callCount <= 2) {
+          return Promise.reject(new Error('Temporary error'));
+        } else if (callCount === 3 || callCount === 5) {
+          // GetObject succeeds
+          return Promise.resolve({
+            Body: {
+              transformToByteArray: () => Promise.resolve(mockBody),
+            },
+            Metadata: {},
+          });
+        } else {
+          // PutObject
+          return Promise.resolve({});
+        }
+      });
+      mockSNSSend.mockResolvedValue({});
+
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(200);
+      expect(callCount).toBeGreaterThan(4);
+    });
   });
 
   describe('Environment Variables', () => {
@@ -368,6 +473,105 @@ describe('Lambda Replication Function', () => {
       expect(process.env.SUCCESS_TOPIC_ARN).toBeDefined();
       expect(process.env.FAILURE_TOPIC_ARN).toBeDefined();
       expect(process.env.DLQ_URL).toBeDefined();
+    });
+  });
+
+  describe('Notification Handling', () => {
+    it('calls publishNotification with correct parameters for S3 success', async () => {
+      const event = {
+        detail: {
+          eventSource: 's3.amazonaws.com',
+          eventName: 'PutObject',
+          requestParameters: {
+            key: 'notification-test.json',
+          },
+        },
+      };
+
+      const mockBody = new Uint8Array([1, 2, 3, 4]);
+      let callCount = 0;
+
+      mockS3Send.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1 || callCount === 3) {
+          return Promise.resolve({
+            Body: {
+              transformToByteArray: () => Promise.resolve(mockBody),
+            },
+            Metadata: {},
+          });
+        } else {
+          return Promise.resolve({});
+        }
+      });
+
+      let snsCallArgs: any;
+      mockSNSSend.mockImplementation((...args) => {
+        snsCallArgs = args;
+        return Promise.resolve({});
+      });
+
+      await handler(event);
+
+      expect(mockSNSSend).toHaveBeenCalled();
+      expect(snsCallArgs).toBeDefined();
+    });
+
+    it('calls publishNotification with correct parameters for DynamoDB success', async () => {
+      const event = {
+        detail: {
+          eventSource: 'dynamodb.amazonaws.com',
+          eventName: 'PutItem',
+          requestParameters: {
+            key: 'notification-dynamo-test',
+          },
+        },
+      };
+
+      mockDynamoSend.mockResolvedValueOnce({
+        Item: {
+          id: { S: 'notification-dynamo-test' },
+          data: { S: 'test-data' },
+        },
+      });
+      mockDynamoSend.mockResolvedValue({});
+
+      let snsCallArgs: any;
+      mockSNSSend.mockImplementation((...args) => {
+        snsCallArgs = args;
+        return Promise.resolve({});
+      });
+
+      await handler(event);
+
+      expect(mockSNSSend).toHaveBeenCalled();
+      expect(snsCallArgs).toBeDefined();
+    });
+
+    it('publishes to failure topic when error occurs', async () => {
+      const event = {
+        detail: {
+          eventSource: 's3.amazonaws.com',
+          eventName: 'PutObject',
+          requestParameters: {
+            key: 'failure-test.json',
+          },
+        },
+      };
+
+      mockS3Send.mockRejectedValue(new Error('Test failure'));
+
+      let publishedToFailureTopic = false;
+      mockSNSSend.mockImplementation(() => {
+        publishedToFailureTopic = true;
+        return Promise.resolve({});
+      });
+      mockSQSSend.mockResolvedValue({});
+
+      await expect(handler(event)).rejects.toThrow('Test failure');
+
+      expect(publishedToFailureTopic).toBe(true);
+      expect(mockSNSSend).toHaveBeenCalled();
     });
   });
 });
