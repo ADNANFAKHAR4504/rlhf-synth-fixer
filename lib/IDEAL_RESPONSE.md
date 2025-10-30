@@ -55,11 +55,12 @@ export class TapStack extends pulumi.ComponentResource {
     super('tap:stack:TapStack', name, args, opts);
 
     const config = new pulumi.Config();
-    const environmentSuffix = args.environmentSuffix || config.get('env') || 'dev';
+    const environmentSuffix =
+      args.environmentSuffix || config.get('env') || 'dev';
     const region = config.get('region') || 'us-east-1';
 
     // Merge provided tags with required tags
-    const resourceTags = pulumi.output(args.tags || {}).apply((t) => ({
+    const resourceTags = pulumi.output(args.tags || {}).apply(t => ({
       ...t,
       Environment: environmentSuffix,
       Project: 'DataPipeline',
@@ -134,20 +135,21 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Configure S3 bucket encryption (SSE-S3)
-    const bucketEncryption = new aws.s3.BucketServerSideEncryptionConfigurationV2(
-      `datapipeline-bucket-encryption-${environmentSuffix}`,
-      {
-        bucket: bucket.id,
-        rules: [
-          {
-            applyServerSideEncryptionByDefault: {
-              sseAlgorithm: 'AES256',
+    const bucketEncryption =
+      new aws.s3.BucketServerSideEncryptionConfigurationV2(
+        `datapipeline-bucket-encryption-${environmentSuffix}`,
+        {
+          bucket: bucket.id,
+          rules: [
+            {
+              applyServerSideEncryptionByDefault: {
+                sseAlgorithm: 'AES256',
+              },
             },
-          },
-        ],
-      },
-      { parent: bucket }
-    );
+          ],
+        },
+        { parent: bucket }
+      );
 
     // Configure S3 lifecycle rules - transition to Glacier after 90 days
     const bucketLifecycle = new aws.s3.BucketLifecycleConfigurationV2(
@@ -228,7 +230,12 @@ export class TapStack extends pulumi.ComponentResource {
               Statement: [
                 {
                   Effect: 'Allow',
-                  Action: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject', 's3:ListBucket'],
+                  Action: [
+                    's3:GetObject',
+                    's3:PutObject',
+                    's3:DeleteObject',
+                    's3:ListBucket',
+                  ],
                   Resource: [bucketArn, `${bucketArn}/*`],
                 },
                 {
@@ -245,7 +252,11 @@ export class TapStack extends pulumi.ComponentResource {
                 },
                 {
                   Effect: 'Allow',
-                  Action: ['sqs:SendMessage', 'sqs:ReceiveMessage', 'sqs:DeleteMessage'],
+                  Action: [
+                    'sqs:SendMessage',
+                    'sqs:ReceiveMessage',
+                    'sqs:DeleteMessage',
+                  ],
                   Resource: queueArn,
                 },
               ],
@@ -327,11 +338,13 @@ export const queueUrl = stack.queueUrl;
 ## Key Features
 
 ### 1. Multi-Environment Support
+
 - Environment parameter (dev, staging, prod) controls resource naming
 - Uses Pulumi configuration system for environment-specific settings
 - All resource names follow pattern: `datapipeline-{resourceType}-{environment}`
 
 ### 2. S3 Configuration
+
 - Versioning enabled for data protection
 - SSE-S3 encryption for data at rest
 - Lifecycle rule to transition objects to Glacier after 90 days
@@ -339,35 +352,41 @@ export const queueUrl = stack.queueUrl;
 - Random suffix ensures globally unique bucket names
 
 ### 3. DynamoDB Table
+
 - On-demand billing mode for cost efficiency
 - Partition key: `fileId`, Sort key: `timestamp`
 - Point-in-time recovery enabled for data protection
 - Environment-specific naming
 
 ### 4. SQS Integration
+
 - 14-day message retention period
 - 5-minute visibility timeout
 - Receives S3 event notifications
 - Queue policy allows S3 to send messages
 
 ### 5. IAM Security
+
 - Least privilege access policy
 - Environment-specific resource access
 - Includes S3, DynamoDB, and SQS permissions
 - Read/write operations for same environment only
 
 ### 6. Resource Tagging
+
 - Consistent tags across all resources
 - Environment tag for environment identification
 - Project: DataPipeline
 - ManagedBy: Pulumi
 
 ### 7. Dependency Management
+
 - Queue policy created before bucket notifications
 - Proper parent relationships for resource organization
 - Uses Pulumi's dependsOn for explicit dependencies
 
 ### 8. Stack Outputs
+
 - S3 bucket name
 - DynamoDB table name
 - SQS queue URL
@@ -396,7 +415,7 @@ pulumi stack output queueUrl
 1. **Random Suffix for S3**: Uses `aws.random.RandomId` to ensure bucket names are globally unique across environments
 2. **Queue-First Approach**: Creates SQS queue and policy before S3 bucket notification to avoid circular dependencies
 3. **Pulumi Interpolation**: Uses `pulumi.interpolate` for dynamic resource naming with environment suffix
-4. **On-Demand Billing**: DynamoDB on-demand mode provides cost efficiency for variable workloads
+4. **On-Demand Billing**: DynamoDB on-demand mode provides cost efficiency for variable workload
 5. **Separate Resources**: Uses separate Pulumi resources for versioning, encryption, lifecycle, and notifications (AWS best practice)
 6. **Point-in-Time Recovery**: Enabled on DynamoDB for data protection and compliance requirements
 7. **ComponentResource Pattern**: Uses Pulumi ComponentResource for better organization and reusability
