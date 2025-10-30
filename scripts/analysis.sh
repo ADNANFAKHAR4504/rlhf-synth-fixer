@@ -16,16 +16,6 @@ cleanup() {
 # Set trap to run cleanup on script exit (success or failure)
 trap cleanup EXIT
 
-# Set AWS endpoint URL for moto server
-export AWS_ENDPOINT_URL="http://localhost:${DOCKER_PORT}"
-echo "Setting AWS_ENDPOINT_URL=${AWS_ENDPOINT_URL}"
-
-# Set AWS credentials for moto (dummy values are fine)
-export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-testing}"
-export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-testing}"
-export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-1}"
-echo "AWS credentials configured for moto server"
-
 echo "=== IaC Analysis Job ==="
 
 # Start Moto server using Docker

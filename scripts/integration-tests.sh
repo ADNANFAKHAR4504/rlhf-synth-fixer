@@ -28,18 +28,8 @@ if [ "$LANGUAGE" = "java" ]; then
   ./gradlew integrationTest jacocoIntegrationTestReport --build-cache --no-daemon
 
 elif [ "$LANGUAGE" = "py" ] || [ "$LANGUAGE" = "python" ]; then
-  if [ "$PLATFORM" = "analysis" ]; then
-    echo "✅ Analysis platform detected, running analysis script with moto server..."
-    # Call the analysis.sh script which handles:
-    # - Starting moto server on port 5001
-    # - Running tests against the server
-    # - Running the analysis script
-    # - Cleanup
-    ./scripts/analysis.sh
-  else
-    echo "✅ Python project detected, running integration tests..."
-    pipenv run test-py-integration
-  fi
+  echo "✅ Python project detected, running integration tests..."
+  pipenv run test-py-integration
 
 elif [ "$LANGUAGE" = "go" ]; then
   echo "✅ Go project detected, running integration tests..."
