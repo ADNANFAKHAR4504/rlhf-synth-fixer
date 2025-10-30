@@ -126,6 +126,9 @@ public class MainIntegrationTest {
         lambdaClient = LambdaClient.builder()
                 .region(region)
                 .credentialsProvider(credentialsProvider)
+                .overrideConfiguration(builder -> builder
+                        .apiCallTimeout(java.time.Duration.ofSeconds(60))
+                        .apiCallAttemptTimeout(java.time.Duration.ofSeconds(60)))
                 .build();
 
         ssmClient = SsmClient.builder()
