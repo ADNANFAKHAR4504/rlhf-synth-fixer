@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350074",
+  "team": "2",
+  "startedAt": "2025-10-20T05:39:50.297Z",
+  "background": "Secure multi-tier web infrastructure deployment with comprehensive AWS services integration, high availability, encryption, monitoring, and CI/CD automation",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "CloudFormation",
+    "VPC",
+    "Subnets",
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "RDS",
+    "S3",
+    "CloudFront",
+    "IAM",
+    "Systems Manager Parameter Store",
+    "CloudWatch",
+    "CodePipeline"
+  ],
+  "training_quality": "9",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}

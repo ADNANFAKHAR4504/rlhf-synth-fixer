@@ -1,0 +1,41 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350145",
+  "team": "4",
+  "startedAt": "2025-10-28T12:41:08.356Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "training_quality": 8,
+  "background": "This challenge requires knowledge of AWS CloudFormation, basic VPC, EC2, Load Balancer, RDS, and security best practices on AWS to build a secure and highly available web application infrastructure.",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Route Table",
+    "Security Group",
+    "EC2",
+    "Auto Scaling",
+    "Launch Template",
+    "Elastic Load Balancing (ALB)",
+    "RDS",
+    "Secrets Manager",
+    "IAM",
+    "S3 Bucket",
+    "CloudTrail",
+    "CloudWatch",
+    "CloudFormation"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
+}
