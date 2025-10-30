@@ -513,7 +513,7 @@ jobs:
     runs-on: ubuntu-24.04
     name: "Claude Review"
     needs: [integration-tests-live, analysis]
-    if: always() && !cancelled() && (needs.analysis.result == 'success' || needs.integration-tests-live.result == 'success')
+    if: always() && !cancelled() && (needs.analysis.result == 'success' || needs.analysis.result == 'skipped') && (needs.integration-tests-live.result == 'success' || needs.integration-tests-live.result == 'skipped')
     permissions:
       contents: write
       pull-requests: write
