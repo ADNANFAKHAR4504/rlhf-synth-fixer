@@ -1,96 +1,88 @@
 /**
  * Terraform Integration Tests for Three-Tier VPC Architecture
- * 
- * Tests real AWS resources deployed via Terraform.
- * Uses cfn-outputs/flat-outputs.json for dynamic resource references.
- * No mocking - validates actual AWS SDK calls and resource interactions.
  */
-
 import * as AWS from 'aws-sdk';
 import * as fs from 'fs';
 import * as path from 'path';
 
-// Test configuration
-const TEST_TIMEOUT = 90000; // 90 seconds
+const TEST_TIMEOUT = 90000;
 let deployedResources: any = {};
-let awsRegion: string = process.env.AWS_REGION || 'us-west-2';  // ✅ From env variable
+let awsRegion: string;  // ✅ NO HARDCODING - will be detected
 
-// AWS SDK service clients
 let ec2: AWS.EC2;
 let rds: AWS.RDS;
 
 /**
- * Safely parse output values that might be strings or already parsed
+ * ✅ SMART: Detect region by finding where VPC actually exists!
  */
-function parseOutputValue(value: any): any {
-  if (value === null || value === undefined) {
-    return null;
-  }
+async function detectRegionFromAWS(vpc_id: string): Promise<string> {
+  console.log(`\n🔍 Searching for VPC ${vpc_id} across all regions...\n`);
+  
+  const regions = [
+    'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
+    'eu-west-1', 'eu-west-2', 'eu-central-1',
+    'ap-southeast-1', 'ap-southeast-2', 'ap-northeast-1',
+    'ca-central-1', 'sa-east-1'
+  ];
 
-  // If it's already an array, return as-is
-  if (Array.isArray(value)) {
-    return value;
-  }
-
-  // If it's a string, try to parse it as JSON
-  if (typeof value === 'string') {
-    // Check if it looks like JSON (starts with [ or {)
-    if (value.startsWith('[') || value.startsWith('{')) {
-      try {
-        return JSON.parse(value);
-      } catch (e) {
-        console.warn(`⚠️  Failed to parse JSON string: ${value}`);
-        return value;
+  for (const region of regions) {
+    try {
+      const tempEC2 = new AWS.EC2({ region });
+      const response = await tempEC2.describeVpcs({
+        VpcIds: [vpc_id]
+      }).promise();
+      
+      if (response.Vpcs && response.Vpcs.length > 0) {
+        console.log(`✅ Found VPC in region: ${region}\n`);
+        return region;
       }
+    } catch (e) {
+      // Region doesn't have this VPC, continue searching
     }
-    // Return plain strings as-is
-    return value;
   }
-
-  // Return other types as-is
-  return value;
+  
+  throw new Error(`❌ VPC ${vpc_id} not found in any region!`);
 }
 
 describe('Terraform Integration Tests - Three-Tier VPC Architecture', () => {
-  beforeAll(() => {
+  beforeAll(async () => {  // ✅ Made async!
     const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
     
     if (fs.existsSync(outputsPath)) {
       const outputsContent = fs.readFileSync(outputsPath, 'utf-8');
       const rawOutputs = JSON.parse(outputsContent);
       
-      console.log('📋 Raw outputs from file:');
-      Object.entries(rawOutputs).forEach(([key, value]) => {
-        console.log(`   ${key}: ${typeof value === 'string' && value.length > 50 ? value.substring(0, 50) + '...' : value}`);
-      });
-
-      // Parse all output values (handles both string and already-parsed formats)
+      // Parse Terraform tuple outputs into proper arrays
       deployedResources = {
-        vpc_id: parseOutputValue(rawOutputs.vpc_id),
-        internet_gateway_id: parseOutputValue(rawOutputs.internet_gateway_id),
-        db_subnet_group_name: parseOutputValue(rawOutputs.db_subnet_group_name),
-        public_subnet_ids: parseOutputValue(rawOutputs.public_subnet_ids),
-        private_subnet_ids: parseOutputValue(rawOutputs.private_subnet_ids),
-        database_subnet_ids: parseOutputValue(rawOutputs.database_subnet_ids),
-        nat_gateway_ids: parseOutputValue(rawOutputs.nat_gateway_ids)
+        vpc_id: rawOutputs.vpc_id,
+        internet_gateway_id: rawOutputs.internet_gateway_id,
+        db_subnet_group_name: rawOutputs.db_subnet_group_name,
+        public_subnet_ids: Array.isArray(rawOutputs.public_subnet_ids) 
+          ? rawOutputs.public_subnet_ids 
+          : JSON.parse(rawOutputs.public_subnet_ids || '[]'),
+        private_subnet_ids: Array.isArray(rawOutputs.private_subnet_ids)
+          ? rawOutputs.private_subnet_ids
+          : JSON.parse(rawOutputs.private_subnet_ids || '[]'),
+        database_subnet_ids: Array.isArray(rawOutputs.database_subnet_ids)
+          ? rawOutputs.database_subnet_ids
+          : JSON.parse(rawOutputs.database_subnet_ids || '[]'),
+        nat_gateway_ids: Array.isArray(rawOutputs.nat_gateway_ids)
+          ? rawOutputs.nat_gateway_ids
+          : JSON.parse(rawOutputs.nat_gateway_ids || '[]')
       };
       
-      console.log('\n✓ Loaded and parsed deployed resources from outputs');
-      console.log('📊 Parsed resources:');
-      Object.entries(deployedResources).forEach(([key, value]) => {
-        if (Array.isArray(value)) {
-          console.log(`   ${key}: [${value.join(', ')}]`);
-        } else {
-          console.log(`   ${key}: ${value}`);
-        }
-      });
+      console.log('✓ Loaded deployed resources from outputs');
+      
+      // ✅ AUTO-DETECT REGION by finding where VPC exists!
+      awsRegion = await detectRegionFromAWS(deployedResources.vpc_id);
+      
     } else {
       console.warn('⚠ No cfn-outputs/flat-outputs.json found');
       throw new Error('Missing outputs file');
     }
     
     AWS.config.update({ region: awsRegion });
-    console.log(`\n✓ AWS SDK configured for region: ${awsRegion}`);
+    console.log(`✓ AWS SDK configured for region: ${awsRegion}`);
     
     ec2 = new AWS.EC2();
     rds = new AWS.RDS();
@@ -554,6 +546,29 @@ describe('Terraform Integration Tests - Three-Tier VPC Architecture', () => {
       });
       
       console.log('✓ DB subnet group ready for RDS deployment');
+    });
+
+    test('should verify network ACL database tier isolation', async () => {
+      const response = await ec2.describeNetworkAcls({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [deployedResources.vpc_id]
+          },
+          {
+            Name: 'association.subnet-id',
+            Values: deployedResources.database_subnet_ids
+          }
+        ]
+      }).promise();
+      
+      expect(response.NetworkAcls!.length).toBe(1);
+      const dbNacl = response.NetworkAcls![0];
+      
+      const denyRules = dbNacl.Entries?.filter(e => e.RuleAction === 'deny' && !e.Egress);
+      expect(denyRules!.length).toBeGreaterThan(0);
+      
+      console.log('✓ Database tier network ACL has proper isolation');
     });
 
     test('should verify VPC CIDR consistency across all resources', async () => {
