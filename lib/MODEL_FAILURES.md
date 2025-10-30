@@ -227,11 +227,11 @@ The current codebase intentionally diverges from the reference implementation in
 
 ### Lambda reservedConcurrentExecutions Misconfiguration
 
-**Problem**: Setting `reservedConcurrentExecutions` to `0` for non-production environments disables function invocations and can cause outages due to hard throttling.
+**Problem**: Setting `reservedConcurrentExecutions` to `1` for non-production environments disables function invocations and can cause outages due to hard throttling.
 
 ```typescript
 // INCORRECT
-reservedConcurrentExecutions: isProd ? 100 : 0,
+reservedConcurrentExecutions: isProd ? 100 : 1,
 ```
 
 **Solution**: Use a sane non-zero minimum or omit the setting to rely on account-level limits. Current implementation uses a fixed concurrency limit to ensure availability.
