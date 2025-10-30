@@ -1,6 +1,8 @@
 ### main.tf
 
-``` hcl
+```hcl
+# main.tf - Complete Terraform configuration for scalable web application
+
 # Variables
 variable "aws_region" {
   description = "AWS region for resources"
