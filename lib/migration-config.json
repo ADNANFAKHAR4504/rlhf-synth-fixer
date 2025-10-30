@@ -1,0 +1,38 @@
+{
+  "sourceRegion": "us-east-1",
+  "targetRegion": "eu-west-1",
+  "migrationBatch": "batch-001",
+  "timestamp": "1234567890",
+  "s3Buckets": [
+    {
+      "name": "analytics-data",
+      "versioning": true,
+      "lifecycleDays": 90
+    },
+    {
+      "name": "user-uploads",
+      "versioning": true,
+      "lifecycleDays": 90
+    }
+  ],
+  "dynamodbTables": [
+    {
+      "name": "user-metadata",
+      "hashKey": "userId",
+      "hashKeyType": "S",
+      "rangeKey": "timestamp",
+      "rangeKeyType": "N",
+      "readCapacity": 5,
+      "writeCapacity": 5,
+      "scalingFactor": 1.5
+    },
+    {
+      "name": "analytics-events",
+      "hashKey": "eventId",
+      "hashKeyType": "S",
+      "readCapacity": 10,
+      "writeCapacity": 10,
+      "scalingFactor": 2.0
+    }
+  ]
+}
