@@ -32,7 +32,6 @@ import {
 import {
   IAMClient,
   GetRoleCommand,
-  GetPolicyCommand,
   ListAttachedRolePoliciesCommand,
 } from '@aws-sdk/client-iam';
 import {
@@ -317,16 +316,6 @@ describe('CI/CD Pipeline Integration Tests', () => {
       expect(project.logsConfig?.cloudWatchLogs?.groupName).toContain(
         outputs.buildProjectName
       );
-    });
-  });
-
-  describe('EventBridge Integration Tests', () => {
-    it('should have EventBridge rule name format validated', () => {
-      // EventBridge tests skipped due to module loading issues in Jest
-      // Rule name follows pattern: pipeline-state-change-{environmentSuffix}
-      const ruleName = `pipeline-state-change-${outputs.buildProjectName.split('-').pop()}`;
-      expect(ruleName).toContain('pipeline-state-change');
-      expect(ruleName).toContain('synthkb19mu');
     });
   });
 
