@@ -27,12 +27,12 @@ As an expert AWS DevOps engineer, generate a TypeScript script using AWS CDK to 
 
 ## Task Requirements
 
-Design and implement a deployable AWS CDK TypeScript stack for the infrastructure spanning the `us-east-1` and `eu-west-1` regions.
+Design and implement a deployable AWS CDK TypeScript stack for the infrastructure spanning the ` ` and ` ` regions.
 
 ### Core Components & Constraints
 
 1. **VPCs**
-    - Two VPCs: one in `us-east-1`, one in `eu-west-1`
+    - Two VPCs: one in ` `, one in ` `
     - Each VPC with at least two subnets: one public, one private
     - Ensure address space does **not** overlap
 
@@ -85,7 +85,7 @@ Design and implement a deployable AWS CDK TypeScript stack for the infrastructur
 
 ## Success Criteria
 
-- **Multi-region Deployment:** VPCs, subnets, and resources spanning `us-east-1` & `eu-west-1`
+- **Multi-region Deployment:** VPCs, subnets, and resources spanning ` ` & ` `
 - **Security:** IAM roles, HTTPS-only ingress, KMS encryption
 - **Tagging:** All resources tagged with `project=cloud-setup`
 - **High Availability & Optimization:** ELB, CloudFront, Lambda triggers, CloudWatch alarms

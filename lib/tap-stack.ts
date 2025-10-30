@@ -15,12 +15,11 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    // Instantiate CloudSetupStack for us-east-1
+    // Instantiate CloudSetup as a construct within this single TapStack (no nested stacks)
     const usEast = new CloudSetupStack(
       this,
       `CloudSetupUsEast1-${environmentSuffix}`,
       {
-        env: { region: 'us-east-1', account: props?.env?.account },
         domainName: `cloudsetup-${environmentSuffix}.example.com`,
         environmentSuffix,
         createHostedZone: false,

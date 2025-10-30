@@ -16,7 +16,7 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
 import { Construct } from 'constructs';
 
-export interface CloudSetupStackProps extends cdk.StackProps {
+export interface CloudSetupStackProps {
   domainName: string;
   environmentSuffix: string;
   // Optional: ARNs for certs if available
@@ -26,7 +26,7 @@ export interface CloudSetupStackProps extends cdk.StackProps {
   createHostedZone?: boolean;
 }
 
-export class CloudSetupStack extends cdk.Stack {
+export class CloudSetupStack extends Construct {
   public readonly vpcId!: string;
   public readonly rdsEndpoint?: string;
   public readonly bucketName?: string;
@@ -36,7 +36,7 @@ export class CloudSetupStack extends cdk.Stack {
   private readonly suffix: string;
 
   constructor(scope: Construct, id: string, props: CloudSetupStackProps) {
-    super(scope, id, props);
+    super(scope, id);
 
     const timestamp = Math.floor(Date.now() / 1000).toString();
     this.suffix = `${props.environmentSuffix || 'dev'}-${timestamp}`;
@@ -215,6 +215,11 @@ EOF`,
       })
     );
 
+    // Define the ASG and explicitly set a root block device mapping that does
+    // not provide a customer KMS key. This ensures EC2/EBS volumes will use
+    // the default EBS KMS key (AWS-managed) rather than a custom key which
+    // can sometimes be in an invalid state and prevent instances from
+    // reaching InService.
     const asg = new autoscaling.AutoScalingGroup(this, `asg-${this.suffix}`, {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
@@ -228,6 +233,21 @@ EOF`,
       securityGroup: httpsSg,
       role: ec2Role,
       userData,
+      // Explicitly configure the root block device without a KMS key. Do
+      // NOT set a kmsKey or kmsKeyId here — leaving it unset ensures the
+      // default AWS-managed EBS key is used for encryption (if encryption
+      // is enabled at the account level) and avoids referencing a custom
+      // KMS key that might be in an invalid state.
+      blockDevices: [
+        {
+          deviceName: '/dev/xvda',
+          volume: autoscaling.BlockDeviceVolume.ebs(8, {
+            // keep the volume encrypted (use the account/default key), but
+            // do not provide a customer-managed KMS key
+            encrypted: true,
+          }),
+        },
+      ],
       minCapacity: 2,
       maxCapacity: 4,
       desiredCapacity: 2,
@@ -268,10 +288,10 @@ EOF`,
     // Only configure alternate domain names (CNAMEs) if a certificate ARN is provided.
     const cfCert = props.cloudFrontCertificateArn
       ? acm.Certificate.fromCertificateArn(
-          this,
-          `cf-cert-${this.suffix}`,
-          props.cloudFrontCertificateArn
-        )
+        this,
+        `cf-cert-${this.suffix}`,
+        props.cloudFrontCertificateArn
+      )
       : undefined;
     const domainNames =
       cfCert && props.domainName ? [props.domainName] : undefined;
