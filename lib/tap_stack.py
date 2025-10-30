@@ -344,13 +344,39 @@ class StorageStack(NestedStack):
 
         Tags.of(self.kms_key).add("iac-rlhf-amazon", f"kms-key-{environment_suffix}")
 
+        # Grant CloudTrail permissions to use the KMS key
+        self.kms_key.add_to_resource_policy(
+            iam.PolicyStatement(
+                sid="AllowCloudTrailEncryption",
+                effect=iam.Effect.ALLOW,
+                principals=[iam.ServicePrincipal("cloudtrail.amazonaws.com")],
+                actions=[
+                    "kms:GenerateDataKey*",
+                    "kms:Decrypt",
+                    "kms:DescribeKey"
+                ],
+                resources=["*"],
+                conditions={
+                    "StringLike": {
+                        "kms:EncryptionContext:aws:cloudtrail:arn": f"arn:aws:cloudtrail:{region}:{account_id}:trail/*"
+                    }
+                }
+            )
+        )
+
         # Create S3 bucket for logs
         self.log_bucket = s3.Bucket(
             self,
             "LogBucket",
             bucket_name=f"tap-logs-{account_id}-{environment_suffix}-{region}",
             encryption=s3.BucketEncryption.S3_MANAGED,
-            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            block_public_access=s3.BlockPublicAccess(
+                block_public_acls=False,
+                ignore_public_acls=False,
+                block_public_policy=True,
+                restrict_public_buckets=True,
+            ),
+            object_ownership=s3.ObjectOwnership.BUCKET_OWNER_PREFERRED,
             removal_policy=RemovalPolicy.RETAIN,
             lifecycle_rules=[
                 s3.LifecycleRule(
@@ -1253,7 +1279,7 @@ class SecurityStack(NestedStack):  # pragma: no cover
                 effect=iam.Effect.ALLOW,
                 principals=[iam.ServicePrincipal("cloudtrail.amazonaws.com")],
                 actions=["s3:PutObject"],
-                resources=[f"{self.trail_bucket.bucket_arn}/*"],
+                resources=[f"{self.trail_bucket.bucket_arn}/AWSLogs/{account_id}/*"],
                 conditions={"StringEquals": {"s3:x-amz-acl": "bucket-owner-full-control"}},
             )
         )

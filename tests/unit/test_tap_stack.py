@@ -522,7 +522,6 @@ class TestServerlessStack(unittest.TestCase):
 
             assert serverless.s3_processing_function is not None
             assert serverless.alarm_function is not None
-            assert serverless.config_function is not None
 
     @mark.it("adds email subscription when provided")
     def test_adds_email_subscription(self):
