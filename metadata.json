@@ -6,7 +6,9 @@
   "team": "synth",
   "startedAt": "2025-10-30T13:47:01+00:00",
   "subtask": "Cloud Environment Setup",
-  "subject_labels": [],
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
   "po_id": "101000776",
   "aws_services": [
     "VPC",

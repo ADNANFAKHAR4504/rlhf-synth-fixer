@@ -9,7 +9,7 @@ module.exports = {
     '^.+\\.mjs$': 'babel-jest',
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(aws-cdk-lib|@aws-cdk|constructs|@aws-sdk)/)',
+    'node_modules/(?!(aws-cdk-lib|@aws-cdk|constructs)/)',
   ],
   globals: {
     'ts-jest': {
