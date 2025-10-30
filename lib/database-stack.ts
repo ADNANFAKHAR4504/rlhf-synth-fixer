@@ -86,7 +86,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
       {
         identifier: `payment-db-${args.environmentSuffix}`,
         engine: 'postgres',
-        engineVersion: '15.5',
+        engineVersion: '15.14',
         instanceClass: 'db.t3.micro',
         allocatedStorage: 20,
         storageType: 'gp3',
