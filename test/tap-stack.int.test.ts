@@ -62,7 +62,7 @@ describe('Serverless Payment Workflow Integration Tests', () => {
   // Debug log all extracted resource identifiers
   debugLog('SETUP', 'Extracted AWS resource identifiers', {
     API_ENDPOINT,
-    API_KEY: API_KEY ? `${API_KEY.substring(0, 10)}...` : 'undefined',
+    API_KEY,
     STATE_MACHINE_ARN,
     TRANSACTIONS_TABLE,
     AUDIT_LOGS_TABLE,
