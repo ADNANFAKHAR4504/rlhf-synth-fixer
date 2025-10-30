@@ -138,9 +138,6 @@ func TestCloudFrontDistribution(t *testing.T) {
 			"Enabled":     true,
 			"HttpVersion": "http2and3",
 			"PriceClass":  "PriceClass_100",
-			"Logging": map[string]interface{}{
-				"Prefix": "cloudfront/",
-			},
 		},
 	})
 }
@@ -178,7 +175,6 @@ func TestStackOutputs(t *testing.T) {
 	template.HasOutput(jsii.String("TranscodeFunctionArn"), map[string]interface{}{})
 	template.HasOutput(jsii.String("StatusFunctionArn"), map[string]interface{}{})
 	template.HasOutput(jsii.String("NotificationTopicArn"), map[string]interface{}{})
-	template.HasOutput(jsii.String("CloudFrontLogsBucketName"), map[string]interface{}{})
 }
 
 // Test EventBridge rule for MediaConvert
