@@ -13,15 +13,22 @@
   "aws_services": [
     "VPC",
     "EC2",
-    "RDS",
-    "ELB",
-    "Auto Scaling",
+    "RDS Aurora",
+    "Application Load Balancer",
+    "Auto Scaling Groups",
     "IAM",
     "KMS",
     "CloudWatch",
-    "ACM",
+    "CloudWatch Logs",
+    "CloudTrail",
+    "S3",
+    "Secrets Manager",
+    "WAF v2",
     "Route 53",
-    "NAT Gateway"
+    "NAT Gateway",
+    "Internet Gateway",
+    "VPC Flow Logs",
+    "SNS"
   ],
   "training_quality": 8,
   "coverage": {

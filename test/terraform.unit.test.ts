@@ -269,7 +269,7 @@ describe("Payment Processing Infrastructure Static Validation", () => {
     });
 
     test("configures backup retention and maintenance windows", () => {
-      expect(has(/backup_retention_period\s*=\s*7/)).toBe(true);
+      expect(has(/backup_retention_period\s*=\s*30/)).toBe(true);
       expect(has(/preferred_backup_window/)).toBe(true);
       expect(has(/preferred_maintenance_window/)).toBe(true);
     });
@@ -446,7 +446,177 @@ describe("Payment Processing Infrastructure Static Validation", () => {
     });
 
     test("configures proper SSL policy for HTTPS", () => {
-      expect(has(/ssl_policy\s*=\s*"ELBSecurityPolicy-TLS-1-2-2017-01"/)).toBe(true);
+      expect(has(/ssl_policy\s*=\s*"ELBSecurityPolicy-TLS13-1-2-2021-06"/)).toBe(true);
+    });
+  });
+
+  describe("Security Enhancements", () => {
+    describe("AWS WAF Configuration", () => {
+      test("creates WAF Web ACL for ALB protection", () => {
+        expect(has(/resource\s+"aws_wafv2_web_acl"\s+"main"/)).toBe(true);
+        expect(has(/scope\s*=\s*"REGIONAL"/)).toBe(true);
+      });
+
+      test("configures rate limiting rule", () => {
+        expect(has(/rate_based_statement\s*{/)).toBe(true);
+        expect(has(/limit\s*=\s*10000/)).toBe(true);
+        expect(has(/aggregate_key_type\s*=\s*"IP"/)).toBe(true);
+      });
+
+      test("includes AWS managed rule sets", () => {
+        expect(has(/AWSManagedRulesCommonRuleSet/)).toBe(true);
+        expect(has(/AWSManagedRulesKnownBadInputsRuleSet/)).toBe(true);
+      });
+
+      test("configures geographic blocking", () => {
+        expect(has(/geo_match_statement\s*{/)).toBe(true);
+        expect(has(/country_codes\s*=\s*\[.*"CN".*"RU".*"KP".*"IR".*\]/)).toBe(true);
+      });
+
+      test("associates WAF with ALB", () => {
+        expect(has(/resource\s+"aws_wafv2_web_acl_association"\s+"main"/)).toBe(true);
+        expect(has(/resource_arn\s*=\s*aws_lb\.main\.arn/)).toBe(true);
+        expect(has(/web_acl_arn\s*=\s*aws_wafv2_web_acl\.main\.arn/)).toBe(true);
+      });
+    });
+
+    describe("Secrets Management", () => {
+      test("generates secure random password", () => {
+        expect(has(/resource\s+"random_password"\s+"db_master_password"/)).toBe(true);
+        expect(has(/length\s*=\s*16/)).toBe(true);
+        expect(has(/special\s*=\s*true/)).toBe(true);
+        expect(has(/upper\s*=\s*true/)).toBe(true);
+        expect(has(/lower\s*=\s*true/)).toBe(true);
+        expect(has(/numeric\s*=\s*true/)).toBe(true);
+      });
+
+      test("creates encrypted secrets manager secret", () => {
+        expect(has(/resource\s+"aws_secretsmanager_secret"\s+"db_credentials"/)).toBe(true);
+        expect(has(/kms_key_id\s*=\s*aws_kms_key\.rds_key\.arn/)).toBe(true);
+        expect(has(/recovery_window_in_days\s*=\s*7/)).toBe(true);
+      });
+
+      test("stores database credentials in secrets manager", () => {
+        expect(has(/resource\s+"aws_secretsmanager_secret_version"\s+"db_credentials"/)).toBe(true);
+        expect(has(/password.*random_password\.db_master_password\.result/)).toBe(true);
+      });
+
+      test("RDS uses managed master user password", () => {
+        expect(has(/manage_master_user_password\s*=\s*true/)).toBe(true);
+        expect(has(/master_user_secret_kms_key_id\s*=\s*aws_kms_key\.rds_key\.arn/)).toBe(true);
+      });
+
+      test("removes hardcoded database password", () => {
+        expect(has(/master_password\s*=\s*var\.db_password/)).toBe(false);
+        expect(tf.includes('default     = "ChangeMe123!"') && !tf.includes('#   default     = "ChangeMe123!"')).toBe(false);
+      });
+    });
+
+    describe("Audit Logging and Compliance", () => {
+      test("configures VPC Flow Logs", () => {
+        expect(has(/resource\s+"aws_flow_log"\s+"vpc_flow_log"/)).toBe(true);
+        expect(has(/traffic_type\s*=\s*"ALL"/)).toBe(true);
+        expect(has(/vpc_id\s*=\s*aws_vpc\.main\.id/)).toBe(true);
+      });
+
+      test("creates CloudWatch log group for VPC Flow Logs", () => {
+        expect(has(/resource\s+"aws_cloudwatch_log_group"\s+"vpc_flow_log"/)).toBe(true);
+        expect(has(/retention_in_days\s*=\s*90/)).toBe(true);
+        expect(has(/kms_key_id\s*=\s*aws_kms_key\.logs_key\.arn/)).toBe(true);
+      });
+
+      test("creates IAM role for VPC Flow Logs", () => {
+        expect(has(/resource\s+"aws_iam_role"\s+"flow_log"/)).toBe(true);
+        expect(has(/Service.*vpc-flow-logs\.amazonaws\.com/)).toBe(true);
+      });
+
+      test("configures CloudTrail for API audit logging", () => {
+        expect(has(/resource\s+"aws_cloudtrail"\s+"main"/)).toBe(true);
+        expect(has(/include_management_events\s*=\s*true/)).toBe(true);
+        expect(has(/kms_key_id\s*=\s*aws_kms_key\.logs_key\.arn/)).toBe(true);
+      });
+
+      test("creates S3 bucket for CloudTrail logs", () => {
+        expect(has(/resource\s+"aws_s3_bucket"\s+"cloudtrail_logs"/)).toBe(true);
+        expect(has(/force_destroy\s*=\s*true/)).toBe(true);
+      });
+
+      test("encrypts CloudTrail S3 bucket", () => {
+        expect(has(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"cloudtrail_logs"/)).toBe(true);
+        expect(has(/kms_master_key_id\s*=\s*aws_kms_key\.logs_key\.arn/)).toBe(true);
+      });
+
+      test("blocks public access to CloudTrail S3 bucket", () => {
+        expect(has(/resource\s+"aws_s3_bucket_public_access_block"\s+"cloudtrail_logs"/)).toBe(true);
+        expect(has(/block_public_acls\s*=\s*true/)).toBe(true);
+        expect(has(/block_public_policy\s*=\s*true/)).toBe(true);
+      });
+    });
+
+    describe("Enhanced KMS Configuration", () => {
+      test("creates dedicated KMS key for logs", () => {
+        expect(has(/resource\s+"aws_kms_key"\s+"logs_key"/)).toBe(true);
+        expect(has(/description.*=.*"KMS key for logs encryption"/)).toBe(true);
+        expect(has(/enable_key_rotation\s*=\s*true/)).toBe(true);
+      });
+
+      test("configures logs KMS key policy for CloudWatch and CloudTrail", () => {
+        expect(has(/AllowCloudWatchLogs/)).toBe(true);
+        expect(has(/AllowCloudTrail/)).toBe(true);
+        expect(has(/Service.*logs\.\$\{var\.aws_region\}\.amazonaws\.com/)).toBe(true);
+        expect(has(/Service.*cloudtrail\.amazonaws\.com/)).toBe(true);
+      });
+
+      test("creates KMS alias for logs key", () => {
+        expect(has(/resource\s+"aws_kms_alias"\s+"logs_key"/)).toBe(true);
+        expect(has(/name\s*=\s*"alias\/\$\{local\.name_prefix\}-logs"/)).toBe(true);
+      });
+    });
+
+    describe("PCI DSS Compliance Tagging", () => {
+      test("includes comprehensive compliance tags", () => {
+        expect(has(/Compliance\s*=\s*"PCI-DSS"/)).toBe(true);
+        expect(has(/DataClass\s*=\s*"Sensitive"/)).toBe(true);
+        expect(has(/BackupRequired\s*=\s*"true"/)).toBe(true);
+        expect(has(/MonitoringLevel\s*=\s*"Enhanced"/)).toBe(true);
+        expect(has(/Owner\s*=\s*"security-team"/)).toBe(true);
+        expect(has(/CostCenter\s*=\s*"payment-processing"/)).toBe(true);
+        expect(has(/Application\s*=\s*"payment-processor"/)).toBe(true);
+      });
+    });
+
+    describe("Enhanced ALB Security", () => {
+      test("enables security features on ALB", () => {
+        expect(has(/drop_invalid_header_fields\s*=\s*true/)).toBe(true);
+        expect(has(/enable_deletion_protection\s*=\s*true/)).toBe(true);
+        expect(has(/enable_http2\s*=\s*true/)).toBe(true);
+      });
+
+      test("uses modern TLS policy", () => {
+        expect(has(/ssl_policy\s*=\s*"ELBSecurityPolicy-TLS13-1-2-2021-06"/)).toBe(true);
+      });
+    });
+
+    describe("Enhanced Monitoring and Alerting", () => {
+      test("creates CloudWatch alarms for critical metrics", () => {
+        expect(has(/resource\s+"aws_cloudwatch_metric_alarm"/)).toBe(true);
+        expect(has(/alarm_actions\s*=\s*\[aws_sns_topic\.alerts\.arn\]/)).toBe(true);
+      });
+
+      test("creates SNS topic for critical alerts", () => {
+        expect(has(/resource\s+"aws_sns_topic"\s+"alerts"/)).toBe(true);
+        expect(has(/kms_master_key_id\s*=\s*aws_kms_key\.logs_key\.arn/)).toBe(true);
+      });
+
+      test("monitors RDS CPU and connections", () => {
+        expect(has(/metric_name\s*=\s*"CPUUtilization"/)).toBe(true);
+        expect(has(/metric_name\s*=\s*"DatabaseConnections"/)).toBe(true);
+      });
+
+      test("monitors ALB response times and error rates", () => {
+        expect(has(/metric_name\s*=\s*"TargetResponseTime"/)).toBe(true);
+        expect(has(/metric_name\s*=\s*"HTTPCode_Target_5XX_Count"/)).toBe(true);
+      });
     });
   });
 
@@ -456,10 +626,22 @@ describe("Payment Processing Infrastructure Static Validation", () => {
       expect(countResourceType("aws_internet_gateway")).toBe(1);
       expect(countResourceType("aws_subnet")).toBe(2);
       expect(countResourceType("aws_security_group")).toBe(3);
-      expect(countResourceType("aws_kms_key")).toBe(2);
+      expect(countResourceType("aws_kms_key")).toBeGreaterThanOrEqual(3); // EBS, RDS, and Logs keys
       expect(countResourceType("aws_rds_cluster")).toBe(1);
       expect(countResourceType("aws_lb")).toBe(1);
       expect(countResourceType("aws_autoscaling_group")).toBe(1);
+      expect(countResourceType("aws_wafv2_web_acl")).toBe(1);
+      expect(countResourceType("aws_secretsmanager_secret")).toBe(1);
+      expect(countResourceType("aws_cloudtrail")).toBe(1);
+      expect(countResourceType("aws_flow_log")).toBe(1);
+      expect(countResourceType("random_password")).toBe(1);
+    });
+
+    test("has appropriate security and compliance resources", () => {
+      expect(countResourceType("aws_s3_bucket")).toBeGreaterThanOrEqual(1); // CloudTrail logs bucket
+      expect(countResourceType("aws_cloudwatch_log_group")).toBeGreaterThanOrEqual(1); // VPC Flow Logs
+      expect(countResourceType("aws_sns_topic")).toBeGreaterThanOrEqual(1); // Alerts topic
+      expect(countResourceType("aws_cloudwatch_metric_alarm")).toBeGreaterThanOrEqual(4); // Multiple monitoring alarms
     });
   });
 

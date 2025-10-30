@@ -1,7 +1,11 @@
+import { CloudTrailClient, DescribeTrailsCommand } from "@aws-sdk/client-cloudtrail";
 import { DescribeSubnetsCommand, DescribeVpcsCommand, EC2Client } from "@aws-sdk/client-ec2";
 import { DescribeLoadBalancersCommand, DescribeTargetGroupsCommand, ElasticLoadBalancingV2Client } from "@aws-sdk/client-elastic-load-balancing-v2";
 import { DescribeKeyCommand, KMSClient } from "@aws-sdk/client-kms";
 import { DescribeDBClustersCommand, RDSClient } from "@aws-sdk/client-rds";
+import { DescribeSecretCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
+import { GetTopicAttributesCommand, SNSClient } from "@aws-sdk/client-sns";
+import { GetWebACLCommand, WAFV2Client } from "@aws-sdk/client-wafv2";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -659,6 +663,158 @@ describe("Payment Processor Infrastructure Integration Tests", () => {
           });
         }
       });
+    });
+  });
+
+  describe("Security Controls", () => {
+    let wafv2Client: WAFV2Client;
+    let cloudTrailClient: CloudTrailClient;
+    let secretsManagerClient: SecretsManagerClient;
+    let snsClient: SNSClient;
+
+    beforeAll(() => {
+      wafv2Client = new WAFV2Client({ region });
+      cloudTrailClient = new CloudTrailClient({ region });
+      secretsManagerClient = new SecretsManagerClient({ region });
+      snsClient = new SNSClient({ region });
+    });
+
+    it("validates WAF Web ACL configuration", async () => {
+      if (skipIfMissing("waf_web_acl_arn", outputs)) return;
+
+      expect(isValidArn(outputs.waf_web_acl_arn)).toBe(true);
+      expect(outputs.waf_web_acl_arn).toContain("webacl");
+
+      // Extract Web ACL ID from ARN
+      const webAclId = outputs.waf_web_acl_arn.split("/").pop();
+
+      const command = new GetWebACLCommand({
+        Scope: "REGIONAL",
+        Id: webAclId
+      });
+
+      const response = await wafv2Client.send(command);
+      expect(response.WebACL).toBeDefined();
+      expect(response.WebACL!.Rules).toBeDefined();
+      expect(response.WebACL!.Rules!.length).toBeGreaterThan(0);
+
+      // Verify common security rules are present
+      const ruleNames = response.WebACL!.Rules!.map(rule => rule.Name);
+      expect(ruleNames).toContain("RateLimitRule");
+      expect(ruleNames).toContain("AWSManagedRulesCommonRuleSet");
+    });
+
+    it("validates Secrets Manager configuration", async () => {
+      if (skipIfMissing("secrets_manager_secret_arn", outputs)) return;
+
+      expect(isValidArn(outputs.secrets_manager_secret_arn)).toBe(true);
+      expect(outputs.secrets_manager_secret_arn).toContain("secret");
+
+      const command = new DescribeSecretCommand({
+        SecretId: outputs.secrets_manager_secret_arn
+      });
+
+      const response = await secretsManagerClient.send(command);
+      expect(response.Name).toBeDefined();
+      expect(response.KmsKeyId).toBeDefined();
+      expect(response.VersionIdsToStages).toBeDefined();
+
+      // Verify encryption is enabled
+      expect(response.KmsKeyId).toBeTruthy();
+    });
+
+    it("validates CloudTrail configuration", async () => {
+      if (skipIfMissing("cloudtrail_arn", outputs)) return;
+
+      expect(isValidArn(outputs.cloudtrail_arn)).toBe(true);
+      expect(outputs.cloudtrail_arn).toContain("trail");
+
+      const trailName = outputs.cloudtrail_arn.split("/").pop();
+
+      const command = new DescribeTrailsCommand({
+        trailNameList: [trailName]
+      });
+
+      const response = await cloudTrailClient.send(command);
+      expect(response.trailList).toHaveLength(1);
+
+      const trail = response.trailList![0];
+      expect(trail.IncludeGlobalServiceEvents).toBe(true);
+      expect(trail.IsMultiRegionTrail).toBeDefined();
+      expect(trail.LogFileValidationEnabled).toBeDefined();
+      expect(trail.KmsKeyId).toBeDefined(); // Encryption should be enabled
+    });
+
+    it("validates SNS alerts topic configuration", async () => {
+      if (skipIfMissing("sns_alerts_topic_arn", outputs)) return;
+
+      expect(isValidArn(outputs.sns_alerts_topic_arn)).toBe(true);
+      expect(outputs.sns_alerts_topic_arn).toContain("topic");
+
+      const command = new GetTopicAttributesCommand({
+        TopicArn: outputs.sns_alerts_topic_arn
+      });
+
+      const response = await snsClient.send(command);
+      expect(response.Attributes).toBeDefined();
+      expect(response.Attributes!.TopicArn).toBe(outputs.sns_alerts_topic_arn);
+
+      // Verify KMS encryption is enabled
+      expect(response.Attributes!.KmsMasterKeyId).toBeDefined();
+    });
+
+    it("validates comprehensive encryption strategy", () => {
+      const encryptionKeys = [];
+
+      if (!skipIfMissing("kms_key_ebs_arn", outputs)) {
+        encryptionKeys.push(outputs.kms_key_ebs_arn);
+      }
+
+      if (!skipIfMissing("kms_key_rds_arn", outputs)) {
+        encryptionKeys.push(outputs.kms_key_rds_arn);
+      }
+
+      if (!skipIfMissing("kms_key_logs_arn", outputs)) {
+        encryptionKeys.push(outputs.kms_key_logs_arn);
+      }
+
+      // Should have multiple KMS keys for different services
+      expect(encryptionKeys.length).toBeGreaterThanOrEqual(2);
+
+      // All keys should be unique
+      const uniqueKeys = new Set(encryptionKeys);
+      expect(uniqueKeys.size).toBe(encryptionKeys.length);
+
+      // All keys should be in the correct region
+      encryptionKeys.forEach(keyArn => {
+        expect(keyArn).toContain(`:${region}:`);
+        expect(isValidArn(keyArn)).toBe(true);
+      });
+    });
+
+    it("validates no hardcoded secrets or passwords", () => {
+      // This test ensures no sensitive hardcoded values are exposed in outputs
+      const sensitivePatterns = [
+        /password.*=.*['"]/i,
+        /secret.*=.*['"]/i,
+        /key.*=.*['"]/i,
+        /token.*=.*['"]/i,
+        /changeme/i,
+        /admin123/i,
+        /password123/i,
+        /123456/,
+      ];
+
+      const outputString = JSON.stringify(outputs);
+
+      sensitivePatterns.forEach(pattern => {
+        expect(outputString).not.toMatch(pattern);
+      });
+
+      // Specifically check that we're not exposing database passwords
+      expect(outputs).not.toHaveProperty("db_password");
+      expect(outputs).not.toHaveProperty("master_password");
+      expect(outputs).not.toHaveProperty("database_password");
     });
   });
 });
