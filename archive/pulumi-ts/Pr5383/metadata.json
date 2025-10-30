@@ -1,0 +1,32 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-30T10:56:12.048062",
+  "subtask": "Multi-Environment Consistency & Replication",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "multi-environment",
+    "s3",
+    "lambda"
+  ],
+  "po_id": "p7fpg",
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "DynamoDB",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 9,
+  "region": "ap-northeast-2",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
