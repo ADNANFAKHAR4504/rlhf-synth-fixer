@@ -1,0 +1,26 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-30T13:27:11+05:30",
+  "subtask": "Multi-Environment Consistency & Replication",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "multi-environment",
+    "s3",
+    "cloudfront"
+  ],
+  "po_id": "fi0mk4",
+  "aws_services": [
+    "S3",
+    "CloudFront",
+    "Route53",
+    "ACM",
+    "IAM"
+  ],
+  "region": "eu-west-1",
+  "training_quality": 9
+}
