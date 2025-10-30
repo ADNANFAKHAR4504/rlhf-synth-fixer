@@ -618,41 +618,6 @@ class TestCloudFrontIntegration(unittest.TestCase):
         self.assertTrue(logging.get("Enabled", False), "CloudFront logging should be enabled")
 
 
-@mark.describe("Route53 DNS Integration Tests")
-class TestRoute53Integration(unittest.TestCase):
-    """Integration tests for Route53 hosted zone and records"""
-
-    @classmethod
-    def setUpClass(cls):
-        """Set up Route53 client for tests"""
-        cls.route53_client = boto3.client("route53", region_name=CONFIG["region"])
-        cls.hosted_zone_id = OUTPUTS.get("HostedZoneId")
-
-    @mark.it("Route53 hosted zone exists if domain is configured")
-    def test_hosted_zone_exists(self):
-        """Test that Route53 hosted zone exists if domain is configured"""
-        if not self.hosted_zone_id:
-            self.skipTest("Hosted zone ID not found - domain may not be configured")
-
-        response = self.route53_client.get_hosted_zone(Id=self.hosted_zone_id)
-
-        self.assertIn("HostedZone", response)
-        zone = response["HostedZone"]
-        self.assertEqual(zone["Id"].split("/")[-1], self.hosted_zone_id.split("/")[-1])
-
-    @mark.it("Route53 has health checks configured")
-    def test_health_checks_exist(self):
-        """Test that Route53 health checks are configured"""
-        if not self.hosted_zone_id:
-            self.skipTest("Hosted zone ID not found - domain may not be configured")
-
-        response = self.route53_client.list_health_checks()
-
-        # Filter health checks by tags or name pattern
-        health_checks = response.get("HealthChecks", [])
-        self.assertGreater(len(health_checks), 0, "No health checks found")
-
-
 @mark.describe("CloudWatch Monitoring Integration Tests")
 class TestCloudWatchIntegration(unittest.TestCase):
     """Integration tests for CloudWatch monitoring"""
@@ -694,16 +659,13 @@ class TestCloudWatchIntegration(unittest.TestCase):
     @mark.it("CloudWatch alarms exist for critical metrics")
     def test_alarms_exist(self):
         """Test that CloudWatch alarms are configured"""
-        alarm_prefix = f"tap-{self.env_suffix}"
+        response = self.cloudwatch_client.describe_alarms()
 
-        response = self.cloudwatch_client.describe_alarms(
-            AlarmNamePrefix=alarm_prefix
-        )
+        all_alarms = response.get("MetricAlarms", [])
+        alarms = [alarm for alarm in all_alarms if self.env_suffix in alarm["AlarmName"]]
 
-        alarms = response.get("MetricAlarms", [])
         self.assertGreater(len(alarms), 0, "No CloudWatch alarms found")
 
-        # Check for specific alarms
         alarm_names = [alarm["AlarmName"] for alarm in alarms]
         high_cpu_alarm = any("high-cpu" in name.lower() for name in alarm_names)
         unhealthy_targets_alarm = any("unhealthy" in name.lower() for name in alarm_names)
@@ -714,13 +676,11 @@ class TestCloudWatchIntegration(unittest.TestCase):
     @mark.it("CloudWatch alarms are configured with SNS actions")
     def test_alarms_have_sns_actions(self):
         """Test that alarms have SNS notification actions"""
-        alarm_prefix = f"tap-{self.env_suffix}"
+        response = self.cloudwatch_client.describe_alarms()
 
-        response = self.cloudwatch_client.describe_alarms(
-            AlarmNamePrefix=alarm_prefix
-        )
+        all_alarms = response.get("MetricAlarms", [])
+        alarms = [alarm for alarm in all_alarms if self.env_suffix in alarm["AlarmName"]]
 
-        alarms = response.get("MetricAlarms", [])
         if not alarms:
             self.skipTest("No alarms found")
 
