@@ -1,0 +1,29 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "79my6",
+  "team": "synth",
+  "startedAt": "2025-10-30T18:06:46+05:30",
+  "subtask": "Serverless Infrastructure",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "serverless",
+    "lambda",
+    "api-gateway"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "CloudWatch",
+    "X-Ray",
+    "IAM",
+    "VPC",
+    "EC2"
+  ],
+  "training_quality": 9
+}
