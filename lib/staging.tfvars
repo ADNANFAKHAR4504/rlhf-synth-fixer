@@ -50,3 +50,4 @@ alarm_email        = "staging-alerts@example.com"
 common_tags = {
   Team      = "DataEngineering"
   Terraform = "true"
+}

@@ -51,3 +51,4 @@ common_tags = {
   Team       = "DataEngineering"
   Terraform  = "true"
   Compliance = "SOC2"
+}

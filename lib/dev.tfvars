@@ -47,3 +47,4 @@ alarm_email        = ""
 common_tags = {
   Team      = "DataEngineering"
   Terraform = "true"
+}
