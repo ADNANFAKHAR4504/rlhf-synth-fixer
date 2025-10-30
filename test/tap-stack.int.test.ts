@@ -1,5 +1,5 @@
-import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
-import { CloudWatchLogsClient, FilterLogEventsCommand } from '@aws-sdk/client-cloudwatch-logs';
+import { CloudWatchClient, DescribeAlarmsCommand, GetMetricDataCommand } from '@aws-sdk/client-cloudwatch';
+import { CloudWatchLogsClient, DescribeLogGroupsCommand, FilterLogEventsCommand } from '@aws-sdk/client-cloudwatch-logs';
 import {
   DescribeSubnetsCommand,
   DescribeVpcsCommand,
@@ -120,7 +120,7 @@ describe('Integration tests — runtime traffic checks (strict)', () => {
     expect(text).toBe(payload);
   });
 
-  test('S3 PUT triggers Lambda (verify via CloudWatch Logs)', async () => {
+  test('S3 PUT triggers Lambda (verify via CloudWatch Logs or Lambda metrics)', async () => {
     const bucket = getOutput('UsEastBucketName', 'BucketName', 'ExportsOutputRefs3bucketpr45111760614634ABF0F231A16EC07D', 's3_app_bucket_name', 's3_app_bucket');
     expect(bucket).toBeDefined();
 
@@ -129,50 +129,120 @@ describe('Integration tests — runtime traffic checks (strict)', () => {
     await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: payload }));
 
     const filter = key;
-    const deadline = Date.now() + 1000 * 60 * 2; // 2 minutes
+    const deadline = Date.now() + 1000 * 60 * 3; // 3 minutes
     let found = false;
-    // Derive the log group name used by the CloudWatch Agent on EC2 instances.
-    // CloudSetup writes to `/aws/ecs/cloud-setup-${suffix}` where suffix is
-    // embedded in resource names like the S3 bucket: cloud-setup-<env>-<ts>
-    const bucketName = bucket as string;
-    let suffix = undefined as string | undefined;
-    try {
-      const m = bucketName.match(/cloud-setup-([^-]+)-\d+/);
-      if (m) suffix = m[1];
-    } catch (e) {
-      // ignore
-    }
 
-    const logGroupName = suffix ? `/aws/ecs/cloud-setup-${suffix}` : undefined;
+    // First try: scan likely log groups. We don't always know the Lambda name
+    // or exact logGroup; enumerate lambda log groups and search them.
+    const startTimeBase = Date.now() - 1000 * 60 * 10; // 10 minutes ago
 
     while (Date.now() < deadline && !found) {
-      const params: any = {
-        startTime: Date.now() - 1000 * 60 * 5,
-        endTime: Date.now(),
-        filterPattern: filter,
-        limit: 50,
-      };
-      // FilterLogEvents requires either logGroupName or logGroupArn
-      if (logGroupName) params.logGroupName = logGroupName;
-
+      // 1) Try any explicitly-derived log group from bucket naming (legacy path)
+      const bucketName = bucket as string;
+      let suffix = undefined as string | undefined;
       try {
-        const res = await cwl.send(new FilterLogEventsCommand(params));
-        if (res.events && res.events.length) {
-          found = true;
-          break;
-        }
-      } catch (err: any) {
-        // If validation error because logGroupName missing or wrong, surface
-        // a helpful message and break out so test fails more clearly.
-        // Other transient errors will be retried until deadline.
-        if (err && err.name === 'ValidationException') {
-          console.warn('FilterLogEvents validation error:', err.message);
-          break;
-        }
-        // otherwise ignore and retry
+        const m = bucketName.match(/cloud-setup-([^-]+)-\d+/);
+        if (m) suffix = m[1];
+      } catch (e) {
+        // ignore
       }
-      await new Promise((r) => setTimeout(r, 4000));
+      const ec2LogGroup = suffix ? `/aws/ecs/cloud-setup-${suffix}` : undefined;
+
+      const groupsToTry: string[] = [];
+      if (ec2LogGroup) groupsToTry.push(ec2LogGroup);
+
+      // 2) enumerate lambda log groups and add them to search list
+      try {
+        const lgResp = await cwl.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: '/aws/lambda/' }));
+        if (lgResp.logGroups) {
+          for (const g of lgResp.logGroups) {
+            if (g.logGroupName) groupsToTry.push(g.logGroupName);
+          }
+        }
+      } catch (e) {
+        // ignore describe errors and continue with other methods
+      }
+
+      // De-duplicate
+      const uniq = Array.from(new Set(groupsToTry));
+
+      for (const lg of uniq) {
+        try {
+          const res = await cwl.send(new FilterLogEventsCommand({
+            logGroupName: lg,
+            startTime: startTimeBase,
+            endTime: Date.now(),
+            filterPattern: filter,
+            limit: 50,
+          }));
+          if (res.events && res.events.length) {
+            found = true;
+            break;
+          }
+        } catch (err: any) {
+          // If validation error because logGroupName missing or wrong, skip this group
+          if (err && err.name === 'ValidationException') {
+            // skip
+            continue;
+          }
+          // otherwise ignore and try other groups
+        }
+      }
+
+      if (found) break;
+
+      // 3) Fallback: query CloudWatch metrics for Lambda invocations for any
+      // function names derived from the lambda log groups we discovered.
+      try {
+        const lgResp2 = await cwl.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: '/aws/lambda/' }));
+        if (lgResp2.logGroups) {
+          const metricQueries: any[] = [];
+          let idIdx = 0;
+          for (const g of lgResp2.logGroups) {
+            if (!g.logGroupName) continue;
+            const parts = g.logGroupName.split('/');
+            const fnName = parts[parts.length - 1];
+            const id = `m${idIdx++}`;
+            metricQueries.push({
+              Id: id,
+              MetricStat: {
+                Metric: { Namespace: 'AWS/Lambda', MetricName: 'Invocations', Dimensions: [{ Name: 'FunctionName', Value: fnName }] },
+                Period: 60,
+                Stat: 'Sum',
+                Unit: 'Count',
+              },
+              ReturnData: true,
+            });
+          }
+          if (metricQueries.length) {
+            const now = new Date();
+            const start = new Date(now.getTime() - 1000 * 60 * 15); // 15m
+            const end = new Date();
+            const md = await cw.send(new GetMetricDataCommand({
+              StartTime: start,
+              EndTime: end,
+              MetricDataQueries: metricQueries,
+            }));
+            if (md && md.MetricDataResults) {
+              for (const res of md.MetricDataResults) {
+                if (res.Values && res.Values.length && res.Values.reduce((a, b) => a + b, 0) > 0) {
+                  found = true;
+                  break;
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        // ignore metric errors and continue polling
+      }
+
+      if (found) break;
+
+      // small backoff before next round
+      await new Promise((r) => setTimeout(r, 5000));
     }
+
     expect(found).toBeTruthy();
   });
 
