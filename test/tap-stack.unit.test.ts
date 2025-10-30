@@ -311,5 +311,241 @@ describe('TapStack CloudFormation Template', () => {
         }
       });
     });
+
+    test('all KMS keys should have key rotation enabled', () => {
+      const kmsKeys = Object.values(template.Resources).filter((resource: any) => 
+        resource.Type === 'AWS::KMS::Key'
+      );
+      expect(kmsKeys).toHaveLength(2);
+      kmsKeys.forEach((key: any) => {
+        expect(key.Properties.EnableKeyRotation).toBe(true);
+      });
+    });
+
+    test('S3 buckets should block all public access', () => {
+      const buckets = Object.values(template.Resources).filter((resource: any) => 
+        resource.Type === 'AWS::S3::Bucket'
+      );
+      buckets.forEach((bucket: any) => {
+        if (bucket.Properties.PublicAccessBlockConfiguration) {
+          expect(bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
+          expect(bucket.Properties.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(true);
+          expect(bucket.Properties.PublicAccessBlockConfiguration.IgnorePublicAcls).toBe(true);
+          expect(bucket.Properties.PublicAccessBlockConfiguration.RestrictPublicBuckets).toBe(true);
+        }
+      });
+    });
+
+    test('Config rules should not have MaximumExecutionFrequency', () => {
+      const configRules = Object.values(template.Resources).filter((resource: any) => 
+        resource.Type === 'AWS::Config::ConfigRule'
+      );
+      configRules.forEach((rule: any) => {
+        expect(rule.Properties.MaximumExecutionFrequency).toBeUndefined();
+      });
+    });
+
+    test('Config rules should depend on recorder and delivery channel', () => {
+      const configRules = Object.values(template.Resources).filter((resource: any) => 
+        resource.Type === 'AWS::Config::ConfigRule'
+      );
+      configRules.forEach((rule: any) => {
+        expect(rule.DependsOn).toContain('ConfigRecorder');
+        expect(rule.DependsOn).toContain('ConfigDeliveryChannel');
+      });
+    });
+  });
+
+  describe('Edge Cases and Error Handling', () => {
+    test('should handle missing environment suffix gracefully', () => {
+      const paramDefault = template.Parameters.EnvironmentSuffix.Default;
+      expect(paramDefault).toBe('dev');
+      expect(paramDefault).toMatch(/^[a-zA-Z0-9]+$/);
+    });
+
+    test('should validate environment suffix pattern', () => {
+      const allowedPattern = template.Parameters.EnvironmentSuffix.AllowedPattern;
+      expect(allowedPattern).toBe('^[a-zA-Z0-9]+$');
+      expect('dev123').toMatch(new RegExp(allowedPattern));
+      expect('prod').toMatch(new RegExp(allowedPattern));
+      expect('stage-env').not.toMatch(new RegExp(allowedPattern));
+      expect('test_env').not.toMatch(new RegExp(allowedPattern));
+    });
+
+    test('should have constraint description for parameter validation', () => {
+      const constraint = template.Parameters.EnvironmentSuffix.ConstraintDescription;
+      expect(constraint).toBeDefined();
+      expect(constraint).toBe('Must contain only alphanumeric characters');
+    });
+
+    test('Lambda function should have appropriate timeout', () => {
+      const lambda = template.Resources.EBSEncryptionLambda;
+      expect(lambda.Properties.Timeout).toBe(30);
+      expect(lambda.Properties.Timeout).toBeGreaterThan(10);
+      expect(lambda.Properties.Timeout).toBeLessThan(60);
+    });
+
+    test('IAM roles should have assume role policy documents', () => {
+      const roles = Object.values(template.Resources).filter((resource: any) => 
+        resource.Type === 'AWS::IAM::Role'
+      );
+      roles.forEach((role: any) => {
+        expect(role.Properties.AssumeRolePolicyDocument).toBeDefined();
+        expect(role.Properties.AssumeRolePolicyDocument.Version).toBe('2012-10-17');
+      });
+    });
+
+    test('Config recorder should record all supported resources', () => {
+      const recorder = template.Resources.ConfigRecorder;
+      expect(recorder.Properties.RecordingGroup.AllSupported).toBe(true);
+      expect(recorder.Properties.RecordingGroup.IncludeGlobalResourceTypes).toBe(true);
+    });
+
+    test('S3 bucket policy should have multiple statements', () => {
+      const bucketPolicy = template.Resources.EncryptedS3BucketPolicy;
+      expect(bucketPolicy.Properties.PolicyDocument.Statement).toHaveLength(3);
+    });
+  });
+
+  describe('Resource Interconnections', () => {
+    test('KMS key aliases should reference correct keys', () => {
+      const s3Alias = template.Resources.S3KMSKeyAlias;
+      const ebsAlias = template.Resources.EBSKMSKeyAlias;
+      
+      expect(s3Alias.Properties.TargetKeyId.Ref).toBe('S3KMSKey');
+      expect(ebsAlias.Properties.TargetKeyId.Ref).toBe('EBSKMSKey');
+    });
+
+    test('S3 bucket encryption should reference S3 KMS key', () => {
+      const bucket = template.Resources.EncryptedS3Bucket;
+      const encryptionConfig = bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0];
+      expect(encryptionConfig.ServerSideEncryptionByDefault.KMSMasterKeyID['Fn::GetAtt']).toEqual(['S3KMSKey', 'Arn']);
+    });
+
+    test('EBS encryption lambda should reference EBS KMS key', () => {
+      const lambda = template.Resources.EBSEncryptionLambda;
+      const kmsKeyId = lambda.Properties.Environment.Variables.KMS_KEY_ID;
+      expect(kmsKeyId['Fn::GetAtt']).toEqual(['EBSKMSKey', 'Arn']);
+    });
+
+    test('Config delivery channel should reference Config bucket', () => {
+      const deliveryChannel = template.Resources.ConfigDeliveryChannel;
+      expect(deliveryChannel.Properties.S3BucketName.Ref).toBe('ConfigBucket');
+    });
+
+    test('Config recorder should reference Config role', () => {
+      const recorder = template.Resources.ConfigRecorder;
+      expect(recorder.Properties.RoleArn['Fn::GetAtt']).toEqual(['ConfigRole', 'Arn']);
+    });
+
+    test('AllUsersGroup should have MFA policy attached', () => {
+      const group = template.Resources.AllUsersGroup;
+      expect(group.Properties.ManagedPolicyArns).toContain({ Ref: 'MFARequiredPolicy' });
+    });
+  });
+
+  describe('Resource Naming and Tagging', () => {
+    test('all named resources should use environment suffix', () => {
+      const namedResources = [
+        'S3KMSKeyAlias',
+        'EBSKMSKeyAlias', 
+        'MFARequiredPolicy',
+        'AllUsersGroup',
+        'ConfigRecorder',
+        'S3EncryptionRule',
+        'EBSEncryptionRule'
+      ];
+      
+      namedResources.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        const nameProperty = resource.Properties.AliasName || 
+                            resource.Properties.ManagedPolicyName ||
+                            resource.Properties.GroupName ||
+                            resource.Properties.Name ||
+                            resource.Properties.ConfigRuleName;
+        
+        if (nameProperty && nameProperty['Fn::Sub']) {
+          expect(nameProperty['Fn::Sub']).toContain('${EnvironmentSuffix}');
+        }
+      });
+    });
+
+    test('KMS keys should have compliance tags', () => {
+      const s3Key = template.Resources.S3KMSKey;
+      const ebsKey = template.Resources.EBSKMSKey;
+      
+      [s3Key, ebsKey].forEach(key => {
+        expect(key.Properties.Tags).toBeDefined();
+        const tags = key.Properties.Tags.reduce((acc: any, tag: any) => {
+          acc[tag.Key] = tag.Value;
+          return acc;
+        }, {});
+        
+        expect(tags.ComplianceControl).toBe('DataEncryption');
+        expect(tags.Environment).toBeDefined();
+        expect(tags.Purpose).toBeDefined();
+      });
+    });
+  });
+
+  describe('Template Completeness Validation', () => {
+    test('should have all critical AWS Config components', () => {
+      const requiredConfigResources = [
+        'ConfigRole',
+        'ConfigBucket', 
+        'ConfigRecorder',
+        'ConfigDeliveryChannel',
+        'S3EncryptionRule',
+        'EBSEncryptionRule'
+      ];
+      
+      requiredConfigResources.forEach(resourceName => {
+        expect(template.Resources[resourceName]).toBeDefined();
+      });
+    });
+
+    test('should have all critical encryption components', () => {
+      const requiredEncryptionResources = [
+        'S3KMSKey',
+        'S3KMSKeyAlias',
+        'EBSKMSKey', 
+        'EBSKMSKeyAlias',
+        'EncryptedS3Bucket',
+        'EncryptedS3BucketPolicy',
+        'EBSEncryptionLambda',
+        'EBSEncryptionCustomResource'
+      ];
+      
+      requiredEncryptionResources.forEach(resourceName => {
+        expect(template.Resources[resourceName]).toBeDefined();
+      });
+    });
+
+    test('should have all critical IAM MFA components', () => {
+      const requiredIAMResources = [
+        'MFARequiredPolicy',
+        'AllUsersGroup'
+      ];
+      
+      requiredIAMResources.forEach(resourceName => {
+        expect(template.Resources[resourceName]).toBeDefined();
+      });
+    });
+
+    test('should have comprehensive outputs for integration testing', () => {
+      const requiredOutputs = [
+        'S3KMSKeyArn',
+        'EBSKMSKeyArn', 
+        'EncryptedS3BucketName',
+        'MFARequiredPolicyArn',
+        'ConfigBucketName'
+      ];
+      
+      requiredOutputs.forEach(outputName => {
+        expect(template.Outputs[outputName]).toBeDefined();
+        expect(template.Outputs[outputName].Description).toBeDefined();
+        expect(template.Outputs[outputName].Value).toBeDefined();
+      });
+    });
   });
 });
