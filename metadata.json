@@ -1,13 +1,15 @@
 {
-  "platform": "CloudFormation",
-  "language": "JSON",
+  "platform": "cfn",
+  "language": "json",
   "complexity": "medium",
   "team": "synth",
   "turn_type": "single",
   "startedAt": "2025-10-30T09:24:11+00:00",
   "po_id": "101000764",
   "subtask": "Environment Migration",
-  "subject_labels": [],
+  "subject_labels": [
+    "example-label"
+  ],
   "aws_services": [
     "RDS",
     "EC2",
