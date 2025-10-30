@@ -610,8 +610,8 @@ jobs:
   cleanup:
     name: Cleanup (Destroy Resources)
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, integration-tests-live, claude-code-action]
-    if: ${{ ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch' && !inputs.skip_cleanup)) && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization' }}
+    needs: [claude-code-action]
+    if: ${{ needs.claude-code-action.result == 'success' }}
     environment: qa
 
     steps:
@@ -648,7 +648,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [detect-metadata, cleanup]
     environment: stage
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ needs.cleanup.result == 'success' }}
     permissions:
       contents: write
 
