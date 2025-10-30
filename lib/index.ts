@@ -4,7 +4,9 @@ import * as aws from '@pulumi/aws';
 // Configuration
 const config = new pulumi.Config();
 const environment = (
-  config.get('environment') ?? process.env.ENVIRONMENT ?? 'dev'
+  config.get('environment') ??
+  process.env.ENVIRONMENT ??
+  'dev'
 ).toLowerCase();
 const environmentSuffix = (
   config.get('environmentSuffix') ??
