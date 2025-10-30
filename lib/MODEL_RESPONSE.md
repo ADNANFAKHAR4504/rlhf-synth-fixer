@@ -13,7 +13,7 @@ Let's break down this request:
    - Security & Compliance Controls
    - Complete CloudFormation YAML
 
-I'll start by outlining the reference architecture in ASCII, then I'll work on the resource wiring narrative, and finally I'll develop the complete CloudFormation YAML template that meets all the specified requirements.
+Outlining the reference architecture in ASCII, then I'll work on the resource wiring narrative, and finally I'll develop the complete CloudFormation YAML template that meets all the specified requirements.
 
 Let's start with the reference architecture in ASCII:
 
@@ -143,7 +143,7 @@ Next, let's outline the security and compliance controls:
    - IAM policies follow the principle of least privilege.
    - Resources have appropriate resource policies where applicable.
 
-Now, I'll develop the complete CloudFormation YAML template that implements all these requirements. This will be a comprehensive template that includes all resources, their configurations, and the necessary wiring between them.
+Develop the complete CloudFormation YAML template that implements all these requirements. This will be a comprehensive template that includes all resources, their configurations, and the necessary wiring between them.
 
 Let me start by defining the Parameters section of the CloudFormation template:
 
