@@ -122,7 +122,6 @@ export class TapStack extends TerraformStack {
       projectName: projectName,
       tags: commonTags,
       // Optionally provide a public key, or let it generate one
-      // publicKey: 'ssh-rsa AAAA...'
     };
 
     const keyPair = new KeyPairConstruct(this, 'keypair', keyPairConfig);
