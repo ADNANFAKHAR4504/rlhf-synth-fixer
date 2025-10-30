@@ -701,7 +701,6 @@ Resources:
       Endpoint: !Ref NotificationEmail
 
   # Step Functions Role and State Machine (Timeout: 60s, Retries 3x)
-  # Step Functions Role and State Machine (Timeout: 60s, Retries 3x)
   StateMachineRole:
     Type: AWS::IAM::Role
     Properties:
@@ -729,17 +728,10 @@ Resources:
                 Action:
                   - xray:PutTraceSegments
                   - xray:PutTelemetryRecords
+                  - xray:GetSamplingRules
+                  - xray:GetSamplingTargets
                 Resource: "*"
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                  - logs:DescribeLogGroups
-                  - logs:DescribeLogStreams
-                Resource:
-                  - !GetAtt StateMachineLogGroup.Arn
-                  - !Sub "${StateMachineLogGroup.Arn}:*"
+              # Enhanced logs permissions with proper resource scoping
               - Effect: Allow
                 Action:
                   - logs:CreateLogDelivery
@@ -747,7 +739,23 @@ Resources:
                   - logs:UpdateLogDelivery
                   - logs:DeleteLogDelivery
                   - logs:ListLogDeliveries
+                  - logs:PutResourcePolicy
+                  - logs:DescribeResourcePolicies
+                  - logs:DescribeLogGroups
                 Resource: "*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:DescribeLogStreams
+                  - logs:PutLogEvents
+                  - logs:GetLogEvents
+                  - logs:GetLogRecord
+                  - logs:GetLogGroupFields
+                  - logs:GetQueryResults
+                Resource:
+                  - !GetAtt StateMachineLogGroup.Arn
+                  - !Sub "${StateMachineLogGroup.Arn}:*"
 
   PaymentWorkflow:
     Type: AWS::StepFunctions::StateMachine
