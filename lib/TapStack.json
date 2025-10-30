@@ -831,7 +831,23 @@
                                     "Effect": "Allow",
                                     "Action": [
                                         "xray:PutTraceSegments",
-                                        "xray:PutTelemetryRecords"
+                                        "xray:PutTelemetryRecords",
+                                        "xray:GetSamplingRules",
+                                        "xray:GetSamplingTargets"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogDelivery",
+                                        "logs:GetLogDelivery",
+                                        "logs:UpdateLogDelivery",
+                                        "logs:DeleteLogDelivery",
+                                        "logs:ListLogDeliveries",
+                                        "logs:PutResourcePolicy",
+                                        "logs:DescribeResourcePolicies",
+                                        "logs:DescribeLogGroups"
                                     ],
                                     "Resource": "*"
                                 },
@@ -840,9 +856,12 @@
                                     "Action": [
                                         "logs:CreateLogGroup",
                                         "logs:CreateLogStream",
+                                        "logs:DescribeLogStreams",
                                         "logs:PutLogEvents",
-                                        "logs:DescribeLogGroups",
-                                        "logs:DescribeLogStreams"
+                                        "logs:GetLogEvents",
+                                        "logs:GetLogRecord",
+                                        "logs:GetLogGroupFields",
+                                        "logs:GetQueryResults"
                                     ],
                                     "Resource": [
                                         {
