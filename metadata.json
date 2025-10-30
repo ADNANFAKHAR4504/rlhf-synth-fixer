@@ -1,6 +1,6 @@
 {
-  "platform": "terraform",
-  "language": "tf",
+  "platform": "tf",
+  "language": "hcl",
   "complexity": "hard",
   "team": "synth",
   "turn_type": "single",
