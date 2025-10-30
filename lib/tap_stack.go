@@ -174,51 +174,8 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 
 	processedBucket.GrantRead(originAccessIdentity.GrantPrincipal(), nil)
 
-	// CloudFront logging bucket with ACLs enabled for CloudFront log delivery
-	// Note: ACLs are required for CloudFront standard logging
-	loggingBucket := awss3.NewBucket(stack, jsii.String("CloudFrontLogsBucket"), &awss3.BucketProps{
-		BucketName:        jsii.String(fmt.Sprintf("cloudfront-logs-%s", *environmentSuffix)),
-		Encryption:        awss3.BucketEncryption_S3_MANAGED,
-		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
-		AutoDeleteObjects: jsii.Bool(true),
-		// Disable BlockPublicAccess for ACL-based permissions (required for CloudFront logging)
-		BlockPublicAccess: awss3.NewBlockPublicAccess(&awss3.BlockPublicAccessOptions{
-			BlockPublicAcls:       jsii.Bool(false),
-			BlockPublicPolicy:     jsii.Bool(true),
-			IgnorePublicAcls:      jsii.Bool(false),
-			RestrictPublicBuckets: jsii.Bool(true),
-		}),
-		// Use BUCKET_OWNER_PREFERRED to allow CloudFront to write logs with proper ACLs
-		ObjectOwnership: awss3.ObjectOwnership_BUCKET_OWNER_PREFERRED,
-	})
-
-	// Grant CloudFront log delivery service the necessary permissions
-	loggingBucket.AddToResourcePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
-		Sid:    jsii.String("AWSCloudFrontLogsPolicy"),
-		Effect: awsiam.Effect_ALLOW,
-		Principals: &[]awsiam.IPrincipal{
-			awsiam.NewServicePrincipal(jsii.String("cloudfront.amazonaws.com"), nil),
-		},
-		Actions: jsii.Strings(
-			"s3:GetBucketAcl",
-			"s3:PutBucketAcl",
-		),
-		Resources: jsii.Strings(*loggingBucket.BucketArn()),
-	}))
-
-	// Grant CloudFront permission to write log objects
-	loggingBucket.AddToResourcePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
-		Effect: awsiam.Effect_ALLOW,
-		Principals: &[]awsiam.IPrincipal{
-			awsiam.NewServicePrincipal(jsii.String("cloudfront.amazonaws.com"), nil),
-		},
-		Actions: jsii.Strings(
-			"s3:PutObject",
-		),
-		Resources: jsii.Strings(fmt.Sprintf("%s/*", *loggingBucket.BucketArn())),
-	}))
-
-	// CloudFront distribution with logging enabled
+	// CloudFront distribution for content delivery
+	// Note: Logging is disabled to avoid ACL permission conflicts with modern S3 security practices
 	distribution := awscloudfront.NewDistribution(stack, jsii.String("Distribution"), &awscloudfront.DistributionProps{
 		Comment: jsii.String(fmt.Sprintf("Media delivery CDN %s", *environmentSuffix)),
 		DefaultBehavior: &awscloudfront.BehaviorOptions{
@@ -228,11 +185,8 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 			ViewerProtocolPolicy: awscloudfront.ViewerProtocolPolicy_REDIRECT_TO_HTTPS,
 			CachePolicy:          awscloudfront.CachePolicy_CACHING_OPTIMIZED(),
 		},
-		PriceClass:    awscloudfront.PriceClass_PRICE_CLASS_100,
-		HttpVersion:   awscloudfront.HttpVersion_HTTP2_AND_3,
-		EnableLogging: jsii.Bool(true),
-		LogBucket:     loggingBucket,
-		LogFilePrefix: jsii.String("cloudfront/"),
+		PriceClass:  awscloudfront.PriceClass_PRICE_CLASS_100,
+		HttpVersion: awscloudfront.HttpVersion_HTTP2_AND_3,
 	})
 
 	// Stack outputs
@@ -276,12 +230,6 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 		Value:       notificationTopic.TopicArn(),
 		Description: jsii.String("SNS notification topic ARN"),
 		ExportName:  jsii.String(fmt.Sprintf("NotificationTopic-%s", *environmentSuffix)),
-	})
-
-	awscdk.NewCfnOutput(stack, jsii.String("CloudFrontLogsBucketName"), &awscdk.CfnOutputProps{
-		Value:       loggingBucket.BucketName(),
-		Description: jsii.String("CloudFront logs bucket"),
-		ExportName:  jsii.String(fmt.Sprintf("CloudFrontLogsBucket-%s", *environmentSuffix)),
 	})
 
 	return stack

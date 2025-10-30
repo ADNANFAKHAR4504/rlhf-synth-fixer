@@ -5,12 +5,12 @@ A production-ready streaming media processing pipeline using AWS CDK with Go, de
 ## Architecture
 
 Complete video ingestion to processing to delivery pipeline:
-- **S3 Buckets**: Source uploads, processed content, and CloudFront logs (encrypted, access controlled)
+- **S3 Buckets**: Source uploads and processed content (encrypted, access controlled)
 - **Lambda Functions**: Transcode trigger and status tracking with inline code
 - **MediaConvert**: Video transcoding to H.264/AAC (configured via Lambda SDK)
 - **DynamoDB**: Job tracking with PAY_PER_REQUEST billing
 - **SNS**: Pipeline notifications for job status updates
-- **CloudFront**: Global content delivery with OAI security and logging enabled
+- **CloudFront**: Global content delivery with OAI security (logging disabled to avoid ACL conflicts)
 - **EventBridge**: MediaConvert job state change monitoring
 - **IAM**: Least-privilege roles for MediaConvert and Lambda with scoped permissions
 
@@ -36,18 +36,19 @@ require (
 All resources use environmentSuffix in names:
 - Source bucket: `media-source-{suffix}` with encryption and auto-delete
 - Processed bucket: `media-processed-{suffix}` with encryption and auto-delete
-- CloudFront logs bucket: `cloudfront-logs-{suffix}` with ACL permissions for CloudFront logging
 - DynamoDB table: `media-jobs-{suffix}` with jobId partition key
 - SNS topic: `media-notifications-{suffix}` for pipeline notifications
 - IAM roles: `media-convert-role-{suffix}` (MediaConvert), `media-lambda-role-{suffix}` (Lambda)
 - Lambda functions: `media-transcode-{suffix}` (transcode), `media-status-{suffix}` (status updates)
 - EventBridge rule: `media-convert-job-rule-{suffix}` for job state changes
+- CloudFront distribution: Content delivery with OAI security (logging disabled)
 
-**CloudFront Logging Configuration**:
-- Bucket created with BUCKET_OWNER_PREFERRED ownership for ACL support
-- BlockPublicAccess configured to allow ACL operations while blocking public policy
-- Bucket policy grants CloudFront service principal GetBucketAcl and PutBucketAcl permissions
-- Separate policy statement allows CloudFront to write log objects (PutObject)
+**CloudFront Configuration**:
+- Logging disabled to avoid ACL permission conflicts with modern S3 security practices
+- Uses Origin Access Identity (OAI) for secure S3 access
+- HTTPS redirect enforced for all viewer requests
+- Optimized caching policy for media delivery
+- Price class 100 for cost-effective edge locations
 
 ### Lambda Functions
 **Transcode Lambda** (inline):
@@ -72,7 +73,6 @@ All outputs for integration testing:
 - TranscodeFunctionArn (transcode Lambda)
 - StatusFunctionArn (status Lambda)
 - NotificationTopicArn (SNS topic)
-- CloudFrontLogsBucketName (logging bucket)
 
 ## Testing
 
@@ -137,16 +137,16 @@ npm run cdk:destroy
 [PASS] No Retain policies: All resources have DESTROY removal policy
 [PASS] Encryption: S3 S3_MANAGED encryption, data in transit via HTTPS
 [PASS] Security: Controlled access, OAI for CloudFront, IAM least privilege
-[PASS] CloudFront Logging: Properly configured with ACL permissions
+[PASS] CloudFront: Configured without logging to avoid ACL permission conflicts
 [PASS] Testing: Comprehensive unit tests with full coverage
 
 ## Key Implementation Details
 
-**CloudFront Logging Fix**:
-- CloudFront requires specific ACL permissions (GetBucketAcl, PutBucketAcl) to write logs
-- Logging bucket configured with BUCKET_OWNER_PREFERRED ownership for ACL support
-- BlockPublicAccess selectively enabled to allow ACL operations while maintaining security
-- Bucket policy grants CloudFront service principal necessary ACL and PutObject permissions
+**CloudFront Configuration**:
+- Logging disabled to avoid ACL permission conflicts with S3 Block Public Access policies
+- Modern S3 security practices prevent ACL-based permissions required by CloudFront legacy logging
+- CloudFront distribution uses Origin Access Identity (OAI) for secure S3 bucket access
+- Alternative: Use CloudWatch Logs or S3 server access logging for monitoring if needed
 
 **MediaConvert Integration**:
 - MediaConvert service integrated via Lambda SDK (not direct CDK construct)
@@ -177,11 +177,12 @@ npm run cdk:destroy
 - Add X-Ray tracing for distributed request tracking across services
 
 ## AWS Services Used
-- S3 (storage)
-- Lambda (compute)
-- DynamoDB (database)
-- SNS (messaging)
-- CloudFront (CDN)
-- IAM (security)
-- MediaConvert (media processing - via Lambda SDK, not CDK)
-- CloudWatch Logs (monitoring)
+- S3 (storage for source and processed media)
+- Lambda (compute for workflow orchestration)
+- DynamoDB (job tracking database)
+- SNS (notification messaging)
+- CloudFront (content delivery network)
+- IAM (security and access control)
+- MediaConvert (video transcoding via Lambda SDK)
+- EventBridge (event routing for job state changes)
+- CloudWatch Logs (Lambda function logging)
