@@ -33,6 +33,13 @@ describe('Terraform Integration Tests - Multi-Environment S3 + DynamoDB', () => 
   let kmsClient: KMSClient;
   let iamClient: IAMClient;
 
+  // Helper function to parse config_summary
+  const getConfigSummary = () => {
+    return typeof outputs.config_summary === 'string'
+      ? JSON.parse(outputs.config_summary)
+      : outputs.config_summary;
+  };
+
   beforeAll(() => {
     const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
 
@@ -95,17 +102,20 @@ describe('Terraform Integration Tests - Multi-Environment S3 + DynamoDB', () => 
 
     test('should have config_summary object', () => {
       expect(outputs.config_summary).toBeDefined();
-      expect(outputs.config_summary.environment).toBe('dev');
-      expect(outputs.config_summary.dynamodb_billing_mode).toBe('PAY_PER_REQUEST');
+      const configSummary = getConfigSummary();
+      expect(configSummary.environment).toBe('dev');
+      expect(configSummary.dynamodb_billing_mode).toBe('PAY_PER_REQUEST');
     });
 
     test('should indicate monitoring disabled for dev', () => {
-      expect(outputs.config_summary.monitoring_enabled).toBe(false);
+      const configSummary = getConfigSummary();
+      expect(configSummary.monitoring_enabled).toBe(false);
       expect(outputs.sns_topic_arn).toContain('N/A');
     });
 
     test('should indicate PITR disabled for dev', () => {
-      expect(outputs.config_summary.pitr_enabled).toBe(false);
+      const configSummary = getConfigSummary();
+      expect(configSummary.pitr_enabled).toBe(false);
     });
   });
 
@@ -118,7 +128,7 @@ describe('Terraform Integration Tests - Multi-Environment S3 + DynamoDB', () => 
         expect(true).toBe(true);
         console.log('S3 bucket exists:', outputs.s3_bucket_name);
       } catch (error) {
-        fail(`S3 bucket does not exist: ${error}`);
+        throw new Error(`S3 bucket does not exist: ${error}`);
       }
     });
 
@@ -207,7 +217,7 @@ describe('Terraform Integration Tests - Multi-Environment S3 + DynamoDB', () => 
         expect(true).toBe(true);
         console.log('DynamoDB table exists:', outputs.dynamodb_table_name);
       } catch (error) {
-        fail(`DynamoDB table does not exist: ${error}`);
+        throw new Error(`DynamoDB table does not exist: ${error}`);
       }
     });
 
@@ -285,42 +295,38 @@ describe('Terraform Integration Tests - Multi-Environment S3 + DynamoDB', () => 
     });
   });
 
- describe('KMS Key Tests', () => {
-  test('should have KMS key exist in AWS', async () => {
-    // Verify KMS key ID format (UUID)
-    expect(outputs.kms_key_id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-    console.log('KMS key ID format valid:', outputs.kms_key_id);
-    
-    // Verify KMS key ARN format
-    expect(outputs.kms_key_arn).toMatch(/^arn:aws:kms:/);
-    console.log('KMS key ARN valid:', outputs.kms_key_arn);
-  });
+  describe('KMS Key Tests', () => {
+    test('should have KMS key exist in AWS', async () => {
+      expect(outputs.kms_key_id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      console.log('KMS key ID format valid:', outputs.kms_key_id);
 
-  test('should have key status as Enabled', async () => {
-    // KMS keys are enabled by default in Terraform
-    expect(outputs.kms_key_arn).toBeDefined();
-    console.log('KMS key is deployed and active');
-  });
+      expect(outputs.kms_key_arn).toMatch(/^arn:aws:kms:/);
+      console.log('KMS key ARN valid:', outputs.kms_key_arn);
+    });
 
-  test('should have key rotation enabled', async () => {
-    // Verify main.tf has enable_key_rotation = true
-    const mainTfPath = require('path').join(__dirname, '../lib/main.tf');
-    const mainTfContent = require('fs').readFileSync(mainTfPath, 'utf-8');
-    expect(mainTfContent).toMatch(/enable_key_rotation\s*=\s*true/);
-    console.log('Key rotation enabled in configuration');
-  });
+    test('should have key status as Enabled', async () => {
+      expect(outputs.kms_key_arn).toBeDefined();
+      console.log('KMS key is deployed and active');
+    });
 
-  test('should NOT be multi-region for dev', async () => {
-    expect(outputs.config_summary.kms_multi_region).toBe(false);
-    console.log('Multi-region disabled for dev');
-  });
+    test('should have key rotation enabled', async () => {
+      const mainTfPath = path.join(__dirname, '../lib/main.tf');
+      const mainTfContent = fs.readFileSync(mainTfPath, 'utf-8');
+      expect(mainTfContent).toMatch(/enable_key_rotation\s*=\s*true/);
+      console.log('Key rotation enabled in configuration');
+    });
 
-  test('should be in correct region', async () => {
-    expect(outputs.kms_key_arn).toContain(region);
-    console.log('KMS key region matches:', region);
-  });
-});
+    test('should NOT be multi-region for dev', async () => {
+      const configSummary = getConfigSummary();
+      expect(configSummary.kms_multi_region).toBe(false);
+      console.log('Multi-region disabled for dev');
+    });
 
+    test('should be in correct region', async () => {
+      expect(outputs.kms_key_arn).toContain(region);
+      console.log('KMS key region matches:', region);
+    });
+  });
 
   describe('IAM Role Tests', () => {
     test('should have IAM role exist in AWS', async () => {
@@ -332,7 +338,7 @@ describe('Terraform Integration Tests - Multi-Environment S3 + DynamoDB', () => 
         expect(true).toBe(true);
         console.log('IAM role exists:', roleName);
       } catch (error) {
-        fail(`IAM role does not exist: ${error}`);
+        throw new Error(`IAM role does not exist: ${error}`);
       }
     });
 
@@ -390,28 +396,33 @@ describe('Terraform Integration Tests - Multi-Environment S3 + DynamoDB', () => 
     });
 
     test('should have correct lifecycle days for dev (30)', () => {
-      expect(outputs.config_summary.s3_lifecycle_days).toBe(30);
+      const configSummary = getConfigSummary();
+      expect(configSummary.s3_lifecycle_days).toBe(30);
       console.log('S3 lifecycle days:', 30);
     });
 
     test('should use on-demand billing for dev', () => {
-      expect(outputs.config_summary.dynamodb_billing_mode).toBe('PAY_PER_REQUEST');
+      const configSummary = getConfigSummary();
+      expect(configSummary.dynamodb_billing_mode).toBe('PAY_PER_REQUEST');
       console.log('DynamoDB billing mode: PAY_PER_REQUEST');
     });
 
     test('should have monitoring disabled for dev', () => {
-      expect(outputs.config_summary.monitoring_enabled).toBe(false);
+      const configSummary = getConfigSummary();
+      expect(configSummary.monitoring_enabled).toBe(false);
       expect(outputs.sns_topic_arn).toContain('N/A');
       console.log('Monitoring disabled for dev');
     });
 
     test('should have PITR disabled for dev', () => {
-      expect(outputs.config_summary.pitr_enabled).toBe(false);
+      const configSummary = getConfigSummary();
+      expect(configSummary.pitr_enabled).toBe(false);
       console.log('PITR disabled for dev');
     });
 
     test('should not be multi-region for dev', () => {
-      expect(outputs.config_summary.kms_multi_region).toBe(false);
+      const configSummary = getConfigSummary();
+      expect(configSummary.kms_multi_region).toBe(false);
       console.log('Multi-region disabled for dev');
     });
   });
