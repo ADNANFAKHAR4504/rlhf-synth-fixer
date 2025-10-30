@@ -4,6 +4,7 @@ Description: TapStack - Serverless webhook processing system for high-volume cry
 Parameters:
   EnvironmentSuffix:
     Type: String
+    Default: dev
     Description: Suffix used in all resource names.
   ApiStageName:
     Type: String
@@ -11,12 +12,15 @@ Parameters:
     Description: API Gateway stage name.
   WebhookApiKeyParamPath:
     Type: String
+    Default: /tapstack/webhook/api-key
     Description: SSM path for exchange API key.
   ValidatorSecretParamPath:
     Type: String
+    Default: /tapstack/validator/secret
     Description: SSM path for signature validation secret.
   ProcessorApiKeyParamPath:
     Type: String
+    Default: /tapstack/processor/api-key
     Description: SSM path for processor API key.
   UseVpcEndpoints:
     Type: String
@@ -816,7 +820,10 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref ReceiverFn
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub ${RestApi}/*/POST/webhook
+      SourceArn: !Sub 
+        - "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApiId}/${ApiStage}/*/webhook"
+        - RestApiId: !Ref RestApi
+          ApiStage: !Ref ApiStageName
 
 Outputs:
   ApiInvokeUrl:
