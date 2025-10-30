@@ -1,0 +1,1372 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Complete Compliance Checking Infrastructure for CloudFormation Templates",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod, pr1234)",
+            "Default": "dev",
+            "AllowedPattern": "^[a-z0-9-]+$",
+            "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+        },
+        "NotificationEmail": {
+            "Type": "String",
+            "Description": "Email address for compliance notifications",
+            "Default": "compliance-notifications@example.com",
+            "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+        }
+    },
+    "Resources": {
+        "ComplianceKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "KMS key for Compliance Infrastructure encryption in ${EnvironmentSuffix}"
+                },
+                "EnableKeyRotation": true,
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Id": "compliance-key-policy",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow use of the key for encryption",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "s3.amazonaws.com",
+                                    "logs.amazonaws.com",
+                                    "sns.amazonaws.com",
+                                    "config.amazonaws.com",
+                                    "lambda.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey",
+                                "kms:DescribeKey",
+                                "kms:CreateGrant"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow CloudWatch Logs",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": {
+                                    "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+                                }
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:CreateGrant",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "ArnLike": {
+                                    "kms:EncryptionContext:aws:logs:arn": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "compliance-kms-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ComplianceKMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/compliance-infrastructure-${EnvironmentSuffix}"
+                },
+                "TargetKeyId": {
+                    "Ref": "ComplianceKMSKey"
+                }
+            }
+        },
+        "ComplianceLogBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "compliance-logs-${EnvironmentSuffix}-${AWS::AccountId}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "ComplianceKMSKey"
+                                }
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldLogs",
+                            "ExpirationInDays": 365,
+                            "NoncurrentVersionExpirationInDays": 30,
+                            "Status": "Enabled"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "compliance-logs-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ComplianceLogBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "ComplianceLogBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AWSConfigBucketPermissionsCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": [
+                                "s3:GetBucketAcl",
+                                "s3:ListBucket"
+                            ],
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "ComplianceLogBucket",
+                                    "Arn"
+                                ]
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AWSConfigBucketExistenceCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:ListBucket",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "ComplianceLogBucket",
+                                    "Arn"
+                                ]
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AWSConfigBucketPutObject",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${ComplianceLogBucket.Arn}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control",
+                                    "aws:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "DenyInsecureTransport",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::GetAtt": [
+                                        "ComplianceLogBucket",
+                                        "Arn"
+                                    ]
+                                },
+                                {
+                                    "Fn::Sub": "${ComplianceLogBucket.Arn}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": "false"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "ComplianceTemplateBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "compliance-cfn-templates-${EnvironmentSuffix}-${AWS::AccountId}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "ComplianceKMSKey"
+                                }
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldVersions",
+                            "NoncurrentVersionExpirationInDays": 90,
+                            "Status": "Enabled"
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LoggingConfiguration": {
+                    "DestinationBucketName": {
+                        "Ref": "ComplianceLogBucket"
+                    },
+                    "LogFilePrefix": "template-bucket-logs/"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "compliance-templates-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ComplianceTemplateBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "ComplianceTemplateBucket"
+                },
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Sid": "DenyInsecureTransport",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::GetAtt": [
+                                        "ComplianceTemplateBucket",
+                                        "Arn"
+                                    ]
+                                },
+                                {
+                                    "Fn::Sub": "${ComplianceTemplateBucket.Arn}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": "false"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "ComplianceViolationsTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "ComplianceViolations-${EnvironmentSuffix}"
+                },
+                "BillingMode": "PAY_PER_REQUEST",
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "ViolationId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "AccountId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "Timestamp",
+                        "AttributeType": "N"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "ViolationId",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "AccountIdTimestampIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "AccountId",
+                                "KeyType": "HASH"
+                            },
+                            {
+                                "AttributeName": "Timestamp",
+                                "KeyType": "RANGE"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        }
+                    }
+                ],
+                "TimeToLiveSpecification": {
+                    "Enabled": true,
+                    "AttributeName": "TTL"
+                },
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": false
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true,
+                    "SSEType": "KMS",
+                    "KMSMasterKeyId": {
+                        "Ref": "ComplianceKMSKey"
+                    }
+                },
+                "StreamSpecification": {
+                    "StreamViewType": "NEW_AND_OLD_IMAGES"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "compliance-violations-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ComplianceLambdaLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/compliance-scanner-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "compliance-lambda-logs-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ComplianceConfigLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/config/compliance-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "compliance-config-logs-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ComplianceNotificationTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "ComplianceViolationAlerts-${EnvironmentSuffix}"
+                },
+                "DisplayName": {
+                    "Fn::Sub": "Compliance Alerts ${EnvironmentSuffix}"
+                },
+                "KmsMasterKeyId": {
+                    "Ref": "ComplianceKMSKey"
+                },
+                "Subscription": [
+                    {
+                        "Endpoint": {
+                            "Ref": "NotificationEmail"
+                        },
+                        "Protocol": "email"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "compliance-sns-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ComplianceNotificationTopicPolicy": {
+            "Type": "AWS::SNS::TopicPolicy",
+            "Properties": {
+                "Topics": [
+                    {
+                        "Ref": "ComplianceNotificationTopic"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "RequireSecureTransport",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": [
+                                "SNS:Publish"
+                            ],
+                            "Resource": {
+                                "Ref": "ComplianceNotificationTopic"
+                            },
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": "false"
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AllowCloudWatchAlarms",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudwatch.amazonaws.com"
+                            },
+                            "Action": "SNS:Publish",
+                            "Resource": {
+                                "Ref": "ComplianceNotificationTopic"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AllowConfigService",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "SNS:Publish",
+                            "Resource": {
+                                "Ref": "ComplianceNotificationTopic"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "ComplianceLambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "ComplianceLambdaExecutionRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "ComplianceLambdaPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "S3ReadAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:GetObjectVersion"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${ComplianceTemplateBucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "S3ListAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ComplianceTemplateBucket",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "DynamoDBAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:PutItem",
+                                        "dynamodb:GetItem",
+                                        "dynamodb:UpdateItem"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ComplianceViolationsTable",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "DynamoDBIndexAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:Query"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${ComplianceViolationsTable.Arn}/index/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "SNSPublish",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "ComplianceNotificationTopic"
+                                    }
+                                },
+                                {
+                                    "Sid": "KMSDecrypt",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey",
+                                        "kms:DescribeKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "ComplianceKMSKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Sid": "ParameterStoreAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ssm:GetParameter",
+                                        "ssm:GetParameters"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/compliance/${EnvironmentSuffix}/*"
+                                    }
+                                },
+                                {
+                                    "Sid": "CloudFormationValidate",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudformation:ValidateTemplate"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Sid": "LogsWrite",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${ComplianceLambdaLogGroup.Arn}:*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "compliance-lambda-role-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ConfigServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "ComplianceConfigServiceRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "ConfigServicePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "S3BucketPermissions",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetBucketAcl",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ComplianceLogBucket",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "S3ObjectPermissions",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject",
+                                        "s3:GetObject"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${ComplianceLogBucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "KMSAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey",
+                                        "kms:DescribeKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "ComplianceKMSKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Sid": "SNSPublish",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "ComplianceNotificationTopic"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "compliance-config-role-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ComplianceScannerFunction": {
+            "Type": "AWS::Lambda::Function",
+            "DependsOn": "ComplianceLambdaLogGroup",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "ComplianceTemplateScanner-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "ComplianceLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 300,
+                "MemorySize": 512,
+                "Environment": {
+                    "Variables": {
+                        "VIOLATIONS_TABLE": {
+                            "Ref": "ComplianceViolationsTable"
+                        },
+                        "SNS_TOPIC_ARN": {
+                            "Ref": "ComplianceNotificationTopic"
+                        },
+                        "PARAMETER_PREFIX": {
+                            "Fn::Sub": "/compliance/${EnvironmentSuffix}/rules/"
+                        },
+                        "ENVIRONMENT_SUFFIX": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nimport uuid\nimport time\nfrom datetime import datetime, timedelta\nimport yaml\nimport traceback\n\ns3_client = boto3.client('s3')\ndynamodb = boto3.resource('dynamodb')\nsns_client = boto3.client('sns')\nssm_client = boto3.client('ssm')\ncfn_client = boto3.client('cloudformation')\n\ndef lambda_handler(event, context):\n    \"\"\"Main handler for compliance scanning\"\"\"\n    try:\n        # Extract S3 event details\n        bucket = event['Records'][0]['s3']['bucket']['name']\n        key = event['Records'][0]['s3']['object']['key']\n\n        # Get the template from S3\n        response = s3_client.get_object(Bucket=bucket, Key=key)\n        template_content = response['Body'].read().decode('utf-8')\n\n        # Parse template (YAML or JSON)\n        try:\n            template = yaml.safe_load(template_content)\n        except yaml.YAMLError:\n            template = json.loads(template_content)\n\n        # Validate template syntax\n        try:\n            cfn_client.validate_template(TemplateBody=template_content)\n        except Exception as e:\n            record_violation('SYNTAX_ERROR', str(e), bucket, key)\n            return\n\n        # Load compliance rules from Parameter Store\n        rules = load_compliance_rules()\n\n        # Perform compliance checks\n        violations = []\n\n        # Check for required tags\n        violations.extend(check_required_tags(template, rules))\n\n        # Check S3 encryption\n        violations.extend(check_s3_encryption(template, rules))\n\n        # Check IAM policies\n        violations.extend(check_iam_policies(template, rules))\n\n        # Check for public resources\n        violations.extend(check_public_access(template, rules))\n\n        # Record violations\n        for violation in violations:\n            record_violation(\n                violation['type'],\n                violation['message'],\n                bucket,\n                key,\n                violation.get('resource'),\n                violation.get('severity', 'HIGH')\n            )\n\n        # Send notification if violations found\n        if violations:\n            send_notification(bucket, key, violations)\n\n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Compliance scan completed',\n                'violations': len(violations)\n            })\n        }\n\n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        print(traceback.format_exc())\n        try:\n            record_violation('SCAN_ERROR', str(e), bucket, key)\n        except:\n            pass\n        raise\n\ndef load_compliance_rules():\n    \"\"\"Load compliance rules from Parameter Store\"\"\"\n    prefix = os.environ['PARAMETER_PREFIX']\n    try:\n        response = ssm_client.get_parameters_by_path(\n            Path=prefix,\n            Recursive=True,\n            WithDecryption=True\n        )\n        rules = {}\n        for param in response.get('Parameters', []):\n            key = param['Name'].replace(prefix, '')\n            try:\n                rules[key] = json.loads(param['Value'])\n            except:\n                rules[key] = param['Value']\n        return rules\n    except:\n        # Return default rules if Parameter Store is empty\n        return {\n            'required_tags': ['project', 'team-number'],\n            's3_encryption_required': True,\n            'iam_wildcard_prohibited': True,\n            'public_access_prohibited': True\n        }\n\ndef check_required_tags(template, rules):\n    \"\"\"Check if resources have required tags\"\"\"\n    violations = []\n    required_tags = rules.get('required_tags', ['project', 'team-number'])\n\n    for resource_name, resource in template.get('Resources', {}).items():\n        tags = resource.get('Properties', {}).get('Tags', [])\n        tag_keys = [tag.get('Key') for tag in tags] if isinstance(tags, list) else []\n\n        missing_tags = [tag for tag in required_tags if tag not in tag_keys]\n        if missing_tags and resource.get('Type') not in ['AWS::Lambda::Permission', 'AWS::S3::BucketPolicy', 'AWS::SNS::TopicPolicy']:\n            violations.append({\n                'type': 'MISSING_TAGS',\n                'resource': resource_name,\n                'message': f\"Resource {resource_name} missing required tags: {missing_tags}\",\n                'severity': 'MEDIUM'\n            })\n\n    return violations\n\ndef check_s3_encryption(template, rules):\n    \"\"\"Check S3 buckets for encryption\"\"\"\n    violations = []\n    if not rules.get('s3_encryption_required', True):\n        return violations\n\n    for resource_name, resource in template.get('Resources', {}).items():\n        if resource.get('Type') == 'AWS::S3::Bucket':\n            encryption = resource.get('Properties', {}).get('BucketEncryption')\n            if not encryption:\n                violations.append({\n                    'type': 'S3_ENCRYPTION_MISSING',\n                    'resource': resource_name,\n                    'message': f\"S3 bucket {resource_name} does not have encryption enabled\",\n                    'severity': 'HIGH'\n                })\n\n    return violations\n\ndef check_iam_policies(template, rules):\n    \"\"\"Check IAM policies for security issues\"\"\"\n    violations = []\n    if not rules.get('iam_wildcard_prohibited', True):\n        return violations\n\n    for resource_name, resource in template.get('Resources', {}).items():\n        if 'Policy' in resource.get('Type', '') or resource.get('Type') == 'AWS::IAM::Role':\n            # Check inline policies\n            policies = resource.get('Properties', {}).get('Policies', [])\n            for policy in policies:\n                policy_doc = policy.get('PolicyDocument', {})\n                for statement in policy_doc.get('Statement', []):\n                    if statement.get('Effect') == 'Allow':\n                        actions = statement.get('Action', [])\n                        if isinstance(actions, str):\n                            actions = [actions]\n                        # Allow specific wildcards for read-only operations\n                        dangerous_wildcards = [a for a in actions if a == '*' or (a.endswith(':*') and not a.startswith(('cloudformation:', 's3:Get', 's3:List', 'iam:Get', 'iam:List', 'tag:Get', 'ec2:Describe', 'logs:', 'kms:Describe')))]\n                        if dangerous_wildcards:\n                            violations.append({\n                                'type': 'IAM_WILDCARD_ACTION',\n                                'resource': resource_name,\n                                'message': f\"IAM policy {resource_name} contains dangerous wildcard actions: {dangerous_wildcards}\",\n                                'severity': 'HIGH'\n                            })\n\n    return violations\n\ndef check_public_access(template, rules):\n    \"\"\"Check for publicly accessible resources\"\"\"\n    violations = []\n    if not rules.get('public_access_prohibited', True):\n        return violations\n\n    for resource_name, resource in template.get('Resources', {}).items():\n        resource_type = resource.get('Type', '')\n\n        # Check S3 bucket policies\n        if resource_type == 'AWS::S3::BucketPolicy':\n            policy = resource.get('Properties', {}).get('PolicyDocument', {})\n            for statement in policy.get('Statement', []):\n                if statement.get('Effect') == 'Allow':\n                    principal = statement.get('Principal', {})\n                    if principal == '*' or (isinstance(principal, dict) and principal.get('AWS') == '*'):\n                        violations.append({\n                            'type': 'PUBLIC_S3_ACCESS',\n                            'resource': resource_name,\n                            'message': f\"S3 bucket policy {resource_name} allows public access\",\n                            'severity': 'CRITICAL'\n                        })\n\n    return violations\n\ndef record_violation(violation_type, message, bucket, key, resource=None, severity='HIGH'):\n    \"\"\"Record violation in DynamoDB\"\"\"\n    table = dynamodb.Table(os.environ['VIOLATIONS_TABLE'])\n\n    violation_id = str(uuid.uuid4())\n    timestamp = int(datetime.now().timestamp())\n    ttl = int((datetime.now() + timedelta(days=90)).timestamp())\n\n    item = {\n        'ViolationId': violation_id,\n        'AccountId': boto3.client('sts').get_caller_identity()['Account'],\n        'Timestamp': timestamp,\n        'TTL': ttl,\n        'ViolationType': violation_type,\n        'Message': message,\n        'Bucket': bucket,\n        'Key': key,\n        'Severity': severity\n    }\n\n    if resource:\n        item['Resource'] = resource\n\n    table.put_item(Item=item)\n\ndef send_notification(bucket, key, violations):\n    \"\"\"Send SNS notification for violations\"\"\"\n    message = f\"Compliance violations detected in template: s3://{bucket}/{key}\\n\\n\"\n    message += f\"Total violations: {len(violations)}\\n\\n\"\n\n    for v in violations[:10]:  # Limit to first 10 violations\n        message += f\"- [{v['severity']}] {v['type']}: {v['message']}\\n\"\n\n    if len(violations) > 10:\n        message += f\"\\n... and {len(violations) - 10} more violations\"\n\n    sns_client.publish(\n        TopicArn=os.environ['SNS_TOPIC_ARN'],\n        Subject=f\"Compliance Alert: {len(violations)} violations found\",\n        Message=message\n    )\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "compliance-scanner-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": 2
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaInvokePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "ComplianceScannerFunction",
+                        "Arn"
+                    ]
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "s3.amazonaws.com",
+                "SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                },
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:s3:::compliance-cfn-templates-${EnvironmentSuffix}-${AWS::AccountId}"
+                }
+            }
+        },
+        "ConfigurationRecorder": {
+            "Type": "AWS::Config::ConfigurationRecorder",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "compliance-recorder-${EnvironmentSuffix}"
+                },
+                "RoleARN": {
+                    "Fn::GetAtt": [
+                        "ConfigServiceRole",
+                        "Arn"
+                    ]
+                },
+                "RecordingGroup": {
+                    "AllSupported": true,
+                    "IncludeGlobalResourceTypes": true
+                }
+            }
+        },
+        "DeliveryChannel": {
+            "Type": "AWS::Config::DeliveryChannel",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "compliance-delivery-${EnvironmentSuffix}"
+                },
+                "S3BucketName": {
+                    "Ref": "ComplianceLogBucket"
+                },
+                "S3KeyPrefix": "config-logs",
+                "SnsTopicARN": {
+                    "Ref": "ComplianceNotificationTopic"
+                },
+                "ConfigSnapshotDeliveryProperties": {
+                    "DeliveryFrequency": "TwentyFour_Hours"
+                }
+            }
+        },
+        "S3BucketEncryptionRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "DependsOn": [
+                "ConfigurationRecorder",
+                "DeliveryChannel"
+            ],
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "s3-bucket-encryption-${EnvironmentSuffix}"
+                },
+                "Description": "Checks if S3 buckets have server-side encryption enabled",
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
+                },
+                "Scope": {
+                    "ComplianceResourceTypes": [
+                        "AWS::S3::Bucket"
+                    ]
+                }
+            }
+        },
+        "RequiredTagsRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "DependsOn": [
+                "ConfigurationRecorder",
+                "DeliveryChannel"
+            ],
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "required-tags-${EnvironmentSuffix}"
+                },
+                "Description": "Checks if resources have required tags",
+                "InputParameters": "{\n  \"tag1Key\": \"project\",\n  \"tag2Key\": \"team-number\"\n}\n",
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "REQUIRED_TAGS"
+                },
+                "Scope": {
+                    "ComplianceResourceTypes": [
+                        "AWS::EC2::Instance",
+                        "AWS::RDS::DBInstance",
+                        "AWS::S3::Bucket",
+                        "AWS::Lambda::Function"
+                    ]
+                }
+            }
+        },
+        "IAMPolicyNoWildcardRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "DependsOn": [
+                "ConfigurationRecorder",
+                "DeliveryChannel"
+            ],
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "iam-policy-no-admin-${EnvironmentSuffix}"
+                },
+                "Description": "Checks if IAM policies grant admin access",
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "IAM_POLICY_NO_STATEMENTS_WITH_ADMIN_ACCESS"
+                },
+                "Scope": {
+                    "ComplianceResourceTypes": [
+                        "AWS::IAM::Policy"
+                    ]
+                }
+            }
+        },
+        "S3PublicAccessBlockRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "DependsOn": [
+                "ConfigurationRecorder",
+                "DeliveryChannel"
+            ],
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "s3-public-access-blocks-${EnvironmentSuffix}"
+                },
+                "Description": "Checks if S3 public access is blocked at account level",
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "S3_ACCOUNT_LEVEL_PUBLIC_ACCESS_BLOCKS"
+                }
+            }
+        },
+        "HighViolationCountAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "ComplianceHighViolationCount-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert when violation count exceeds threshold",
+                "MetricName": "ViolationCount",
+                "Namespace": "Compliance",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 5,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "ComplianceNotificationTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "LambdaErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "ComplianceLambdaErrors-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert on Lambda function errors",
+                "MetricName": "Errors",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 60,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "ComplianceScannerFunction"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "ComplianceNotificationTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "DynamoDBThrottleAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "ComplianceDynamoDBThrottle-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alert on DynamoDB throttling",
+                "MetricName": "ThrottledRequests",
+                "Namespace": "AWS/DynamoDB",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "TableName",
+                        "Value": {
+                            "Ref": "ComplianceViolationsTable"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "ComplianceNotificationTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "ComplianceRulesParameter": {
+            "Type": "AWS::SSM::Parameter",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "/compliance/${EnvironmentSuffix}/rules/required_tags"
+                },
+                "Type": "String",
+                "Value": "[\"project\", \"team-number\"]",
+                "Description": "Required tags for all resources",
+                "Tags": {
+                    "project": "iac-rlhf-amazon",
+                    "team-number": 2,
+                    "Environment": {
+                        "Ref": "EnvironmentSuffix"
+                    }
+                }
+            }
+        },
+        "S3EncryptionRuleParameter": {
+            "Type": "AWS::SSM::Parameter",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "/compliance/${EnvironmentSuffix}/rules/s3_encryption_required"
+                },
+                "Type": "String",
+                "Value": "true",
+                "Description": "S3 encryption requirement flag",
+                "Tags": {
+                    "project": "iac-rlhf-amazon",
+                    "team-number": 2,
+                    "Environment": {
+                        "Ref": "EnvironmentSuffix"
+                    }
+                }
+            }
+        },
+        "IAMWildcardRuleParameter": {
+            "Type": "AWS::SSM::Parameter",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "/compliance/${EnvironmentSuffix}/rules/iam_wildcard_prohibited"
+                },
+                "Type": "String",
+                "Value": "true",
+                "Description": "IAM wildcard action prohibition flag",
+                "Tags": {
+                    "project": "iac-rlhf-amazon",
+                    "team-number": 2,
+                    "Environment": {
+                        "Ref": "EnvironmentSuffix"
+                    }
+                }
+            }
+        },
+        "PublicAccessRuleParameter": {
+            "Type": "AWS::SSM::Parameter",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "/compliance/${EnvironmentSuffix}/rules/public_access_prohibited"
+                },
+                "Type": "String",
+                "Value": "true",
+                "Description": "Public access prohibition flag",
+                "Tags": {
+                    "project": "iac-rlhf-amazon",
+                    "team-number": 2,
+                    "Environment": {
+                        "Ref": "EnvironmentSuffix"
+                    }
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "TemplateBucketName": {
+            "Description": "S3 bucket for uploading CloudFormation templates",
+            "Value": {
+                "Ref": "ComplianceTemplateBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TemplateBucket"
+                }
+            }
+        },
+        "ViolationsTableName": {
+            "Description": "DynamoDB table storing compliance violations",
+            "Value": {
+                "Ref": "ComplianceViolationsTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ViolationsTable"
+                }
+            }
+        },
+        "NotificationTopicArn": {
+            "Description": "SNS topic for compliance alerts",
+            "Value": {
+                "Ref": "ComplianceNotificationTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-NotificationTopic"
+                }
+            }
+        },
+        "LambdaFunctionArn": {
+            "Description": "Compliance scanner Lambda function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ComplianceScannerFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaFunction"
+                }
+            }
+        },
+        "KMSKeyId": {
+            "Description": "KMS key for encryption",
+            "Value": {
+                "Ref": "ComplianceKMSKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KMSKey"
+                }
+            }
+        },
+        "EnvironmentSuffix": {
+            "Description": "Environment suffix used for resource naming",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+                }
+            }
+        },
+        "ConfigRecorderName": {
+            "Description": "AWS Config recorder name",
+            "Value": {
+                "Ref": "ConfigurationRecorder"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ConfigRecorder"
+                }
+            }
+        }
+    }
+}
