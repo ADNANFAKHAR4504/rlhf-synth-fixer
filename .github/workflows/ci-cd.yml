@@ -651,7 +651,7 @@ jobs:
     name: Cleanup (Destroy Resources)
     runs-on: ubuntu-24.04
     needs: [claude-code-action]
-    if: ${{ needs.claude-review.result == 'success' && needs.claude-review.outputs.quality_score >= 8 }}
+    if: ${{ needs.claude-code-action.result == 'success' && fromJSON(needs.claude-code-action.outputs.quality_score) >= 8 }}
 
     steps:
       - name: Checkout code
