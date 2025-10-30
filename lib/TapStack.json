@@ -152,6 +152,125 @@
         }
     },
     "Resources": {
+        "KMSKey": {
+            "Type": "AWS::KMS::Key",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Description": "KMS key for encrypting EBS volumes and S3 buckets",
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM policies",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow services to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "s3.amazonaws.com",
+                                    "logs.amazonaws.com",
+                                    "rds.amazonaws.com",
+                                    "cloudtrail.amazonaws.com",
+                                    "ec2.amazonaws.com",
+                                    "autoscaling.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey",
+                                "kms:CreateGrant"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow EC2 and Auto Scaling to use the key via EC2",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com",
+                                    "autoscaling.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "kms:CreateGrant",
+                                "kms:Decrypt",
+                                "kms:DescribeKey",
+                                "kms:Encrypt",
+                                "kms:GenerateDataKey*",
+                                "kms:ReEncrypt*"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "kms:ViaService": {
+                                        "Fn::Sub": "ec2.${AWS::Region}.amazonaws.com"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "Allow Auto Scaling to create grants for AWS resources",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "autoscaling.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:CreateGrant",
+                                "kms:ListGrants",
+                                "kms:RevokeGrant"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "Bool": {
+                                    "kms:GrantIsForAWSResource": "true"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerName"
+                        }
+                    }
+                ]
+            }
+        },
+        "KMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${EnvironmentSuffix}-key"
+                },
+                "TargetKeyId": {
+                    "Ref": "KMSKey"
+                }
+            }
+        },
         "EC2KeyPair": {
             "Type": "AWS::EC2::KeyPair",
             "Properties": {
@@ -1235,6 +1354,10 @@
         },
         "LaunchTemplate": {
             "Type": "AWS::EC2::LaunchTemplate",
+            "DependsOn": [
+                "KMSKey",
+                "KMSKeyAlias"
+            ],
             "Properties": {
                 "LaunchTemplateName": {
                     "Fn::Sub": "${EnvironmentSuffix}-LaunchTemplate"
@@ -1300,6 +1423,17 @@
                             "Ref": "WebServerSecurityGroup"
                         }
                     ],
+                    "BlockDeviceMappings": [
+                        {
+                            "DeviceName": "/dev/xvda",
+                            "Ebs": {
+                                "VolumeSize": 30,
+                                "VolumeType": "gp3",
+                                "Encrypted": true,
+                                "DeleteOnTermination": true
+                            }
+                        }
+                    ],
                     "UserData": {
                         "Fn::Base64": {
                             "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y python3 python3-pip mysql jq\npip3 install pymysql boto3 cryptography\n\n# Get RDS endpoint and credentials\nRDS_ENDPOINT=\"${RDSDatabase.Endpoint.Address}\"\nSECRET_ARN=\"${DbSecret}\"\nREGION=\"${AWS::Region}\"\nS3_BUCKET=\"${S3Bucket}\"\nLAMBDA_FUNCTION_NAME=\"${RDSSnapshotLambda}\"\n\n# Create Python server script\ncat > /home/ec2-user/server.py << 'EOFPYTHON'\n#!/usr/bin/env python3\nimport pymysql\nimport json\nimport boto3\nfrom http.server import HTTPServer, BaseHTTPRequestHandler\nimport os\nimport time\nfrom datetime import datetime\n\ndef test_rds_connection():\n    try:\n        # Get credentials from Secrets Manager\n        client = boto3.client('secretsmanager', region_name=os.environ.get('AWS_REGION'))\n        secret_value = client.get_secret_value(SecretId=os.environ.get('SECRET_ARN'))\n        secret = json.loads(secret_value['SecretString'])\n\n        # Test connection\n        connection = pymysql.connect(\n            host=os.environ.get('RDS_ENDPOINT'),\n            user=secret['username'],\n            password=secret['password'],\n            connect_timeout=5\n        )\n\n        # Get MySQL version\n        with connection.cursor() as cursor:\n            cursor.execute(\"SELECT VERSION()\")\n            version = cursor.fetchone()[0]\n\n        connection.close()\n\n        return {\n            'status': 'SUCCESS',\n            'message': 'Connected to RDS successfully',\n            'mysql_version': version,\n            'endpoint': os.environ.get('RDS_ENDPOINT')\n        }\n    except Exception as e:\n        return {\n            'status': 'FAILED',\n            'message': str(e),\n            'endpoint': os.environ.get('RDS_ENDPOINT')\n        }\n\ndef test_s3_connection():\n    try:\n        # Create S3 client\n        s3_client = boto3.client('s3', region_name=os.environ.get('AWS_REGION'))\n        \n        # Test write - put a test object\n        test_key = f\"health-check-{int(time.time())}.txt\"\n        test_content = f\"Connection test from EC2 at {datetime.utcnow().isoformat()}\"\n        \n        s3_client.put_object(\n            Bucket=os.environ.get('S3_BUCKET'),\n            Key=test_key,\n            Body=test_content.encode(),\n            ContentType='text/plain'\n        )\n\n        # Test read - get the object back\n        response = s3_client.get_object(\n            Bucket=os.environ.get('S3_BUCKET'),\n            Key=test_key\n        )\n        retrieved_content = response['Body'].read().decode()\n\n        # Test delete - clean up test object\n        s3_client.delete_object(\n            Bucket=os.environ.get('S3_BUCKET'),\n            Key=test_key\n        )\n\n        return {\n            'status': 'SUCCESS',\n            'message': 'Connected to S3 successfully - Write/Read/Delete operations completed',\n            'bucket_name': os.environ.get('S3_BUCKET'),\n            'test_key': test_key,\n            'content_match': test_content == retrieved_content\n        }\n    except Exception as e:\n        return {\n            'status': 'FAILED',\n            'message': str(e),\n            'bucket_name': os.environ.get('S3_BUCKET')\n        }\n\ndef trigger_rds_snapshot():\n    try:\n        # Create Lambda client\n        lambda_client = boto3.client('lambda', region_name=os.environ.get('AWS_REGION'))\n        \n        # Invoke the snapshot Lambda function\n        response = lambda_client.invoke(\n            FunctionName=os.environ.get('LAMBDA_FUNCTION_NAME'),\n            InvocationType='RequestResponse',  # Synchronous call\n            Payload=json.dumps({\n                'source': 'ec2-api-test',\n                'timestamp': datetime.utcnow().isoformat()\n            })\n        )\n        \n        # Parse the response\n        response_payload = json.loads(response['Payload'].read().decode())\n        \n        return {\n            'status': 'SUCCESS' if response['StatusCode'] == 200 else 'FAILED',\n            'message': 'RDS Snapshot Lambda invoked successfully',\n            'lambda_response': response_payload,\n            'status_code': response['StatusCode']\n        }\n    except Exception as e:\n        return {\n            'status': 'FAILED',\n            'message': str(e),\n            'lambda_function': os.environ.get('LAMBDA_FUNCTION_NAME')\n        }\n\nclass RequestHandler(BaseHTTPRequestHandler):\n    def do_GET(self):\n        if self.path == '/':\n            self.handle_home()\n        elif self.path == '/snapshot':\n            self.handle_snapshot()\n        elif self.path == '/api/snapshot':\n            self.handle_api_snapshot()\n        else:\n            self.send_response(404)\n            self.send_header('Content-type', 'text/html')\n            self.end_headers()\n            self.wfile.write(b'<h1>404 - Not Found</h1>')\n\n    def handle_home(self):\n        rds_result = test_rds_connection()\n        s3_result = test_s3_connection()\n\n        self.send_response(200)\n        self.send_header('Content-type', 'text/html')\n        self.end_headers()\n\n        html = f\"\"\"\n        <!DOCTYPE html>\n        <html>\n        <head>\n            <title>${EnvironmentSuffix} Environment</title>\n            <style>\n                body {{ font-family: Arial, sans-serif; margin: 40px; }}\n                .success {{ color: green; font-weight: bold; }}\n                .failed {{ color: red; font-weight: bold; }}\n                .info {{ background: #f0f0f0; padding: 20px; border-radius: 5px; margin-bottom: 20px; }}\n                .button {{ background: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 10px 5px; }}\n                .button:hover {{ background: #45a049; }}\n            </style>\n        </head>\n        <body>\n            <h1>${EnvironmentSuffix} Environment - Secure Instance</h1>\n\n            <div class=\"info\">\n                <h3>Test APIs:</h3>\n                <a href=\"/snapshot\" class=\"button\">Test RDS Snapshot (Web)</a>\n                <a href=\"/api/snapshot\" class=\"button\">Test RDS Snapshot (JSON API)</a>\n            </div>\n\n            <h2>RDS Connection Test</h2>\n            <div class=\"info\">\n                <p><strong>Status:</strong> <span class=\"{rds_result['status'].lower()}\">{rds_result['status']}</span></p>\n                <p><strong>Message:</strong> {rds_result['message']}</p>\n                <p><strong>Endpoint:</strong> {rds_result.get('endpoint', 'N/A')}</p>\n                {f\"<p><strong>MySQL Version:</strong> {rds_result.get('mysql_version', 'N/A')}</p>\" if rds_result['status'] == 'SUCCESS' else ''}\n            </div>\n\n            <h2>S3 Connection Test</h2>\n            <div class=\"info\">\n                <p><strong>Status:</strong> <span class=\"{s3_result['status'].lower()}\">{s3_result['status']}</span></p>\n                <p><strong>Message:</strong> {s3_result['message']}</p>\n                <p><strong>Bucket Name:</strong> {s3_result.get('bucket_name', 'N/A')}</p>\n                {f\"<p><strong>Test Key:</strong> {s3_result.get('test_key', 'N/A')}</p>\" if s3_result['status'] == 'SUCCESS' else ''}\n                {f\"<p><strong>Content Match:</strong> {s3_result.get('content_match', 'N/A')}</p>\" if s3_result['status'] == 'SUCCESS' else ''}\n            </div>\n        </body>\n        </html>\n        \"\"\"\n        \n        self.wfile.write(html.encode())\n\n    def handle_snapshot(self):\n        snapshot_result = trigger_rds_snapshot()\n\n        self.send_response(200)\n        self.send_header('Content-type', 'text/html')\n        self.end_headers()\n\n        html = f\"\"\"\n        <!DOCTYPE html>\n        <html>\n        <head>\n            <title>RDS Snapshot Test - ${EnvironmentSuffix}</title>\n            <style>\n                body {{ font-family: Arial, sans-serif; margin: 40px; }}\n                .success {{ color: green; font-weight: bold; }}\n                .failed {{ color: red; font-weight: bold; }}\n                .info {{ background: #f0f0f0; padding: 20px; border-radius: 5px; margin-bottom: 20px; }}\n                .button {{ background: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; }}\n            </style>\n        </head>\n        <body>\n            <h1>RDS Snapshot Test Results</h1>\n            \n            <div class=\"info\">\n                <p><strong>Status:</strong> <span class=\"{snapshot_result['status'].lower()}\">{snapshot_result['status']}</span></p>\n                <p><strong>Message:</strong> {snapshot_result['message']}</p>\n                <p><strong>Lambda Function:</strong> {os.environ.get('LAMBDA_FUNCTION_NAME', 'N/A')}</p>\n                {f\"<p><strong>Status Code:</strong> {snapshot_result.get('status_code', 'N/A')}</p>\" if 'status_code' in snapshot_result else ''}\n                {f\"<p><strong>Lambda Response:</strong> <pre>{json.dumps(snapshot_result.get('lambda_response', {{}}), indent=2)}</pre></p>\" if 'lambda_response' in snapshot_result else ''}\n            </div>\n            \n            <a href=\"/\" class=\"button\">Back to Home</a>\n        </body>\n        </html>\n        \"\"\"\n        \n        self.wfile.write(html.encode())\n\n    def handle_api_snapshot(self):\n        snapshot_result = trigger_rds_snapshot()\n        \n        self.send_response(200 if snapshot_result['status'] == 'SUCCESS' else 500)\n        self.send_header('Content-type', 'application/json')\n        self.end_headers()\n        \n        response = {\n            'timestamp': datetime.utcnow().isoformat(),\n            'environment': os.environ.get('AWS_REGION', 'unknown'),\n            'snapshot_result': snapshot_result\n        }\n        \n        self.wfile.write(json.dumps(response, indent=2).encode())\n    \n    def log_message(self, format, *args):\n        pass\n\nif __name__ == '__main__':\n    server = HTTPServer(('0.0.0.0', 80), RequestHandler)\n    print('Server started on port 80')\n    server.serve_forever()\nEOFPYTHON\n\n# Set environment variables and run server\nexport RDS_ENDPOINT=\"$RDS_ENDPOINT\"\nexport SECRET_ARN=\"$SECRET_ARN\"\nexport AWS_REGION=\"$REGION\"\nexport S3_BUCKET=\"$S3_BUCKET\"\nexport LAMBDA_FUNCTION_NAME=\"$LAMBDA_FUNCTION_NAME\"\n\n# Make script executable and run\nchmod +x /home/ec2-user/server.py\nnohup python3 /home/ec2-user/server.py > /var/log/server.log 2>&1 &\n\n# Install CloudWatch Agent\nwget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm\nrpm -U ./amazon-cloudwatch-agent.rpm\n"
@@ -1313,6 +1447,35 @@
                                     "Key": "Name",
                                     "Value": {
                                         "Fn::Sub": "${EnvironmentSuffix}-WebServer"
+                                    }
+                                },
+                                {
+                                    "Key": "Environment",
+                                    "Value": {
+                                        "Ref": "EnvironmentSuffix"
+                                    }
+                                },
+                                {
+                                    "Key": "Project",
+                                    "Value": {
+                                        "Ref": "ProjectName"
+                                    }
+                                },
+                                {
+                                    "Key": "Owner",
+                                    "Value": {
+                                        "Ref": "OwnerName"
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "ResourceType": "volume",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": {
+                                        "Fn::Sub": "${EnvironmentSuffix}-Volume"
                                     }
                                 },
                                 {
@@ -2782,6 +2945,17 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${EnvironmentSuffix}-DB-Secret-ARN"
+                }
+            }
+        },
+        "KMSKeyId": {
+            "Description": "KMS Key ID for encryption",
+            "Value": {
+                "Ref": "KMSKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-KMSKey"
                 }
             }
         }

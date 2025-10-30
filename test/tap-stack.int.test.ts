@@ -82,7 +82,8 @@ describe('TapStack Integration Tests', () => {
         'CloudTrailBucketName',
         'Environment',
         'ProjectName',
-        'DBSecretArn'
+        'DBSecretArn',
+        'KMSKeyId'
       ];
 
       expectedOutputs.forEach(outputKey => {

@@ -508,7 +508,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct output count', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(9);
+      expect(outputCount).toBe(10);
     });
   });
 

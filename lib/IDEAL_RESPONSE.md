@@ -94,6 +94,82 @@ Conditions:
 Resources:
 
   # =====================================
+  # KMS Key for Encryption
+  # =====================================
+  KMSKey:
+    Type: AWS::KMS::Key
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Description: KMS key for encrypting EBS volumes and S3 buckets
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM policies
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow services to use the key
+            Effect: Allow
+            Principal:
+              Service:
+                - s3.amazonaws.com
+                - logs.amazonaws.com
+                - rds.amazonaws.com
+                - cloudtrail.amazonaws.com
+                - ec2.amazonaws.com
+                - autoscaling.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+              - 'kms:CreateGrant'
+            Resource: '*'
+          - Sid: Allow EC2 and Auto Scaling to use the key via EC2
+            Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - autoscaling.amazonaws.com
+            Action:
+              - 'kms:CreateGrant'
+              - 'kms:Decrypt'
+              - 'kms:DescribeKey'
+              - 'kms:Encrypt'
+              - 'kms:GenerateDataKey*'
+              - 'kms:ReEncrypt*'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:ViaService': !Sub 'ec2.${AWS::Region}.amazonaws.com'
+          - Sid: Allow Auto Scaling to create grants for AWS resources
+            Effect: Allow
+            Principal:
+              Service: autoscaling.amazonaws.com
+            Action:
+              - 'kms:CreateGrant'
+              - 'kms:ListGrants'
+              - 'kms:RevokeGrant'
+            Resource: '*'
+            Condition:
+              Bool:
+                'kms:GrantIsForAWSResource': 'true'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref OwnerName
+
+  KMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${EnvironmentSuffix}-key'
+      TargetKeyId: !Ref KMSKey
+
+  # =====================================
   # EC2 Key Pair
   # =====================================
   EC2KeyPair:
@@ -617,6 +693,9 @@ Resources:
   # =====================================
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
+    DependsOn: 
+      - KMSKey
+      - KMSKeyAlias
     Properties:
       LaunchTemplateName: !Sub '${EnvironmentSuffix}-LaunchTemplate'
       LaunchTemplateData:
@@ -636,6 +715,13 @@ Resources:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 30
+              VolumeType: gp3
+              Encrypted: true
+              DeleteOnTermination: true
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
@@ -918,6 +1004,16 @@ Resources:
             Tags:
               - Key: Name
                 Value: !Sub '${EnvironmentSuffix}-WebServer'
+              - Key: Environment
+                Value: !Ref EnvironmentSuffix
+              - Key: Project
+                Value: !Ref ProjectName
+              - Key: Owner
+                Value: !Ref OwnerName
+          - ResourceType: volume
+            Tags:
+              - Key: Name
+                Value: !Sub '${EnvironmentSuffix}-Volume'
               - Key: Environment
                 Value: !Ref EnvironmentSuffix
               - Key: Project
@@ -1678,4 +1774,10 @@ Outputs:
     Value: !Ref DbSecret
     Export:
       Name: !Sub '${EnvironmentSuffix}-DB-Secret-ARN'
+
+  KMSKeyId:
+    Description: KMS Key ID for encryption
+    Value: !Ref KMSKey
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-KMSKey'
 ```
