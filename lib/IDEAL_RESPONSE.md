@@ -12,7 +12,7 @@ The solution includes robust integration tests that validate real AWS resources 
 import { spawn } from 'child_process';
 import fs from 'fs';
 
-const region = process.env.AWS_REGION || 'us-east-1';
+const region = process.env.AWS_REGION || 'us-east-2';
 const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf-8'));
 const environmentSuffix = 'pr5418'; // Extracted from deployed stack
 
@@ -429,7 +429,7 @@ All outputs include export names for cross-stack references.
 7. **Security**: Secrets Manager, security groups, private subnets
 8. **Destroyability**: No retain policies for complete cleanup
 
-## Cost Estimate (us-east-1)
+## Cost Estimate (us-east-2)
 
 Approximate monthly costs:
 - VPC (NAT Gateway): $32.85

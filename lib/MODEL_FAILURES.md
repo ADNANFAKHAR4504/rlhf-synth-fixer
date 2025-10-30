@@ -190,8 +190,8 @@ All files |       0 |        0 |       0 |       0 |
 **MODEL_RESPONSE Issue**: 4 out of 68 integration tests failed (94.1% pass rate) due to mismatched expectations:
 
 1. **DMS Instance ARN Pattern**: Test expected human-readable name in ARN, but AWS generates random resource identifiers
-   - Expected: `arn:aws:dms:us-east-1:123456789012:rep:.*migration-dms-instance`
-   - Actual: `arn:aws:dms:us-east-1:342597974367:rep:KBOXVCGOIBC6ZKMKHVGC6K5PKA`
+   - Expected: `arn:aws:dms:us-east-2:123456789012:rep:.*migration-dms-instance`
+   - Actual: `arn:aws:dms:us-east-2:342597974367:rep:KBOXVCGOIBC6ZKMKHVGC6K5PKA`
 
 2. **Environment Suffix Mismatch**: Test hardcoded expected value
    - Expected: `dev`

@@ -18,7 +18,7 @@ Create a CloudFormation template to establish the AWS infrastructure needed for 
 10. Enable deletion protection on critical resources
 
 ## Environment
-Migration infrastructure deployed in us-east-1 for transferring on-premises workloads to AWS. Uses DMS for database replication from on-premises MySQL to RDS Aurora MySQL, Site-to-Site VPN for secure connectivity, and Application Load Balancer for web tier. VPC configured with 10.0.0.0/16 CIDR spanning 2 availability zones with public and private subnets. Requires AWS CLI configured with appropriate IAM permissions for DMS, VPC, RDS, and Secrets Manager services.
+Migration infrastructure deployed in us-east-2 for transferring on-premises workloads to AWS. Uses DMS for database replication from on-premises MySQL to RDS Aurora MySQL, Site-to-Site VPN for secure connectivity, and Application Load Balancer for web tier. VPC configured with 10.0.0.0/16 CIDR spanning 2 availability zones with public and private subnets. Requires AWS CLI configured with appropriate IAM permissions for DMS, VPC, RDS, and Secrets Manager services.
 
 ## Constraints
 1. Use AWS Database Migration Service (DMS) for continuous data replication

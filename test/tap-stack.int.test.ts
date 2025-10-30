@@ -1,7 +1,7 @@
 import { spawn } from 'child_process';
 import fs from 'fs';
 
-const region = process.env.AWS_REGION || 'us-east-1';
+const region = process.env.AWS_REGION || 'us-east-2';
 const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf-8'));
 const environmentSuffix = 'pr5418'; // Extracted from deployed stack
 
