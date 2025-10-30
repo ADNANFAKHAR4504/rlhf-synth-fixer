@@ -328,7 +328,7 @@ class TestCrossService(unittest.TestCase):
         Service 1 (Trigger): Lambda function
         Service 2 (Verify): DynamoDB table
         
-        Action: Invoke processing Lambda with test data
+        Action: Invoke processing Lambda with S3 event payload
         Verification: Data appears in DynamoDB with correct Decimal types
         
         Mapped to prompt: Lambda processes data and stores in DynamoDB
@@ -336,25 +336,31 @@ class TestCrossService(unittest.TestCase):
         print("\n=== Test: Lambda Writes to DynamoDB ===")
         function_name = OUTPUTS.get('processing_lambda_name')
         table_name = OUTPUTS.get('dynamodb_table_name')
+        bucket_name = OUTPUTS.get('s3_bucket_name')
         self.assertIsNotNone(function_name, "Processing Lambda name not found in outputs")
         self.assertIsNotNone(table_name, "DynamoDB table name not found in outputs")
+        self.assertIsNotNone(bucket_name, "S3 bucket name not found in outputs")
         
         test_symbol = f"CROSS{uuid.uuid4().hex[:6].upper()}"
         test_timestamp = int(time.time())
+        test_key = f"incoming/cross-test-{uuid.uuid4()}.csv"
+        
+        csv_content = f"symbol,timestamp,price,volume\n{test_symbol},{test_timestamp},100.50,5000\n"
+        
+        print(f"Uploading CSV file to S3: s3://{bucket_name}/{test_key}")
+        s3_client.put_object(
+            Bucket=bucket_name,
+            Key=test_key,
+            Body=csv_content.encode('utf-8')
+        )
         
         payload = {
             'Records': [{
                 's3': {
-                    'bucket': {'name': OUTPUTS.get('s3_bucket_name')},
-                    'object': {'key': 'test-data.csv'}
+                    'bucket': {'name': bucket_name},
+                    'object': {'key': test_key}
                 }
-            }],
-            'test_data': {
-                'symbol': test_symbol,
-                'timestamp': test_timestamp,
-                'price': 100.50,
-                'volume': 5000
-            }
+            }]
         }
         
         print(f"Invoking Lambda to process data for symbol: {test_symbol}")
@@ -378,8 +384,13 @@ class TestCrossService(unittest.TestCase):
         print(f"Successfully verified Lambda wrote to DynamoDB")
         
         # Cleanup
-        table = dynamodb_resource.Table(table_name)
-        table.delete_item(Key={'symbol': test_symbol, 'timestamp': Decimal(str(test_timestamp))})
+        try:
+            s3_client.delete_object(Bucket=bucket_name, Key=test_key)
+            s3_client.delete_object(Bucket=bucket_name, Key=f"processed/{test_key.split('/')[-1]}")
+            table = dynamodb_resource.Table(table_name)
+            table.delete_item(Key={'symbol': test_symbol, 'timestamp': Decimal(str(test_timestamp))})
+        except Exception:
+            pass
 
     def test_api_gateway_invokes_lambda(self):
         """
@@ -410,7 +421,10 @@ class TestCrossService(unittest.TestCase):
         data = response.json()
         print(f"API Gateway response: {json.dumps(data, indent=2)}")
         
-        self.assertIn('statusCode', data, "Response missing statusCode")
+        self.assertIn('symbol', data, "Response missing symbol field")
+        self.assertIn('count', data, "Response missing count field")
+        self.assertIn('results', data, "Response missing results field")
+        self.assertEqual(data['symbol'], test_symbol, "Symbol mismatch in response")
         print(f"Successfully verified API Gateway invoked Lambda")
 
     def test_s3_event_triggers_lambda(self):
@@ -556,7 +570,7 @@ class TestEndToEnd(unittest.TestCase):
             f"{api_endpoint}/upload",
             json={
                 'filename': test_filename,
-                'content': csv_content
+                'data': csv_content
             },
             timeout=30
         )
