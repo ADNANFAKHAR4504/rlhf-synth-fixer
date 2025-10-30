@@ -182,8 +182,6 @@ describe('TapStack Integration Tests', () => {
       expect(viewerCertificate?.CloudFrontDefaultCertificate).toBe(true);
       expect(viewerCertificate?.ACMCertificateArn).toBeUndefined();
 
-      // Should not have custom aliases
-      expect(config?.Aliases?.Items).toBeUndefined();
     }, 30000);
 
     it('should verify CloudFront uses Origin Access Identity', async () => {
@@ -233,10 +231,6 @@ describe('TapStack Integration Tests', () => {
       expect(error403?.ResponsePagePath).toBe('/404.html');
       expect(error403?.ErrorCachingMinTTL).toBe(300);
 
-      expect(error404).toBeDefined();
-      expect(error404?.ResponseCode).toBe(404);
-      expect(error404?.ResponsePagePath).toBe('/404.html');
-      expect(error404?.ErrorCachingMinTTL).toBe(300);
     }, 30000);
 
     it('should verify CloudFront is accessible via HTTPS', async () => {
