@@ -1,0 +1,11 @@
+We are NovaFintech, a rapidly expanding fintech startup on the verge of launching our revolutionary digital banking platform to thousands of waiting customers. As our Cloud Infrastructure Engineer, you're stepping into a critical role during this exciting growth phase. Your mission is to architect and deliver a production-ready CloudFormation template that will serve as the foundation for our entire customer-facing web application on AWS.
+
+Here's what we need you to build for our launch next month:
+
+We require a robust EC2 instance deployment using the latest Amazon Linux 2 AMI with t2.micro instance type to host our core banking application. This instance must have an Elastic IP associated to ensure consistent public access for our customers across different sessions. Security is non-negotiable in fintech - configure a comprehensive Security Group that carefully manages inbound traffic, allowing HTTP (port 80) for web access and SSH (port 22) for our operations team to perform necessary maintenance from any location.
+
+Given the regulatory requirements in financial services, we need reliable log storage and retention. Create an S3 bucket with versioning enabled to securely store all application logs and transaction records. To maintain the highest security standards, implement an IAM role for the EC2 instance that provides secure access to the S3 bucket without ever exposing credentials in our application code.
+
+While we're starting with a single instance, our architecture must be built for scale. Implement an Auto Scaling Group with a fixed size of 1 instance initially, establishing the framework for future horizontal scaling as our customer base grows. Finally, set up a Route 53 domain configuration to ensure reliable DNS routing of customer traffic directly to our application through the Elastic IP address.
+
+Your deliverable - a comprehensive, well-documented YAML template named nova_web_app_infrastructure.yaml - must follow AWS best practices, pass all CloudFormation validation checks, and create a fully integrated infrastructure where all components work seamlessly together.
