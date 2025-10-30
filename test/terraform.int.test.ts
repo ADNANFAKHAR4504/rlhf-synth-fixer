@@ -55,11 +55,11 @@ function loadOutputs(): any {
 const outputs = loadOutputs();
 
 // AWS clients (initialized with default config)
-const ec2ClientHubRegion = new EC2Client({ region: 'us-east-1' });
-const ec2ClientUsWest = new EC2Client({ region: 'us-west-2' });
-const ec2ClientEuWest = new EC2Client({ region: 'eu-west-1' });
-const s3Client = new S3Client({ region: 'us-east-1' });
-const route53Client = new Route53Client({ region: 'us-east-1' });
+const ec2ClientHubRegion = new EC2Client({ region: 'eu-west-3' });
+const ec2ClientUsWest = new EC2Client({ region: 'ap-northeast-1' });
+const ec2ClientEuWest = new EC2Client({ region: 'us-west-1' });
+const s3Client = new S3Client({ region: 'eu-west-3' });
+const route53Client = new Route53Client({ region: 'eu-west-3' });
 
 // Test timeout for AWS API calls
 const TEST_TIMEOUT = 30000;
@@ -89,7 +89,7 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
     );
 
     test(
-      'US-West-2 Spoke VPC exists',
+      'AP-Northeast-1 Spoke VPC exists',
       async () => {
         if (!IS_CICD) {
           console.log('Skipping: not in CI/CD environment');
@@ -109,7 +109,7 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
     );
 
     test(
-      'EU-West-1 Spoke VPC exists',
+      'US-West-1 Spoke VPC exists',
       async () => {
         if (!IS_CICD) {
           console.log('Skipping: not in CI/CD environment');
@@ -333,7 +333,7 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
     );
 
     test(
-      'SSM endpoints exist in US-West-2 Spoke VPC',
+      'SSM endpoints exist in AP-Northeast-1 Spoke VPC',
       async () => {
         if (!IS_CICD) {
           console.log('Skipping: not in CI/CD environment');
@@ -351,7 +351,7 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
     );
 
     test(
-      'SSM endpoints exist in EU-West-1 Spoke VPC',
+      'SSM endpoints exist in US-West-1 Spoke VPC',
       async () => {
         if (!IS_CICD) {
           console.log('Skipping: not in CI/CD environment');

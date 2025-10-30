@@ -1,7 +1,7 @@
 variable "aws_region" {
   description = "Primary AWS region for deployment"
   type        = string
-  default     = "us-east-1"
+  default     = "eu-west-3"
 }
 
 variable "project_name" {
@@ -19,15 +19,15 @@ variable "enable_route53" {
 variable "hub_region" {
   description = "AWS region for the hub"
   type        = string
-  default     = "us-east-1"
+  default     = "eu-west-3"
 }
 
 variable "spoke_regions" {
   description = "AWS regions for the spokes"
   type        = map(string)
   default = {
-    "us-west-2" = "us-west-2"
-    "eu-west-1" = "eu-west-1"
+    "ap-northeast-1" = "ap-northeast-1"
+    "us-west-1"      = "us-west-1"
   }
 }
 
@@ -46,8 +46,8 @@ variable "spoke_vpc_cidrs" {
   description = "CIDR blocks for spoke VPCs"
   type        = map(string)
   default = {
-    "us-west-2" = "10.1.0.0/16"
-    "eu-west-1" = "10.2.0.0/16"
+    "ap-northeast-1" = "10.1.0.0/16"
+    "us-west-1"      = "10.2.0.0/16"
   }
 
   validation {

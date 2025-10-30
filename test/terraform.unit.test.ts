@@ -73,8 +73,8 @@ describe('Provider Configuration', () => {
 
   test('aliased providers reference correct variables', () => {
     expect(providerContent).toMatch(/alias\s*=\s*"hub"[\s\S]*?region\s*=\s*var\.hub_region/);
-    expect(providerContent).toMatch(/alias\s*=\s*"us_west"[\s\S]*?region\s*=\s*var\.spoke_regions\["us-west-2"\]/);
-    expect(providerContent).toMatch(/alias\s*=\s*"eu_west"[\s\S]*?region\s*=\s*var\.spoke_regions\["eu-west-1"\]/);
+    expect(providerContent).toMatch(/alias\s*=\s*"us_west"[\s\S]*?region\s*=\s*var\.spoke_regions\["ap-northeast-1"\]/);
+    expect(providerContent).toMatch(/alias\s*=\s*"eu_west"[\s\S]*?region\s*=\s*var\.spoke_regions\["us-west-1"\]/);
   });
 });
 
@@ -114,8 +114,8 @@ describe('Variables Configuration', () => {
   test('contains spoke_vpc_cidrs variable with validation', () => {
     expect(variablesContent).toMatch(/variable\s+"spoke_vpc_cidrs"\s*{/);
     expect(variablesContent).toMatch(/type\s*=\s*map\(string\)/);
-    expect(variablesContent).toMatch(/"us-west-2"\s*=\s*"10\.1\.0\.0\/16"/);
-    expect(variablesContent).toMatch(/"eu-west-1"\s*=\s*"10\.2\.0\.0\/16"/);
+    expect(variablesContent).toMatch(/"ap-northeast-1"\s*=\s*"10\.1\.0\.0\/16"/);
+    expect(variablesContent).toMatch(/"us-west-1"\s*=\s*"10\.2\.0\.0\/16"/);
     expect(variablesContent).toMatch(/validation\s*{/);
   });
 
@@ -424,7 +424,7 @@ describe('Terraform Variables File', () => {
   });
 
   test('contains aws_region value', () => {
-    expect(tfvarsContent).toMatch(/aws_region\s*=\s*"us-east-1"/);
+    expect(tfvarsContent).toMatch(/aws_region\s*=\s*"eu-west-3"/);
   });
 
   test('contains enable_route53 set to false', () => {
@@ -432,14 +432,14 @@ describe('Terraform Variables File', () => {
   });
 
   test('contains hub and spoke region values', () => {
-    expect(tfvarsContent).toMatch(/hub_region\s*=\s*"us-east-1"/);
-    expect(tfvarsContent).toMatch(/"us-west-2"\s*=\s*"us-west-2"/);
-    expect(tfvarsContent).toMatch(/"eu-west-1"\s*=\s*"eu-west-1"/);
+    expect(tfvarsContent).toMatch(/hub_region\s*=\s*"eu-west-3"/);
+    expect(tfvarsContent).toMatch(/"ap-northeast-1"\s*=\s*"ap-northeast-1"/);
+    expect(tfvarsContent).toMatch(/"us-west-1"\s*=\s*"us-west-1"/);
   });
 
   test('contains CIDR values', () => {
     expect(tfvarsContent).toMatch(/hub_vpc_cidr\s*=\s*"10\.0\.0\.0\/16"/);
-    expect(tfvarsContent).toMatch(/"us-west-2"\s*=\s*"10\.1\.0\.0\/16"/);
-    expect(tfvarsContent).toMatch(/"eu-west-1"\s*=\s*"10\.2\.0\.0\/16"/);
+    expect(tfvarsContent).toMatch(/"ap-northeast-1"\s*=\s*"10\.1\.0\.0\/16"/);
+    expect(tfvarsContent).toMatch(/"us-west-1"\s*=\s*"10\.2\.0\.0\/16"/);
   });
 });

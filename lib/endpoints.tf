@@ -85,12 +85,12 @@ resource "aws_vpc_endpoint" "ssm_hub" {
   })
 }
 
-# Systems Manager endpoints for US-West-2 Spoke
+# Systems Manager endpoints for AP-Northeast-1 Spoke
 resource "aws_vpc_endpoint" "ssm_us_west" {
   for_each            = toset(local.ssm_endpoints)
   provider            = aws.us_west
   vpc_id              = module.us_west_spoke_vpc.vpc_id
-  service_name        = "com.amazonaws.${var.spoke_regions["us-west-2"]}.${each.key}"
+  service_name        = "com.amazonaws.${var.spoke_regions["ap-northeast-1"]}.${each.key}"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = module.us_west_spoke_vpc.private_subnet_ids
   security_group_ids  = [module.endpoints_sg_us_west.security_group_id]
@@ -101,12 +101,12 @@ resource "aws_vpc_endpoint" "ssm_us_west" {
   })
 }
 
-# Systems Manager endpoints for EU-West-1 Spoke
+# Systems Manager endpoints for US-West-1 Spoke
 resource "aws_vpc_endpoint" "ssm_eu_west" {
   for_each            = toset(local.ssm_endpoints)
   provider            = aws.eu_west
   vpc_id              = module.eu_west_spoke_vpc.vpc_id
-  service_name        = "com.amazonaws.${var.spoke_regions["eu-west-1"]}.${each.key}"
+  service_name        = "com.amazonaws.${var.spoke_regions["us-west-1"]}.${each.key}"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = module.eu_west_spoke_vpc.private_subnet_ids
   security_group_ids  = [module.endpoints_sg_eu_west.security_group_id]

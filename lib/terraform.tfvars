@@ -2,18 +2,18 @@
 project_name = "trading-platform"
 
 # Region Configuration
-aws_region = "us-east-1"
-hub_region = "us-east-1"
+aws_region = "eu-west-3"
+hub_region = "eu-west-3"
 spoke_regions = {
-  "us-west-2" = "us-west-2"
-  "eu-west-1" = "eu-west-1"
+  "ap-northeast-1" = "ap-northeast-1"
+  "us-west-1"      = "us-west-1"
 }
 
 # Network Configuration
 hub_vpc_cidr = "10.0.0.0/16"
 spoke_vpc_cidrs = {
-  "us-west-2" = "10.1.0.0/16"
-  "eu-west-1" = "10.2.0.0/16"
+  "ap-northeast-1" = "10.1.0.0/16"
+  "us-west-1"      = "10.2.0.0/16"
 }
 
 # DNS Configuration

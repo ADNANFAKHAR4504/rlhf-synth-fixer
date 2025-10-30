@@ -19,7 +19,7 @@ provider "aws" {
   region = var.aws_region
 }
 
-# Hub region provider (us-east-1)
+# Hub region provider (eu-west-3)
 provider "aws" {
   alias  = "hub"
   region = var.hub_region
@@ -28,19 +28,19 @@ provider "aws" {
   }
 }
 
-# US-West-2 spoke provider
+# AP-Northeast-1 spoke provider
 provider "aws" {
   alias  = "us_west"
-  region = var.spoke_regions["us-west-2"]
+  region = var.spoke_regions["ap-northeast-1"]
   default_tags {
     tags = var.common_tags
   }
 }
 
-# EU-West-1 spoke provider
+# US-West-1 spoke provider
 provider "aws" {
   alias  = "eu_west"
-  region = var.spoke_regions["eu-west-1"]
+  region = var.spoke_regions["us-west-1"]
   default_tags {
     tags = var.common_tags
   }

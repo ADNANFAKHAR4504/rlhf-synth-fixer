@@ -66,11 +66,11 @@ resource "aws_flow_log" "hub" {
   })
 }
 
-# Flow Logs for US-West-2 Spoke VPC
+# Flow Logs for AP-Northeast-1 Spoke VPC
 resource "aws_flow_log" "us_west_spoke" {
   provider                 = aws.us_west
   log_destination_type     = "s3"
-  log_destination          = "${aws_s3_bucket.flow_logs.arn}/us-west-2-spoke-vpc/"
+  log_destination          = "${aws_s3_bucket.flow_logs.arn}/ap-northeast-1-spoke-vpc/"
   log_format               = var.flow_log_format
   traffic_type             = "ALL"
   vpc_id                   = module.us_west_spoke_vpc.vpc_id
@@ -83,15 +83,15 @@ resource "aws_flow_log" "us_west_spoke" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "us-west-2-spoke-vpc-flow-logs"
+    Name = "ap-northeast-1-spoke-vpc-flow-logs"
   })
 }
 
-# Flow Logs for EU-West-1 Spoke VPC
+# Flow Logs for US-West-1 Spoke VPC
 resource "aws_flow_log" "eu_west_spoke" {
   provider                 = aws.eu_west
   log_destination_type     = "s3"
-  log_destination          = "${aws_s3_bucket.flow_logs.arn}/eu-west-1-spoke-vpc/"
+  log_destination          = "${aws_s3_bucket.flow_logs.arn}/us-west-1-spoke-vpc/"
   log_format               = var.flow_log_format
   traffic_type             = "ALL"
   vpc_id                   = module.eu_west_spoke_vpc.vpc_id
@@ -104,7 +104,7 @@ resource "aws_flow_log" "eu_west_spoke" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "eu-west-1-spoke-vpc-flow-logs"
+    Name = "us-west-1-spoke-vpc-flow-logs"
   })
 }
 

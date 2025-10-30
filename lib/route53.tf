@@ -19,7 +19,7 @@ resource "aws_route53_zone" "private" {
   }
 }
 
-# Associate private zone with US-West-2 spoke VPC
+# Associate private zone with AP-Northeast-1 spoke VPC
 resource "aws_route53_zone_association" "us_west_spoke" {
   count    = var.enable_route53 ? 1 : 0
   provider = aws.us_west
@@ -27,7 +27,7 @@ resource "aws_route53_zone_association" "us_west_spoke" {
   vpc_id   = module.us_west_spoke_vpc.vpc_id
 }
 
-# Associate private zone with EU-West-1 spoke VPC
+# Associate private zone with US-West-1 spoke VPC
 resource "aws_route53_zone_association" "eu_west_spoke" {
   count    = var.enable_route53 ? 1 : 0
   provider = aws.eu_west
@@ -52,7 +52,7 @@ resource "aws_route53_record" "us_west_api" {
   count    = var.enable_route53 ? 1 : 0
   provider = aws.hub
   zone_id  = aws_route53_zone.private[0].zone_id
-  name     = "api.us-west-2"
+  name     = "api.ap-northeast-1"
   type     = "A"
   ttl      = 300
   records  = ["10.1.1.100"] # Example private IP
@@ -62,7 +62,7 @@ resource "aws_route53_record" "eu_west_api" {
   count    = var.enable_route53 ? 1 : 0
   provider = aws.hub
   zone_id  = aws_route53_zone.private[0].zone_id
-  name     = "api.eu-west-1"
+  name     = "api.us-west-1"
   type     = "A"
   ttl      = 300
   records  = ["10.2.1.100"] # Example private IP

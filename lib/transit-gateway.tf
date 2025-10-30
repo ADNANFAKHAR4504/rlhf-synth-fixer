@@ -29,7 +29,7 @@ resource "aws_ec2_transit_gateway_route_table" "us_west_spoke" {
   transit_gateway_id = aws_ec2_transit_gateway.hub.id
 
   tags = merge(var.common_tags, {
-    Name = "us-west-2-spoke-tgw-rtb"
+    Name = "ap-northeast-1-spoke-tgw-rtb"
   })
 }
 
@@ -38,7 +38,7 @@ resource "aws_ec2_transit_gateway_route_table" "eu_west_spoke" {
   transit_gateway_id = aws_ec2_transit_gateway.hub.id
 
   tags = merge(var.common_tags, {
-    Name = "eu-west-1-spoke-tgw-rtb"
+    Name = "us-west-1-spoke-tgw-rtb"
   })
 }
 
@@ -57,33 +57,33 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "hub" {
   })
 }
 
-# Transit Gateway Peering for US-West-2
+# Transit Gateway Peering for AP-Northeast-1
 resource "aws_ec2_transit_gateway_peering_attachment" "us_west" {
   provider                = aws.hub
-  peer_region             = var.spoke_regions["us-west-2"]
+  peer_region             = var.spoke_regions["ap-northeast-1"]
   peer_transit_gateway_id = aws_ec2_transit_gateway.us_west_spoke.id
   transit_gateway_id      = aws_ec2_transit_gateway.hub.id
 
   tags = merge(var.common_tags, {
-    Name = "hub-to-us-west-2-peering"
+    Name = "hub-to-ap-northeast-1-peering"
   })
 }
 
-# Transit Gateway in US-West-2 Spoke
+# Transit Gateway in AP-Northeast-1 Spoke
 resource "aws_ec2_transit_gateway" "us_west_spoke" {
   provider                        = aws.us_west
-  description                     = "US-West-2 Spoke Transit Gateway"
+  description                     = "AP-Northeast-1 Spoke Transit Gateway"
   default_route_table_association = "disable"
   default_route_table_propagation = "disable"
   dns_support                     = "enable"
 
   tags = merge(var.common_tags, {
-    Name = "us-west-2-spoke-tgw"
+    Name = "ap-northeast-1-spoke-tgw"
     Type = "spoke"
   })
 }
 
-# Transit Gateway attachment for US-West-2 Spoke VPC
+# Transit Gateway attachment for AP-Northeast-1 Spoke VPC
 resource "aws_ec2_transit_gateway_vpc_attachment" "us_west_spoke" {
   provider                                        = aws.us_west
   subnet_ids                                      = module.us_west_spoke_vpc.private_subnet_ids
@@ -94,37 +94,37 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "us_west_spoke" {
   transit_gateway_default_route_table_propagation = false
 
   tags = merge(var.common_tags, {
-    Name = "us-west-2-vpc-tgw-attachment"
+    Name = "ap-northeast-1-vpc-tgw-attachment"
   })
 }
 
-# Transit Gateway Peering for EU-West-1
+# Transit Gateway Peering for US-West-1
 resource "aws_ec2_transit_gateway_peering_attachment" "eu_west" {
   provider                = aws.hub
-  peer_region             = var.spoke_regions["eu-west-1"]
+  peer_region             = var.spoke_regions["us-west-1"]
   peer_transit_gateway_id = aws_ec2_transit_gateway.eu_west_spoke.id
   transit_gateway_id      = aws_ec2_transit_gateway.hub.id
 
   tags = merge(var.common_tags, {
-    Name = "hub-to-eu-west-1-peering"
+    Name = "hub-to-us-west-1-peering"
   })
 }
 
-# Transit Gateway in EU-West-1 Spoke
+# Transit Gateway in US-West-1 Spoke
 resource "aws_ec2_transit_gateway" "eu_west_spoke" {
   provider                        = aws.eu_west
-  description                     = "EU-West-1 Spoke Transit Gateway"
+  description                     = "US-West-1 Spoke Transit Gateway"
   default_route_table_association = "disable"
   default_route_table_propagation = "disable"
   dns_support                     = "enable"
 
   tags = merge(var.common_tags, {
-    Name = "eu-west-1-spoke-tgw"
+    Name = "us-west-1-spoke-tgw"
     Type = "spoke"
   })
 }
 
-# Transit Gateway attachment for EU-West-1 Spoke VPC
+# Transit Gateway attachment for US-West-1 Spoke VPC
 resource "aws_ec2_transit_gateway_vpc_attachment" "eu_west_spoke" {
   provider                                        = aws.eu_west
   subnet_ids                                      = module.eu_west_spoke_vpc.private_subnet_ids
@@ -135,7 +135,7 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "eu_west_spoke" {
   transit_gateway_default_route_table_propagation = false
 
   tags = merge(var.common_tags, {
-    Name = "eu-west-1-vpc-tgw-attachment"
+    Name = "us-west-1-vpc-tgw-attachment"
   })
 }
 
@@ -145,7 +145,7 @@ resource "aws_ec2_transit_gateway_peering_attachment_accepter" "us_west" {
   transit_gateway_attachment_id = aws_ec2_transit_gateway_peering_attachment.us_west.id
 
   tags = merge(var.common_tags, {
-    Name = "us-west-2-peering-accepter"
+    Name = "ap-northeast-1-peering-accepter"
   })
 }
 
@@ -154,7 +154,7 @@ resource "aws_ec2_transit_gateway_peering_attachment_accepter" "eu_west" {
   transit_gateway_attachment_id = aws_ec2_transit_gateway_peering_attachment.eu_west.id
 
   tags = merge(var.common_tags, {
-    Name = "eu-west-1-peering-accepter"
+    Name = "us-west-1-peering-accepter"
   })
 }
 
@@ -180,14 +180,14 @@ resource "aws_ec2_transit_gateway_route_table_association" "eu_west_peering" {
 # Routes - Hub can reach all spokes
 resource "aws_ec2_transit_gateway_route" "hub_to_us_west" {
   provider                       = aws.hub
-  destination_cidr_block         = var.spoke_vpc_cidrs["us-west-2"]
+  destination_cidr_block         = var.spoke_vpc_cidrs["ap-northeast-1"]
   transit_gateway_attachment_id  = aws_ec2_transit_gateway_peering_attachment.us_west.id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.hub.id
 }
 
 resource "aws_ec2_transit_gateway_route" "hub_to_eu_west" {
   provider                       = aws.hub
-  destination_cidr_block         = var.spoke_vpc_cidrs["eu-west-1"]
+  destination_cidr_block         = var.spoke_vpc_cidrs["us-west-1"]
   transit_gateway_attachment_id  = aws_ec2_transit_gateway_peering_attachment.eu_west.id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.hub.id
 }
@@ -202,7 +202,7 @@ resource "aws_ec2_transit_gateway_route" "us_west_to_hub" {
 
 resource "aws_ec2_transit_gateway_route" "us_west_to_eu_west" {
   provider                       = aws.hub
-  destination_cidr_block         = var.spoke_vpc_cidrs["eu-west-1"]
+  destination_cidr_block         = var.spoke_vpc_cidrs["us-west-1"]
   transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.hub.id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.us_west_spoke.id
 }
@@ -216,7 +216,7 @@ resource "aws_ec2_transit_gateway_route" "eu_west_to_hub" {
 
 resource "aws_ec2_transit_gateway_route" "eu_west_to_us_west" {
   provider                       = aws.hub
-  destination_cidr_block         = var.spoke_vpc_cidrs["us-west-2"]
+  destination_cidr_block         = var.spoke_vpc_cidrs["ap-northeast-1"]
   transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.hub.id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.eu_west_spoke.id
 }

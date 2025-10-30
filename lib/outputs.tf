@@ -21,12 +21,12 @@ output "hub_public_subnet_ids" {
 
 # Spoke VPC Outputs
 output "us_west_spoke_vpc_id" {
-  description = "ID of the US-West-2 spoke VPC"
+  description = "ID of the AP-Northeast-1 spoke VPC"
   value       = module.us_west_spoke_vpc.vpc_id
 }
 
 output "eu_west_spoke_vpc_id" {
-  description = "ID of the EU-West-1 spoke VPC"
+  description = "ID of the US-West-1 spoke VPC"
   value       = module.eu_west_spoke_vpc.vpc_id
 }
 
