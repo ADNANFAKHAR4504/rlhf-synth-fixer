@@ -434,13 +434,6 @@ export class TapStack extends cdk.Stack {
         DATABASE_CREDENTIALS:
           ecs.Secret.fromSecretsManager(dbCredentialsSecret),
       },
-      healthCheck: {
-        command: ['CMD-SHELL', 'curl -f http://localhost:8080/ || exit 1'],
-        interval: Duration.seconds(30),
-        timeout: Duration.seconds(5),
-        retries: 3,
-        startPeriod: Duration.seconds(60),
-      },
     });
 
     container.addPortMappings({

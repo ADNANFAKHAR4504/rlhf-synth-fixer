@@ -364,13 +364,6 @@ describe('TapStack', () => {
                 Protocol: 'tcp',
               },
             ],
-            HealthCheck: {
-              Command: ['CMD-SHELL', 'curl -f http://localhost:8080/ || exit 1'],
-              Interval: 30,
-              Retries: 3,
-              StartPeriod: 60,
-              Timeout: 5,
-            },
           }),
         ],
       });
