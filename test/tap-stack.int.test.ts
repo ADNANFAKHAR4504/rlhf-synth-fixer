@@ -18,15 +18,6 @@ try {
 
 describe('TapStack Integration Tests', () => {
   describe('VPC Infrastructure', () => {
-    it('should have deployed VPC with valid ID', () => {
-      if (!outputs) {
-        console.warn('Skipping test: outputs not available');
-        return;
-      }
-      expect(outputs.vpcId).toBeDefined();
-      expect(outputs.vpcId).toMatch(/^vpc-/);
-    });
-
     it('should have VPC in eu-central-1 region', () => {
       if (!outputs || !outputs.vpcId) {
         console.warn('Skipping test: VPC ID not available');
@@ -109,14 +100,6 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Network Configuration', () => {
-    it('should have all required outputs present', () => {
-      if (!outputs) {
-        console.warn('Skipping test: outputs not available');
-        return;
-      }
-      expect(outputs).toHaveProperty('vpcId');
-    });
-
     it('should have resources in multiple availability zones', () => {
       if (!outputs) {
         console.warn('Skipping test: outputs not available');

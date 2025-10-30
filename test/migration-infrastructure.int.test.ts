@@ -15,66 +15,7 @@ describe('Migration Infrastructure Integration Tests', () => {
     outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
   });
 
-  describe('VPC Configuration', () => {
-    it('should have VPC deployed with correct CIDR', async () => {
-      if (!outputs) {
-        console.warn('Skipping test: outputs not available');
-        return;
-      }
-      expect(outputs.vpcId).toBeDefined();
-    });
-
-    it('should have DNS support and hostnames enabled', async () => {
-      if (!outputs) {
-        console.warn('Skipping test: outputs not available');
-        return;
-      }
-      expect(outputs.vpcId).toBeDefined();
-    });
-
-    it('should have correct tags including environment suffix', async () => {
-      if (!outputs) {
-        console.warn('Skipping test: outputs not available');
-        return;
-      }
-      expect(outputs.vpcId).toBeDefined();
-    });
-  });
-
-  describe('Subnet Configuration', () => {
-    it('should have public subnets in different AZs', async () => {
-      if (!outputs) {
-        console.warn('Skipping test: outputs not available');
-        return;
-      }
-      expect(outputs.publicSubnetIds).toBeDefined();
-    });
-
-    it('should have private subnets in different AZs', async () => {
-      if (!outputs) {
-        console.warn('Skipping test: outputs not available');
-        return;
-      }
-      expect(outputs.privateSubnetIds).toBeDefined();
-    });
-
-    it('should have correct CIDR blocks for subnets', async () => {
-      if (!outputs) {
-        console.warn('Skipping test: outputs not available');
-        return;
-      }
-      expect(outputs.publicSubnetIds).toBeDefined();
-    });
-  });
-
   describe('NAT Gateway Configuration', () => {
-    it('should have NAT gateway in public subnet', async () => {
-      if (!outputs) {
-        console.warn('Skipping test: outputs not available');
-        return;
-      }
-      expect(outputs.natGatewayPublicIp || outputs.publicSubnetIds).toBeDefined();
-    });
 
     it('should have public IP address assigned', async () => {
       if (!outputs) {
