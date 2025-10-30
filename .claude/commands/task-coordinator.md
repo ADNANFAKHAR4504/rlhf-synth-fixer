@@ -237,9 +237,7 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
 - [x] Code in ideal response and tapstack are the same" \
      --base main \
      --head ${BRANCH_NAME} \
-     --label "synth" \
-     --label "automated" \
-     --label "complexity-${COMPLEXITY}"
+     --label "Synth-2"
    ```
 
 7. **Capture PR number**:
