@@ -2,7 +2,7 @@
 
 ---
 
-Let me organize my approach to creating a CloudFormation YAML template that enforces least-privilege IAM design according to the given constraints and requirements.
+Creating a CloudFormation YAML template that enforces least-privilege IAM design according to the given constraints and requirements.
 
 ## Understanding the Requirements
 
