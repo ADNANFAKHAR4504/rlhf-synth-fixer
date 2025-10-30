@@ -1,3 +1,4 @@
+import { APIGatewayClient, GetApiKeyCommand } from '@aws-sdk/client-api-gateway';
 import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb';
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import { GetObjectCommand, HeadBucketCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
@@ -20,6 +21,7 @@ let s3: S3Client;
 let sqs: SQSClient;
 let lambda: LambdaClient;
 let ddb: DynamoDBClient;
+let apiGateway: APIGatewayClient | undefined;
 
 beforeAll(() => {
   if (!fs.existsSync(outputsPath)) {
@@ -42,6 +44,7 @@ beforeAll(() => {
   sqs = new SQSClient({ region });
   lambda = new LambdaClient({ region });
   ddb = new DynamoDBClient({ region });
+  apiGateway = new APIGatewayClient({ region });
   // Try to purge processing queue to start from a clean state (best-effort)
   if (outputs.processing_queue_url) {
     try {
@@ -61,10 +64,28 @@ describe('Integration: runtime traffic checks (uses cfn-outputs/flat-outputs.jso
     const testId = uuidv4();
     const payload = { testId, ts: new Date().toISOString(), message: 'integration-test' };
 
-    // Build headers; include API key if present in outputs
+    // Build headers; include API key value if possible.
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (outputs.api_key_id) {
-      headers['x-api-key'] = outputs.api_key_id;
+      // outputs.api_key_id is often the API key resource id, not the actual key value.
+      // Try to resolve the real key value via the API Gateway API (requires permissions).
+      try {
+        if (apiGateway) {
+          const getKey = new GetApiKeyCommand({ apiKey: outputs.api_key_id, includeValue: true });
+          const res = await apiGateway.send(getKey);
+          if ((res as any).value) {
+            headers['x-api-key'] = (res as any).value as string;
+          } else {
+            // fallback to whatever was in outputs (may be an id and cause 403)
+            headers['x-api-key'] = outputs.api_key_id;
+          }
+        } else {
+          headers['x-api-key'] = outputs.api_key_id;
+        }
+      } catch (err) {
+        // If we can't fetch the key value (permissions or not available), fall back to id
+        headers['x-api-key'] = outputs.api_key_id;
+      }
     }
 
     const response = await axios.post(apiEndpoint, payload, { headers, validateStatus: () => true, timeout: 30000 });
