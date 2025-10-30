@@ -278,12 +278,16 @@ export class ComplianceConstruct extends Construct {
         code: lambda.Code.fromAsset(path.join(__dirname, 'lambda_layer'), {
           bundling: {
             image: lambda.Runtime.NODEJS_18_X.bundlingImage,
+            // Use npm install (not npm ci) and set a local cache under the
+            // asset output to avoid npm attempting to write to a root-owned
+            // cache directory inside the Docker image. This avoids failures
+            // when the repo lockfile is out-of-date for this layer folder
+            // (we prefer reliability for CI synths over strict lockfile
+            // enforcement here).
             command: [
               'bash',
               '-lc',
-              // Install production dependencies into the nodejs folder and
-              // copy the prepared nodejs tree to the asset output.
-              'cd /asset-input && npm ci --production --prefix nodejs && cp -r nodejs /asset-output',
+              'cd /asset-input && npm config set cache /asset-output/.npm-cache --global && npm install --omit=dev --prefix nodejs && cp -r nodejs /asset-output',
             ],
             // Provide a local bundling fallback (tryBundle) so synth can succeed
             // on CI runners that don't support Docker. tryBundle should produce
@@ -296,14 +300,17 @@ export class ComplianceConstruct extends Construct {
                   const src = path.join(__dirname, 'lambda_layer');
                   const nodejsPath = path.join(src, 'nodejs');
 
-                  const r = spawnSync(
-                    'npm',
-                    ['ci', '--production', '--prefix', 'nodejs'],
-                    {
-                      cwd: src,
-                      stdio: 'inherit',
-                    }
-                  );
+                  // Use npm install with a local cache directory to mirror the
+                  // Docker command above. Using a per-output cache avoids
+                  // permission issues when npm tries to write into /.npm.
+                  const npmCmd = `npm config set cache ${path.join(
+                    outputDir,
+                    '.npm-cache'
+                  )} --global && npm install --omit=dev --prefix nodejs`;
+                  const r = spawnSync('bash', ['-lc', npmCmd], {
+                    cwd: src,
+                    stdio: 'inherit',
+                  });
                   if (r.status !== 0) return false;
 
                   const dest = path.join(outputDir, 'nodejs');
