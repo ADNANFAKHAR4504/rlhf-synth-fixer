@@ -1,7 +1,7 @@
 import { AutoScalingClient, DescribeAutoScalingGroupsCommand } from '@aws-sdk/client-auto-scaling';
-import { DescribeInstancesCommand, DescribeLaunchTemplatesCommand, DescribeSecurityGroupsCommand, DescribeSubnetsCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
+import { DescribeInstancesCommand, DescribeLaunchTemplatesCommand, DescribeSecurityGroupsCommand, DescribeSubnetsCommand, DescribeVpcAttributeCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
 import { DescribeListenersCommand, DescribeLoadBalancersCommand, DescribeTargetGroupsCommand, ElasticLoadBalancingV2Client } from '@aws-sdk/client-elastic-load-balancing-v2';
-import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
+import { DescribeKeyCommand, GetKeyRotationStatusCommand, KMSClient } from '@aws-sdk/client-kms';
 import { DescribeDBClustersCommand, DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
 import { Route53Client } from '@aws-sdk/client-route-53';
 import { execSync } from 'child_process';
@@ -189,8 +189,21 @@ describe('Payment Processing Infrastructure Integration Tests', () => {
       const vpc = result.Vpcs![0];
       expect(vpc.State).toBe('available');
       expect(vpc.CidrBlock).toBeDefined();
-      expect(vpc.EnableDnsHostnames).toBe(true);
-      expect(vpc.EnableDnsSupport).toBe(true);
+
+      // Check DNS attributes separately
+      const dnsCommand = new DescribeVpcAttributeCommand({
+        VpcId: outputs.vpc_id,
+        Attribute: 'enableDnsHostnames'
+      });
+      const dnsHostnamesResult = await ec2Client.send(dnsCommand);
+      expect(dnsHostnamesResult.EnableDnsHostnames?.Value).toBe(true);
+
+      const dnsSupportCommand = new DescribeVpcAttributeCommand({
+        VpcId: outputs.vpc_id,
+        Attribute: 'enableDnsSupport'
+      });
+      const dnsSupportResult = await ec2Client.send(dnsSupportCommand);
+      expect(dnsSupportResult.EnableDnsSupport?.Value).toBe(true);
 
       const tags = vpc.Tags || [];
       const projectTag = tags.find(tag => tag.Key === 'Project');
@@ -517,12 +530,16 @@ describe('Payment Processing Infrastructure Integration Tests', () => {
 
         try {
           const keyId = arn.split('/').pop();
-          const command = new DescribeKeyCommand({ KeyId: keyId });
-          const result = await kmsClient.send(command);
+          const describeCommand = new DescribeKeyCommand({ KeyId: keyId });
+          const describeResult = await kmsClient.send(describeCommand);
 
-          expect(result.KeyMetadata?.KeyState).toBe('Enabled');
-          expect(result.KeyMetadata?.KeyUsage).toBe('ENCRYPT_DECRYPT');
-          expect(result.KeyMetadata?.KeyRotationStatus).toBe(true);
+          expect(describeResult.KeyMetadata?.KeyState).toBe('Enabled');
+          expect(describeResult.KeyMetadata?.KeyUsage).toBe('ENCRYPT_DECRYPT');
+
+          // Check key rotation status separately
+          const rotationCommand = new GetKeyRotationStatusCommand({ KeyId: keyId });
+          const rotationResult = await kmsClient.send(rotationCommand);
+          expect(rotationResult.KeyRotationEnabled).toBe(true);
         } catch (error) {
           console.warn(`KMS key validation skipped for ${arn} - resource may not exist or be accessible`);
         }
@@ -535,11 +552,15 @@ describe('Payment Processing Infrastructure Integration Tests', () => {
       if (!outputs.application_url) return;
 
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
         const response = await fetch(outputs.application_url, {
           method: 'GET',
-          timeout: 10000
+          signal: controller.signal
         });
 
+        clearTimeout(timeoutId);
         expect(response.status).toBeLessThan(500);
       } catch (error) {
         console.warn('Application health check skipped - may not be fully deployed or accessible');
@@ -551,11 +572,15 @@ describe('Payment Processing Infrastructure Integration Tests', () => {
 
       try {
         const url = `http://${outputs.alb_dns_name}`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
         const response = await fetch(url, {
           method: 'GET',
-          timeout: 10000
+          signal: controller.signal
         });
 
+        clearTimeout(timeoutId);
         expect([200, 301, 302, 403]).toContain(response.status);
       } catch (error) {
         console.warn('ALB health check skipped - may not be accessible');
