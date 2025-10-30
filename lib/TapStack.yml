@@ -976,6 +976,7 @@ Resources:
 
   TransactionPostMethod:
     Type: AWS::ApiGateway::Method
+    DependsOn: ApiGatewayRole
     Properties:
       HttpMethod: POST
       AuthorizationType: NONE
