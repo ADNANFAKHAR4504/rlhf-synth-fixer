@@ -190,7 +190,7 @@ class TapStack extends Stack {
      * @return Created SecurityGroup
      */
     private SecurityGroup createSecurityGroup() {
-        SecurityGroup sg = SecurityGroup.Builder.create(this, "LambdaSecurityGroup")
+        SecurityGroup sg = SecurityGroup.Builder.create(this, "LambdaSecurityGroupV2")
                 .vpc(this.vpc)
                 .description("Security group for Lambda functions in Tap application")
                 .allowAllOutbound(true)
