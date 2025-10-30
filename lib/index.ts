@@ -139,27 +139,21 @@ const publicRouteTable = new aws.ec2.RouteTable(
   }
 );
 
-const _publicRoute = new aws.ec2.Route(`public-route-${environmentSuffix}`, {
+new aws.ec2.Route(`public-route-${environmentSuffix}`, {
   routeTableId: publicRouteTable.id,
   destinationCidrBlock: '0.0.0.0/0',
   gatewayId: igw.id,
 });
 
-const _publicRtAssoc1 = new aws.ec2.RouteTableAssociation(
-  `public-rt-assoc-1-${environmentSuffix}`,
-  {
-    subnetId: publicSubnet1.id,
-    routeTableId: publicRouteTable.id,
-  }
-);
+new aws.ec2.RouteTableAssociation(`public-rt-assoc-1-${environmentSuffix}`, {
+  subnetId: publicSubnet1.id,
+  routeTableId: publicRouteTable.id,
+});
 
-const _publicRtAssoc2 = new aws.ec2.RouteTableAssociation(
-  `public-rt-assoc-2-${environmentSuffix}`,
-  {
-    subnetId: publicSubnet2.id,
-    routeTableId: publicRouteTable.id,
-  }
-);
+new aws.ec2.RouteTableAssociation(`public-rt-assoc-2-${environmentSuffix}`, {
+  subnetId: publicSubnet2.id,
+  routeTableId: publicRouteTable.id,
+});
 
 // Route Table for Private Subnets
 const privateRouteTable = new aws.ec2.RouteTable(
@@ -173,27 +167,21 @@ const privateRouteTable = new aws.ec2.RouteTable(
   }
 );
 
-const _privateRoute = new aws.ec2.Route(`private-route-${environmentSuffix}`, {
+new aws.ec2.Route(`private-route-${environmentSuffix}`, {
   routeTableId: privateRouteTable.id,
   destinationCidrBlock: '0.0.0.0/0',
   natGatewayId: natGateway.id,
 });
 
-const _privateRtAssoc1 = new aws.ec2.RouteTableAssociation(
-  `private-rt-assoc-1-${environmentSuffix}`,
-  {
-    subnetId: privateSubnet1.id,
-    routeTableId: privateRouteTable.id,
-  }
-);
+new aws.ec2.RouteTableAssociation(`private-rt-assoc-1-${environmentSuffix}`, {
+  subnetId: privateSubnet1.id,
+  routeTableId: privateRouteTable.id,
+});
 
-const _privateRtAssoc2 = new aws.ec2.RouteTableAssociation(
-  `private-rt-assoc-2-${environmentSuffix}`,
-  {
-    subnetId: privateSubnet2.id,
-    routeTableId: privateRouteTable.id,
-  }
-);
+new aws.ec2.RouteTableAssociation(`private-rt-assoc-2-${environmentSuffix}`, {
+  subnetId: privateSubnet2.id,
+  routeTableId: privateRouteTable.id,
+});
 
 // VPC Endpoint for S3 (Gateway type)
 const s3VpcEndpoint = new aws.ec2.VpcEndpoint(
@@ -345,25 +333,22 @@ const migrationBucket = new aws.s3.Bucket(
 );
 
 // IAM Policy for EC2 S3 Access
-const _ec2S3Policy = new aws.iam.RolePolicy(
-  `ec2-s3-policy-${environmentSuffix}`,
-  {
-    name: `ec2-s3-policy-${environmentSuffix}`,
-    role: ec2Role.id,
-    policy: migrationBucket.arn.apply(bucketArn =>
-      JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Action: ['s3:GetObject', 's3:PutObject', 's3:ListBucket'],
-            Resource: [bucketArn, `${bucketArn}/*`],
-          },
-        ],
-      })
-    ),
-  }
-);
+new aws.iam.RolePolicy(`ec2-s3-policy-${environmentSuffix}`, {
+  name: `ec2-s3-policy-${environmentSuffix}`,
+  role: ec2Role.id,
+  policy: migrationBucket.arn.apply(bucketArn =>
+    JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Effect: 'Allow',
+          Action: ['s3:GetObject', 's3:PutObject', 's3:ListBucket'],
+          Resource: [bucketArn, `${bucketArn}/*`],
+        },
+      ],
+    })
+  ),
+});
 
 // IAM Instance Profile
 const ec2InstanceProfile = new aws.iam.InstanceProfile(
@@ -449,38 +434,35 @@ const replicationRole = new aws.iam.Role(
 );
 
 // Replication Policy
-const _replicationPolicy = new aws.iam.RolePolicy(
-  `s3-replication-policy-${environmentSuffix}`,
-  {
-    name: `s3-replication-policy-${environmentSuffix}`,
-    role: replicationRole.id,
-    policy: migrationBucket.arn.apply(bucketArn =>
-      JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Action: ['s3:GetReplicationConfiguration', 's3:ListBucket'],
-            Resource: bucketArn,
-          },
-          {
-            Effect: 'Allow',
-            Action: [
-              's3:GetObjectVersionForReplication',
-              's3:GetObjectVersionAcl',
-            ],
-            Resource: `${bucketArn}/*`,
-          },
-          {
-            Effect: 'Allow',
-            Action: ['s3:ReplicateObject', 's3:ReplicateDelete'],
-            Resource: `${bucketArn}/*`,
-          },
-        ],
-      })
-    ),
-  }
-);
+new aws.iam.RolePolicy(`s3-replication-policy-${environmentSuffix}`, {
+  name: `s3-replication-policy-${environmentSuffix}`,
+  role: replicationRole.id,
+  policy: migrationBucket.arn.apply(bucketArn =>
+    JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Effect: 'Allow',
+          Action: ['s3:GetReplicationConfiguration', 's3:ListBucket'],
+          Resource: bucketArn,
+        },
+        {
+          Effect: 'Allow',
+          Action: [
+            's3:GetObjectVersionForReplication',
+            's3:GetObjectVersionAcl',
+          ],
+          Resource: `${bucketArn}/*`,
+        },
+        {
+          Effect: 'Allow',
+          Action: ['s3:ReplicateObject', 's3:ReplicateDelete'],
+          Resource: `${bucketArn}/*`,
+        },
+      ],
+    })
+  ),
+});
 
 // Exports
 export const vpcId = vpc.id;
