@@ -182,8 +182,8 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
 		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
 		AutoDeleteObjects: jsii.Bool(true),
-		// Enable ACLs for CloudFront logging (required by CloudFront)
-		ObjectOwnership:   awss3.ObjectOwnership_BUCKET_OWNER_PREFERRED,
+		// Use OBJECT_WRITER to allow CloudFront to write logs with proper ACLs
+		ObjectOwnership:   awss3.ObjectOwnership_OBJECT_WRITER,
 	})
 
 	// CloudFront distribution with logging enabled
