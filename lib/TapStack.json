@@ -41,6 +41,11 @@
             "Type": "Number",
             "Default": 30,
             "Description": "CloudWatch Logs retention period in days"
+        },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Unique suffix for resource naming (e.g., pr1234, synth123) for deployment isolation"
         }
     },
     "Resources": {
@@ -344,7 +349,7 @@
             "Type": "AWS::Lambda::Function",
             "Properties": {
                 "FunctionName": {
-                    "Fn::Sub": "${AWS::StackName}-validator-${Environment}"
+                    "Fn::Sub": "${AWS::StackName}-validator-${Environment}-${EnvironmentSuffix}"
                 },
                 "Handler": "index.lambda_handler",
                 "Role": {
@@ -392,7 +397,7 @@
             "Type": "AWS::Lambda::Function",
             "Properties": {
                 "FunctionName": {
-                    "Fn::Sub": "${AWS::StackName}-fraud-detector-${Environment}"
+                    "Fn::Sub": "${AWS::StackName}-fraud-detector-${Environment}-${EnvironmentSuffix}"
                 },
                 "Handler": "index.lambda_handler",
                 "Role": {
@@ -440,7 +445,7 @@
             "Type": "AWS::Lambda::Function",
             "Properties": {
                 "FunctionName": {
-                    "Fn::Sub": "${AWS::StackName}-settlement-${Environment}"
+                    "Fn::Sub": "${AWS::StackName}-settlement-${Environment}-${EnvironmentSuffix}"
                 },
                 "Handler": "index.lambda_handler",
                 "Role": {
@@ -491,7 +496,7 @@
             "Type": "AWS::Lambda::Function",
             "Properties": {
                 "FunctionName": {
-                    "Fn::Sub": "${AWS::StackName}-notification-${Environment}"
+                    "Fn::Sub": "${AWS::StackName}-notification-${Environment}-${EnvironmentSuffix}"
                 },
                 "Handler": "index.lambda_handler",
                 "Role": {
@@ -545,7 +550,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/lambda/${AWS::StackName}-validator-${Environment}"
+                    "Fn::Sub": "/aws/lambda/${AWS::StackName}-validator-${Environment}-${EnvironmentSuffix}"
                 },
                 "RetentionInDays": {
                     "Ref": "LogRetentionInDays"
@@ -556,7 +561,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/lambda/${AWS::StackName}-fraud-detector-${Environment}"
+                    "Fn::Sub": "/aws/lambda/${AWS::StackName}-fraud-detector-${Environment}-${EnvironmentSuffix}"
                 },
                 "RetentionInDays": {
                     "Ref": "LogRetentionInDays"
@@ -567,7 +572,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/lambda/${AWS::StackName}-settlement-${Environment}"
+                    "Fn::Sub": "/aws/lambda/${AWS::StackName}-settlement-${Environment}-${EnvironmentSuffix}"
                 },
                 "RetentionInDays": {
                     "Ref": "LogRetentionInDays"
@@ -578,7 +583,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/lambda/${AWS::StackName}-notification-${Environment}"
+                    "Fn::Sub": "/aws/lambda/${AWS::StackName}-notification-${Environment}-${EnvironmentSuffix}"
                 },
                 "RetentionInDays": {
                     "Ref": "LogRetentionInDays"
@@ -589,7 +594,7 @@
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
                 "TableName": {
-                    "Fn::Sub": "${AWS::StackName}-transactions-${Environment}"
+                    "Fn::Sub": "${AWS::StackName}-transactions-${Environment}-${EnvironmentSuffix}"
                 },
                 "BillingMode": "PAY_PER_REQUEST",
                 "AttributeDefinitions": [
@@ -634,7 +639,7 @@
             "Type": "AWS::DynamoDB::Table",
             "Properties": {
                 "TableName": {
-                    "Fn::Sub": "${AWS::StackName}-audit-logs-${Environment}"
+                    "Fn::Sub": "${AWS::StackName}-audit-logs-${Environment}-${EnvironmentSuffix}"
                 },
                 "BillingMode": "PAY_PER_REQUEST",
                 "AttributeDefinitions": [
@@ -665,7 +670,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${Environment}-transaction-archives-${AWS::AccountId}"
+                    "Fn::Sub": "${Environment}-transaction-archives-${EnvironmentSuffix}-${AWS::AccountId}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -736,7 +741,7 @@
             "Type": "AWS::SNS::Topic",
             "Properties": {
                 "TopicName": {
-                    "Fn::Sub": "${AWS::StackName}-alerts-${Environment}"
+                    "Fn::Sub": "${AWS::StackName}-alerts-${Environment}-${EnvironmentSuffix}"
                 }
             }
         },
@@ -744,7 +749,7 @@
             "Type": "AWS::SNS::Topic",
             "Properties": {
                 "TopicName": {
-                    "Fn::Sub": "${AWS::StackName}-failed-transactions-${Environment}"
+                    "Fn::Sub": "${AWS::StackName}-failed-transactions-${Environment}-${EnvironmentSuffix}"
                 }
             }
         },
@@ -885,7 +890,7 @@
             "Type": "AWS::StepFunctions::StateMachine",
             "Properties": {
                 "StateMachineName": {
-                    "Fn::Sub": "${AWS::StackName}-payment-workflow-${Environment}"
+                    "Fn::Sub": "${AWS::StackName}-payment-workflow-${Environment}-${EnvironmentSuffix}"
                 },
                 "RoleArn": {
                     "Fn::GetAtt": [
@@ -1034,7 +1039,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/states/${AWS::StackName}-payment-workflow-${Environment}"
+                    "Fn::Sub": "/aws/states/${AWS::StackName}-payment-workflow-${Environment}-${EnvironmentSuffix}"
                 },
                 "RetentionInDays": {
                     "Ref": "LogRetentionInDays"
@@ -1090,7 +1095,7 @@
             "Type": "AWS::ApiGateway::RestApi",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-payment-api-${Environment}"
+                    "Fn::Sub": "${AWS::StackName}-payment-api-${Environment}-${EnvironmentSuffix}"
                 },
                 "EndpointConfiguration": {
                     "Types": [
@@ -1115,7 +1120,7 @@
             "Type": "AWS::ApiGateway::UsagePlan",
             "Properties": {
                 "UsagePlanName": {
-                    "Fn::Sub": "${AWS::StackName}-usage-plan-${Environment}"
+                    "Fn::Sub": "${AWS::StackName}-usage-plan-${Environment}-${EnvironmentSuffix}"
                 },
                 "ApiStages": [
                     {
@@ -1141,7 +1146,7 @@
             "Type": "AWS::ApiGateway::ApiKey",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-api-key-${Environment}"
+                    "Fn::Sub": "${AWS::StackName}-api-key-${Environment}-${EnvironmentSuffix}"
                 },
                 "Enabled": true
             }
@@ -1217,7 +1222,7 @@
             "Type": "AWS::ApiGateway::RequestValidator",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-transaction-validator"
+                    "Fn::Sub": "${AWS::StackName}-transaction-validator-${EnvironmentSuffix}"
                 },
                 "RestApiId": {
                     "Ref": "PaymentApi"
