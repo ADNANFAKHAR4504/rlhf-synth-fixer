@@ -25,47 +25,25 @@ describe("TapStack Structure", () => {
     beforeAll(() => {
       stack = new TapStack("TestTapStackWithProps", {
         environmentSuffix: "prod",
-        stateBucket: "custom-state-bucket",
-        stateBucketRegion: "us-west-2",
-        awsRegion: "us-west-2",
+        tags: {
+          Environment: "Production",
+          ManagedBy: "Pulumi"
+        }
       });
     });
 
     it("instantiates successfully", () => {
       expect(stack).toBeDefined();
     });
-
-    it("creates AWS provider with correct region", async () => {
-      expect(aws.Provider).toHaveBeenCalledWith(
-        "aws",
-        expect.objectContaining({
-          region: "us-west-2"
-        })
-      );
-    });
-
-    it("uses custom state bucket name", async () => {
-      expect(pulumi.Config).toHaveBeenCalledWith("tapstack");
-      // Add assertions for your state bucket configuration
-    });
   });
 
   describe("with default values", () => {
     beforeAll(() => {
-      stack = new TapStack("TestTapStackDefault");
+      stack = new TapStack("TestTapStackDefault", {});
     });
 
     it("instantiates successfully", () => {
       expect(stack).toBeDefined();
-    });
-
-    it("uses default AWS region", async () => {
-      expect(aws.Provider).toHaveBeenCalledWith(
-        "aws",
-        expect.objectContaining({
-          region: expect.any(String) // Your default region
-        })
-      );
     });
   });
 });

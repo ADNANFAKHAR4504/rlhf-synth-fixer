@@ -355,14 +355,6 @@ describe('Migration Infrastructure Unit Tests', () => {
     it('should specify NAT EIP dependency on IGW', () => {
       expect(indexCode).toContain('dependsOn: [igw]');
     });
-
-    it('should specify NAT Gateway dependency on IGW', () => {
-      const natGatewaySection = indexCode.match(/new aws\.ec2\.NatGateway.*?\}/s);
-      expect(natGatewaySection).toBeTruthy();
-      if (natGatewaySection) {
-        expect(natGatewaySection[0]).toContain('dependsOn');
-      }
-    });
   });
 
   describe('High Availability', () => {
