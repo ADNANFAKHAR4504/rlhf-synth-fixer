@@ -371,7 +371,7 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
           ActionNames: ['logs:CreateLogGroup'],
           ResourceArns: [deniedLogResource],
         })
-      ));
+      );
 
       const evaluation = simulationResponse.EvaluationResults![0];
       expect(['implicitDeny', 'explicitDeny']).toContain(evaluation.EvalDecision);
@@ -435,7 +435,7 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
           ActionNames: ['s3:GetObject'],
           ResourceArns: [deniedS3Resource],
         })
-      ));
+      );
 
       const deniedEvaluation = deniedSimulationResponse.EvaluationResults![0];
       expect(['implicitDeny', 'explicitDeny']).toContain(deniedEvaluation.EvalDecision);
@@ -487,7 +487,7 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
           ActionNames: ['dynamodb:GetItem'],
           ResourceArns: [deniedDynamoResource],
         })
-      ));
+      );
 
       const evaluation = simulationResponse.EvaluationResults![0];
       expect(['implicitDeny', 'explicitDeny']).toContain(evaluation.EvalDecision);
@@ -521,7 +521,7 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
           ActionNames: ['ssm:PutParameter'],
           ResourceArns: [allowedSSMResource],
         })
-      ));
+      );
 
       const evaluation = simulationResponse.EvaluationResults![0];
       expect(['implicitDeny', 'explicitDeny']).toContain(evaluation.EvalDecision);
@@ -534,7 +534,7 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
           ActionNames: ['ssm:GetParameter'],
           ResourceArns: [deniedSSMResource],
         })
-      ));
+      );
 
       const deniedEvaluation = deniedResponse.EvaluationResults![0];
       expect(['implicitDeny', 'explicitDeny']).toContain(deniedEvaluation.EvalDecision);
@@ -606,7 +606,7 @@ describe('Least-Privilege IAM Design - Integration Test Scenarios', () => {
           ActionNames: ['logs:CreateLogGroup'],
           ResourceArns: [deniedLogResource],
         })
-      ));
+      );
 
       const evaluation = simulationResponse.EvaluationResults![0];
       expect(['implicitDeny', 'explicitDeny']).toContain(evaluation.EvalDecision);
