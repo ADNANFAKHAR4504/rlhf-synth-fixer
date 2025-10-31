@@ -729,10 +729,10 @@ Resources:
             Principal: { Service: cloudtrail.amazonaws.com }
             Action:
               - 's3:PutObject'
-              - 's3:PutObjectAcl'
             Resource: !Sub '${CloudTrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
             Condition:
               StringEquals:
+                s3:x-amz-acl: 'bucket-owner-full-control'
                 aws:SourceAccount: !Ref 'AWS::AccountId'
 
   CloudTrailLogRole:
