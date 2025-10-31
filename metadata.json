@@ -7,7 +7,11 @@
   "po_id": "101000781",
   "startedAt": "2025-10-31T07:06:00+00:00",
   "subtask": "Environment Migration",
-  "subject_labels": [],
+  "subject_labels": [
+    "iac",
+    "cdk",
+    "go"
+  ],
   "aws_services": [
     "VPC",
     "RDS",
@@ -16,5 +20,6 @@
     "KMS",
     "CloudWatch"
   ],
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "iamarpit-turing"
 }

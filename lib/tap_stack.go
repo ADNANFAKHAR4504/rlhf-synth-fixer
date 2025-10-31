@@ -4,11 +4,11 @@ import (
 	"fmt"
 
 	"github.com/aws/aws-cdk-go/awscdk/v2"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudwatch"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awskms"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsrds"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awssecretsmanager"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awskms"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudwatch"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 )
@@ -42,9 +42,9 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 
 	// Create VPC with 3 AZs
 	vpc := awsec2.NewVpc(stack, jsii.String("PaymentDbVpc"), &awsec2.VpcProps{
-		VpcName:          jsii.String(fmt.Sprintf("payment-db-vpc-%s", environmentSuffix)),
-		MaxAzs:           jsii.Number(3),
-		NatGateways:      jsii.Number(1),
+		VpcName:     jsii.String(fmt.Sprintf("payment-db-vpc-%s", environmentSuffix)),
+		MaxAzs:      jsii.Number(3),
+		NatGateways: jsii.Number(1),
 		SubnetConfiguration: &[]*awsec2.SubnetConfiguration{
 			{
 				Name:       jsii.String("Public"),
@@ -61,14 +61,14 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 
 	// Create KMS key for encryption
 	encryptionKey := awskms.NewKey(stack, jsii.String("AuroraEncryptionKey"), &awskms.KeyProps{
-		Description:        jsii.String(fmt.Sprintf("KMS key for Aurora cluster encryption - %s", environmentSuffix)),
-		EnableKeyRotation:  jsii.Bool(true),
-		RemovalPolicy:      awscdk.RemovalPolicy_DESTROY,
+		Description:       jsii.String(fmt.Sprintf("KMS key for Aurora cluster encryption - %s", environmentSuffix)),
+		EnableKeyRotation: jsii.Bool(true),
+		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
 	})
 
 	// Create database credentials secret
 	dbSecret := awssecretsmanager.NewSecret(stack, jsii.String("AuroraSecret"), &awssecretsmanager.SecretProps{
-		SecretName: jsii.String(fmt.Sprintf("payment-db-credentials-%s", environmentSuffix)),
+		SecretName:  jsii.String(fmt.Sprintf("payment-db-credentials-%s", environmentSuffix)),
 		Description: jsii.String("Master credentials for Aurora PostgreSQL cluster"),
 		GenerateSecretString: &awssecretsmanager.SecretStringGenerator{
 			SecretStringTemplate: jsii.String(`{"username": "dbadmin"}`),
@@ -86,7 +86,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		}),
 		Description: jsii.String(fmt.Sprintf("Parameter group for payment processing - %s", environmentSuffix)),
 		Parameters: &map[string]*string{
-			"rds.force_ssl": jsii.String("1"),
+			"rds.force_ssl":  jsii.String("1"),
 			"shared_buffers": jsii.String("{DBInstanceClassMemory/10240}"),
 		},
 	})
@@ -125,12 +125,12 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		VpcSubnets: &awsec2.SubnetSelection{
 			SubnetType: awsec2.SubnetType_PRIVATE_WITH_EGRESS,
 		},
-		StorageEncrypted:    jsii.Bool(true),
+		StorageEncrypted:     jsii.Bool(true),
 		StorageEncryptionKey: encryptionKey,
-		ParameterGroup:      parameterGroup,
+		ParameterGroup:       parameterGroup,
 		Backup: &awsrds.BackupProps{
-			Retention:          awscdk.Duration_Days(jsii.Number(7)),
-			PreferredWindow:    jsii.String("03:00-04:00"),
+			Retention:       awscdk.Duration_Days(jsii.Number(7)),
+			PreferredWindow: jsii.String("03:00-04:00"),
 		},
 		CloudwatchLogsExports: &[]*string{
 			jsii.String("postgresql"),
@@ -151,8 +151,8 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		Metric: cluster.MetricCPUUtilization(&awscloudwatch.MetricOptions{
 			Period: awscdk.Duration_Minutes(jsii.Number(5)),
 		}),
-		Threshold:         jsii.Number(80),
-		EvaluationPeriods: jsii.Number(2),
+		Threshold:          jsii.Number(80),
+		EvaluationPeriods:  jsii.Number(2),
 		ComparisonOperator: awscloudwatch.ComparisonOperator_GREATER_THAN_THRESHOLD,
 	})
 
@@ -163,8 +163,8 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		Metric: cluster.MetricFreeableMemory(&awscloudwatch.MetricOptions{
 			Period: awscdk.Duration_Minutes(jsii.Number(5)),
 		}),
-		Threshold:         jsii.Number(15),
-		EvaluationPeriods: jsii.Number(2),
+		Threshold:          jsii.Number(15),
+		EvaluationPeriods:  jsii.Number(2),
 		ComparisonOperator: awscloudwatch.ComparisonOperator_LESS_THAN_THRESHOLD,
 	})
 
