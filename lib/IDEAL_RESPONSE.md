@@ -756,7 +756,7 @@ export class RDSStack extends pulumi.ComponentResource {
 
 ### Monitoring & Observability
 
-9. **CloudWatch Dashboard**: Comprehensive dashboard showing RDS performance, Lambda metrics, backup storage, and test results
+9. **CloudWatch Dashboard**: Comprehensive dashboard showing RDS performance, Lambda metrics, backup storage, and test result
 10. **RTO Violation Alarm**: Alerts when recovery exceeds 4-hour threshold
 11. **Additional Alarms**: CPU, storage, S3 bucket size monitoring
 12. **Encrypted Logs**: CloudWatch Logs encrypted with KMS
