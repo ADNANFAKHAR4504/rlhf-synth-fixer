@@ -1950,8 +1950,8 @@ resource "aws_sfn_state_machine" "consistency_workflow" {
   definition = local.sfn_definition
   
   logging_configuration {
-    # FIXED: No :* suffix on log group ARN
-    log_destination        = aws_cloudwatch_log_group.sfn_logs.arn
+    # Step Functions requires :* suffix on log group ARN
+    log_destination        = "${aws_cloudwatch_log_group.sfn_logs.arn}:*"
     include_execution_data = true
     level                  = "ERROR"
   }
