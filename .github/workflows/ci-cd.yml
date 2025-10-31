@@ -49,7 +49,7 @@ env:
   # Go caching optimization
   GOCACHE: ${{ github.workspace }}/.cache/go-build
   GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
-  IAC_ANALYSIS_SUBTASK: 'IaC Program Optimization'
+  IAC_ANALYSIS_SUBTASK: "IaC Program Optimization"
 
 jobs:
   detect-metadata:
@@ -152,6 +152,68 @@ jobs:
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
+
+  claude-task-analyze:
+    runs-on: ubuntu-24.04
+    name: "Claude Task Analysis"
+    needs: [detect-metadata, synth]
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization'}}
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/head', github.event.pull_request.number) || github.ref }}
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          download-artifacts: "false"
+
+      - name: Run Claude Task Analysis
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          allowed_tools: "Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite"
+          trigger_phrase: ""
+          custom_instructions: |
+            Analyze the IAC task files in the lib/ folder and generate a comprehensive report in table format.
+
+            Your task:
+            1. Read all IAC code files in the lib/ folder (including TypeScript, Python, Java, Go, Terraform, CloudFormation, etc.)
+            2. Identify all AWS resources defined in the infrastructure code
+            3. For each resource, determine:
+               - Resource name/identifier
+               - isProtectionEnabled: Whether the resource has protection enabled (e.g., deletion protection, backup enabled, encryption enabled, etc.)
+               - Cost: Estimate the monthly cost for the resource (use AWS pricing where applicable)
+
+            4. Generate a markdown table with the following columns:
+               - resource: The resource name/identifier
+               - isProtectionEnabled: true/false based on protection settings
+               - cost: Estimated monthly cost (in USD, or "N/A" if not applicable)
+
+            5. Post the report as a GitHub comment on the pull request.
+
+            Example table format:
+            | resource | isProtectionEnabled | cost |
+            |----------|---------------------|------|
+            | s3-bucket-myapp | true | $0.023 |
+            | lambda-function-processor | false | $0.50 |
+
+            Important:
+            - Analyze all files in lib/ folder recursively
+            - Consider resource protection mechanisms like deletion protection, backup policies, encryption, versioning, etc.
+            - For cost estimation, use standard AWS pricing or reasonable estimates
+            - If cost cannot be determined, use "N/A"
+            - Post the complete report as a GitHub comment
 
   infracost:
     name: Infracost (Terraform Cost Estimation)
@@ -269,8 +331,8 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'false'
-          is-analysis: 'true'
+          download-artifacts: "false"
+          is-analysis: "true"
 
       - name: Run analysis
         run: ./scripts/analysis.sh
@@ -546,7 +608,7 @@ jobs:
             echo "❌ lib/MODEL_FAILURES.md not found, exiting with failure"
             exit 1
           fi
-      
+
       - name: Verify IaC Program Optimization script exists
         if: ${{ needs.detect-metadata.outputs.subtask == env.IAC_ANALYSIS_SUBTASK }}
         run: |
@@ -598,7 +660,7 @@ jobs:
             Now follow the instructions in .claude/agents/iac-code-reviewer.md 
             SCORE:<numeric_value>
             Example: SCORE:8
-          
+
             - This must always appear on its own line at the very end of your output.
             - Do not include extra text, markdown, or emojis on that line.
             - The numeric value (0–10) represents the final quality score.
