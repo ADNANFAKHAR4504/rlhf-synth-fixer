@@ -137,7 +137,7 @@ case "$LANGUAGE" in
 esac
 
 # CRITICAL: Use exact difficulty value as complexity (no mapping)
-# This ensures PR body shows the same complexity as tasks.csv
+# This ensures PR body shows the same complexity as .claude/tasks.csv
 COMPLEXITY="$DIFFICULTY"
 
 # Get timestamp

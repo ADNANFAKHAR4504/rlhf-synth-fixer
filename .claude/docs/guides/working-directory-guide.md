@@ -50,11 +50,11 @@ pwd
 # Output should be: .../iac-test-automations (NOT inside worktree/)
 
 # Verify main files exist
-ls tasks.csv .claude/ templates/
+ls .claude/tasks.csv .claude/ templates/
 ```
 
 **Key Files**:
-- `tasks.csv` - Task list
+- `.claude/tasks.csv` - Task list
 - `.claude/` - Agent instructions
 - `templates/` - Platform templates
 - `.claude/scripts/` - Utility scripts
@@ -250,10 +250,10 @@ cat lib/PROMPT.md
 ```bash
 # ❌ WRONG (inconsistent context)
 cd worktree/synth-123
-cat ../../tasks.csv  # This references main repo tasks.csv, not worktree
+cat ../../.claude/tasks.csv  # This references main repo .claude/tasks.csv, not worktree
 
 # ✅ CORRECT (stay in one context)
-# If need tasks.csv, don't be in worktree
+# If need .claude/tasks.csv, don't be in worktree
 # If need metadata.json, be in worktree
 ```
 
@@ -268,7 +268,7 @@ cat ../../tasks.csv  # This references main repo tasks.csv, not worktree
 1. **Phase 1 (Task Selection)**: Main repo
    ```bash
    pwd  # .../iac-test-automations
-   cat tasks.csv
+   cat .claude/tasks.csv
    ```
 
 2. **Setup Worktree**: Create and enter
@@ -347,7 +347,7 @@ jq '.training_quality' metadata.json
 
 | File | Location | Access From Worktree |
 |------|----------|----------------------|
-| tasks.csv | Main repo root | Not accessible (don't try) |
+| .claude/tasks.csv | Main repo .claude/ | Not accessible (don't try) |
 | .claude/scripts/task-manager.sh | Main repo .claude/scripts/ | Via .claude/ symlink |
 
 ### Always in Worktree (Never in Main Repo)
@@ -386,7 +386,7 @@ cd worktree/synth-{task_id}
 ls metadata.json
 ```
 
-### Error: "tasks.csv not found"
+### Error: ".claude/tasks.csv not found"
 
 **Cause**: In worktree, trying to access main repo file
 
@@ -395,7 +395,7 @@ ls metadata.json
 # Return to main repo
 cd ../..
 pwd  # Should be: .../iac-test-automations
-ls tasks.csv
+ls .claude/tasks.csv
 ```
 
 ### Error: "Branch mismatch"
@@ -471,7 +471,7 @@ ls metadata.json
 
 # Before CSV update
 pwd
-ls tasks.csv
+ls .claude/tasks.csv
 ```
 
 ### 4. Document Directory Changes

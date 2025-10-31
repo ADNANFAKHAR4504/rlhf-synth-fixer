@@ -158,4 +158,4 @@ git branch --show-current  # Must match: synth-{task_id}
 - Verify location before ALL file operations
 
 **Files in worktree**: metadata.json, lib/, test/, cfn-outputs/
-**Files in main repo only**: tasks.csv (not accessible from worktree)
+**Files in main repo only**: .claude/tasks.csv (not accessible from worktree)
