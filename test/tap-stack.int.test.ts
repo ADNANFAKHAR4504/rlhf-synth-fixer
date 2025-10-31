@@ -4,7 +4,7 @@ import dns from 'dns';
 import { promisify } from 'util';
 
 const dnsResolve = promisify(dns.resolve);
-const region = process.env.AWS_REGION || 'us-east-1';
+const region = process.env.AWS_REGION || 'eu-west-1';
 const cfnClient = new CloudFormationClient({ region });
 
 let discoveredStack: { name: string; outputs: Record<string, string> } | null = null;
@@ -77,7 +77,7 @@ describe('Three-Tier Application Stack Integration Tests', () => {
 
     test('should have all required outputs from deployment', async () => {
       const stackOutputs = await getStackOutputs();
-      
+
       expect(stackOutputs.VPCId).toBeDefined();
       expect(stackOutputs.ALBDNSName).toBeDefined();
       expect(stackOutputs.RDSEndpoint).toBeDefined();
@@ -97,7 +97,7 @@ describe('Three-Tier Application Stack Integration Tests', () => {
 
     test('should have valid resource identifiers', async () => {
       const stackOutputs = await getStackOutputs();
-      
+
       expect(stackOutputs.VPCId).toMatch(/^vpc-[a-f0-9]+$/);
       expect(stackOutputs.ALBDNSName).toMatch(/^[a-zA-Z0-9\-]+\..*\.elb\.amazonaws\.com$/);
       expect(stackOutputs.RDSEndpoint).toMatch(/^[a-zA-Z0-9\-]+\..*\.rds\.amazonaws\.com$/);
@@ -112,12 +112,12 @@ describe('Three-Tier Application Stack Integration Tests', () => {
   describe('Connectivity Tests', () => {
     test('ALB should be accessible via DNS', async () => {
       const stackOutputs = await getStackOutputs();
-      
+
       try {
         const addresses = await dnsResolve(stackOutputs.ALBDNSName, 'A');
         expect(addresses).toBeDefined();
         expect(addresses.length).toBeGreaterThan(0);
-        
+
         addresses.forEach(address => {
           expect(address).toMatch(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/);
         });
@@ -132,25 +132,25 @@ describe('Three-Tier Application Stack Integration Tests', () => {
     test('should validate complete infrastructure deployment', async () => {
       const stackOutputs = await getStackOutputs();
       const stackName = await getStackName();
-      
+
       console.log('Infrastructure validation complete:');
       console.log(`- Stack: ${stackName}`);
       console.log(`- VPC: ${stackOutputs.VPCId}`);
       console.log(`- ALB: ${stackOutputs.ALBDNSName}`);
       console.log(`- RDS: ${stackOutputs.RDSEndpoint}`);
       console.log(`- Environment: ${stackOutputs.EnvironmentType}`);
-      
+
       const requiredOutputs = [
         'VPCId', 'ALBDNSName', 'RDSEndpoint', 'RDSPort', 'DBSecretArn',
-        'EnvironmentType', 'EnvironmentSuffix', 'LogsBucketName', 
+        'EnvironmentType', 'EnvironmentSuffix', 'LogsBucketName',
         'StaticContentBucketName', 'SNSTopicArn'
       ];
-      
+
       requiredOutputs.forEach(output => {
         expect(stackOutputs[output]).toBeDefined();
         expect(stackOutputs[output]).not.toBe('');
       });
-      
+
       expect(true).toBe(true);
     });
   });

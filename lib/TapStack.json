@@ -62,7 +62,8 @@
     "AlarmEmail": {
       "Type": "String",
       "Description": "Email address for CloudWatch alarm notifications",
-      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+      "Default": "admin@example.com"
     }
   },
   "Conditions": {
