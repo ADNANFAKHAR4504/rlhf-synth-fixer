@@ -48,7 +48,6 @@ env:
   # Go caching optimization
   GOCACHE: ${{ github.workspace }}/.cache/go-build
   GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
-  IAC_ANALYSIS_SUBTASK: "IaC Program Optimization"
   IAC_ANALYSIS_SUBJECT_LABEL: "Infrastructure Analysis/Monitoring"
 
 jobs:
