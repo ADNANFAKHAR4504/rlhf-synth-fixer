@@ -29,5 +29,11 @@
     "CloudFront"
   ],
   "training_quality": 9,
-  "aws_services_count": 16
+  "aws_services_count": 16,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mikiaszerihun",
+  "dockerS3Location": ""
 }
