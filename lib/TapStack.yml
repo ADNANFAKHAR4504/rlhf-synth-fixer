@@ -1351,11 +1351,8 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-IGW'
 
-  VPCFlowLogsLogGroup:
-    Description: VPC Flow Logs CloudWatch Log Group
-    Value: !Ref VPCFlowLogsLogGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-VPCFlowLogs'
+  # VPCFlowLogsLogGroup output removed - resource not defined in template
+  # VPC Flow Logs can be added as a separate resource if needed
 
   EC2SecurityGroupId:
     Description: EC2 Security Group ID
@@ -1371,6 +1368,6 @@ Outputs:
 
   DBSecurityGroupId:
     Description: Database Security Group ID
-    Value: !Ref DBSecurityGroup
+    Value: !Ref DatabaseSecurityGroup
     Export:
       Name: !Sub '${AWS::StackName}-DB-SG'
