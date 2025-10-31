@@ -42,7 +42,7 @@ variable "aurora_instance_class" {
 variable "aurora_engine_version" {
   description = "Aurora PostgreSQL engine version"
   type        = string
-  default     = "15.4"
+  default     = "17.4"
 }
 
 variable "backup_retention_period" {
@@ -1101,8 +1101,10 @@ resource "aws_s3_bucket_replication_configuration" "backup_replication" {
       storage_class = "STANDARD_IA"
     }
   }
-  
-  depends_on = [aws_s3_bucket_versioning.backup_primary]
+ depends_on = [
+    aws_s3_bucket_versioning.backup_primary,
+    aws_s3_bucket_versioning.backup_secondary
+  ] 
 }
 
 # ============================================================================
