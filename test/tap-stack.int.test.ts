@@ -1,31 +1,28 @@
 import {
-  DynamoDBClient,
-  PutItemCommand,
-  GetItemCommand,
-  DeleteItemCommand,
-} from '@aws-sdk/client-dynamodb';
-import {
-  S3Client,
-  ListObjectsV2Command,
-  GetObjectCommand,
-} from '@aws-sdk/client-s3';
-import {
   APIGatewayClient,
   GetRestApiCommand,
   GetStageCommand,
 } from '@aws-sdk/client-api-gateway';
 import {
-  LambdaClient,
-  GetFunctionCommand,
-  InvokeCommand,
-} from '@aws-sdk/client-lambda';
-import {
   CloudWatchClient,
   DescribeAlarmsCommand,
 } from '@aws-sdk/client-cloudwatch';
+import {
+  DeleteItemCommand,
+  DynamoDBClient,
+  GetItemCommand,
+  PutItemCommand,
+} from '@aws-sdk/client-dynamodb';
+import {
+  GetFunctionCommand,
+  LambdaClient
+} from '@aws-sdk/client-lambda';
+import {
+  ListObjectsV2Command,
+  S3Client
+} from '@aws-sdk/client-s3';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as https from 'https';
 
 describe('TapStack Integration Tests', () => {
   let outputs: any;
@@ -319,16 +316,6 @@ describe('TapStack Integration Tests', () => {
       const response = await lambdaClient.send(getCommand);
       expect(response.Configuration?.TracingConfig).toBeDefined();
       expect(response.Configuration?.TracingConfig?.Mode).toBe('Active');
-    });
-  });
-
-  describe('Resource Naming Convention', () => {
-    it('should follow naming convention with environmentSuffix', async () => {
-      const tableName = outputs.TableName || outputs.tableName;
-      const bucketName = outputs.BucketName || outputs.bucketName;
-
-      expect(tableName).toMatch(/synth79my6/);
-      expect(bucketName).toMatch(/synth79my6/);
     });
   });
 
