@@ -157,7 +157,7 @@ Resources:
   MasterKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/${EnvironmentName}-master-key'
+      AliasName: !Sub 'alias/${EnvironmentName}-master-key-${AWS::Region}'
       TargetKeyId: !Ref MasterKMSKey
 
   # ========================================
@@ -334,7 +334,7 @@ Resources:
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${EnvironmentName}-webserver-sg'
+      GroupName: !Sub '${EnvironmentName}-webserver-sg-${AWS::Region}'
       GroupDescription: Security group for web servers - minimal ports
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -376,7 +376,7 @@ Resources:
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${EnvironmentName}-database-sg'
+      GroupName: !Sub '${EnvironmentName}-database-sg-${AWS::Region}'
       GroupDescription: Security group for RDS database
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -440,7 +440,7 @@ Resources:
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentName}-ec2-role'
+      RoleName: !Sub '${EnvironmentName}-ec2-role-${AWS::Region}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -496,7 +496,7 @@ Resources:
   AppDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${EnvironmentName}-app-data-${AWS::AccountId}'
+      BucketName: !Sub '${EnvironmentName}-app-data-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -526,7 +526,7 @@ Resources:
   AppConfigBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${EnvironmentName}-app-config-${AWS::AccountId}'
+      BucketName: !Sub '${EnvironmentName}-app-config-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -560,7 +560,7 @@ Resources:
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub '${EnvironmentName}-db-subnet-group'
+      DBSubnetGroupName: !Sub '${EnvironmentName}-db-subnet-group-${AWS::Region}'
       DBSubnetGroupDescription: Subnet group for RDS database
       SubnetIds:
         - !Ref PrivateSubnet1
@@ -606,7 +606,7 @@ Resources:
   RDSDatabase:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: !Sub '${EnvironmentName}-database'
+      DBInstanceIdentifier: !Sub '${EnvironmentName}-database-${AWS::Region}'
       AllocatedStorage: 20
       StorageType: gp3
       StorageEncrypted: true
@@ -676,7 +676,7 @@ Resources:
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/cloudtrail/${EnvironmentName}'
+      LogGroupName: !Sub '/aws/cloudtrail/${EnvironmentName}-${AWS::Region}'
       RetentionInDays: 90
       Tags:
         - Key: Name
@@ -695,7 +695,7 @@ Resources:
   CloudTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${EnvironmentName}-cloudtrail-${AWS::AccountId}'
+      BucketName: !Sub '${EnvironmentName}-cloudtrail-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -789,7 +789,7 @@ Resources:
     DependsOn:
       - CloudTrailBucketPolicy
     Properties:
-      TrailName: !Sub '${EnvironmentName}-trail'
+      TrailName: !Sub '${EnvironmentName}-trail-${AWS::Region}'
       S3BucketName: !Ref CloudTrailBucket
       S3KeyPrefix: 'cloudtrail'
       IncludeGlobalServiceEvents: true
@@ -825,7 +825,7 @@ Resources:
     Type: AWS::WAFv2::WebACL
     Condition: CreateCloudFront
     Properties:
-      Name: !Sub '${EnvironmentName}-web-acl'
+      Name: !Sub '${EnvironmentName}-web-acl-${AWS::Region}'
       Scope: CLOUDFRONT
       DefaultAction:
         Allow: {}
@@ -881,7 +881,7 @@ Resources:
     Condition: CreateCloudFront
     Properties:
       OriginAccessControlConfig:
-        Name: !Sub '${EnvironmentName}-oac'
+        Name: !Sub '${EnvironmentName}-oac-${AWS::Region}'
         Description: OAC for CloudFront to access S3 origins securely
         SigningProtocol: sigv4
         SigningBehavior: always
@@ -943,7 +943,7 @@ Resources:
   LambdaDeadLetterQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub '${EnvironmentName}-lambda-dlq'
+      QueueName: !Sub '${EnvironmentName}-lambda-dlq-${AWS::Region}'
       MessageRetentionPeriod: 1209600 # 14 days
       KmsMasterKeyId: !Ref MasterKMSKey
       Tags:
@@ -963,7 +963,7 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentName}-lambda-role'
+      RoleName: !Sub '${EnvironmentName}-lambda-role-${AWS::Region}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -1006,7 +1006,7 @@ Resources:
   SampleLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${EnvironmentName}-sample-function'
+      FunctionName: !Sub '${EnvironmentName}-sample-function-${AWS::Region}'
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -1046,12 +1046,12 @@ Resources:
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/lambda/${SampleLambdaFunction}'
+      LogGroupName: !Sub '/aws/lambda/${EnvironmentName}-sample-function-${AWS::Region}'
       RetentionInDays: 30
       KmsKeyId: !GetAtt MasterKMSKey.Arn
       Tags:
         - Key: Name
-          Value: !Sub '/aws/lambda/${SampleLambdaFunction}'
+          Value: !Sub '/aws/lambda/${EnvironmentName}-sample-function-${AWS::Region}'
         - Key: Project
           Value: !Ref ProjectName
         - Key: Department
@@ -1070,7 +1070,7 @@ Resources:
   RestApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: !Sub '${EnvironmentName}-api'
+      Name: !Sub '${EnvironmentName}-api-${AWS::Region}'
       Description: NovaCart Secure API Gateway with request validation
       EndpointConfiguration:
         Types:
@@ -1287,7 +1287,7 @@ Resources:
   EC2CPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${EnvironmentName}-ec2-high-cpu'
+      AlarmName: !Sub '${EnvironmentName}-ec2-high-cpu-${AWS::Region}'
       AlarmDescription: Alert when EC2 CPU exceeds 80%
       MetricName: CPUUtilization
       Namespace: AWS/EC2
@@ -1317,7 +1317,7 @@ Resources:
   EC2CPUAlarmAz2:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${EnvironmentName}-ec2-high-cpu-az2'
+      AlarmName: !Sub '${EnvironmentName}-ec2-high-cpu-az2-${AWS::Region}'
       AlarmDescription: Alert when EC2 CPU exceeds 80% (AZ2)
       MetricName: CPUUtilization
       Namespace: AWS/EC2
@@ -1347,7 +1347,7 @@ Resources:
   RDSCPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${EnvironmentName}-rds-high-cpu'
+      AlarmName: !Sub '${EnvironmentName}-rds-high-cpu-${AWS::Region}'
       AlarmDescription: Alert when RDS CPU exceeds 80%
       MetricName: CPUUtilization
       Namespace: AWS/RDS
