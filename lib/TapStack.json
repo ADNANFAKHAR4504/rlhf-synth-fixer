@@ -22,14 +22,17 @@
     },
     "SubnetId1": {
       "Type": "AWS::EC2::Subnet::Id",
+      "Default": "subnet-0abc123456789def0",
       "Description": "First subnet ID in an existing VPC (must be in different AZ from SubnetId2)"
     },
     "SubnetId2": {
       "Type": "AWS::EC2::Subnet::Id",
+      "Default": "subnet-0def987654321cba0",
       "Description": "Second subnet ID in an existing VPC (must be in different AZ from SubnetId1)"
     },
     "VpcId": {
       "Type": "AWS::EC2::VPC::Id",
+       "Default": "vpc-0123456789abcdef0",
       "Description": "VPC ID where the RDS instance will be deployed"
     },
     "MasterUsername": {
