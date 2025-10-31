@@ -250,7 +250,8 @@
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "s3:PutObject"
+                                        "s3:PutObject",
+                                        "s3:PutObjectAcl"
                                     ],
                                     "Resource": {
                                         "Fn::Sub": "${TransactionArchivesBucket.Arn}/*"
@@ -982,7 +983,7 @@
                         "ProcessResults": {
                             "Type": "Pass",
                             "Parameters": {
-                                "transaction_id.$": "$.input.transaction_id",
+                                "transaction_id.$": "$.transaction_id",
                                 "validation_result.$": "$.validation_results[0]",
                                 "fraud_result.$": "$.validation_results[1]"
                             },

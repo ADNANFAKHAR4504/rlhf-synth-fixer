@@ -142,6 +142,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:PutObject # Archive complete transaction to S3
+                  - s3:PutObjectAcl # Required for S3 object ACL permissions
                 Resource: !Sub ${TransactionArchivesBucket.Arn}/*
               - Effect: Allow
                 Action:
@@ -812,7 +813,7 @@ Resources:
           ProcessResults:
             Type: Pass
             Parameters:
-              transaction_id.$: "$.input.transaction_id" # Retrieve transaction_id from initial input
+              transaction_id.$: "$.transaction_id" # Retrieve transaction_id from root level
               validation_result.$: "$.validation_results[0]"
               fraud_result.$: "$.validation_results[1]"
             Next: SettleTransaction
