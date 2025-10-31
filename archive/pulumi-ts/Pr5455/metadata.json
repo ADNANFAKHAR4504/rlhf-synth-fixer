@@ -1,12 +1,14 @@
 {
   "platform": "pulumi",
-  "language": "ts",
+  "language": "typescript",
   "complexity": "medium",
   "turn_type": "single",
   "team": "synth",
   "startedAt": "2025-10-30T18:30:00+00:00",
   "subtask": "CI/CD Pipeline Integration",
-  "subject_labels": ["CI/CD Pipeline"],
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
   "po_id": "11z098",
   "aws_services": [
     "s3",
@@ -18,5 +20,11 @@
     "iam"
   ],
   "region": "ap-southeast-1",
-  "training_quality": 8
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
