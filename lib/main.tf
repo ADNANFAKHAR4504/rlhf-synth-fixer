@@ -292,7 +292,7 @@ resource "aws_db_instance" "main" {
   delete_automated_backups = true
 
   # Security and monitoring
-  deletion_protection = local.environment == "prod" ? true : false
+  deletion_protection = false
   skip_final_snapshot = local.environment == "dev" ? true : false
   final_snapshot_identifier = local.environment != "dev" ? "${var.project_name}-${local.environment}-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}" : null
 

@@ -8,7 +8,7 @@ resource "aws_lb" "main" {
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
 
-  enable_deletion_protection = local.environment == "prod" ? true : false
+  enable_deletion_protection = false
 
   access_logs {
     bucket  = aws_s3_bucket.alb_logs.bucket
