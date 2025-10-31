@@ -93,7 +93,7 @@
       "Type": "AWS::SecretsManager::Secret",
       "Properties": {
         "Name": {
-          "Fn::Sub": "rds-mysql-password-${EnvironmentSuffix}"
+          "Fn::Sub": "rds-mysql-password-${EnvironmentSuffix}-${AWS::AccountId}"
         },
         "Description": "RDS MySQL master password for multi-environment stack",
         "GenerateSecretString": {
@@ -957,7 +957,7 @@
       "DeletionPolicy": "Delete",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "logs-bucket-${EnvironmentSuffix}"
+          "Fn::Sub": "logs-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
         },
         "VersioningConfiguration": {
           "Status": "Enabled"
@@ -1011,7 +1011,7 @@
       "DeletionPolicy": "Delete",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "static-content-${EnvironmentSuffix}"
+          "Fn::Sub": "static-content-${EnvironmentSuffix}-${AWS::AccountId}"
         },
         "VersioningConfiguration": {
           "Status": "Enabled"
