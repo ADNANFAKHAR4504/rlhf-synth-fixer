@@ -4,13 +4,9 @@
   "complexity": "medium",
   "team": "synth",
   "startedAt": "2025-10-30T10:23:00-07:00",
-  "subtask": "Cloud Environment Setup",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "aws",
-    "infrastructure",
-    "networking",
-    "vpc",
-    "security"
+   "Cloud Environment Setup"
   ],
   "po_id": "1maext",
   "aws_services": [
