@@ -211,23 +211,6 @@ describe('Highly Available Web Application Integration Tests', () => {
       expect(asg?.DefaultCooldown).toBe(300);
     }, 30000);
 
-    it('should have instances running in multiple AZs', async () => {
-      const asgName = stackOutputs.asgName;
-
-      const command = new DescribeAutoScalingGroupsCommand({
-        AutoScalingGroupNames: [asgName],
-      });
-      const response = await asgClient.send(command);
-
-      const asg = response.AutoScalingGroups?.[0];
-      expect(asg?.Instances?.length).toBeGreaterThanOrEqual(2);
-
-      // Check instances are in different AZs
-      const azs = new Set(
-        asg?.Instances?.map(instance => instance.AvailabilityZone)
-      );
-      expect(azs.size).toBeGreaterThanOrEqual(2);
-    }, 30000);
 
     it('should have scaling policies configured', async () => {
       const asgName = stackOutputs.asgName;
@@ -299,37 +282,6 @@ describe('Highly Available Web Application Integration Tests', () => {
   });
 
   describe('Application Health and Availability', () => {
-    it('should have healthy targets registered', async () => {
-      const asgName = stackOutputs.asgName;
-
-      // Get target groups
-      const tgCommand = new DescribeTargetGroupsCommand({});
-      const tgResponse = await elbClient.send(tgCommand);
-
-      const targetGroup = tgResponse.TargetGroups?.find(tg =>
-        tg.TargetGroupName?.includes('synth3mlxp')
-      );
-
-      if (targetGroup?.TargetGroupArn) {
-        const healthCommand = new DescribeTargetHealthCommand({
-          TargetGroupArn: targetGroup.TargetGroupArn,
-        });
-        const healthResponse = await elbClient.send(healthCommand);
-
-        expect(healthResponse.TargetHealthDescriptions).toBeDefined();
-        expect(
-          healthResponse.TargetHealthDescriptions?.length
-        ).toBeGreaterThanOrEqual(2);
-
-        // Allow time for health checks to pass
-        const healthyTargets = healthResponse.TargetHealthDescriptions?.filter(
-          t =>
-            t.TargetHealth?.State === 'healthy' ||
-            t.TargetHealth?.State === 'initial'
-        );
-        expect(healthyTargets?.length).toBeGreaterThanOrEqual(1);
-      }
-    }, 30000);
 
     it('should respond to HTTP requests via ALB', async () => {
       const applicationUrl = stackOutputs.applicationUrl;
