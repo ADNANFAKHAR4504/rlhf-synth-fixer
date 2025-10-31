@@ -61,7 +61,9 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Create ALB Stack
-    const publicSubnetIds = pulumi.all(this.networkStack.publicSubnets.map(s => s.id));
+    const publicSubnetIds = pulumi.all(
+      this.networkStack.publicSubnets.map(s => s.id)
+    );
     this.albStack = new AlbStack(
       'webapp-alb',
       {
@@ -75,7 +77,9 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Create Frontend ECS Service
-    const privateSubnetIds = pulumi.all(this.networkStack.privateSubnets.map(s => s.id));
+    const privateSubnetIds = pulumi.all(
+      this.networkStack.privateSubnets.map(s => s.id)
+    );
     this.frontendService = new EcsServiceStack(
       'webapp-frontend',
       {

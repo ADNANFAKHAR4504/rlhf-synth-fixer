@@ -45,7 +45,10 @@ export class AlbStack extends pulumi.ComponentResource {
 
     // Create Target Group for Frontend (port 3000)
     // Note: ALB target group names must be <= 32 characters
-    const frontendTgName = `${name}-fe-tg-${args.environmentSuffix}`.substring(0, 32);
+    const frontendTgName = `${name}-fe-tg-${args.environmentSuffix}`.substring(
+      0,
+      32
+    );
     this.frontendTargetGroup = new aws.lb.TargetGroup(
       `${name}-frontend-tg-${args.environmentSuffix}`,
       {
@@ -75,7 +78,10 @@ export class AlbStack extends pulumi.ComponentResource {
 
     // Create Target Group for Backend (port 8080)
     // Note: ALB target group names must be <= 32 characters
-    const backendTgName = `${name}-be-tg-${args.environmentSuffix}`.substring(0, 32);
+    const backendTgName = `${name}-be-tg-${args.environmentSuffix}`.substring(
+      0,
+      32
+    );
     this.backendTargetGroup = new aws.lb.TargetGroup(
       `${name}-backend-tg-${args.environmentSuffix}`,
       {

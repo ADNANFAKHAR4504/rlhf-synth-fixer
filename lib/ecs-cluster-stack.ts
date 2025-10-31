@@ -126,7 +126,8 @@ export class EcsClusterStack extends pulumi.ComponentResource {
 
     // Create ECR repositories
     // Note: ECR repository names must be lowercase
-    const frontendRepoName = `${name}-frontend-${args.environmentSuffix}`.toLowerCase();
+    const frontendRepoName =
+      `${name}-frontend-${args.environmentSuffix}`.toLowerCase();
     this.ecrRepositoryFrontend = new aws.ecr.Repository(
       `${name}-frontend-repo-${args.environmentSuffix}`,
       {
@@ -143,7 +144,8 @@ export class EcsClusterStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const backendRepoName = `${name}-backend-${args.environmentSuffix}`.toLowerCase();
+    const backendRepoName =
+      `${name}-backend-${args.environmentSuffix}`.toLowerCase();
     this.ecrRepositoryBackend = new aws.ecr.Repository(
       `${name}-backend-repo-${args.environmentSuffix}`,
       {

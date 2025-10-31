@@ -4,13 +4,13 @@ import * as pulumi from '@pulumi/pulumi';
 pulumi.runtime.setMocks({
   newResource: function (args: pulumi.runtime.MockResourceArgs): {
     id: string;
-    state: any;
+    state: Record<string, unknown>;
   } {
     // Generate deterministic IDs for resources
     const id = `${args.name}-${args.type.replace(/:/g, '-')}-id`;
 
     // Mock state based on resource type
-    const state: any = {
+    const state: Record<string, unknown> = {
       ...args.inputs,
       id: id,
       arn: `arn:aws:${args.type.split(':')[0]}:eu-west-2:123456789012:${args.name}`,
@@ -122,7 +122,7 @@ pulumi.runtime.setMocks({
     }
 
     return {
-      id: state.id,
+      id: state.id as string,
       state: state,
     };
   },
@@ -143,9 +143,9 @@ pulumi.runtime.setMocks({
 });
 
 // Helper to run tests in a Pulumi stack context
-pulumi.runtime.runInPulumiStack = async (
-  fn: () => Promise<any>
-): Promise<any> => {
+pulumi.runtime.runInPulumiStack = async <T>(
+  fn: () => Promise<T>
+): Promise<T> => {
   const result = await fn();
   return result;
 };
@@ -155,11 +155,11 @@ export const mockOutput = <T>(value: T): pulumi.Output<T> => {
   return {
     apply: <U>(func: (t: T) => pulumi.Input<U>) => mockOutput(func(value)),
     get: () => Promise.resolve(value),
-  } as any;
+  } as pulumi.Output<T>;
 };
 
 export const mockAll = <T extends readonly unknown[]>(
   values: T
-): pulumi.Output<any> => {
-  return mockOutput(values as any);
+): pulumi.Output<T> => {
+  return mockOutput(values);
 };
