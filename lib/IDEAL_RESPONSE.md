@@ -488,7 +488,7 @@ export class RDSStack extends pulumi.ComponentResource {
     new aws.secretsmanager.SecretVersion(`db-secret-version-${args.environmentSuffix}`, {
       secretId: dbSecret.id,
       secretString: pulumi.interpolate`{
-        "username": "admin",
+        "username": "dbadmin",
         "password": "${dbPassword.result}",
         "engine": "postgres",
         "host": "",
@@ -529,7 +529,7 @@ export class RDSStack extends pulumi.ComponentResource {
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
       dbName: 'backuptest',
-      username: 'admin',
+      username: 'dbadmin',
       password: dbPassword.result,
       dbSubnetGroupName: dbSubnetGroup.name,
       vpcSecurityGroupIds: [args.securityGroupId],
@@ -576,7 +576,7 @@ export class RDSStack extends pulumi.ComponentResource {
       secretString: pulumi.all([dbPassword.result, dbInstance.endpoint]).apply(([pwd, endpoint]) => {
         const host = endpoint.split(':')[0];
         return JSON.stringify({
-          username: 'admin',
+          username: 'dbadmin',
           password: pwd,
           engine: 'postgres',
           host: host,

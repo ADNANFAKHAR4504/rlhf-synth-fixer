@@ -42,7 +42,7 @@ export class RDSStack extends pulumi.ComponentResource {
         instanceClass: 'db.t3.micro',
         allocatedStorage: 20,
         dbName: 'backuptest',
-        username: 'admin',
+        username: 'dbadmin',
         password: pulumi.secret('ChangeMe123!'),
         dbSubnetGroupName: dbSubnetGroup.name,
         vpcSecurityGroupIds: [args.securityGroupId],

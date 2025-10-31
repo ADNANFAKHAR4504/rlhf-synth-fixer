@@ -87,7 +87,7 @@ serverSideEncryptionConfiguration: {
 // In lib/rds-stack.ts, line 36
 const dbInstance = new aws.rds.Instance(`postgres-${args.environmentSuffix}`, {
   // ...
-  username: 'admin',
+  username: 'dbadmin',
   password: pulumi.secret('ChangeMe123!'),  // ❌ Hardcoded password
   // ...
 });
@@ -110,7 +110,7 @@ const dbSecret = new aws.secretsmanager.Secret(`db-secret-${args.environmentSuff
 new aws.secretsmanager.SecretVersion(`db-secret-version-${args.environmentSuffix}`, {
   secretId: dbSecret.id,
   secretString: pulumi.interpolate`{
-    "username": "admin",
+    "username": "dbadmin",
     "password": "${dbPassword.result}",
     "engine": "postgres",
     "host": "${dbInstance.endpoint}",
