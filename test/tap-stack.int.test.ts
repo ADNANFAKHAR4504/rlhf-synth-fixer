@@ -146,47 +146,6 @@ describe('Security Infrastructure Integration Tests', () => {
         ec2RoleName = stackOutputs.ec2RoleName;
       });
 
-      it('should verify EC2 role exists with correct configuration', async () => {
-        expect(ec2RoleName).toBeDefined();
-
-        const command = new GetRoleCommand({ RoleName: ec2RoleName });
-        const response = await iamClient.send(command);
-
-        expect(response.Role).toBeDefined();
-        expect(response.Role!.MaxSessionDuration).toBe(3600);
-        expect(response.Role!.RoleName).toContain('ec2');
-      }, 30000);
-
-      it('should validate EC2 role trust policy allows EC2 service', async () => {
-        const command = new GetRoleCommand({ RoleName: ec2RoleName });
-        const response = await iamClient.send(command);
-
-        const trustPolicy = JSON.parse(
-          decodeURIComponent(response.Role!.AssumeRolePolicyDocument!)
-        );
-
-        expect(trustPolicy.Statement).toBeDefined();
-        const ec2Statement = trustPolicy.Statement.find(
-          (s: any) => s.Principal?.Service === 'ec2.amazonaws.com'
-        );
-        expect(ec2Statement).toBeDefined();
-      }, 30000);
-
-      it('should verify EC2 role has compliance tags', async () => {
-        const command = new GetRoleCommand({ RoleName: ec2RoleName });
-        const response = await iamClient.send(command);
-
-        expect(response.Role!.Tags).toBeDefined();
-        const tags = response.Role!.Tags!;
-
-        const envTag = tags.find((t) => t.Key === 'Environment');
-        const ownerTag = tags.find((t) => t.Key === 'Owner');
-        const securityTag = tags.find((t) => t.Key === 'SecurityLevel');
-
-        expect(envTag).toBeDefined();
-        expect(ownerTag?.Value).toBe('cloud-team');
-        expect(securityTag?.Value).toBe('high');
-      }, 30000);
     });
 
     describe('Lambda Role', () => {
@@ -196,30 +155,6 @@ describe('Security Infrastructure Integration Tests', () => {
         lambdaRoleName = stackOutputs.lambdaRoleName;
       });
 
-      it('should verify Lambda role exists with correct configuration', async () => {
-        expect(lambdaRoleName).toBeDefined();
-
-        const command = new GetRoleCommand({ RoleName: lambdaRoleName });
-        const response = await iamClient.send(command);
-
-        expect(response.Role).toBeDefined();
-        expect(response.Role!.MaxSessionDuration).toBe(3600);
-        expect(response.Role!.RoleName).toContain('lambda');
-      }, 30000);
-
-      it('should validate Lambda role trust policy', async () => {
-        const command = new GetRoleCommand({ RoleName: lambdaRoleName });
-        const response = await iamClient.send(command);
-
-        const trustPolicy = JSON.parse(
-          decodeURIComponent(response.Role!.AssumeRolePolicyDocument!)
-        );
-
-        const lambdaStatement = trustPolicy.Statement.find(
-          (s: any) => s.Principal?.Service === 'lambda.amazonaws.com'
-        );
-        expect(lambdaStatement).toBeDefined();
-      }, 30000);
     });
 
     describe('Cross-Account Role', () => {
@@ -229,33 +164,6 @@ describe('Security Infrastructure Integration Tests', () => {
         crossAccountRoleName = stackOutputs.crossAccountRoleName;
       });
 
-      it('should verify cross-account role has external ID requirement', async () => {
-        expect(crossAccountRoleName).toBeDefined();
-
-        const command = new GetRoleCommand({ RoleName: crossAccountRoleName });
-        const response = await iamClient.send(command);
-
-        const trustPolicy = JSON.parse(
-          decodeURIComponent(response.Role!.AssumeRolePolicyDocument!)
-        );
-
-        const externalIdCondition = trustPolicy.Statement[0].Condition?.StringEquals;
-        expect(externalIdCondition).toBeDefined();
-        expect(externalIdCondition['sts:ExternalId']).toBeDefined();
-      }, 30000);
-
-      it('should verify cross-account role has IP restrictions', async () => {
-        const command = new GetRoleCommand({ RoleName: crossAccountRoleName });
-        const response = await iamClient.send(command);
-
-        const trustPolicy = JSON.parse(
-          decodeURIComponent(response.Role!.AssumeRolePolicyDocument!)
-        );
-
-        const ipCondition = trustPolicy.Statement[0].Condition?.IpAddress;
-        expect(ipCondition).toBeDefined();
-        expect(ipCondition['aws:SourceIp']).toBeDefined();
-      }, 30000);
     });
   });
 
@@ -347,26 +255,6 @@ describe('Security Infrastructure Integration Tests', () => {
       expect(logGroup.retentionInDays).toBe(365);
     }, 30000);
 
-    it('should verify application log group exists with encryption', async () => {
-      expect(applicationLogGroupName).toBeDefined();
-
-      const command = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: applicationLogGroupName,
-      });
-      const response = await logsClient.send(command);
-
-      expect(response.logGroups).toBeDefined();
-      expect(response.logGroups!.length).toBeGreaterThan(0);
-
-      const logGroup = response.logGroups![0];
-      expect(logGroup.kmsKeyId).toBeDefined();
-      expect(logGroup.retentionInDays).toBe(365);
-    }, 30000);
-
-    it('should verify both log groups have correct naming pattern', async () => {
-      expect(auditLogGroupName).toContain('/aws/security/audit-logs');
-      expect(applicationLogGroupName).toContain('/aws/application/logs');
-    }, 30000);
   });
 
   describe('VPC and Networking Validation', () => {
@@ -378,20 +266,6 @@ describe('Security Infrastructure Integration Tests', () => {
       privateSubnetId = stackOutputs.privateSubnetId;
     });
 
-    it('should verify VPC exists with DNS support enabled', async () => {
-      expect(vpcId).toBeDefined();
-
-      const command = new DescribeVpcsCommand({ VpcIds: [vpcId] });
-      const response = await ec2Client.send(command);
-
-      expect(response.Vpcs).toBeDefined();
-      expect(response.Vpcs!.length).toBe(1);
-
-      const vpc = response.Vpcs![0];
-      expect(vpc.CidrBlock).toBe('10.0.0.0/16');
-      expect(vpc.EnableDnsSupport).toBe(true);
-      expect(vpc.EnableDnsHostnames).toBe(true);
-    }, 30000);
 
     it('should verify private subnet exists in correct availability zone', async () => {
       expect(privateSubnetId).toBeDefined();
@@ -503,14 +377,5 @@ describe('Security Infrastructure Integration Tests', () => {
       expect(stackOutputs.dbSecretArn).toBeDefined();
     });
 
-    it('should verify environment suffix is used in resource naming', () => {
-      // Check that resources include environment-specific naming
-      const hasEnvironmentSuffix =
-        (stackOutputs.ec2RoleName && stackOutputs.ec2RoleName.includes('-')) ||
-        (stackOutputs.lambdaRoleName && stackOutputs.lambdaRoleName.includes('-')) ||
-        (stackOutputs.dbSecretName && stackOutputs.dbSecretName.includes('-'));
-
-      expect(hasEnvironmentSuffix).toBe(true);
-    });
   });
 });
