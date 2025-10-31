@@ -1410,11 +1410,6 @@ gem install cfn-nag
 
 # Run the scan against the template
 cfn-nag-scan --input-path least-privilege-iam-design.yaml
-
-# Expected output should contain no warnings related to:
-# - W11 (IAM role should not allow * action)
-# - W12 (IAM policy should not allow * resource)
-# - W76 (IAM policy should not allow * action and * resource)
 ```
 
 ### 3. Verify Permission Boundary Application
