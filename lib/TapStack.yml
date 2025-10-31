@@ -510,7 +510,7 @@ Resources:
   ELBLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'tapstack-${EnvironmentSuffix}-elb-logs-${AWS::AccountId}'
+      BucketName: !Sub 'tapstack-${EnvironmentSuffix}-elb-logs-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
