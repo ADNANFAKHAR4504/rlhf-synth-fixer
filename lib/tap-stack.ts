@@ -19,178 +19,241 @@ export class TapStack extends pulumi.ComponentResource {
     const tags = args.tags || {};
 
     // VPC for Lambda functions
-    const vpc = new aws.ec2.Vpc(`webhook-vpc-${environmentSuffix}`, {
-      cidrBlock: '10.0.0.0/16',
-      enableDnsHostnames: true,
-      enableDnsSupport: true,
-      tags: { ...tags, Name: `webhook-vpc-${environmentSuffix}` },
-    }, { parent: this });
+    const vpc = new aws.ec2.Vpc(
+      `webhook-vpc-${environmentSuffix}`,
+      {
+        cidrBlock: '10.0.0.0/16',
+        enableDnsHostnames: true,
+        enableDnsSupport: true,
+        tags: { ...tags, Name: `webhook-vpc-${environmentSuffix}` },
+      },
+      { parent: this }
+    );
 
     // Private subnets for Lambda
-    const privateSubnet1 = new aws.ec2.Subnet(`webhook-private-subnet-1-${environmentSuffix}`, {
-      vpcId: vpc.id,
-      cidrBlock: '10.0.1.0/24',
-      availabilityZone: 'us-east-1a',
-      tags: { ...tags, Name: `webhook-private-subnet-1-${environmentSuffix}` },
-    }, { parent: this });
-
-    const privateSubnet2 = new aws.ec2.Subnet(`webhook-private-subnet-2-${environmentSuffix}`, {
-      vpcId: vpc.id,
-      cidrBlock: '10.0.2.0/24',
-      availabilityZone: 'us-east-1b',
-      tags: { ...tags, Name: `webhook-private-subnet-2-${environmentSuffix}` },
-    }, { parent: this });
-
-    // Security group for Lambda functions
-    const lambdaSecurityGroup = new aws.ec2.SecurityGroup(`webhook-lambda-sg-${environmentSuffix}`, {
-      vpcId: vpc.id,
-      description: 'Security group for webhook Lambda functions',
-      egress: [{
-        protocol: '-1',
-        fromPort: 0,
-        toPort: 0,
-        cidrBlocks: ['0.0.0.0/0'],
-      }],
-      tags: { ...tags, Name: `webhook-lambda-sg-${environmentSuffix}` },
-    }, { parent: this });
-
-    // VPC Endpoints for AWS services (to avoid NAT Gateway costs)
-    const s3Endpoint = new aws.ec2.VpcEndpoint(`webhook-s3-endpoint-${environmentSuffix}`, {
-      vpcId: vpc.id,
-      serviceName: 'com.amazonaws.us-east-1.s3',
-      vpcEndpointType: 'Gateway',
-      routeTableIds: [vpc.defaultRouteTableId],
-      tags: { ...tags, Name: `webhook-s3-endpoint-${environmentSuffix}` },
-    }, { parent: this });
-
-    const dynamodbEndpoint = new aws.ec2.VpcEndpoint(`webhook-dynamodb-endpoint-${environmentSuffix}`, {
-      vpcId: vpc.id,
-      serviceName: 'com.amazonaws.us-east-1.dynamodb',
-      vpcEndpointType: 'Gateway',
-      routeTableIds: [vpc.defaultRouteTableId],
-      tags: { ...tags, Name: `webhook-dynamodb-endpoint-${environmentSuffix}` },
-    }, { parent: this });
-
-    // DynamoDB table for storing processed events
-    const webhookTable = new aws.dynamodb.Table(`webhook-events-${environmentSuffix}`, {
-      attributes: [
-        { name: 'eventId', type: 'S' },
-        { name: 'timestamp', type: 'N' },
-      ],
-      hashKey: 'eventId',
-      rangeKey: 'timestamp',
-      billingMode: 'PAY_PER_REQUEST',
-      pointInTimeRecovery: {
-        enabled: true,
-      },
-      streamEnabled: true,
-      streamViewType: 'NEW_AND_OLD_IMAGES',
-      tags: { ...tags, Name: `webhook-events-${environmentSuffix}` },
-    }, { parent: this });
-
-    // S3 bucket for archiving events
-    const archiveBucket = new aws.s3.Bucket(`webhook-archive-${environmentSuffix}`, {
-      versioning: {
-        enabled: true,
-      },
-      serverSideEncryptionConfiguration: {
-        rule: {
-          applyServerSideEncryptionByDefault: {
-            sseAlgorithm: 'AES256',
-          },
+    const privateSubnet1 = new aws.ec2.Subnet(
+      `webhook-private-subnet-1-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        cidrBlock: '10.0.1.0/24',
+        availabilityZone: 'us-east-1a',
+        tags: {
+          ...tags,
+          Name: `webhook-private-subnet-1-${environmentSuffix}`,
         },
       },
-      lifecycleRules: [{
-        enabled: true,
-        transitions: [{
-          days: 30,
-          storageClass: 'GLACIER',
-        }],
-      }],
-      tags: { ...tags, Name: `webhook-archive-${environmentSuffix}` },
-    }, { parent: this });
+      { parent: this }
+    );
 
-    // Block public access to S3 bucket
-    const bucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(`webhook-archive-public-access-${environmentSuffix}`, {
-      bucket: archiveBucket.id,
-      blockPublicAcls: true,
-      blockPublicPolicy: true,
-      ignorePublicAcls: true,
-      restrictPublicBuckets: true,
-    }, { parent: this });
+    const privateSubnet2 = new aws.ec2.Subnet(
+      `webhook-private-subnet-2-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        cidrBlock: '10.0.2.0/24',
+        availabilityZone: 'us-east-1b',
+        tags: {
+          ...tags,
+          Name: `webhook-private-subnet-2-${environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
 
-    // IAM role for webhook receiver Lambda
-    const webhookReceiverRole = new aws.iam.Role(`webhook-receiver-role-${environmentSuffix}`, {
-      assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [{
-          Action: 'sts:AssumeRole',
-          Effect: 'Allow',
-          Principal: {
-            Service: 'lambda.amazonaws.com',
-          },
-        }],
-      }),
-      tags: { ...tags, Name: `webhook-receiver-role-${environmentSuffix}` },
-    }, { parent: this });
-
-    // IAM policy for webhook receiver Lambda
-    const webhookReceiverPolicy = new aws.iam.RolePolicy(`webhook-receiver-policy-${environmentSuffix}`, {
-      role: webhookReceiverRole.id,
-      policy: pulumi.all([webhookTable.arn, archiveBucket.arn]).apply(([tableArn, bucketArn]) => JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
+    // Security group for Lambda functions
+    const lambdaSecurityGroup = new aws.ec2.SecurityGroup(
+      `webhook-lambda-sg-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        description: 'Security group for webhook Lambda functions',
+        egress: [
           {
-            Effect: 'Allow',
-            Action: [
-              'logs:CreateLogGroup',
-              'logs:CreateLogStream',
-              'logs:PutLogEvents',
-            ],
-            Resource: 'arn:aws:logs:*:*:*',
-          },
-          {
-            Effect: 'Allow',
-            Action: [
-              'dynamodb:PutItem',
-              'dynamodb:GetItem',
-            ],
-            Resource: tableArn,
-          },
-          {
-            Effect: 'Allow',
-            Action: [
-              'xray:PutTraceSegments',
-              'xray:PutTelemetryRecords',
-            ],
-            Resource: '*',
-          },
-          {
-            Effect: 'Allow',
-            Action: [
-              'ec2:CreateNetworkInterface',
-              'ec2:DescribeNetworkInterfaces',
-              'ec2:DeleteNetworkInterface',
-            ],
-            Resource: '*',
+            protocol: '-1',
+            fromPort: 0,
+            toPort: 0,
+            cidrBlocks: ['0.0.0.0/0'],
           },
         ],
-      })),
-    }, { parent: this });
+        tags: { ...tags, Name: `webhook-lambda-sg-${environmentSuffix}` },
+      },
+      { parent: this }
+    );
+
+    // VPC Endpoints for AWS services (to avoid NAT Gateway costs)
+    new aws.ec2.VpcEndpoint(
+      `webhook-s3-endpoint-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        serviceName: 'com.amazonaws.us-east-1.s3',
+        vpcEndpointType: 'Gateway',
+        routeTableIds: [vpc.defaultRouteTableId],
+        tags: { ...tags, Name: `webhook-s3-endpoint-${environmentSuffix}` },
+      },
+      { parent: this }
+    );
+
+    new aws.ec2.VpcEndpoint(
+      `webhook-dynamodb-endpoint-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        serviceName: 'com.amazonaws.us-east-1.dynamodb',
+        vpcEndpointType: 'Gateway',
+        routeTableIds: [vpc.defaultRouteTableId],
+        tags: {
+          ...tags,
+          Name: `webhook-dynamodb-endpoint-${environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
+    // DynamoDB table for storing processed events
+    const webhookTable = new aws.dynamodb.Table(
+      `webhook-events-${environmentSuffix}`,
+      {
+        attributes: [
+          { name: 'eventId', type: 'S' },
+          { name: 'timestamp', type: 'N' },
+        ],
+        hashKey: 'eventId',
+        rangeKey: 'timestamp',
+        billingMode: 'PAY_PER_REQUEST',
+        pointInTimeRecovery: {
+          enabled: true,
+        },
+        streamEnabled: true,
+        streamViewType: 'NEW_AND_OLD_IMAGES',
+        tags: { ...tags, Name: `webhook-events-${environmentSuffix}` },
+      },
+      { parent: this }
+    );
+
+    // S3 bucket for archiving events
+    const archiveBucket = new aws.s3.Bucket(
+      `webhook-archive-${environmentSuffix}`,
+      {
+        versioning: {
+          enabled: true,
+        },
+        serverSideEncryptionConfiguration: {
+          rule: {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'AES256',
+            },
+          },
+        },
+        lifecycleRules: [
+          {
+            enabled: true,
+            transitions: [
+              {
+                days: 30,
+                storageClass: 'GLACIER',
+              },
+            ],
+          },
+        ],
+        tags: { ...tags, Name: `webhook-archive-${environmentSuffix}` },
+      },
+      { parent: this }
+    );
+
+    // Block public access to S3 bucket
+    new aws.s3.BucketPublicAccessBlock(
+      `webhook-archive-public-access-${environmentSuffix}`,
+      {
+        bucket: archiveBucket.id,
+        blockPublicAcls: true,
+        blockPublicPolicy: true,
+        ignorePublicAcls: true,
+        restrictPublicBuckets: true,
+      },
+      { parent: this }
+    );
+
+    // IAM role for webhook receiver Lambda
+    const webhookReceiverRole = new aws.iam.Role(
+      `webhook-receiver-role-${environmentSuffix}`,
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'lambda.amazonaws.com',
+              },
+            },
+          ],
+        }),
+        tags: { ...tags, Name: `webhook-receiver-role-${environmentSuffix}` },
+      },
+      { parent: this }
+    );
+
+    // IAM policy for webhook receiver Lambda
+    const webhookReceiverPolicy = new aws.iam.RolePolicy(
+      `webhook-receiver-policy-${environmentSuffix}`,
+      {
+        role: webhookReceiverRole.id,
+        policy: pulumi.all([webhookTable.arn]).apply(([tableArn]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'logs:CreateLogGroup',
+                  'logs:CreateLogStream',
+                  'logs:PutLogEvents',
+                ],
+                Resource: 'arn:aws:logs:*:*:*',
+              },
+              {
+                Effect: 'Allow',
+                Action: ['dynamodb:PutItem', 'dynamodb:GetItem'],
+                Resource: tableArn,
+              },
+              {
+                Effect: 'Allow',
+                Action: ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'],
+                Resource: '*',
+              },
+              {
+                Effect: 'Allow',
+                Action: [
+                  'ec2:CreateNetworkInterface',
+                  'ec2:DescribeNetworkInterfaces',
+                  'ec2:DeleteNetworkInterface',
+                ],
+                Resource: '*',
+              },
+            ],
+          })
+        ),
+      },
+      { parent: this }
+    );
 
     // CloudWatch log group for webhook receiver
-    const webhookReceiverLogGroup = new aws.cloudwatch.LogGroup(`webhook-receiver-logs-${environmentSuffix}`, {
-      retentionInDays: 7,
-      tags: { ...tags, Name: `webhook-receiver-logs-${environmentSuffix}` },
-    }, { parent: this });
+    const webhookReceiverLogGroup = new aws.cloudwatch.LogGroup(
+      `webhook-receiver-logs-${environmentSuffix}`,
+      {
+        retentionInDays: 7,
+        tags: { ...tags, Name: `webhook-receiver-logs-${environmentSuffix}` },
+      },
+      { parent: this }
+    );
 
     // Webhook receiver Lambda function
-    const webhookReceiverFunction = new aws.lambda.Function(`webhook-receiver-${environmentSuffix}`, {
-      runtime: 'nodejs18.x',
-      handler: 'index.handler',
-      role: webhookReceiverRole.arn,
-      code: new pulumi.asset.AssetArchive({
-        'index.js': new pulumi.asset.StringAsset(`
+    const webhookReceiverFunction = new aws.lambda.Function(
+      `webhook-receiver-${environmentSuffix}`,
+      {
+        runtime: 'nodejs18.x',
+        handler: 'index.handler',
+        role: webhookReceiverRole.arn,
+        code: new pulumi.asset.AssetArchive({
+          'index.js': new pulumi.asset.StringAsset(`
 const AWS = require('aws-sdk');
 const dynamodb = new AWS.DynamoDB.DocumentClient();
 const AWSXRay = require('aws-xray-sdk-core');
@@ -247,107 +310,127 @@ exports.handler = async (event) => {
   }
 };
         `),
-      }),
-      memorySize: 512,
-      timeout: 30,
-      environment: {
-        variables: {
-          TABLE_NAME: webhookTable.name,
-          BUCKET_NAME: archiveBucket.bucket,
+        }),
+        memorySize: 512,
+        timeout: 30,
+        environment: {
+          variables: {
+            TABLE_NAME: webhookTable.name,
+            BUCKET_NAME: archiveBucket.bucket,
+          },
         },
+        vpcConfig: {
+          subnetIds: [privateSubnet1.id, privateSubnet2.id],
+          securityGroupIds: [lambdaSecurityGroup.id],
+        },
+        tracingConfig: {
+          mode: 'Active',
+        },
+        tags: { ...tags, Name: `webhook-receiver-${environmentSuffix}` },
       },
-      vpcConfig: {
-        subnetIds: [privateSubnet1.id, privateSubnet2.id],
-        securityGroupIds: [lambdaSecurityGroup.id],
-      },
-      tracingConfig: {
-        mode: 'Active',
-      },
-      tags: { ...tags, Name: `webhook-receiver-${environmentSuffix}` },
-    }, { parent: this, dependsOn: [webhookReceiverLogGroup, webhookReceiverPolicy] });
+      {
+        parent: this,
+        dependsOn: [webhookReceiverLogGroup, webhookReceiverPolicy],
+      }
+    );
 
     // IAM role for event processor Lambda
-    const eventProcessorRole = new aws.iam.Role(`event-processor-role-${environmentSuffix}`, {
-      assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [{
-          Action: 'sts:AssumeRole',
-          Effect: 'Allow',
-          Principal: {
-            Service: 'lambda.amazonaws.com',
-          },
-        }],
-      }),
-      tags: { ...tags, Name: `event-processor-role-${environmentSuffix}` },
-    }, { parent: this });
+    const eventProcessorRole = new aws.iam.Role(
+      `event-processor-role-${environmentSuffix}`,
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'lambda.amazonaws.com',
+              },
+            },
+          ],
+        }),
+        tags: { ...tags, Name: `event-processor-role-${environmentSuffix}` },
+      },
+      { parent: this }
+    );
 
     // IAM policy for event processor Lambda
-    const eventProcessorPolicy = new aws.iam.RolePolicy(`event-processor-policy-${environmentSuffix}`, {
-      role: eventProcessorRole.id,
-      policy: pulumi.all([webhookTable.arn, webhookTable.streamArn, archiveBucket.arn]).apply(([tableArn, streamArn, bucketArn]) => JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Action: [
-              'logs:CreateLogGroup',
-              'logs:CreateLogStream',
-              'logs:PutLogEvents',
-            ],
-            Resource: 'arn:aws:logs:*:*:*',
-          },
-          {
-            Effect: 'Allow',
-            Action: [
-              'dynamodb:GetRecords',
-              'dynamodb:GetShardIterator',
-              'dynamodb:DescribeStream',
-              'dynamodb:ListStreams',
-              'dynamodb:UpdateItem',
-            ],
-            Resource: [tableArn, streamArn],
-          },
-          {
-            Effect: 'Allow',
-            Action: [
-              's3:PutObject',
-            ],
-            Resource: `${bucketArn}/*`,
-          },
-          {
-            Effect: 'Allow',
-            Action: [
-              'xray:PutTraceSegments',
-              'xray:PutTelemetryRecords',
-            ],
-            Resource: '*',
-          },
-          {
-            Effect: 'Allow',
-            Action: [
-              'ec2:CreateNetworkInterface',
-              'ec2:DescribeNetworkInterfaces',
-              'ec2:DeleteNetworkInterface',
-            ],
-            Resource: '*',
-          },
-        ],
-      })),
-    }, { parent: this });
+    const eventProcessorPolicy = new aws.iam.RolePolicy(
+      `event-processor-policy-${environmentSuffix}`,
+      {
+        role: eventProcessorRole.id,
+        policy: pulumi
+          .all([webhookTable.arn, webhookTable.streamArn, archiveBucket.arn])
+          .apply(([tableArn, streamArn, bucketArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'logs:CreateLogGroup',
+                    'logs:CreateLogStream',
+                    'logs:PutLogEvents',
+                  ],
+                  Resource: 'arn:aws:logs:*:*:*',
+                },
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'dynamodb:GetRecords',
+                    'dynamodb:GetShardIterator',
+                    'dynamodb:DescribeStream',
+                    'dynamodb:ListStreams',
+                    'dynamodb:UpdateItem',
+                  ],
+                  Resource: [tableArn, streamArn],
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['s3:PutObject'],
+                  Resource: `${bucketArn}/*`,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'],
+                  Resource: '*',
+                },
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'ec2:CreateNetworkInterface',
+                    'ec2:DescribeNetworkInterfaces',
+                    'ec2:DeleteNetworkInterface',
+                  ],
+                  Resource: '*',
+                },
+              ],
+            })
+          ),
+      },
+      { parent: this }
+    );
 
     // CloudWatch log group for event processor
-    const eventProcessorLogGroup = new aws.cloudwatch.LogGroup(`event-processor-logs-${environmentSuffix}`, {
-      retentionInDays: 7,
-      tags: { ...tags, Name: `event-processor-logs-${environmentSuffix}` },
-    }, { parent: this });
+    const eventProcessorLogGroup = new aws.cloudwatch.LogGroup(
+      `event-processor-logs-${environmentSuffix}`,
+      {
+        retentionInDays: 7,
+        tags: { ...tags, Name: `event-processor-logs-${environmentSuffix}` },
+      },
+      { parent: this }
+    );
 
     // Event processor Lambda function
-    const eventProcessorFunction = new aws.lambda.Function(`event-processor-${environmentSuffix}`, {
-      runtime: 'nodejs18.x',
-      handler: 'index.handler',
-      role: eventProcessorRole.arn,
-      code: new pulumi.asset.AssetArchive({
-        'index.js': new pulumi.asset.StringAsset(`
+    const eventProcessorFunction = new aws.lambda.Function(
+      `event-processor-${environmentSuffix}`,
+      {
+        runtime: 'nodejs18.x',
+        handler: 'index.handler',
+        role: eventProcessorRole.arn,
+        code: new pulumi.asset.AssetArchive({
+          'index.js': new pulumi.asset.StringAsset(`
 const AWS = require('aws-sdk');
 const dynamodb = new AWS.DynamoDB.DocumentClient();
 const s3 = new AWS.S3();
@@ -398,105 +481,133 @@ exports.handler = async (event) => {
   };
 };
         `),
-      }),
-      memorySize: 512,
-      timeout: 30,
-      environment: {
-        variables: {
-          TABLE_NAME: webhookTable.name,
-          BUCKET_NAME: archiveBucket.bucket,
+        }),
+        memorySize: 512,
+        timeout: 30,
+        environment: {
+          variables: {
+            TABLE_NAME: webhookTable.name,
+            BUCKET_NAME: archiveBucket.bucket,
+          },
         },
+        vpcConfig: {
+          subnetIds: [privateSubnet1.id, privateSubnet2.id],
+          securityGroupIds: [lambdaSecurityGroup.id],
+        },
+        tracingConfig: {
+          mode: 'Active',
+        },
+        tags: { ...tags, Name: `event-processor-${environmentSuffix}` },
       },
-      vpcConfig: {
-        subnetIds: [privateSubnet1.id, privateSubnet2.id],
-        securityGroupIds: [lambdaSecurityGroup.id],
-      },
-      tracingConfig: {
-        mode: 'Active',
-      },
-      tags: { ...tags, Name: `event-processor-${environmentSuffix}` },
-    }, { parent: this, dependsOn: [eventProcessorLogGroup, eventProcessorPolicy] });
+      {
+        parent: this,
+        dependsOn: [eventProcessorLogGroup, eventProcessorPolicy],
+      }
+    );
 
     // Event source mapping for DynamoDB stream
-    const eventSourceMapping = new aws.lambda.EventSourceMapping(`webhook-stream-mapping-${environmentSuffix}`, {
-      eventSourceArn: webhookTable.streamArn,
-      functionName: eventProcessorFunction.arn,
-      startingPosition: 'LATEST',
-      batchSize: 10,
-      maximumRetryAttempts: 3,
-    }, { parent: this });
+    new aws.lambda.EventSourceMapping(
+      `webhook-stream-mapping-${environmentSuffix}`,
+      {
+        eventSourceArn: webhookTable.streamArn,
+        functionName: eventProcessorFunction.arn,
+        startingPosition: 'LATEST',
+        batchSize: 10,
+        maximumRetryAttempts: 3,
+      },
+      { parent: this }
+    );
 
     // IAM role for dead letter handler Lambda
-    const deadLetterHandlerRole = new aws.iam.Role(`dead-letter-handler-role-${environmentSuffix}`, {
-      assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [{
-          Action: 'sts:AssumeRole',
-          Effect: 'Allow',
-          Principal: {
-            Service: 'lambda.amazonaws.com',
-          },
-        }],
-      }),
-      tags: { ...tags, Name: `dead-letter-handler-role-${environmentSuffix}` },
-    }, { parent: this });
+    const deadLetterHandlerRole = new aws.iam.Role(
+      `dead-letter-handler-role-${environmentSuffix}`,
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'lambda.amazonaws.com',
+              },
+            },
+          ],
+        }),
+        tags: {
+          ...tags,
+          Name: `dead-letter-handler-role-${environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
 
     // IAM policy for dead letter handler Lambda
-    const deadLetterHandlerPolicy = new aws.iam.RolePolicy(`dead-letter-handler-policy-${environmentSuffix}`, {
-      role: deadLetterHandlerRole.id,
-      policy: pulumi.all([archiveBucket.arn]).apply(([bucketArn]) => JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Action: [
-              'logs:CreateLogGroup',
-              'logs:CreateLogStream',
-              'logs:PutLogEvents',
+    const deadLetterHandlerPolicy = new aws.iam.RolePolicy(
+      `dead-letter-handler-policy-${environmentSuffix}`,
+      {
+        role: deadLetterHandlerRole.id,
+        policy: pulumi.all([archiveBucket.arn]).apply(([bucketArn]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'logs:CreateLogGroup',
+                  'logs:CreateLogStream',
+                  'logs:PutLogEvents',
+                ],
+                Resource: 'arn:aws:logs:*:*:*',
+              },
+              {
+                Effect: 'Allow',
+                Action: ['s3:PutObject'],
+                Resource: `${bucketArn}/*`,
+              },
+              {
+                Effect: 'Allow',
+                Action: ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'],
+                Resource: '*',
+              },
+              {
+                Effect: 'Allow',
+                Action: [
+                  'ec2:CreateNetworkInterface',
+                  'ec2:DescribeNetworkInterfaces',
+                  'ec2:DeleteNetworkInterface',
+                ],
+                Resource: '*',
+              },
             ],
-            Resource: 'arn:aws:logs:*:*:*',
-          },
-          {
-            Effect: 'Allow',
-            Action: [
-              's3:PutObject',
-            ],
-            Resource: `${bucketArn}/*`,
-          },
-          {
-            Effect: 'Allow',
-            Action: [
-              'xray:PutTraceSegments',
-              'xray:PutTelemetryRecords',
-            ],
-            Resource: '*',
-          },
-          {
-            Effect: 'Allow',
-            Action: [
-              'ec2:CreateNetworkInterface',
-              'ec2:DescribeNetworkInterfaces',
-              'ec2:DeleteNetworkInterface',
-            ],
-            Resource: '*',
-          },
-        ],
-      })),
-    }, { parent: this });
+          })
+        ),
+      },
+      { parent: this }
+    );
 
     // CloudWatch log group for dead letter handler
-    const deadLetterHandlerLogGroup = new aws.cloudwatch.LogGroup(`dead-letter-handler-logs-${environmentSuffix}`, {
-      retentionInDays: 7,
-      tags: { ...tags, Name: `dead-letter-handler-logs-${environmentSuffix}` },
-    }, { parent: this });
+    const deadLetterHandlerLogGroup = new aws.cloudwatch.LogGroup(
+      `dead-letter-handler-logs-${environmentSuffix}`,
+      {
+        retentionInDays: 7,
+        tags: {
+          ...tags,
+          Name: `dead-letter-handler-logs-${environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
 
     // Dead letter handler Lambda function
-    const deadLetterHandlerFunction = new aws.lambda.Function(`dead-letter-handler-${environmentSuffix}`, {
-      runtime: 'nodejs18.x',
-      handler: 'index.handler',
-      role: deadLetterHandlerRole.arn,
-      code: new pulumi.asset.AssetArchive({
-        'index.js': new pulumi.asset.StringAsset(`
+    new aws.lambda.Function(
+      `dead-letter-handler-${environmentSuffix}`,
+      {
+        runtime: 'nodejs18.x',
+        handler: 'index.handler',
+        role: deadLetterHandlerRole.arn,
+        code: new pulumi.asset.AssetArchive({
+          'index.js': new pulumi.asset.StringAsset(`
 const AWS = require('aws-sdk');
 const s3 = new AWS.S3();
 const AWSXRay = require('aws-xray-sdk-core');
@@ -528,149 +639,216 @@ exports.handler = async (event) => {
   }
 };
         `),
-      }),
-      memorySize: 512,
-      timeout: 30,
-      environment: {
-        variables: {
-          BUCKET_NAME: archiveBucket.bucket,
+        }),
+        memorySize: 512,
+        timeout: 30,
+        environment: {
+          variables: {
+            BUCKET_NAME: archiveBucket.bucket,
+          },
         },
+        vpcConfig: {
+          subnetIds: [privateSubnet1.id, privateSubnet2.id],
+          securityGroupIds: [lambdaSecurityGroup.id],
+        },
+        tracingConfig: {
+          mode: 'Active',
+        },
+        tags: { ...tags, Name: `dead-letter-handler-${environmentSuffix}` },
       },
-      vpcConfig: {
-        subnetIds: [privateSubnet1.id, privateSubnet2.id],
-        securityGroupIds: [lambdaSecurityGroup.id],
-      },
-      tracingConfig: {
-        mode: 'Active',
-      },
-      tags: { ...tags, Name: `dead-letter-handler-${environmentSuffix}` },
-    }, { parent: this, dependsOn: [deadLetterHandlerLogGroup, deadLetterHandlerPolicy] });
+      {
+        parent: this,
+        dependsOn: [deadLetterHandlerLogGroup, deadLetterHandlerPolicy],
+      }
+    );
 
     // CloudWatch alarm for webhook receiver errors
-    const webhookReceiverErrorAlarm = new aws.cloudwatch.MetricAlarm(`webhook-receiver-error-alarm-${environmentSuffix}`, {
-      comparisonOperator: 'GreaterThanThreshold',
-      evaluationPeriods: 1,
-      metricName: 'Errors',
-      namespace: 'AWS/Lambda',
-      period: 300,
-      statistic: 'Sum',
-      threshold: 1,
-      alarmDescription: 'Alarm when webhook receiver Lambda error rate exceeds 1%',
-      dimensions: {
-        FunctionName: webhookReceiverFunction.name,
+    new aws.cloudwatch.MetricAlarm(
+      `webhook-receiver-error-alarm-${environmentSuffix}`,
+      {
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 1,
+        metricName: 'Errors',
+        namespace: 'AWS/Lambda',
+        period: 300,
+        statistic: 'Sum',
+        threshold: 1,
+        alarmDescription:
+          'Alarm when webhook receiver Lambda error rate exceeds 1%',
+        dimensions: {
+          FunctionName: webhookReceiverFunction.name,
+        },
+        tags: {
+          ...tags,
+          Name: `webhook-receiver-error-alarm-${environmentSuffix}`,
+        },
       },
-      tags: { ...tags, Name: `webhook-receiver-error-alarm-${environmentSuffix}` },
-    }, { parent: this });
+      { parent: this }
+    );
 
     // CloudWatch alarm for event processor errors
-    const eventProcessorErrorAlarm = new aws.cloudwatch.MetricAlarm(`event-processor-error-alarm-${environmentSuffix}`, {
-      comparisonOperator: 'GreaterThanThreshold',
-      evaluationPeriods: 1,
-      metricName: 'Errors',
-      namespace: 'AWS/Lambda',
-      period: 300,
-      statistic: 'Sum',
-      threshold: 1,
-      alarmDescription: 'Alarm when event processor Lambda error rate exceeds 1%',
-      dimensions: {
-        FunctionName: eventProcessorFunction.name,
+    new aws.cloudwatch.MetricAlarm(
+      `event-processor-error-alarm-${environmentSuffix}`,
+      {
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 1,
+        metricName: 'Errors',
+        namespace: 'AWS/Lambda',
+        period: 300,
+        statistic: 'Sum',
+        threshold: 1,
+        alarmDescription:
+          'Alarm when event processor Lambda error rate exceeds 1%',
+        dimensions: {
+          FunctionName: eventProcessorFunction.name,
+        },
+        tags: {
+          ...tags,
+          Name: `event-processor-error-alarm-${environmentSuffix}`,
+        },
       },
-      tags: { ...tags, Name: `event-processor-error-alarm-${environmentSuffix}` },
-    }, { parent: this });
+      { parent: this }
+    );
 
     // API Gateway REST API
-    const api = new aws.apigateway.RestApi(`webhook-api-${environmentSuffix}`, {
-      description: 'Webhook processing API',
-      endpointConfiguration: {
-        types: 'REGIONAL',
+    const api = new aws.apigateway.RestApi(
+      `webhook-api-${environmentSuffix}`,
+      {
+        description: 'Webhook processing API',
+        endpointConfiguration: {
+          types: 'REGIONAL',
+        },
+        tags: { ...tags, Name: `webhook-api-${environmentSuffix}` },
       },
-      tags: { ...tags, Name: `webhook-api-${environmentSuffix}` },
-    }, { parent: this });
+      { parent: this }
+    );
 
     // API Gateway resource
-    const webhookResource = new aws.apigateway.Resource(`webhook-resource-${environmentSuffix}`, {
-      restApi: api.id,
-      parentId: api.rootResourceId,
-      pathPart: 'webhook',
-    }, { parent: this });
+    const webhookResource = new aws.apigateway.Resource(
+      `webhook-resource-${environmentSuffix}`,
+      {
+        restApi: api.id,
+        parentId: api.rootResourceId,
+        pathPart: 'webhook',
+      },
+      { parent: this }
+    );
 
     // API Gateway method
-    const webhookMethod = new aws.apigateway.Method(`webhook-method-${environmentSuffix}`, {
-      restApi: api.id,
-      resourceId: webhookResource.id,
-      httpMethod: 'POST',
-      authorization: 'NONE',
-      apiKeyRequired: true,
-    }, { parent: this });
+    const webhookMethod = new aws.apigateway.Method(
+      `webhook-method-${environmentSuffix}`,
+      {
+        restApi: api.id,
+        resourceId: webhookResource.id,
+        httpMethod: 'POST',
+        authorization: 'NONE',
+        apiKeyRequired: true,
+      },
+      { parent: this }
+    );
 
     // API Gateway integration
-    const webhookIntegration = new aws.apigateway.Integration(`webhook-integration-${environmentSuffix}`, {
-      restApi: api.id,
-      resourceId: webhookResource.id,
-      httpMethod: webhookMethod.httpMethod,
-      integrationHttpMethod: 'POST',
-      type: 'AWS_PROXY',
-      uri: webhookReceiverFunction.invokeArn,
-    }, { parent: this });
+    const webhookIntegration = new aws.apigateway.Integration(
+      `webhook-integration-${environmentSuffix}`,
+      {
+        restApi: api.id,
+        resourceId: webhookResource.id,
+        httpMethod: webhookMethod.httpMethod,
+        integrationHttpMethod: 'POST',
+        type: 'AWS_PROXY',
+        uri: webhookReceiverFunction.invokeArn,
+      },
+      { parent: this }
+    );
 
     // Lambda permission for API Gateway
-    const apiGatewayInvokePermission = new aws.lambda.Permission(`webhook-api-invoke-permission-${environmentSuffix}`, {
-      action: 'lambda:InvokeFunction',
-      function: webhookReceiverFunction.name,
-      principal: 'apigateway.amazonaws.com',
-      sourceArn: pulumi.interpolate`${api.executionArn}/*/*`,
-    }, { parent: this });
+    new aws.lambda.Permission(
+      `webhook-api-invoke-permission-${environmentSuffix}`,
+      {
+        action: 'lambda:InvokeFunction',
+        function: webhookReceiverFunction.name,
+        principal: 'apigateway.amazonaws.com',
+        sourceArn: pulumi.interpolate`${api.executionArn}/*/*`,
+      },
+      { parent: this }
+    );
 
     // API Gateway deployment
-    const deployment = new aws.apigateway.Deployment(`webhook-deployment-${environmentSuffix}`, {
-      restApi: api.id,
-    }, { parent: this, dependsOn: [webhookIntegration] });
+    const deployment = new aws.apigateway.Deployment(
+      `webhook-deployment-${environmentSuffix}`,
+      {
+        restApi: api.id,
+      },
+      { parent: this, dependsOn: [webhookIntegration] }
+    );
 
     // API Gateway stage with throttling
-    const stage = new aws.apigateway.Stage(`webhook-stage-${environmentSuffix}`, {
-      restApi: api.id,
-      deployment: deployment.id,
-      stageName: 'prod',
-      xrayTracingEnabled: true,
-      tags: { ...tags, Name: `webhook-stage-${environmentSuffix}` },
-    }, { parent: this });
+    const stage = new aws.apigateway.Stage(
+      `webhook-stage-${environmentSuffix}`,
+      {
+        restApi: api.id,
+        deployment: deployment.id,
+        stageName: 'prod',
+        xrayTracingEnabled: true,
+        tags: { ...tags, Name: `webhook-stage-${environmentSuffix}` },
+      },
+      { parent: this }
+    );
 
     // Method settings for throttling
-    const methodSettings = new aws.apigateway.MethodSettings(`webhook-method-settings-${environmentSuffix}`, {
-      restApi: api.id,
-      stageName: stage.stageName,
-      methodPath: '*/*',
-      settings: {
-        throttlingBurstLimit: 10000,
-        throttlingRateLimit: 10000,
+    new aws.apigateway.MethodSettings(
+      `webhook-method-settings-${environmentSuffix}`,
+      {
+        restApi: api.id,
+        stageName: stage.stageName,
+        methodPath: '*/*',
+        settings: {
+          throttlingBurstLimit: 10000,
+          throttlingRateLimit: 10000,
+        },
       },
-    }, { parent: this });
+      { parent: this }
+    );
 
     // API Gateway usage plan
-    const usagePlan = new aws.apigateway.UsagePlan(`webhook-usage-plan-${environmentSuffix}`, {
-      apiStages: [{
-        apiId: api.id,
-        stage: stage.stageName,
-      }],
-      throttleSettings: {
-        burstLimit: 10000,
-        rateLimit: 10000,
+    const usagePlan = new aws.apigateway.UsagePlan(
+      `webhook-usage-plan-${environmentSuffix}`,
+      {
+        apiStages: [
+          {
+            apiId: api.id,
+            stage: stage.stageName,
+          },
+        ],
+        throttleSettings: {
+          burstLimit: 10000,
+          rateLimit: 10000,
+        },
+        tags: { ...tags, Name: `webhook-usage-plan-${environmentSuffix}` },
       },
-      tags: { ...tags, Name: `webhook-usage-plan-${environmentSuffix}` },
-    }, { parent: this });
+      { parent: this }
+    );
 
     // API Gateway API key
-    const apiKey = new aws.apigateway.ApiKey(`webhook-api-key-${environmentSuffix}`, {
-      enabled: true,
-      tags: { ...tags, Name: `webhook-api-key-${environmentSuffix}` },
-    }, { parent: this });
+    const apiKey = new aws.apigateway.ApiKey(
+      `webhook-api-key-${environmentSuffix}`,
+      {
+        enabled: true,
+        tags: { ...tags, Name: `webhook-api-key-${environmentSuffix}` },
+      },
+      { parent: this }
+    );
 
     // API Gateway usage plan key
-    const usagePlanKey = new aws.apigateway.UsagePlanKey(`webhook-usage-plan-key-${environmentSuffix}`, {
-      keyId: apiKey.id,
-      keyType: 'API_KEY',
-      usagePlanId: usagePlan.id,
-    }, { parent: this });
+    new aws.apigateway.UsagePlanKey(
+      `webhook-usage-plan-key-${environmentSuffix}`,
+      {
+        keyId: apiKey.id,
+        keyType: 'API_KEY',
+        usagePlanId: usagePlan.id,
+      },
+      { parent: this }
+    );
 
     // Export outputs
     this.apiUrl = pulumi.interpolate`${api.id}.execute-api.us-east-1.amazonaws.com/${stage.stageName}/webhook`;

@@ -39,9 +39,16 @@ describe('TapStack Integration Tests', () => {
 
   beforeAll(() => {
     // Load stack outputs
-    const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+    const outputsPath = path.join(
+      __dirname,
+      '..',
+      'cfn-outputs',
+      'flat-outputs.json'
+    );
     if (!fs.existsSync(outputsPath)) {
-      throw new Error(`Outputs file not found at ${outputsPath}. Please deploy the stack first.`);
+      throw new Error(
+        `Outputs file not found at ${outputsPath}. Please deploy the stack first.`
+      );
     }
     outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 
@@ -63,7 +70,9 @@ describe('TapStack Integration Tests', () => {
 
     it('should have valid API URL format', () => {
       const apiUrl = outputs.ApiUrl || outputs.apiUrl;
-      expect(apiUrl).toMatch(/^[a-z0-9]+\.execute-api\.[a-z0-9-]+\.amazonaws\.com\/.+$/);
+      expect(apiUrl).toMatch(
+        /^[a-z0-9]+\.execute-api\.[a-z0-9-]+\.amazonaws\.com\/.+$/
+      );
     });
 
     it('should have valid table name', () => {
@@ -194,7 +203,9 @@ describe('TapStack Integration Tests', () => {
       });
 
       const response = await lambdaClient.send(getCommand);
-      expect(response.Configuration?.FunctionName).toContain('webhook-receiver');
+      expect(response.Configuration?.FunctionName).toContain(
+        'webhook-receiver'
+      );
       expect(response.Configuration?.Runtime).toBe('nodejs18.x');
       expect(response.Configuration?.MemorySize).toBe(512);
       expect(response.Configuration?.Timeout).toBe(30);
@@ -220,7 +231,9 @@ describe('TapStack Integration Tests', () => {
       });
 
       const response = await lambdaClient.send(getCommand);
-      expect(response.Configuration?.FunctionName).toContain('dead-letter-handler');
+      expect(response.Configuration?.FunctionName).toContain(
+        'dead-letter-handler'
+      );
       expect(response.Configuration?.Runtime).toBe('nodejs18.x');
     });
   });
@@ -236,7 +249,7 @@ describe('TapStack Integration Tests', () => {
       expect(response.MetricAlarms).toBeDefined();
       expect(response.MetricAlarms!.length).toBeGreaterThan(0);
 
-      const alarm = response.MetricAlarms!.find((a) =>
+      const alarm = response.MetricAlarms!.find(a =>
         a.AlarmName?.includes('webhook-receiver-error-alarm')
       );
       expect(alarm).toBeDefined();
@@ -287,9 +300,13 @@ describe('TapStack Integration Tests', () => {
       const response = await lambdaClient.send(getCommand);
       expect(response.Configuration?.VpcConfig).toBeDefined();
       expect(response.Configuration?.VpcConfig?.SubnetIds).toBeDefined();
-      expect(response.Configuration?.VpcConfig?.SubnetIds!.length).toBeGreaterThan(0);
+      expect(
+        response.Configuration?.VpcConfig?.SubnetIds!.length
+      ).toBeGreaterThan(0);
       expect(response.Configuration?.VpcConfig?.SecurityGroupIds).toBeDefined();
-      expect(response.Configuration?.VpcConfig?.SecurityGroupIds!.length).toBeGreaterThan(0);
+      expect(
+        response.Configuration?.VpcConfig?.SecurityGroupIds!.length
+      ).toBeGreaterThan(0);
     });
 
     it('should have X-Ray tracing enabled on Lambda functions', async () => {

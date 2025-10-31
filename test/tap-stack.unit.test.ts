@@ -6,7 +6,9 @@ describe('TapStack Unit Tests', () => {
 
   // Mock Pulumi runtime
   pulumi.runtime.setMocks({
-    newResource: (args: pulumi.runtime.MockResourceArgs): { id: string; state: any } => {
+    newResource: (
+      args: pulumi.runtime.MockResourceArgs
+    ): { id: string; state: any } => {
       // Return mock ID and state for all resource types
       return {
         id: args.name + '-id',
@@ -20,7 +22,8 @@ describe('TapStack Unit Tests', () => {
           defaultRouteTableId: 'rtb-12345',
           rootResourceId: 'root-id',
           executionArn: 'arn:aws:execute-api:us-east-1:123456789012:api-id',
-          invokeArn: 'arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:123456789012:function:test/invocations',
+          invokeArn:
+            'arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:123456789012:function:test/invocations',
         },
       };
     },
