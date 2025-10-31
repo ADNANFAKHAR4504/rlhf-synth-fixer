@@ -197,6 +197,7 @@ Resources:
           import os
           import boto3
           import time
+          from decimal import Decimal
           # X-Ray tracing is enabled via Lambda configuration and IAM policies
 
           dynamodb = boto3.resource('dynamodb')
@@ -213,7 +214,7 @@ Resources:
                       'transaction_id': transaction_id,
                       'merchant_id': event.get('merchant_id', 'UNKNOWN'), # Required for GSI
                       'customer_id': event.get('customer_id', 'UNKNOWN'),
-                      'amount': event.get('amount', 0.0),
+                      'amount': Decimal(str(event.get('amount', 0))),
                       'payment_method': event.get('payment_method', 'UNKNOWN'),
                       'initial_request': event,
                       'status': 'VALIDATING',
@@ -236,7 +237,7 @@ Resources:
               
               # Validate the transaction (simplified for demo)
               is_valid = True
-              if 'amount' not in event or float(event['amount']) <= 0:
+              if 'amount' not in event or Decimal(str(event['amount'])) <= 0:
                   is_valid = False
               if 'payment_method' not in event:
                   is_valid = False
