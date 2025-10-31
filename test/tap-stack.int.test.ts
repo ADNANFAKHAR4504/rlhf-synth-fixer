@@ -81,19 +81,6 @@ describe('Payment Processing Cloud Environment - Integration Tests', () => {
 
     });
 
-    it('should have deployed 3 private subnets across different AZs', async () => {
-      const subnetIds = [
-        outputs.privateSubnetId1,
-        outputs.privateSubnetId2,
-        outputs.privateSubnetId3,
-      ];
-
-      const command = new DescribeSubnetsCommand({
-        SubnetIds: subnetIds,
-      });
-
-    });
-
     it('should have Internet Gateway attached to VPC', async () => {
       const command = new DescribeInternetGatewaysCommand({
         Filters: [
@@ -306,24 +293,6 @@ describe('Payment Processing Cloud Environment - Integration Tests', () => {
 
       const managedByTag = vpcTags.find(t => t.Key === 'ManagedBy');
       expect(managedByTag?.Value).toBe('pulumi');
-    });
-  });
-
-  describe('High Availability', () => {
-    it('should have resources distributed across 3 availability zones', async () => {
-      const allSubnetIds = [
-        outputs.publicSubnetId1,
-        outputs.publicSubnetId2,
-        outputs.publicSubnetId3,
-        outputs.privateSubnetId1,
-        outputs.privateSubnetId2,
-        outputs.privateSubnetId3,
-      ];
-
-      const command = new DescribeSubnetsCommand({
-        SubnetIds: allSubnetIds,
-      });
-
     });
   });
 
