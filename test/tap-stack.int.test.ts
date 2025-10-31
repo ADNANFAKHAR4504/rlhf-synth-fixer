@@ -1,4 +1,4 @@
-import { CloudFormationClient, DescribeStacksCommand } from '@aws-sdk/client-cloudformation';
+import { CloudFormationClient, DescribeStacksCommand, ListStacksCommand } from '@aws-sdk/client-cloudformation';
 import { HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
 
 interface StackOutputs {
@@ -17,8 +17,9 @@ interface StackOutputs {
 }
 
 describe('TapStack Integration Tests - Infrastructure Validation', () => {
-  const stackName = process.env.STACK_NAME || 'TapStacktest';
   const region = process.env.AWS_REGION || 'us-east-2';
+  let stackName: string;
+  let environmentSuffix: string;
   let stackOutputs: StackOutputs = {};
 
   const cloudFormationClient = new CloudFormationClient({ region });
@@ -26,6 +27,40 @@ describe('TapStack Integration Tests - Infrastructure Validation', () => {
 
   beforeAll(async () => {
     try {
+      // Auto-discover TapStack by listing stacks and finding one with CREATE_COMPLETE status
+      const listCommand = new ListStacksCommand({
+        StackStatusFilter: ['CREATE_COMPLETE', 'UPDATE_COMPLETE']
+      });
+      const listResult = await cloudFormationClient.send(listCommand);
+
+      // Find a stack that starts with 'TapStack' but exclude CDK-generated notification stacks
+      const tapStack = listResult.StackSummaries?.find(stack =>
+        stack.StackName?.startsWith('TapStack') &&
+        !stack.StackName?.includes('Notification') &&
+        !stack.StackName?.includes('dev') && // Exclude CDK dev stacks
+        (stack.StackStatus === 'CREATE_COMPLETE' || stack.StackStatus === 'UPDATE_COMPLETE')
+      );
+
+      if (!tapStack || !tapStack.StackName) {
+        const availableStacks = listResult.StackSummaries
+          ?.filter(s => s.StackName?.startsWith('TapStack'))
+          ?.map(s => `${s.StackName} (${s.StackStatus})`)
+          .join(', ') || 'none';
+        throw new Error(
+          `No suitable TapStack found for integration testing. ` +
+          `Available TapStack stacks: ${availableStacks}. ` +
+          `Please deploy a TapStack with a payment processing infrastructure first.`
+        );
+      }
+
+      stackName = tapStack.StackName;
+      console.log(`🔍 Auto-discovered stack: ${stackName}`);
+
+      // Extract environment suffix from stack name (TapStack -> TapStackpr5509 has suffix pr5509)
+      environmentSuffix = stackName.replace('TapStack', '') || 'test';
+      console.log(`🏷️ Environment suffix: ${environmentSuffix}`);
+
+      // Now get the stack details
       const command = new DescribeStacksCommand({ StackName: stackName });
       const stackResult = await cloudFormationClient.send(command);
       const stack = stackResult.Stacks?.[0];
@@ -126,12 +161,12 @@ describe('TapStack Integration Tests - Infrastructure Validation', () => {
       // Check endpoint format and region
       expect(stackOutputs.AuroraClusterEndpoint).toContain('.cluster-');
       expect(stackOutputs.AuroraReaderEndpoint).toContain('.cluster-ro-');
-      expect(stackOutputs.AuroraClusterEndpoint).toContain('.us-east-2.rds.amazonaws.com');
-      expect(stackOutputs.AuroraReaderEndpoint).toContain('.us-east-2.rds.amazonaws.com');
+      expect(stackOutputs.AuroraClusterEndpoint).toContain(`.${region}.rds.amazonaws.com`);
+      expect(stackOutputs.AuroraReaderEndpoint).toContain(`.${region}.rds.amazonaws.com`);
 
       // Endpoints should reference our stack
-      expect(stackOutputs.AuroraClusterEndpoint).toContain('tapstackpr5509test');
-      expect(stackOutputs.AuroraReaderEndpoint).toContain('tapstackpr5509test');
+      expect(stackOutputs.AuroraClusterEndpoint).toContain(stackName.toLowerCase());
+      expect(stackOutputs.AuroraReaderEndpoint).toContain(stackName.toLowerCase());
     });
 
     test('should have consistent cluster identifiers', () => {
@@ -143,15 +178,15 @@ describe('TapStack Integration Tests - Infrastructure Validation', () => {
       const clusterIdFromReader = readerEndpoint.split('.')[0];
 
       expect(clusterIdFromMain).toBe(clusterIdFromReader);
-      expect(clusterIdFromMain).toContain('tapstackpr5509test');
+      expect(clusterIdFromMain).toContain(stackName.toLowerCase());
     });
   });
 
   describe('⚖️ Load Balancer Infrastructure Validation', () => {
     test('should have ALB with correct DNS configuration', () => {
       expect(stackOutputs.ALBDNSName).toBeDefined();
-      expect(stackOutputs.ALBDNSName).toContain('.us-east-2.elb.amazonaws.com');
-      expect(stackOutputs.ALBDNSName).toContain('alb-pr5509test');
+      expect(stackOutputs.ALBDNSName).toContain(`.${region}.elb.amazonaws.com`);
+      expect(stackOutputs.ALBDNSName).toContain(`alb-${environmentSuffix}`);
     });
 
     test('should be able to reach ALB endpoint', async () => {
@@ -183,8 +218,8 @@ describe('TapStack Integration Tests - Infrastructure Validation', () => {
       expect(stackOutputs.ECSClusterName).toBeDefined();
       expect(stackOutputs.ECSServiceName).toBeDefined();
 
-      expect(stackOutputs.ECSClusterName).toBe('ecs-cluster-pr5509test');
-      expect(stackOutputs.ECSServiceName).toBe('payment-api-service-pr5509test');
+      expect(stackOutputs.ECSClusterName).toBe(`ecs-cluster-${environmentSuffix}`);
+      expect(stackOutputs.ECSServiceName).toBe(`payment-api-service-${environmentSuffix}`);
     });
   });
 
@@ -193,7 +228,7 @@ describe('TapStack Integration Tests - Infrastructure Validation', () => {
       expect(stackOutputs.TransactionLogsBucketName).toBeDefined();
 
       const bucketName = stackOutputs.TransactionLogsBucketName!;
-      expect(bucketName).toMatch(/^dev-transaction-logs-pr5509test-\d+-us-east-2$/);
+      expect(bucketName).toMatch(new RegExp(`^dev-transaction-logs-${environmentSuffix}-\\d+-${region}$`));
 
       // Verify bucket exists by calling HeadBucket
       const command = new HeadBucketCommand({ Bucket: bucketName });
@@ -208,14 +243,17 @@ describe('TapStack Integration Tests - Infrastructure Validation', () => {
     test('should have SNS topic for CloudWatch alarms', () => {
       expect(stackOutputs.AlarmSNSTopicArn).toBeDefined();
 
-      const expectedArn = `arn:aws:sns:us-east-2:656003592164:cloudwatch-alarms-pr5509test`;
+      // Extract account ID from existing ARN for dynamic validation
+      const arnParts = stackOutputs.AlarmSNSTopicArn!.split(':');
+      const accountId = arnParts[4];
+      const expectedArn = `arn:aws:sns:${region}:${accountId}:cloudwatch-alarms-${environmentSuffix}`;
       expect(stackOutputs.AlarmSNSTopicArn).toBe(expectedArn);
     });
   });
 
   describe('🏷️ Multi-Environment Consistency Validation', () => {
     test('should use environment suffix consistently across resources', () => {
-      const expectedSuffix = 'pr5509test';
+      const expectedSuffix = environmentSuffix;
 
       // Check that critical resources include the environment suffix
       expect(stackOutputs.ECSClusterName).toContain(expectedSuffix);
@@ -240,9 +278,9 @@ describe('TapStack Integration Tests - Infrastructure Validation', () => {
 
   describe('🔒 Security and Architecture Validation', () => {
     test('should have proper regional deployment', () => {
-      const expectedRegion = 'us-east-2';
+      const expectedRegion = region;
 
-      // All regional resources should be in us-east-2
+      // All regional resources should be in the discovered region
       expect(stackOutputs.ALBDNSName).toContain(`.${expectedRegion}.elb.amazonaws.com`);
       expect(stackOutputs.AuroraClusterEndpoint).toContain(`.${expectedRegion}.rds.amazonaws.com`);
       expect(stackOutputs.AlarmSNSTopicArn).toContain(`:${expectedRegion}:`);
