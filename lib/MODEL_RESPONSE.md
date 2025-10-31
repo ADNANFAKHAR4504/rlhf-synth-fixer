@@ -11,8 +11,6 @@
    - Security & Compliance Controls
    - Complete CloudFormation YAML
 
-Outlining the reference architecture in ASCII, then I'll work on the resource wiring narrative, and finally I'll develop the complete CloudFormation YAML template that meets all the specified requirements.
-
 Let's start with the reference architecture in ASCII:
 
 ```
