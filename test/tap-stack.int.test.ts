@@ -134,8 +134,8 @@ describe('VPC Infrastructure Integration Tests', () => {
       const response = await ec2Client.send(command);
 
       const azs = response.Subnets!.map(s => s.AvailabilityZone).sort();
-      expect(azs).toContain('ap-southeast-1a');
-      expect(azs).toContain('ap-southeast-1b');
+      expect(azs).toContain('us-east-1a');
+      expect(azs).toContain('us-east-1b');
     });
   });
 
