@@ -23,10 +23,7 @@ import {
   CodePipelineClient,
   GetPipelineCommand,
 } from '@aws-sdk/client-codepipeline';
-import {
-  SNSClient,
-  GetTopicAttributesCommand,
-} from '@aws-sdk/client-sns';
+import { SNSClient, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
 import {
   IAMClient,
   GetRoleCommand,
@@ -36,7 +33,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // Load deployment outputs
-const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+const outputsPath = path.join(
+  __dirname,
+  '..',
+  'cfn-outputs',
+  'flat-outputs.json'
+);
 let outputs: any;
 
 try {
@@ -78,7 +80,9 @@ describe('TapStack Integration Tests - Real AWS Resources', () => {
 
     it('should have lifecycle policy configured', async () => {
       const bucketName = outputs.artifactBucketName;
-      const command = new GetBucketLifecycleConfigurationCommand({ Bucket: bucketName });
+      const command = new GetBucketLifecycleConfigurationCommand({
+        Bucket: bucketName,
+      });
       const response = await s3Client.send(command);
 
       expect(response.Rules).toBeDefined();
@@ -96,7 +100,9 @@ describe('TapStack Integration Tests - Real AWS Resources', () => {
 
       expect(response.ServerSideEncryptionConfiguration).toBeDefined();
       const rule = response.ServerSideEncryptionConfiguration!.Rules![0];
-      expect(rule.ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe('aws:kms');
+      expect(rule.ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe(
+        'aws:kms'
+      );
     });
   });
 
@@ -132,7 +138,9 @@ describe('TapStack Integration Tests - Real AWS Resources', () => {
       const policy = JSON.parse(response.lifecyclePolicyText!);
 
       expect(policy.rules).toBeDefined();
-      const rule = policy.rules.find((r: any) => r.selection?.countNumber === 10);
+      const rule = policy.rules.find(
+        (r: any) => r.selection?.countNumber === 10
+      );
       expect(rule).toBeDefined();
       expect(rule.action.type).toBe('expire');
     });
@@ -200,7 +208,9 @@ describe('TapStack Integration Tests - Real AWS Resources', () => {
       const command = new GetPipelineCommand({ name: pipelineName });
       const response = await codePipelineClient.send(command);
 
-      const approvalStage = response.pipeline!.stages!.find(s => s.name === 'Approval');
+      const approvalStage = response.pipeline!.stages!.find(
+        s => s.name === 'Approval'
+      );
       expect(approvalStage).toBeDefined();
 
       const approvalAction = approvalStage!.actions![0];
@@ -213,12 +223,16 @@ describe('TapStack Integration Tests - Real AWS Resources', () => {
       const command = new GetPipelineCommand({ name: pipelineName });
       const response = await codePipelineClient.send(command);
 
-      const sourceStage = response.pipeline!.stages!.find(s => s.name === 'Source');
+      const sourceStage = response.pipeline!.stages!.find(
+        s => s.name === 'Source'
+      );
       expect(sourceStage).toBeDefined();
 
       const sourceAction = sourceStage!.actions![0];
       expect(sourceAction.actionTypeId!.provider).toBe('S3');
-      expect(sourceAction.configuration!.S3Bucket).toBe(outputs.artifactBucketName);
+      expect(sourceAction.configuration!.S3Bucket).toBe(
+        outputs.artifactBucketName
+      );
     });
   });
 
@@ -233,7 +247,9 @@ describe('TapStack Integration Tests - Real AWS Resources', () => {
       const response = await snsClient.send(command);
 
       expect(response.Attributes).toBeDefined();
-      expect(response.Attributes!.DisplayName).toBe('Pipeline Failure Notifications');
+      expect(response.Attributes!.DisplayName).toBe(
+        'Pipeline Failure Notifications'
+      );
     });
   });
 
@@ -252,7 +268,9 @@ describe('TapStack Integration Tests - Real AWS Resources', () => {
       const policyResponse = await iamClient.send(getPolicyCommand);
 
       expect(policyResponse.PolicyDocument).toBeDefined();
-      const policy = JSON.parse(decodeURIComponent(policyResponse.PolicyDocument!));
+      const policy = JSON.parse(
+        decodeURIComponent(policyResponse.PolicyDocument!)
+      );
 
       // Verify ECR permissions
       const ecrStatement = policy.Statement.find((s: any) =>
@@ -275,7 +293,9 @@ describe('TapStack Integration Tests - Real AWS Resources', () => {
       const policyResponse = await iamClient.send(getPolicyCommand);
 
       expect(policyResponse.PolicyDocument).toBeDefined();
-      const policy = JSON.parse(decodeURIComponent(policyResponse.PolicyDocument!));
+      const policy = JSON.parse(
+        decodeURIComponent(policyResponse.PolicyDocument!)
+      );
 
       // Verify S3 and logs permissions
       const s3Statement = policy.Statement.find((s: any) =>
@@ -298,7 +318,9 @@ describe('TapStack Integration Tests - Real AWS Resources', () => {
       const policyResponse = await iamClient.send(getPolicyCommand);
 
       expect(policyResponse.PolicyDocument).toBeDefined();
-      const policy = JSON.parse(decodeURIComponent(policyResponse.PolicyDocument!));
+      const policy = JSON.parse(
+        decodeURIComponent(policyResponse.PolicyDocument!)
+      );
 
       // Verify CodeBuild and S3 permissions
       const codeBuildStatement = policy.Statement.find((s: any) =>
@@ -336,7 +358,9 @@ describe('TapStack Integration Tests - Real AWS Resources', () => {
       const pipelineCommand = new GetPipelineCommand({ name: pipelineName });
       const pipelineResponse = await codePipelineClient.send(pipelineCommand);
 
-      const sourceStage = pipelineResponse.pipeline!.stages!.find(s => s.name === 'Source');
+      const sourceStage = pipelineResponse.pipeline!.stages!.find(
+        s => s.name === 'Source'
+      );
       const sourceBucket = sourceStage!.actions![0].configuration!.S3Bucket;
       expect(sourceBucket).toBe(outputs.artifactBucketName);
 
@@ -350,10 +374,15 @@ describe('TapStack Integration Tests - Real AWS Resources', () => {
       const pipelineCommand = new GetPipelineCommand({ name: pipelineName });
       const pipelineResponse = await codePipelineClient.send(pipelineCommand);
 
-      const buildStage = pipelineResponse.pipeline!.stages!.find(s => s.name === 'Build');
-      const buildProjectName = buildStage!.actions![0].configuration!.ProjectName;
+      const buildStage = pipelineResponse.pipeline!.stages!.find(
+        s => s.name === 'Build'
+      );
+      const buildProjectName =
+        buildStage!.actions![0].configuration!.ProjectName;
 
-      const buildCommand = new BatchGetProjectsCommand({ names: [buildProjectName] });
+      const buildCommand = new BatchGetProjectsCommand({
+        names: [buildProjectName],
+      });
       const buildResponse = await codeBuildClient.send(buildCommand);
       expect(buildResponse.projects!.length).toBe(1);
     });

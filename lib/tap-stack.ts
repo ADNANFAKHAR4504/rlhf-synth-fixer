@@ -230,35 +230,35 @@ export class TapStack extends pulumi.ComponentResource {
         policy: pulumi
           .all([artifactBucket.arn, region])
           .apply(([bucketArn, regionName]) =>
-          JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Action: [
-                  'logs:CreateLogGroup',
-                  'logs:CreateLogStream',
-                  'logs:PutLogEvents',
-                ],
-                Resource: `arn:aws:logs:${regionName}:*:log-group:/aws/codebuild/*`,
-              },
-              {
-                Effect: 'Allow',
-                Action: ['s3:GetObject', 's3:GetObjectVersion'],
-                Resource: `${bucketArn}/*`,
-              },
-              {
-                Effect: 'Allow',
-                Action: [
-                  'ec2:DescribeVpcs',
-                  'ec2:DescribeSubnets',
-                  'ec2:DescribeSecurityGroups',
-                ],
-                Resource: '*',
-              },
-            ],
-          })
-        ),
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'logs:CreateLogGroup',
+                    'logs:CreateLogStream',
+                    'logs:PutLogEvents',
+                  ],
+                  Resource: `arn:aws:logs:${regionName}:*:log-group:/aws/codebuild/*`,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['s3:GetObject', 's3:GetObjectVersion'],
+                  Resource: `${bucketArn}/*`,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'ec2:DescribeVpcs',
+                    'ec2:DescribeSubnets',
+                    'ec2:DescribeSecurityGroups',
+                  ],
+                  Resource: '*',
+                },
+              ],
+            })
+          ),
       },
       { parent: this }
     );

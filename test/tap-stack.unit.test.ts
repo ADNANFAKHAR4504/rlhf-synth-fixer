@@ -8,7 +8,9 @@ import { TapStack } from '../lib/tap-stack';
 
 // Mock Pulumi to avoid actual resource creation during tests
 pulumi.runtime.setMocks({
-  newResource: (args: pulumi.runtime.MockResourceArgs): { id: string; state: any } => {
+  newResource: (
+    args: pulumi.runtime.MockResourceArgs
+  ): { id: string; state: any } => {
     return {
       id: `${args.name}-id`,
       state: args.inputs,
@@ -44,30 +46,30 @@ describe('TapStack Unit Tests', () => {
       expect(stack).toBeInstanceOf(TapStack);
     });
 
-    it('should export artifact bucket name output', (done) => {
-      stack.artifactBucketName.apply((name) => {
+    it('should export artifact bucket name output', done => {
+      stack.artifactBucketName.apply(name => {
         expect(name).toContain('pipeline-artifacts-test123');
         done();
       });
     });
 
-    it('should export ECR repository URL output', (done) => {
-      stack.ecrRepositoryUrl.apply((url) => {
+    it('should export ECR repository URL output', done => {
+      stack.ecrRepositoryUrl.apply(url => {
         expect(url).toBeDefined();
         expect(typeof url).toBe('string');
         done();
       });
     });
 
-    it('should export pipeline name output', (done) => {
-      stack.pipelineName.apply((name) => {
+    it('should export pipeline name output', done => {
+      stack.pipelineName.apply(name => {
         expect(name).toContain('cicd-pipeline-test123');
         done();
       });
     });
 
-    it('should export SNS topic ARN output', (done) => {
-      stack.snsTopicArn.apply((arn) => {
+    it('should export SNS topic ARN output', done => {
+      stack.snsTopicArn.apply(arn => {
         expect(arn).toBeDefined();
         expect(typeof arn).toBe('string');
         done();
@@ -82,15 +84,15 @@ describe('TapStack Unit Tests', () => {
       defaultStack = new TapStack('default-stack', {});
     });
 
-    it('should use "dev" as default environmentSuffix', (done) => {
-      defaultStack.artifactBucketName.apply((name) => {
+    it('should use "dev" as default environmentSuffix', done => {
+      defaultStack.artifactBucketName.apply(name => {
         expect(name).toContain('pipeline-artifacts-dev');
         done();
       });
     });
 
-    it('should create pipeline with dev suffix', (done) => {
-      defaultStack.pipelineName.apply((name) => {
+    it('should create pipeline with dev suffix', done => {
+      defaultStack.pipelineName.apply(name => {
         expect(name).toContain('cicd-pipeline-dev');
         done();
       });
@@ -106,22 +108,22 @@ describe('TapStack Unit Tests', () => {
       });
     });
 
-    it('should include environmentSuffix in S3 bucket name', (done) => {
-      prodStack.artifactBucketName.apply((name) => {
+    it('should include environmentSuffix in S3 bucket name', done => {
+      prodStack.artifactBucketName.apply(name => {
         expect(name).toMatch(/pipeline-artifacts-prod/);
         done();
       });
     });
 
-    it('should include environmentSuffix in pipeline name', (done) => {
-      prodStack.pipelineName.apply((name) => {
+    it('should include environmentSuffix in pipeline name', done => {
+      prodStack.pipelineName.apply(name => {
         expect(name).toMatch(/cicd-pipeline-prod/);
         done();
       });
     });
 
-    it('should include environmentSuffix in SNS topic ARN', (done) => {
-      prodStack.snsTopicArn.apply((arn) => {
+    it('should include environmentSuffix in SNS topic ARN', done => {
+      prodStack.snsTopicArn.apply(arn => {
         expect(arn).toMatch(/pipeline-notifications-prod/);
         done();
       });
@@ -191,11 +193,11 @@ describe('TapStack Unit Tests', () => {
       expect(emptyStack).toBeDefined();
     });
 
-    it('should handle special characters in environmentSuffix', (done) => {
+    it('should handle special characters in environmentSuffix', done => {
       const specialStack = new TapStack('special-stack', {
         environmentSuffix: 'env-123',
       });
-      specialStack.artifactBucketName.apply((name) => {
+      specialStack.artifactBucketName.apply(name => {
         expect(name).toContain('env-123');
         done();
       });
