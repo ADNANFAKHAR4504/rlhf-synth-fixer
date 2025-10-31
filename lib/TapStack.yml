@@ -798,11 +798,7 @@ Resources:
       EnableLogFileValidation: true
       CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailLogRole.Arn
-      # Use the key ARN to ensure CloudTrail references the exact KMS key resource
-      KMSKeyId:
-        Fn::GetAtt:
-          - MasterKMSKey
-          - Arn
+      KMSKeyId: !Ref MasterKMSKey
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-trail'
