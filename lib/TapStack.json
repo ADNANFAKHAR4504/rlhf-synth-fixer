@@ -22,7 +22,7 @@
     },
     "SubnetId1": {
       "Type": "AWS::EC2::Subnet::Id",
-      "Default": "subnet-072cc9718e5e749bf,subnet-0cf66cd821439cdc7",
+      "Default": "subnet-0cf66cd821439cdc7",
       "Description": "First subnet ID in an existing VPC (must be in different AZ from SubnetId2)"
     },
     "SubnetId2": {
