@@ -17,8 +17,8 @@ Implementation constraints
 
 - Target Terraform version 1.5 or later and AWS provider 5.x.
 - Do not hard-code account IDs or regions. Accept `aws_region` and `environment` via variables or environment variables (TF_VAR_*).
-- Use the Terraform random provider to generate a short string suffix for any resource names that must be globally unique.
-- Pass sensitive configuration (API keys, DB credentials, validation rules) as SSM Parameter Store parameter names in Lambda environment variables; Lambdas should fetch the values at runtime.
+ - Append a short random suffix to names that must be globally unique (for example, via Terraform's `random_string` resource).
+ - Store sensitive configuration (API keys, DB credentials, validation rules) in SSM Parameter Store and pass parameter names to Lambda environment variables; Lambdas should fetch those values at runtime.
 
 Outputs and structure
 
