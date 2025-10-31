@@ -17,7 +17,6 @@
                         "default": "Network Configuration"
                     },
                     "Parameters": [
-                        "VpcId",
                         "SSHAllowedIP"
                     ]
                 },
@@ -47,10 +46,6 @@
             "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
             "AllowedPattern": "^[a-zA-Z0-9]+$",
             "ConstraintDescription": "Must contain only alphanumeric characters"
-        },
-        "VpcId": {
-            "Type": "AWS::EC2::VPC::Id",
-            "Description": "Existing VPC ID for deployment"
         },
         "SSHAllowedIP": {
             "Type": "String",
@@ -168,6 +163,32 @@
         }
     },
     "Resources": {
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "VPC",
+                        "CIDR"
+                    ]
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-VPC"
+                        }
+                    }
+                ]
+            }
+        },
         "EC2KeyPair": {
             "Type": "AWS::EC2::KeyPair",
             "Properties": {
@@ -209,7 +230,7 @@
             "Type": "AWS::EC2::VPCGatewayAttachment",
             "Properties": {
                 "VpcId": {
-                    "Ref": "VpcId"
+                    "Ref": "VPC"
                 },
                 "InternetGatewayId": {
                     "Ref": "InternetGateway"
@@ -323,7 +344,7 @@
             "Type": "AWS::EC2::Subnet",
             "Properties": {
                 "VpcId": {
-                    "Ref": "VpcId"
+                    "Ref": "VPC"
                 },
                 "AvailabilityZone": {
                     "Fn::Select": [
@@ -359,7 +380,7 @@
             "Type": "AWS::EC2::Subnet",
             "Properties": {
                 "VpcId": {
-                    "Ref": "VpcId"
+                    "Ref": "VPC"
                 },
                 "AvailabilityZone": {
                     "Fn::Select": [
@@ -395,7 +416,7 @@
             "Type": "AWS::EC2::Subnet",
             "Properties": {
                 "VpcId": {
-                    "Ref": "VpcId"
+                    "Ref": "VPC"
                 },
                 "AvailabilityZone": {
                     "Fn::Select": [
@@ -430,7 +451,7 @@
             "Type": "AWS::EC2::Subnet",
             "Properties": {
                 "VpcId": {
-                    "Ref": "VpcId"
+                    "Ref": "VPC"
                 },
                 "AvailabilityZone": {
                     "Fn::Select": [
@@ -465,7 +486,7 @@
             "Type": "AWS::EC2::Subnet",
             "Properties": {
                 "VpcId": {
-                    "Ref": "VpcId"
+                    "Ref": "VPC"
                 },
                 "AvailabilityZone": {
                     "Fn::Select": [
@@ -500,7 +521,7 @@
             "Type": "AWS::EC2::Subnet",
             "Properties": {
                 "VpcId": {
-                    "Ref": "VpcId"
+                    "Ref": "VPC"
                 },
                 "AvailabilityZone": {
                     "Fn::Select": [
@@ -535,7 +556,7 @@
             "Type": "AWS::EC2::RouteTable",
             "Properties": {
                 "VpcId": {
-                    "Ref": "VpcId"
+                    "Ref": "VPC"
                 },
                 "Tags": [
                     {
@@ -590,7 +611,7 @@
             "Type": "AWS::EC2::RouteTable",
             "Properties": {
                 "VpcId": {
-                    "Ref": "VpcId"
+                    "Ref": "VPC"
                 },
                 "Tags": [
                     {
@@ -644,7 +665,7 @@
             "Type": "AWS::EC2::RouteTable",
             "Properties": {
                 "VpcId": {
-                    "Ref": "VpcId"
+                    "Ref": "VPC"
                 },
                 "Tags": [
                     {
@@ -687,7 +708,7 @@
             "Properties": {
                 "GroupDescription": "Security group for Application Load Balancer",
                 "VpcId": {
-                    "Ref": "VpcId"
+                    "Ref": "VPC"
                 },
                 "SecurityGroupIngress": [
                     {
@@ -722,7 +743,7 @@
             "Properties": {
                 "GroupDescription": "Security group for web servers",
                 "VpcId": {
-                    "Ref": "VpcId"
+                    "Ref": "VPC"
                 },
                 "SecurityGroupIngress": [
                     {
@@ -761,7 +782,7 @@
             "Properties": {
                 "GroupDescription": "Security group for RDS database",
                 "VpcId": {
-                    "Ref": "VpcId"
+                    "Ref": "VPC"
                 },
                 "SecurityGroupIngress": [
                     {
@@ -1060,7 +1081,7 @@
                 "Port": 80,
                 "Protocol": "HTTP",
                 "VpcId": {
-                    "Ref": "VpcId"
+                    "Ref": "VPC"
                 },
                 "HealthCheckEnabled": true,
                 "HealthCheckIntervalSeconds": 30,
@@ -1593,7 +1614,7 @@
         "VPCId": {
             "Description": "VPC ID",
             "Value": {
-                "Ref": "VpcId"
+                "Ref": "VPC"
             },
             "Export": {
                 "Name": {

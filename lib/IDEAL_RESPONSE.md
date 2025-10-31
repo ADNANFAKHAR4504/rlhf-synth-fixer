@@ -12,7 +12,6 @@ Metadata:
       - Label:
           default: 'Network Configuration'
         Parameters:
-          - VpcId
           - SSHAllowedIP
       - Label:
           default: 'Database Configuration'
@@ -30,10 +29,6 @@ Parameters:
     Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters'
-
-  VpcId:
-    Type: AWS::EC2::VPC::Id
-    Description: Existing VPC ID for deployment
   
   SSHAllowedIP:
     Type: String
@@ -120,6 +115,19 @@ Mappings:
       AccountId: "507241528517"
 
 Resources:
+  # VPC - Create a new VPC
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !FindInMap [SubnetConfig, VPC, CIDR]
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-${EnvironmentSuffix}-VPC'
+
   # EC2 Key Pair - automatically created
   EC2KeyPair:
     Type: AWS::EC2::KeyPair
@@ -144,7 +152,7 @@ Resources:
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
 
   # Elastic IP for NAT Gateway
@@ -213,7 +221,7 @@ Resources:
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
       AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !FindInMap [SubnetConfig, PublicSubnet1, CIDR]
       MapPublicIpOnLaunch: true
@@ -226,7 +234,7 @@ Resources:
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
       AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !FindInMap [SubnetConfig, PublicSubnet2, CIDR]
       MapPublicIpOnLaunch: true
@@ -239,7 +247,7 @@ Resources:
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
       AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !FindInMap [SubnetConfig, PrivateSubnet1, CIDR]
       Tags:
@@ -251,7 +259,7 @@ Resources:
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
       AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !FindInMap [SubnetConfig, PrivateSubnet2, CIDR]
       Tags:
@@ -263,7 +271,7 @@ Resources:
   DatabaseSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
       AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !FindInMap [SubnetConfig, DatabaseSubnet1, CIDR]
       Tags:
@@ -275,7 +283,7 @@ Resources:
   DatabaseSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
       AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !FindInMap [SubnetConfig, DatabaseSubnet2, CIDR]
       Tags:
@@ -288,7 +296,7 @@ Resources:
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
       Tags:
         - Key: Environment
           Value: Production
@@ -318,7 +326,7 @@ Resources:
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
       Tags:
         - Key: Environment
           Value: Production
@@ -347,7 +355,7 @@ Resources:
   DatabaseRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
       Tags:
         - Key: Environment
           Value: Production
@@ -371,7 +379,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for Application Load Balancer
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
@@ -391,7 +399,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for web servers
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
@@ -411,7 +419,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for RDS database
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3306
@@ -569,7 +577,7 @@ Resources:
       Name: !Sub '${AWS::StackName}-TG'
       Port: 80
       Protocol: HTTP
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
       HealthCheckEnabled: true
       HealthCheckIntervalSeconds: 30
       HealthCheckPath: /health
@@ -1032,7 +1040,7 @@ Resources:
 Outputs:
   VPCId:
     Description: VPC ID
-    Value: !Ref VpcId
+    Value: !Ref VPC
     Export:
       Name: !Sub '${EnvironmentSuffix}-VPC'
 

@@ -39,7 +39,6 @@ describe('TapStack CloudFormation Template', () => {
   describe('Parameters', () => {
     test('should define all required parameters', () => {
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
-      expect(template.Parameters.VpcId).toBeDefined();
       expect(template.Parameters.SSHAllowedIP).toBeDefined();
       expect(template.Parameters.DBUsername).toBeDefined();
       expect(template.Parameters.LatestAmiId).toBeDefined();
@@ -47,7 +46,6 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct parameter types and defaults', () => {
       expect(template.Parameters.EnvironmentSuffix).toEqual(expect.objectContaining({ Type: 'String', Default: 'dev' }));
-      expect(template.Parameters.VpcId).toEqual(expect.objectContaining({ Type: 'AWS::EC2::VPC::Id' }));
       expect(template.Parameters.SSHAllowedIP).toEqual(expect.objectContaining({ Type: 'String', Default: '10.0.0.0/32' }));
       expect(template.Parameters.DBUsername).toEqual(expect.objectContaining({ Type: 'String', Default: 'admin', NoEcho: true }));
     });
@@ -127,6 +125,15 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Networking and Security', () => {
+    test('should create a VPC with DNS support', () => {
+      const vpc = template.Resources.VPC;
+      expect(vpc).toBeDefined();
+      expect(vpc.Type).toBe('AWS::EC2::VPC');
+      expect(vpc.Properties.CidrBlock).toEqual({ 'Fn::FindInMap': ['SubnetConfig', 'VPC', 'CIDR'] });
+      expect(vpc.Properties.EnableDnsHostnames).toBe(true);
+      expect(vpc.Properties.EnableDnsSupport).toBe(true);
+    });
+
     test('should create subnets in multiple availability zones', () => {
       expect(template.Resources.PublicSubnet1).toBeDefined();
       expect(template.Resources.PublicSubnet2).toBeDefined();
@@ -134,6 +141,15 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.PrivateSubnet2).toBeDefined();
       expect(template.Resources.DatabaseSubnet1).toBeDefined();
       expect(template.Resources.DatabaseSubnet2).toBeDefined();
+    });
+
+    test('all subnets should reference the created VPC', () => {
+      const publicSubnet1 = template.Resources.PublicSubnet1.Properties;
+      const privateSubnet1 = template.Resources.PrivateSubnet1.Properties;
+      const databaseSubnet1 = template.Resources.DatabaseSubnet1.Properties;
+      expect(publicSubnet1.VpcId).toEqual({ Ref: 'VPC' });
+      expect(privateSubnet1.VpcId).toEqual({ Ref: 'VPC' });
+      expect(databaseSubnet1.VpcId).toEqual({ Ref: 'VPC' });
     });
 
     test('public subnets should have MapPublicIpOnLaunch enabled', () => {
@@ -162,6 +178,15 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.DatabaseRouteTable).toBeDefined();
     });
 
+    test('all route tables should reference the created VPC', () => {
+      const publicRT = template.Resources.PublicRouteTable.Properties;
+      const privateRT = template.Resources.PrivateRouteTable.Properties;
+      const databaseRT = template.Resources.DatabaseRouteTable.Properties;
+      expect(publicRT.VpcId).toEqual({ Ref: 'VPC' });
+      expect(privateRT.VpcId).toEqual({ Ref: 'VPC' });
+      expect(databaseRT.VpcId).toEqual({ Ref: 'VPC' });
+    });
+
     test('public route table should route to Internet Gateway', () => {
       const publicRoute = template.Resources.PublicRoute.Properties;
       expect(publicRoute.RouteTableId).toEqual({ Ref: 'PublicRouteTable' });
@@ -174,6 +199,15 @@ describe('TapStack CloudFormation Template', () => {
       expect(privateRoute.RouteTableId).toEqual({ Ref: 'PrivateRouteTable' });
       expect(privateRoute.DestinationCidrBlock).toBe('0.0.0.0/0');
       expect(privateRoute.NatGatewayId).toEqual({ Ref: 'NATGateway' });
+    });
+
+    test('all security groups should reference the created VPC', () => {
+      const albSG = template.Resources.ALBSecurityGroup.Properties;
+      const webSG = template.Resources.WebServerSecurityGroup.Properties;
+      const dbSG = template.Resources.DatabaseSecurityGroup.Properties;
+      expect(albSG.VpcId).toEqual({ Ref: 'VPC' });
+      expect(webSG.VpcId).toEqual({ Ref: 'VPC' });
+      expect(dbSG.VpcId).toEqual({ Ref: 'VPC' });
     });
 
     test('ALBSecurityGroup should allow HTTP/HTTPS from the internet', () => {
@@ -333,6 +367,11 @@ describe('TapStack CloudFormation Template', () => {
       const lt = template.Resources.EC2LaunchTemplate.Properties.LaunchTemplateData;
       expect(lt.IamInstanceProfile.Arn).toEqual({ 'Fn::GetAtt': ['EC2InstanceProfile', 'Arn'] });
       expect(lt.SecurityGroupIds).toEqual([{ Ref: 'WebServerSecurityGroup' }]);
+    });
+
+    test('ALBTargetGroup should reference the created VPC', () => {
+      const tg = template.Resources.ALBTargetGroup.Properties;
+      expect(tg.VpcId).toEqual({ Ref: 'VPC' });
     });
 
     test('AutoScalingGroup should use private subnets', () => {
@@ -518,7 +557,7 @@ describe('TapStack CloudFormation Template', () => {
     test('VPCId should output VPC ID', () => {
       const output = template.Outputs.VPCId;
       expect(output.Description).toBe('VPC ID');
-      expect(output.Value).toEqual({ Ref: 'VpcId' });
+      expect(output.Value).toEqual({ Ref: 'VPC' });
     });
 
     test('ApplicationLoadBalancerDNS should output ALB DNS name', () => {
