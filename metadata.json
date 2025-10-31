@@ -6,7 +6,7 @@
   "team": "synth",
   "startedAt": "2025-10-30T00:00:00+00:00",
   "subtask": "Application Deployment",
-  "subject_labels": "Web Application Deployment",
+  "subject_labels": ["Web Application Deployment"],
   "po_id": "2x02ti",
   "aws_services": [
     "VPC",
