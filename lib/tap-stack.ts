@@ -88,6 +88,15 @@ export class TapStack extends cdk.Stack {
     });
 
     // DynamoDB single-table design with on-demand + PITR and replication
+    // Choose a DR region that is different from the primary, even when the primary is us-west-2
+    const isPrimaryUsWest2 = new cdk.CfnCondition(
+      this,
+      `IsPrimaryUsWest2-${region}-${environmentSuffix}`,
+      { expression: cdk.Fn.conditionEquals(region, 'us-west-2') }
+    );
+    const drRegion = cdk.Token.asString(
+      cdk.Fn.conditionIf(isPrimaryUsWest2.logicalId, 'us-east-1', 'us-west-2')
+    );
     const table = new dynamodb.Table(
       this,
       `EventsTable-${region}-${environmentSuffix}`,
@@ -98,7 +107,7 @@ export class TapStack extends cdk.Stack {
         sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
         pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
         removalPolicy: cdk.RemovalPolicy.DESTROY,
-        replicationRegions: ['us-west-2'],
+        replicationRegions: [drRegion],
       }
     );
     // GSIs for time-series/analytics
