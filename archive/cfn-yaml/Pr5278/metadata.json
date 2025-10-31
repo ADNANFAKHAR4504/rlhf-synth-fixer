@@ -119,6 +119,11 @@
     "PrivateHostedZone"
   ],
   "training_quality": 9,
-  "background": "Design and deploy a production-grade hub-and-spoke network baseline using AWS Transit Gateway. The stack provisions a hub VPC with NAT and IGW, three spoke VPCs, TGW route tables that restrict spoke-to-spoke communication, interface VPC endpoints for SSM in all VPCs, Route 53 private hosted zone associated to all VPCs, and VPC Flow Logs retained for 7 days. The goal is a reusable, lint-clean CloudFormation template that is region-agnostic (derives AZs via GetAZs) and suitable for rollout in multiple regions, including us-east-1 and ap-southeast-2, with consistent tagging and outputs for integration tests."
+  "background": "Design and deploy a production-grade hub-and-spoke network baseline using AWS Transit Gateway. The stack provisions a hub VPC with NAT and IGW, three spoke VPCs, TGW route tables that restrict spoke-to-spoke communication, interface VPC endpoints for SSM in all VPCs, Route 53 private hosted zone associated to all VPCs, and VPC Flow Logs retained for 7 days. The goal is a reusable, lint-clean CloudFormation template that is region-agnostic (derives AZs via GetAZs) and suitable for rollout in multiple regions, including us-east-1 and ap-southeast-2, with consistent tagging and outputs for integration tests.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
 }
-
