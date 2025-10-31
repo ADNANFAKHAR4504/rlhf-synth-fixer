@@ -54,11 +54,6 @@
       "MinLength": 1,
       "MaxLength": 16
     },
-    "DBPasswordSecretName": {
-      "Type": "String",
-      "Description": "Name of the AWS Secrets Manager secret containing the database master password",
-      "Default": "rds-mysql-password"
-    },
     "ACMCertificateArn": {
       "Type": "String",
       "Description": "ARN of ACM certificate for HTTPS listener",
@@ -93,6 +88,22 @@
     }
   },
   "Resources": {
+    "DBPasswordSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "rds-mysql-password-${EnvironmentSuffix}"
+        },
+        "Description": "RDS MySQL master password for multi-environment stack",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\`'",
+          "RequireEachIncludedType": true
+        }
+      }
+    },
     "VPC": {
       "Type": "AWS::EC2::VPC",
       "Properties": {
@@ -889,7 +900,7 @@
       "DeletionPolicy": "Delete",
       "Properties": {
         "DBInstanceIdentifier": {
-          "Fn::Sub": "db-${EnvironmentSuffix}"
+          "Fn::Sub": "rds-mysql-${EnvironmentSuffix}"
         },
         "Engine": "mysql",
         "EngineVersion": "8.0.39",
@@ -903,7 +914,7 @@
           "Ref": "DBUsername"
         },
         "MasterUserPassword": {
-          "Fn::Sub": "{{resolve:secretsmanager:${DBPasswordSecretName}:SecretString:password}}"
+          "Fn::Sub": "{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}"
         },
         "DBSubnetGroupName": {
           "Ref": "DBSubnetGroup"
@@ -1192,6 +1203,48 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-SNSTopicArn"
+        }
+      }
+    },
+    "RDSPort": {
+      "Description": "RDS database port",
+      "Value": "3306",
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RDSPort"
+        }
+      }
+    },
+    "DBSecretArn": {
+      "Description": "ARN of the database credentials secret",
+      "Value": {
+        "Ref": "DBPasswordSecret"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBSecretArn"
+        }
+      }
+    },
+    "EnvironmentType": {
+      "Description": "Environment type",
+      "Value": {
+        "Ref": "EnvironmentName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentType"
+        }
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix for resource naming",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
         }
       }
     }

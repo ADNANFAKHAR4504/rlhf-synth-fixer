@@ -1,6 +1,6 @@
 # Multi-Environment Infrastructure CloudFormation Template
 
-This CloudFormation template deploys a complete multi-environment web application infrastructure that can be consistently deployed across development, staging, and production AWS accounts using StackSets.
+This CloudFormation template deploys a complete multi-environment web application infrastructure that can be consistently deployed across development, staging, and production AWS accounts using StackSets. This version implements proper secrets management and dynamic integration testing.
 
 ## File: lib/TapStack.json
 

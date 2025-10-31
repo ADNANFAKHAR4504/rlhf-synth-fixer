@@ -39,7 +39,6 @@ describe('TapStack CloudFormation Template - Multi-Environment Infrastructure', 
         'InstanceType',
         'DBInstanceClass',
         'DBUsername',
-        'DBPasswordSecretName',
         'ACMCertificateArn',
         'AlarmEmail'
       ];
@@ -64,10 +63,10 @@ describe('TapStack CloudFormation Template - Multi-Environment Infrastructure', 
       expect(suffixParam.AllowedPattern).toMatch(/^\[a-z0-9-\]/);
     });
 
-    test('DBPasswordSecretName should have correct properties', () => {
-      const dbPasswordSecretParam = template.Parameters.DBPasswordSecretName;
-      expect(dbPasswordSecretParam.Type).toBe('String');
-      expect(dbPasswordSecretParam.Default).toBe('rds-mysql-password');
+    test('DBPasswordSecret resource should exist', () => {
+      const dbPasswordSecret = template.Resources.DBPasswordSecret;
+      expect(dbPasswordSecret).toBeDefined();
+      expect(dbPasswordSecret.Type).toBe('AWS::SecretsManager::Secret');
     });
 
     test('AlarmEmail should have email validation pattern', () => {
@@ -616,12 +615,12 @@ describe('TapStack CloudFormation Template - Multi-Environment Infrastructure', 
   describe('Template Resource Count', () => {
     test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(34);
+      expect(resourceCount).toBe(35);
     });
 
     test('should have correct number of parameters', () => {
       const paramCount = Object.keys(template.Parameters).length;
-      expect(paramCount).toBe(9);
+      expect(paramCount).toBe(8);
     });
 
     test('should have correct number of conditions', () => {
@@ -631,7 +630,7 @@ describe('TapStack CloudFormation Template - Multi-Environment Infrastructure', 
 
     test('should have correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(6);
+      expect(outputCount).toBe(10);
     });
   });
 });
