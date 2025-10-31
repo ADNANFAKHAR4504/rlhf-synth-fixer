@@ -176,10 +176,15 @@ describe("Terraform Integration - Infrastructure Validation (Plan Only)", () => 
       execSync("which terraform", { encoding: "utf-8" });
       terraformAvailable = true;
 
-      // Initialize Terraform if needed
+      // Initialize Terraform if needed (skip backend in tests)
       if (!fs.existsSync(path.join(TERRAFORM_DIR, ".terraform"))) {
         console.log("Initializing Terraform...");
-        execSync("terraform init -backend=false", { cwd: TERRAFORM_DIR });
+        try {
+          execSync("terraform init -backend=false", { cwd: TERRAFORM_DIR, stdio: 'ignore' });
+        } catch (initError) {
+          // If backend=false fails, try with reconfigure
+          execSync("terraform init -reconfigure -backend=false", { cwd: TERRAFORM_DIR, stdio: 'ignore' });
+        }
       }
     } catch (error) {
       console.warn("⚠️  Terraform not found in PATH - skipping plan validation tests");
@@ -793,6 +798,7 @@ describe("Service-Level Integration Tests - Deployed Infrastructure", () => {
           TableName: outputs.dynamodb_table_name,
           Item: {
             id: { S: testId },
+            sort_key: { S: "test-item" },
             data: { S: "integration-test" },
             timestamp: { N: Date.now().toString() },
           },
@@ -981,6 +987,7 @@ describe("Service-Level Integration Tests - Deployed Infrastructure", () => {
             TableName: outputs.dynamodb_table_name,
             Item: {
               id: { S: testId },
+              sort_key: { S: "pipeline-test" },
               data: { S: "e2e-pipeline-test" },
               timestamp: { N: Date.now().toString() },
             },
@@ -997,7 +1004,10 @@ describe("Service-Level Integration Tests - Deployed Infrastructure", () => {
         const getResponse = await ddbClient.send(
           new GetItemCommand({
             TableName: outputs.dynamodb_table_name,
-            Key: { id: { S: testId } },
+            Key: {
+              id: { S: testId },
+              sort_key: { S: "pipeline-test" },
+            },
           })
         );
 
