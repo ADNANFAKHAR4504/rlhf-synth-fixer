@@ -11,5 +11,11 @@
     "Cloud Environment Setup"
   ],
   "training_quality": 9,
-  "aws_services": "Aurora Database, Route 53, Application Load Balancer, Auto Scaling Group, Systems Manager, CloudWatch, VPC, Security Groups, IAM"
+  "aws_services": "Aurora Database, Route 53, Application Load Balancer, Auto Scaling Group, Systems Manager, CloudWatch, VPC, Security Groups, IAM",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "akshat-jain355",
+  "dockerS3Location": ""
 }
