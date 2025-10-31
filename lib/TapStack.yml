@@ -46,9 +46,6 @@ Parameters:
     Default: ''
 
 Conditions:
-  IsProduction: !Equals [!Ref Environment, 'prod']
-  IsStaging: !Equals [!Ref Environment, 'staging']
-  IsDevelopment: !Equals [!Ref Environment, 'dev']
   HasCertificate: !Not [!Equals [!Ref CertificateArn, '']]
 
 Mappings:

@@ -48,30 +48,6 @@
         }
     },
     "Conditions": {
-        "IsProduction": {
-            "Fn::Equals": [
-                {
-                    "Ref": "Environment"
-                },
-                "prod"
-            ]
-        },
-        "IsStaging": {
-            "Fn::Equals": [
-                {
-                    "Ref": "Environment"
-                },
-                "staging"
-            ]
-        },
-        "IsDevelopment": {
-            "Fn::Equals": [
-                {
-                    "Ref": "Environment"
-                },
-                "dev"
-            ]
-        },
         "HasCertificate": {
             "Fn::Not": [
                 {
