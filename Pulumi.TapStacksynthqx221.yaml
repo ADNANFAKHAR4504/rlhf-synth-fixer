@@ -1,0 +1,4 @@
+encryptionsalt: v1:ZpPd4L0goHA=:v1:AqHzYLqS0e9IO/6b:co94u1f7JjOJbSHGdNhU80FFW26IWA==
+config:
+  aws:region: eu-central-1
+  TapStack:env: synthqx221
