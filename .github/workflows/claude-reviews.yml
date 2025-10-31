@@ -1,0 +1,70 @@
+# name: Claude PR Reviews
+
+# on:
+#   pull_request:
+#     types: [opened, synchronize]
+
+# env:
+#   NODE_VERSION: '22.17.0'
+#   # Use PR number for resource isolation, fallback to 'main' for main branch
+#   # Prefix with 'pr' to ensure AWS resource names start with a letter
+#   ENVIRONMENT_SUFFIX: ${{ github.event.number && format('pr{0}', github.event.number) || 'dev' }}
+
+# jobs:
+#   claude-code-action:
+#     runs-on: ubuntu-24.04
+#     permissions:
+#       contents: write
+#       pull-requests: write
+#       issues: write
+#       id-token: write
+#       actions: read
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v4
+#         with:
+#           fetch-depth: 0
+#           ref: refs/pull/${{ github.event.pull_request.number }}/head
+
+#       - name: Check for required documentation files
+#         id: docs-check
+#         run: |
+#           if [ ! -f "lib/PROMPT.md" ]; then
+#             echo "❌ lib/PROMPT.md not found, exiting with failure"
+#             exit 1
+#           fi
+
+#           if [ ! -f "lib/MODEL_RESPONSE.md" ]; then
+#             echo "❌ lib/MODEL_RESPONSE.md not found, exiting with failure"
+#             exit 1
+#           fi
+
+#           if [ ! -f "lib/IDEAL_RESPONSE.md" ]; then
+#             echo "❌ lib/IDEAL_RESPONSE.md not found, exiting with failure"
+#             exit 1
+#           fi
+
+#           if [ ! -f "lib/MODEL_FAILURES.md" ]; then
+#             echo "❌ lib/MODEL_FAILURES.md not found, exiting with failure"
+#             exit 1
+#           fi
+
+#       - name: Run Claude PR Review Action
+#         uses: anthropics/claude-code-action@beta
+#         with:
+#           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+#           github_token: ${{ secrets.GITHUB_TOKEN }}
+#           timeout_minutes: '60'
+#           allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
+#           trigger_phrase: ''
+#           custom_instructions: |
+#             Follow instructions in .claude/agents/iac-code-reviewer.md
+#           # Optional: Restrict network access to specific domains only
+#           # experimental_allowed_domains: |
+#           #   .anthropic.com
+#           #   .github.com
+#           #   api.github.com
+#           #   .githubusercontent.com
+#           #   bun.sh
+#           #   registry.npmjs.org
+#           #   .blob.core.windows.net
