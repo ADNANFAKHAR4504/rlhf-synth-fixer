@@ -394,7 +394,6 @@ Resources:
   PermissionBoundaryPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      ManagedPolicyName: !Sub '${EnvironmentName}-permission-boundary'
       Description: Permission boundary for all NovaCart roles
       PolicyDocument:
         Version: '2012-10-17'
