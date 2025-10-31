@@ -1,5 +1,5 @@
 {
-  "platform": "cfn",
+  "platform": "cloudformation",
   "language": "json",
   "complexity": "hard",
   "turn_type": "single",
@@ -18,5 +18,10 @@
   ],
   "region": "us-east-1",
   "training_quality": 8,
-  "author": "iamarpit-turing"
+  "author": "iamarpit-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
