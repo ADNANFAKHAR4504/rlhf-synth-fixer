@@ -186,7 +186,7 @@ variable "redis_engine_version" {
 variable "aurora_engine_version" {
   description = "Aurora PostgreSQL engine version"
   type        = string
-  default     = "15.3"
+  default     = "16.9"
 }
 
 variable "aurora_instance_class" {
