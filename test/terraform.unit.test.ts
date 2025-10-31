@@ -847,13 +847,12 @@ describe("26. EventBridge & Step Functions", () => {
     expect(stackContent).toMatch(/sfn_definition\s*=\s*jsonencode\(/);
   });
 
-  test("Step Functions logging does NOT use :* suffix on log group ARN", () => {
+  test("Step Functions logging uses required :* suffix on log group ARN", () => {
     const sfnStateMachine = stackContent.match(/resource\s+"aws_sfn_state_machine"\s+"consistency_workflow"[\s\S]*?(?=\nresource\s+"|$)/);
     expect(sfnStateMachine).toBeTruthy();
     expect(sfnStateMachine![0]).toMatch(/logging_configuration\s*\{/);
-    expect(sfnStateMachine![0]).toMatch(/log_destination\s*=\s*aws_cloudwatch_log_group\.sfn_logs\.arn/);
-    // Should NOT have :* suffix
-    expect(sfnStateMachine![0]).not.toMatch(/log_destination\s*=\s*"\$\{aws_cloudwatch_log_group\.sfn_logs\.arn\}:\*"/);
+    // Must have :* suffix as required by AWS Step Functions
+    expect(sfnStateMachine![0]).toMatch(/log_destination\s*=\s*"\$\{aws_cloudwatch_log_group\.sfn_logs\.arn\}:\*"/);
   });
 });
 
