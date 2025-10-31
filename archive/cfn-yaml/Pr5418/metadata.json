@@ -23,5 +23,10 @@
     "CloudWatch"
   ],
   "training_quality": 9,
-  "author": "iamarpit-turing"
+  "author": "iamarpit-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
