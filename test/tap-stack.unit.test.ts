@@ -260,7 +260,7 @@ describe('TapStack Unit Tests', () => {
   describe('VPC Flow Logs', () => {
     test('CloudWatch Log Group is created for Flow Logs', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: `/aws/vpc/flowlogs-${environmentSuffix}`,
+        LogGroupName: `/aws/vpc/flow-logs-group-${environmentSuffix}`,
         RetentionInDays: 30,
       });
     });
