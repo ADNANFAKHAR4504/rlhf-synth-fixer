@@ -733,6 +733,15 @@ Resources:
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: s3:PutObject
+            Resource: !Sub '${CloudTrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+          - Sid: AWSCloudTrailWriteService
+            Effect: Allow
+            Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
             Resource: !Sub '${CloudTrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
