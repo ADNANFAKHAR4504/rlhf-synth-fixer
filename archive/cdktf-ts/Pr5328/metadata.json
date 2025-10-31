@@ -1,0 +1,21 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000696",
+  "team": "1",
+  "startedAt": "2025-10-29T13:06:07.574Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "training_quality": 9,
+  "aws_services": "IAM, KMS, S3, RDS, EBS, AWS Config, Secrets Manager, CloudWatch, CloudFormation",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "akshat-jain355",
+  "dockerS3Location": ""
+}
