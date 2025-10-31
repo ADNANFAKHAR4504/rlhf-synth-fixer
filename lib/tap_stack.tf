@@ -1451,34 +1451,16 @@ resource "aws_cloudwatch_metric_alarm" "dms_task_failed" {
 # LAMBDA FUNCTION FOR FAILOVER ORCHESTRATION (INLINE CODE)
 # ============================================================================
 
-resource "aws_lambda_function" "failover_orchestrator" {
-  provider         = aws.us_east_1
-  function_name    = local.lambda_function_name
-  role            = aws_iam_role.lambda_failover.arn
-  handler         = "index.lambda_handler"
-  runtime         = "python3.11"
-  timeout         = 300
-  memory_size     = 512
-  
-  environment {
-    variables = {
-      GLOBAL_CLUSTER_ID = aws_rds_global_cluster.aurora_global.id
-      PRIMARY_REGION    = var.primary_region
-      SECONDARY_REGION  = var.secondary_region
-      ROUTE53_ZONE_ID   = aws_route53_zone.main.zone_id
-      SNS_TOPIC_ARN     = aws_sns_topic.alarms.arn
-      DB_ENDPOINT_NAME  = "db.${local.route53_zone_name}"
-    }
-  }
-  
-  # Inline Lambda function code
-  filename = null
-  source_code_hash = null
-  
-  # Using inline_code through the code parameter with base64 encoding
-  # This is the actual Lambda function code that handles failover orchestration
-  
-  inline_code = <<EOF
+# ============================================================================
+# LAMBDA INLINE CODE (Archive Files)
+# ============================================================================
+
+data "archive_file" "failover_orchestrator_code" {
+  type        = "zip"
+  output_path = "/tmp/failover_orchestrator.zip"
+
+  source {
+    content = <<-EOT
 import boto3
 import json
 import os
@@ -1490,40 +1472,33 @@ def lambda_handler(event, context):
     Orchestrates Aurora Global Database failover with zero downtime.
     Handles both planned and unplanned failover scenarios.
     """
-    
-    # Initialize AWS clients
     rds_primary = boto3.client('rds', region_name=os.environ['PRIMARY_REGION'])
     rds_secondary = boto3.client('rds', region_name=os.environ['SECONDARY_REGION'])
     route53 = boto3.client('route53')
     sns = boto3.client('sns')
     cloudwatch = boto3.client('cloudwatch')
-    
     global_cluster_id = os.environ['GLOBAL_CLUSTER_ID']
     zone_id = os.environ['ROUTE53_ZONE_ID']
     sns_topic = os.environ['SNS_TOPIC_ARN']
     db_endpoint = os.environ['DB_ENDPOINT_NAME']
-    
+
     try:
-        # Log start of failover process
         print(f"Starting failover orchestration at {datetime.utcnow()}")
-        
-        # Step 1: Check current cluster status
+
         global_cluster = rds_primary.describe_global_clusters(
             GlobalClusterIdentifier=global_cluster_id
         )['GlobalClusters'][0]
-        
         current_primary = None
         current_secondary = None
-        
         for member in global_cluster['GlobalClusterMembers']:
             if member['IsWriter']:
                 current_primary = member['DBClusterArn']
             else:
                 current_secondary = member['DBClusterArn']
-        
+
         print(f"Current primary: {current_primary}")
         print(f"Current secondary: {current_secondary}")
-        
+
         # Step 2: Check replication lag before failover
         lag_metric = cloudwatch.get_metric_statistics(
             Namespace='AWS/RDS',
@@ -1536,69 +1511,51 @@ def lambda_handler(event, context):
             Period=60,
             Statistics=['Maximum']
         )
-        
         if lag_metric['Datapoints']:
             max_lag = max([dp['Maximum'] for dp in lag_metric['Datapoints']])
-            if max_lag > 1000:  # More than 1 second
+            if max_lag > 1000:
                 message = f"Warning: Replication lag is {max_lag}ms. Proceeding with caution."
                 print(message)
                 sns.publish(TopicArn=sns_topic, Subject="Failover Warning", Message=message)
-        
-        # Step 3: Initiate failover
+
         print("Initiating global cluster failover...")
-        
-        # Determine target region based on current primary
         if os.environ['PRIMARY_REGION'] in current_primary:
             target_region = os.environ['SECONDARY_REGION']
             new_primary_cluster = current_secondary.split(':')[-1]
         else:
             target_region = os.environ['PRIMARY_REGION']
             new_primary_cluster = current_primary.split(':')[-1]
-        
-        # Perform the failover
+
         response = rds_primary.failover_global_cluster(
             GlobalClusterIdentifier=global_cluster_id,
             TargetDbClusterIdentifier=new_primary_cluster
         )
-        
+
         print(f"Failover initiated: {response}")
-        
-        # Step 4: Wait for failover to complete
-        max_wait_time = 300  # 5 minutes
+        max_wait_time = 300
         start_time = time.time()
         failover_complete = False
-        
         while not failover_complete and (time.time() - start_time) < max_wait_time:
             time.sleep(10)
-            
-            # Check cluster status
             cluster_status = rds_primary.describe_global_clusters(
                 GlobalClusterIdentifier=global_cluster_id
             )['GlobalClusters'][0]
-            
             if cluster_status['Status'] == 'available':
-                # Verify writer has changed
                 for member in cluster_status['GlobalClusterMembers']:
                     if member['IsWriter'] and member['DBClusterArn'] == current_secondary:
                         failover_complete = True
                         break
-            
             print(f"Waiting for failover... Status: {cluster_status['Status']}")
-        
+
         if not failover_complete:
             raise Exception("Failover did not complete within expected time")
-        
-        # Step 5: Update Route53 DNS records
+
         print("Updating Route53 DNS records...")
-        
-        # Get new primary endpoint
         new_primary_info = rds_secondary.describe_db_clusters(
             DBClusterIdentifier=new_primary_cluster
         )['DBClusters'][0]
-        
         new_endpoint = new_primary_info['Endpoint']
-        
-        # Update weighted routing
+
         change_batch = {
             'Changes': [
                 {
@@ -1614,36 +1571,30 @@ def lambda_handler(event, context):
                 }
             ]
         }
-        
         route53_response = route53.change_resource_record_sets(
             HostedZoneId=zone_id,
             ChangeBatch=change_batch
         )
-        
         print(f"Route53 update: {route53_response}")
-        
-        # Step 6: Send completion notification
-        completion_message = f"""
+
+        completion_message = f'''
         Aurora Global Database Failover Completed Successfully
-        
+
         Time: {datetime.utcnow()}
         New Primary Region: {target_region}
         New Primary Endpoint: {new_endpoint}
         Total Duration: {int(time.time() - start_time)} seconds
-        
+
         Action Required:
         1. Verify application connectivity
         2. Check replication status
         3. Update any hardcoded endpoints
-        """
-        
+        '''
         sns.publish(
             TopicArn=sns_topic,
             Subject="Aurora Failover Completed",
             Message=completion_message
         )
-        
-        # Step 7: Put custom metrics
         cloudwatch.put_metric_data(
             Namespace='CustomApp/Database',
             MetricData=[
@@ -1661,7 +1612,7 @@ def lambda_handler(event, context):
                 }
             ]
         )
-        
+
         return {
             'statusCode': 200,
             'body': json.dumps({
@@ -1670,19 +1621,15 @@ def lambda_handler(event, context):
                 'duration_seconds': int(time.time() - start_time)
             })
         }
-        
+
     except Exception as e:
         error_message = f"Failover failed: {str(e)}"
         print(error_message)
-        
-        # Send failure notification
         sns.publish(
             TopicArn=sns_topic,
             Subject="Aurora Failover Failed",
             Message=error_message
         )
-        
-        # Put failure metric
         cloudwatch.put_metric_data(
             Namespace='CustomApp/Database',
             MetricData=[
@@ -1694,10 +1641,35 @@ def lambda_handler(event, context):
                 }
             ]
         )
-        
         raise e
-EOF
-  
+EOT
+    filename = "index.py"
+  }
+}
+
+# Lambda Function - Failover Orchestrator
+resource "aws_lambda_function" "failover_orchestrator" {
+  function_name = local.lambda_function_name
+  role          = aws_iam_role.lambda_failover.arn
+  handler       = "index.lambda_handler"
+  runtime       = "python3.11"
+  timeout       = 300
+  memory_size   = 512
+
+  filename         = data.archive_file.failover_orchestrator_code.output_path
+  source_code_hash = data.archive_file.failover_orchestrator_code.output_base64sha256
+
+  environment {
+    variables = {
+      GLOBAL_CLUSTER_ID = aws_rds_global_cluster.aurora_global.id
+      PRIMARY_REGION    = var.primary_region
+      SECONDARY_REGION  = var.secondary_region
+      ROUTE53_ZONE_ID   = aws_route53_zone.main.zone_id
+      SNS_TOPIC_ARN     = aws_sns_topic.alarms.arn
+      DB_ENDPOINT_NAME  = "db.${local.route53_zone_name}"
+    }
+  }
+
   tags = merge(local.common_tags, {
     Name = local.lambda_function_name
     Type = "Failover Orchestrator"
