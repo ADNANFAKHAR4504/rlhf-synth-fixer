@@ -193,7 +193,7 @@ describe('TapStack Integration Tests - Infrastructure Validation', () => {
       expect(stackOutputs.TransactionLogsBucketName).toBeDefined();
 
       const bucketName = stackOutputs.TransactionLogsBucketName!;
-      expect(bucketName).toBe('dev-transaction-logs-pr5509test');
+      expect(bucketName).toMatch(/^dev-transaction-logs-pr5509test-\d+-us-east-2$/);
 
       // Verify bucket exists by calling HeadBucket
       const command = new HeadBucketCommand({ Bucket: bucketName });
@@ -231,7 +231,7 @@ describe('TapStack Integration Tests - Infrastructure Validation', () => {
       expect(stackOutputs.ECSServiceName).toMatch(/^payment-api-service-.+$/);
 
       // Storage should follow pattern
-      expect(stackOutputs.TransactionLogsBucketName).toMatch(/^dev-transaction-logs-.+$/);
+      expect(stackOutputs.TransactionLogsBucketName).toMatch(/^dev-transaction-logs-.+-\d+-us-east-2$/);
 
       // Monitoring should follow pattern
       expect(stackOutputs.AlarmSNSTopicArn).toMatch(/^arn:aws:sns:.+:cloudwatch-alarms-.+$/);

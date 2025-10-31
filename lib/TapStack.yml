@@ -451,7 +451,7 @@ Resources:
   TransactionLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub ${Environment}-transaction-logs-${EnvironmentSuffix}
+      BucketName: !Sub ${Environment}-transaction-logs-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
