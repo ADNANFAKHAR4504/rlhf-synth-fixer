@@ -14,7 +14,7 @@ The infrastructure includes:
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 /**
  * tap-stack.ts
  *
@@ -517,7 +517,7 @@ yum install -y amazon-cloudwatch-agent
 
 ## File: bin/tap.ts
 
-```typescript
+```ts
 /**
  * Pulumi application entry point for the highly available web application
  * with auto-scaling and failure recovery.
