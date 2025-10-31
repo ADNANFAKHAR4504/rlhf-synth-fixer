@@ -307,11 +307,29 @@ terraform {
         const comparePlan = plans[envNames[i]];
         const compareTypes = Array.from(comparePlan.keys()).sort();
 
-        // Check same resource types exist
-        expect(compareTypes).toEqual(baseTypes);
+        // These resources can legitimately vary across environments:
+        // - Neptune: Optional graph database (enabled via variable)
+        // - Provisioned concurrency: Typically only in prod for performance
+        const allowedVariableResources = [
+          "aws_neptune",
+          "aws_lambda_provisioned_concurrency_config",
+        ];
 
-        // Check same counts (accounting for conditional resources like Neptune)
-        for (const type of baseTypes) {
+        const isAllowedToVary = (type: string) =>
+          allowedVariableResources.some(prefix => type.includes(prefix));
+
+        // Filter out allowed variable resources for type comparison
+        const baseTypesFiltered = baseTypes.filter(t => !isAllowedToVary(t));
+        const compareTypesFiltered = compareTypes.filter(t => !isAllowedToVary(t));
+
+        // Check same resource types exist (excluding allowed variable resources)
+        expect(compareTypesFiltered).toEqual(baseTypesFiltered);
+
+        // Get all unique types from both environments
+        const allTypes = new Set([...baseTypes, ...compareTypes]);
+
+        // Check same counts for all resource types
+        for (const type of allTypes) {
           const baseCount = basePlan.get(type) || 0;
           const compareCount = comparePlan.get(type) || 0;
 
@@ -323,8 +341,8 @@ terraform {
             );
           }
 
-          // Neptune and provisioned concurrency resources can vary
-          if (!type.includes("neptune") && !type.includes("provisioned_concurrency")) {
+          // Only assert equality for non-variable resources
+          if (!isAllowedToVary(type)) {
             expect(compareCount).toBe(baseCount);
           }
         }
