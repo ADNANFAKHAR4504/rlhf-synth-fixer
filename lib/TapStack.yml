@@ -141,6 +141,18 @@ Resources:
                 aws:SourceAccount: !Ref 'AWS::AccountId'
               ArnLike:
                 aws:SourceArn: !Sub 'arn:aws:cloudtrail:*:${AWS::AccountId}:trail/*'
+          - Sid: Allow CloudWatch Logs encryption
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+              - kms:CreateGrant
+            Resource: '*'
 
   MasterKMSKeyAlias:
     Type: AWS::KMS::Alias
