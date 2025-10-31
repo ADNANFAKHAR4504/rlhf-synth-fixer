@@ -6,14 +6,8 @@
   "po_id": "fh1si",
   "team": "synth",
   "startedAt": "2025-10-30T13:33:56+05:30",
-  "subtask": "Multi-Environment Consistency & Replication",
-  "subject_labels": [
-    "aws",
-    "infrastructure",
-    "multi-environment",
-    "s3",
-    "dynamodb"
-  ],
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": "Multi-Environment Consistency and Replication",
   "aws_services": [
     "s3",
     "dynamodb",
