@@ -180,11 +180,7 @@ Parameters:
     Type: Number
     Default: 30
     Description: CloudWatch Logs retention period in days
-```
 
-Now, let's define the resources starting with the IAM roles for the Lambda functions:
-
-```yaml
 Resources:
   # IAM Roles
   ValidatorLambdaRole:
