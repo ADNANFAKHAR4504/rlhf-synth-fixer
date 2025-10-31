@@ -729,7 +729,7 @@ resource "aws_rds_cluster" "secondary" {
   preferred_backup_window         = "03:00-04:00"
   preferred_maintenance_window    = "sun:04:00-sun:05:00"
   enabled_cloudwatch_logs_exports = ["postgresql"]
-  deletion_protection             = true
+  deletion_protection             = false
   skip_final_snapshot             = false
   final_snapshot_identifier       = "${local.db_cluster_identifier}-secondary-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
   
