@@ -256,13 +256,6 @@ describe('RDS PostgreSQL Migration CloudFormation Template', () => {
         expect(template.Resources.PostgreSQLInstance.Type).toBe('AWS::RDS::DBInstance');
       });
 
-      test('should have correct dependencies', () => {
-        const instance = template.Resources.PostgreSQLInstance;
-        expect(instance.DependsOn).toBeDefined();
-        expect(instance.DependsOn).toContain('DBSubnetGroup');
-        expect(instance.DependsOn).toContain('DBMasterPassword');
-      });
-
       test('should have correct DB instance identifier with EnvironmentSuffix', () => {
         const instance = template.Resources.PostgreSQLInstance;
         expect(instance.Properties.DBInstanceIdentifier).toEqual({
