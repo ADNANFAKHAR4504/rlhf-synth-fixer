@@ -13,7 +13,7 @@ describe('TapStack (default props)', () => {
     app = new cdk.App();
     stack = new TapStack(app, 'TestTapStackDefault', {
       environmentSuffix,
-      env: { account: '111111111111', region: 'us-east-1' },
+      env: { account: '111111111111', region: 'us-west-2' },
       jwtIssuer: 'https://issuer.example.com',
       jwtAudience: ['aud-1'],
     });
@@ -114,7 +114,7 @@ describe('TapStack (with alert email and JWT authorizer)', () => {
       alertEmail: 'alerts@example.com',
       jwtIssuer: 'https://issuer.example.com',
       jwtAudience: ['aud-1'],
-      env: { account: '111111111111', region: 'us-east-1' },
+      env: { account: '111111111111', region: 'us-west-2' },
     });
     template = Template.fromStack(stack);
   });
@@ -155,6 +155,46 @@ describe('TapStack (replicationRegions handling)', () => {
     const template = Template.fromStack(stack);
     template.resourceCountIs('AWS::DynamoDB::Table', 1);
   });
+
+  test('defaults replica selection when not provided (us-east-1 primary)', () => {
+    const prev = process.env.CDK_DEFAULT_REGION;
+    process.env.CDK_DEFAULT_REGION = 'us-east-1';
+    try {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestTapStackReplicaDefaultEast', {
+        environmentSuffix,
+        env: { account: '111111111111', region: 'us-east-1' },
+      });
+      const template = Template.fromStack(stack);
+      template.resourceCountIs('AWS::DynamoDB::Table', 1);
+    } finally {
+      if (prev === undefined) {
+        delete process.env.CDK_DEFAULT_REGION;
+      } else {
+        process.env.CDK_DEFAULT_REGION = prev;
+      }
+    }
+  });
+
+  test('falls back to stack region when CDK_DEFAULT_REGION is not set', () => {
+    const prev = process.env.CDK_DEFAULT_REGION;
+    delete process.env.CDK_DEFAULT_REGION;
+    try {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestTapStackReplicaNoEnv', {
+        environmentSuffix,
+        env: { account: '111111111111', region: 'us-west-2' },
+      });
+      const template = Template.fromStack(stack);
+      template.resourceCountIs('AWS::DynamoDB::Table', 1);
+    } finally {
+      if (prev === undefined) {
+        delete process.env.CDK_DEFAULT_REGION;
+      } else {
+        process.env.CDK_DEFAULT_REGION = prev;
+      }
+    }
+  });
 });
 
 describe('TapStack (context env suffix branch)', () => {
@@ -162,7 +202,7 @@ describe('TapStack (context env suffix branch)', () => {
     const app = new cdk.App();
     app.node.setContext('environmentSuffix', 'ctx');
     const stack = new TapStack(app, 'TestTapStackCtx', {
-      env: { account: '111111111111', region: 'us-east-1' },
+      env: { account: '111111111111', region: 'us-west-2' },
       jwtIssuer: 'https://issuer.example.com',
       jwtAudience: ['aud-1'],
     });
@@ -175,7 +215,7 @@ describe('TapStack (default env suffix branch)', () => {
   test('falls back to default when neither prop nor context provided', () => {
     const app = new cdk.App();
     const stack = new TapStack(app, 'TestTapStackDefaultSuffix', {
-      env: { account: '111111111111', region: 'us-east-1' },
+      env: { account: '111111111111', region: 'us-west-2' },
       jwtIssuer: 'https://issuer.example.com',
       jwtAudience: ['aud-1'],
     });
@@ -189,7 +229,7 @@ describe('TapStack (WAF optional association)', () => {
     const app = new cdk.App();
     const stack = new TapStack(app, 'TestTapStackWaf', {
       environmentSuffix,
-      env: { account: '111111111111', region: 'us-east-1' },
+      env: { account: '111111111111', region: 'us-west-2' },
       enableWafForHttpApi: true,
     });
     const template = Template.fromStack(stack);
