@@ -673,6 +673,7 @@ resource "aws_rds_cluster" "primary" {
   lifecycle {
     ignore_changes = [master_password]
   }
+  depends_on = [aws_rds_global_cluster.aurora_global]
 }
 
 # Aurora Instance - Primary Region (Writer)
@@ -687,7 +688,7 @@ resource "aws_rds_cluster_instance" "primary_writer" {
   performance_insights_enabled = true
   monitoring_interval          = 60
   monitoring_role_arn          = aws_iam_role.aurora_monitoring.arn
-  
+  depends_on = [aws_rds_cluster.primary]
   tags = merge(local.common_tags, {
     Name = "${local.db_cluster_identifier}-primary-writer-slmr"
     Role = "Writer"
@@ -716,7 +717,7 @@ resource "aws_rds_cluster_instance" "primary_reader" {
 # Aurora Cluster - Secondary Region
 resource "aws_rds_cluster" "secondary" {
   provider                        = aws.us_west_2
-  cluster_identifier              = "${local.db_cluster_identifier}-secondary"
+  cluster_identifier              = "${local.db_cluster_identifier}-secondary-n"
   engine                          = "aurora-postgresql"
   engine_version                  = var.aurora_engine_version
   global_cluster_identifier       = aws_rds_global_cluster.aurora_global.global_cluster_identifier
@@ -733,7 +734,7 @@ resource "aws_rds_cluster" "secondary" {
   final_snapshot_identifier       = "${local.db_cluster_identifier}-secondary-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
   
   tags = merge(local.common_tags, {
-    Name   = "${local.db_cluster_identifier}-secondary"
+    Name   = "${local.db_cluster_identifier}-secondary-n"
     Region = var.secondary_region
     Role   = "Secondary"
   })
@@ -754,7 +755,7 @@ resource "aws_rds_cluster_instance" "secondary" {
   performance_insights_enabled = true
   monitoring_interval          = 60
   monitoring_role_arn          = aws_iam_role.aurora_monitoring_secondary.arn
-  
+  depends_on = [aws_rds_cluster.secondary]
   tags = merge(local.common_tags, {
     Name = "${local.db_cluster_identifier}-secondary-${count.index + 1}-slmr"
     Role = count.index == 0 ? "Secondary-Writer" : "Secondary-Reader"
