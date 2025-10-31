@@ -1402,7 +1402,6 @@ export AWS_ACCESS_KEY_ID=$(cat mfa-session.json | jq -r '.Credentials.AccessKeyI
 export AWS_SECRET_ACCESS_KEY=$(cat mfa-session.json | jq -r '.Credentials.SecretAccessKey')
 export AWS_SESSION_TOKEN=$(cat mfa-session.json | jq -r '.Credentials.SessionToken')
 
-# Test privileged operation with MFA (should succeed)
 aws ec2 describe-instances
 ```
 
