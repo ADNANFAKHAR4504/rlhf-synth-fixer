@@ -1,0 +1,37 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "team": "synth",
+  "startedAt": "2025-10-28T19:47:23+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "po_id": "9655144176",
+  "turn_type": "single",
+  "aws_services": [
+    "VPC",
+    "API Gateway",
+    "RDS Aurora PostgreSQL",
+    "EFS",
+    "ECS Fargate",
+    "ElastiCache Redis",
+    "Kinesis Data Streams",
+    "AWS Secrets Manager",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "Security Groups"
+  ],
+  "region": "sa-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

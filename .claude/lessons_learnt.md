@@ -9,12 +9,12 @@ This document contains common patterns, failures, and solutions discovered durin
 
 ### CSV File Corruption Prevention (CRITICAL)
 
-**Symptom**: tasks.csv file gets corrupted with only current task's data, all other task rows are lost/overwritten
+**Symptom**: .claude/tasks.csv file gets corrupted with only current task's data, all other task rows are lost/overwritten
 
 **Root Cause**: Not preserving all rows when updating CSV file, or not validating write operations
 
 **Prevention Rules** (MANDATORY for ALL CSV operations):
-1. **ALWAYS create backup before ANY modification**: `shutil.copy2('tasks.csv', 'tasks.csv.backup')`
+1. **ALWAYS create backup before ANY modification**: `shutil.copy2('.claude/tasks.csv', '.claude/tasks.csv.backup')`
 2. **ALWAYS read ALL rows into memory** before modifying any single row
 3. **ALWAYS validate row count** before and after write operations
 4. **ALWAYS verify fieldnames** are present and non-empty
@@ -28,12 +28,12 @@ import shutil
 import sys
 
 # 1. BACKUP
-shutil.copy2('tasks.csv', 'tasks.csv.backup')
+shutil.copy2('.claude/tasks.csv', '.claude/tasks.csv.backup')
 
 # 2. READ ALL ROWS
 rows = []
 original_count = 0
-with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
+with open('.claude/tasks.csv', 'r', newline='', encoding='utf-8') as f:
     reader = csv.DictReader(f)
     fieldnames = reader.fieldnames
     for row in reader:
@@ -46,29 +46,29 @@ with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
 # 3. VALIDATE BEFORE WRITE
 if len(rows) != original_count or not fieldnames:
     print("ERROR: Data validation failed")
-    shutil.copy2('tasks.csv.backup', 'tasks.csv')
+    shutil.copy2('.claude/tasks.csv.backup', '.claude/tasks.csv')
     sys.exit(1)
 
 # 4. WRITE ALL ROWS
-with open('tasks.csv', 'w', newline='', encoding='utf-8') as f:
+with open('.claude/tasks.csv', 'w', newline='', encoding='utf-8') as f:
     writer = csv.DictWriter(f, fieldnames=fieldnames)
     writer.writeheader()
     writer.writerows(rows)  # Write ALL rows
 
 # 5. VERIFY WRITE
-verify_count = sum(1 for _ in csv.DictReader(open('tasks.csv', 'r')))
+verify_count = sum(1 for _ in csv.DictReader(open('.claude/tasks.csv', 'r')))
 if verify_count != original_count:
     print("ERROR: Write verification failed")
-    shutil.copy2('tasks.csv.backup', 'tasks.csv')
+    shutil.copy2('.claude/tasks.csv.backup', '.claude/tasks.csv')
     sys.exit(1)
 ```
 
-**Applies to**: ALL agents that modify tasks.csv (task-selector, task-coordinator)
+**Applies to**: ALL agents that modify .claude/tasks.csv (task-selector, task-coordinator)
 
 **Recovery**: If corruption occurs:
 1. Use the validation tool: `python3 .claude/scripts/validate-tasks-csv.py --restore`
-2. Or manually restore: `cp tasks.csv.backup tasks.csv`
-3. Or use git: `git checkout tasks.csv` (if committed)
+2. Or manually restore: `cp .claude/tasks.csv.backup .claude/tasks.csv`
+3. Or use git: `git checkout .claude/tasks.csv` (if committed)
 
 **Validation Tool**: Use `python3 .claude/scripts/validate-tasks-csv.py` to:
 - Validate CSV structure and integrity
@@ -84,7 +84,7 @@ if verify_count != original_count:
 
 **Symptom**: Task requires Pulumi+Go but generated code is CDK+TypeScript, or task requires Terraform but code is in Pulumi
 
-**Root Cause**: Not reading or honoring the platform/language constraints from metadata.json or tasks.csv
+**Root Cause**: Not reading or honoring the platform/language constraints from metadata.json or .claude/tasks.csv
 
 **Quick Fix**:
 - **ALWAYS read metadata.json FIRST** before generating any code

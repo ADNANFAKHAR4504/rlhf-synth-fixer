@@ -7,7 +7,7 @@ This directory contains scripts **specifically designed for Claude agent orchest
 ### Task Management Scripts
 
 1. **`task-manager.sh`**
-   - Purpose: Thread-safe task selection and management from tasks.csv
+   - Purpose: Thread-safe task selection and management from .claude/tasks.csv
    - Features: File locking for parallel agent execution
    - Commands:
      - `select-and-update` - Atomically select and mark task as in-progress
@@ -21,14 +21,14 @@ This directory contains scripts **specifically designed for Claude agent orchest
    - Output: Creates metadata.json and lib/PROMPT.md in specified directory
 
 3. **`check-csv-safety.sh`**
-   - Purpose: Pre-flight check before agents modify tasks.csv
+   - Purpose: Pre-flight check before agents modify .claude/tasks.csv
    - Validates: CSV integrity, backup existence, agent code patterns
    - **MANDATORY**: Run before any CSV modification
 
 4. **`validate-tasks-csv.py`**
    - Purpose: Validate CSV file integrity and structure
    - Commands:
-     - Default: Validate current tasks.csv
+     - Default: Validate current .claude/tasks.csv
      - `--create-backup` - Create backup file
      - `--restore` - Restore from backup
 
