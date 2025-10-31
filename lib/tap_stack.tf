@@ -1500,7 +1500,7 @@ resource "aws_db_subnet_group" "aurora" {
 
 # Aurora Cluster Parameter Group
 resource "aws_rds_cluster_parameter_group" "aurora" {
-  family = "aurora-postgresql15"
+  family = "aurora-postgresql16"
   name   = "${local.name_prefix}-aurora-cluster-params"
   
   parameter {
