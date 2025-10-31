@@ -820,27 +820,26 @@ Resources:
       Protocol: HTTP
 
   # ========================================
-  # Launch Template
+  # Launch Template for Auto Scaling
   # ========================================
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub '${ProjectName}-${EnvironmentName}-lt'
+      LaunchTemplateName: !Sub '${AWS::StackName}-LaunchTemplate'
       LaunchTemplateData:
         ImageId: !Ref LatestAmiId
-        InstanceType: t3.medium
+        InstanceType: t3.micro
+        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
           - !Ref EC2SecurityGroup
-        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
         BlockDeviceMappings:
           - DeviceName: /dev/xvda
             Ebs:
-              VolumeSize: 20
+              VolumeSize: 8
               VolumeType: gp3
               Encrypted: true
-              KmsKeyId: !Ref KMSKey
               DeleteOnTermination: true
         MetadataOptions:
           HttpTokens: required
