@@ -16,5 +16,6 @@
     "IAM",
     "CloudWatch"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "rajendra-s-aws"
 }
