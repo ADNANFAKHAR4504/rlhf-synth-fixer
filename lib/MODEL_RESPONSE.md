@@ -297,7 +297,7 @@ resource "aws_vpc_endpoint" "kms" {
 
 # Security Group for VPC Endpoints
 resource "aws_security_group" "vpc_endpoints" {
-  name_prefix = "vpc-endpoints-"
+  name_prefix = "sg-vpc-endpoints-"
   vpc_id      = aws_vpc.main.id
   description = "Security group for VPC endpoints"
 
