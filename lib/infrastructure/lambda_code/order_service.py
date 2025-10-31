@@ -41,8 +41,37 @@ def handler(event, context):
     logger.info(f"Received event: {json.dumps(event, default=decimal_default)}")
     
     try:
+        # Handle both API Gateway and direct invocation (Step Functions)
         http_method = event.get('httpMethod', '')
         
+        # Direct invocation (Step Functions) - data is in event root
+        if not http_method and 'orderId' in event:
+            order_id = event.get('orderId')
+            user_id = event.get('userId')
+            product_id = event.get('productId')
+            quantity = event.get('quantity', '1')
+            
+            if not order_id or not user_id or not product_id:
+                return {
+                    'statusCode': 400,
+                    'body': json.dumps({'error': 'orderId, userId, and productId are required'})
+                }
+            
+            orders_table.put_item(Item={
+                'orderId': order_id,
+                'userId': user_id,
+                'productId': product_id,
+                'quantity': Decimal(str(quantity)),
+                'status': 'pending',
+                'createdAt': Decimal(str(int(time.time())))
+            })
+            
+            return {
+                'statusCode': 200,
+                'body': json.dumps({'orderId': order_id, 'status': 'created'})
+            }
+        
+        # API Gateway invocation
         if http_method == 'POST':
             body = json.loads(event.get('body', '{}'))
             order_id = body.get('orderId')
