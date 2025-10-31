@@ -167,15 +167,6 @@ Resources:
         - Key: Name
           Value: !Sub nat-eip-1-${EnvironmentSuffix}
 
-  NatGateway2EIP:
-    Type: AWS::EC2::EIP
-    DependsOn: AttachGateway
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub nat-eip-2-${EnvironmentSuffix}
-
   NatGateway1:
     Type: AWS::EC2::NatGateway
     Properties:
@@ -184,15 +175,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub nat-gateway-1-${EnvironmentSuffix}
-
-  NatGateway2:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NatGateway2EIP.AllocationId
-      SubnetId: !Ref PublicSubnet2
-      Tags:
-        - Key: Name
-          Value: !Sub nat-gateway-2-${EnvironmentSuffix}
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -262,7 +244,7 @@ Resources:
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGateway2
+      NatGatewayId: !Ref NatGateway1
 
   PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation

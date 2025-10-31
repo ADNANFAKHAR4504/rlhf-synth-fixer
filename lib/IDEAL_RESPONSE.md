@@ -122,9 +122,9 @@ aws cloudformation deploy \
     EnvironmentSuffix=prod-001 \
     DBMasterUsername=admin \
     ContainerImage=your-repo/payment-api:v1.0 \
-    CertificateArn=arn:aws:acm:eu-west-1:123456789012:certificate/xxxxx \
+    CertificateArn=arn:aws:acm:us-east-2:123456789012:certificate/xxxxx \
   --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
-  --region eu-west-1
+  --region us-east-2
 ```
 
 ## Testing

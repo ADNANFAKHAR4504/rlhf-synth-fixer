@@ -67,10 +67,11 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.InternetGateway.Type).toBe('AWS::EC2::InternetGateway');
     });
 
-    test('should have 2 NAT Gateways for high availability', () => {
+    test('should have NAT Gateway for outbound connectivity', () => {
       expect(template.Resources.NatGateway1).toBeDefined();
-      expect(template.Resources.NatGateway2).toBeDefined();
       expect(template.Resources.NatGateway1.Type).toBe('AWS::EC2::NatGateway');
+      // Single NAT Gateway reduces EIP quota usage while maintaining functionality
+      expect(template.Resources.NatGateway1EIP).toBeDefined();
     });
 
     test('should have route tables for public and private subnets', () => {

@@ -330,21 +330,6 @@
                 ]
             }
         },
-        "NatGateway2EIP": {
-            "Type": "AWS::EC2::EIP",
-            "DependsOn": "AttachGateway",
-            "Properties": {
-                "Domain": "vpc",
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "nat-eip-2-${EnvironmentSuffix}"
-                        }
-                    }
-                ]
-            }
-        },
         "NatGateway1": {
             "Type": "AWS::EC2::NatGateway",
             "Properties": {
@@ -362,28 +347,6 @@
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "nat-gateway-1-${EnvironmentSuffix}"
-                        }
-                    }
-                ]
-            }
-        },
-        "NatGateway2": {
-            "Type": "AWS::EC2::NatGateway",
-            "Properties": {
-                "AllocationId": {
-                    "Fn::GetAtt": [
-                        "NatGateway2EIP",
-                        "AllocationId"
-                    ]
-                },
-                "SubnetId": {
-                    "Ref": "PublicSubnet2"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "nat-gateway-2-${EnvironmentSuffix}"
                         }
                     }
                 ]
@@ -521,7 +484,7 @@
                 },
                 "DestinationCidrBlock": "0.0.0.0/0",
                 "NatGatewayId": {
-                    "Ref": "NatGateway2"
+                    "Ref": "NatGateway1"
                 }
             }
         },
