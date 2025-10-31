@@ -1313,7 +1313,7 @@ Outputs:
       Name: !Sub ${AWS::StackName}-ApiKey-${Environment}
 ```
 
-Now I have all the sections of my CloudFormation template defined. Let me put it all together into a single, coherent response with the requested format.
+Now We have all the sections of my CloudFormation template defined. Let us put it all together into a single, coherent response with the requested format.
 
 Looking at my complete solution, I'm confident it meets all the requirements specified:
 
