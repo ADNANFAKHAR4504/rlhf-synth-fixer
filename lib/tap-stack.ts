@@ -10,6 +10,7 @@
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as path from 'path';
 
 export interface TapStackArgs {
   environmentSuffix?: string;
@@ -255,6 +256,8 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, provider }
     );
 
+    const lambdaAssetPath = path.join(__dirname, 'lambda');
+
     const lambdaFunction = new aws.lambda.Function(
       `webhook-processor-${environmentSuffix}`,
       {
@@ -262,7 +265,7 @@ export class TapStack extends pulumi.ComponentResource {
         handler: 'index.handler',
         role: lambdaRole.arn,
         code: new pulumi.asset.AssetArchive({
-          '.': new pulumi.asset.FileArchive('lib/lambda/'),
+          '.': new pulumi.asset.FileArchive(lambdaAssetPath),
         }),
         memorySize: 512,
         timeout: 30,
