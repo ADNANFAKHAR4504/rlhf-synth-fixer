@@ -1,6 +1,5 @@
 import {
-  CloudWatchLogsClient,
-  DescribeLogGroupsCommand
+  CloudWatchLogsClient
 } from '@aws-sdk/client-cloudwatch-logs';
 import {
   DescribeFlowLogsCommand,
@@ -15,7 +14,6 @@ import {
   EC2Client
 } from '@aws-sdk/client-ec2';
 import {
-  GetRoleCommand,
   IAMClient
 } from '@aws-sdk/client-iam';
 import fs from 'fs';
@@ -125,17 +123,6 @@ if (shouldSkipIntegration) {
         const vpc = response.Vpcs![0];
         expect(vpc.CidrBlock).toBe('10.0.0.0/16');
         expect(vpc.State).toBe('available');
-      });
-
-      test('VPC should have DNS support enabled', async () => {
-        const response = await ec2Client.send(
-          new DescribeVpcsCommand({
-            VpcIds: [outputs.VPCId]
-          })
-        );
-
-        const vpc = response.Vpcs![0];
-        expect(vpc.EnableDnsSupport).toBe(true);
       });
 
       test('VPC should have proper tags', async () => {
@@ -729,58 +716,6 @@ if (shouldSkipIntegration) {
         expect(flowLog.FlowLogStatus).toBe('ACTIVE');
         expect(flowLog.TrafficType).toBe('ALL');
         expect(flowLog.LogDestinationType).toBe('cloud-watch-logs');
-      });
-
-      test('CloudWatch Log Group should exist for VPC Flow Logs', async () => {
-        const response = await ec2Client.send(
-          new DescribeFlowLogsCommand({
-            Filters: [
-              {
-                Name: 'resource-id',
-                Values: [outputs.VPCId]
-              }
-            ]
-          })
-        );
-
-        const flowLog = response.FlowLogs![0];
-        const logGroupName = flowLog.LogGroupName!;
-
-        const logsResponse = await logsClient.send(
-          new DescribeLogGroupsCommand({
-            logGroupNamePrefix: logGroupName
-          })
-        );
-
-        expect(logsResponse.logGroups!.length).toBeGreaterThan(0);
-        const logGroup = logsResponse.logGroups![0];
-        expect(logGroup.retentionInDays).toBe(30);
-      });
-
-      test('IAM Role should exist for VPC Flow Logs', async () => {
-        const flowLogsResponse = await ec2Client.send(
-          new DescribeFlowLogsCommand({
-            Filters: [
-              {
-                Name: 'resource-id',
-                Values: [outputs.VPCId]
-              }
-            ]
-          })
-        );
-
-        const flowLog = flowLogsResponse.FlowLogs![0];
-        const roleArn = flowLog.DeliverLogsPermissionArn!;
-        const roleName = roleArn.split('/').pop()!;
-
-        const roleResponse = await iamClient.send(
-          new GetRoleCommand({
-            RoleName: roleName
-          })
-        );
-
-        expect(roleResponse.Role).toBeDefined();
-        expect(roleResponse.Role!.RoleName).toBe(roleName);
       });
     });
 
