@@ -71,6 +71,10 @@ jobs:
         id: metadata
         run: ./scripts/detect-metadata.sh
 
+      - name: Check Project Files
+        id: check-files
+        run: ./scripts/check-project-files.sh
+
   validate-commit-message:
     name: Validate Commit Message
     runs-on: ubuntu-24.04
