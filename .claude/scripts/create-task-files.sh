@@ -137,7 +137,7 @@ case "$LANGUAGE" in
 esac
 
 # CRITICAL: Use exact difficulty value as complexity (no mapping)
-# This ensures PR body shows the same complexity as tasks.csv
+# This ensures PR body shows the same complexity as .claude/tasks.csv
 COMPLEXITY="$DIFFICULTY"
 
 # Get timestamp
@@ -183,6 +183,7 @@ cat > "$METADATA_FILE" <<EOF
   "platform": "$PLATFORM",
   "language": "$LANGUAGE",
   "complexity": "$COMPLEXITY",
+  "turn_type": "single",
   "team": "synth",
   "startedAt": "$STARTED_AT",
   "subtask": "$SUBTASK",
@@ -373,7 +374,7 @@ fi
 log_info "Created PROMPT.md"
 
 # Validate metadata
-REQUIRED=("platform" "language" "complexity" "team" "startedAt" "subtask" "po_id")
+REQUIRED=("platform" "language" "complexity" "turn_type" "team" "startedAt" "subtask" "po_id")
 MISSING=()
 
 for field in "${REQUIRED[@]}"; do
