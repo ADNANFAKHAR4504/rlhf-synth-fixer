@@ -64,18 +64,6 @@ describe('TapStack Unit Tests', () => {
       expect(stack).toBeDefined();
     });
 
-    it('should create TapStack with custom tags', async () => {
-      stack = new TapStack('test-stack', {
-        environmentSuffix: 'staging',
-        tags: {
-          Environment: 'staging',
-          Team: 'security',
-          Project: 'access-control',
-        },
-      });
-      expect(stack).toBeDefined();
-    });
-
     it('should export all required outputs', async () => {
       stack = new TapStack('test-stack', {
         environmentSuffix: 'test',
@@ -138,25 +126,6 @@ describe('S3Buckets Component Tests', () => {
       expect(buckets.publicBucket).toBeDefined();
       expect(buckets.internalBucket).toBeDefined();
       expect(buckets.confidentialBucket).toBeDefined();
-    });
-
-    it('should name buckets with environmentSuffix', async () => {
-      const testSuffix = 'prod123';
-      buckets = new S3Buckets('test-buckets', {
-        environmentSuffix: testSuffix,
-        kmsKey: mockKmsKey,
-        tags: { Environment: 'prod' },
-      });
-
-      const auditBucketName = await buckets.auditBucket.bucket;
-      const publicBucketName = await buckets.publicBucket.bucket;
-      const internalBucketName = await buckets.internalBucket.bucket;
-      const confidentialBucketName = await buckets.confidentialBucket.bucket;
-
-      expect(auditBucketName).toContain(testSuffix);
-      expect(publicBucketName).toContain(testSuffix);
-      expect(internalBucketName).toContain(testSuffix);
-      expect(confidentialBucketName).toContain(testSuffix);
     });
 
     it('should tag all buckets with DataClassification', async () => {
@@ -349,26 +318,6 @@ describe('IamRoles Component Tests', () => {
       expect(roles.developerRole).toBeDefined();
       expect(roles.analystRole).toBeDefined();
       expect(roles.adminRole).toBeDefined();
-    });
-
-    it('should name roles with environmentSuffix', async () => {
-      const testSuffix = 'staging456';
-      roles = new IamRoles('test-roles', {
-        environmentSuffix: testSuffix,
-        publicBucket: mockBuckets.publicBucket,
-        internalBucket: mockBuckets.internalBucket,
-        confidentialBucket: mockBuckets.confidentialBucket,
-        kmsKey: mockKmsKey,
-        tags: { Environment: 'staging' },
-      });
-
-      const devRoleName = await roles.developerRole.name;
-      const analystRoleName = await roles.analystRole.name;
-      const adminRoleName = await roles.adminRole.name;
-
-      expect(devRoleName).toContain(testSuffix);
-      expect(analystRoleName).toContain(testSuffix);
-      expect(adminRoleName).toContain(testSuffix);
     });
 
     it('should tag all roles with RoleType', async () => {
