@@ -1,0 +1,15 @@
+{
+  "platform": "cdk",
+  "language": "go",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "291998",
+  "team": "5",
+  "startedAt": "2025-08-27T15:57:20.878Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raaj1021",
+  "dockerS3Location": ""
+}
