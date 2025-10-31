@@ -14,7 +14,7 @@ interface TaskMetadata {
   startedAt: string;
   subtask: string;
   subject_labels?: string[];
-  aws_services?: string;
+  aws_services?: string[];
   task_config?: {
     deploy_env: string;
   };
@@ -319,7 +319,12 @@ async function main(): Promise<void> {
       subtask: label ? label : taskSubCategory,
       ...(taskSubCategory ? { subject_labels: [taskSubCategory] } : {}),
       ...(resourcesText && resourcesText.trim().length > 0
-        ? { aws_services: resourcesText.trim() }
+        ? {
+            aws_services: resourcesText
+              .split(',')
+              .map(s => s.trim())
+              .filter(s => s.length > 0),
+          }
         : {}),
       ...(deployEnv
         ? {
