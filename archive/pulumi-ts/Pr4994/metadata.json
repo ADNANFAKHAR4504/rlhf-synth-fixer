@@ -10,5 +10,22 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "VPC, EC2, RDS, S3, Route53, CloudWatch, IAM, CloudWatch LogGroup, EventBridge"
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "Route53",
+    "CloudWatch",
+    "IAM",
+    "CloudWatch LogGroup",
+    "EventBridge"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raghav-turing",
+  "dockerS3Location": ""
 }
