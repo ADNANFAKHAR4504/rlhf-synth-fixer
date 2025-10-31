@@ -303,7 +303,10 @@ describe('Serverless Payment Workflow Integration Tests', () => {
 
       const auditQuery = await dynamodb.scan({
         TableName: AUDIT_LOGS_TABLE,
-        FilterExpression: 'transaction_id = :tid AND action = :action',
+        FilterExpression: 'transaction_id = :tid AND #action = :action',
+        ExpressionAttributeNames: {
+          '#action': 'action'
+        },
         ExpressionAttributeValues: {
           ':tid': transactionId,
           ':action': 'SETTLEMENT_COMPLETE'
