@@ -15,9 +15,11 @@ Parameters:
       - development
 
   ProjectName:
-    Description: Project name for tagging
+    Description: Project name for tagging (lowercase only)
     Type: String
-    Default: MyProject
+    Default: myproject
+    AllowedPattern: '^[a-z0-9-]+$'
+    ConstraintDescription: Must contain only lowercase letters, numbers, and hyphens
 
   OwnerEmail:
     Description: Owner email for tagging
@@ -25,9 +27,9 @@ Parameters:
     Default: owner@example.com
 
   KeyPairName:
-    Description: EC2 Key Pair for SSH access
-    Type: AWS::EC2::KeyPair::KeyName
-    ConstraintDescription: Must be a valid EC2 key pair
+    Description: EC2 Key Pair for SSH access (leave empty if not using SSH)
+    Type: String
+    Default: ''
 
   DBMasterUsername:
     Description: Database master username
@@ -37,14 +39,6 @@ Parameters:
     MaxLength: 16
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
 
-  DBMasterPassword:
-    Description: Database master password
-    Type: String
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9!@#$%^&*()]*'
-    ConstraintDescription: Must contain at least 8 characters
 
   AllowedSSHIP:
     Description: IP address allowed to SSH (use 0.0.0.0/0 for any - NOT recommended)
@@ -55,6 +49,12 @@ Parameters:
   LatestAmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
+# ====================
+# CONDITIONS
+# ====================
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
 
 # ====================
 # MAPPINGS
@@ -574,7 +574,7 @@ Resources:
   LogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${ProjectName}-${EnvironmentName}-logs-${AWS::AccountId}'
+      BucketName: !Sub '${ProjectName}-${EnvironmentName}-logs-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -633,6 +633,74 @@ Resources:
               Bool:
                 'aws:SecureTransport': 'false'
 
+  # Lambda Role for S3 Bucket Cleanup
+  S3CleanupLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: S3BucketCleanup
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:ListBucket'
+                  - 's3:ListBucketVersions'
+                Resource: !GetAtt LogsBucket.Arn
+              - Effect: Allow
+                Action:
+                  - 's3:DeleteObject'
+                  - 's3:DeleteObjectVersion'
+                Resource: !Sub '${LogsBucket.Arn}/*'
+
+  # Lambda Function to Empty S3 Bucket
+  S3CleanupLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-${EnvironmentName}-s3-cleanup'
+      Runtime: python3.11
+      Handler: index.handler
+      Role: !GetAtt S3CleanupLambdaRole.Arn
+      Timeout: 300
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+
+          def handler(event, context):
+              try:
+                  bucket_name = event['ResourceProperties']['BucketName']
+
+                  if event['RequestType'] == 'Delete':
+                      s3 = boto3.resource('s3')
+                      bucket = s3.Bucket(bucket_name)
+
+                      # Delete all object versions and delete markers
+                      bucket.object_versions.delete()
+
+                      print(f'Successfully emptied bucket: {bucket_name}')
+
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(f'Error: {str(e)}')
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+
+  # Custom Resource to Trigger Cleanup
+  EmptyLogsBucket:
+    Type: Custom::EmptyS3Bucket
+    Properties:
+      ServiceToken: !GetAtt S3CleanupLambda.Arn
+      BucketName: !Ref LogsBucket
+
   # ========================================
   # CloudTrail
   # ========================================
@@ -662,78 +730,10 @@ Resources:
           Value: !Ref ProjectName
 
   # ========================================
-  # AWS Config
+  # AWS Config - Removed to avoid conflicts with existing Config setup
   # ========================================
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties:
-      Name: !Sub '${ProjectName}-${EnvironmentName}-config-recorder'
-      RoleArn: !GetAtt ConfigRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-
-  ConfigRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub '${ProjectName}-${EnvironmentName}-config-role'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: 'sts:AssumeRole'
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/ConfigRole
-      Policies:
-        - PolicyName: S3AccessPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 's3:GetBucketAcl'
-                  - 's3:ListBucket'
-                Resource: !GetAtt LogsBucket.Arn
-              - Effect: Allow
-                Action:
-                  - 's3:PutObject'
-                  - 's3:GetObject'
-                Resource: !Sub '${LogsBucket.Arn}/*'
-
-  DeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      Name: !Sub '${ProjectName}-${EnvironmentName}-delivery-channel'
-      S3BucketName: !Ref LogsBucket
-
-  # Config Rules for Compliance
-  EncryptedVolumesRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: ConfigRecorder
-    Properties:
-      ConfigRuleName: encrypted-volumes
-      Description: Checks whether EBS volumes are encrypted
-      Source:
-        Owner: AWS
-        SourceIdentifier: ENCRYPTED_VOLUMES
-
-  RequiredTagsRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: ConfigRecorder
-    Properties:
-      ConfigRuleName: required-tags
-      Description: Checks whether resources contain all required tags
-      InputParameters: |
-        {
-          "tag1Key": "Environment",
-          "tag2Key": "Owner",
-          "tag3Key": "Project"
-        }
-      Source:
-        Owner: AWS
-        SourceIdentifier: REQUIRED_TAGS
+  # ConfigRecorder, ConfigRole, DeliveryChannel, and ConfigRules removed
+  # as they may conflict with organization-level AWS Config configuration
 
   # ========================================
   # Systems Manager Parameter Store
@@ -744,7 +744,7 @@ Resources:
       Name: !Sub '/${ProjectName}/${EnvironmentName}/db/endpoint'
       Description: RDS Endpoint URL
       Type: String
-      Value: !GetAtt DatabaseCluster.Endpoint.Address
+      Value: !GetAtt DatabaseInstance.Endpoint.Address
       Tags:
         Environment: !Ref EnvironmentName
         Owner: !Ref OwnerEmail
@@ -756,7 +756,7 @@ Resources:
       Name: !Sub '/${ProjectName}/${EnvironmentName}/db/port'
       Description: RDS Port
       Type: String
-      Value: !GetAtt DatabaseCluster.Endpoint.Port
+      Value: !GetAtt DatabaseInstance.Endpoint.Port
       Tags:
         Environment: !Ref EnvironmentName
         Owner: !Ref OwnerEmail
@@ -833,7 +833,7 @@ Resources:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
           - !Ref EC2SecurityGroup
-        KeyName: !Ref KeyPairName
+        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
         BlockDeviceMappings:
           - DeviceName: /dev/xvda
             Ebs:
@@ -911,9 +911,9 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
-      MinSize: 3
-      MaxSize: 9
-      DesiredCapacity: 3
+      MinSize: 2
+      MaxSize: 6
+      DesiredCapacity: 2
       HealthCheckType: ELB
       HealthCheckGracePeriod: 300
       TargetGroupARNs:
@@ -933,11 +933,11 @@ Resources:
           PropagateAtLaunch: true
     CreationPolicy:
       ResourceSignal:
-        Count: 3
+        Count: 2
         Timeout: PT15M
     UpdatePolicy:
       AutoScalingRollingUpdate:
-        MinInstancesInService: 3
+        MinInstancesInService: 1
         MaxBatchSize: 1
         PauseTime: PT5M
         WaitOnResourceSignals: true
@@ -989,11 +989,40 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  DBClusterParameterGroup:
-    Type: AWS::RDS::DBClusterParameterGroup
+  # Database Secret (Secrets Manager)
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
     Properties:
-      Description: Aurora Cluster Parameter Group
-      Family: aurora-mysql5.7
+      Name: !Sub '${ProjectName}-${EnvironmentName}-db-secret'
+      Description: RDS database master password
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username":"${DBMasterUsername}"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+        RequireEachIncludedType: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref OwnerEmail
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # Attach secret to RDS instance
+  SecretRDSInstanceAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties:
+      SecretId: !Ref DBSecret
+      TargetId: !Ref DatabaseInstance
+      TargetType: AWS::RDS::DBInstance
+
+  # RDS Parameter Group
+  DBParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: MySQL Parameter Group
+      Family: mysql8.0
       Parameters:
         character_set_server: utf8mb4
         collation_server: utf8mb4_unicode_ci
@@ -1005,19 +1034,26 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  DatabaseCluster:
-    Type: AWS::RDS::DBCluster
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
+  # MySQL RDS Instance (not Aurora)
+  DatabaseInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
-      Engine: aurora-mysql
-      EngineVersion: 5.7.mysql_aurora.2.10.2
-      DBClusterIdentifier: !Sub '${ProjectName}-${EnvironmentName}-cluster'
+      DBInstanceIdentifier: !Sub '${ProjectName}-${EnvironmentName}-mysql'
+      Engine: mysql
+      EngineVersion: '8.0.43'
+      DBInstanceClass: db.t3.medium
+      AllocatedStorage: 100
+      StorageType: gp3
+      StorageEncrypted: true
+      KmsKeyId: !Ref KMSKey
       MasterUsername: !Ref DBMasterUsername
-      MasterUserPassword: !Ref DBMasterPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
       DBSubnetGroupName: !Ref DBSubnetGroup
-      VpcSecurityGroupIds:
+      VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
+      PubliclyAccessible: false
       BackupRetentionPeriod: 7
       PreferredBackupWindow: 03:00-04:00
       PreferredMaintenanceWindow: mon:04:00-mon:05:00
@@ -1025,48 +1061,11 @@ Resources:
         - error
         - general
         - slowquery
-      StorageEncrypted: true
-      KmsKeyId: !Ref KMSKey
-      DBClusterParameterGroupName: !Ref DBClusterParameterGroup
-      DeletionProtection: true
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: Owner
-          Value: !Ref OwnerEmail
-        - Key: Project
-          Value: !Ref ProjectName
-
-  DatabaseInstance1:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      DBInstanceIdentifier: !Sub '${ProjectName}-${EnvironmentName}-instance-1'
-      DBClusterIdentifier: !Ref DatabaseCluster
-      Engine: aurora-mysql
-      DBInstanceClass: db.r5.large
-      PubliclyAccessible: false
-      AvailabilityZone: !Select [0, !GetAZs '']
       MonitoringInterval: 60
       MonitoringRoleArn: !GetAtt RDSEnhancedMonitoringRole.Arn
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: Owner
-          Value: !Ref OwnerEmail
-        - Key: Project
-          Value: !Ref ProjectName
-
-  DatabaseInstance2:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      DBInstanceIdentifier: !Sub '${ProjectName}-${EnvironmentName}-instance-2'
-      DBClusterIdentifier: !Ref DatabaseCluster
-      Engine: aurora-mysql
-      DBInstanceClass: db.r5.large
-      PubliclyAccessible: false
-      AvailabilityZone: !Select [1, !GetAZs '']
-      MonitoringInterval: 60
-      MonitoringRoleArn: !GetAtt RDSEnhancedMonitoringRole.Arn
+      DeletionProtection: false
+      DBParameterGroupName: !Ref DBParameterGroup
+      MultiAZ: true
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -1158,15 +1157,15 @@ Resources:
       Threshold: 75
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
-        - Name: DBClusterIdentifier
-          Value: !Ref DatabaseCluster
+        - Name: DBInstanceIdentifier
+          Value: !Ref DatabaseInstance
 
   DatabaseStorageAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub '${ProjectName}-${EnvironmentName}-db-storage'
       AlarmDescription: Alarm when database free storage is low
-      MetricName: FreeLocalStorage
+      MetricName: FreeStorageSpace
       Namespace: AWS/RDS
       Statistic: Average
       Period: 300
@@ -1174,8 +1173,8 @@ Resources:
       Threshold: 10737418240  # 10GB in bytes
       ComparisonOperator: LessThanThreshold
       Dimensions:
-        - Name: DBClusterIdentifier
-          Value: !Ref DatabaseCluster
+        - Name: DBInstanceIdentifier
+          Value: !Ref DatabaseInstance
 
   # ========================================
   # Backup Plan
@@ -1202,7 +1201,7 @@ Resources:
             StartWindowMinutes: 60
             CompletionWindowMinutes: 120
             Lifecycle:
-              DeleteAfterDays: 30
+              DeleteAfterDays: 97
               MoveToColdStorageAfterDays: 7
             RecoveryPointTags:
               Environment: !Ref EnvironmentName
@@ -1217,7 +1216,7 @@ Resources:
         SelectionName: !Sub '${ProjectName}-${EnvironmentName}-backup-selection'
         IamRoleArn: !GetAtt BackupRole.Arn
         Resources:
-          - !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${DatabaseCluster}'
+          - !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${DatabaseInstance}'
         ListOfTags:
           - ConditionType: STRINGEQUALS
             ConditionKey: Environment
@@ -1255,14 +1254,14 @@ Outputs:
       Name: !Sub '${AWS::StackName}-ALB-DNS'
 
   DatabaseEndpoint:
-    Description: Aurora Database Endpoint
-    Value: !GetAtt DatabaseCluster.Endpoint.Address
+    Description: MySQL Database Endpoint
+    Value: !GetAtt DatabaseInstance.Endpoint.Address
     Export:
       Name: !Sub '${AWS::StackName}-DB-Endpoint'
 
   DatabasePort:
-    Description: Aurora Database Port
-    Value: !GetAtt DatabaseCluster.Endpoint.Port
+    Description: MySQL Database Port
+    Value: !GetAtt DatabaseInstance.Endpoint.Port
     Export:
       Name: !Sub '${AWS::StackName}-DB-Port'
 
