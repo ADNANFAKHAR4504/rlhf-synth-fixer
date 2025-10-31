@@ -1100,3 +1100,64 @@ output "db_secret_name" {
   description = "Name of the Secrets Manager secret containing DB credentials"
   value       = aws_secretsmanager_secret.db_credentials.name
 }
+
+# Additional outputs for comprehensive integration testing
+output "launch_template_id" {
+  description = "ID of the EC2 launch template"
+  value       = aws_launch_template.web.id
+}
+
+output "target_group_arn" {
+  description = "ARN of the ALB target group"
+  value       = aws_lb_target_group.web.arn
+}
+
+output "nat_gateway_ids" {
+  description = "IDs of the NAT Gateways"
+  value       = aws_nat_gateway.main[*].id
+}
+
+output "internet_gateway_id" {
+  description = "ID of the Internet Gateway"
+  value       = aws_internet_gateway.main.id
+}
+
+output "scaling_policy_up_arn" {
+  description = "ARN of the scale up policy"
+  value       = aws_autoscaling_policy.scale_up.arn
+}
+
+output "scaling_policy_down_arn" {
+  description = "ARN of the scale down policy"  
+  value       = aws_autoscaling_policy.scale_down.arn
+}
+
+output "cloudwatch_alarm_cpu_high_name" {
+  description = "Name of the CPU high CloudWatch alarm"
+  value       = aws_cloudwatch_metric_alarm.cpu_high.alarm_name
+}
+
+output "cloudwatch_alarm_cpu_low_name" {
+  description = "Name of the CPU low CloudWatch alarm"
+  value       = aws_cloudwatch_metric_alarm.cpu_low.alarm_name
+}
+
+output "iam_role_arn" {
+  description = "ARN of the EC2 IAM role"
+  value       = aws_iam_role.web.arn
+}
+
+output "iam_instance_profile_name" {
+  description = "Name of the EC2 instance profile"
+  value       = aws_iam_instance_profile.web.name
+}
+
+output "db_parameter_group_name" {
+  description = "Name of the RDS parameter group"
+  value       = aws_db_parameter_group.mysql.name
+}
+
+output "db_subnet_group_name" {
+  description = "Name of the RDS subnet group"
+  value       = aws_db_subnet_group.main.name
+}
