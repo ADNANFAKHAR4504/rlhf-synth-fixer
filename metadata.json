@@ -1,5 +1,5 @@
 {
-  "platform": "cloudformation",
+  "platform": "cfn",
   "language": "yaml",
   "complexity": "expert",
   "turn_type": "single",
