@@ -1,0 +1,32 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000304",
+  "team": "5",
+  "startedAt": "2025-10-28T09:41:13.562Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "IAM",
+    "KMS",
+    "VPC",
+    "EC2",
+    "CloudTrail",
+    "SecretsManager",
+    "SNS",
+    "CloudWatch",
+    "S3",
+    "Lambda"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
+}
