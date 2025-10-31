@@ -12,5 +12,11 @@
     "Cloud Environment Setup"
   ],
   "aws_services": "[\"Amazon S3\", \"AWS Lambda\", \"Amazon DynamoDB\", \"Amazon CloudWatch\", \"AWS IAM\", \"S3 Event Notifications\"]",
-  "training_quality": 9
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
 }
