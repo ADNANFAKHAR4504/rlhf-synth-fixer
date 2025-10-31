@@ -9,7 +9,7 @@
  */
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
-// import * as aws from '@pulumi/aws'; // Removed as it's only used in example code
+import * as aws from '@pulumi/aws';
 
 // Import your nested stacks here. For example:
 // import { DynamoDBStack } from "./dynamodb-stack";
@@ -28,6 +28,21 @@ export interface TapStackArgs {
    * Optional default tags to apply to resources.
    */
   tags?: pulumi.Input<{ [key: string]: string }>;
+
+  /**
+   * Optional name for a shared state bucket.
+   */
+  stateBucket?: pulumi.Input<string>;
+
+  /**
+   * Optional AWS region for the shared state bucket.
+   */
+  stateBucketRegion?: pulumi.Input<string>;
+
+  /**
+   * Optional AWS region override for the provider.
+   */
+  awsRegion?: string;
 }
 
 /**
@@ -50,13 +65,38 @@ export class TapStack extends pulumi.ComponentResource {
    * @param args Configuration arguments including environment suffix and tags.
    * @param opts Pulumi options.
    */
-  constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
+  constructor(name: string, args: TapStackArgs = {}, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
 
-    // The following variables are commented out as they are only used in example code.
-    // To use them, uncomment the lines below and the corresponding example code.
-    // const environmentSuffix = args.environmentSuffix || 'dev';
-    // const tags = args.tags || {};
+    const tapConfig = new pulumi.Config('tapstack');
+    const environmentSuffix =
+      args.environmentSuffix ??
+      tapConfig.get('environmentSuffix') ??
+      'dev';
+    const region =
+      args.awsRegion ||
+      tapConfig.get('awsRegion') ||
+      tapConfig.get('region') ||
+      process.env.AWS_REGION ||
+      'us-east-1';
+
+    const mergedTags: { [key: string]: string } = {
+      Environment: environmentSuffix,
+      ...(args.tags && typeof args.tags === 'object'
+        ? (args.tags as { [key: string]: string })
+        : {}),
+    };
+
+    const provider = new aws.Provider(
+      'aws',
+      {
+        region,
+        defaultTags: {
+          tags: mergedTags,
+        },
+      },
+      { parent: this }
+    );
 
     // --- Instantiate Nested Components Here ---
     // This is where you would create instances of your other component resources,
@@ -79,7 +119,14 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Register the outputs of this component.
     this.registerOutputs({
-      // table: this.table,
+      environmentSuffix,
+      region,
+      stateBucket: args.stateBucket || tapConfig.get('stateBucket') || null,
+      stateBucketRegion:
+        args.stateBucketRegion ||
+        tapConfig.get('stateBucketRegion') ||
+        null,
+      providerUrn: provider.urn,
     });
   }
 }

@@ -22,7 +22,7 @@ describe("TapStack Structure", () => {
   });
 
   describe("with props", () => {
-    beforeAll(() => {
+    beforeEach(() => {
       stack = new TapStack("TestTapStackWithProps", {
         environmentSuffix: "prod",
         stateBucket: "custom-state-bucket",
@@ -40,7 +40,8 @@ describe("TapStack Structure", () => {
         "aws",
         expect.objectContaining({
           region: "us-west-2"
-        })
+        }),
+        expect.anything()
       );
     });
 
@@ -51,7 +52,7 @@ describe("TapStack Structure", () => {
   });
 
   describe("with default values", () => {
-    beforeAll(() => {
+    beforeEach(() => {
       stack = new TapStack("TestTapStackDefault");
     });
 
@@ -64,7 +65,8 @@ describe("TapStack Structure", () => {
         "aws",
         expect.objectContaining({
           region: expect.any(String) // Your default region
-        })
+        }),
+        expect.anything()
       );
     });
   });
