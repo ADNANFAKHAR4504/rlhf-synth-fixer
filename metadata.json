@@ -15,5 +15,6 @@
     "EC2",
     "SecretsManager"
   ],
-  "training_quality": 8
+  "training_quality": 8,
+  "author": "iamarpit-turing"
 }
