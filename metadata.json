@@ -5,13 +5,11 @@
   "turn_type": "single",
   "team": "synth",
   "startedAt": "2025-10-30T17:58:32+05:30",
-  "subtask": "Serverless Infrastructure",
+  "subtask": "Application Deployment",
   "subject_labels": [
-    "aws",
-    "infrastructure",
-    "serverless",
-    "lambda",
-    "api-gateway"
+    "Serverless Infrastructure (Functions as Code)",
+    "Web Application Deployment",
+    "Cloud Environment Setup"
   ],
   "po_id": "ie6ds5",
   "aws_services": [

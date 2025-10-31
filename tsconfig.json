@@ -1,9 +1,9 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
-    "module": "commonjs",
-    "moduleResolution": "node",
-    "lib": ["es2020"],
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["es2022"],
     "declaration": true,
     "strict": true,
     "noImplicitAny": true,
@@ -23,10 +23,7 @@
     "isolatedModules": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "outDir": "bin"
+    "outDir": "dist"
   },
-  "include": ["*.ts", "lib/**/*.ts"],
   "exclude": ["node_modules", "cdk.out", "templates", "archive", "worktree", "**/*.d.ts", "test/**/*.ts", "test/*.ts"]
 }
