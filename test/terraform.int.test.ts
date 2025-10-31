@@ -32,16 +32,6 @@ import {
   GetFunctionCommand,
   LambdaClient
 } from "@aws-sdk/client-lambda";
-// Neptune client is optional - skip if not installed
-let NeptuneClient: any = null;
-let DescribeNeptuneCommand: any = null;
-try {
-  const neptuneModule = require("@aws-sdk/client-neptune");
-  NeptuneClient = neptuneModule.NeptuneClient;
-  DescribeNeptuneCommand = neptuneModule.DescribeDBClustersCommand;
-} catch (error) {
-  console.log("ℹ️  @aws-sdk/client-neptune not installed - Neptune tests will be skipped");
-}
 import {
   DescribeDBClustersCommand,
   RDSClient,
@@ -65,6 +55,16 @@ import {
 import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
+// Neptune client is optional - skip if not installed
+let NeptuneClient: any = null;
+let DescribeNeptuneCommand: any = null;
+try {
+  const neptuneModule = require("@aws-sdk/client-neptune");
+  NeptuneClient = neptuneModule.NeptuneClient;
+  DescribeNeptuneCommand = neptuneModule.DescribeDBClustersCommand;
+} catch (error) {
+  console.log("ℹ️  @aws-sdk/client-neptune not installed - Neptune tests will be skipped");
+}
 
 // Test configuration
 const REGION = process.env.AWS_REGION || "us-east-1";
@@ -175,7 +175,7 @@ describe("Terraform Integration - Infrastructure Validation (Plan Only)", () => 
     try {
       execSync("which terraform", { encoding: "utf-8" });
       terraformAvailable = true;
-      
+
       // Initialize Terraform if needed
       if (!fs.existsSync(path.join(TERRAFORM_DIR, ".terraform"))) {
         console.log("Initializing Terraform...");
@@ -194,7 +194,7 @@ describe("Terraform Integration - Infrastructure Validation (Plan Only)", () => 
         console.log("ℹ️  Terraform not available - skipping plan validation");
         return;
       }
-      
+
       for (const envFile of environments) {
         const planOutput = runTerraformPlan(envFile);
 
@@ -215,7 +215,7 @@ describe("Terraform Integration - Infrastructure Validation (Plan Only)", () => 
         console.log("ℹ️  Terraform not available - skipping resource count validation");
         return;
       }
-      
+
       const plans: Record<string, Map<string, number>> = {};
 
       // Generate plans for all environments
@@ -275,7 +275,7 @@ describe("Terraform Integration - Infrastructure Validation (Plan Only)", () => 
         console.log("ℹ️  Terraform not available - skipping diff field validation");
         return;
       }
-      
+
       const allowedDiffFields = [
         "instance_type",
         "instance_class",
@@ -307,7 +307,7 @@ describe("Terraform Integration - Infrastructure Validation (Plan Only)", () => 
       console.log("ℹ️  Terraform not available - skipping output validation");
       return;
     }
-    
+
     const requiredOutputs = [
       "vpc_id",
       "dynamodb_table_arn",
@@ -559,7 +559,7 @@ describe("Service-Level Integration Tests - Deployed Infrastructure", () => {
         // Extract cluster ID from endpoint or outputs
         // Format: cluster-name.cluster-xxx.region.rds.amazonaws.com
         let clusterId = outputs.aurora_cluster_id || "";
-        
+
         if (!clusterId && outputs.aurora_writer_endpoint) {
           // Extract from endpoint: tap-pipeline-dev-aurora.cluster-xxx.region.rds.amazonaws.com
           clusterId = outputs.aurora_writer_endpoint.split(".")[0];
