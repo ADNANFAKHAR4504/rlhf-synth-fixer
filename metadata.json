@@ -6,7 +6,14 @@
   "team": "synth",
   "startedAt": "2025-10-31T07:05:29+00:00",
   "subtask": "Multi-Environment Consistency & Replication",
-  "subject_labels": [],
+  "subject_labels": [
+    "multi-environment",
+    "cloudformation",
+    "stacksets",
+    "vpc",
+    "financial-services",
+    "infrastructure-consistency"
+  ],
   "po_id": "101000780",
   "aws_services": [
     "VPC",

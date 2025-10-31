@@ -39,7 +39,7 @@ describe('TapStack CloudFormation Template - Multi-Environment Infrastructure', 
         'InstanceType',
         'DBInstanceClass',
         'DBUsername',
-        'DBPassword',
+        'DBPasswordSecretName',
         'ACMCertificateArn',
         'AlarmEmail'
       ];
@@ -64,10 +64,10 @@ describe('TapStack CloudFormation Template - Multi-Environment Infrastructure', 
       expect(suffixParam.AllowedPattern).toMatch(/^\[a-z0-9-\]/);
     });
 
-    test('DBPassword should be NoEcho for security', () => {
-      const dbPasswordParam = template.Parameters.DBPassword;
-      expect(dbPasswordParam.NoEcho).toBe(true);
-      expect(dbPasswordParam.MinLength).toBe(8);
+    test('DBPasswordSecretName should have correct properties', () => {
+      const dbPasswordSecretParam = template.Parameters.DBPasswordSecretName;
+      expect(dbPasswordSecretParam.Type).toBe('String');
+      expect(dbPasswordSecretParam.Default).toBe('rds-mysql-password');
     });
 
     test('AlarmEmail should have email validation pattern', () => {
