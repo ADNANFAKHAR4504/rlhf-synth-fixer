@@ -132,9 +132,12 @@ export class EcsServiceStack extends pulumi.ComponentResource {
     );
 
     // Create Auto Scaling Target
-    const clusterName = pulumi
-      .output(args.clusterArn)
-      .apply((arn: string) => arn.split('/').pop()!);
+    const clusterName = pulumi.output(args.clusterArn).apply(arn => {
+      if (typeof arn === 'string') {
+        return arn.split('/').pop()!;
+      }
+      return String(arn).split('/').pop()!;
+    });
     const resourceId = pulumi.interpolate`service/${clusterName}/${this.service.name}`;
 
     this.autoScalingTarget = new aws.appautoscaling.Target(
