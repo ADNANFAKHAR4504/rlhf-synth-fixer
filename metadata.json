@@ -20,7 +20,7 @@
     "KMS",
     "IAM"
   ],
-  "training_quality": 9,
+  "training_quality": 10,
   "task_config": {
     "deploy_env": "dev.tfvars"
   }
