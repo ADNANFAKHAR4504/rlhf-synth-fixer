@@ -1,6 +1,6 @@
 {
   "platform": "pulumi",
-  "language": "ts",
+  "language": "typescript",
   "complexity": "medium",
   "turn_type": "single",
   "po_id": "hhfsa",
@@ -19,5 +19,11 @@
     "SNS",
     "KMS"
   ],
-  "training_quality": 9
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
