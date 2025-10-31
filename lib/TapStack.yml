@@ -331,14 +331,39 @@ Resources:
               }
               
               # Store fraud detection result in DynamoDB
-              transactions_table.update_item(
-                  Key={'transaction_id': transaction_id},
-                  UpdateExpression='SET fraud_result = :fr, updated_at = :ua',
-                  ExpressionAttributeValues={
-                      ':fr': fraud_result,
-                      ':ua': int(time.time())
-                  }
-              )
+              # Handle race condition - if record doesn't exist, put_item first
+              try:
+                  transactions_table.update_item(
+                      Key={'transaction_id': transaction_id},
+                      UpdateExpression='SET fraud_result = :fr, updated_at = :ua',
+                      ConditionExpression='attribute_exists(transaction_id)',
+                      ExpressionAttributeValues={
+                          ':fr': fraud_result,
+                          ':ua': int(time.time())
+                      }
+                  )
+              except transactions_table.meta.client.exceptions.ConditionalCheckFailedException:
+                  # Record doesn't exist, create minimal record with fraud result
+                  transactions_table.put_item(
+                      Item={
+                          'transaction_id': transaction_id,
+                          'fraud_result': fraud_result,
+                          'status': 'PROCESSING',
+                          'created_at': int(time.time()),
+                          'updated_at': int(time.time())
+                      }
+                  )
+              except Exception as e:
+                  # Fallback: use put_item to ensure the fraud result is stored
+                  transactions_table.put_item(
+                      Item={
+                          'transaction_id': transaction_id,
+                          'fraud_result': fraud_result,
+                          'status': 'PROCESSING',
+                          'created_at': int(time.time()),
+                          'updated_at': int(time.time())
+                      }
+                  )
               
               return fraud_result
       Runtime: python3.12
