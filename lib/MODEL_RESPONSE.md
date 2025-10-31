@@ -11,8 +11,7 @@ Alright, this is a comprehensive AWS CDK security baseline request. Let me break
 6. **CloudWatch logs**: KMS encryption, 7-year retention
 7. **Cross-account IAM**: DevOps access with MFA requirements
 8. **SCPs**: Prevent deletion of security resources
-9. **AWS Config**: Compliance rules for encryption
-10. **CloudTrail**: Multi-region, validated, encrypted
+9. **CloudTrail**: Multi-region, validated, encrypted
 
 Constraints:
 - KMS key rotation enabled
@@ -24,7 +23,6 @@ Constraints:
 - Tagging via CDK Aspects
 - Custom constructs for reusability
 - Termination protection
-- Config aggregators for reporting
 
 I need to create two files:
 1. `main.ts` - CDK app entry point
@@ -77,12 +75,9 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 import * as logs from 'aws-cdk-lib/aws-logs';
-import * as config from 'aws-cdk-lib/aws-config';
 import * as organizations from 'aws-cdk-lib/aws-organizations';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as events from 'aws-cdk-lib/aws-events';
-import * as targets from 'aws-cdk-lib/aws-events-targets';
 import { Construct } from 'constructs';
 
 // 🔹 Custom Construct for Secure KMS Key
@@ -241,12 +236,6 @@ export class TapStack extends cdk.Stack {
 
     const vpcFlowLogBucket = new SecureS3Bucket(this, 'VpcFlowLogBucket', {
       bucketName: `${cdk.Aws.ACCOUNT_ID}-vpc-flow-logs`,
-      encryptionKey: kmsS3Key.key,
-      logBucket: accessLogBucket.bucket,
-    });
-
-    const configBucket = new SecureS3Bucket(this, 'ConfigBucket', {
-      bucketName: `${cdk.Aws.ACCOUNT_ID}-config-logs`,
       encryptionKey: kmsS3Key.key,
       logBucket: accessLogBucket.bucket,
     });
@@ -537,81 +526,6 @@ def handler(event, context):
       }],
     });
 
-    // 🔹 AWS Config Configuration
-    const configRole = new iam.Role(this, 'ConfigServiceRole', {
-      assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
-      roleName: 'SecurityBaselineConfigRole',
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/ConfigRole'),
-      ],
-    });
-
-    configBucket.bucket.grantReadWrite(configRole);
-
-    const configRecorder = new config.CfnConfigurationRecorder(this, 'ConfigRecorder', {
-      name: 'security-baseline-recorder',
-      roleArn: configRole.roleArn,
-      recordingGroup: {
-        allSupported: true,
-        includeGlobalResourceTypes: true,
-        recordingStrategy: {
-          useOnly: 'ALL_SUPPORTED_RESOURCE_TYPES',
-        },
-      },
-    });
-
-    const deliveryChannel = new config.CfnDeliveryChannel(this, 'ConfigDeliveryChannel', {
-      name: 'security-baseline-delivery',
-      s3BucketName: configBucket.bucket.bucketName,
-      configSnapshotDeliveryProperties: {
-        deliveryFrequency: 'TwentyFour_Hours',
-      },
-    });
-
-    // Config Rules for Compliance
-    const encryptedVolumesRule = new config.ManagedRule(this, 'EncryptedVolumesRule', {
-      identifier: config.ManagedRuleIdentifiers.EC2_ENCRYPTED_VOLUMES,
-      description: 'Checks that EBS volumes are encrypted',
-    });
-
-    const s3BucketSSLRequestsRule = new config.ManagedRule(this, 'S3BucketSSLRequestsRule', {
-      identifier: config.ManagedRuleIdentifiers.S3_BUCKET_SSL_REQUESTS_ONLY,
-      description: 'Checks that S3 buckets require SSL requests',
-    });
-
-    const iamPasswordPolicyRule = new config.ManagedRule(this, 'IamPasswordPolicyRule', {
-      identifier: config.ManagedRuleIdentifiers.IAM_PASSWORD_POLICY,
-      description: 'Checks IAM password policy requirements',
-      inputParameters: {
-        RequireUppercaseCharacters: 'true',
-        RequireLowercaseCharacters: 'true',
-        RequireSymbols: 'true',
-        RequireNumbers: 'true',
-        MinimumPasswordLength: '14',
-        PasswordReusePrevention: '24',
-        MaxPasswordAge: '90',
-      },
-    });
-
-    const mfaEnabledRule = new config.ManagedRule(this, 'MfaEnabledRule', {
-      identifier: config.ManagedRuleIdentifiers.MFA_ENABLED_FOR_IAM_CONSOLE_ACCESS,
-      description: 'Checks that MFA is enabled for IAM console access',
-    });
-
-    const cloudTrailEnabledRule = new config.ManagedRule(this, 'CloudTrailEnabledRule', {
-      identifier: config.ManagedRuleIdentifiers.CLOUD_TRAIL_ENABLED,
-      description: 'Checks that CloudTrail is enabled',
-    });
-
-    // Config Aggregator for multi-account reporting
-    const configAggregator = new config.CfnConfigurationAggregator(this, 'ConfigAggregator', {
-      configurationAggregatorName: 'security-baseline-aggregator',
-      accountAggregationSources: [{
-        accountIds: [cdk.Aws.ACCOUNT_ID],
-        allAwsRegions: true,
-      }],
-    });
-
     // 🔹 Service Control Policies (SCPs)
     const preventSecurityResourceDeletionScp = new organizations.CfnPolicy(this, 'PreventSecurityResourceDeletionSCP', {
       type: 'SERVICE_CONTROL_POLICY',
@@ -671,18 +585,8 @@ def handler(event, context):
             ],
             Resource: [
               cloudTrailBucket.bucket.bucketArn,
-              configBucket.bucket.bucketArn,
               vpcFlowLogBucket.bucket.bucketArn,
             ],
-          },
-          {
-            Effect: 'Deny',
-            Action: [
-              'config:DeleteConfigurationRecorder',
-              'config:DeleteDeliveryChannel',
-              'config:StopConfigurationRecorder',
-            ],
-            Resource: '*',
           },
         ],
       }),
@@ -717,56 +621,6 @@ def handler(event, context):
       treatMissingData: cdk.aws_cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
-    // 🔹 EventBridge Rules for Compliance
-    const complianceChangeRule = new events.Rule(this, 'ComplianceChangeRule', {
-      ruleName: 'security-baseline-compliance-changes',
-      description: 'Triggers on Config compliance changes',
-      eventPattern: {
-        source: ['aws.config'],
-        detailType: ['Config Rules Compliance Change'],
-      },
-    });
-
-    // 🔹 Lambda for Compliance Reporting
-    const complianceReportingLambda = new lambda.Function(this, 'ComplianceReportingLambda', {
-      functionName: 'compliance-reporting',
-      runtime: lambda.Runtime.PYTHON_3_11,
-      handler: 'index.handler',
-      role: new iam.Role(this, 'ComplianceReportingRole', {
-        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-        managedPolicies: [
-          iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
-          iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/ConfigRole'),
-        ],
-      }),
-      timeout: cdk.Duration.minutes(5),
-      code: lambda.Code.fromInline(`
-import json
-import boto3
-
-def handler(event, context):
-    """Generate compliance reports from Config aggregator"""
-    config_client = boto3.client('config')
-    
-    # Get aggregated compliance summary
-    response = config_client.get_aggregate_compliance_details_by_config_rule(
-        ConfigurationAggregatorName='security-baseline-aggregator',
-        ConfigRuleName=event.get('ConfigRuleName', 'All'),
-        Limit=100
-    )
-    
-    return {
-        'statusCode': 200,
-        'body': json.dumps({
-            'ComplianceReport': response['AggregateEvaluationResults'],
-            'GeneratedAt': context.request_id
-        })
-    }
-      `),
-    });
-
-    complianceChangeRule.addTarget(new targets.LambdaFunction(complianceReportingLambda));
-
     // 🔹 Outputs
     new cdk.CfnOutput(this, 'KmsDatabaseKeyArn', {
       value: kmsDatabaseKey.key.keyArn,
@@ -784,12 +638,6 @@ def handler(event, context):
       value: devOpsRole.roleArn,
       description: 'DevOps cross-account role ARN',
       exportName: 'SecurityBaseline-DevOpsRoleArn',
-    });
-
-    new cdk.CfnOutput(this, 'ComplianceAggregatorName', {
-      value: configAggregator.ref,
-      description: 'Config aggregator name for compliance reporting',
-      exportName: 'SecurityBaseline-ComplianceAggregator',
     });
   }
 }

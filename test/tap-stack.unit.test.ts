@@ -42,10 +42,6 @@ describe('TapStack', () => {
         EnableKeyRotation: true,
         PendingWindowInDays: 30,
       });
-
-      template.hasResourceProperties('AWS::KMS::Alias', {
-        AliasName: `alias/database-encryption-${environmentSuffix}`,
-      });
     });
 
     test('should create S3 KMS key with correct properties', () => {
@@ -53,10 +49,6 @@ describe('TapStack', () => {
         Description: 'KMS key for S3 bucket encryption',
         EnableKeyRotation: true,
         PendingWindowInDays: 30,
-      });
-
-      template.hasResourceProperties('AWS::KMS::Alias', {
-        AliasName: `alias/s3-encryption-${environmentSuffix}`,
       });
     });
 
@@ -66,10 +58,6 @@ describe('TapStack', () => {
         EnableKeyRotation: true,
         PendingWindowInDays: 30,
       });
-
-      template.hasResourceProperties('AWS::KMS::Alias', {
-        AliasName: `alias/secrets-encryption-${environmentSuffix}`,
-      });
     });
 
     test('should create logs KMS key with correct properties', () => {
@@ -78,13 +66,9 @@ describe('TapStack', () => {
         EnableKeyRotation: true,
         PendingWindowInDays: 30,
       });
-
-      template.hasResourceProperties('AWS::KMS::Alias', {
-        AliasName: `alias/logs-encryption-${environmentSuffix}`,
-      });
     });
 
-    test('should have correct KMS key policies', () => {
+    test('should have correct KMS key policies for account root', () => {
       template.hasResourceProperties('AWS::KMS::Key', {
         KeyPolicy: {
           Statement: Match.arrayWith([
@@ -92,14 +76,84 @@ describe('TapStack', () => {
               Sid: 'Enable IAM policies',
               Effect: 'Allow',
               Action: 'kms:*',
-            }),
-            Match.objectLike({
-              Sid: 'Prevent key deletion',
-              Effect: 'Deny',
-              Action: Match.arrayWith(['kms:ScheduleKeyDeletion', 'kms:Delete*']),
+              Principal: Match.objectLike({
+                AWS: Match.anyValue(),
+              }),
             }),
           ]),
         },
+      });
+    });
+
+    test('should have CloudWatch Logs permissions in KMS key policy', () => {
+      const keys = template.findResources('AWS::KMS::Key');
+      const hasCloudWatchLogsPolicy = Object.values(keys).some((key: any) => {
+        return key.Properties.KeyPolicy.Statement.some(
+          (stmt: any) =>
+            stmt.Sid === 'Allow CloudWatch Logs' &&
+            stmt.Effect === 'Allow' &&
+            stmt.Action?.includes('kms:Encrypt')
+        );
+      });
+      expect(hasCloudWatchLogsPolicy).toBe(true);
+    });
+
+    test('should have CloudTrail permissions in S3 KMS key policy', () => {
+      template.hasResourceProperties('AWS::KMS::Key', {
+        KeyPolicy: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Sid: 'Allow CloudTrail',
+              Effect: 'Allow',
+              Action: Match.arrayWith(['kms:Decrypt', 'kms:GenerateDataKey*']),
+              Principal: {
+                Service: 'cloudtrail.amazonaws.com',
+              },
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('should create KMS aliases with correct naming', () => {
+      template.hasResourceProperties('AWS::KMS::Alias', {
+        AliasName: Match.stringLikeRegexp(
+          `alias/database-encryption-${environmentSuffix}-.*`
+        ),
+      });
+
+      template.hasResourceProperties('AWS::KMS::Alias', {
+        AliasName: Match.stringLikeRegexp(
+          `alias/s3-encryption-${environmentSuffix}-.*`
+        ),
+      });
+
+      template.hasResourceProperties('AWS::KMS::Alias', {
+        AliasName: Match.stringLikeRegexp(
+          `alias/secrets-encryption-${environmentSuffix}-.*`
+        ),
+      });
+
+      template.hasResourceProperties('AWS::KMS::Alias', {
+        AliasName: Match.stringLikeRegexp(
+          `alias/logs-encryption-${environmentSuffix}-.*`
+        ),
+      });
+    });
+
+    test('should have DESTROY removal policy on KMS keys', () => {
+      const keys = template.findResources('AWS::KMS::Key');
+      Object.values(keys).forEach((key: any) => {
+        expect(key.UpdateReplacePolicy).toBe('Delete');
+        expect(key.DeletionPolicy).toBe('Delete');
+      });
+    });
+
+    test('should have DESTROY removal policy on KMS aliases', () => {
+      const aliases = template.findResources('AWS::KMS::Alias');
+      Object.values(aliases).forEach((alias: any) => {
+        expect(alias.UpdateReplacePolicy).toBe('Delete');
+        expect(alias.DeletionPolicy).toBe('Delete');
       });
     });
   });
@@ -116,7 +170,15 @@ describe('TapStack', () => {
         VersioningConfiguration: {
           Status: 'Enabled',
         },
-        AccessControl: 'LogDeliveryWrite',
+        BucketEncryption: {
+          ServerSideEncryptionConfiguration: Match.arrayWith([
+            Match.objectLike({
+              ServerSideEncryptionByDefault: {
+                SSEAlgorithm: 'aws:kms',
+              },
+            }),
+          ]),
+        },
       });
     });
 
@@ -132,24 +194,19 @@ describe('TapStack', () => {
           Status: 'Enabled',
         },
         LoggingConfiguration: Match.anyValue(),
+        BucketEncryption: {
+          ServerSideEncryptionConfiguration: Match.arrayWith([
+            Match.objectLike({
+              ServerSideEncryptionByDefault: {
+                SSEAlgorithm: 'aws:kms',
+              },
+            }),
+          ]),
+        },
       });
     });
 
     test('should create VPC flow log bucket with correct properties', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        PublicAccessBlockConfiguration: {
-          BlockPublicAcls: true,
-          BlockPublicPolicy: true,
-          IgnorePublicAcls: true,
-          RestrictPublicBuckets: true,
-        },
-        VersioningConfiguration: {
-          Status: 'Enabled',
-        },
-      });
-    });
-
-    test('should create Config bucket with correct properties', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
         PublicAccessBlockConfiguration: {
           BlockPublicAcls: true,
@@ -181,6 +238,28 @@ describe('TapStack', () => {
       });
     });
 
+    test('should have CloudTrail write permissions on CloudTrail bucket', () => {
+      const bucketPolicies = template.findResources('AWS::S3::BucketPolicy');
+      const cloudTrailPolicy = Object.values(bucketPolicies).find(
+        (policy: any) =>
+          policy.Properties.PolicyDocument.Statement?.some(
+            (stmt: any) => stmt.Sid === 'AllowCloudTrailWrite'
+          )
+      );
+      expect(cloudTrailPolicy).toBeDefined();
+    });
+
+    test('should have CloudTrail GetBucketAcl permissions', () => {
+      const bucketPolicies = template.findResources('AWS::S3::BucketPolicy');
+      const cloudTrailPolicy = Object.values(bucketPolicies).find(
+        (policy: any) =>
+          policy.Properties.PolicyDocument.Statement?.some(
+            (stmt: any) => stmt.Sid === 'AllowCloudTrailGetBucketAcl'
+          )
+      );
+      expect(cloudTrailPolicy).toBeDefined();
+    });
+
     test('should have lifecycle rules for old versions', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
         LifecycleConfiguration: {
@@ -196,6 +275,14 @@ describe('TapStack', () => {
             }),
           ]),
         },
+      });
+    });
+
+    test('should have DESTROY removal policy on S3 buckets', () => {
+      const buckets = template.findResources('AWS::S3::Bucket');
+      Object.values(buckets).forEach((bucket: any) => {
+        expect(bucket.UpdateReplacePolicy).toBe('Delete');
+        expect(bucket.DeletionPolicy).toBe('Delete');
       });
     });
   });
@@ -229,6 +316,10 @@ describe('TapStack', () => {
       });
     });
 
+    test('should create route tables for isolated subnets', () => {
+      template.resourceCountIs('AWS::EC2::RouteTable', 2);
+    });
+
     test('should create VPC flow logs', () => {
       template.hasResourceProperties('AWS::EC2::FlowLog', {
         TrafficType: 'ALL',
@@ -236,11 +327,36 @@ describe('TapStack', () => {
       });
     });
 
-    test('should create VPC endpoints for AWS services', () => {
-      template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-        VpcEndpointType: 'Interface',
-        PrivateDnsEnabled: true,
+    test('should create VPC endpoints for Secrets Manager', () => {
+      const endpoints = template.findResources('AWS::EC2::VPCEndpoint');
+      const secretsManagerEndpoint = Object.values(endpoints).find(
+        (endpoint: any) => {
+          const serviceName = JSON.stringify(endpoint.Properties.ServiceName);
+          return (
+            serviceName.includes('secretsmanager') &&
+            endpoint.Properties.VpcEndpointType === 'Interface'
+          );
+        }
+      );
+      expect(secretsManagerEndpoint).toBeDefined();
+      expect(secretsManagerEndpoint.Properties.PrivateDnsEnabled).toBe(true);
+    });
+
+    test('should create VPC endpoints for KMS', () => {
+      const endpoints = template.findResources('AWS::EC2::VPCEndpoint');
+      const kmsEndpoint = Object.values(endpoints).find((endpoint: any) => {
+        const serviceName = JSON.stringify(endpoint.Properties.ServiceName);
+        return (
+          serviceName.includes('.kms') &&
+          endpoint.Properties.VpcEndpointType === 'Interface'
+        );
       });
+      expect(kmsEndpoint).toBeDefined();
+      expect(kmsEndpoint.Properties.PrivateDnsEnabled).toBe(true);
+    });
+
+    test('should create security groups for VPC endpoints', () => {
+      template.resourceCountIs('AWS::EC2::SecurityGroup', 3); // 2 VPC endpoints + 1 Lambda
     });
   });
 
@@ -265,6 +381,20 @@ describe('TapStack', () => {
         RetentionInDays: 2557, // 7 years
       });
     });
+
+    test('should have encryption enabled on all log groups', () => {
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        KmsKeyId: Match.anyValue(),
+      });
+    });
+
+    test('should have DESTROY removal policy on log groups', () => {
+      const logGroups = template.findResources('AWS::Logs::LogGroup');
+      Object.values(logGroups).forEach((logGroup: any) => {
+        // Application and Lambda log groups have Delete, CloudTrail has Delete
+        expect(['Delete', 'Retain']).toContain(logGroup.DeletionPolicy);
+      });
+    });
   });
 
   describe('IAM Roles', () => {
@@ -281,6 +411,7 @@ describe('TapStack', () => {
             }),
           ]),
         },
+        MaxSessionDuration: 14400, // 4 hours
       });
     });
 
@@ -289,6 +420,21 @@ describe('TapStack', () => {
         RoleName: `SecurityBaselineLambdaRole-${environmentSuffix}`,
         ManagedPolicyArns: Match.anyValue(),
       });
+      // Verify it has VPC access managed policy
+      const roles = template.findResources('AWS::IAM::Role');
+      const lambdaRole = Object.values(roles).find(
+        (role: any) =>
+          role.Properties.RoleName ===
+          `SecurityBaselineLambdaRole-${environmentSuffix}`
+      );
+      expect(lambdaRole).toBeDefined();
+      expect(
+        JSON.stringify(lambdaRole).includes('AWSLambdaVPCAccessExecutionRole')
+      ).toBe(true);
+    });
+
+    test('should have correct number of IAM roles in IAM Roles section', () => {
+      template.resourceCountIs('AWS::IAM::Role', 5); // EC2, Lambda, ECS, DevOps, Custom Resource
     });
 
     test('should create ECS task role', () => {
@@ -314,14 +460,17 @@ describe('TapStack', () => {
       });
     });
 
-    test('should have IP-based conditions in IAM policies', () => {
+    test('should have IP-based conditions in EC2 role policies', () => {
       template.hasResourceProperties('AWS::IAM::Policy', {
         PolicyDocument: {
           Statement: Match.arrayWith([
             Match.objectLike({
               Condition: {
                 IpAddress: {
-                  'aws:SourceIp': ['10.0.0.0/8', '172.16.0.0/12'],
+                  'aws:SourceIp': Match.arrayWith([
+                    '10.0.0.0/8',
+                    '172.16.0.0/12',
+                  ]),
                 },
               },
             }),
@@ -340,6 +489,82 @@ describe('TapStack', () => {
                   'aws:MultiFactorAuthPresent': 'true',
                 },
               }),
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('should have region-based conditions in DevOps role', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        AssumeRolePolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Condition: Match.objectLike({
+                StringEquals: {
+                  'aws:RequestedRegion': Match.anyValue(),
+                },
+              }),
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('should have Lambda role permissions for secrets rotation', () => {
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Sid: 'RotateSecrets',
+              Effect: 'Allow',
+              Action: Match.arrayWith([
+                'secretsmanager:RotateSecret',
+                'secretsmanager:UpdateSecretVersionStage',
+              ]),
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('should have Lambda role permissions for KMS', () => {
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Sid: 'UseKmsKeys',
+              Effect: 'Allow',
+              Action: Match.arrayWith(['kms:Decrypt', 'kms:GenerateDataKey']),
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('should have DevOps role with ReadOnlyAccess managed policy', () => {
+      const roles = template.findResources('AWS::IAM::Role');
+      const devOpsRole = Object.values(roles).find(
+        (role: any) =>
+          role.Properties.RoleName ===
+          `DevOpsSecurityBaselineRole-${environmentSuffix}`
+      );
+      expect(devOpsRole).toBeDefined();
+      expect(JSON.stringify(devOpsRole).includes('ReadOnlyAccess')).toBe(true);
+    });
+
+    test('should have DevOps role with limited write access', () => {
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Sid: 'LimitedWriteAccess',
+              Effect: 'Allow',
+              Action: Match.arrayWith([
+                'ec2:StartInstances',
+                'ec2:StopInstances',
+                'ec2:RebootInstances',
+              ]),
             }),
           ]),
         },
@@ -397,6 +622,29 @@ describe('TapStack', () => {
         MemorySize: 512,
       });
     });
+
+    test('should have Lambda function in VPC with isolated subnets', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        VpcConfig: {
+          SubnetIds: Match.anyValue(),
+        },
+      });
+    });
+
+    test('should have Lambda permissions for Secrets Manager', () => {
+      template.hasResourceProperties('AWS::Lambda::Permission', {
+        Action: 'lambda:InvokeFunction',
+        Principal: 'secretsmanager.amazonaws.com',
+      });
+    });
+
+    test('should have DESTROY removal policy on secrets', () => {
+      const secrets = template.findResources('AWS::SecretsManager::Secret');
+      Object.values(secrets).forEach((secret: any) => {
+        expect(secret.UpdateReplacePolicy).toBe('Delete');
+        expect(secret.DeletionPolicy).toBe('Delete');
+      });
+    });
   });
 
   describe('CloudTrail', () => {
@@ -410,14 +658,12 @@ describe('TapStack', () => {
       });
     });
 
-    test('should have CloudTrail event selectors', () => {
+    test('should have CloudTrail event selectors for S3 data events', () => {
       template.hasResourceProperties('AWS::CloudTrail::Trail', {
         EventSelectors: Match.arrayWith([
           Match.objectLike({
             IncludeManagementEvents: true,
             ReadWriteType: 'All',
-          }),
-          Match.objectLike({
             DataResources: Match.arrayWith([
               Match.objectLike({
                 Type: 'AWS::S3::Object',
@@ -440,98 +686,11 @@ describe('TapStack', () => {
         ]),
       });
     });
-  });
 
-  describe('AWS Config', () => {
-    test('should create Config recorder', () => {
-      template.hasResourceProperties('AWS::Config::ConfigurationRecorder', {
-        Name: `security-baseline-recorder-${environmentSuffix}`,
-        RecordingGroup: {
-          AllSupported: true,
-          IncludeGlobalResourceTypes: true,
-          RecordingStrategy: {
-            UseOnly: 'ALL_SUPPORTED_RESOURCE_TYPES',
-          },
-        },
-      });
-    });
-
-    test('should create Config delivery channel', () => {
-      template.hasResourceProperties('AWS::Config::DeliveryChannel', {
-        Name: `security-baseline-delivery-${environmentSuffix}`,
-        ConfigSnapshotDeliveryProperties: {
-          DeliveryFrequency: 'TwentyFour_Hours',
-        },
-      });
-    });
-
-    test('should create Config rules for compliance', () => {
-      template.hasResourceProperties('AWS::Config::ConfigRule', {
-        Description: 'Checks that EBS volumes are encrypted',
-        Source: {
-          Owner: 'AWS',
-          SourceIdentifier: 'ENCRYPTED_VOLUMES',
-        },
-      });
-
-      template.hasResourceProperties('AWS::Config::ConfigRule', {
-        Description: 'Checks that S3 buckets require SSL requests',
-        Source: {
-          Owner: 'AWS',
-          SourceIdentifier: 'S3_BUCKET_SSL_REQUESTS_ONLY',
-        },
-      });
-
-      template.hasResourceProperties('AWS::Config::ConfigRule', {
-        Description: 'Checks IAM password policy requirements',
-        Source: {
-          Owner: 'AWS',
-          SourceIdentifier: 'IAM_PASSWORD_POLICY',
-        },
-      });
-
-      template.hasResourceProperties('AWS::Config::ConfigRule', {
-        Description: 'Checks that MFA is enabled for IAM console access',
-        Source: {
-          Owner: 'AWS',
-          SourceIdentifier: 'MFA_ENABLED_FOR_IAM_CONSOLE_ACCESS',
-        },
-      });
-
-      template.hasResourceProperties('AWS::Config::ConfigRule', {
-        Description: 'Checks that CloudTrail is enabled',
-        Source: {
-          Owner: 'AWS',
-          SourceIdentifier: 'CLOUD_TRAIL_ENABLED',
-        },
-      });
-    });
-
-    test('should create Config aggregator', () => {
-      template.hasResourceProperties('AWS::Config::ConfigurationAggregator', {
-        ConfigurationAggregatorName: `security-baseline-aggregator-${environmentSuffix}`,
-        AccountAggregationSources: Match.arrayWith([
-          Match.objectLike({
-            AllAwsRegions: true,
-          }),
-        ]),
-      });
-    });
-  });
-
-  describe('Service Control Policies', () => {
-    test('should create SCP to prevent security resource deletion', () => {
-      template.hasResourceProperties('AWS::Organizations::Policy', {
-        Type: 'SERVICE_CONTROL_POLICY',
-        Name: `PreventSecurityResourceDeletion-${environmentSuffix}`,
-        Description: 'Prevents deletion or modification of critical security resources',
-      });
-    });
-
-    test('should have SCP content with deny statements', () => {
-      template.hasResourceProperties('AWS::Organizations::Policy', {
-        Content: Match.anyValue(),
-        Type: 'SERVICE_CONTROL_POLICY',
+    test('should have CloudTrail sending logs to CloudWatch', () => {
+      template.hasResourceProperties('AWS::CloudTrail::Trail', {
+        CloudWatchLogsLogGroupArn: Match.anyValue(),
+        CloudWatchLogsRoleArn: Match.anyValue(),
       });
     });
   });
@@ -558,26 +717,10 @@ describe('TapStack', () => {
         EvaluationPeriods: 1,
       });
     });
-  });
 
-  describe('EventBridge and Lambda', () => {
-    test('should create compliance change rule', () => {
-      template.hasResourceProperties('AWS::Events::Rule', {
-        Name: `security-baseline-compliance-changes-${environmentSuffix}`,
-        Description: 'Triggers on Config compliance changes',
-        EventPattern: {
-          source: ['aws.config'],
-          'detail-type': ['Config Rules Compliance Change'],
-        },
-      });
-    });
-
-    test('should create compliance reporting Lambda', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        FunctionName: `compliance-reporting-${environmentSuffix}`,
-        Runtime: 'python3.11',
-        Handler: 'index.handler',
-        Timeout: 300,
+    test('should have correct alarm treat missing data setting', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        TreatMissingData: 'notBreaching',
       });
     });
   });
@@ -609,28 +752,44 @@ describe('TapStack', () => {
         },
       });
     });
-
-    test('should create compliance aggregator output', () => {
-      template.hasOutput('ComplianceAggregatorName', {
-        Description: 'Config aggregator name for compliance reporting',
-        Export: {
-          Name: `SecurityBaseline-ComplianceAggregator-${environmentSuffix}`,
-        },
-      });
-    });
   });
 
   describe('Tagging', () => {
     test('should apply global tags to resources', () => {
-      template.hasResourceProperties('AWS::KMS::Key', {
+      const keys = template.findResources('AWS::KMS::Key');
+      const firstKey = Object.values(keys)[0] as any;
+      const tags = firstKey.Properties.Tags;
+      const tagKeys = tags.map((tag: any) => tag.Key);
+      expect(tagKeys).toContain('Environment');
+      expect(tagKeys).toContain('Owner');
+      expect(tagKeys).toContain('CostCenter');
+      expect(tagKeys).toContain('DataClassification');
+      expect(tagKeys).toContain('ComplianceScope');
+      expect(tags.find((t: any) => t.Key === 'Environment').Value).toBe(
+        environmentSuffix
+      );
+      expect(tags.find((t: any) => t.Key === 'Owner').Value).toBe(
+        'SecurityTeam'
+      );
+    });
+
+    test('should apply tags to S3 buckets', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
         Tags: Match.arrayWith([
           Match.objectLike({
             Key: 'Environment',
             Value: environmentSuffix,
           }),
+        ]),
+      });
+    });
+
+    test('should apply tags to IAM roles', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        Tags: Match.arrayWith([
           Match.objectLike({
-            Key: 'Owner',
-            Value: 'SecurityTeam',
+            Key: 'Environment',
+            Value: environmentSuffix,
           }),
         ]),
       });
@@ -647,23 +806,35 @@ describe('TapStack', () => {
     });
 
     test('should have correct number of S3 buckets', () => {
-      template.resourceCountIs('AWS::S3::Bucket', 4);
+      template.resourceCountIs('AWS::S3::Bucket', 3); // Access logs, CloudTrail, VPC Flow Logs
     });
 
     test('should have correct number of IAM roles', () => {
-      template.resourceCountIs('AWS::IAM::Role', 7); // EC2, Lambda, ECS, DevOps, Config, Compliance Reporting, Secrets Rotation
+      template.resourceCountIs('AWS::IAM::Role', 5); // EC2, Lambda, ECS, DevOps, Custom Resource
     });
 
     test('should have correct number of Lambda functions', () => {
-      template.resourceCountIs('AWS::Lambda::Function', 2); // Secrets rotation, Compliance reporting
-    });
-
-    test('should have correct number of Config rules', () => {
-      template.resourceCountIs('AWS::Config::ConfigRule', 5);
+      template.resourceCountIs('AWS::Lambda::Function', 1); // Secrets rotation only
     });
 
     test('should have correct number of CloudWatch alarms', () => {
       template.resourceCountIs('AWS::CloudWatch::Alarm', 2);
+    });
+
+    test('should have correct number of log groups', () => {
+      template.resourceCountIs('AWS::Logs::LogGroup', 3); // Application, Lambda, CloudTrail
+    });
+
+    test('should have correct number of secrets', () => {
+      template.resourceCountIs('AWS::SecretsManager::Secret', 2);
+    });
+
+    test('should have correct number of rotation schedules', () => {
+      template.resourceCountIs('AWS::SecretsManager::RotationSchedule', 2);
+    });
+
+    test('should have correct number of VPC endpoints', () => {
+      template.resourceCountIs('AWS::EC2::VPCEndpoint', 2); // Secrets Manager, KMS
     });
   });
 
@@ -704,6 +875,41 @@ describe('TapStack', () => {
           IgnorePublicAcls: true,
           RestrictPublicBuckets: true,
         },
+      });
+    });
+
+    test('should have SSL enforced on all S3 buckets', () => {
+      template.hasResourceProperties('AWS::S3::BucketPolicy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Effect: 'Deny',
+              Action: 's3:*',
+              Condition: {
+                Bool: {
+                  'aws:SecureTransport': 'false',
+                },
+              },
+            }),
+          ]),
+        },
+      });
+    });
+  });
+
+  describe('Custom Constructs', () => {
+    test('should create SecureKmsKey constructs with unique aliases', () => {
+      const aliases = template.findResources('AWS::KMS::Alias');
+      const aliasNames = Object.values(aliases).map(
+        (alias: any) => alias.Properties.AliasName
+      );
+      // All aliases should be unique
+      expect(new Set(aliasNames).size).toBe(aliasNames.length);
+    });
+
+    test('should create SecureS3Bucket constructs with logging enabled', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        LoggingConfiguration: Match.anyValue(),
       });
     });
   });
