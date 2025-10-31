@@ -207,6 +207,7 @@ Task ID: ${TASK_ID}"
 6. **Create PR**:
    ```bash
    AWS_SERVICES_COUNT=$(jq -r '.aws_services | length' metadata.json)
+   SYNTH_GROUP=$(jq -r '.synth_group // "Synth-1"' ../../.claude/settings.local.json)
 
    gh pr create \
      --title "synth-${TASK_ID} {SUBTASK}" \
@@ -237,7 +238,7 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
 - [x] Code in ideal response and tapstack are the same" \
      --base main \
      --head ${BRANCH_NAME} \
-     --label "Synth-1"
+     --label "${SYNTH_GROUP}"
    ```
 
 7. **Capture PR number**:
