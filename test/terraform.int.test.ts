@@ -1,9 +1,11 @@
 import { CloudWatchLogsClient, DescribeLogStreamsCommand } from "@aws-sdk/client-cloudwatch-logs";
 import { DescribeFlowLogsCommand, EC2Client } from "@aws-sdk/client-ec2";
-import { DecryptCommand, DescribeKeyCommand, EncryptCommand, KMSClient } from "@aws-sdk/client-kms";
+import { DecryptCommand, DescribeKeyCommand, EncryptCommand, GetKeyRotationStatusCommand, KMSClient } from "@aws-sdk/client-kms";
 import { InvokeCommand, LambdaClient } from "@aws-sdk/client-lambda";
-import { execFileSync, ExecFileSyncOptions } from "child_process";
+import { ExecFileSyncOptions, execFileSync } from "child_process";
 import fs from "fs";
+import http from "http";
+import https from "https";
 import os from "os";
 import path from "path";
 
@@ -134,8 +136,6 @@ function getCreatedByType(plan: TfPlan, type: string) {
 }
 
 async function httpGet(url: string): Promise<{ status: number; body: string }> {
-  const http = await import("http");
-  const https = await import("https");
   const client = url.startsWith("https") ? https : http;
 
   return new Promise((resolve, reject) => {
@@ -363,7 +363,14 @@ describe("Service-level Integration Tests - Deployed Infrastructure", () => {
 
       console.log(`🔐 KMS Key state: ${keyInfo.KeyMetadata?.KeyState}`);
       expect(keyInfo.KeyMetadata?.KeyState).toBe("Enabled");
-      expect(keyInfo.KeyMetadata?.KeyRotationEnabled).toBe(true);
+
+      // Check rotation status separately
+      const rotationCmd = new GetKeyRotationStatusCommand({
+        KeyId: outputs.kms_key_arn_us_east_1,
+      });
+      const rotationStatus = await client.send(rotationCmd);
+      console.log(`🔐 KMS Key rotation enabled: ${rotationStatus.KeyRotationEnabled}`);
+      expect(rotationStatus.KeyRotationEnabled).toBe(true);
 
       const plaintext = "test-data-for-kms";
       const encryptCmd = new EncryptCommand({
@@ -393,7 +400,14 @@ describe("Service-level Integration Tests - Deployed Infrastructure", () => {
 
       console.log(`🔐 KMS Key state: ${keyInfo.KeyMetadata?.KeyState}`);
       expect(keyInfo.KeyMetadata?.KeyState).toBe("Enabled");
-      expect(keyInfo.KeyMetadata?.KeyRotationEnabled).toBe(true);
+
+      // Check rotation status separately
+      const rotationCmd = new GetKeyRotationStatusCommand({
+        KeyId: outputs.kms_key_arn_us_west_2,
+      });
+      const rotationStatus = await client.send(rotationCmd);
+      console.log(`🔐 KMS Key rotation enabled: ${rotationStatus.KeyRotationEnabled}`);
+      expect(rotationStatus.KeyRotationEnabled).toBe(true);
 
       const plaintext = "test-data-for-kms";
       const encryptCmd = new EncryptCommand({
