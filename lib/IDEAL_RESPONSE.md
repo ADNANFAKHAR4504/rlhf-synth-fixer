@@ -66,7 +66,7 @@ export class TapStack extends cdk.Stack {
       this,
       `VpcFlowLogGroup-${environmentSuffix}`,
       {
-        logGroupName: `/aws/vpc/flowlogs-${environmentSuffix}`,
+        logGroupName: `/aws/vpc/flow-log-group-${environmentSuffix}`,
         retention: logs.RetentionDays.ONE_MONTH,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
