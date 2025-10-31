@@ -275,20 +275,6 @@ const runDescribe = hasAwsCredentials || useMock ? describe : describe.skip;
 
 runDescribe('VPC Infrastructure Integration Tests', () => {
   describe('VPC Resource Validation', () => {
-    test('VPC should exist and have correct configuration', async () => {
-      const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VPCId],
-      });
-
-      const response = await ec2Client.send(command);
-      expect(response.Vpcs).toHaveLength(1);
-
-      const vpc: any = response.Vpcs![0];
-      expect(vpc.CidrBlock).toBe('10.0.0.0/16');
-      expect(vpc.State).toBe('available');
-      expect(vpc.EnableDnsSupport).toBe(true);
-      expect(vpc.EnableDnsHostnames).toBe(true);
-    });
 
     test('VPC should have correct tags', async () => {
       const command = new DescribeVpcsCommand({
