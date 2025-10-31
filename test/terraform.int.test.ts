@@ -300,10 +300,13 @@ terraform {
         return;
       }
 
+      console.log(`\n🔍 Comparing resource counts across ${envNames.length} environments: ${envNames.join(', ')}`);
+
       const basePlan = plans[envNames[0]];
       const baseTypes = Array.from(basePlan.keys()).sort();
 
       for (let i = 1; i < envNames.length; i++) {
+        console.log(`\n📊 Comparing ${envNames[0]} vs ${envNames[i]}...`);
         const comparePlan = plans[envNames[i]];
         const compareTypes = Array.from(comparePlan.keys()).sort();
 
@@ -311,12 +314,16 @@ terraform {
         // - Neptune: Optional graph database (enabled via variable)
         // - Provisioned concurrency: Typically only in prod for performance
         // - EIP/NAT Gateway: Dev often uses single NAT, prod uses multi-AZ
+        // - SNS topic subscriptions: May vary based on alert recipients per env
         const allowedVariableResources = [
           "aws_neptune",
           "aws_lambda_provisioned_concurrency_config",
           "aws_eip",
           "aws_nat_gateway",
+          "aws_sns_topic_subscription",
         ];
+
+        console.log(`   Allowed variable resources: ${allowedVariableResources.join(', ')}`);
 
         const isAllowedToVary = (type: string) =>
           allowedVariableResources.some(prefix => type.includes(prefix));
@@ -339,13 +346,24 @@ terraform {
           // Allow small variance for conditional resources
           const diff = Math.abs(baseCount - compareCount);
           if (diff > 0) {
+            const isAllowed = isAllowedToVary(type);
             console.log(
-              `ℹ️  ${type}: ${envNames[0]}=${baseCount}, ${envNames[i]}=${compareCount}`
+              `ℹ️  ${type}: ${envNames[0]}=${baseCount}, ${envNames[i]}=${compareCount}${isAllowed ? ' (allowed to vary)' : ''}`
             );
           }
 
           // Only assert equality for non-variable resources
           if (!isAllowedToVary(type)) {
+            if (baseCount !== compareCount) {
+              console.error(
+                `❌ Resource count mismatch: ${type}`,
+                `\n   ${envNames[0]}: ${baseCount} resources`,
+                `\n   ${envNames[i]}: ${compareCount} resources`,
+                `\n   Difference: ${Math.abs(baseCount - compareCount)}`,
+                `\n   This resource is NOT in the allowed variable resources list.`,
+                `\n   If this is intentional, add "${type}" to allowedVariableResources.`
+              );
+            }
             expect(compareCount).toBe(baseCount);
           }
         }
