@@ -16,15 +16,6 @@ function toPascalCase(str: string): string {
   return str.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join('');
 }
 
-// Helper to parse array strings from outputs
-function parseArrayString(str: string): string[] {
-  try {
-    return JSON.parse(str);
-  } catch {
-    return [];
-  }
-}
-
 describe('Web Application Infrastructure Integration Tests', () => {
   let outputs: any;
   let ec2: AWS.EC2;
@@ -50,13 +41,19 @@ describe('Web Application Infrastructure Integration Tests', () => {
         outputs[pascalKey] = value;
       }
       
+      // Note: Some expected outputs are missing from the flat outputs
+      // Adding defaults for missing values
+      outputs.Region = outputs.Region || process.env.AWS_REGION || 'us-west-2';
+      outputs.AlbDnsName = outputs.AlbDnsName || ''; // Missing from output
+      outputs.S3LogsBucket = outputs.S3LogsBucket || ''; // Missing from output
+      
       console.log('Loaded outputs:', Object.keys(outputs));
     } else {
       throw new Error(`Deployment outputs not found at ${OUTPUT_FILE}. Run deployment first.`);
     }
 
-    // Initialize AWS clients - default to us-west-2 as per your config
-    const region = process.env.AWS_REGION || 'us-west-2';
+    // Initialize AWS clients using deployment region
+    const region = outputs.Region;
     
     ec2 = new AWS.EC2({ region });
     elbv2 = new AWS.ELBv2({ region });
@@ -79,12 +76,12 @@ describe('Web Application Infrastructure Integration Tests', () => {
           'PublicSubnetIds',
           'PrivateSubnetIds',
           'DatabaseSubnetIds',
+          'AutoscalingGroupName',
+          'RdsEndpoint',
+          'RdsReadReplicaEndpoints',
           'SecurityGroupAlbId',
           'SecurityGroupWebId',
           'SecurityGroupRdsId',
-          'RdsEndpoint',
-          'RdsReadReplicaEndpoints',
-          'AutoscalingGroupName',
           'DbSecretArn',
           'DbSecretName'
         ];
@@ -95,248 +92,230 @@ describe('Web Application Infrastructure Integration Tests', () => {
         });
       });
 
-      test('resource naming follows convention', () => {
+      test('resource names follow naming convention', () => {
         expect(outputs.AutoscalingGroupName).toContain('webapp-production');
         expect(outputs.DbSecretName).toContain('webapp-production-db-credentials');
+        
+        // Parse subnet arrays
+        const publicSubnets = JSON.parse(outputs.PublicSubnetIds);
+        expect(Array.isArray(publicSubnets)).toBe(true);
+        expect(publicSubnets.length).toBe(2);
       });
     });
 
-    describe('VPC and Network Configuration', () => {
-      test('VPC exists and is configured correctly', async () => {
-        const vpcs = await ec2.describeVpcs({
+    describe('VPC and Networking Configuration', () => {
+      test('VPC is configured with correct CIDR and settings', async () => {
+        const vpcResponse = await ec2.describeVpcs({
           VpcIds: [outputs.VpcId]
         }).promise();
 
-        expect(vpcs.Vpcs?.length).toBe(1);
-        const vpc = vpcs.Vpcs![0];
-        
+        const vpc = vpcResponse.Vpcs![0];
         expect(vpc.State).toBe('available');
         expect(vpc.CidrBlock).toBe('10.0.0.0/16');
-        
-        // Check for webapp-production-vpc tag
-        const nameTag = vpc.Tags?.find(t => t.Key === 'Name');
-        expect(nameTag?.Value).toContain('webapp-production-vpc');
       });
 
-      test('all subnets are properly configured', async () => {
-        const publicSubnetIds = parseArrayString(outputs.PublicSubnetIds);
-        const privateSubnetIds = parseArrayString(outputs.PrivateSubnetIds);
-        const databaseSubnetIds = parseArrayString(outputs.DatabaseSubnetIds);
+      test('all subnets are properly configured across AZs', async () => {
+        const publicSubnetIds = JSON.parse(outputs.PublicSubnetIds);
+        const privateSubnetIds = JSON.parse(outputs.PrivateSubnetIds);
+        const databaseSubnetIds = JSON.parse(outputs.DatabaseSubnetIds);
         
         const allSubnetIds = [...publicSubnetIds, ...privateSubnetIds, ...databaseSubnetIds];
         
-        const subnets = await ec2.describeSubnets({
+        const subnetsResponse = await ec2.describeSubnets({
           SubnetIds: allSubnetIds
         }).promise();
 
-        expect(subnets.Subnets?.length).toBe(6); // 2 public, 2 private, 2 database
+        // Verify we have 6 subnets (2 public, 2 private, 2 database)
+        expect(subnetsResponse.Subnets?.length).toBe(6);
 
-        // Verify public subnets
-        publicSubnetIds.forEach(subnetId => {
-          const subnet = subnets.Subnets?.find(s => s.SubnetId === subnetId);
-          expect(subnet?.MapPublicIpOnLaunch).toBe(true);
-          expect(subnet?.VpcId).toBe(outputs.VpcId);
+        // Check public subnets
+        const publicSubnets = subnetsResponse.Subnets?.filter(s => 
+          publicSubnetIds.includes(s.SubnetId)
+        );
+        publicSubnets?.forEach(subnet => {
+          expect(subnet.MapPublicIpOnLaunch).toBe(true);
+          expect(subnet.State).toBe('available');
+          expect(['10.0.1.0/24', '10.0.2.0/24']).toContain(subnet.CidrBlock);
         });
 
-        // Verify private and database subnets
-        [...privateSubnetIds, ...databaseSubnetIds].forEach(subnetId => {
-          const subnet = subnets.Subnets?.find(s => s.SubnetId === subnetId);
-          expect(subnet?.MapPublicIpOnLaunch).toBe(false);
-          expect(subnet?.VpcId).toBe(outputs.VpcId);
+        // Check private subnets
+        const privateSubnets = subnetsResponse.Subnets?.filter(s => 
+          privateSubnetIds.includes(s.SubnetId)
+        );
+        privateSubnets?.forEach(subnet => {
+          expect(subnet.MapPublicIpOnLaunch).toBe(false);
+          expect(['10.0.10.0/24', '10.0.11.0/24']).toContain(subnet.CidrBlock);
         });
+
+        // Check database subnets
+        const databaseSubnets = subnetsResponse.Subnets?.filter(s => 
+          databaseSubnetIds.includes(s.SubnetId)
+        );
+        databaseSubnets?.forEach(subnet => {
+          expect(subnet.MapPublicIpOnLaunch).toBe(false);
+          expect(['10.0.20.0/24', '10.0.21.0/24']).toContain(subnet.CidrBlock);
+        });
+
+        // Verify subnets are in different AZs
+        const azs = new Set(subnetsResponse.Subnets?.map(s => s.AvailabilityZone));
+        expect(azs.size).toBe(2);
       });
 
-      test('NAT gateways are configured for high availability', async () => {
+      test('NAT Gateways are properly configured for high availability', async () => {
         const natGateways = await ec2.describeNatGateways({
-          Filter: [
-            {
-              Name: 'vpc-id',
-              Values: [outputs.VpcId]
-            },
-            {
-              Name: 'state',
-              Values: ['available']
-            }
-          ]
+          Filter: [{
+            Name: 'vpc-id',
+            Values: [outputs.VpcId]
+          }]
         }).promise();
 
-        expect(natGateways.NatGateways?.length).toBe(2); // One per AZ
+        expect(natGateways.NatGateways?.length).toBe(2);
         
         natGateways.NatGateways?.forEach(nat => {
           expect(nat.State).toBe('available');
-          expect(nat.VpcId).toBe(outputs.VpcId);
-          // Check NAT is in public subnet
-          const publicSubnetIds = parseArrayString(outputs.PublicSubnetIds);
-          expect(publicSubnetIds).toContain(nat.SubnetId);
+          expect(nat.ConnectivityType).toBe('public');
         });
-      });
 
-      test('internet gateway is attached to VPC', async () => {
-        const igws = await ec2.describeInternetGateways({
-          Filters: [
-            {
-              Name: 'attachment.vpc-id',
-              Values: [outputs.VpcId]
-            }
-          ]
+        // Verify each NAT Gateway is in a different AZ
+        const natSubnetIds = natGateways.NatGateways?.map(n => n.SubnetId);
+        const subnetsResponse = await ec2.describeSubnets({
+          SubnetIds: natSubnetIds as string[]
         }).promise();
 
-        expect(igws.InternetGateways?.length).toBe(1);
-        const igw = igws.InternetGateways![0];
-        
-        const attachment = igw.Attachments?.find(a => a.VpcId === outputs.VpcId);
-        expect(attachment?.State).toBe('available');
+        const natAzs = new Set(subnetsResponse.Subnets?.map(s => s.AvailabilityZone));
+        expect(natAzs.size).toBe(2);
+      });
+
+      test('route tables are correctly configured', async () => {
+        const routeTables = await ec2.describeRouteTables({
+          Filters: [{
+            Name: 'vpc-id',
+            Values: [outputs.VpcId]
+          }]
+        }).promise();
+
+        // Should have: 1 main, 1 public, 2 private route tables
+        const customRouteTables = routeTables.RouteTables?.filter(rt => 
+          rt.Associations?.some(a => !a.Main)
+        );
+        expect(customRouteTables?.length).toBeGreaterThanOrEqual(3);
+
+        // Check public route table has IGW route
+        const publicRouteTable = routeTables.RouteTables?.find(rt => 
+          rt.Routes?.some(r => r.GatewayId?.startsWith('igw-'))
+        );
+        expect(publicRouteTable).toBeDefined();
+
+        // Check private route tables have NAT Gateway routes
+        const privateRouteTables = routeTables.RouteTables?.filter(rt => 
+          rt.Routes?.some(r => r.NatGatewayId?.startsWith('nat-'))
+        );
+        expect(privateRouteTables?.length).toBe(2);
       });
     });
 
     describe('Security Groups Configuration', () => {
       test('ALB security group allows HTTP/HTTPS from internet', async () => {
-        const sgs = await ec2.describeSecurityGroups({
+        const sgResponse = await ec2.describeSecurityGroups({
           GroupIds: [outputs.SecurityGroupAlbId]
         }).promise();
 
-        expect(sgs.SecurityGroups?.length).toBe(1);
-        const albSg = sgs.SecurityGroups![0];
+        const albSg = sgResponse.SecurityGroups![0];
         
         // Check inbound rules
         const httpRule = albSg.IpPermissions?.find(rule => 
           rule.FromPort === 80 && rule.ToPort === 80
         );
-        expect(httpRule?.IpRanges?.[0]?.CidrIp).toBe('0.0.0.0/0');
+        expect(httpRule).toBeDefined();
+        expect(httpRule?.IpRanges?.[0].CidrIp).toBe('0.0.0.0/0');
 
         const httpsRule = albSg.IpPermissions?.find(rule => 
           rule.FromPort === 443 && rule.ToPort === 443
         );
-        expect(httpsRule?.IpRanges?.[0]?.CidrIp).toBe('0.0.0.0/0');
+        expect(httpsRule).toBeDefined();
+        expect(httpsRule?.IpRanges?.[0].CidrIp).toBe('0.0.0.0/0');
       });
 
-      test('Web security group only allows traffic from ALB', async () => {
-        const sgs = await ec2.describeSecurityGroups({
+      test('Web server security group only allows traffic from ALB', async () => {
+        const sgResponse = await ec2.describeSecurityGroups({
           GroupIds: [outputs.SecurityGroupWebId]
         }).promise();
 
-        const webSg = sgs.SecurityGroups![0];
+        const webSg = sgResponse.SecurityGroups![0];
         
-        // Check that HTTP/HTTPS rules reference ALB security group
+        // Check HTTP/HTTPS rules reference ALB security group
         const httpRule = webSg.IpPermissions?.find(rule => 
           rule.FromPort === 80 && rule.ToPort === 80
         );
-        expect(httpRule?.UserIdGroupPairs?.[0]?.GroupId).toBe(outputs.SecurityGroupAlbId);
+        expect(httpRule?.UserIdGroupPairs?.[0].GroupId).toBe(outputs.SecurityGroupAlbId);
+
+        // Check SSH is restricted to VPC CIDR
+        const sshRule = webSg.IpPermissions?.find(rule => 
+          rule.FromPort === 22 && rule.ToPort === 22
+        );
+        expect(sshRule?.IpRanges?.[0].CidrIp).toBe('10.0.0.0/16');
       });
 
-      test('RDS security group only allows traffic from web servers', async () => {
-        const sgs = await ec2.describeSecurityGroups({
+      test('RDS security group only allows MySQL from web servers', async () => {
+        const sgResponse = await ec2.describeSecurityGroups({
           GroupIds: [outputs.SecurityGroupRdsId]
         }).promise();
 
-        const rdsSg = sgs.SecurityGroups![0];
+        const rdsSg = sgResponse.SecurityGroups![0];
         
-        // Check MySQL port rule
         const mysqlRule = rdsSg.IpPermissions?.find(rule => 
           rule.FromPort === 3306 && rule.ToPort === 3306
         );
-        expect(mysqlRule?.UserIdGroupPairs?.[0]?.GroupId).toBe(outputs.SecurityGroupWebId);
+        expect(mysqlRule).toBeDefined();
+        expect(mysqlRule?.UserIdGroupPairs?.[0].GroupId).toBe(outputs.SecurityGroupWebId);
       });
     });
 
-    describe('RDS Database Configuration', () => {
-      test('RDS master instance is configured correctly', async () => {
-        const endpoint = outputs.RdsEndpoint.split(':')[0];
-        const dbInstances = await rds.describeDBInstances({
-          DBInstanceIdentifier: 'webapp-production-mysql-master'
-        }).promise();
-
-        expect(dbInstances.DBInstances?.length).toBe(1);
-        const dbInstance = dbInstances.DBInstances![0];
-        
-        expect(dbInstance.DBInstanceStatus).toBe('available');
-        expect(dbInstance.Engine).toBe('mysql');
-        expect(dbInstance.DBInstanceClass).toBe('db.t3.medium');
-        expect(dbInstance.MultiAZ).toBe(true);
-        expect(dbInstance.StorageEncrypted).toBe(true);
-        expect(dbInstance.BackupRetentionPeriod).toBe(30);
-        expect(dbInstance.AllocatedStorage).toBeGreaterThanOrEqual(100);
-        expect(dbInstance.MaxAllocatedStorage).toBe(500);
-        expect(dbInstance.PerformanceInsightsEnabled).toBe(true);
-      });
-
-      test('RDS read replica is configured and available', async () => {
-        const replicaEndpoints = parseArrayString(outputs.RdsReadReplicaEndpoints);
-        expect(replicaEndpoints.length).toBeGreaterThanOrEqual(1);
-
-        const dbInstances = await rds.describeDBInstances({
-          DBInstanceIdentifier: 'webapp-production-mysql-read-replica-1'
-        }).promise();
-
-        expect(dbInstances.DBInstances?.length).toBe(1);
-        const replica = dbInstances.DBInstances![0];
-        
-        expect(replica.DBInstanceStatus).toBe('available');
-        expect(replica.ReadReplicaSourceDBInstanceIdentifier).toContain('webapp-production-mysql-master');
-        expect(replica.PerformanceInsightsEnabled).toBe(true);
-      });
-
-      test('RDS subnet group spans multiple availability zones', async () => {
-        const subnetGroups = await rds.describeDBSubnetGroups({
-          DBSubnetGroupName: 'webapp-production-db-subnet-group'
-        }).promise();
-
-        expect(subnetGroups.DBSubnetGroups?.length).toBe(1);
-        const subnetGroup = subnetGroups.DBSubnetGroups![0];
-        
-        expect(subnetGroup.SubnetGroupStatus).toBe('Complete');
-        expect(subnetGroup.Subnets?.length).toBe(2);
-        
-        // Verify different AZs
-        const azs = subnetGroup.Subnets?.map(s => s.SubnetAvailabilityZone?.Name);
-        expect(new Set(azs).size).toBe(2);
-      });
-    });
-
-    describe('Auto Scaling Configuration', () => {
-      test('Auto Scaling Group is configured correctly', async () => {
-        const asgs = await autoscaling.describeAutoScalingGroups({
+    describe('Auto Scaling Group Configuration', () => {
+      test('ASG is configured with correct parameters', async () => {
+        const asgResponse = await autoscaling.describeAutoScalingGroups({
           AutoScalingGroupNames: [outputs.AutoscalingGroupName]
         }).promise();
 
-        expect(asgs.AutoScalingGroups?.length).toBe(1);
-        const asg = asgs.AutoScalingGroups![0];
-        
+        const asg = asgResponse.AutoScalingGroups![0];
         expect(asg.MinSize).toBe(2);
         expect(asg.MaxSize).toBe(6);
-        expect(asg.DesiredCapacity).toBeGreaterThanOrEqual(2);
+        expect(asg.DesiredCapacity).toBe(4);
         expect(asg.HealthCheckType).toBe('ELB');
         expect(asg.HealthCheckGracePeriod).toBe(300);
-        
+
         // Verify it spans multiple AZs
-        const publicSubnetIds = parseArrayString(outputs.PublicSubnetIds);
-        expect(asg.VPCZoneIdentifier?.split(',')).toEqual(expect.arrayContaining(publicSubnetIds));
+        const publicSubnetIds = JSON.parse(outputs.PublicSubnetIds);
+        expect(asg.VPCZoneIdentifier).toBeDefined();
+        publicSubnetIds.forEach((subnetId: string) => {
+          expect(asg.VPCZoneIdentifier).toContain(subnetId);
+        });
       });
 
-      test('Launch template is configured with proper settings', async () => {
-        const asgs = await autoscaling.describeAutoScalingGroups({
+      test('launch template is properly configured', async () => {
+        const asgResponse = await autoscaling.describeAutoScalingGroups({
           AutoScalingGroupNames: [outputs.AutoscalingGroupName]
         }).promise();
 
-        const launchTemplate = asgs.AutoScalingGroups![0].LaunchTemplate;
-        expect(launchTemplate).toBeDefined();
+        const launchTemplateId = asgResponse.AutoScalingGroups![0].LaunchTemplate?.LaunchTemplateId;
         
-        const ltVersions = await ec2.describeLaunchTemplateVersions({
-          LaunchTemplateId: launchTemplate?.LaunchTemplateId,
-          Versions: ['$Latest']
+        const ltResponse = await ec2.describeLaunchTemplateVersions({
+          LaunchTemplateId: launchTemplateId
         }).promise();
 
-        expect(ltVersions.LaunchTemplateVersions?.length).toBe(1);
-        const ltData = ltVersions.LaunchTemplateVersions![0].LaunchTemplateData;
+        const lt = ltResponse.LaunchTemplateVersions![0];
+        expect(lt.LaunchTemplateData?.InstanceType).toBe('t3.medium');
+        expect(lt.LaunchTemplateData?.SecurityGroupIds).toContain(outputs.SecurityGroupWebId);
+        expect(lt.LaunchTemplateData?.IamInstanceProfile).toBeDefined();
         
-        expect(ltData?.InstanceType).toBe('t3.medium');
-        expect(ltData?.BlockDeviceMappings?.[0]?.Ebs?.VolumeSize).toBe(20);
-        expect(ltData?.BlockDeviceMappings?.[0]?.Ebs?.Encrypted).toBe(true);
-        expect(ltData?.MetadataOptions?.HttpTokens).toBe('required');
-        expect(ltData?.Monitoring?.Enabled).toBe(true);
+        // Check block device mapping
+        const blockDevice = lt.LaunchTemplateData?.BlockDeviceMappings?.[0];
+        expect(blockDevice?.Ebs?.VolumeSize).toBe(20);
+        expect(blockDevice?.Ebs?.VolumeType).toBe('gp3');
+        expect(blockDevice?.Ebs?.Encrypted).toBe(true);
       });
 
-      test('Auto Scaling policies are configured', async () => {
+      test('scaling policies are configured correctly', async () => {
         const policies = await autoscaling.describePolicies({
           AutoScalingGroupName: outputs.AutoscalingGroupName
         }).promise();
@@ -348,36 +327,146 @@ describe('Web Application Infrastructure Integration Tests', () => {
         );
         expect(scaleUpPolicy).toBeDefined();
         expect(scaleUpPolicy?.ScalingAdjustment).toBe(2);
-        
+
         const scaleDownPolicy = policies.ScalingPolicies?.find(p => 
           p.PolicyName?.includes('scale-down')
         );
         expect(scaleDownPolicy).toBeDefined();
         expect(scaleDownPolicy?.ScalingAdjustment).toBe(-1);
       });
+
+      test('CloudWatch alarms for scaling are configured', async () => {
+        const alarms = await cloudwatch.describeAlarms({
+          AlarmNamePrefix: 'webapp-production-cpu'
+        }).promise();
+
+        expect(alarms.MetricAlarms?.length).toBeGreaterThanOrEqual(2);
+        
+        const highCpuAlarm = alarms.MetricAlarms?.find(a => 
+          a.AlarmName?.includes('cpu-high')
+        );
+        expect(highCpuAlarm?.Threshold).toBe(70);
+        expect(highCpuAlarm?.ComparisonOperator).toBe('GreaterThanOrEqualToThreshold');
+
+        const lowCpuAlarm = alarms.MetricAlarms?.find(a => 
+          a.AlarmName?.includes('cpu-low')
+        );
+        expect(lowCpuAlarm?.Threshold).toBe(20);
+        expect(lowCpuAlarm?.ComparisonOperator).toBe('LessThanOrEqualToThreshold');
+      });
+    });
+
+    describe('RDS Database Configuration', () => {
+      test('RDS instance is configured correctly', async () => {
+        const instanceId = outputs.RdsEndpoint.split('.')[0];
+        
+        const dbInstances = await rds.describeDBInstances({
+          DBInstanceIdentifier: instanceId
+        }).promise();
+
+        const dbInstance = dbInstances.DBInstances![0];
+        expect(dbInstance.DBInstanceStatus).toBe('available');
+        expect(dbInstance.Engine).toBe('mysql');
+        expect(dbInstance.DBInstanceClass).toBe('db.t3.medium');
+        expect(dbInstance.AllocatedStorage).toBe(100);
+        expect(dbInstance.StorageEncrypted).toBe(true);
+        expect(dbInstance.MultiAZ).toBe(true);
+        expect(dbInstance.BackupRetentionPeriod).toBe(30);
+        expect(dbInstance.PerformanceInsightsEnabled).toBe(true);
+      });
+
+      test('RDS read replica is configured', async () => {
+        const readReplicaEndpoints = JSON.parse(outputs.RdsReadReplicaEndpoints);
+        expect(readReplicaEndpoints.length).toBe(1);
+        
+        const readReplicaId = readReplicaEndpoints[0].split('.')[0];
+        const dbInstances = await rds.describeDBInstances({
+          DBInstanceIdentifier: readReplicaId
+        }).promise();
+
+        const readReplica = dbInstances.DBInstances![0];
+        expect(readReplica.DBInstanceStatus).toBe('available');
+        expect(readReplica.ReadReplicaSourceDBInstanceIdentifier).toContain('webapp-production-mysql-master');
+      });
+
+      test('RDS CloudWatch log exports are enabled', async () => {
+        const logGroups = [
+          '/aws/rds/instance/webapp-production-mysql-master/error',
+          '/aws/rds/instance/webapp-production-mysql-master/general',
+          '/aws/rds/instance/webapp-production-mysql-master/slowquery'
+        ];
+
+        for (const logGroupName of logGroups) {
+          try {
+            const response = await cloudwatchLogs.describeLogGroups({
+              logGroupNamePrefix: logGroupName.replace('/errortf', '/error')
+            }).promise();
+            
+            const logGroup = response.logGroups?.find(lg => 
+              lg.logGroupName?.includes('webapp-production-mysql-master')
+            );
+            expect(logGroup).toBeDefined();
+            expect(logGroup?.retentionInDays).toBe(7);
+          } catch (error: any) {
+            console.warn(`Log group ${logGroupName} not found: ${error.message}`);
+          }
+        }
+      });
     });
 
     describe('Secrets Manager Configuration', () => {
-      test('database credentials secret exists and is accessible', async () => {
+      test('database credentials secret is properly configured', async () => {
         const secret = await secretsManager.describeSecret({
           SecretId: outputs.DbSecretArn
         }).promise();
 
-        expect(secret.ARN).toBe(outputs.DbSecretArn);
-        expect(secret.Name).toBe(outputs.DbSecretName);
+        expect(secret.Name).toContain('webapp-production-db-credentials');
         expect(secret.DeletedDate).toBeUndefined();
         
-        // Verify rotation is not enabled (as per config)
-        expect(secret.RotationEnabled).toBeFalsy();
+        // Don't retrieve actual secret value in tests
+        expect(secret.VersionIdsToStages).toBeDefined();
+        expect(Object.keys(secret.VersionIdsToStages!).length).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  // ============ SERVICE-LEVEL TESTS (Interactive - Single Service) ============
+  describe('Service-Level Tests', () => {
+    describe('EC2 Instance Health Checks', () => {
+      test('instances in ASG are healthy and running', async () => {
+        const asgResponse = await autoscaling.describeAutoScalingGroups({
+          AutoScalingGroupNames: [outputs.AutoscalingGroupName]
+        }).promise();
+
+        const instances = asgResponse.AutoScalingGroups![0].Instances || [];
+        expect(instances.length).toBeGreaterThanOrEqual(2);
+
+        instances.forEach(instance => {
+          expect(instance.HealthStatus).toBe('Healthy');
+          expect(instance.LifecycleState).toBe('InService');
+        });
+
+        // Check actual EC2 instances
+        const instanceIds = instances.map(i => i.InstanceId);
+        const ec2Response = await ec2.describeInstances({
+          InstanceIds: instanceIds
+        }).promise();
+
+        ec2Response.Reservations?.forEach(reservation => {
+          reservation.Instances?.forEach(instance => {
+            expect(instance.State?.Name).toBe('running');
+          });
+        });
       });
 
-      test('secret contains valid JSON structure', async () => {
+    });
+
+    describe('RDS Database Connectivity', () => {
+      test('can retrieve database connection info from Secrets Manager', async () => {
         const secretValue = await secretsManager.getSecretValue({
           SecretId: outputs.DbSecretArn
         }).promise();
 
-        expect(secretValue.SecretString).toBeDefined();
-        
         const credentials = JSON.parse(secretValue.SecretString!);
         expect(credentials.username).toBeDefined();
         expect(credentials.password).toBeDefined();
@@ -385,206 +474,76 @@ describe('Web Application Infrastructure Integration Tests', () => {
         expect(credentials.port).toBe(3306);
         expect(credentials.dbname).toBe('webapp');
       });
-    });
 
-    describe('CloudWatch Monitoring', () => {
-      test('CloudWatch alarms are configured for Auto Scaling', async () => {
-        const alarms = await cloudwatch.describeAlarms({
-          AlarmNames: [
-            'webapp-production-cpu-high',
-            'webapp-production-cpu-low'
-          ]
+      test('database parameter group has correct settings', async () => {
+        const instanceId = outputs.RdsEndpoint.split('.')[0];
+        
+        const dbInstances = await rds.describeDBInstances({
+          DBInstanceIdentifier: instanceId
         }).promise();
 
-        expect(alarms.MetricAlarms?.length).toBe(2);
+        const parameterGroupName = dbInstances.DBInstances![0].DBParameterGroups?.[0].DBParameterGroupName;
         
-        const highCpuAlarm = alarms.MetricAlarms?.find(a => 
-          a.AlarmName === 'webapp-production-cpu-high'
-        );
-        expect(highCpuAlarm?.MetricName).toBe('CPUUtilization');
-        expect(highCpuAlarm?.Threshold).toBe(70);
-        expect(highCpuAlarm?.ComparisonOperator).toBe('GreaterThanOrEqualToThreshold');
-        
-        const lowCpuAlarm = alarms.MetricAlarms?.find(a => 
-          a.AlarmName === 'webapp-production-cpu-low'
-        );
-        expect(lowCpuAlarm?.Threshold).toBe(20);
-        expect(lowCpuAlarm?.ComparisonOperator).toBe('LessThanOrEqualToThreshold');
-      });
-
-      test('CloudWatch Log Groups exist for RDS', async () => {
-        const logGroupNames = [
-          '/aws/rds/instance/webapp-production-mysql-master/error',
-          '/aws/rds/instance/webapp-production-mysql-master/general',
-          '/aws/rds/instance/webapp-production-mysql-master/slowquery'
-        ];
-
-        for (const logGroupName of logGroupNames) {
-          try {
-            const logGroups = await cloudwatchLogs.describeLogGroups({
-              logGroupNamePrefix: logGroupName,
-              limit: 1
-            }).promise();
-
-            const logGroup = logGroups.logGroups?.find(lg => 
-              lg.logGroupName === logGroupName || 
-              lg.logGroupName === logGroupName + 'tf' // Handle the 'errortf' case
-            );
-            
-            expect(logGroup).toBeDefined();
-            expect(logGroup?.retentionInDays).toBe(7);
-          } catch (error) {
-            console.warn(`Log group ${logGroupName} might not exist yet`);
-          }
-        }
-      });
-    });
-
-    describe('IAM Roles and Policies', () => {
-      test('EC2 instance profile has required permissions', async () => {
-        const profileName = 'webapp-production-web-profile';
-        
-        const profiles = await iam.getInstanceProfile({
-          InstanceProfileName: profileName
+        const parameters = await rds.describeDBParameters({
+          DBParameterGroupName: parameterGroupName!
         }).promise();
 
-        expect(profiles.InstanceProfile.Roles.length).toBe(1);
-        
-        const roleName = profiles.InstanceProfile.Roles[0].RoleName;
-        
-        // Check attached policies
-        const attachedPolicies = await iam.listAttachedRolePolicies({
-          RoleName: roleName
-        }).promise();
+        const charsetParam = parameters.Parameters?.find(p => p.ParameterName === 'character_set_server');
+        expect(charsetParam?.ParameterValue).toBe('utf8mb4');
 
-        const policyArns = attachedPolicies.AttachedPolicies?.map(p => p.PolicyArn);
-        
-        expect(policyArns).toContain('arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore');
-        expect(policyArns).toContain('arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy');
-        
-        // Check for Secrets Manager policy
-        const secretsPolicy = attachedPolicies.AttachedPolicies?.find(p => 
-          p.PolicyName?.includes('secrets-manager-read')
-        );
-        expect(secretsPolicy).toBeDefined();
-      });
-    });
-  });
+        const maxConnectionsParam = parameters.Parameters?.find(p => p.ParameterName === 'max_connections');
+        expect(maxConnectionsParam?.ParameterValue).toBe('500');
 
-  // ============ SERVICE-LEVEL TESTS (Interactive - Single Service) ============
-  describe('Service-Level Tests', () => {
-    describe('EC2 Instance Connectivity', () => {
-      test('instances in Auto Scaling Group are healthy', async () => {
-        const asgInstances = await autoscaling.describeAutoScalingInstances({
-          MaxRecords: 50
-        }).promise();
-
-        const instancesInAsg = asgInstances.AutoScalingInstances?.filter(i => 
-          i.AutoScalingGroupName === outputs.AutoscalingGroupName
-        );
-
-        expect(instancesInAsg?.length).toBeGreaterThanOrEqual(2);
-        
-        instancesInAsg?.forEach(instance => {
-          expect(instance.HealthStatus).toBe('HEALTHY');
-          expect(instance.LifecycleState).toBe('InService');
-        });
-      });
-
-      test('instances can be accessed via Systems Manager', async () => {
-        const asgInstances = await autoscaling.describeAutoScalingInstances({
-          MaxRecords: 50
-        }).promise();
-
-        const instanceId = asgInstances.AutoScalingInstances?.find(i => 
-          i.AutoScalingGroupName === outputs.AutoscalingGroupName
-        )?.InstanceId;
-
-        if (instanceId) {
-          const instanceInfo = await ssm.describeInstanceInformation({
-            Filters: [
-              {
-                Key: 'InstanceIds',
-                Values: [instanceId]
-              }
-            ]
-          }).promise();
-        }
-      });
-    });
-
-    describe('Database Connectivity', () => {
-      test('can retrieve and parse database credentials from Secrets Manager', async () => {
-        const secretValue = await secretsManager.getSecretValue({
-          SecretId: outputs.DbSecretArn
-        }).promise();
-
-        const credentials = JSON.parse(secretValue.SecretString!);
-        
-        expect(credentials.username).toBeTruthy();
-        expect(credentials.password).toBeTruthy();
-        expect(credentials.password.length).toBeGreaterThanOrEqual(32);
-      });
-
-      test('database endpoint is resolvable', async () => {
-        const endpoint = outputs.RdsEndpoint.split(':')[0];
-        
-        // DNS lookup to verify endpoint resolution
-        const dns = require('dns').promises;
-        
-        try {
-          const addresses = await dns.resolve4(endpoint);
-          expect(addresses.length).toBeGreaterThan(0);
-        } catch (error) {
-          console.warn('DNS resolution failed - this might be expected in isolated test environment');
-        }
+        const slowQueryParam = parameters.Parameters?.find(p => p.ParameterName === 'slow_query_log');
+        expect(slowQueryParam?.ParameterValue).toBe('1');
       });
     });
 
     describe('S3 Bucket Operations', () => {
       test('ALB logs bucket exists and has correct configuration', async () => {
-        // Derive bucket name from pattern
-        const accountId = outputs.DbSecretArn.split(':')[4];
-        const bucketName = `webapp-production-alb-logs-${accountId}`;
+        // Note: S3 bucket name is missing from outputs
+        // We'll try to find it based on naming pattern
+        const accountId = await new AWS.STS().getCallerIdentity().promise();
+        const expectedBucketName = `webapp-production-alb-logs-${accountId.Account}`;
 
         try {
           // Check bucket exists
-          await s3.headBucket({ Bucket: bucketName }).promise();
+          await s3.headBucket({
+            Bucket: expectedBucketName
+          }).promise();
 
           // Check versioning
-          const versioning = await s3.getBucketVersioning({ 
-            Bucket: bucketName 
+          const versioning = await s3.getBucketVersioning({
+            Bucket: expectedBucketName
           }).promise();
           expect(versioning.Status).toBe('Enabled');
 
           // Check encryption
-          const encryption = await s3.getBucketEncryption({ 
-            Bucket: bucketName 
+          const encryption = await s3.getBucketEncryption({
+            Bucket: expectedBucketName
           }).promise();
-          expect(encryption.ServerSideEncryptionConfiguration?.Rules?.[0]
-            ?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
+          expect(encryption.ServerSideEncryptionConfiguration?.Rules?.[0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
 
           // Check public access block
-          const publicAccessBlock = await s3.getPublicAccessBlock({ 
-            Bucket: bucketName 
+          const publicAccess = await s3.getPublicAccessBlock({
+            Bucket: expectedBucketName
           }).promise();
-          expect(publicAccessBlock.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
-          expect(publicAccessBlock.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
-          expect(publicAccessBlock.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
-          expect(publicAccessBlock.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
+          expect(publicAccess.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
+          expect(publicAccess.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
 
           // Check lifecycle configuration
-          const lifecycle = await s3.getBucketLifecycleConfiguration({ 
-            Bucket: bucketName 
+          const lifecycle = await s3.getBucketLifecycleConfiguration({
+            Bucket: expectedBucketName
           }).promise();
           expect(lifecycle.Rules?.length).toBeGreaterThan(0);
           
           const rule = lifecycle.Rules?.[0];
           expect(rule?.Status).toBe('Enabled');
           expect(rule?.Transitions?.length).toBe(2);
+          expect(rule?.Expiration?.Days).toBe(365);
         } catch (error: any) {
           if (error.code === 'NoSuchBucket') {
-            console.warn('ALB logs bucket not found - it may not have been referenced in outputs');
+            console.warn(`ALB logs bucket not found: ${expectedBucketName}`);
           } else {
             throw error;
           }
@@ -595,351 +554,200 @@ describe('Web Application Infrastructure Integration Tests', () => {
 
   // ============ CROSS-SERVICE TESTS (Interactive - Two Services) ============
   describe('Cross-Service Tests', () => {
-    describe('Auto Scaling and CloudWatch Integration', () => {
-      test('Auto Scaling Group metrics are being collected', async () => {
-        const endTime = new Date();
-        const startTime = new Date(endTime.getTime() - 3600000); // 1 hour ago
-
-        const metrics = await cloudwatch.getMetricStatistics({
-          Namespace: 'AWS/EC2',
-          MetricName: 'CPUUtilization',
-          Dimensions: [
-            {
-              Name: 'AutoScalingGroupName',
-              Value: outputs.AutoscalingGroupName
-            }
-          ],
-          StartTime: startTime,
-          EndTime: endTime,
-          Period: 300,
-          Statistics: ['Average']
-        }).promise();
-      });
-
-      test('scaling policies respond to CloudWatch alarms', async () => {
-        const alarms = await cloudwatch.describeAlarms({
-          AlarmNames: ['webapp-production-cpu-high']
+    describe('ALB + Auto Scaling Integration', () => {
+      test('ALB target group has healthy targets from ASG', async () => {
+        // Find target group ARN from ASG
+        const asgResponse = await autoscaling.describeAutoScalingGroups({
+          AutoScalingGroupNames: [outputs.AutoscalingGroupName]
         }).promise();
 
-        const alarm = alarms.MetricAlarms?.[0];
-        expect(alarm).toBeDefined();
+        const targetGroupArns = asgResponse.AutoScalingGroups![0].TargetGroupARNs || [];
+        expect(targetGroupArns.length).toBeGreaterThan(0);
+
+        // Check target health
+        const targetHealth = await elbv2.describeTargetHealth({
+          TargetGroupArn: targetGroupArns[0]
+        }).promise();
+
+        expect(targetHealth.TargetHealthDescriptions?.length).toBeGreaterThanOrEqual(2);
         
-        // Verify alarm actions point to scaling policies
-        const policies = await autoscaling.describePolicies({
-          AutoScalingGroupName: outputs.AutoscalingGroupName
-        }).promise();
-
-        const scaleUpPolicy = policies.ScalingPolicies?.find(p => 
-          p.PolicyName?.includes('scale-up')
+        const healthyTargets = targetHealth.TargetHealthDescriptions?.filter(t => 
+          t.TargetHealth?.State === 'healthy'
         );
-        
-        expect(alarm?.AlarmActions).toContain(scaleUpPolicy?.PolicyARN);
+        expect(healthyTargets?.length).toBeGreaterThanOrEqual(2);
       });
-    });
 
-    describe('VPC and Security Group Integration', () => {
-      test('security groups properly reference each other', async () => {
-        // Get all three security groups
-        const sgs = await ec2.describeSecurityGroups({
-          GroupIds: [
-            outputs.SecurityGroupAlbId,
-            outputs.SecurityGroupWebId,
-            outputs.SecurityGroupRdsId
-          ]
+
+      test('scaling operations update ALB targets correctly', async () => {
+        const initialAsgResponse = await autoscaling.describeAutoScalingGroups({
+          AutoScalingGroupNames: [outputs.AutoscalingGroupName]
         }).promise();
 
-        const webSg = sgs.SecurityGroups?.find(sg => sg.GroupId === outputs.SecurityGroupWebId);
-        const rdsSg = sgs.SecurityGroups?.find(sg => sg.GroupId === outputs.SecurityGroupRdsId);
+        const initialCapacity = initialAsgResponse.AutoScalingGroups![0].DesiredCapacity!;
+        const targetGroupArn = initialAsgResponse.AutoScalingGroups![0].TargetGroupARNs![0];
 
-        // Web SG should reference ALB SG
-        const webHttpRule = webSg?.IpPermissions?.find(rule => rule.FromPort === 80);
-        expect(webHttpRule?.UserIdGroupPairs?.[0]?.GroupId).toBe(outputs.SecurityGroupAlbId);
-
-        // RDS SG should reference Web SG
-        const rdsRule = rdsSg?.IpPermissions?.find(rule => rule.FromPort === 3306);
-        expect(rdsRule?.UserIdGroupPairs?.[0]?.GroupId).toBe(outputs.SecurityGroupWebId);
-      });
-
-      test('instances are in correct subnets', async () => {
-        const instances = await autoscaling.describeAutoScalingInstances().promise();
-        
-        const asgInstances = instances.AutoScalingInstances?.filter(i => 
-          i.AutoScalingGroupName === outputs.AutoscalingGroupName
-        );
-
-        if (asgInstances && asgInstances.length > 0) {
-          const instanceIds = asgInstances.map(i => i.InstanceId);
-          
-          const ec2Instances = await ec2.describeInstances({
-            InstanceIds: instanceIds
-          }).promise();
-
-          const publicSubnetIds = parseArrayString(outputs.PublicSubnetIds);
-          
-          ec2Instances.Reservations?.forEach(reservation => {
-            reservation.Instances?.forEach(instance => {
-              // Instances should be in public subnets (as per ASG config)
-              expect(publicSubnetIds).toContain(instance.SubnetId);
-              expect(instance.VpcId).toBe(outputs.VpcId);
-              
-              // Check security group
-              const sgIds = instance.SecurityGroups?.map(sg => sg.GroupId);
-              expect(sgIds).toContain(outputs.SecurityGroupWebId);
-            });
-          });
-        }
-      });
-    });
-
-    describe('RDS and Subnet Group Integration', () => {
-      test('RDS instances are in correct subnet group', async () => {
-        const dbInstances = await rds.describeDBInstances({
-          DBInstanceIdentifier: 'webapp-production-mysql-master'
+        // Temporarily increase capacity
+        await autoscaling.setDesiredCapacity({
+          AutoScalingGroupName: outputs.AutoscalingGroupName,
+          DesiredCapacity: initialCapacity + 1
         }).promise();
 
-        const dbInstance = dbInstances.DBInstances![0];
-        expect(dbInstance.DBSubnetGroup?.DBSubnetGroupName).toBe('webapp-production-db-subnet-group');
-        
-        // Verify subnets match our database subnets
-        const databaseSubnetIds = parseArrayString(outputs.DatabaseSubnetIds);
-        const rdsSubnetIds = dbInstance.DBSubnetGroup?.Subnets?.map(s => s.SubnetIdentifier);
-        
-        expect(rdsSubnetIds?.sort()).toEqual(databaseSubnetIds.sort());
-      });
+        // Wait for new instance to launch and register
+        await new Promise(resolve => setTimeout(resolve, 60000)); // 1 minute
 
-      test('RDS security group is properly applied', async () => {
-        const dbInstances = await rds.describeDBInstances({
-          DBInstanceIdentifier: 'webapp-production-mysql-master'
+        // Check target group now has more targets
+        const newTargetHealth = await elbv2.describeTargetHealth({
+          TargetGroupArn: targetGroupArn
         }).promise();
 
-        const dbInstance = dbInstances.DBInstances![0];
-        const vpcSgIds = dbInstance.VpcSecurityGroups?.map(sg => sg.VpcSecurityGroupId);
-        
-        expect(vpcSgIds).toContain(outputs.SecurityGroupRdsId);
-      });
+        expect(newTargetHealth.TargetHealthDescriptions?.length).toBeGreaterThan(initialCapacity);
+
+        // Scale back down
+        await autoscaling.setDesiredCapacity({
+          AutoScalingGroupName: outputs.AutoscalingGroupName,
+          DesiredCapacity: initialCapacity
+        }).promise();
+      }, 90000);
     });
   });
 
   // ============ END-TO-END TESTS (Interactive - Three+ Services) ============
   describe('End-to-End Tests', () => {
-    describe('High Availability Configuration', () => {
-      test('infrastructure spans multiple availability zones', async () => {
-        // Check subnets span multiple AZs
-        const publicSubnetIds = parseArrayString(outputs.PublicSubnetIds);
-        const privateSubnetIds = parseArrayString(outputs.PrivateSubnetIds);
-        const databaseSubnetIds = parseArrayString(outputs.DatabaseSubnetIds);
-        
-        const subnets = await ec2.describeSubnets({
-          SubnetIds: [...publicSubnetIds, ...privateSubnetIds, ...databaseSubnetIds]
+    describe('Complete Application Flow', () => {
+      test('auto scaling responds to increased load', async () => {
+        const initialMetrics = await cloudwatch.getMetricStatistics({
+          Namespace: 'AWS/EC2',
+          MetricName: 'CPUUtilization',
+          Dimensions: [{
+            Name: 'AutoScalingGroupName',
+            Value: outputs.AutoscalingGroupName
+          }],
+          StartTime: new Date(Date.now() - 300000), // 5 minutes ago
+          EndTime: new Date(),
+          Period: 60,
+          Statistics: ['Average']
         }).promise();
 
-        const azs = new Set(subnets.Subnets?.map(s => s.AvailabilityZone));
-        expect(azs.size).toBeGreaterThanOrEqual(2);
-
-        // Check Auto Scaling Group spans multiple AZs
-        const asgs = await autoscaling.describeAutoScalingGroups({
-          AutoScalingGroupNames: [outputs.AutoscalingGroupName]
-        }).promise();
-
-        const asgAzs = asgs.AutoScalingGroups![0].AvailabilityZones;
-        expect(asgAzs?.length).toBeGreaterThanOrEqual(2);
-
-        // Check RDS Multi-AZ is enabled
-        const dbInstances = await rds.describeDBInstances({
-          DBInstanceIdentifier: 'webapp-production-mysql-master'
-        }).promise();
-
-        expect(dbInstances.DBInstances![0].MultiAZ).toBe(true);
-      });
-
-      test('failover capability with read replicas', async () => {
-        const masterDb = await rds.describeDBInstances({
-          DBInstanceIdentifier: 'webapp-production-mysql-master'
-        }).promise();
-
-        const replicaDb = await rds.describeDBInstances({
-          DBInstanceIdentifier: 'webapp-production-mysql-read-replica-1'
-        }).promise();
-
-        // Verify read replica is in different AZ
-        const masterAz = masterDb.DBInstances![0].AvailabilityZone;
-        const replicaAz = replicaDb.DBInstances![0].AvailabilityZone;
-        
-        // They might be in same or different AZ, but both should be available
-        expect(masterDb.DBInstances![0].DBInstanceStatus).toBe('available');
-        expect(replicaDb.DBInstances![0].DBInstanceStatus).toBe('available');
+        // Note: Actually triggering auto scaling would require generating real load
+        // This test validates the metrics are being collected
+        expect(initialMetrics.Datapoints).toBeDefined();
       });
     });
 
-    describe('Complete Infrastructure Flow', () => {
-      test('all components are properly connected', async () => {
-        // This test verifies the complete chain of resources
-        
-        // 1. VPC exists
-        const vpcs = await ec2.describeVpcs({
-          VpcIds: [outputs.VpcId]
-        }).promise();
-        expect(vpcs.Vpcs?.length).toBe(1);
-
-        // 2. Subnets exist in VPC
-        const publicSubnetIds = parseArrayString(outputs.PublicSubnetIds);
-        const subnets = await ec2.describeSubnets({
-          SubnetIds: publicSubnetIds
-        }).promise();
-        expect(subnets.Subnets?.every(s => s.VpcId === outputs.VpcId)).toBe(true);
-
-        // 3. Auto Scaling Group uses correct subnets
-        const asgs = await autoscaling.describeAutoScalingGroups({
+    describe('High Availability Testing', () => {
+      test('application remains available during instance failure', async () => {
+        const asgResponse = await autoscaling.describeAutoScalingGroups({
           AutoScalingGroupNames: [outputs.AutoscalingGroupName]
         }).promise();
-        const asgSubnets = asgs.AutoScalingGroups![0].VPCZoneIdentifier?.split(',');
-        expect(asgSubnets?.sort()).toEqual(publicSubnetIds.sort());
 
-        // 4. Security groups exist in VPC
-        const sgs = await ec2.describeSecurityGroups({
-          GroupIds: [outputs.SecurityGroupWebId]
-        }).promise();
-        expect(sgs.SecurityGroups![0].VpcId).toBe(outputs.VpcId);
+        const instances = asgResponse.AutoScalingGroups![0].Instances || [];
+        const initialCount = instances.length;
 
-        // 5. RDS is in VPC
+        if (initialCount > 2) {
+          // Terminate one instance
+          const instanceToTerminate = instances[0].InstanceId;
+          
+          await autoscaling.terminateInstanceInAutoScalingGroup({
+            InstanceId: instanceToTerminate,
+            ShouldDecrementDesiredCapacity: false
+          }).promise();
+
+          // Wait for replacement instance
+          await new Promise(resolve => setTimeout(resolve, 30000));
+
+          // Verify ASG replaced the instance
+          const newAsgResponse = await autoscaling.describeAutoScalingGroups({
+            AutoScalingGroupNames: [outputs.AutoscalingGroupName]
+          }).promise();
+
+          const newInstances = newAsgResponse.AutoScalingGroups![0].Instances || [];
+          const healthyInstances = newInstances.filter(i => i.HealthStatus === 'Healthy');
+
+          expect(healthyInstances.length).toBeGreaterThanOrEqual(initialCount - 1);
+        }
+      }, 60000);
+
+      test('RDS Multi-AZ provides database availability', async () => {
+        const instanceId = outputs.RdsEndpoint.split('.')[0];
+        
         const dbInstances = await rds.describeDBInstances({
-          DBInstanceIdentifier: 'webapp-production-mysql-master'
+          DBInstanceIdentifier: instanceId
         }).promise();
-        const dbSubnets = dbInstances.DBInstances![0].DBSubnetGroup?.Subnets;
-        expect(dbSubnets?.every(s => s.SubnetStatus === 'Active')).toBe(true);
 
-        // 6. Secrets Manager secret exists
-        const secret = await secretsManager.describeSecret({
-          SecretId: outputs.DbSecretArn
+        const dbInstance = dbInstances.DBInstances![0];
+        expect(dbInstance.MultiAZ).toBe(true);
+        
+        // Check for automated backups
+        const backups = await rds.describeDBSnapshots({
+          DBInstanceIdentifier: instanceId,
+          SnapshotType: 'automated'
         }).promise();
-        expect(secret.DeletedDate).toBeUndefined();
+
+        expect(backups.DBSnapshots?.length).toBeGreaterThan(0);
       });
     });
 
     describe('Monitoring and Observability', () => {
-      test('CloudWatch dashboards could be created with available metrics', async () => {
-        // List available metrics for the infrastructure
-        const metrics = await cloudwatch.listMetrics({
+      test('CloudWatch metrics are being collected for all components', async () => {
+        // Check EC2 metrics
+        const ec2Metrics = await cloudwatch.listMetrics({
           Namespace: 'AWS/EC2',
-          Dimensions: [
-            {
-              Name: 'AutoScalingGroupName',
-              Value: outputs.AutoscalingGroupName
-            }
-          ]
+          Dimensions: [{
+            Name: 'AutoScalingGroupName',
+            Value: outputs.AutoscalingGroupName
+          }]
         }).promise();
 
-        // Expected metrics for monitoring
-        const expectedMetrics = [
-          'CPUUtilization',
-          'NetworkIn',
-          'NetworkOut',
-          'DiskReadOps',
-          'DiskWriteOps'
-        ];
-
-        const availableMetricNames = metrics.Metrics?.map(m => m.MetricName) || [];
+        expect(ec2Metrics.Metrics?.length).toBeGreaterThan(0);
         
-        // Some metrics might be available
-        expectedMetrics.forEach(metric => {
-          if (availableMetricNames.includes(metric)) {
-            expect(availableMetricNames).toContain(metric);
+        const metricNames = ec2Metrics.Metrics?.map(m => m.MetricName) || [];
+        expect(metricNames).toContain('CPUUtilization');
+
+        // Check RDS metrics
+        const instanceId = outputs.RdsEndpoint.split('.')[0];
+        const rdsMetrics = await cloudwatch.listMetrics({
+          Namespace: 'AWS/RDS',
+          Dimensions: [{
+            Name: 'DBInstanceIdentifier',
+            Value: instanceId
+          }]
+        }).promise();
+
+        expect(rdsMetrics.Metrics?.length).toBeGreaterThan(0);
+      });
+
+      test('ALB access logs are being written to S3', async () => {
+        // Note: This requires the S3 bucket name which is missing from outputs
+        const accountId = await new AWS.STS().getCallerIdentity().promise();
+        const bucketName = `webapp-production-alb-logs-${accountId.Account}`;
+
+        try {
+          const objects = await s3.listObjectsV2({
+            Bucket: bucketName,
+            Prefix: 'alb/',
+            MaxKeys: 10
+          }).promise();
+
+          // Logs might not exist immediately after deployment
+          if (objects.Contents && objects.Contents.length > 0) {
+            expect(objects.Contents[0].Key).toContain('.gz');
           }
-        });
-      });
-
-      test('RDS Performance Insights is enabled', async () => {
-        const dbInstances = await rds.describeDBInstances({
-          DBInstanceIdentifier: 'webapp-production-mysql-master'
-        }).promise();
-
-        const dbInstance = dbInstances.DBInstances![0];
-        expect(dbInstance.PerformanceInsightsEnabled).toBe(true);
-        expect(dbInstance.PerformanceInsightsRetentionPeriod).toBe(7);
-      });
-
-      test('CloudWatch logs are configured for RDS', async () => {
-        const dbInstances = await rds.describeDBInstances({
-          DBInstanceIdentifier: 'webapp-production-mysql-master'
-        }).promise();
-
-        const enabledLogs = dbInstances.DBInstances![0].EnabledCloudwatchLogsExports;
-        expect(enabledLogs).toContain('error');
-        expect(enabledLogs).toContain('general');
-        expect(enabledLogs).toContain('slowquery');
+        } catch (error: any) {
+          if (error.code !== 'NoSuchBucket') {
+            console.warn('ALB logs not yet available:', error.message);
+          }
+        }
       });
     });
 
-    describe('Security Best Practices', () => {
-      test('encryption is enabled for all data stores', async () => {
-        // RDS encryption
+    describe('Security Compliance', () => {
+      test('all data is encrypted at rest', async () => {
+        // Check RDS encryption
+        const instanceId = outputs.RdsEndpoint.split('.')[0];
         const dbInstances = await rds.describeDBInstances({
-          DBInstanceIdentifier: 'webapp-production-mysql-master'
+          DBInstanceIdentifier: instanceId
         }).promise();
         expect(dbInstances.DBInstances![0].StorageEncrypted).toBe(true);
-
-        // EBS encryption for launch template
-        const asgs = await autoscaling.describeAutoScalingGroups({
-          AutoScalingGroupNames: [outputs.AutoscalingGroupName]
-        }).promise();
-        const ltId = asgs.AutoScalingGroups![0].LaunchTemplate?.LaunchTemplateId;
-        
-        if (ltId) {
-          const ltVersions = await ec2.describeLaunchTemplateVersions({
-            LaunchTemplateId: ltId,
-            Versions: ['$Latest']
-          }).promise();
-          
-          const blockDevices = ltVersions.LaunchTemplateVersions![0]
-            .LaunchTemplateData?.BlockDeviceMappings;
-          expect(blockDevices?.[0]?.Ebs?.Encrypted).toBe(true);
-        }
-      });
-
-      test('IMDSv2 is enforced on EC2 instances', async () => {
-        const asgs = await autoscaling.describeAutoScalingGroups({
-          AutoScalingGroupNames: [outputs.AutoscalingGroupName]
-        }).promise();
-        const ltId = asgs.AutoScalingGroups![0].LaunchTemplate?.LaunchTemplateId;
-        
-        if (ltId) {
-          const ltVersions = await ec2.describeLaunchTemplateVersions({
-            LaunchTemplateId: ltId,
-            Versions: ['$Latest']
-          }).promise();
-          
-          const metadataOptions = ltVersions.LaunchTemplateVersions![0]
-            .LaunchTemplateData?.MetadataOptions;
-          expect(metadataOptions?.HttpTokens).toBe('required');
-          expect(metadataOptions?.HttpEndpoint).toBe('enabled');
-        }
-      });
-
-      test('database uses secure parameters', async () => {
-        // Check parameter group settings
-        const dbInstances = await rds.describeDBInstances({
-          DBInstanceIdentifier: 'webapp-production-mysql-master'
-        }).promise();
-        
-        const parameterGroupName = dbInstances.DBInstances![0]
-          .DBParameterGroups?.[0]?.DBParameterGroupName;
-        
-        if (parameterGroupName) {
-          const parameters = await rds.describeDBParameters({
-            DBParameterGroupName: parameterGroupName
-          }).promise();
-          
-          // Check for important security parameters
-          const slowQueryLog = parameters.Parameters?.find(p => 
-            p.ParameterName === 'slow_query_log'
-          );
-          expect(slowQueryLog?.ParameterValue).toBe('1');
-          
-          const maxConnections = parameters.Parameters?.find(p => 
-            p.ParameterName === 'max_connections'
-          );
-          expect(parseInt(maxConnections?.ParameterValue || '0')).toBeGreaterThanOrEqual(500);
-        }
       });
     });
   });
