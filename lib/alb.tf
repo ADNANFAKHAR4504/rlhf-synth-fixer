@@ -16,6 +16,8 @@ resource "aws_lb" "main" {
     enabled = true
   }
 
+  depends_on = [aws_s3_bucket_policy.alb_logs]
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-${local.environment}-alb"
   })

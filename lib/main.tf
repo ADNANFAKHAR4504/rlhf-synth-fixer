@@ -265,7 +265,7 @@ resource "aws_db_instance" "main" {
 
   # Engine configuration
   engine         = "postgres"
-  engine_version = "15.6"
+  engine_version = "15.10"
   instance_class = local.rds_instance_classes[local.environment]
 
   # Database configuration
