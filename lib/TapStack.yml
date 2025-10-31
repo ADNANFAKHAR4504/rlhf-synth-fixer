@@ -37,11 +37,20 @@ Parameters:
     Description: Environment name prefix
     Type: String
     Default: SecureInfra
+
+  BucketPrefix:
+    Description: Prefix for S3 bucket names (must be lowercase, 3-37 characters)
+    Type: String
+    Default: secureinfra
+    AllowedPattern: '^[a-z0-9][a-z0-9-]*[a-z0-9]$'
+    MinLength: 3
+    MaxLength: 37
+    ConstraintDescription: Must be lowercase alphanumeric with hyphens, 3-37 characters
     
   KeyPairName:
-    Description: EC2 Key Pair for SSH access
-    Type: AWS::EC2::KeyPair::KeyName
-    ConstraintDescription: Must be an existing EC2 KeyPair
+    Description: EC2 Key Pair for SSH access (leave empty if not using SSH)
+    Type: String
+    Default: ''
     
   AllowedSSHIP:
     Description: IP address allowed to SSH to EC2 instances
@@ -115,14 +124,72 @@ Parameters:
     Type: Number
     Default: 2
 
+  LatestAmiId:
+    Description: Latest Amazon Linux 2 AMI ID from SSM Parameter Store (region-agnostic)
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
+  EnableNATGateway:
+    Description: Enable NAT Gateway for private subnet internet access (requires 1-2 EIPs, set to 'false' if you have EIP limit issues)
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  HighAvailabilityNAT:
+    Description: Deploy NAT Gateway in each AZ for high availability (only applies if EnableNATGateway is true, requires 2 EIPs)
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
 Mappings:
-  RegionAMI:
+  ELBAccountIdMap:
     us-east-1:
-      AMI: ami-0c02fb55731490381
+      AccountId: '127311923021'
+    us-east-2:
+      AccountId: '033677994240'
+    us-west-1:
+      AccountId: '027434742980'
     us-west-2:
-      AMI: ami-0352d5a37fb4f603f
+      AccountId: '797873946194'
+    ca-central-1:
+      AccountId: '985666609251'
+    eu-central-1:
+      AccountId: '054676820928'
     eu-west-1:
-      AMI: ami-0f29c8402f8cce65c
+      AccountId: '156460612806'
+    eu-west-2:
+      AccountId: '652711504416'
+    eu-west-3:
+      AccountId: '009996457667'
+    eu-north-1:
+      AccountId: '897822967062'
+    ap-east-1:
+      AccountId: '754344448648'
+    ap-northeast-1:
+      AccountId: '582318560864'
+    ap-northeast-2:
+      AccountId: '600734575887'
+    ap-northeast-3:
+      AccountId: '383597477331'
+    ap-southeast-1:
+      AccountId: '114774131450'
+    ap-southeast-2:
+      AccountId: '783225319266'
+    ap-south-1:
+      AccountId: '718504428378'
+    sa-east-1:
+      AccountId: '507241528517'
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
+  UseNATGateway: !Equals [!Ref EnableNATGateway, 'true']
+  UseHighAvailabilityNAT: !And
+    - !Equals [!Ref EnableNATGateway, 'true']
+    - !Equals [!Ref HighAvailabilityNAT, 'true']
 
 Resources:
   # ==========================================
@@ -234,6 +301,7 @@ Resources:
 
   NatGateway1EIP:
     Type: AWS::EC2::EIP
+    Condition: UseNATGateway
     DependsOn: InternetGatewayAttachment
     Properties:
       Domain: vpc
@@ -243,6 +311,7 @@ Resources:
 
   NatGateway2EIP:
     Type: AWS::EC2::EIP
+    Condition: UseHighAvailabilityNAT
     DependsOn: InternetGatewayAttachment
     Properties:
       Domain: vpc
@@ -252,6 +321,7 @@ Resources:
 
   NatGateway1:
     Type: AWS::EC2::NatGateway
+    Condition: UseNATGateway
     Properties:
       AllocationId: !GetAtt NatGateway1EIP.AllocationId
       SubnetId: !Ref PublicSubnet1
@@ -261,6 +331,7 @@ Resources:
 
   NatGateway2:
     Type: AWS::EC2::NatGateway
+    Condition: UseHighAvailabilityNAT
     Properties:
       AllocationId: !GetAtt NatGateway2EIP.AllocationId
       SubnetId: !Ref PublicSubnet2
@@ -306,6 +377,7 @@ Resources:
 
   DefaultPrivateRoute1:
     Type: AWS::EC2::Route
+    Condition: UseNATGateway
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
@@ -327,10 +399,11 @@ Resources:
 
   DefaultPrivateRoute2:
     Type: AWS::EC2::Route
+    Condition: UseNATGateway
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGateway2
+      NatGatewayId: !If [UseHighAvailabilityNAT, !Ref NatGateway2, !Ref NatGateway1]
 
   PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -530,7 +603,7 @@ Resources:
   AppBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${EnvironmentName}-app-bucket-${AWS::AccountId}'
+      BucketName: !Sub '${BucketPrefix}-app-bucket-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -562,7 +635,7 @@ Resources:
   LoggingBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${EnvironmentName}-logging-bucket-${AWS::AccountId}'
+      BucketName: !Sub '${BucketPrefix}-logging-bucket-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -591,17 +664,19 @@ Resources:
           - Sid: AllowELBLogging
             Effect: Allow
             Principal:
-              Service: elasticloadbalancing.amazonaws.com
+              AWS: !Sub
+                - 'arn:aws:iam::${ELBAccountId}:root'
+                - ELBAccountId: !FindInMap [ELBAccountIdMap, !Ref 'AWS::Region', AccountId]
             Action: 's3:PutObject'
             Resource: !Sub '${LoggingBucket.Arn}/elb-logs/*'
           - Sid: AllowCloudTrailLogging
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
-            Action: 
+            Action:
               - 's3:GetBucketAcl'
               - 's3:PutObject'
-            Resource: 
+            Resource:
               - !GetAtt LoggingBucket.Arn
               - !Sub '${LoggingBucket.Arn}/*'
 
@@ -627,7 +702,7 @@ Resources:
       DBInstanceIdentifier: !Sub '${EnvironmentName}-db'
       DBInstanceClass: !Ref DBInstanceClass
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.43'
       AllocatedStorage: 20
       StorageType: gp3
       StorageEncrypted: true
@@ -733,9 +808,9 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${EnvironmentName}-LaunchTemplate'
       LaunchTemplateData:
-        ImageId: !FindInMap [RegionAMI, !Ref 'AWS::Region', AMI]
+        ImageId: !Ref LatestAmiId
         InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyPairName
+        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
@@ -743,15 +818,13 @@ Resources:
         BlockDeviceMappings:
           - DeviceName: /dev/xvda
             Ebs:
-              VolumeSize: 20
+              VolumeSize: 8
               VolumeType: gp3
-              Encrypted: true
-              KmsKeyId: !GetAtt KMSKey.Arn
               DeleteOnTermination: true
         Monitoring:
           Enabled: true
         UserData:
-          Fn::Base64: !Sub |
+          Fn::Base64: |
             #!/bin/bash
             yum update -y
             yum install -y amazon-cloudwatch-agent
@@ -870,60 +943,6 @@ Resources:
           Value: !Sub '${EnvironmentName}-CloudTrail'
 
   # ==========================================
-  # AWS Config for Configuration Tracking
-  # ==========================================
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties:
-      Name: !Sub '${EnvironmentName}-ConfigRecorder'
-      RoleArn: !GetAtt ConfigRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-
-  ConfigRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub '${EnvironmentName}-Config-Role'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: 'sts:AssumeRole'
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/ConfigRole
-      Policies:
-        - PolicyName: S3Access
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 's3:GetBucketAcl'
-                  - 's3:PutObject'
-                  - 's3:GetObject'
-                Resource:
-                  - !GetAtt LoggingBucket.Arn
-                  - !Sub '${LoggingBucket.Arn}/*'
-
-  DeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      Name: !Sub '${EnvironmentName}-DeliveryChannel'
-      S3BucketName: !Ref LoggingBucket
-      S3KeyPrefix: config/
-
-  ConfigRecorderStatus:
-    Type: AWS::Config::ConfigurationRecorder
-    DependsOn:
-      - DeliveryChannel
-    Properties:
-      Name: !Sub '${EnvironmentName}-ConfigRecorder'
-      RoleArn: !GetAtt ConfigRole.Arn
-
-  # ==========================================
   # CloudFront Distribution (HTTPS Only)
   # ==========================================
   CloudFrontDistribution:
@@ -957,9 +976,9 @@ Resources:
           CloudFrontDefaultCertificate: true
         PriceClass: PriceClass_100
         HttpVersion: http2
-        Tags:
-          - Key: Name
-            Value: !Sub '${EnvironmentName}-CloudFront'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-CloudFront'
 
   CloudFrontOAI:
     Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
