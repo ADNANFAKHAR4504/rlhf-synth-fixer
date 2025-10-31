@@ -9,7 +9,7 @@ Parameters:
     AllowedValues:
       - dev
       - prod
-    Default: prod
+    Default: dev
 
   EnvironmentSuffix:
     Type: String

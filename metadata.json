@@ -7,6 +7,7 @@
   "team": "4",
   "startedAt": "2025-10-31T13:29:21.505Z",
   "subtask": "Provisioning of Infrastructure Environments",
+  "background": "A financial services company needs to migrate their payment processing application from their development environment to production. The existing development infrastructure was built manually and must now be replicated with proper production-grade configurations.",
   "subject_labels": [
     "Cloud Environment Setup"
   ],
