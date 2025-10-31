@@ -99,3 +99,20 @@ fix - Your main fix is adding dependency on the secondary bucket versioning in y
 ╵
 Error: Terraform exited with code 1.
 ```
+
+4. Medium Failures - the backtrack feature cannot be enabled on an Aurora cluster which is part of a global database.
+
+fix - Since backtrack is not supported on clusters that belong to global clusters, you should disable backtrack for those clusters.
+
+
+```
+╷
+│ Error: creating RDS Cluster (prod-aurora-cluster-slmr-primary): operation error RDS: CreateDBCluster, https response error StatusCode: 400, RequestID: 215a2f4e-2cc8-4070-bbbf-a308155348c6, api error InvalidParameterCombination: Backtrack is not supported for global databases.
+│ 
+│   with aws_rds_cluster.primary,
+│   on tap_stack.tf line 646, in resource "aws_rds_cluster" "primary":
+│  646: resource "aws_rds_cluster" "primary" {
+│ 
+╵
+Error: Terraform exited with code 1.
+```

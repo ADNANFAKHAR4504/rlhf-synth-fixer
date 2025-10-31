@@ -663,7 +663,6 @@ resource "aws_rds_cluster" "primary" {
   deletion_protection             = true
   skip_final_snapshot             = false
   final_snapshot_identifier       = "${local.db_cluster_identifier}-primary-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
-  backtrack_window                = var.enable_backtrack ? var.backtrack_window : 0
   
   tags = merge(local.common_tags, {
     Name   = "${local.db_cluster_identifier}-primary"
