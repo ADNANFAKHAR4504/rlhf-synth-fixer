@@ -14,6 +14,8 @@ describe('TapStack (default props)', () => {
     stack = new TapStack(app, 'TestTapStackDefault', {
       environmentSuffix,
       env: { account: '111111111111', region: 'us-east-1' },
+      jwtIssuer: 'https://issuer.example.com',
+      jwtAudience: ['aud-1'],
     });
     template = Template.fromStack(stack);
   });
@@ -66,13 +68,12 @@ describe('TapStack (default props)', () => {
     template.resourceCountIs('AWS::Lambda::EventInvokeConfig', 5);
   });
 
-  test('creates HTTP API with POST /ingest route (no authorizer by default)', () => {
+  test('creates HTTP API with POST /ingest route and JWT authorizer', () => {
     template.hasResourceProperties('AWS::ApiGatewayV2::Api', Match.anyValue());
     template.hasResourceProperties('AWS::ApiGatewayV2::Route', Match.objectLike({
       RouteKey: 'POST /ingest',
     }));
-    // No authorizer when not provided
-    template.resourceCountIs('AWS::ApiGatewayV2::Authorizer', 0);
+    template.resourceCountIs('AWS::ApiGatewayV2::Authorizer', 1);
   });
 
   test('creates SNS topic for alerts (no subscription by default)', () => {
@@ -139,6 +140,8 @@ describe('TapStack (context env suffix branch)', () => {
     app.node.setContext('environmentSuffix', 'ctx');
     const stack = new TapStack(app, 'TestTapStackCtx', {
       env: { account: '111111111111', region: 'us-east-1' },
+      jwtIssuer: 'https://issuer.example.com',
+      jwtAudience: ['aud-1'],
     });
     const template = Template.fromStack(stack);
     template.resourceCountIs('AWS::EC2::VPC', 1);
@@ -150,8 +153,11 @@ describe('TapStack (default env suffix branch)', () => {
     const app = new cdk.App();
     const stack = new TapStack(app, 'TestTapStackDefaultSuffix', {
       env: { account: '111111111111', region: 'us-east-1' },
+      jwtIssuer: 'https://issuer.example.com',
+      jwtAudience: ['aud-1'],
     });
     const template = Template.fromStack(stack);
     template.resourceCountIs('AWS::SNS::Topic', 1);
   });
 });
+

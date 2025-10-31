@@ -3,6 +3,7 @@ import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as apigwv2Auth from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import * as apigwv2Integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as events from 'aws-cdk-lib/aws-events';
@@ -16,6 +17,7 @@ import * as subs from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as sfnTasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
+import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
 
 // ? Import your stacks here
@@ -55,6 +57,34 @@ export class TapStack extends cdk.Stack {
         },
         { name: 'isolated', subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
       ],
+    });
+
+    // VPC Endpoints to reduce NAT usage (cost + security)
+    vpc.addGatewayEndpoint(`DynamoDbEndpoint-${region}-${environmentSuffix}`, {
+      service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
+    });
+    vpc.addGatewayEndpoint(`S3Endpoint-${region}-${environmentSuffix}`, {
+      service: ec2.GatewayVpcEndpointAwsService.S3,
+    });
+    vpc.addInterfaceEndpoint(`LogsEndpoint-${region}-${environmentSuffix}`, {
+      service: ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
+      privateDnsEnabled: true,
+    });
+    vpc.addInterfaceEndpoint(`SnsEndpoint-${region}-${environmentSuffix}`, {
+      service: ec2.InterfaceVpcEndpointAwsService.SNS,
+      privateDnsEnabled: true,
+    });
+    vpc.addInterfaceEndpoint(`SqsEndpoint-${region}-${environmentSuffix}`, {
+      service: ec2.InterfaceVpcEndpointAwsService.SQS,
+      privateDnsEnabled: true,
+    });
+    vpc.addInterfaceEndpoint(`EventsEndpoint-${region}-${environmentSuffix}`, {
+      service: ec2.InterfaceVpcEndpointAwsService.EVENTBRIDGE,
+      privateDnsEnabled: true,
+    });
+    vpc.addInterfaceEndpoint(`XrayEndpoint-${region}-${environmentSuffix}`, {
+      service: ec2.InterfaceVpcEndpointAwsService.XRAY,
+      privateDnsEnabled: true,
     });
 
     // DynamoDB single-table design with on-demand + PITR and replication
@@ -323,12 +353,9 @@ export class TapStack extends cdk.Stack {
       }
     );
 
+    // Optional JWT configuration
     let authorizer: apigwv2.IHttpRouteAuthorizer | undefined = undefined;
-    if (
-      props?.jwtIssuer &&
-      props?.jwtAudience &&
-      props.jwtAudience.length > 0
-    ) {
+    if (props?.jwtIssuer && props?.jwtAudience && props.jwtAudience.length > 0) {
       authorizer = new apigwv2Auth.HttpJwtAuthorizer(
         `JwtAuthorizer-${region}-${environmentSuffix}`,
         props.jwtIssuer,
@@ -341,6 +368,57 @@ export class TapStack extends cdk.Stack {
       methods: [apigwv2.HttpMethod.POST],
       integration: ingestionIntegration,
       authorizer,
+    });
+
+    // Associate WAFv2 WebACL with HTTP API default stage
+    const webAcl = new wafv2.CfnWebACL(this, `WebACL-${region}-${environmentSuffix}`, {
+      defaultAction: { allow: {} },
+      scope: 'REGIONAL',
+      visibilityConfig: {
+        cloudWatchMetricsEnabled: true,
+        metricName: `webacl-${region}-${environmentSuffix}`,
+        sampledRequestsEnabled: true,
+      },
+      name: `tap-webacl-${region}-${environmentSuffix}`,
+      rules: [
+        {
+          name: 'AWS-AWSManagedRulesCommonRuleSet',
+          priority: 1,
+          overrideAction: { none: {} },
+          statement: {
+            managedRuleGroupStatement: {
+              name: 'AWSManagedRulesCommonRuleSet',
+              vendorName: 'AWS',
+            },
+          },
+          visibilityConfig: {
+            cloudWatchMetricsEnabled: true,
+            metricName: `aws-common-${region}-${environmentSuffix}`,
+            sampledRequestsEnabled: true,
+          },
+        },
+        {
+          name: 'AWS-AWSManagedRulesKnownBadInputsRuleSet',
+          priority: 2,
+          overrideAction: { none: {} },
+          statement: {
+            managedRuleGroupStatement: {
+              name: 'AWSManagedRulesKnownBadInputsRuleSet',
+              vendorName: 'AWS',
+            },
+          },
+          visibilityConfig: {
+            cloudWatchMetricsEnabled: true,
+            metricName: `aws-badinputs-${region}-${environmentSuffix}`,
+            sampledRequestsEnabled: true,
+          },
+        },
+      ],
+    });
+
+    new wafv2.CfnWebACLAssociation(this, `WebACLAssoc-${region}-${environmentSuffix}`, {
+      webAclArn: webAcl.attrArn,
+      resourceArn: `arn:aws:apigateway:${region}::/apis/${httpApi.apiId}/stages/$default`,
     });
 
     // S3 bucket for audit logs (append account id to satisfy naming rule)
@@ -356,6 +434,19 @@ export class TapStack extends cdk.Stack {
         autoDeleteObjects: false,
       }
     );
+
+    auditBucket.addLifecycleRule({
+      id: 'transition-ia-then-glacier',
+      enabled: true,
+      transitions: [
+        { storageClass: s3.StorageClass.INTELLIGENT_TIERING, transitionAfter: cdk.Duration.days(30) },
+        { storageClass: s3.StorageClass.GLACIER, transitionAfter: cdk.Duration.days(180) },
+      ],
+      noncurrentVersionTransitions: [
+        { storageClass: s3.StorageClass.GLACIER, transitionAfter: cdk.Duration.days(90) },
+      ],
+      expiration: cdk.Duration.days(365 * 3),
+    });
 
     // CloudWatch Dashboard with key metrics
     const dashboard = new cloudwatch.Dashboard(
@@ -392,6 +483,60 @@ export class TapStack extends cdk.Stack {
         ],
       })
     );
+
+    // CloudWatch Alarms wired to SNS Alerts
+    const alarmAction = new cloudwatchActions.SnsAction(alertsTopic);
+
+    const lambdaErrorAlarms = [ingestionFn, validationFn, enrichmentFn, storageFn].map(
+      (fn, idx) =>
+        new cloudwatch.Alarm(this, `LambdaErrorsAlarm${idx + 1}-${region}-${environmentSuffix}`, {
+          metric: fn.metricErrors({ period: cdk.Duration.minutes(1) }),
+          evaluationPeriods: 3,
+          threshold: 1,
+          datapointsToAlarm: 1,
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+          alarmDescription: `Lambda errors > 0 for ${fn.functionName}`,
+        })
+    );
+    lambdaErrorAlarms.forEach((a) => a.addAlarmAction(alarmAction));
+
+    const dlqAlarm = new cloudwatch.Alarm(this, `DLQDepthAlarm-${region}-${environmentSuffix}`, {
+      metric: lambdaDlq.metricApproximateNumberOfMessagesVisible({ period: cdk.Duration.minutes(1) }),
+      evaluationPeriods: 3,
+      threshold: 1,
+      datapointsToAlarm: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: 'Messages visible in Lambda DLQ',
+    });
+    dlqAlarm.addAlarmAction(alarmAction);
+
+    const sfnFailedAlarm = new cloudwatch.Alarm(this, `SFNFailedAlarm-${region}-${environmentSuffix}`, {
+      metric: stateMachine.metricFailed({ period: cdk.Duration.minutes(1) }),
+      evaluationPeriods: 1,
+      threshold: 1,
+      datapointsToAlarm: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: 'Step Functions failed executions > 0',
+    });
+    sfnFailedAlarm.addAlarmAction(alarmAction);
+
+    // API Gateway 5XX Errors alarm
+    const api5xxMetric = new cloudwatch.Metric({
+      namespace: 'AWS/ApiGateway',
+      metricName: '5xx', // For HTTP API use '5xx' with dimensions ApiId/Stage
+      period: cdk.Duration.minutes(1),
+      statistic: 'Sum',
+      dimensionsMap: { ApiId: httpApi.apiId, Stage: '$default' },
+    });
+    const api5xxAlarm = new cloudwatch.Alarm(this, `HttpApi5xxAlarm-${region}-${environmentSuffix}`, {
+      metric: api5xxMetric,
+      evaluationPeriods: 1,
+      threshold: 1,
+      datapointsToAlarm: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: 'HTTP API 5xx errors detected',
+    });
+    api5xxAlarm.addAlarmAction(alarmAction);
 
     // Outputs
     new cdk.CfnOutput(this, 'HttpApiUrl', {
