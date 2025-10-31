@@ -2,18 +2,20 @@
 
 This implementation strictly follows ALL prompt requirements and contains no technical errors.
 
-## 1) `tap_stack.tf`
+## 1) `provider.tf`
+
+This file contains the Terraform configuration block and provider declarations, separated from the main stack file as a best practice.
 
 ```hcl
-# tap_stack.tf - Multi-Environment Reference Data Pipeline Stack
-# Enforces topology parity across dev/staging/prod with capacity variations
+# provider.tf
 
 terraform {
-  required_version = ">= 1.5"
+  required_version = ">= 1.4.0"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = ">= 5.0"
     }
     archive = {
       source  = "hashicorp/archive"
@@ -24,7 +26,24 @@ terraform {
       version = "~> 3.6"
     }
   }
+
+  # Partial backend config: values are injected at `terraform init` time
+  backend "s3" {}
 }
+
+# Primary AWS provider for general resources
+provider "aws" {
+  region = var.aws_region
+}
+```
+
+## 2) `tap_stack.tf`
+
+This file contains all variables, resources, locals, and outputs for the multi-environment pipeline. The terraform block and provider configurations have been moved to `provider.tf` following Terraform best practices.
+
+```hcl
+# tap_stack.tf - Multi-Environment Reference Data Pipeline Stack
+# Enforces topology parity across dev/staging/prod with capacity variations
 
 # ===========================
 # VARIABLES
@@ -2439,7 +2458,7 @@ output "kms_key_arn" {
 }
 ```
 
-## 2) `dev.tfvars`
+## 3) `dev.tfvars`
 
 ```hcl
 # dev.tfvars - Development environment configuration
@@ -2495,7 +2514,7 @@ common_tags = {
 }
 ```
 
-## 3) `staging.tfvars`
+## 4) `staging.tfvars`
 
 ```hcl
 # staging.tfvars - Staging environment configuration
@@ -2554,7 +2573,7 @@ common_tags = {
 }
 ```
 
-## 4) `prod.tfvars`
+## 5) `prod.tfvars`
 
 ```hcl
 # prod.tfvars - Production environment configuration
