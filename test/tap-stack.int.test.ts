@@ -132,8 +132,56 @@ describe('Integration tests — runtime traffic checks (strict)', () => {
     const deadline = Date.now() + 1000 * 60 * 3; // 3 minutes
     let found = false;
 
-    // First try: scan likely log groups. We don't always know the Lambda name
-    // or exact logGroup; enumerate lambda log groups and search them.
+    // First try: prefer explicit outputs if provided (TapStack now exports these)
+    const explicitLogGroup = getOutput('UsEast_LambdaLogGroup', 'UsEast_LambdaLogGroupName', 'UsEast_LambdaLogGroupNameOutput');
+    const explicitFnName = getOutput('UsEast_LambdaFunctionName', 'UsEast_LambdaFunction');
+    if (explicitLogGroup) {
+      try {
+        const resp = await cwl.send(new FilterLogEventsCommand({
+          logGroupName: explicitLogGroup as string,
+          startTime: Date.now() - 1000 * 60 * 10,
+          endTime: Date.now(),
+          filterPattern: filter,
+          limit: 50,
+        }));
+        if (resp.events && resp.events.length) {
+          found = true;
+        }
+      } catch (e) {
+        // try the general enumeration path below if explicit group fails
+      }
+    }
+
+    // If explicit function name provided, also try directly via metrics
+    if (!found && explicitFnName) {
+      try {
+        const now = new Date();
+        const start = new Date(now.getTime() - 1000 * 60 * 15);
+        const md = await cw.send(new GetMetricDataCommand({
+          StartTime: start,
+          EndTime: now,
+          MetricDataQueries: [
+            {
+              Id: 'm1',
+              MetricStat: {
+                Metric: { Namespace: 'AWS/Lambda', MetricName: 'Invocations', Dimensions: [{ Name: 'FunctionName', Value: explicitFnName as string }] },
+                Period: 60,
+                Stat: 'Sum',
+              },
+              ReturnData: true,
+            },
+          ],
+        }));
+        if (md && md.MetricDataResults && md.MetricDataResults.some((r) => r.Values && r.Values.length && r.Values.reduce((a, b) => a + b, 0) > 0)) {
+          found = true;
+        }
+      } catch (e) {
+        // ignore and fall back to enumeration
+      }
+    }
+
+    // If explicit outputs didn't produce results, fall back to enumeration.
+    // We don't always know the Lambda name or exact logGroup; enumerate lambda log groups and search them.
     const startTimeBase = Date.now() - 1000 * 60 * 10; // 10 minutes ago
 
     while (Date.now() < deadline && !found) {
