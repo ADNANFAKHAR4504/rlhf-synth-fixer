@@ -1400,10 +1400,6 @@
         },
         "LaunchTemplate": {
             "Type": "AWS::EC2::LaunchTemplate",
-            "DependsOn": [
-                "KMSKey",
-                "KMSKeyAlias"
-            ],
             "Properties": {
                 "LaunchTemplateName": {
                     "Fn::Sub": "${EnvironmentSuffix}-LaunchTemplate"

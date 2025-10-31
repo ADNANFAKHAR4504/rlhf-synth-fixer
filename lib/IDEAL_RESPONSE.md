@@ -723,9 +723,6 @@ Resources:
   # =====================================
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
-    DependsOn: 
-      - KMSKey
-      - KMSKeyAlias
     Properties:
       LaunchTemplateName: !Sub '${EnvironmentSuffix}-LaunchTemplate'
       LaunchTemplateData:
