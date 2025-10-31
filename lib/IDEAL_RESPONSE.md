@@ -525,7 +525,7 @@ export class RDSStack extends pulumi.ComponentResource {
     // Create RDS instance with enhanced configuration
     const dbInstance = new aws.rds.Instance(`postgres-${args.environmentSuffix}`, {
       engine: 'postgres',
-      engineVersion: '15.3',
+      engineVersion: '15.13',
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
       dbName: 'backuptest',

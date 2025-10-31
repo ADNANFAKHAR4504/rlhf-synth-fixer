@@ -38,7 +38,7 @@ export class RDSStack extends pulumi.ComponentResource {
       `postgres-${args.environmentSuffix}`,
       {
         engine: 'postgres',
-        engineVersion: '15.3',
+        engineVersion: '15.13',
         instanceClass: 'db.t3.micro',
         allocatedStorage: 20,
         dbName: 'backuptest',
