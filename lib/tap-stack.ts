@@ -56,12 +56,15 @@ export class TapStack extends pulumi.ComponentResource {
     };
 
     // Get current AWS account and region
-    const current = aws.getCallerIdentity({});
+    const callerIdentity = pulumi.output(aws.getCallerIdentity({}));
+    const accountId = callerIdentity.apply(identity => identity.accountId);
+    const region = pulumi.output(aws.getRegion()).apply(r => r.name);
 
     // 1. S3 Bucket for Pipeline Artifacts
     const artifactBucket = new aws.s3.Bucket(
       `pipeline-artifacts-${environmentSuffix}`,
       {
+        bucket: pulumi.interpolate`pipeline-artifacts-${environmentSuffix.toLowerCase()}-${accountId}`,
         versioning: {
           enabled: true,
         },
@@ -150,8 +153,8 @@ export class TapStack extends pulumi.ComponentResource {
       {
         role: codeBuildDockerRole.id,
         policy: pulumi
-          .all([artifactBucket.arn, ecrRepository.arn])
-          .apply(([bucketArn, repoArn]) =>
+          .all([artifactBucket.arn, ecrRepository.arn, region])
+          .apply(([bucketArn, repoArn, regionName]) =>
             JSON.stringify({
               Version: '2012-10-17',
               Statement: [
@@ -162,8 +165,7 @@ export class TapStack extends pulumi.ComponentResource {
                     'logs:CreateLogStream',
                     'logs:PutLogEvents',
                   ],
-                  Resource:
-                    'arn:aws:logs:eu-north-1:*:log-group:/aws/codebuild/*',
+                  Resource: `arn:aws:logs:${regionName}:*:log-group:/aws/codebuild/*`,
                 },
                 {
                   Effect: 'Allow',
@@ -225,7 +227,9 @@ export class TapStack extends pulumi.ComponentResource {
       `codebuild-pulumi-policy-${environmentSuffix}`,
       {
         role: codeBuildPulumiRole.id,
-        policy: artifactBucket.arn.apply(bucketArn =>
+        policy: pulumi
+          .all([artifactBucket.arn, region])
+          .apply(([bucketArn, regionName]) =>
           JSON.stringify({
             Version: '2012-10-17',
             Statement: [
@@ -236,8 +240,7 @@ export class TapStack extends pulumi.ComponentResource {
                   'logs:CreateLogStream',
                   'logs:PutLogEvents',
                 ],
-                Resource:
-                  'arn:aws:logs:eu-north-1:*:log-group:/aws/codebuild/*',
+                Resource: `arn:aws:logs:${regionName}:*:log-group:/aws/codebuild/*`,
               },
               {
                 Effect: 'Allow',
@@ -276,11 +279,11 @@ export class TapStack extends pulumi.ComponentResource {
           environmentVariables: [
             {
               name: 'AWS_DEFAULT_REGION',
-              value: 'eu-north-1',
+              value: region,
             },
             {
               name: 'AWS_ACCOUNT_ID',
-              value: current.then(c => c.accountId),
+              value: accountId,
             },
             {
               name: 'IMAGE_REPO_NAME',
