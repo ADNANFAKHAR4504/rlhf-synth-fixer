@@ -55,8 +55,6 @@ resource "aws_route53_health_check" "alb" {
   resource_path                   = "/"
   failure_threshold               = "5"
   request_interval                = "30"
-  cloudwatch_logs_region          = var.aws_region
-  cloudwatch_alarm_region         = var.aws_region
   insufficient_data_health_status = "Failure"
 
   tags = merge(local.common_tags, {
