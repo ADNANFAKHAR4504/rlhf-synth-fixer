@@ -257,7 +257,7 @@ Use the built-in validation in `.claude/scripts/create-task-files.sh`:
 METADATA_FILE="metadata.json"
 
 # Check required fields
-REQUIRED=("platform" "language" "complexity" "team" "startedAt" "subtask" "po_id")
+REQUIRED=("platform" "language" "complexity" "turn_type" "team" "startedAt" "subtask" "po_id")
 for field in "${REQUIRED[@]}"; do
   if ! grep -q "\"$field\":" "$METADATA_FILE"; then
     echo "❌ ERROR: Missing required field '$field'"
