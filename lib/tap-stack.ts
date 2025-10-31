@@ -1,19 +1,11 @@
-/**
- * tap-stack.ts
- *
- * Main Pulumi stack for the serverless payment webhook processing system.
- */
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
+import { CloudWatchStack } from './cloudwatch-stack';
 import { DynamoDBStack } from './dynamodb-stack';
+import { S3Stack } from './s3-stack';
 import { LambdaStack } from './lambda-stack';
 import { ApiGatewayStack } from './apigateway-stack';
-import { S3Stack } from './s3-stack';
-import { CloudWatchStack } from './cloudwatch-stack';
 
-/**
- * TapStackArgs defines the input arguments for the TapStack Pulumi component.
- */
 export interface TapStackArgs {
   /**
    * An optional suffix for identifying the deployment environment (e.g., 'dev', 'prod').
@@ -40,9 +32,9 @@ export class TapStack extends pulumi.ComponentResource {
 
     const environmentSuffix = args.environmentSuffix || 'dev';
     const tags = pulumi.output(args.tags || {}).apply(t => ({
-      ...t,
-      Environment: 'production',
+      Environment: environmentSuffix,
       Project: 'payment-processor',
+      ...t,
     }));
 
     // Create CloudWatch Log Groups
@@ -75,32 +67,33 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create Lambda functions
+    // Create Lambda function for webhook handling
     const lambdaStack = new LambdaStack(
       'lambda',
       {
         environmentSuffix,
+        tags,
         tableName: dynamoDBStack.tableName,
         bucketName: s3Stack.bucketName,
         webhookLogGroupName: cloudWatchStack.webhookLogGroupName,
         reportLogGroupName: cloudWatchStack.reportLogGroupName,
-        tags,
       },
       { parent: this }
     );
 
-    // Create API Gateway
+    // Create API Gateway for webhook endpoint
     const apiGatewayStack = new ApiGatewayStack(
       'apigateway',
       {
         environmentSuffix,
+        tags,
         webhookLambdaArn: lambdaStack.webhookLambdaArn,
         webhookLambdaName: lambdaStack.webhookLambdaName,
-        tags,
       },
       { parent: this }
     );
 
+    // Export key outputs
     this.apiEndpoint = apiGatewayStack.apiEndpoint;
     this.tableName = dynamoDBStack.tableName;
     this.bucketName = s3Stack.bucketName;
