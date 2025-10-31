@@ -1,10 +1,13 @@
-# Security-Hardened S3 Data Lake with IAM - Ideal Implementation
+# `AWS_REGION`
 
-This is the corrected, production-ready implementation with all security requirements properly configured.
+```text
+ap-northeast-2
+```
 
-## File: lib/tap-stack.ts
+# `tap-stack.ts`
 
-```typescript
+```ts
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';
@@ -36,59 +39,122 @@ export class TapStack extends pulumi.ComponentResource {
       ...tags,
     };
 
-    // KMS Key for encryption with rotation enabled
-    const kmsKey = new aws.kms.Key(`datalake-kms-key-${environmentSuffix}`, {
-      description: 'KMS key for S3 data lake encryption and CloudWatch logs',
-      enableKeyRotation: true,
-      tags: defaultTags,
-    }, { parent: this });
+    // Get current AWS account ID for KMS key policy
+    const currentAccount = aws.getCallerIdentity({});
 
-    const kmsKeyAlias = new aws.kms.Alias(`datalake-kms-alias-${environmentSuffix}`, {
-      name: `alias/datalake-${environmentSuffix}`,
-      targetKeyId: kmsKey.keyId,
-    }, { parent: this });
-
-    // CloudWatch Log Group for S3 access logging WITH encryption
-    const logGroup = new aws.cloudwatch.LogGroup(`datalake-logs-${environmentSuffix}`, {
-      name: `/aws/s3/datalake-${environmentSuffix}`,
-      retentionInDays: 30,
-      kmsKeyId: kmsKey.arn,  // FIX #1: Added KMS encryption
-      tags: defaultTags,
-    }, { parent: this });
-
-    // S3 Bucket
-    const bucket = new aws.s3.Bucket(`datalake-bucket-${environmentSuffix}`, {
-      bucket: `financial-datalake-${environmentSuffix}`,
-      tags: defaultTags,
-    }, { parent: this });
-
-    // S3 Bucket Versioning WITH MFA Delete
-    const bucketVersioning = new aws.s3.BucketVersioningV2(`datalake-versioning-${environmentSuffix}`, {
-      bucket: bucket.id,
-      versioningConfiguration: {
-        status: 'Enabled',
-        mfaDelete: 'Enabled',  // FIX #2: Added MFA delete protection
-      },
-    }, { parent: this });
-
-    // S3 Bucket Encryption
-    const bucketEncryption = new aws.s3.BucketServerSideEncryptionConfigurationV2(
-      `datalake-encryption-${environmentSuffix}`,
+    // KMS Key for encryption with rotation enabled and CloudWatch Logs permissions
+    const kmsKey = new aws.kms.Key(
+      `datalake-kms-key-${environmentSuffix}`,
       {
-        bucket: bucket.id,
-        rules: [{
-          applyServerSideEncryptionByDefault: {
-            sseAlgorithm: 'aws:kms',
-            kmsMasterKeyId: kmsKey.arn,
-          },
-          bucketKeyEnabled: true,
-        }],
+        description: 'KMS key for S3 data lake encryption and CloudWatch logs',
+        enableKeyRotation: true,
+        policy: currentAccount.then(account =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Sid: 'Enable IAM User Permissions',
+                Effect: 'Allow',
+                Principal: {
+                  AWS: `arn:aws:iam::${account.accountId}:root`,
+                },
+                Action: 'kms:*',
+                Resource: '*',
+              },
+              {
+                Sid: 'Allow CloudWatch Logs',
+                Effect: 'Allow',
+                Principal: {
+                  Service: 'logs.ap-northeast-2.amazonaws.com',
+                },
+                Action: [
+                  'kms:Encrypt',
+                  'kms:Decrypt',
+                  'kms:ReEncrypt*',
+                  'kms:GenerateDataKey*',
+                  'kms:CreateGrant',
+                  'kms:DescribeKey',
+                ],
+                Resource: '*',
+                Condition: {
+                  ArnLike: {
+                    'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:ap-northeast-2:${account.accountId}:*`,
+                  },
+                },
+              },
+            ],
+          })
+        ),
+        tags: defaultTags,
       },
       { parent: this }
     );
 
+    const _kmsKeyAlias = new aws.kms.Alias(
+      `datalake-kms-alias-${environmentSuffix}`,
+      {
+        name: `alias/datalake-${environmentSuffix}`,
+        targetKeyId: kmsKey.keyId,
+      },
+      { parent: this }
+    );
+
+    // CloudWatch Log Group for S3 access logging WITH encryption
+    const logGroup = new aws.cloudwatch.LogGroup(
+      `datalake-logs-${environmentSuffix}`,
+      {
+        name: `/aws/s3/datalake-${environmentSuffix}`,
+        retentionInDays: 30,
+        kmsKeyId: kmsKey.arn,
+        tags: defaultTags,
+      },
+      { parent: this }
+    );
+
+    // S3 Bucket
+    const bucket = new aws.s3.Bucket(
+      `datalake-bucket-${environmentSuffix}`,
+      {
+        bucket: `financial-datalake-${environmentSuffix}`,
+        tags: defaultTags,
+      },
+      { parent: this }
+    );
+
+    // S3 Bucket Versioning (MFA Delete cannot be enabled via API - requires manual MFA auth)
+    const _bucketVersioning = new aws.s3.BucketVersioningV2(
+      `datalake-versioning-${environmentSuffix}`,
+      {
+        bucket: bucket.id,
+        versioningConfiguration: {
+          status: 'Enabled',
+          // mfaDelete: 'Enabled', // Cannot be set via API - requires MFA device auth
+        },
+      },
+      { parent: this }
+    );
+
+    // S3 Bucket Encryption
+    const _bucketEncryption =
+      new aws.s3.BucketServerSideEncryptionConfigurationV2(
+        `datalake-encryption-${environmentSuffix}`,
+        {
+          bucket: bucket.id,
+          rules: [
+            {
+              applyServerSideEncryptionByDefault: {
+                sseAlgorithm: 'aws:kms',
+                kmsMasterKeyId: kmsKey.arn,
+              },
+              bucketKeyEnabled: true,
+            },
+          ],
+        },
+        { parent: this }
+      );
+
     // S3 Bucket Public Access Block
-    const bucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(
+    const _bucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(
       `datalake-public-access-block-${environmentSuffix}`,
       {
         bucket: bucket.id,
@@ -101,7 +167,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // S3 Lifecycle Configuration WITH abort incomplete multipart uploads
-    const bucketLifecycle = new aws.s3.BucketLifecycleConfigurationV2(
+    const _bucketLifecycle = new aws.s3.BucketLifecycleConfigurationV2(
       `datalake-lifecycle-${environmentSuffix}`,
       {
         bucket: bucket.id,
@@ -109,13 +175,14 @@ export class TapStack extends pulumi.ComponentResource {
           {
             id: 'glacier-transition',
             status: 'Enabled',
-            transitions: [{
-              days: 90,
-              storageClass: 'GLACIER',
-            }],
+            transitions: [
+              {
+                days: 90,
+                storageClass: 'GLACIER',
+              },
+            ],
           },
           {
-            // FIX #3: Added rule to abort incomplete multipart uploads
             id: 'abort-incomplete-multipart-uploads',
             status: 'Enabled',
             abortIncompleteMultipartUpload: {
@@ -128,216 +195,238 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // IAM Role for DataAnalyst WITH maxSessionDuration
-    const dataAnalystRole = new aws.iam.Role(`data-analyst-role-${environmentSuffix}`, {
-      name: `DataAnalyst-${environmentSuffix}`,
-      maxSessionDuration: 3600,  // FIX #4: Added 1-hour session duration
-      assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [{
-          Effect: 'Allow',
-          Principal: {
-            AWS: [
-              'arn:aws:iam::123456789012:root',
+    const dataAnalystRole = new aws.iam.Role(
+      `data-analyst-role-${environmentSuffix}`,
+      {
+        name: `DataAnalyst-${environmentSuffix}`,
+        maxSessionDuration: 3600,
+        assumeRolePolicy: currentAccount.then(account =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Principal: {
+                  AWS: [`arn:aws:iam::${account.accountId}:root`],
+                },
+                Action: 'sts:AssumeRole',
+              },
             ],
-          },
-          Action: 'sts:AssumeRole',
-        }],
-      }),
-      tags: defaultTags,
-    }, { parent: this });
+          })
+        ),
+        tags: defaultTags,
+      },
+      { parent: this }
+    );
 
     // DataAnalyst Policy WITH explicit ARNs and IP conditions
-    const dataAnalystPolicy = new aws.iam.RolePolicy(`data-analyst-policy-${environmentSuffix}`, {
-      role: dataAnalystRole.id,
-      policy: pulumi.all([bucket.arn, kmsKey.arn]).apply(([bucketArn, keyArn]) => JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Action: [
-              's3:GetObject',
-              's3:ListBucket',
-            ],
-            Resource: [
-              `${bucketArn}/*`,
-              bucketArn,
-            ],
-            Condition: {
-              // FIX #7: Added source IP restrictions
-              IpAddress: {
-                'aws:SourceIp': ['10.0.0.0/8'],
-              },
-            },
-          },
-          {
-            Effect: 'Allow',
-            Action: [
-              'kms:Decrypt',
-            ],
-            Resource: keyArn,  // FIX #5: Changed from wildcard to explicit ARN
-            Condition: {
-              // FIX #7: Added source IP restrictions
-              IpAddress: {
-                'aws:SourceIp': ['10.0.0.0/8'],
-              },
-            },
-          },
-        ],
-      })),
-    }, { parent: this });
+    const _dataAnalystPolicy = new aws.iam.RolePolicy(
+      `data-analyst-policy-${environmentSuffix}`,
+      {
+        role: dataAnalystRole.id,
+        policy: pulumi
+          .all([bucket.arn, kmsKey.arn])
+          .apply(([bucketArn, keyArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: ['s3:GetObject', 's3:ListBucket'],
+                  Resource: [`${bucketArn}/*`, bucketArn],
+                  Condition: {
+                    IpAddress: {
+                      'aws:SourceIp': ['10.0.0.0/8'],
+                    },
+                  },
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['kms:Decrypt'],
+                  Resource: keyArn,
+                  Condition: {
+                    IpAddress: {
+                      'aws:SourceIp': ['10.0.0.0/8'],
+                    },
+                  },
+                },
+              ],
+            })
+          ),
+      },
+      { parent: this }
+    );
 
     // IAM Role for DataEngineer
-    const dataEngineerRole = new aws.iam.Role(`data-engineer-role-${environmentSuffix}`, {
-      name: `DataEngineer-${environmentSuffix}`,
-      maxSessionDuration: 3600,
-      assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [{
-          Effect: 'Allow',
-          Principal: {
-            AWS: [
-              'arn:aws:iam::123456789012:root',
+    const dataEngineerRole = new aws.iam.Role(
+      `data-engineer-role-${environmentSuffix}`,
+      {
+        name: `DataEngineer-${environmentSuffix}`,
+        maxSessionDuration: 3600,
+        assumeRolePolicy: currentAccount.then(account =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Principal: {
+                  AWS: [`arn:aws:iam::${account.accountId}:root`],
+                },
+                Action: 'sts:AssumeRole',
+              },
             ],
-          },
-          Action: 'sts:AssumeRole',
-        }],
-      }),
-      tags: defaultTags,
-    }, { parent: this });
+          })
+        ),
+        tags: defaultTags,
+      },
+      { parent: this }
+    );
 
     // DataEngineer Policy WITH IP conditions
-    const dataEngineerPolicy = new aws.iam.RolePolicy(`data-engineer-policy-${environmentSuffix}`, {
-      role: dataEngineerRole.id,
-      policy: pulumi.all([bucket.arn, kmsKey.arn]).apply(([bucketArn, keyArn]) => JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Action: [
-              's3:GetObject',
-              's3:PutObject',
-              's3:DeleteObject',
-              's3:ListBucket',
-            ],
-            Resource: [
-              `${bucketArn}/*`,
-              bucketArn,
-            ],
-            Condition: {
-              // FIX #6: Added source IP restrictions
-              IpAddress: {
-                'aws:SourceIp': ['10.0.0.0/8'],
-              },
-            },
-          },
-          {
-            Effect: 'Allow',
-            Action: [
-              'kms:Decrypt',
-              'kms:Encrypt',
-              'kms:GenerateDataKey',
-            ],
-            Resource: keyArn,
-            Condition: {
-              // FIX #6: Added source IP restrictions
-              IpAddress: {
-                'aws:SourceIp': ['10.0.0.0/8'],
-              },
-            },
-          },
-        ],
-      })),
-    }, { parent: this });
+    const _dataEngineerPolicy = new aws.iam.RolePolicy(
+      `data-engineer-policy-${environmentSuffix}`,
+      {
+        role: dataEngineerRole.id,
+        policy: pulumi
+          .all([bucket.arn, kmsKey.arn])
+          .apply(([bucketArn, keyArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    's3:GetObject',
+                    's3:PutObject',
+                    's3:DeleteObject',
+                    's3:ListBucket',
+                  ],
+                  Resource: [`${bucketArn}/*`, bucketArn],
+                  Condition: {
+                    IpAddress: {
+                      'aws:SourceIp': ['10.0.0.0/8'],
+                    },
+                  },
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['kms:Decrypt', 'kms:Encrypt', 'kms:GenerateDataKey'],
+                  Resource: keyArn,
+                  Condition: {
+                    IpAddress: {
+                      'aws:SourceIp': ['10.0.0.0/8'],
+                    },
+                  },
+                },
+              ],
+            })
+          ),
+      },
+      { parent: this }
+    );
 
     // IAM Role for DataAdmin
-    const dataAdminRole = new aws.iam.Role(`data-admin-role-${environmentSuffix}`, {
-      name: `DataAdmin-${environmentSuffix}`,
-      maxSessionDuration: 3600,
-      assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [{
-          Effect: 'Allow',
-          Principal: {
-            AWS: [
-              'arn:aws:iam::123456789012:root',
+    const dataAdminRole = new aws.iam.Role(
+      `data-admin-role-${environmentSuffix}`,
+      {
+        name: `DataAdmin-${environmentSuffix}`,
+        maxSessionDuration: 3600,
+        assumeRolePolicy: currentAccount.then(account =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Principal: {
+                  AWS: [`arn:aws:iam::${account.accountId}:root`],
+                },
+                Action: 'sts:AssumeRole',
+              },
             ],
-          },
-          Action: 'sts:AssumeRole',
-        }],
-      }),
-      tags: defaultTags,
-    }, { parent: this });
+          })
+        ),
+        tags: defaultTags,
+      },
+      { parent: this }
+    );
 
-    // DataAdmin Policy with IP conditions (already correct)
-    const dataAdminPolicy = new aws.iam.RolePolicy(`data-admin-policy-${environmentSuffix}`, {
-      role: dataAdminRole.id,
-      policy: pulumi.all([bucket.arn, kmsKey.arn]).apply(([bucketArn, keyArn]) => JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Action: 's3:*',
-            Resource: [
-              `${bucketArn}/*`,
-              bucketArn,
-            ],
-            Condition: {
-              IpAddress: {
-                'aws:SourceIp': ['10.0.0.0/8'],
-              },
-            },
-          },
-          {
-            Effect: 'Allow',
-            Action: 'kms:*',
-            Resource: keyArn,
-            Condition: {
-              IpAddress: {
-                'aws:SourceIp': ['10.0.0.0/8'],
-              },
-            },
-          },
-        ],
-      })),
-    }, { parent: this });
+    // DataAdmin Policy with IP conditions
+    const _dataAdminPolicy = new aws.iam.RolePolicy(
+      `data-admin-policy-${environmentSuffix}`,
+      {
+        role: dataAdminRole.id,
+        policy: pulumi
+          .all([bucket.arn, kmsKey.arn])
+          .apply(([bucketArn, keyArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: 's3:*',
+                  Resource: [`${bucketArn}/*`, bucketArn],
+                  Condition: {
+                    IpAddress: {
+                      'aws:SourceIp': ['10.0.0.0/8'],
+                    },
+                  },
+                },
+                {
+                  Effect: 'Allow',
+                  Action: 'kms:*',
+                  Resource: keyArn,
+                  Condition: {
+                    IpAddress: {
+                      'aws:SourceIp': ['10.0.0.0/8'],
+                    },
+                  },
+                },
+              ],
+            })
+          ),
+      },
+      { parent: this }
+    );
 
     // S3 Bucket Policy WITH HTTPS enforcement
-    const bucketPolicy = new aws.s3.BucketPolicy(`datalake-policy-${environmentSuffix}`, {
-      bucket: bucket.id,
-      policy: pulumi.all([bucket.arn]).apply(([bucketArn]) => JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            // FIX #8: Added HTTPS enforcement
-            Sid: 'DenyInsecureTransport',
-            Effect: 'Deny',
-            Principal: '*',
-            Action: 's3:*',
-            Resource: [
-              bucketArn,
-              `${bucketArn}/*`,
+    const _bucketPolicy = new aws.s3.BucketPolicy(
+      `datalake-policy-${environmentSuffix}`,
+      {
+        bucket: bucket.id,
+        policy: pulumi.all([bucket.arn]).apply(([bucketArn]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Sid: 'DenyInsecureTransport',
+                Effect: 'Deny',
+                Principal: '*',
+                Action: 's3:*',
+                Resource: [bucketArn, `${bucketArn}/*`],
+                Condition: {
+                  Bool: {
+                    'aws:SecureTransport': 'false',
+                  },
+                },
+              },
+              {
+                Sid: 'DenyUnencryptedObjectUploads',
+                Effect: 'Deny',
+                Principal: '*',
+                Action: 's3:PutObject',
+                Resource: `${bucketArn}/*`,
+                Condition: {
+                  StringNotEquals: {
+                    's3:x-amz-server-side-encryption': 'aws:kms',
+                  },
+                },
+              },
             ],
-            Condition: {
-              Bool: {
-                'aws:SecureTransport': 'false',
-              },
-            },
-          },
-          {
-            Sid: 'DenyUnencryptedObjectUploads',
-            Effect: 'Deny',
-            Principal: '*',
-            Action: 's3:PutObject',
-            Resource: `${bucketArn}/*`,
-            Condition: {
-              StringNotEquals: {
-                's3:x-amz-server-side-encryption': 'aws:kms',
-              },
-            },
-          },
-        ],
-      })),
-    }, { parent: this });
+          })
+        ),
+      },
+      { parent: this }
+    );
 
     // Export outputs
     this.bucketName = bucket.id;
@@ -360,180 +449,3 @@ export class TapStack extends pulumi.ComponentResource {
   }
 }
 ```
-
-## File: index.ts
-
-```typescript
-import * as pulumi from '@pulumi/pulumi';
-import { TapStack } from './lib/tap-stack';
-
-const config = new pulumi.Config();
-const environmentSuffix = config.get('environmentSuffix') || 'dev';
-
-const stack = new TapStack('datalake-stack', {
-  environmentSuffix: environmentSuffix,
-  tags: {
-    Project: 'DataLake',
-    ManagedBy: 'Pulumi',
-  },
-});
-
-// Export all outputs for cross-stack references
-export const bucketName = stack.bucketName;
-export const dataAnalystRoleArn = stack.dataAnalystRoleArn;
-export const dataEngineerRoleArn = stack.dataEngineerRoleArn;
-export const dataAdminRoleArn = stack.dataAdminRoleArn;
-export const kmsKeyId = stack.kmsKeyId;
-export const kmsKeyArn = stack.kmsKeyArn;
-export const logGroupName = stack.logGroupName;
-```
-
-## File: tests/tap-stack.test.ts
-
-```typescript
-import * as pulumi from '@pulumi/pulumi';
-import * as assert from 'assert';
-import { TapStack } from '../lib/tap-stack';
-
-pulumi.runtime.setMocks({
-  newResource: function(args: pulumi.runtime.MockResourceArgs): { id: string, state: any } {
-    return {
-      id: args.inputs.name ? `${args.name}-id` : `${args.type}-id`,
-      state: args.inputs,
-    };
-  },
-  call: function(args: pulumi.runtime.MockCallArgs) {
-    return args.inputs;
-  },
-});
-
-describe('TapStack', () => {
-  let stack: TapStack;
-
-  before(async () => {
-    stack = new TapStack('test-stack', {
-      environmentSuffix: 'test',
-      tags: { TestTag: 'TestValue' },
-    });
-  });
-
-  it('should create bucket with correct naming pattern', async () => {
-    const bucketName = await stack.bucketName;
-    assert.ok(bucketName, 'Bucket name should be defined');
-  });
-
-  it('should create all three IAM roles', async () => {
-    const [analyst, engineer, admin] = await Promise.all([
-      stack.dataAnalystRoleArn,
-      stack.dataEngineerRoleArn,
-      stack.dataAdminRoleArn,
-    ]);
-
-    assert.ok(analyst, 'DataAnalyst role should be created');
-    assert.ok(engineer, 'DataEngineer role should be created');
-    assert.ok(admin, 'DataAdmin role should be created');
-  });
-
-  it('should create KMS key and alias', async () => {
-    const [keyId, keyArn] = await Promise.all([
-      stack.kmsKeyId,
-      stack.kmsKeyArn,
-    ]);
-
-    assert.ok(keyId, 'KMS key ID should be defined');
-    assert.ok(keyArn, 'KMS key ARN should be defined');
-  });
-
-  it('should create CloudWatch log group', async () => {
-    const logGroupName = await stack.logGroupName;
-    assert.ok(logGroupName, 'Log group should be created');
-    assert.ok(logGroupName.includes('test'), 'Log group should include environment suffix');
-  });
-});
-```
-
-## Deployment Instructions
-
-1. Install dependencies:
-```bash
-npm install @pulumi/pulumi @pulumi/aws
-npm install --save-dev @types/node @types/mocha mocha
-```
-
-2. Configure AWS region:
-```bash
-pulumi config set aws:region ap-northeast-2
-```
-
-3. Set environment suffix:
-```bash
-pulumi config set environmentSuffix dev
-```
-
-4. Preview the deployment:
-```bash
-pulumi preview
-```
-
-5. Deploy the stack:
-```bash
-pulumi up
-```
-
-6. View outputs:
-```bash
-pulumi stack output
-```
-
-7. Run tests:
-```bash
-npm test
-```
-
-## Security Features Implemented
-
-1. **Encryption at Rest**:
-   - S3 bucket encrypted with customer-managed KMS key
-   - CloudWatch logs encrypted with the same KMS key
-   - KMS key rotation enabled
-
-2. **Encryption in Transit**:
-   - S3 bucket policy enforces HTTPS-only access
-   - All HTTP requests are denied
-
-3. **Access Control**:
-   - Three IAM roles with distinct permission levels
-   - Least-privilege policies with explicit resource ARNs
-   - No wildcard permissions in production policies
-   - Source IP restrictions on all IAM policies
-   - Maximum session duration of 1 hour for all roles
-
-4. **Data Protection**:
-   - S3 versioning enabled
-   - MFA delete protection enabled
-   - Cross-account access configured for trusted account
-
-5. **Cost Optimization**:
-   - Lifecycle policy transitions objects to Glacier after 90 days
-   - Abort incomplete multipart uploads after 7 days
-   - CloudWatch logs retained for 30 days
-
-6. **Compliance & Audit**:
-   - CloudWatch log group for S3 access logging
-   - All resources properly tagged
-   - Comprehensive outputs for integration with other stacks
-
-## Differences from MODEL_RESPONSE
-
-All 8 errors have been corrected:
-
-1. CloudWatch log group now includes `kmsKeyId`
-2. S3 versioning includes `mfaDelete: 'Enabled'`
-3. Lifecycle includes abort incomplete multipart uploads rule
-4. DataAnalyst role includes `maxSessionDuration: 3600`
-5. DataAnalyst policy uses explicit KMS ARN instead of wildcard
-6. DataEngineer policy includes source IP conditions
-7. DataAnalyst policy includes source IP conditions
-8. Bucket policy enforces HTTPS with `aws:SecureTransport` condition
-
-This implementation is production-ready and meets all security requirements for a financial services data lake.

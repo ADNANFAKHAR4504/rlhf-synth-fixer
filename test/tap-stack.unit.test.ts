@@ -53,8 +53,15 @@ describe('TapStack', () => {
     });
   });
 
+  const resolve = async <T>(output: pulumi.Output<T> | T): Promise<T> => {
+    if (pulumi.Output.isInstance(output)) {
+      return output.promise();
+    }
+    return output;
+  };
+
   it('should create bucket with correct naming pattern', async () => {
-    const bucketName = await stack.bucketName;
+    const bucketName = await resolve(stack.bucketName);
     assert.ok(bucketName, 'Bucket name should be defined');
     assert.ok(typeof bucketName === 'string', 'Bucket name should be a string');
     assert.ok(bucketName.length > 0, 'Bucket name should not be empty');
@@ -62,9 +69,9 @@ describe('TapStack', () => {
 
   it('should create all three IAM roles', async () => {
     const [analyst, engineer, admin] = await Promise.all([
-      stack.dataAnalystRoleArn,
-      stack.dataEngineerRoleArn,
-      stack.dataAdminRoleArn,
+      resolve(stack.dataAnalystRoleArn),
+      resolve(stack.dataEngineerRoleArn),
+      resolve(stack.dataAdminRoleArn),
     ]);
 
     assert.ok(analyst, 'DataAnalyst role should be created');
@@ -79,8 +86,8 @@ describe('TapStack', () => {
 
   it('should create KMS key and alias', async () => {
     const [keyId, keyArn] = await Promise.all([
-      stack.kmsKeyId,
-      stack.kmsKeyArn,
+      resolve(stack.kmsKeyId),
+      resolve(stack.kmsKeyArn),
     ]);
 
     assert.ok(keyId, 'KMS key ID should be defined');
@@ -88,7 +95,7 @@ describe('TapStack', () => {
   });
 
   it('should create CloudWatch log group', async () => {
-    const logGroupName = await stack.logGroupName;
+    const logGroupName = await resolve(stack.logGroupName);
     assert.ok(logGroupName, 'Log group should be created');
     assert.ok(typeof logGroupName === 'string', 'Log group name should be a string');
     assert.ok(logGroupName.length > 0, 'Log group name should not be empty');
@@ -96,13 +103,13 @@ describe('TapStack', () => {
 
   it('should have all required outputs', async () => {
     const outputs = {
-      bucketName: await stack.bucketName,
-      dataAnalystRoleArn: await stack.dataAnalystRoleArn,
-      dataEngineerRoleArn: await stack.dataEngineerRoleArn,
-      dataAdminRoleArn: await stack.dataAdminRoleArn,
-      kmsKeyId: await stack.kmsKeyId,
-      kmsKeyArn: await stack.kmsKeyArn,
-      logGroupName: await stack.logGroupName,
+      bucketName: await resolve(stack.bucketName),
+      dataAnalystRoleArn: await resolve(stack.dataAnalystRoleArn),
+      dataEngineerRoleArn: await resolve(stack.dataEngineerRoleArn),
+      dataAdminRoleArn: await resolve(stack.dataAdminRoleArn),
+      kmsKeyId: await resolve(stack.kmsKeyId),
+      kmsKeyArn: await resolve(stack.kmsKeyArn),
+      logGroupName: await resolve(stack.logGroupName),
     };
 
     Object.entries(outputs).forEach(([key, value]) => {
@@ -111,11 +118,22 @@ describe('TapStack', () => {
   });
 
   it('should use environment suffix in resource naming', async () => {
-    const bucketName = await stack.bucketName;
-    const logGroupName = await stack.logGroupName;
+    const bucketName = await resolve(stack.bucketName);
+    const logGroupName = await resolve(stack.logGroupName);
 
     // Verify resources have valid names (environment suffix is in the resource definitions)
     assert.ok(typeof bucketName === 'string' && bucketName.length > 0, 'Bucket should have a valid name');
     assert.ok(typeof logGroupName === 'string' && logGroupName.length > 0, 'Log group should have a valid name');
+  });
+
+  it('defaults to dev environment settings when args omitted', async () => {
+    const defaultStack = new TapStack('test-stack-default', {});
+    const [bucketName, logGroupName] = await Promise.all([
+      resolve(defaultStack.bucketName),
+      resolve(defaultStack.logGroupName),
+    ]);
+
+    assert.ok(bucketName.includes('dev'), 'Default bucket should include dev suffix');
+    assert.ok(logGroupName.includes('dev'), 'Default log group should include dev suffix');
   });
 });

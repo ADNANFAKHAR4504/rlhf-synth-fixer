@@ -39,7 +39,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         description: 'KMS key for S3 data lake encryption and CloudWatch logs',
         enableKeyRotation: true,
-        policy: currentAccount.then((account) =>
+        policy: currentAccount.then(account =>
           JSON.stringify({
             Version: '2012-10-17',
             Statement: [
@@ -56,7 +56,7 @@ export class TapStack extends pulumi.ComponentResource {
                 Sid: 'Allow CloudWatch Logs',
                 Effect: 'Allow',
                 Principal: {
-                  Service: `logs.ap-northeast-2.amazonaws.com`,
+                  Service: 'logs.ap-northeast-2.amazonaws.com',
                 },
                 Action: [
                   'kms:Encrypt',
@@ -191,7 +191,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         name: `DataAnalyst-${environmentSuffix}`,
         maxSessionDuration: 3600,
-        assumeRolePolicy: currentAccount.then((account) =>
+        assumeRolePolicy: currentAccount.then(account =>
           JSON.stringify({
             Version: '2012-10-17',
             Statement: [
@@ -254,7 +254,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         name: `DataEngineer-${environmentSuffix}`,
         maxSessionDuration: 3600,
-        assumeRolePolicy: currentAccount.then((account) =>
+        assumeRolePolicy: currentAccount.then(account =>
           JSON.stringify({
             Version: '2012-10-17',
             Statement: [
@@ -322,7 +322,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         name: `DataAdmin-${environmentSuffix}`,
         maxSessionDuration: 3600,
-        assumeRolePolicy: currentAccount.then((account) =>
+        assumeRolePolicy: currentAccount.then(account =>
           JSON.stringify({
             Version: '2012-10-17',
             Statement: [
