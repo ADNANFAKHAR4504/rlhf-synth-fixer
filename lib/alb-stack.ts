@@ -109,9 +109,8 @@ export class AlbStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create HTTP Listener (redirects to HTTPS)
-    // Note: listener is created but not exported as it's only used for HTTP->HTTPS redirect
-    new aws.lb.Listener(
+    // Create HTTP Listener (for testing - in production use HTTPS)
+    const httpListener = new aws.lb.Listener(
       `${name}-http-listener-${args.environmentSuffix}`,
       {
         loadBalancerArn: this.alb.arn,
@@ -119,41 +118,37 @@ export class AlbStack extends pulumi.ComponentResource {
         protocol: 'HTTP',
         defaultActions: [
           {
-            type: 'redirect',
-            redirect: {
-              port: '443',
-              protocol: 'HTTPS',
-              statusCode: 'HTTP_301',
-            },
-          },
-        ],
-      },
-      { parent: this }
-    );
-
-    // Create HTTPS Listener
-    // Note: Certificate ARN should be provided or created via ACM
-    const certificateArn =
-      args.certificateArn ||
-      'arn:aws:acm:eu-west-2:123456789012:certificate/example';
-
-    this.httpsListener = new aws.lb.Listener(
-      `${name}-https-listener-${args.environmentSuffix}`,
-      {
-        loadBalancerArn: this.alb.arn,
-        port: 443,
-        protocol: 'HTTPS',
-        sslPolicy: 'ELBSecurityPolicy-TLS-1-2-2017-01',
-        certificateArn: certificateArn,
-        defaultActions: [
-          {
             type: 'forward',
             targetGroupArn: this.frontendTargetGroup.arn,
           },
         ],
       },
-      { parent: this }
+      { parent: this, dependsOn: [this.alb] }
     );
+
+    // Create HTTPS Listener if certificate is provided
+    if (args.certificateArn) {
+      this.httpsListener = new aws.lb.Listener(
+        `${name}-https-listener-${args.environmentSuffix}`,
+        {
+          loadBalancerArn: this.alb.arn,
+          port: 443,
+          protocol: 'HTTPS',
+          sslPolicy: 'ELBSecurityPolicy-TLS-1-2-2017-01',
+          certificateArn: args.certificateArn,
+          defaultActions: [
+            {
+              type: 'forward',
+              targetGroupArn: this.frontendTargetGroup.arn,
+            },
+          ],
+        },
+        { parent: this, dependsOn: [this.alb] }
+      );
+    } else {
+      // Use HTTP listener as the main listener for testing
+      this.httpsListener = httpListener;
+    }
 
     // Create Listener Rule for Backend API (path-based routing)
     new aws.lb.ListenerRule(

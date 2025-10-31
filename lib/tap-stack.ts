@@ -106,7 +106,7 @@ export class TapStack extends pulumi.ComponentResource {
         ],
         tags,
       },
-      resourceOpts
+      { ...resourceOpts, dependsOn: [this.albStack.httpsListener] }
     );
 
     // Create Backend ECS Service
@@ -137,7 +137,7 @@ export class TapStack extends pulumi.ComponentResource {
         ],
         tags,
       },
-      resourceOpts
+      { ...resourceOpts, dependsOn: [this.albStack.httpsListener] }
     );
 
     // Create Route53 Stack
