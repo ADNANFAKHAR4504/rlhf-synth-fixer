@@ -6,7 +6,9 @@
   "team": "synth",
   "startedAt": "2025-10-30T13:55:47+00:00",
   "subtask": "Cloud Environment Setup",
-  "subject_labels": ["cloud environment"],
+  "subject_labels": [
+    "cloud environment"
+  ],
   "po_id": "101000775",
   "aws_services": [
     "AWS::EC2::VPC",
@@ -21,5 +23,10 @@
   ],
   "region": "ap-southeast-1",
   "training_quality": 9.5,
-  "author": "iamarpit-turing"
+  "author": "iamarpit-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
