@@ -103,7 +103,6 @@ locals {
     ManagedBy   = "Terraform"
     Owner       = "DevOps"
     CostCenter  = "${var.project_name}-${var.environment}"
-    CreatedAt   = timestamp()
   }
 
   azs = slice(data.aws_availability_zones.available.names, 0, 2)
@@ -828,6 +827,11 @@ resource "random_password" "db_password" {
   length  = 32
   special = true
   override_special = "!#$%&*()-_=+[]{}<>:?"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+  
 }
 
 # Create the secret
