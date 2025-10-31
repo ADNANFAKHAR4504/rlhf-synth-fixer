@@ -2590,8 +2590,6 @@ Outputs:
 
 I notice that my response was cut off. Let me continue with the CloudFormation YAML template. Here's what's missing:
 
-It appears that the API Gateway, CloudWatch Alarms, and Outputs sections might have been cut off. Let me complete the template.
-
 For the API Gateway section, I need to ensure it includes:
 
 - API Gateway REST API
