@@ -22,5 +22,6 @@
     "IAM"
   ],
   "region": "ap-southeast-2",
-  "training_quality": 8
+  "training_quality": 8,
+  "author": "rajendra-s-aws"
 }
