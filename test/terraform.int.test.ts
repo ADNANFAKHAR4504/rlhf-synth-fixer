@@ -198,17 +198,28 @@ describe("Terraform Integration - Infrastructure Validation (Plan Only)", () => 
       execSync("which terraform", { encoding: "utf-8" });
       terraformAvailable = true;
 
-      // Always try to initialize with -reconfigure to handle backend changes
-      console.log("Initializing Terraform for plan validation...");
+      // Create backend override to force local state for testing
+      console.log("Setting up Terraform with local backend for testing...");
+      const backendOverride = `
+terraform {
+  backend "local" {}
+}
+`;
+
+      const overridePath = path.join(TERRAFORM_DIR, "backend_override.tf");
+      fs.writeFileSync(overridePath, backendOverride);
+      console.log("✅ Created backend override file");
+
+      // Initialize with local backend
       try {
-        execSync("terraform init -reconfigure -backend=false", {
+        execSync("terraform init -reconfigure", {
           cwd: TERRAFORM_DIR,
           stdio: 'pipe'
         });
         backendInitialized = true;
-        console.log("✅ Terraform initialized successfully");
+        console.log("✅ Terraform initialized with local backend");
       } catch (initError) {
-        console.warn("⚠️  Failed to initialize Terraform - plan tests will attempt with existing state");
+        console.warn("⚠️  Failed to initialize Terraform");
         backendInitialized = false;
       }
     } catch (error) {
@@ -217,46 +228,51 @@ describe("Terraform Integration - Infrastructure Validation (Plan Only)", () => 
     }
   });
 
+  afterAll(() => {
+    // Cleanup: Remove backend override and local state
+    try {
+      const overridePath = path.join(TERRAFORM_DIR, "backend_override.tf");
+      if (fs.existsSync(overridePath)) {
+        fs.unlinkSync(overridePath);
+        console.log("🧹 Cleaned up backend override file");
+      }
+
+      const statePath = path.join(TERRAFORM_DIR, "terraform.tfstate");
+      if (fs.existsSync(statePath)) {
+        fs.unlinkSync(statePath);
+      }
+
+      const planPath = path.join(TERRAFORM_DIR, "tfplan-test");
+      if (fs.existsSync(planPath)) {
+        fs.unlinkSync(planPath);
+      }
+    } catch (error) {
+      // Ignore cleanup errors
+    }
+  });
+
   test(
     "can generate valid plans for all environments",
     () => {
-      if (!terraformAvailable) {
-        console.log("ℹ️  Terraform not available - skipping plan validation");
+      if (!terraformAvailable || !backendInitialized) {
+        console.log("ℹ️  Terraform not properly initialized - skipping plan validation");
         return;
       }
 
+      // Validate plans for all environments
       for (const envFile of environments) {
-        let planOutput = runTerraformPlan(envFile);
+        console.log(`\n📋 Generating plan for ${envFile}...`);
+        const planOutput = runTerraformPlan(envFile);
 
-        // Smart retry logic: If backend init required, reinitialize and retry once
-        // This handles cases where .terraform exists but backend config changed
-        if (planOutput === null && !backendInitialized) {
-          console.log(`⚠️  Backend issue detected for ${envFile}, attempting fix...`);
-
-          if (reinitializeTerraform()) {
-            // Mark as initialized and retry the plan
-            backendInitialized = true;
-            planOutput = runTerraformPlan(envFile);
-          } else {
-            console.log("ℹ️  Cannot reinitialize - skipping plan validation");
-            return;
-          }
-        }
-
-        // If still null after retry, skip gracefully
-        if (planOutput === null) {
-          console.log("ℹ️  Unable to generate plan after retry - skipping validation");
-          return;
-        }
-
+        // Should never be null with local backend configured
         expect(planOutput).toBeTruthy();
         expect(planOutput).not.toContain("Error:");
         expect(planOutput).toMatch(/Plan:|No changes/);
 
-        console.log(`✅ ${envFile}: Plan generated successfully`);
+        console.log(`✅ ${envFile}: Plan validated successfully`);
       }
     },
-    TEST_TIMEOUT
+    TEST_TIMEOUT * 2 // Allow more time for 3 plans
   );
 
   test(
