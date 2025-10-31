@@ -13,7 +13,6 @@ const outputs = JSON.parse(
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
 function requireOutput(key: string): string {
   const value = outputs[key];
   if (!value || typeof value !== 'string') {

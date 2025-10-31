@@ -32,6 +32,8 @@ interface TapStackProps extends cdk.StackProps {
   jwtAudience?: string[];
   // Optional list of DynamoDB replica regions for the Global Table
   replicationRegions?: string[];
+  // Optional: attempt to attach WAFv2 to HTTP API stage (not supported for HTTP APIs)
+  enableWafForHttpApi?: boolean;
 }
 
 export class TapStack extends cdk.Stack {
@@ -384,64 +386,67 @@ export class TapStack extends cdk.Stack {
       authorizer,
     });
 
-    // Associate WAFv2 WebACL with HTTP API default stage
-    const webAcl = new wafv2.CfnWebACL(
-      this,
-      `WebACL-${region}-${environmentSuffix}`,
-      {
-        defaultAction: { allow: {} },
-        scope: 'REGIONAL',
-        visibilityConfig: {
-          cloudWatchMetricsEnabled: true,
-          metricName: `webacl-${region}-${environmentSuffix}`,
-          sampledRequestsEnabled: true,
-        },
-        name: `tap-webacl-${region}-${environmentSuffix}`,
-        rules: [
-          {
-            name: 'AWS-AWSManagedRulesCommonRuleSet',
-            priority: 1,
-            overrideAction: { none: {} },
-            statement: {
-              managedRuleGroupStatement: {
-                name: 'AWSManagedRulesCommonRuleSet',
-                vendorName: 'AWS',
+    // Associate WAFv2 WebACL (HTTP APIs aren't supported by WAF association; guard behind opt-in flag)
+    if (props?.enableWafForHttpApi) {
+      const webAcl = new wafv2.CfnWebACL(
+        this,
+        `WebACL-${region}-${environmentSuffix}`,
+        {
+          defaultAction: { allow: {} },
+          scope: 'REGIONAL',
+          visibilityConfig: {
+            cloudWatchMetricsEnabled: true,
+            metricName: `webacl-${region}-${environmentSuffix}`,
+            sampledRequestsEnabled: true,
+          },
+          name: `tap-webacl-${region}-${environmentSuffix}`,
+          rules: [
+            {
+              name: 'AWS-AWSManagedRulesCommonRuleSet',
+              priority: 1,
+              overrideAction: { none: {} },
+              statement: {
+                managedRuleGroupStatement: {
+                  name: 'AWSManagedRulesCommonRuleSet',
+                  vendorName: 'AWS',
+                },
+              },
+              visibilityConfig: {
+                cloudWatchMetricsEnabled: true,
+                metricName: `aws-common-${region}-${environmentSuffix}`,
+                sampledRequestsEnabled: true,
               },
             },
-            visibilityConfig: {
-              cloudWatchMetricsEnabled: true,
-              metricName: `aws-common-${region}-${environmentSuffix}`,
-              sampledRequestsEnabled: true,
-            },
-          },
-          {
-            name: 'AWS-AWSManagedRulesKnownBadInputsRuleSet',
-            priority: 2,
-            overrideAction: { none: {} },
-            statement: {
-              managedRuleGroupStatement: {
-                name: 'AWSManagedRulesKnownBadInputsRuleSet',
-                vendorName: 'AWS',
+            {
+              name: 'AWS-AWSManagedRulesKnownBadInputsRuleSet',
+              priority: 2,
+              overrideAction: { none: {} },
+              statement: {
+                managedRuleGroupStatement: {
+                  name: 'AWSManagedRulesKnownBadInputsRuleSet',
+                  vendorName: 'AWS',
+                },
+              },
+              visibilityConfig: {
+                cloudWatchMetricsEnabled: true,
+                metricName: `aws-badinputs-${region}-${environmentSuffix}`,
+                sampledRequestsEnabled: true,
               },
             },
-            visibilityConfig: {
-              cloudWatchMetricsEnabled: true,
-              metricName: `aws-badinputs-${region}-${environmentSuffix}`,
-              sampledRequestsEnabled: true,
-            },
-          },
-        ],
-      }
-    );
+          ],
+        }
+      );
 
-    new wafv2.CfnWebACLAssociation(
-      this,
-      `WebACLAssoc-${region}-${environmentSuffix}`,
-      {
-        webAclArn: webAcl.attrArn,
-        resourceArn: `arn:aws:apigateway:${region}::/apis/${httpApi.apiId}/stages/$default`,
-      }
-    );
+      // Note: HTTP APIs aren't currently supported for WAF association; consider REST API or CloudFront
+      new wafv2.CfnWebACLAssociation(
+        this,
+        `WebACLAssoc-${region}-${environmentSuffix}`,
+        {
+          webAclArn: webAcl.attrArn,
+          resourceArn: `arn:aws:apigateway:${region}::/restapis/${httpApi.apiId}/stages/$default`,
+        }
+      );
+    }
 
     // S3 bucket for audit logs (append account id to satisfy naming rule)
     const auditBucket = new s3.Bucket(

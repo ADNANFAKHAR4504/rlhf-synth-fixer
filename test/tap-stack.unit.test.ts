@@ -184,3 +184,25 @@ describe('TapStack (default env suffix branch)', () => {
   });
 });
 
+describe('TapStack (WAF optional association)', () => {
+  test('creates WAF WebACL and association when enabled', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'TestTapStackWaf', {
+      environmentSuffix,
+      env: { account: '111111111111', region: 'us-east-1' },
+      enableWafForHttpApi: true,
+    });
+    const template = Template.fromStack(stack);
+
+    template.resourceCountIs('AWS::WAFv2::WebACL', 1);
+    template.hasResourceProperties('AWS::WAFv2::WebACL', Match.objectLike({
+      Scope: 'REGIONAL',
+    }));
+    template.resourceCountIs('AWS::WAFv2::WebACLAssociation', 1);
+    template.hasResourceProperties('AWS::WAFv2::WebACLAssociation', Match.objectLike({
+      WebACLArn: Match.anyValue(),
+      ResourceArn: Match.anyValue(),
+    }));
+  });
+});
+

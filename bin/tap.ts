@@ -6,7 +6,9 @@ import { TapStack } from '../lib/tap-stack';
 const app = new cdk.App();
 
 // Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
-const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
+let environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
+// Append 'res' to the environment suffix as requested
+environmentSuffix = `${environmentSuffix}res`;
 const stackName = `TapStack${environmentSuffix}`;
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
