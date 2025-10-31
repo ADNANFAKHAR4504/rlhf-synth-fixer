@@ -105,10 +105,26 @@ Resources:
                 - rds.amazonaws.com
                 - s3.amazonaws.com
                 - logs.amazonaws.com
+                - autoscaling.amazonaws.com
             Action:
               - 'kms:Decrypt'
               - 'kms:GenerateDataKey'
+              - 'kms:GenerateDataKeyWithoutPlaintext'
               - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+              - 'kms:ReEncrypt*'
+            Resource: '*'
+          - Sid: Allow EC2 AutoScaling to create encrypted volumes
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling'
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+              - 'kms:GenerateDataKeyWithoutPlaintext'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+              - 'kms:ReEncrypt*'
             Resource: '*'
       EnableKeyRotation: true
       Tags:
@@ -839,7 +855,6 @@ Resources:
             Ebs:
               VolumeSize: 8
               VolumeType: gp3
-              Encrypted: true
               DeleteOnTermination: true
         MetadataOptions:
           HttpTokens: required
