@@ -94,7 +94,7 @@ resource "aws_api_gateway_usage_plan" "webhook_plan" {
 
   throttle_settings {
     rate_limit  = 1000
-    burst_limit = 200
+    burst_limit = 2000
   }
 
   tags = local.common_tags
@@ -182,6 +182,9 @@ resource "aws_cloudwatch_metric_alarm" "lambda_error_rate_validator" {
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 1
   threshold           = 1
+  alarm_actions       = length(var.notification_emails) > 0 ? [aws_sns_topic.alerts.arn] : []
+  ok_actions          = length(var.notification_emails) > 0 ? [aws_sns_topic.alerts.arn] : []
+  tags                = local.common_tags
 
   metric_query {
     id          = "m1"
@@ -223,6 +226,9 @@ resource "aws_cloudwatch_metric_alarm" "lambda_error_rate_processor" {
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 1
   threshold           = 1
+  alarm_actions       = length(var.notification_emails) > 0 ? [aws_sns_topic.alerts.arn] : []
+  ok_actions          = length(var.notification_emails) > 0 ? [aws_sns_topic.alerts.arn] : []
+  tags                = local.common_tags
 
   metric_query {
     id          = "m1"
@@ -277,6 +283,7 @@ resource "aws_cloudwatch_metric_alarm" "dlq_messages" {
   tags = local.common_tags
   alarm_actions = length(var.notification_emails) > 0 ? [aws_sns_topic.alerts.arn] : []
 }
+
 
 ```
 - `dynamodb.tf`

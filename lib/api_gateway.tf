@@ -78,7 +78,7 @@ resource "aws_api_gateway_usage_plan" "webhook_plan" {
 
   throttle_settings {
     rate_limit  = 1000
-    burst_limit = 200
+    burst_limit = 2000
   }
 
   tags = local.common_tags
