@@ -4,7 +4,7 @@ Orchestrates the complete Infrastructure as Code development lifecycle by coordi
 
 ## ⚠️ CRITICAL: CSV Data Integrity
 
-**BEFORE modifying tasks.csv:**
+**BEFORE modifying .claude/tasks.csv:**
 1. READ "CSV File Corruption Prevention" in `.claude/lessons_learnt.md`
 2. READ complete guide in `.claude/docs/policies/csv_safety_guide.md`
 3. RUN safety check: `./.claude/scripts/check-csv-safety.sh`
@@ -15,7 +15,7 @@ ALL CSV operations MUST:
 3. Validate row counts before and after
 4. Restore from backup if ANY validation fails
 
-**Failure to follow these rules will corrupt tasks.csv and lose all task data!**
+**Failure to follow these rules will corrupt .claude/tasks.csv and lose all task data!**
 
 ## ⚠️ CRITICAL: Commit Message Requirements
 
@@ -258,8 +258,8 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    ```bash
    cd ../..  # Return to main repo
 
-   if [ ! -f "tasks.csv" ]; then
-     echo "❌ ERROR: tasks.csv not found at $(pwd)"
+   if [ ! -f ".claude/tasks.csv" ]; then
+     echo "❌ ERROR: .claude/tasks.csv not found at $(pwd)"
      exit 1
    fi
 
@@ -267,7 +267,7 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    ./.claude/scripts/task-manager.sh mark-done "${TASK_ID}" "${PR_NUMBER}"
 
    if [ $? -ne 0 ]; then
-     echo "❌ Failed to update tasks.csv"
+     echo "❌ Failed to update .claude/tasks.csv"
      exit 1
    fi
    ```
@@ -381,7 +381,7 @@ If `metadata.json` not present:
 - Set `team` = "synth" (REQUIRED)
 - Set `turn_type` = "single" (REQUIRED)
 - Set `startedAt` = current timestamp: `date -Iseconds` (REQUIRED)
-- **Extract from tasks.csv** (REQUIRED):
+- **Extract from .claude/tasks.csv** (REQUIRED):
   - `subtask` from subtask column
   - `subject_labels` from subject_labels column (parse as JSON array)
 - Do not add more fields than shown in example
