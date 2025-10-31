@@ -65,8 +65,6 @@ Let's start with the reference architecture in ASCII:
                 +-------------------+     +-------------------+     +-------------------+
 ```
 
-Now, let's work on the resource wiring narrative to describe how the components interact with each other:
-
 The payment workflow begins with the API Gateway, which receives payment requests. The API Gateway is configured with request validation, API key authentication, and throttling limits set to 10,000 RPS. X-Ray tracing is enabled to track requests through the system.
 
 When a payment request is received, the API Gateway triggers a Step Functions workflow. This workflow orchestrates the payment processing through several Lambda functions in a coordinated manner:
