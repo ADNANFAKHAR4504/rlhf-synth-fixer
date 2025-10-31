@@ -40,7 +40,7 @@ export class VPCStack extends pulumi.ComponentResource {
       {
         vpcId: vpc.id,
         cidrBlock: '10.0.1.0/24',
-        availabilityZone: 'ap-southeast-1a',
+        availabilityZone: 'us-east-1a',
         tags: pulumi.all([args.tags]).apply(([tags]) => ({
           ...tags,
           Name: `private-subnet-1-${args.environmentSuffix}`,
@@ -54,7 +54,7 @@ export class VPCStack extends pulumi.ComponentResource {
       {
         vpcId: vpc.id,
         cidrBlock: '10.0.2.0/24',
-        availabilityZone: 'ap-southeast-1b',
+        availabilityZone: 'us-east-1b',
         tags: pulumi.all([args.tags]).apply(([tags]) => ({
           ...tags,
           Name: `private-subnet-2-${args.environmentSuffix}`,
