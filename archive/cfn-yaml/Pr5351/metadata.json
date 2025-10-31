@@ -45,5 +45,11 @@
       "Compliance-driven organizations requiring encryption enforcement",
       "Multi-environment deployment scenarios"
     ]
-  }
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "govardhan-turing",
+  "dockerS3Location": ""
 }
