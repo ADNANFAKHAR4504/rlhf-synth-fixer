@@ -72,13 +72,13 @@ jobs:
       - name: Fetch base branch
         run: git fetch origin main:main
 
-      - name: Detect metadata and validate project
-        id: metadata
-        run: ./scripts/detect-metadata.sh
-
       - name: Check Project Files
         id: check-files
         run: ./scripts/check-project-files.sh
+
+      - name: Detect metadata and validate project
+        id: metadata
+        run: ./scripts/detect-metadata.sh
 
   validate-commit-message:
     name: Validate Commit Message
