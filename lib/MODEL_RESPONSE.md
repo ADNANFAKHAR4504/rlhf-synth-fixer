@@ -35,8 +35,6 @@ Let's structure the template with these components:
    - EC2 Role ARN
    - Lambda Role ARN
 
-Now, I'll design each component with the principle of least privilege in mind:
-
 ### IAM Permission Boundary Policy
 
 This policy will explicitly deny privilege escalation actions. It should deny:
