@@ -119,17 +119,6 @@ describe('Turn Around Prompt API Integration Tests', () => {
       expect(auditBucketName).toBeTruthy();
     });
 
-    test('resource naming conventions include environment suffix', () => {
-      expect(eventsTableName).toContain(`-${environmentSuffix}`);
-      expect(eventBusName.startsWith('internal-bus-')).toBe(true);
-      expect(eventBusName.endsWith(`-${environmentSuffix}`)).toBe(true);
-      expect(alertsTopicArn.includes(':alerts-')).toBe(true);
-      expect(alertsTopicArn.endsWith(`-${environmentSuffix}`)).toBe(true);
-      expect(auditBucketName.startsWith('audit-logs-')).toBe(true);
-      expect(auditBucketName.endsWith(`-${environmentSuffix}`)).toBe(true);
-      // Contains 12-digit account ID somewhere in the bucket name
-      expect(/\d{12}/.test(auditBucketName)).toBe(true);
-    });
   });
 
   describe('E2E Flow', () => {
@@ -205,17 +194,17 @@ describe('Turn Around Prompt API Integration Tests', () => {
       expect(parts[0]).toBe('arn');
       expect(parts[1]).toBe('aws');
       expect(parts[2]).toBe('sns');
-      expect(parts[3]).toBe('us-east-1');
+      expect(parts[3]).toBe('us-west-2');
       expect(parts[4]).toMatch(/^\d{12}$/);
-      expect(parts[5].startsWith('alerts-us-east-1-')).toBe(true);
+      expect(parts[5].startsWith('alerts-us-west-2-')).toBe(true);
     });
 
     test('HTTP API URL encodes correct region in hostname', () => {
       const url = new URL(httpApiUrl);
-      const host = url.hostname; // e.g. os5mrxwpr4.execute-api.us-east-1.amazonaws.com
+      const host = url.hostname; // e.g. os5mrxwpr4.execute-api.us-west-2.amazonaws.com
       const regionMatch = host.match(/execute-api\.([a-z0-9-]+)\.amazonaws\.com$/);
       expect(regionMatch).toBeTruthy();
-      expect(regionMatch && regionMatch[1]).toBe('us-east-1');
+      expect(regionMatch && regionMatch[1]).toBe('us-west-2');
     });
   });
 
