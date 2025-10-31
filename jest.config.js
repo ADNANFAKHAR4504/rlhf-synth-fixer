@@ -11,11 +11,6 @@ module.exports = {
   transformIgnorePatterns: [
     'node_modules/(?!(aws-cdk-lib|@aws-cdk|constructs)/)',
   ],
-  globals: {
-    'ts-jest': {
-      isolatedModules: true,
-    },
-  },
   collectCoverageFrom: [
     '<rootDir>/lib/**/*.ts',
     '<rootDir>/lib/**/*.mjs',
