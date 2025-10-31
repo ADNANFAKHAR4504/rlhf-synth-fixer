@@ -355,7 +355,11 @@ export class TapStack extends cdk.Stack {
 
     // Optional JWT configuration
     let authorizer: apigwv2.IHttpRouteAuthorizer | undefined = undefined;
-    if (props?.jwtIssuer && props?.jwtAudience && props.jwtAudience.length > 0) {
+    if (
+      props?.jwtIssuer &&
+      props?.jwtAudience &&
+      props.jwtAudience.length > 0
+    ) {
       authorizer = new apigwv2Auth.HttpJwtAuthorizer(
         `JwtAuthorizer-${region}-${environmentSuffix}`,
         props.jwtIssuer,
@@ -371,55 +375,63 @@ export class TapStack extends cdk.Stack {
     });
 
     // Associate WAFv2 WebACL with HTTP API default stage
-    const webAcl = new wafv2.CfnWebACL(this, `WebACL-${region}-${environmentSuffix}`, {
-      defaultAction: { allow: {} },
-      scope: 'REGIONAL',
-      visibilityConfig: {
-        cloudWatchMetricsEnabled: true,
-        metricName: `webacl-${region}-${environmentSuffix}`,
-        sampledRequestsEnabled: true,
-      },
-      name: `tap-webacl-${region}-${environmentSuffix}`,
-      rules: [
-        {
-          name: 'AWS-AWSManagedRulesCommonRuleSet',
-          priority: 1,
-          overrideAction: { none: {} },
-          statement: {
-            managedRuleGroupStatement: {
-              name: 'AWSManagedRulesCommonRuleSet',
-              vendorName: 'AWS',
+    const webAcl = new wafv2.CfnWebACL(
+      this,
+      `WebACL-${region}-${environmentSuffix}`,
+      {
+        defaultAction: { allow: {} },
+        scope: 'REGIONAL',
+        visibilityConfig: {
+          cloudWatchMetricsEnabled: true,
+          metricName: `webacl-${region}-${environmentSuffix}`,
+          sampledRequestsEnabled: true,
+        },
+        name: `tap-webacl-${region}-${environmentSuffix}`,
+        rules: [
+          {
+            name: 'AWS-AWSManagedRulesCommonRuleSet',
+            priority: 1,
+            overrideAction: { none: {} },
+            statement: {
+              managedRuleGroupStatement: {
+                name: 'AWSManagedRulesCommonRuleSet',
+                vendorName: 'AWS',
+              },
+            },
+            visibilityConfig: {
+              cloudWatchMetricsEnabled: true,
+              metricName: `aws-common-${region}-${environmentSuffix}`,
+              sampledRequestsEnabled: true,
             },
           },
-          visibilityConfig: {
-            cloudWatchMetricsEnabled: true,
-            metricName: `aws-common-${region}-${environmentSuffix}`,
-            sampledRequestsEnabled: true,
-          },
-        },
-        {
-          name: 'AWS-AWSManagedRulesKnownBadInputsRuleSet',
-          priority: 2,
-          overrideAction: { none: {} },
-          statement: {
-            managedRuleGroupStatement: {
-              name: 'AWSManagedRulesKnownBadInputsRuleSet',
-              vendorName: 'AWS',
+          {
+            name: 'AWS-AWSManagedRulesKnownBadInputsRuleSet',
+            priority: 2,
+            overrideAction: { none: {} },
+            statement: {
+              managedRuleGroupStatement: {
+                name: 'AWSManagedRulesKnownBadInputsRuleSet',
+                vendorName: 'AWS',
+              },
+            },
+            visibilityConfig: {
+              cloudWatchMetricsEnabled: true,
+              metricName: `aws-badinputs-${region}-${environmentSuffix}`,
+              sampledRequestsEnabled: true,
             },
           },
-          visibilityConfig: {
-            cloudWatchMetricsEnabled: true,
-            metricName: `aws-badinputs-${region}-${environmentSuffix}`,
-            sampledRequestsEnabled: true,
-          },
-        },
-      ],
-    });
+        ],
+      }
+    );
 
-    new wafv2.CfnWebACLAssociation(this, `WebACLAssoc-${region}-${environmentSuffix}`, {
-      webAclArn: webAcl.attrArn,
-      resourceArn: `arn:aws:apigateway:${region}::/apis/${httpApi.apiId}/stages/$default`,
-    });
+    new wafv2.CfnWebACLAssociation(
+      this,
+      `WebACLAssoc-${region}-${environmentSuffix}`,
+      {
+        webAclArn: webAcl.attrArn,
+        resourceArn: `arn:aws:apigateway:${region}::/apis/${httpApi.apiId}/stages/$default`,
+      }
+    );
 
     // S3 bucket for audit logs (append account id to satisfy naming rule)
     const auditBucket = new s3.Bucket(
@@ -439,11 +451,20 @@ export class TapStack extends cdk.Stack {
       id: 'transition-ia-then-glacier',
       enabled: true,
       transitions: [
-        { storageClass: s3.StorageClass.INTELLIGENT_TIERING, transitionAfter: cdk.Duration.days(30) },
-        { storageClass: s3.StorageClass.GLACIER, transitionAfter: cdk.Duration.days(180) },
+        {
+          storageClass: s3.StorageClass.INTELLIGENT_TIERING,
+          transitionAfter: cdk.Duration.days(30),
+        },
+        {
+          storageClass: s3.StorageClass.GLACIER,
+          transitionAfter: cdk.Duration.days(180),
+        },
       ],
       noncurrentVersionTransitions: [
-        { storageClass: s3.StorageClass.GLACIER, transitionAfter: cdk.Duration.days(90) },
+        {
+          storageClass: s3.StorageClass.GLACIER,
+          transitionAfter: cdk.Duration.days(90),
+        },
       ],
       expiration: cdk.Duration.days(365 * 3),
     });
@@ -487,37 +508,56 @@ export class TapStack extends cdk.Stack {
     // CloudWatch Alarms wired to SNS Alerts
     const alarmAction = new cloudwatchActions.SnsAction(alertsTopic);
 
-    const lambdaErrorAlarms = [ingestionFn, validationFn, enrichmentFn, storageFn].map(
+    const lambdaErrorAlarms = [
+      ingestionFn,
+      validationFn,
+      enrichmentFn,
+      storageFn,
+    ].map(
       (fn, idx) =>
-        new cloudwatch.Alarm(this, `LambdaErrorsAlarm${idx + 1}-${region}-${environmentSuffix}`, {
-          metric: fn.metricErrors({ period: cdk.Duration.minutes(1) }),
-          evaluationPeriods: 3,
-          threshold: 1,
-          datapointsToAlarm: 1,
-          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-          alarmDescription: `Lambda errors > 0 for ${fn.functionName}`,
-        })
+        new cloudwatch.Alarm(
+          this,
+          `LambdaErrorsAlarm${idx + 1}-${region}-${environmentSuffix}`,
+          {
+            metric: fn.metricErrors({ period: cdk.Duration.minutes(1) }),
+            evaluationPeriods: 3,
+            threshold: 1,
+            datapointsToAlarm: 1,
+            treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+            alarmDescription: `Lambda errors > 0 for ${fn.functionName}`,
+          }
+        )
     );
-    lambdaErrorAlarms.forEach((a) => a.addAlarmAction(alarmAction));
+    lambdaErrorAlarms.forEach(a => a.addAlarmAction(alarmAction));
 
-    const dlqAlarm = new cloudwatch.Alarm(this, `DLQDepthAlarm-${region}-${environmentSuffix}`, {
-      metric: lambdaDlq.metricApproximateNumberOfMessagesVisible({ period: cdk.Duration.minutes(1) }),
-      evaluationPeriods: 3,
-      threshold: 1,
-      datapointsToAlarm: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: 'Messages visible in Lambda DLQ',
-    });
+    const dlqAlarm = new cloudwatch.Alarm(
+      this,
+      `DLQDepthAlarm-${region}-${environmentSuffix}`,
+      {
+        metric: lambdaDlq.metricApproximateNumberOfMessagesVisible({
+          period: cdk.Duration.minutes(1),
+        }),
+        evaluationPeriods: 3,
+        threshold: 1,
+        datapointsToAlarm: 1,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription: 'Messages visible in Lambda DLQ',
+      }
+    );
     dlqAlarm.addAlarmAction(alarmAction);
 
-    const sfnFailedAlarm = new cloudwatch.Alarm(this, `SFNFailedAlarm-${region}-${environmentSuffix}`, {
-      metric: stateMachine.metricFailed({ period: cdk.Duration.minutes(1) }),
-      evaluationPeriods: 1,
-      threshold: 1,
-      datapointsToAlarm: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: 'Step Functions failed executions > 0',
-    });
+    const sfnFailedAlarm = new cloudwatch.Alarm(
+      this,
+      `SFNFailedAlarm-${region}-${environmentSuffix}`,
+      {
+        metric: stateMachine.metricFailed({ period: cdk.Duration.minutes(1) }),
+        evaluationPeriods: 1,
+        threshold: 1,
+        datapointsToAlarm: 1,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription: 'Step Functions failed executions > 0',
+      }
+    );
     sfnFailedAlarm.addAlarmAction(alarmAction);
 
     // API Gateway 5XX Errors alarm
@@ -528,14 +568,18 @@ export class TapStack extends cdk.Stack {
       statistic: 'Sum',
       dimensionsMap: { ApiId: httpApi.apiId, Stage: '$default' },
     });
-    const api5xxAlarm = new cloudwatch.Alarm(this, `HttpApi5xxAlarm-${region}-${environmentSuffix}`, {
-      metric: api5xxMetric,
-      evaluationPeriods: 1,
-      threshold: 1,
-      datapointsToAlarm: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: 'HTTP API 5xx errors detected',
-    });
+    const api5xxAlarm = new cloudwatch.Alarm(
+      this,
+      `HttpApi5xxAlarm-${region}-${environmentSuffix}`,
+      {
+        metric: api5xxMetric,
+        evaluationPeriods: 1,
+        threshold: 1,
+        datapointsToAlarm: 1,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription: 'HTTP API 5xx errors detected',
+      }
+    );
     api5xxAlarm.addAlarmAction(alarmAction);
 
     // Outputs
