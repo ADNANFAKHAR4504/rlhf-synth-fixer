@@ -131,7 +131,9 @@ describe('TapStack Unit Tests', () => {
 
     test('All subnets have route table associations', () => {
       // In test environment, CDK may use fewer AZs (6 associations = 2 AZs * 3 tiers)
-      const associations = template.findResources('AWS::EC2::SubnetRouteTableAssociation');
+      const associations = template.findResources(
+        'AWS::EC2::SubnetRouteTableAssociation'
+      );
       expect(Object.keys(associations).length).toBeGreaterThanOrEqual(6);
       expect(Object.keys(associations).length).toBeLessThanOrEqual(9);
     });
@@ -237,7 +239,8 @@ describe('TapStack Unit Tests', () => {
       // Database security group is configured with allowAllOutbound: false
       const securityGroups = template.findResources('AWS::EC2::SecurityGroup');
       const dbSg = Object.values(securityGroups).find(
-        (sg: any) => sg.Properties.GroupName === `database-sg-${environmentSuffix}`
+        (sg: any) =>
+          sg.Properties.GroupName === `database-sg-${environmentSuffix}`
       );
       expect(dbSg).toBeDefined();
       // CDK adds a default deny-all egress rule when allowAllOutbound is false
@@ -422,14 +425,16 @@ describe('TapStack Unit Tests', () => {
   describe('Destroyability Requirements', () => {
     test('All resources are destroyable (no Retain policies)', () => {
       const allResources = template.toJSON().Resources;
-      Object.entries(allResources).forEach(([logicalId, resource]: [string, any]) => {
-        if (resource.DeletionPolicy) {
-          expect(resource.DeletionPolicy).not.toBe('Retain');
+      Object.entries(allResources).forEach(
+        ([logicalId, resource]: [string, any]) => {
+          if (resource.DeletionPolicy) {
+            expect(resource.DeletionPolicy).not.toBe('Retain');
+          }
+          if (resource.UpdateReplacePolicy) {
+            expect(resource.UpdateReplacePolicy).not.toBe('Retain');
+          }
         }
-        if (resource.UpdateReplacePolicy) {
-          expect(resource.UpdateReplacePolicy).not.toBe('Retain');
-        }
-      });
+      );
     });
   });
 });
