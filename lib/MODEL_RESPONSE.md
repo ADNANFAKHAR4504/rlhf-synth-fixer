@@ -93,8 +93,6 @@ Both topics have email subscriptions to notify relevant stakeholders.
 
 CloudWatch monitoring and alarms are set up to detect issues, such as Lambda errors exceeding 1% and API 4xx errors exceeding 5%. All components have X-Ray tracing enabled for comprehensive monitoring and troubleshooting capabilities.
 
-Now, let's move on to the resilience and performance controls:
-
 1. **Retry Mechanism**: The Step Functions workflow includes a retry configuration of 3 attempts with exponential backoff for all Lambda function invocations, ensuring transient failures don't cause transaction failures.
 
 2. **Timeouts**: The Step Functions workflow has a maximum execution time of 60 seconds, ensuring that transactions are completed in a timely manner or properly reported as failures.
