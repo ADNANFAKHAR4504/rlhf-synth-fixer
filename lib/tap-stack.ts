@@ -10,7 +10,6 @@ import {
   VpcConstruct,
   SecurityGroupConstruct,
   EksClusterConstruct,
-  ManagedNodeGroupConstruct,
   AlbConstruct,
   IrsaRoleConstruct,
 } from './modules';
@@ -113,33 +112,8 @@ export class TapStack extends TerraformStack {
     const eksCluster = new EksClusterConstruct(this, 'eks-cluster', {
       name: `${environmentSuffix}-cluster`,
       version: props?.eksVersion || '1.28',
-      subnetIds: [
-        ...vpcConstruct.privateSubnets.map((s) => s.id),
-      ],
+      subnetIds: [...vpcConstruct.privateSubnets.map(s => s.id)],
       securityGroupIds: [eksClusterSecurityGroup.securityGroup.id],
-      tags: commonTags,
-    });
-
-    // Create Managed Node Groups
-    const nodeGroupConfig = props?.nodeGroupConfig || {
-      minSize: 2,
-      maxSize: 5,
-      desiredSize: 3,
-      instanceTypes: ['t3.medium'],
-    };
-
-    // x86_64 Node Group
-    const x86NodeGroup = new ManagedNodeGroupConstruct(this, 'x86-node-group', {
-      clusterName: eksCluster.cluster.name,
-      nodeGroupName: `${environmentSuffix}-x86-nodes`,
-      nodeRoleArn: eksCluster.nodeRole.arn,
-      subnetIds: vpcConstruct.privateSubnets.map((s) => s.id),
-      instanceTypes: nodeGroupConfig.instanceTypes,
-      architecture: 'x86_64',
-      minSize: nodeGroupConfig.minSize,
-      maxSize: nodeGroupConfig.maxSize,
-      desiredSize: nodeGroupConfig.desiredSize,
-      diskSize: 30,
       tags: commonTags,
     });
 
@@ -180,7 +154,7 @@ export class TapStack extends TerraformStack {
     const alb = new AlbConstruct(this, 'main-alb', {
       name: `${environmentSuffix}-alb`,
       vpcId: vpcConstruct.vpc.id,
-      subnetIds: vpcConstruct.publicSubnets.map((s) => s.id),
+      subnetIds: vpcConstruct.publicSubnets.map(s => s.id),
       securityGroupId: albSecurityGroup.securityGroup.id,
       tags: commonTags,
     });
@@ -193,9 +167,7 @@ export class TapStack extends TerraformStack {
       eksCluster.oidcProvider.arn,
       'kube-system',
       'aws-load-balancer-controller',
-      [
-        'arn:aws:iam::aws:policy/ElasticLoadBalancingFullAccess',
-      ],
+      ['arn:aws:iam::aws:policy/ElasticLoadBalancingFullAccess'],
       commonTags
     );
 
@@ -207,9 +179,7 @@ export class TapStack extends TerraformStack {
       eksCluster.oidcProvider.arn,
       'kube-system',
       'ebs-csi-controller-sa',
-      [
-        'arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy',
-      ],
+      ['arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy'],
       commonTags
     );
 

@@ -336,6 +336,7 @@ export interface NodeGroupConfig {
   maxSize: number;
   desiredSize: number;
   diskSize?: number;
+  diskEncrypted?: boolean;
   tags?: { [key: string]: string };
 }
 
