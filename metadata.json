@@ -1,0 +1,28 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000186",
+  "team": "2",
+  "startedAt": "2025-10-31T13:13:59.533Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "CloudFormation",
+    "RDS Aurora MySQL",
+    "S3",
+    "Lambda",
+    "EventBridge",
+    "SSM Parameter Store",
+    "DynamoDB",
+    "CloudWatch",
+    "SNS",
+    "Config",
+    "IAM",
+    "KMS"
+  ],
+  "training_quality": "9"
+}
