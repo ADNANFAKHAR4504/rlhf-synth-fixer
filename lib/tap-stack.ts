@@ -96,7 +96,7 @@ export class TapStack extends cdk.Stack {
         billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
         partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
         sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
-        pointInTimeRecovery: true,
+        pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
         removalPolicy: cdk.RemovalPolicy.DESTROY,
         replicationRegions: ['us-west-2'],
       }
