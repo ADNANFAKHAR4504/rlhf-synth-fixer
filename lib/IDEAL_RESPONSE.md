@@ -1,15 +1,41 @@
+# Multi-Region Terraform Infrastructure
+
+This solution implements a multi-region deployment across `us-east-1` and `us-west-2` for disaster recovery and high availability.
+
+## Architecture Overview
+
+- **Multi-region**: Identical infrastructure deployed to both us-east-1 and us-west-2
+- **Provider aliases**: Uses `aws.us_east_1` and `aws.us_west_2` for regional resource deployment
+- **Security**: KMS encryption, least-privilege security groups, private subnets for sensitive resources
+- **Networking**: VPC with public/private subnets, NAT gateways, VPC Flow Logs
+- **Compute**: EC2 instances in private subnets behind Application Load Balancers
+- **Database**: RDS PostgreSQL with encryption and automated backups
+- **Serverless**: Lambda functions with CloudWatch Logs integration
+- **Destroyable**: All resources can be cleanly destroyed (deletion_protection = false)
+
+## Implementation
+
+The infrastructure is defined in a single file `tap_stack.tf` that works with the existing `provider.tf` file.
+
+**Note**: The `provider.tf` file (already present) contains the `terraform{}` block and provider configurations:
+
 ```hcl
+# provider.tf (existing file)
 terraform {
-  required_version = ">= 1.7"
+  required_version = ">= 1.4.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = ">= 5.0"
     }
   }
+  backend "s3" {}
 }
 
-# Provider aliases for multi-region deployment
+provider "aws" {
+  region = var.aws_region
+}
+
 provider "aws" {
   alias  = "us_east_1"
   region = var.us_east_1_region
@@ -19,7 +45,11 @@ provider "aws" {
   alias  = "us_west_2"
   region = var.us_west_2_region
 }
+```
 
+## tap_stack.tf
+
+```hcl
 # Variables
 variable "aws_region" {
   description = "Primary AWS region (used by provider.tf)"
@@ -27,6 +57,7 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
+# Regions for aliased providers used by resources
 variable "us_east_1_region" {
   description = "Region for aliased provider aws.us_east_1"
   type        = string
@@ -39,14 +70,57 @@ variable "us_west_2_region" {
   default     = "us-west-2"
 }
 
+# Variables declared to align with tfvars inputs (some may be unused in this topology)
+variable "environment" {
+  description = "Environment name (dev|staging|prod)"
+  type        = string
+  default     = "dev"
+}
+
+variable "vpc_cidr" {
+  description = "VPC CIDR (single-env input)"
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "az_count" {
+  description = "Number of AZs"
+  type        = number
+  default     = 2
+}
+
+variable "instance_type" {
+  description = "EC2 instance type"
+  type        = string
+  default     = "t3.micro"
+}
+
+variable "asg_min" {
+  description = "ASG min size"
+  type        = number
+  default     = 1
+}
+
+variable "asg_max" {
+  description = "ASG max size"
+  type        = number
+  default     = 4
+}
+
+variable "asg_desired" {
+  description = "ASG desired size"
+  type        = number
+  default     = 2
+}
+
 variable "app_name" {
-  description = "Application name used for resource naming"
+  description = "Application name for resource naming"
   type        = string
   default     = "tap-app"
 }
 
 variable "common_tags" {
-  description = "Common tags to apply to all resources"
+  description = "Common tags applied to all resources"
   type        = map(string)
   default = {
     Environment = "Production"
@@ -54,6 +128,7 @@ variable "common_tags" {
   }
 }
 
+# Multi-region VPC CIDR blocks
 variable "vpc_cidr_us_east_1" {
   description = "VPC CIDR for us-east-1"
   type        = string
@@ -93,9 +168,40 @@ variable "private_subnet_cidrs_us_west_2" {
 variable "allowed_ingress_cidrs" {
   description = "List of CIDR blocks allowed to access ALB"
   type        = list(string)
-  default     = ["0.0.0.0/0"] # Restrict in production
+  default     = ["10.0.0.0/8"]
 }
 
+variable "app_port" {
+  description = "Application port on EC2 instances"
+  type        = number
+  default     = 8080
+}
+
+variable "one_nat_gateway_per_region" {
+  description = "Use only one NAT gateway per region (cost optimization)"
+  type        = bool
+  default     = true
+}
+
+variable "log_retention_days" {
+  description = "CloudWatch Logs retention in days"
+  type        = number
+  default     = 30
+}
+
+variable "enable_https" {
+  description = "Enable HTTPS on ALB"
+  type        = bool
+  default     = false
+}
+
+variable "certificate_arn" {
+  description = "ACM certificate ARN for HTTPS"
+  type        = string
+  default     = ""
+}
+
+# Database variables
 variable "db_engine" {
   description = "RDS database engine"
   type        = string
@@ -112,6 +218,12 @@ variable "db_instance_class" {
   description = "RDS instance class"
   type        = string
   default     = "db.t3.micro"
+}
+
+variable "db_allocated_storage" {
+  description = "RDS allocated storage in GB"
+  type        = number
+  default     = 20
 }
 
 variable "db_username" {
@@ -133,8 +245,7 @@ variable "backup_retention_days" {
   default     = 7
 }
 
-
-
+# Unused variables for compatibility with tfvars
 variable "lambda_zip_path" {
   description = "Path to Lambda function ZIP file"
   type        = string
@@ -151,36 +262,6 @@ variable "lambda_runtime" {
   description = "Lambda function runtime"
   type        = string
   default     = "python3.11"
-}
-
-variable "enable_https" {
-  description = "Enable HTTPS on ALB"
-  type        = bool
-  default     = false
-}
-
-variable "certificate_arn" {
-  description = "ACM certificate ARN for HTTPS"
-  type        = string
-  default     = ""
-}
-
-variable "app_port" {
-  description = "Application port on EC2 instances"
-  type        = number
-  default     = 8080
-}
-
-variable "one_nat_gateway_per_region" {
-  description = "Use only one NAT gateway per region (cost optimization)"
-  type        = bool
-  default     = true
-}
-
-variable "log_retention_days" {
-  description = "CloudWatch Logs retention in days"
-  type        = number
-  default     = 30
 }
 
 variable "enable_bastion" {
@@ -201,14 +282,14 @@ locals {
 
   vpc_configs = {
     "us-east-1" = {
-      cidr             = var.vpc_cidr_us_east_1
-      public_subnets   = var.public_subnet_cidrs_us_east_1
-      private_subnets  = var.private_subnet_cidrs_us_east_1
+      cidr            = var.vpc_cidr_us_east_1
+      public_subnets  = var.public_subnet_cidrs_us_east_1
+      private_subnets = var.private_subnet_cidrs_us_east_1
     }
     "us-west-2" = {
-      cidr             = var.vpc_cidr_us_west_2
-      public_subnets   = var.public_subnet_cidrs_us_west_2
-      private_subnets  = var.private_subnet_cidrs_us_west_2
+      cidr            = var.vpc_cidr_us_west_2
+      public_subnets  = var.public_subnet_cidrs_us_west_2
+      private_subnets = var.private_subnet_cidrs_us_west_2
     }
   }
 
@@ -216,8 +297,6 @@ locals {
     Environment = "Production"
     Application = var.app_name
   })
-
-
 }
 
 # Data Sources
@@ -231,6 +310,29 @@ data "aws_availability_zones" "us_east_1" {
 data "aws_availability_zones" "us_west_2" {
   provider = aws.us_west_2
   state    = "available"
+}
+
+# Get latest Amazon Linux 2 AMI per region
+data "aws_ami" "amazon_linux_2_us_east_1" {
+  provider    = aws.us_east_1
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+}
+
+data "aws_ami" "amazon_linux_2_us_west_2" {
+  provider    = aws.us_west_2
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
 }
 
 # KMS Keys - US-EAST-1
@@ -680,11 +782,11 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs_us_west_2" {
 # VPC Flow Logs
 resource "aws_flow_log" "vpc_us_east_1" {
   provider                 = aws.us_east_1
-  iam_role_arn            = aws_iam_role.vpc_flow_logs.arn
-  log_destination_type    = "cloud-watch-logs"
-  log_destination         = aws_cloudwatch_log_group.vpc_flow_logs_us_east_1.arn
-  traffic_type            = "ALL"
-  vpc_id                  = aws_vpc.main_us_east_1.id
+  iam_role_arn             = aws_iam_role.vpc_flow_logs.arn
+  log_destination_type     = "cloud-watch-logs"
+  log_destination          = aws_cloudwatch_log_group.vpc_flow_logs_us_east_1.arn
+  traffic_type             = "ALL"
+  vpc_id                   = aws_vpc.main_us_east_1.id
   max_aggregation_interval = 60
 
   tags = merge(local.common_tags, {
@@ -694,11 +796,11 @@ resource "aws_flow_log" "vpc_us_east_1" {
 
 resource "aws_flow_log" "vpc_us_west_2" {
   provider                 = aws.us_west_2
-  iam_role_arn            = aws_iam_role.vpc_flow_logs.arn
-  log_destination_type    = "cloud-watch-logs"
-  log_destination         = aws_cloudwatch_log_group.vpc_flow_logs_us_west_2.arn
-  traffic_type            = "ALL"
-  vpc_id                  = aws_vpc.main_us_west_2.id
+  iam_role_arn             = aws_iam_role.vpc_flow_logs.arn
+  log_destination_type     = "cloud-watch-logs"
+  log_destination          = aws_cloudwatch_log_group.vpc_flow_logs_us_west_2.arn
+  traffic_type             = "ALL"
+  vpc_id                   = aws_vpc.main_us_west_2.id
   max_aggregation_interval = 60
 
   tags = merge(local.common_tags, {
@@ -924,8 +1026,6 @@ resource "aws_security_group" "db_us_west_2" {
   }
 }
 
-
-
 # IAM Role for EC2 Instances
 resource "aws_iam_role" "ec2_instance" {
   name = "${var.app_name}-ec2-instance-role"
@@ -946,12 +1046,6 @@ resource "aws_iam_role" "ec2_instance" {
   tags = local.common_tags
 }
 
-# IAM Policy for EC2 S3 Access - US-EAST-1
-
-
-# IAM Policy for EC2 S3 Access - US-WEST-2
-
-
 # Instance Profile for EC2
 resource "aws_iam_instance_profile" "ec2_instance" {
   name = "${var.app_name}-ec2-instance-profile"
@@ -969,7 +1063,7 @@ resource "aws_lb" "main_us_east_1" {
   subnets            = aws_subnet.public_us_east_1[*].id
 
   enable_deletion_protection = false
-  enable_http2              = true
+  enable_http2               = true
 
   tags = merge(local.common_tags, {
     Name = "${var.app_name}-alb-us-east-1"
@@ -985,7 +1079,7 @@ resource "aws_lb" "main_us_west_2" {
   subnets            = aws_subnet.public_us_west_2[*].id
 
   enable_deletion_protection = false
-  enable_http2              = true
+  enable_http2               = true
 
   tags = merge(local.common_tags, {
     Name = "${var.app_name}-alb-us-west-2"
@@ -1111,35 +1205,12 @@ resource "aws_lb_listener" "https_us_west_2" {
   })
 }
 
-# Get latest Amazon Linux 2 AMI
-data "aws_ami" "amazon_linux_2_us_east_1" {
-  provider    = aws.us_east_1
-  most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
-  }
-}
-
-data "aws_ami" "amazon_linux_2_us_west_2" {
-  provider    = aws.us_west_2
-  most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
-  }
-}
-
 # EC2 Instances - US-EAST-1
 resource "aws_instance" "app_us_east_1" {
   provider                    = aws.us_east_1
   count                       = 2
   ami                         = data.aws_ami.amazon_linux_2_us_east_1.id
-  instance_type               = "t3.micro"
+  instance_type               = var.instance_type
   subnet_id                   = aws_subnet.private_us_east_1[count.index % length(aws_subnet.private_us_east_1)].id
   vpc_security_group_ids      = [aws_security_group.app_us_east_1.id]
   iam_instance_profile        = aws_iam_instance_profile.ec2_instance.name
@@ -1174,7 +1245,7 @@ resource "aws_instance" "app_us_west_2" {
   provider                    = aws.us_west_2
   count                       = 2
   ami                         = data.aws_ami.amazon_linux_2_us_west_2.id
-  instance_type               = "t3.micro"
+  instance_type               = var.instance_type
   subnet_id                   = aws_subnet.private_us_west_2[count.index % length(aws_subnet.private_us_west_2)].id
   vpc_security_group_ids      = [aws_security_group.app_us_west_2.id]
   iam_instance_profile        = aws_iam_instance_profile.ec2_instance.name
@@ -1246,25 +1317,25 @@ resource "aws_db_subnet_group" "main_us_west_2" {
 
 # RDS Instances
 resource "aws_db_instance" "main_us_east_1" {
-  provider                   = aws.us_east_1
-  identifier                 = "${var.app_name}-db-us-east-1"
-  engine                     = var.db_engine
-  engine_version            = var.db_engine_version
-  instance_class            = var.db_instance_class
-  allocated_storage         = 20
-  storage_type              = "gp3"
-  storage_encrypted         = true
-  kms_key_id               = aws_kms_key.main_us_east_1.arn
-  db_subnet_group_name     = aws_db_subnet_group.main_us_east_1.name
-  vpc_security_group_ids   = [aws_security_group.db_us_east_1.id]
+  provider               = aws.us_east_1
+  identifier             = "${var.app_name}-db-us-east-1"
+  engine                 = var.db_engine
+  engine_version         = var.db_engine_version
+  instance_class         = var.db_instance_class
+  allocated_storage      = var.db_allocated_storage
+  storage_type           = "gp3"
+  storage_encrypted      = true
+  kms_key_id             = aws_kms_key.main_us_east_1.arn
+  db_subnet_group_name   = aws_db_subnet_group.main_us_east_1.name
+  vpc_security_group_ids = [aws_security_group.db_us_east_1.id]
 
   db_name  = "${replace(var.app_name, "-", "")}db"
   username = var.db_username
   password = var.db_password
 
   backup_retention_period = var.backup_retention_days
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   deletion_protection = false
   skip_final_snapshot = true
@@ -1277,25 +1348,25 @@ resource "aws_db_instance" "main_us_east_1" {
 }
 
 resource "aws_db_instance" "main_us_west_2" {
-  provider                   = aws.us_west_2
-  identifier                 = "${var.app_name}-db-us-west-2"
-  engine                     = var.db_engine
-  engine_version            = var.db_engine_version
-  instance_class            = var.db_instance_class
-  allocated_storage         = 20
-  storage_type              = "gp3"
-  storage_encrypted         = true
-  kms_key_id               = aws_kms_key.main_us_west_2.arn
-  db_subnet_group_name     = aws_db_subnet_group.main_us_west_2.name
-  vpc_security_group_ids   = [aws_security_group.db_us_west_2.id]
+  provider               = aws.us_west_2
+  identifier             = "${var.app_name}-db-us-west-2"
+  engine                 = var.db_engine
+  engine_version         = var.db_engine_version
+  instance_class         = var.db_instance_class
+  allocated_storage      = var.db_allocated_storage
+  storage_type           = "gp3"
+  storage_encrypted      = true
+  kms_key_id             = aws_kms_key.main_us_west_2.arn
+  db_subnet_group_name   = aws_db_subnet_group.main_us_west_2.name
+  vpc_security_group_ids = [aws_security_group.db_us_west_2.id]
 
   db_name  = "${replace(var.app_name, "-", "")}db"
   username = var.db_username
   password = var.db_password
 
   backup_retention_period = var.backup_retention_days
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   deletion_protection = false
   skip_final_snapshot = true
@@ -1434,55 +1505,6 @@ resource "aws_lambda_function" "main_us_west_2" {
   tags = local.common_tags
 }
 
-# Per-region outputs
-output "vpc_id_us_east_1" {
-  value = aws_vpc.main_us_east_1.id
-}
-
-output "vpc_id_us_west_2" {
-  value = aws_vpc.main_us_west_2.id
-}
-
-output "alb_dns_name_us_east_1" {
-  value = aws_lb.main_us_east_1.dns_name
-}
-
-output "alb_dns_name_us_west_2" {
-  value = aws_lb.main_us_west_2.dns_name
-}
-
-output "kms_key_arn_us_east_1" {
-  value = aws_kms_key.main_us_east_1.arn
-}
-
-output "kms_key_arn_us_west_2" {
-  value = aws_kms_key.main_us_west_2.arn
-}
-
-output "rds_endpoint_us_east_1" {
-  value = aws_db_instance.main_us_east_1.endpoint
-}
-
-output "rds_endpoint_us_west_2" {
-  value = aws_db_instance.main_us_west_2.endpoint
-}
-
-output "lambda_arn_us_east_1" {
-  value = aws_lambda_function.main_us_east_1.arn
-}
-
-output "lambda_arn_us_west_2" {
-  value = aws_lambda_function.main_us_west_2.arn
-}
-
-output "vpc_flow_log_id_us_east_1" {
-  value = aws_flow_log.vpc_us_east_1.id
-}
-
-output "vpc_flow_log_id_us_west_2" {
-  value = aws_flow_log.vpc_us_west_2.id
-}
-
 # Inline archive files for Lambda functions to avoid external ZIP dependency
 data "archive_file" "lambda_east_1" {
   type        = "zip"
@@ -1501,4 +1523,74 @@ data "archive_file" "lambda_us_west_2" {
     filename = "index.js"
   }
 }
+
+# Per-region outputs
+output "vpc_id_us_east_1" {
+  description = "VPC ID in us-east-1"
+  value       = aws_vpc.main_us_east_1.id
+}
+
+output "vpc_id_us_west_2" {
+  description = "VPC ID in us-west-2"
+  value       = aws_vpc.main_us_west_2.id
+}
+
+output "alb_dns_name_us_east_1" {
+  description = "ALB DNS name in us-east-1"
+  value       = aws_lb.main_us_east_1.dns_name
+}
+
+output "alb_dns_name_us_west_2" {
+  description = "ALB DNS name in us-west-2"
+  value       = aws_lb.main_us_west_2.dns_name
+}
+
+output "kms_key_arn_us_east_1" {
+  description = "KMS key ARN in us-east-1"
+  value       = aws_kms_key.main_us_east_1.arn
+}
+
+output "kms_key_arn_us_west_2" {
+  description = "KMS key ARN in us-west-2"
+  value       = aws_kms_key.main_us_west_2.arn
+}
+
+output "rds_endpoint_us_east_1" {
+  description = "RDS endpoint in us-east-1"
+  value       = aws_db_instance.main_us_east_1.endpoint
+}
+
+output "rds_endpoint_us_west_2" {
+  description = "RDS endpoint in us-west-2"
+  value       = aws_db_instance.main_us_west_2.endpoint
+}
+
+output "lambda_arn_us_east_1" {
+  description = "Lambda function ARN in us-east-1"
+  value       = aws_lambda_function.main_us_east_1.arn
+}
+
+output "lambda_arn_us_west_2" {
+  description = "Lambda function ARN in us-west-2"
+  value       = aws_lambda_function.main_us_west_2.arn
+}
+
+output "vpc_flow_log_id_us_east_1" {
+  description = "VPC Flow Log ID in us-east-1"
+  value       = aws_flow_log.vpc_us_east_1.id
+}
+
+output "vpc_flow_log_id_us_west_2" {
+  description = "VPC Flow Log ID in us-west-2"
+  value       = aws_flow_log.vpc_us_west_2.id
+}
 ```
+
+## Key Features
+
+- **Multi-Region**: Complete infrastructure in both us-east-1 and us-west-2
+- **Security**: KMS encryption for all data at rest, least-privilege IAM roles and security groups
+- **Networking**: Properly isolated public/private subnets with NAT gateways for private subnet egress
+- **Monitoring**: VPC Flow Logs to CloudWatch with KMS encryption
+- **Destroyable**: All resources configured for easy cleanup (deletion_protection = false, skip_final_snapshot = true)
+- **Production-Ready**: Follows AWS best practices for multi-region deployments
