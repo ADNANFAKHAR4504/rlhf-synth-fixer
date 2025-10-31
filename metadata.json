@@ -5,13 +5,9 @@
   "team": "synth",
   "turn_type": "single",
   "startedAt": "2025-10-30T05:06:35.547785Z",
-  "subtask": "Cloud Environment Setup",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "aws",
-    "infrastructure",
-    "networking",
-    "vpc",
-    "environment-setup"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "VPC",
