@@ -571,7 +571,6 @@ Resources:
   DBPasswordSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub '${EnvironmentName}-db-password'
       Description: RDS Master Password
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${DBMasterUsername}"}'
