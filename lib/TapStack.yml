@@ -899,6 +899,9 @@ Resources:
             systemctl enable amazon-ssm-agent
             systemctl start amazon-ssm-agent
             
+            # Install MySQL client for RDS connectivity testing
+            yum install -y mysql jq
+            
             # Install and start web server (example)
             yum install -y httpd
             systemctl enable httpd

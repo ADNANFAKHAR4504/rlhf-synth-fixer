@@ -1,61 +1,61 @@
 // Configuration - These are coming from cfn-outputs after CloudFormation deployment
-import * as fs from 'fs';
 import {
   AutoScalingClient,
   DescribeAutoScalingGroupsCommand,
   DescribePoliciesCommand,
 } from '@aws-sdk/client-auto-scaling';
 import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
+  GetCommandInvocationCommand,
   SSMClient,
   SendCommandCommand,
-  GetCommandInvocationCommand,
 } from '@aws-sdk/client-ssm';
-import {
-  S3Client,
-  PutObjectCommand,
-  GetObjectCommand,
-  DeleteObjectCommand,
-  ListObjectsV2Command,
-} from '@aws-sdk/client-s3';
+import * as fs from 'fs';
 // CloudWatchLogsClient removed - VPC Flow Logs not configured in template
-import {
-  CloudWatchClient,
-  DescribeAlarmsCommand,
-} from '@aws-sdk/client-cloudwatch';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeInternetGatewaysCommand,
-  DescribeSecurityGroupsCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-} from '@aws-sdk/client-rds';
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetHealthCommand,
-  DescribeTargetGroupsCommand,
-} from '@aws-sdk/client-elastic-load-balancing-v2';
-import {
-  CloudTrailClient,
-  GetTrailStatusCommand,
-  LookupEventsCommand,
-} from '@aws-sdk/client-cloudtrail';
-import {
-  KMSClient,
-  DescribeKeyCommand,
-} from '@aws-sdk/client-kms';
 import {
   BackupClient,
   ListBackupPlansCommand,
   ListBackupVaultsCommand,
 } from '@aws-sdk/client-backup';
 import {
-  SecretsManagerClient,
+  CloudTrailClient,
+  GetTrailStatusCommand,
+  LookupEventsCommand,
+} from '@aws-sdk/client-cloudtrail';
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+} from '@aws-sdk/client-cloudwatch';
+import {
+  DescribeInternetGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  DescribeTargetHealthCommand,
+  ElasticLoadBalancingV2Client,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  DescribeKeyCommand,
+  KMSClient,
+} from '@aws-sdk/client-kms';
+import {
+  DescribeDBInstancesCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
   GetSecretValueCommand,
+  SecretsManagerClient,
 } from '@aws-sdk/client-secrets-manager';
 
 const outputs = JSON.parse(
@@ -87,7 +87,13 @@ const elbClient = new ElasticLoadBalancingV2Client({ region: awsRegion });
 const cloudTrailClient = new CloudTrailClient({ region: awsRegion });
 const kmsClient = new KMSClient({ region: awsRegion });
 const backupClient = new BackupClient({ region: awsRegion });
-const secretsClient = new SecretsManagerClient({ region: awsRegion });
+const secretsClient = new SecretsManagerClient({
+  region: awsRegion,
+  maxAttempts: 5,
+  requestHandler: {
+    requestTimeout: 10000,
+  } as any
+});
 
 // Helper function to wait for SSM command completion
 async function waitForCommand(
@@ -614,20 +620,24 @@ describe('TapStack CloudFormation Integration Tests', () => {
         try {
           // ACTION: Describe CloudWatch Alarms
           const response = await cloudwatchClient.send(
-            new DescribeAlarmsCommand({})
+            new DescribeAlarmsCommand({
+              AlarmNames: ['myproject-production-high-cpu']
+            })
           );
 
-          const cpuHighAlarm = response.MetricAlarms?.find(
-            alarm => alarm.AlarmName?.includes('high-cpu')
-          );
+          expect(response.MetricAlarms).toBeDefined();
+          expect(response.MetricAlarms!.length).toBeGreaterThan(0);
+
+          const cpuHighAlarm = response.MetricAlarms![0];
 
           expect(cpuHighAlarm).toBeDefined();
-          expect(cpuHighAlarm!.MetricName).toBe('CPUUtilization');
-          expect(cpuHighAlarm!.Namespace).toBe('AWS/EC2');
-          expect(cpuHighAlarm!.Threshold).toBe(80);
-          expect(cpuHighAlarm!.ComparisonOperator).toBe('GreaterThanThreshold');
+          expect(cpuHighAlarm.AlarmName).toBe('myproject-production-high-cpu');
+          expect(cpuHighAlarm.MetricName).toBe('CPUUtilization');
+          expect(cpuHighAlarm.Namespace).toBe('AWS/EC2');
+          expect(cpuHighAlarm.Threshold).toBe(80);
+          expect(cpuHighAlarm.ComparisonOperator).toBe('GreaterThanThreshold');
 
-          console.log(`CPU High Alarm state: ${cpuHighAlarm!.StateValue}`);
+          console.log(`CPU High Alarm state: ${cpuHighAlarm.StateValue}`);
         } catch (error: any) {
           console.error('CloudWatch Alarm test failed:', error);
           throw error;
@@ -638,20 +648,24 @@ describe('TapStack CloudFormation Integration Tests', () => {
         try {
           // ACTION: Describe CloudWatch Alarms
           const response = await cloudwatchClient.send(
-            new DescribeAlarmsCommand({})
+            new DescribeAlarmsCommand({
+              AlarmNames: ['myproject-production-low-cpu']
+            })
           );
 
-          const cpuLowAlarm = response.MetricAlarms?.find(
-            alarm => alarm.AlarmName?.includes('low-cpu')
-          );
+          expect(response.MetricAlarms).toBeDefined();
+          expect(response.MetricAlarms!.length).toBeGreaterThan(0);
+
+          const cpuLowAlarm = response.MetricAlarms![0];
 
           expect(cpuLowAlarm).toBeDefined();
-          expect(cpuLowAlarm!.MetricName).toBe('CPUUtilization');
-          expect(cpuLowAlarm!.Namespace).toBe('AWS/EC2');
-          expect(cpuLowAlarm!.Threshold).toBe(30);
-          expect(cpuLowAlarm!.ComparisonOperator).toBe('LessThanThreshold');
+          expect(cpuLowAlarm.AlarmName).toBe('myproject-production-low-cpu');
+          expect(cpuLowAlarm.MetricName).toBe('CPUUtilization');
+          expect(cpuLowAlarm.Namespace).toBe('AWS/EC2');
+          expect(cpuLowAlarm.Threshold).toBe(30);
+          expect(cpuLowAlarm.ComparisonOperator).toBe('LessThanThreshold');
 
-          console.log(`CPU Low Alarm state: ${cpuLowAlarm!.StateValue}`);
+          console.log(`CPU Low Alarm state: ${cpuLowAlarm.StateValue}`);
         } catch (error: any) {
           console.error('CloudWatch Alarm test failed:', error);
           throw error;
@@ -986,8 +1000,8 @@ describe('TapStack CloudFormation Integration Tests', () => {
                   '#!/bin/bash',
                   'set -e',
                   '',
-                  '# Install jq if not present',
-                  'sudo yum install -y jq || true',
+                  '# Install required packages if not present',
+                  'sudo yum install -y jq mysql >/dev/null 2>&1 || true',
                   '',
                   '# Retrieve password from Secrets Manager',
                   `SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "${secretArn}" --region ${awsRegion} --query SecretString --output text)`,
@@ -1128,8 +1142,8 @@ describe('TapStack CloudFormation Integration Tests', () => {
                   '#!/bin/bash',
                   'set -e',
                   '',
-                  '# Step 0: Install jq if not present',
-                  'sudo yum install -y jq || true',
+                  '# Step 0: Install required packages if not present',
+                  'sudo yum install -y jq mysql >/dev/null 2>&1 || true',
                   '',
                   '# Step 1: Retrieve password from Secrets Manager',
                   `SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "${secretArn}" --region ${awsRegion} --query SecretString --output text)`,
@@ -1349,7 +1363,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
                   'echo "=== Complete Application Stack Test ==="',
                   '',
                   '# Step 1: Install dependencies',
-                  'sudo yum install -y jq || true',
+                  'sudo yum install -y jq mysql >/dev/null 2>&1 || true',
                   '',
                   '# Step 2: Get DB credentials from Secrets Manager',
                   `SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "${secretArn}" --region ${awsRegion} --query SecretString --output text)`,
@@ -1366,7 +1380,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
                   'echo "Step 4: Log uploaded to S3"',
                   '',
                   '# Step 5: Send metric to CloudWatch',
-                  'aws cloudwatch put-metric-data --namespace "TAPStack/E2E" --metric-name "FullStackTest" --value 1',
+                  `aws cloudwatch put-metric-data --namespace "TAPStack/E2E" --metric-name "FullStackTest" --value 1 --region ${awsRegion}`,
                   'echo "Step 5: Metric sent to CloudWatch"',
                   '',
                   '# Step 6: Cleanup',
