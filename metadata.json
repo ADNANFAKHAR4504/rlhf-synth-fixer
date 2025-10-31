@@ -18,5 +18,6 @@
     "DynamoDB",
     "SSM",
     "CloudWatch"
-  ]
+  ],
+  "training_quality": 10
 }
