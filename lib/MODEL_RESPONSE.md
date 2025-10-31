@@ -1314,8 +1314,6 @@ Now We have all the sections of my CloudFormation template defined. Let us put i
 9. It parameterizes environment values.
 10. It exports key outputs for downstream stacks.
 
-The template is complete and should be deployable as-is, with proper IAM roles and policies, resource dependencies, and all the required configurations.
-
 ### Answer
 
 ---
