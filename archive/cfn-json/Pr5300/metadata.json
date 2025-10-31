@@ -1,0 +1,20 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000209",
+  "team": "1",
+  "startedAt": "2025-10-29T09:11:49.862Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": "\"VPC\",    \"EC2\",    \"RDS\",    \"S3\",    \"CloudFront\",    \"IAM\",    \"KMS\",    \"SecretsManager\",    \"CloudTrail\",    \"Config\",    \"AutoScaling\",    \"ElasticLoadBalancingV2\"",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
+}
