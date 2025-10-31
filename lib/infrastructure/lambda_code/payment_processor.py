@@ -14,7 +14,6 @@ import uuid
 from decimal import Decimal
 
 import boto3
-from aws_xray_sdk.core import patch_all
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -23,8 +22,6 @@ dynamodb = boto3.resource('dynamodb')
 payments_table = dynamodb.Table(os.environ['PAYMENTS_TABLE_NAME'])
 
 sqs = boto3.client('sqs')
-
-patch_all()
 
 
 def decimal_default(obj):
