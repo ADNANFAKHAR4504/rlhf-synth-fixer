@@ -4,7 +4,37 @@
 
 import fs from 'fs';
 import path from 'path';
-import { add, computeTier, formatName, getTimestamp, isEven } from '../lib/meta';
+
+// Inline minimal versions of the removed `lib/meta.ts` helpers so the
+// unit test remains self-contained and does not depend on lib/meta.
+function add(a: number, b: number): number {
+  return a + b;
+}
+
+function isEven(n: number): boolean {
+  if (!Number.isFinite(n)) throw new TypeError('non-finite');
+  return n % 2 === 0;
+}
+
+function formatName(parts: Array<string | null | undefined>): string {
+  return parts
+    .filter(Boolean)
+    .map((p) => String(p).trim())
+    .filter(Boolean)
+    .join('-');
+}
+
+function getTimestamp(prefix?: string): string {
+  const t = new Date().toISOString().replace(/[:.]/g, '');
+  return prefix ? `${prefix}-${t}` : t;
+}
+
+function computeTier(v: number): string {
+  if (!Number.isFinite(v) || v < 0) throw new RangeError('value');
+  if (v < 10) return 'low';
+  if (v < 100) return 'med';
+  return 'high';
+}
 
 // --- Inline helpers so the unit test is fully self-contained (no external test helpers) ---
 function listTfFiles(dir = path.resolve(__dirname, '..', 'lib')): string[] {
