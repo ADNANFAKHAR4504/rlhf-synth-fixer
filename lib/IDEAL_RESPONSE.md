@@ -389,13 +389,14 @@ yum install -y amazon-cloudwatch-agent
     }, { parent: this });
 
     // Create Auto Scaling Group
+    // Note: Using public subnets for instances to allow internet access without NAT Gateway (cost optimization)
     const asg = new aws.autoscaling.Group(`tap-asg-${environmentSuffix}`, {
       minSize: 2,
       maxSize: 6,
       desiredCapacity: 2,
       healthCheckGracePeriod: 300,
       healthCheckType: 'ELB',
-      vpcZoneIdentifiers: privateSubnets.map(subnet => subnet.id),
+      vpcZoneIdentifiers: publicSubnets.map(subnet => subnet.id),
       targetGroupArns: [targetGroup.arn],
       launchTemplate: {
         id: launchTemplate.id,
@@ -698,16 +699,16 @@ pulumi stack rm dev
 - All metrics evaluated every 60 seconds
 
 ### Security
-- ALB in public subnets, instances in private subnets
-- Security groups with least privilege access
-- IAM roles with minimal required permissions
-- No public IP addresses on instances
+- ALB and instances in public subnets (cost optimization - no NAT Gateway required)
+- Security groups with least privilege access (instances only accept traffic from ALB)
+- IAM roles with minimal required permissions (SSM and CloudWatch only)
+- Instances automatically assigned public IPs for internet access
 
 ## Cost Optimization
 
 This implementation uses several cost-optimization strategies:
 - t3.micro instances (AWS Free Tier eligible)
-- No NAT Gateways (instances in private subnets use VPC endpoints if needed)
+- No NAT Gateways (instances in public subnets have direct internet access)
 - Application Load Balancer shared across all instances
 - Auto-scaling reduces costs during low-traffic periods
 - CloudWatch alarms use standard metrics (no custom metrics)
