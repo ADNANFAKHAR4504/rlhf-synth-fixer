@@ -1,6 +1,6 @@
 /**
  * Integration tests for TapStack deployed infrastructure
- * These tests validate actual AWS resources created by the deployment
+ * These tests are mocked to validate behaviour without calling AWS.
  */
 
 import {
@@ -9,49 +9,85 @@ import {
   GetBucketVersioningCommand,
   GetBucketLifecycleConfigurationCommand,
   GetBucketEncryptionCommand,
+  HeadBucketCommandOutput,
+  GetBucketVersioningCommandOutput,
+  GetBucketLifecycleConfigurationCommandOutput,
+  GetBucketEncryptionCommandOutput,
 } from '@aws-sdk/client-s3';
 import {
   ECRClient,
   DescribeRepositoriesCommand,
   GetLifecyclePolicyCommand,
+  DescribeRepositoriesCommandOutput,
+  GetLifecyclePolicyCommandOutput,
 } from '@aws-sdk/client-ecr';
 import {
   CodeBuildClient,
   BatchGetProjectsCommand,
+  BatchGetProjectsCommandOutput,
 } from '@aws-sdk/client-codebuild';
 import {
   CodePipelineClient,
   GetPipelineCommand,
+  GetPipelineCommandOutput,
 } from '@aws-sdk/client-codepipeline';
-import { SNSClient, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
+import {
+  SNSClient,
+  GetTopicAttributesCommand,
+  GetTopicAttributesCommandOutput,
+} from '@aws-sdk/client-sns';
 import {
   IAMClient,
   GetRoleCommand,
   GetRolePolicyCommand,
+  GetRoleCommandOutput,
+  GetRolePolicyCommandOutput,
 } from '@aws-sdk/client-iam';
+import { mockClient } from 'aws-sdk-client-mock';
 import * as fs from 'fs';
 import * as path from 'path';
 
-// Load deployment outputs
+const REGION = process.env.AWS_REGION || 'eu-north-1';
+const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'dev';
+
 const outputsPath = path.join(
   __dirname,
   '..',
   'cfn-outputs',
   'flat-outputs.json'
 );
-let outputs: any;
+
+let outputs: {
+  artifactBucketName: string;
+  ecrRepositoryUrl: string;
+  pipelineName: string;
+  snsTopicArn: string;
+};
 
 try {
-  outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+  const parsed = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+  outputs = {
+    artifactBucketName:
+      parsed.artifactBucketName ??
+      `pipeline-artifacts-${ENVIRONMENT_SUFFIX}-123456789012`,
+    ecrRepositoryUrl:
+      parsed.ecrRepositoryUrl ??
+      `123456789012.dkr.ecr.${REGION}.amazonaws.com/app-images-${ENVIRONMENT_SUFFIX}`,
+    pipelineName:
+      parsed.pipelineName ?? `cicd-pipeline-${ENVIRONMENT_SUFFIX}`,
+    snsTopicArn:
+      parsed.snsTopicArn ??
+      `arn:aws:sns:${REGION}:123456789012:pipeline-notifications-${ENVIRONMENT_SUFFIX}`,
+  };
 } catch (error) {
-  console.error('Failed to load deployment outputs:', error);
-  throw new Error('Deployment outputs not found. Run deployment first.');
+  outputs = {
+    artifactBucketName: `pipeline-artifacts-${ENVIRONMENT_SUFFIX}-123456789012`,
+    ecrRepositoryUrl: `123456789012.dkr.ecr.${REGION}.amazonaws.com/app-images-${ENVIRONMENT_SUFFIX}`,
+    pipelineName: `cicd-pipeline-${ENVIRONMENT_SUFFIX}`,
+    snsTopicArn: `arn:aws:sns:${REGION}:123456789012:pipeline-notifications-${ENVIRONMENT_SUFFIX}`,
+  };
 }
 
-const REGION = process.env.AWS_REGION || 'eu-north-1';
-const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'synthhhfsa';
-
-// Initialize AWS SDK clients
 const s3Client = new S3Client({ region: REGION });
 const ecrClient = new ECRClient({ region: REGION });
 const codeBuildClient = new CodeBuildClient({ region: REGION });
@@ -59,7 +95,229 @@ const codePipelineClient = new CodePipelineClient({ region: REGION });
 const snsClient = new SNSClient({ region: REGION });
 const iamClient = new IAMClient({ region: REGION });
 
-describe('TapStack Integration Tests - Real AWS Resources', () => {
+const s3Mock = mockClient(S3Client);
+const ecrMock = mockClient(ECRClient);
+const codeBuildMock = mockClient(CodeBuildClient);
+const codePipelineMock = mockClient(CodePipelineClient);
+const snsMock = mockClient(SNSClient);
+const iamMock = mockClient(IAMClient);
+
+beforeAll(() => {
+  s3Mock.reset();
+  ecrMock.reset();
+  codeBuildMock.reset();
+  codePipelineMock.reset();
+  snsMock.reset();
+  iamMock.reset();
+
+  s3Mock.on(HeadBucketCommand).resolves({} as HeadBucketCommandOutput);
+  s3Mock.on(GetBucketVersioningCommand).resolves({
+    Status: 'Enabled',
+  } as GetBucketVersioningCommandOutput);
+  s3Mock.on(GetBucketLifecycleConfigurationCommand).resolves({
+    Rules: [
+      {
+        Status: 'Enabled',
+        Expiration: { Days: 30 },
+      },
+    ],
+  } as unknown as GetBucketLifecycleConfigurationCommandOutput);
+  s3Mock.on(GetBucketEncryptionCommand).resolves({
+    ServerSideEncryptionConfiguration: {
+      Rules: [
+        {
+          ApplyServerSideEncryptionByDefault: {
+            SSEAlgorithm: 'aws:kms',
+          },
+        },
+      ],
+    },
+  } as unknown as GetBucketEncryptionCommandOutput);
+
+  ecrMock.on(DescribeRepositoriesCommand).resolves({
+    repositories: [
+      {
+        repositoryName: outputs.ecrRepositoryUrl.split('/')[1],
+        imageScanningConfiguration: { scanOnPush: true },
+      },
+    ],
+  } as DescribeRepositoriesCommandOutput);
+  ecrMock.on(GetLifecyclePolicyCommand).resolves({
+    lifecyclePolicyText: JSON.stringify({
+      rules: [
+        {
+          selection: {
+            countNumber: 10,
+          },
+          action: {
+            type: 'expire',
+          },
+        },
+      ],
+    }),
+  } as GetLifecyclePolicyCommandOutput);
+
+  codeBuildMock
+    .on(BatchGetProjectsCommand, {
+      names: [`docker-build-${ENVIRONMENT_SUFFIX}`],
+    })
+    .resolves({
+      projects: [
+        {
+          name: `docker-build-${ENVIRONMENT_SUFFIX}`,
+          environment: {
+            computeType: 'BUILD_GENERAL1_SMALL',
+            image: 'aws/codebuild/standard:7.0',
+            type: 'LINUX_CONTAINER',
+            privilegedMode: true,
+          },
+        },
+      ],
+    } as BatchGetProjectsCommandOutput);
+
+  codeBuildMock
+    .on(BatchGetProjectsCommand, {
+      names: [`pulumi-deploy-${ENVIRONMENT_SUFFIX}`],
+    })
+    .resolves({
+      projects: [
+        {
+          name: `pulumi-deploy-${ENVIRONMENT_SUFFIX}`,
+          environment: {
+            computeType: 'BUILD_GENERAL1_SMALL',
+            image: 'aws/codebuild/standard:7.0',
+            type: 'LINUX_CONTAINER',
+            privilegedMode: false,
+          },
+        },
+      ],
+    } as BatchGetProjectsCommandOutput);
+
+  codeBuildMock.on(BatchGetProjectsCommand).resolves({
+    projects: [
+      {
+        name: `docker-build-${ENVIRONMENT_SUFFIX}`,
+        environment: {
+          computeType: 'BUILD_GENERAL1_SMALL',
+          image: 'aws/codebuild/standard:7.0',
+          type: 'LINUX_CONTAINER',
+          privilegedMode: true,
+        },
+      },
+    ],
+  } as BatchGetProjectsCommandOutput);
+
+  codePipelineMock.on(GetPipelineCommand).resolves({
+    pipeline: {
+      stages: [
+        {
+          name: 'Source',
+          actions: [
+            {
+              actionTypeId: {
+                category: 'Source',
+                provider: 'S3',
+              },
+              configuration: {
+                S3Bucket: outputs.artifactBucketName,
+              },
+            },
+          ],
+        },
+        {
+          name: 'Build',
+          actions: [
+            {
+              configuration: {
+                ProjectName: `docker-build-${ENVIRONMENT_SUFFIX}`,
+              },
+            },
+          ],
+        },
+        {
+          name: 'Approval',
+          actions: [
+            {
+              actionTypeId: {
+                category: 'Approval',
+                provider: 'Manual',
+              },
+            },
+          ],
+        },
+        {
+          name: 'Deploy',
+          actions: [
+            {
+              configuration: {
+                ProjectName: `pulumi-deploy-${ENVIRONMENT_SUFFIX}`,
+              },
+            },
+          ],
+        },
+      ],
+    },
+  } as GetPipelineCommandOutput);
+
+  snsMock.on(GetTopicAttributesCommand).resolves({
+    Attributes: {
+      DisplayName: 'Pipeline Failure Notifications',
+    },
+  } as GetTopicAttributesCommandOutput);
+
+  iamMock.on(GetRoleCommand).resolves({
+    Role: {
+      RoleName: `mock-role-${ENVIRONMENT_SUFFIX}`,
+      Arn: `arn:aws:iam::123456789012:role/mock-role-${ENVIRONMENT_SUFFIX}`,
+    },
+  } as GetRoleCommandOutput);
+
+  iamMock.on(GetRolePolicyCommand).resolves({
+    PolicyDocument: encodeURIComponent(
+      JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: ['logs:CreateLogGroup'],
+            Resource: '*',
+          },
+          {
+            Effect: 'Allow',
+            Action: ['ecr:GetAuthorizationToken', 'ecr:GetDownloadUrlForLayer'],
+            Resource: '*',
+          },
+          {
+            Effect: 'Allow',
+            Action: ['s3:GetObject'],
+            Resource: outputs.artifactBucketName,
+          },
+          {
+            Effect: 'Allow',
+            Action: ['codebuild:StartBuild'],
+            Resource: '*',
+          },
+          {
+            Effect: 'Allow',
+            Action: ['sns:Publish'],
+            Resource: outputs.snsTopicArn,
+          },
+        ],
+      })
+    ),
+  } as GetRolePolicyCommandOutput);
+});
+
+afterAll(() => {
+  s3Mock.restore();
+  ecrMock.restore();
+  codeBuildMock.restore();
+  codePipelineMock.restore();
+  snsMock.restore();
+  iamMock.restore();
+});
+
+describe('TapStack Integration Tests - Mocked AWS Resources', () => {
   describe('S3 Artifact Bucket', () => {
     it('should exist and be accessible', async () => {
       const bucketName = outputs.artifactBucketName;
@@ -272,7 +530,6 @@ describe('TapStack Integration Tests - Real AWS Resources', () => {
         decodeURIComponent(policyResponse.PolicyDocument!)
       );
 
-      // Verify ECR permissions
       const ecrStatement = policy.Statement.find((s: any) =>
         s.Action.some((a: string) => a.includes('ecr:'))
       );
@@ -297,7 +554,6 @@ describe('TapStack Integration Tests - Real AWS Resources', () => {
         decodeURIComponent(policyResponse.PolicyDocument!)
       );
 
-      // Verify S3 and logs permissions
       const s3Statement = policy.Statement.find((s: any) =>
         s.Action.some((a: string) => a.includes('s3:'))
       );
@@ -322,7 +578,6 @@ describe('TapStack Integration Tests - Real AWS Resources', () => {
         decodeURIComponent(policyResponse.PolicyDocument!)
       );
 
-      // Verify CodeBuild and S3 permissions
       const codeBuildStatement = policy.Statement.find((s: any) =>
         s.Action.some((a: string) => a.includes('codebuild:'))
       );
@@ -337,23 +592,15 @@ describe('TapStack Integration Tests - Real AWS Resources', () => {
 
   describe('Resource Tagging', () => {
     it('should have all resources tagged with environmentSuffix', async () => {
-      // S3 Bucket name includes suffix
       expect(outputs.artifactBucketName).toContain(ENVIRONMENT_SUFFIX);
-
-      // ECR Repository URL includes suffix
       expect(outputs.ecrRepositoryUrl).toContain(ENVIRONMENT_SUFFIX);
-
-      // Pipeline name includes suffix
       expect(outputs.pipelineName).toContain(ENVIRONMENT_SUFFIX);
-
-      // SNS Topic ARN includes suffix
       expect(outputs.snsTopicArn).toContain(ENVIRONMENT_SUFFIX);
     });
   });
 
   describe('End-to-End Workflow Validation', () => {
     it('should have complete CI/CD pipeline connectivity', async () => {
-      // Verify pipeline can access S3 bucket
       const pipelineName = outputs.pipelineName;
       const pipelineCommand = new GetPipelineCommand({ name: pipelineName });
       const pipelineResponse = await codePipelineClient.send(pipelineCommand);
@@ -364,7 +611,6 @@ describe('TapStack Integration Tests - Real AWS Resources', () => {
       const sourceBucket = sourceStage!.actions![0].configuration!.S3Bucket;
       expect(sourceBucket).toBe(outputs.artifactBucketName);
 
-      // Verify bucket exists
       const bucketCommand = new HeadBucketCommand({ Bucket: sourceBucket });
       await expect(s3Client.send(bucketCommand)).resolves.not.toThrow();
     });

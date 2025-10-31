@@ -11,9 +11,37 @@ pulumi.runtime.setMocks({
   newResource: (
     args: pulumi.runtime.MockResourceArgs
   ): { id: string; state: any } => {
+    const state = { ...args.inputs };
+
+    switch (args.type) {
+      case 'aws:s3/bucket:Bucket': {
+        const bucketName =
+          state.bucket ?? `${args.name}-${state.environmentSuffix ?? 'dev'}`;
+        state.bucket = bucketName;
+        state.arn = `arn:aws:s3:::${bucketName}`;
+        break;
+      }
+      case 'aws:ecr/repository:Repository': {
+        const repositoryName = state.name ?? args.name;
+        state.repositoryUrl = `123456789012.dkr.ecr.us-east-1.amazonaws.com/${repositoryName}`;
+        state.arn = `arn:aws:ecr:us-east-1:123456789012:repository/${repositoryName}`;
+        break;
+      }
+      case 'aws:codepipeline/pipeline:Pipeline': {
+        state.name = args.name;
+        break;
+      }
+      case 'aws:sns/topic:Topic': {
+        state.arn = `arn:aws:sns:us-east-1:123456789012:${args.name}`;
+        break;
+      }
+      default:
+        break;
+    }
+
     return {
       id: `${args.name}-id`,
-      state: args.inputs,
+      state,
     };
   },
   call: (args: pulumi.runtime.MockCallArgs) => {
