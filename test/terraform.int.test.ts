@@ -310,9 +310,12 @@ terraform {
         // These resources can legitimately vary across environments:
         // - Neptune: Optional graph database (enabled via variable)
         // - Provisioned concurrency: Typically only in prod for performance
+        // - EIP/NAT Gateway: Dev often uses single NAT, prod uses multi-AZ
         const allowedVariableResources = [
           "aws_neptune",
           "aws_lambda_provisioned_concurrency_config",
+          "aws_eip",
+          "aws_nat_gateway",
         ];
 
         const isAllowedToVary = (type: string) =>
