@@ -301,10 +301,6 @@ export class TapStack extends pulumi.ComponentResource {
       `webhook-api-${environmentSuffix}`,
       {
         name: `webhook-api-${environmentSuffix}`,
-        endpointConfiguration: {
-          types: ['EDGE'],
-        },
-        minimumCompressionSize: 1024,
         tags: mergedTags,
       },
       { parent: this, provider }
@@ -483,7 +479,7 @@ export class TapStack extends pulumi.ComponentResource {
     new aws.cloudwatch.MetricAlarm(
       `webhook-error-alarm-${environmentSuffix}`,
       {
-        alarmName: `webhook-error-alarm-${environmentSuffix}`,
+        name: `webhook-error-alarm-${environmentSuffix}`,
         alarmDescription:
           'Alarm when webhook processor errors exceed 5 within five minutes',
         comparisonOperator: 'GreaterThanOrEqualToThreshold',
