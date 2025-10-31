@@ -54,6 +54,36 @@ echo "=== Bootstrap Phase ==="
 echo "=== Deploy Phase ==="
 if [ "$PLATFORM" = "cdk" ]; then
   echo "✅ CDK project detected, running CDK deploy..."
+
+  # Check if stack is in failed state and needs cleanup
+  STACK_NAME="TapStack${ENVIRONMENT_SUFFIX}"
+  STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "NOT_FOUND")
+
+  if [[ "$STACK_STATUS" =~ ^(ROLLBACK_COMPLETE|UPDATE_ROLLBACK_COMPLETE|CREATE_FAILED|DELETE_FAILED)$ ]]; then
+    echo "⚠️ Stack is in $STACK_STATUS state. Attempting to delete..."
+
+    # Try CDK destroy first
+    npm run cdk:destroy -- --force || true
+
+    # If stack still exists and in DELETE_FAILED, force delete with AWS CLI
+    STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "NOT_FOUND")
+
+    if [[ "$STACK_STATUS" == "DELETE_FAILED" ]]; then
+      echo "⚠️ Stack still in DELETE_FAILED state. Force deleting with AWS CLI..."
+      # Get stuck resources and continue-update-rollback to unstick
+      aws cloudformation continue-update-rollback --stack-name "$STACK_NAME" \
+        --resources-to-skip "TapVpcRestrictDefaultSecurityGroupCustomResource2332DAD5" 2>/dev/null || true
+      sleep 5
+      # Now try delete again
+      aws cloudformation delete-stack --stack-name "$STACK_NAME"
+      echo "⏳ Waiting for stack deletion..."
+      aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" || true
+    fi
+
+    echo "✅ Stack cleanup completed"
+    sleep 10
+  fi
+
   npm run cdk:deploy
 
 elif [ "$PLATFORM" = "cdktf" ]; then

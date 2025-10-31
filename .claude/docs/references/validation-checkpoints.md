@@ -83,24 +83,34 @@ grep -E '\*\*.*\swith\s.*\*\*' lib/PROMPT.md
 
 ## Checkpoint E: Platform Code Compliance
 
-**When**: After MODEL_RESPONSE generation, before deployment
-**Who**: iac-infra-generator (Phase 4), iac-infra-qa-trainer (Section 1)
+**When**: After IDEAL_RESPONSE generation, before reporting ready
+**Who**: iac-code-reviewer (Phase 1.5), iac-infra-qa-trainer (Section 1)
 
 **Validation**:
 ```bash
-# Verify generated code matches expected platform/language
-# Use platform-specific patterns from shared-validations.md
+# IMPORTANT: This validates lib/IDEAL_RESPONSE.md (the corrected final code)
+# NOT lib/MODEL_RESPONSE.md (the initial model output that may have errors)
+#
+# The script automatically:
+# - Reads platform/language from metadata.json
+# - Detects actual platform/language in lib/IDEAL_RESPONSE.md
+# - Compares and reports match/mismatch
 
-EXPECTED_PLATFORM=$(jq -r '.platform' metadata.json)
-EXPECTED_LANGUAGE=$(jq -r '.language' metadata.json)
-
-# Check for platform-specific imports/syntax in lib/
-bash ./.claude/scripts/validate-code-platform.sh "$EXPECTED_PLATFORM" "$EXPECTED_LANGUAGE"
+bash ./.claude/scripts/validate-code-platform.sh
 ```
 
-**Pass criteria**: Code matches platform detection patterns
-**Fail action**: CRITICAL - regenerate with stronger platform constraints
+**Pass criteria**:
+- IDEAL_RESPONSE.md code matches metadata.json platform and language
+- Script exits with code 0
+
+**Fail action**:
+- CRITICAL - platform/language mismatch detected
+- Review IDEAL_RESPONSE.md and ensure it matches project structure
+- Check build files (pom.xml vs build.gradle), stack architecture, package names
+
 **Reference**: shared-validations.md Platform Detection Patterns
+
+**NOTE**: MODEL_RESPONSE.md may contain errors - that's expected! MODEL_FAILURES.md documents what was fixed. Only IDEAL_RESPONSE.md matters for this validation.
 
 ---
 
