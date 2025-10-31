@@ -11,7 +11,6 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as codebuild from 'aws-cdk-lib/aws-codebuild';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as config from 'aws-cdk-lib/aws-config';
-import * as ssm from 'aws-cdk-lib/aws-ssm';
 
 export interface TapStackProps extends cdk.StackProps {
   environmentSuffix: string;
@@ -259,10 +258,6 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'ApprovalTopicArn', {
       value: approvalTopic.topicArn,
       exportName: `${env}-ApprovalTopicArn`,
-    });
-
-    ssm.StringParameter.fromStringParameterAttributes(this, 'AlertEmailParam', {
-      parameterName: `/${env}/config-sync/alert-email`,
     });
   }
 }
