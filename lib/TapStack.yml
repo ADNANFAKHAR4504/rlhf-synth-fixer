@@ -255,11 +255,12 @@ Resources:
               # Update validation result in DynamoDB
               transactions_table.update_item(
                   Key={'transaction_id': transaction_id},
-                  UpdateExpression='SET validation_result = :vr, #st = :s',
+                  UpdateExpression='SET validation_result = :vr, #st = :s, updated_at = :ua',
                   ExpressionAttributeNames={'#st': 'status'},
                   ExpressionAttributeValues={
                       ':vr': validation_result,
                       ':s': 'VALIDATED',
+                      ':ua': int(time.time())
                   }
               )
               
