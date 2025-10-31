@@ -18,27 +18,29 @@ const config = new pulumi.Config();
 const environmentSuffix =
   process.env.ENVIRONMENT_SUFFIX || config.get('env') || 'dev';
 
-// Get metadata from environment variables for tagging purposes.
-// These are often injected by CI/CD systems.
-const repository = config.get('repository') || 'unknown';
-const commitAuthor = config.get('commitAuthor') || 'unknown';
-
-// Define a set of default tags to apply to all resources.
-// While not explicitly used in the TapStack instantiation here,
-// this is the standard place to define them. They would typically be passed
-// into the TapStack or configured on the AWS provider.
-const defaultTags = {
-  Environment: environmentSuffix,
-  Repository: repository,
-  Author: commitAuthor,
-};
-
 // Instantiate the main stack component for the infrastructure.
 // This encapsulates all the resources for the platform.
-new TapStack('pulumi-infra', {
-  tags: defaultTags,
+const stack = new TapStack('pulumi-infra', {
+  tags: {
+    Environment: environmentSuffix,
+    Project: 'disaster-recovery',
+    ManagedBy: 'pulumi',
+  },
 });
 
-// To use the stack outputs, you can export them.
-// For example, if TapStack had an output `bucketName`:
-// export const bucketName = stack.bucketName;
+// Export outputs that match your get-outputs.sh expectations
+export const vpcId = stack.vpcId;
+export const privateSubnetIds = stack.privateSubnetIds;
+export const publicSubnetIds = stack.publicSubnetIds;
+export const s3BucketName = stack.s3BucketName;
+export const primaryDbEndpoint = stack.primaryDbEndpoint;
+export const primaryDbIdentifier = stack.primaryDbIdentifier;
+export const replicaDbEndpoint = stack.replicaDbEndpoint;
+export const replicaDbIdentifier = stack.replicaDbIdentifier;
+export const backupBucketPrimaryName = stack.backupBucketPrimaryName;
+export const backupBucketReplicaName = stack.backupBucketReplicaName;
+export const alertTopicArn = stack.alertTopicArn;
+export const healthCheckLambdaArn = stack.healthCheckLambdaArn;
+export const failoverLambdaArn = stack.failoverLambdaArn;
+export const kmsKeyId = stack.kmsKeyId;
+export const dbSecretArn = stack.dbSecretArn;

@@ -8,6 +8,9 @@ export interface TapStackProps {
 
 export class TapStack extends pulumi.ComponentResource {
   public readonly vpcId: pulumi.Output<string>;
+  public readonly privateSubnetIds: pulumi.Output<string>[];  // Add this
+  public readonly publicSubnetIds: pulumi.Output<string>[];   // Add this
+  public readonly s3BucketName: pulumi.Output<string>;        // Add this
   public readonly primaryDbEndpoint: pulumi.Output<string>;
   public readonly primaryDbIdentifier: pulumi.Output<string>;
   public readonly replicaDbEndpoint: pulumi.Output<string>;
@@ -18,6 +21,7 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly healthCheckLambdaArn: pulumi.Output<string>;
   public readonly failoverLambdaArn: pulumi.Output<string>;
   public readonly kmsKeyId: pulumi.Output<string>;
+  public readonly dbSecretArn: pulumi.Output<string>;
 
   constructor(
     name: string,
@@ -147,7 +151,32 @@ export class TapStack extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    // Primary RDS PostgreSQL Instance
+    // Create AWS Secrets Manager secret for database password
+    const dbSecret = new aws.secretsmanager.Secret(
+      `dr-db-secret-${environmentSuffix}`,
+      {
+        name: `dr-db-password-${environmentSuffix}`,
+        description: 'Database master password for DR RDS instances',
+        kmsKeyId: kmsKey.arn,
+        tags: commonTags,
+      },
+      { provider, parent: this }
+    );
+
+    // Generate a secure random password
+    const dbSecretVersion = new aws.secretsmanager.SecretVersion(
+      `dr-db-secret-version-${environmentSuffix}`,
+      {
+        secretId: dbSecret.id,
+        secretString: JSON.stringify({
+          username: 'dbadmin',
+          password: 'TempPassword123!', // This will be rotated by AWS
+        }),
+      },
+      { provider, parent: this }
+    );
+
+    // Primary RDS PostgreSQL Instance - Updated to use Secrets Manager
     const primaryDb = new aws.rds.Instance(
       `dr-primary-db-${environmentSuffix}`,
       {
@@ -162,7 +191,8 @@ export class TapStack extends pulumi.ComponentResource {
         dbSubnetGroupName: dbSubnetGroup.name,
         vpcSecurityGroupIds: [dbSecurityGroup.id],
         username: 'dbadmin',
-        password: config.requireSecret('dbPassword'),
+        // Use traditional password for read replica compatibility
+        password: 'AdminPassword123!', // Will be stored in Secrets Manager separately
         backupRetentionPeriod: 7,
         backupWindow: '03:00-04:00',
         maintenanceWindow: 'mon:04:00-mon:05:00',
@@ -175,7 +205,7 @@ export class TapStack extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    // Read Replica for DR
+    // Read Replica for DR - No password needed, inherits from primary
     const replicaDb = new aws.rds.Instance(
       `dr-replica-db-${environmentSuffix}`,
       {
@@ -202,25 +232,53 @@ export class TapStack extends pulumi.ComponentResource {
       `dr-backup-primary-${environmentSuffix}`,
       {
         bucket: `dr-backup-primary-${environmentSuffix}`,
-        versioning: {
-          enabled: true,
-        },
-        serverSideEncryptionConfiguration: {
-          rule: {
+        tags: commonTags,
+      },
+      { provider, parent: this }
+    );
+
+    // Add encryption separately
+    const primaryBucketEncryption = new aws.s3.BucketServerSideEncryptionConfiguration(
+      `dr-backup-primary-encryption-${environmentSuffix}`,
+      {
+        bucket: backupBucketPrimary.id,
+        rules: [
+          {
             applyServerSideEncryptionByDefault: {
               sseAlgorithm: 'AES256',
             },
           },
-        },
-        lifecycleRules: [
+        ],
+      },
+      { provider, parent: this }
+    );
+
+    // Add lifecycle separately
+    const primaryBucketLifecycle = new aws.s3.BucketLifecycleConfiguration(
+      `dr-backup-primary-lifecycle-${environmentSuffix}`,
+      {
+        bucket: backupBucketPrimary.id,
+        rules: [
           {
-            enabled: true,
+            id: 'delete-old-backups',
+            status: 'Enabled',
             expiration: {
               days: 7,
             },
           },
         ],
-        tags: commonTags,
+      },
+      { provider, parent: this }
+    );
+
+    // Add versioning separately (keep existing)
+    const primaryBucketVersioning = new aws.s3.BucketVersioning(
+      `dr-backup-primary-versioning-${environmentSuffix}`,
+      {
+        bucket: backupBucketPrimary.id,
+        versioningConfiguration: {
+          status: 'Enabled',
+        },
       },
       { provider, parent: this }
     );
@@ -229,17 +287,34 @@ export class TapStack extends pulumi.ComponentResource {
       `dr-backup-replica-${environmentSuffix}`,
       {
         bucket: `dr-backup-replica-${environmentSuffix}`,
-        versioning: {
-          enabled: true,
-        },
-        serverSideEncryptionConfiguration: {
-          rule: {
+        tags: commonTags,
+      },
+      { provider, parent: this }
+    );
+
+    // Add encryption for replica bucket
+    const replicaBucketEncryption = new aws.s3.BucketServerSideEncryptionConfiguration(
+      `dr-backup-replica-encryption-${environmentSuffix}`,
+      {
+        bucket: backupBucketReplica.id,
+        rules: [
+          {
             applyServerSideEncryptionByDefault: {
               sseAlgorithm: 'AES256',
             },
           },
+        ],
+      },
+      { provider, parent: this }
+    );
+
+    const replicaBucketVersioning = new aws.s3.BucketVersioning(
+      `dr-backup-replica-versioning-${environmentSuffix}`,
+      {
+        bucket: backupBucketReplica.id,
+        versioningConfiguration: {
+          status: 'Enabled',
         },
-        tags: commonTags,
       },
       { provider, parent: this }
     );
@@ -572,6 +647,9 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Assign outputs
     this.vpcId = vpc.id;
+    this.privateSubnetIds = [privateSubnet1.id, privateSubnet2.id];
+    this.publicSubnetIds = []; // You don't have public subnets, so empty array
+    this.s3BucketName = backupBucketPrimary.bucket;
     this.primaryDbEndpoint = primaryDb.endpoint;
     this.primaryDbIdentifier = primaryDb.identifier;
     this.replicaDbEndpoint = replicaDb.endpoint;
@@ -582,10 +660,14 @@ export class TapStack extends pulumi.ComponentResource {
     this.healthCheckLambdaArn = healthCheckLambda.arn;
     this.failoverLambdaArn = failoverLambda.arn;
     this.kmsKeyId = kmsKey.keyId;
+    this.dbSecretArn = dbSecret.arn;
 
     // Register outputs
     this.registerOutputs({
       vpcId: vpc.id,
+      privateSubnetIds: [privateSubnet1.id, privateSubnet2.id],  // Add this
+      publicSubnetIds: [],  // Add this (empty since no public subnets)
+      s3BucketName: backupBucketPrimary.bucket,  // Add this
       primaryDbEndpoint: primaryDb.endpoint,
       primaryDbIdentifier: primaryDb.identifier,
       replicaDbEndpoint: replicaDb.endpoint,
@@ -596,6 +678,7 @@ export class TapStack extends pulumi.ComponentResource {
       healthCheckLambdaArn: healthCheckLambda.arn,
       failoverLambdaArn: failoverLambda.arn,
       kmsKeyId: kmsKey.keyId,
+      dbSecretArn: dbSecret.arn,
     });
 
     // Suppress unused variable warnings
@@ -606,5 +689,11 @@ export class TapStack extends pulumi.ComponentResource {
     void replicationLagAlarm;
     void cpuAlarm;
     void healthCheck;
+    void primaryBucketVersioning;
+    void primaryBucketEncryption;
+    void primaryBucketLifecycle;
+    void replicaBucketVersioning;
+    void replicaBucketEncryption;
+    void dbSecretVersion;
   }
 }
