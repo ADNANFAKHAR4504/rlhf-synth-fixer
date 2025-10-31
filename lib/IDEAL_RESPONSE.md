@@ -231,7 +231,7 @@ variable "redis_engine_version" {
 variable "aurora_engine_version" {
   description = "Aurora PostgreSQL engine version"
   type        = string
-  default     = "15.4"
+  default     = "16.9"
 }
 
 variable "aurora_instance_class" {
@@ -432,6 +432,42 @@ resource "aws_kms_key" "master" {
   description             = "Master KMS key for ${local.name_prefix}"
   deletion_window_in_days = var.env == "prod" ? 30 : 7
   enable_key_rotation     = true
+  
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${var.aws_region}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
+          }
+        }
+      }
+    ]
+  })
   
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-kms-${var.kms_key_alias_suffix}"
@@ -1509,7 +1545,7 @@ resource "aws_db_subnet_group" "aurora" {
 
 # Aurora Cluster Parameter Group
 resource "aws_rds_cluster_parameter_group" "aurora" {
-  family = "aurora-postgresql15"
+  family = "aurora-postgresql16"
   name   = "${local.name_prefix}-aurora-cluster-params"
   
   parameter {
@@ -1678,7 +1714,7 @@ resource "aws_neptune_cluster" "main" {
   vpc_security_group_ids               = [aws_security_group.neptune[0].id]
   
   storage_encrypted                   = true
-  kms_key_id                          = aws_kms_key.master.arn
+  kms_key_arn                         = aws_kms_key.master.arn
   iam_database_authentication_enabled = true
   
   backup_retention_period      = var.env == "prod" ? 30 : 7
@@ -1959,8 +1995,8 @@ resource "aws_sfn_state_machine" "consistency_workflow" {
   definition = local.sfn_definition
   
   logging_configuration {
-    # FIXED: No :* suffix on log group ARN
-    log_destination        = aws_cloudwatch_log_group.sfn_logs.arn
+    # Step Functions requires :* suffix on log group ARN
+    log_destination        = "${aws_cloudwatch_log_group.sfn_logs.arn}:*"
     include_execution_data = true
     level                  = "ERROR"
   }
@@ -2645,8 +2681,10 @@ common_tags = {
 ### Invalid Terraform Fixed:
 ✅ **ElastiCache**: Removed invalid `auth_token_enabled` attribute  
 ✅ **SQS policy**: Changed to use `.url` instead of `.id`  
-✅ **SFN logging**: Removed `:*` suffix from log group ARN  
-✅ **Neptune**: Removed invalid `enable_cloudwatch_logs_exports` attribute  
+✅ **SFN logging**: Added required `:*` suffix to log group ARN  
+✅ **Neptune**: Changed `kms_key_id` to `kms_key_arn` and removed invalid `enable_cloudwatch_logs_exports`  
+✅ **Aurora**: Updated to version 16.9 with `aurora-postgresql16` parameter group family  
+✅ **KMS**: Added CloudWatch Logs service permissions to key policy  
 ✅ **Redis alarms**: Fixed to use `ReplicationGroupId` and valid metrics  
 ✅ **NAT/RT indexing**: Smart NAT count with single gateway option  
 
