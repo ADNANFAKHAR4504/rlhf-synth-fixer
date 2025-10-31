@@ -1,6 +1,6 @@
 ## Ideal response — lib/ directory
 
-This document describes the important files under `lib/` for the webhook-processing Terraform module and includes the current content for each source file. Terraform files are shown as Terraform code blocks, TypeScript as TypeScript blocks, Python for Lambda handlers, and bash for scripts.
+This document describes the important files under `lib/` for the webhook-processing Terraform module and includes the current content for each source file. 
 
 Notes:
 - The module is designed to be run without hard-coded account/region values. Provide `aws_region` and `environment` via `-var` or `TF_VAR_*` environment variables.
@@ -450,49 +450,6 @@ resource "aws_lambda_event_source_mapping" "processor_sqs" {
   function_name    = aws_lambda_function.transaction_processor.arn
   batch_size       = 10
 }
-
-```
-
-- `meta.ts`
-
-```typescript
-
-// small helper module to give Jest something to instrument under lib/
-export function add(a: number, b: number): number {
-  return a + b;
-}
-
-export function isEven(n: number): boolean {
-  if (!Number.isFinite(n)) throw new TypeError('n must be a finite number');
-  return n % 2 === 0;
-}
-
-export function formatName(parts: Array<string | null | undefined>): string {
-  // join parts, skip falsy and trim
-  return parts
-    .filter(Boolean)
-    .map(p => String(p).trim())
-    .join('-');
-}
-
-export function getTimestamp(prefix = ''): string {
-  const d = new Date();
-  const ts = d
-    .toISOString()
-    .replace(/[^0-9]/g, '')
-    .slice(0, 14); // YYYYMMDDHHMMSS
-  return prefix ? `${prefix}-${ts}` : ts;
-}
-
-// Expose a branching function to increase coverage
-export function computeTier(value: number): 'low' | 'med' | 'high' {
-  if (value < 0) throw new RangeError('value must be non-negative');
-  if (value < 10) return 'low';
-  if (value < 100) return 'med';
-  return 'high';
-}
-
-export default { add, isEven, formatName, getTimestamp, computeTier };
 
 ```
 
