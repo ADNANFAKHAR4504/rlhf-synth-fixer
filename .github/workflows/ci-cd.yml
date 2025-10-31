@@ -3,7 +3,6 @@ name: CI/CD Pipeline
 # Special keyword [skip-jobs] can be added to commit messages to skip most jobs
 # The upload-task-to-s3 job will still run when a PR is merged, regardless of this tag
 # The cleanup-pr job will still run when a PR is closed, regardless of this tag
-
 on:
   push:
     branches: [main]
@@ -153,17 +152,10 @@ jobs:
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
-  claude-task-analyze:
+  infracost:
+    name: Infracost (Terraform Cost Estimation)
+    needs: [detect-metadata, build, synth]
     runs-on: ubuntu-24.04
-    name: "Claude Task Analysis"
-    needs: [detect-metadata, synth]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization'}}
-    permissions:
-      contents: write
-      pull-requests: write
-      issues: write
-      id-token: write
-      actions: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -185,35 +177,55 @@ jobs:
           allowed_tools: "Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite"
           trigger_phrase: ""
           custom_instructions: |
-            Analyze the IAC task files in the lib/ folder and generate a comprehensive report in table format.
+            Analyze the IAC task files in the lib/ folder and generate a report showing which resources have deletion protection enabled.
+            This helps identify resources that will REMAIN after stack deletion.
 
             Your task:
             1. Read all IAC code files in the lib/ folder (including TypeScript, Python, Java, Go, Terraform, CloudFormation, etc.)
             2. Identify all AWS resources defined in the infrastructure code
-            3. For each resource, determine:
+            3. For each resource, check ONLY for deletion protection settings:
+               - Look for properties like: DeletionProtection, deletion_protection, DeletionPolicy: Retain, etc.
+               - Common patterns:
+                 * CloudFormation: DeletionProtection: true, DeletionPolicy: Retain
+                 * Terraform: deletion_protection = true, prevent_destroy = true
+                 * CDK: deletionProtection: true, removalPolicy: RemovalPolicy.RETAIN
+                 * RDS: DeletionProtection: true
+                 * DynamoDB: DeletionProtectionEnabled: true
+                 * S3: (bucket-level policy prevents deletion)
+               - Note: RDS databases should NOT have delete protection enabled (deleteProtection should be false for RDS)
+            4. For each resource, determine:
                - Resource name/identifier
-               - isProtectionEnabled: Whether the resource has protection enabled (e.g., deletion protection, backup enabled, encryption enabled, etc.)
-               - Cost: Estimate the monthly cost for the resource (use AWS pricing where applicable)
+               - deleteProtection: true if deletion protection is enabled, false otherwise
+               - cost: Estimate the monthly cost (for resources that will remain after deletion)
 
-            4. Generate a markdown table with the following columns:
+            5. Generate a markdown table with the following columns:
                - resource: The resource name/identifier
-               - isProtectionEnabled: true/false based on protection settings
+               - deleteProtection: true/false based on deletion protection settings
                - cost: Estimated monthly cost (in USD, or "N/A" if not applicable)
 
-            5. Post the report as a GitHub comment on the pull request.
+            6. At the bottom of the table, add a summary row with:
+               - Total monthly cost (sum of all costs, excluding "N/A")
+               - Total per day cost (monthly cost / 30)
+
+            7. Post the report as a GitHub comment on the pull request.
 
             Example table format:
-            | resource | isProtectionEnabled | cost |
-            |----------|---------------------|------|
+            | resource | deleteProtection | cost |
+            |----------|------------------|------|
             | s3-bucket-myapp | true | $0.023 |
-            | lambda-function-processor | false | $0.50 |
+            | rds-database-prod | false | $150.00 |
+            | dynamodb-table-users | true | $25.00 |
+            | **Total (per month)** | | **$175.023** |
+            | **Total (per day)** | | **$5.83** |
 
             Important:
-            - Analyze all files in lib/ folder recursively
-            - Consider resource protection mechanisms like deletion protection, backup policies, encryption, versioning, etc.
+            - ONLY check for deletion protection settings - ignore encryption, MFA, backup, versioning, etc.
+            - Focus on identifying resources that will remain after stack deletion
+            - Resources with deleteProtection: true will persist after stack deletion
             - For cost estimation, use standard AWS pricing or reasonable estimates
-            - If cost cannot be determined, use "N/A"
-            - Post the complete report as a GitHub comment
+            - If cost cannot be determined, use "N/A" and exclude from totals
+            - Calculate per day cost as monthly cost divided by 30
+            - Post the complete report as a GitHub comment with the cost summary at the bottom
 
   infracost:
     name: Infracost (Terraform Cost Estimation)
@@ -250,6 +262,8 @@ jobs:
       - name: Setup Infracost
         if: env.skip_infracost != 'true'
         uses: infracost/actions/setup@v3
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
 
       - name: Setup Environment (variables)
         if: env.skip_infracost != 'true'
@@ -505,6 +519,88 @@ jobs:
           path: |
             coverage/
             cov.json
+
+  claude-task-analyze:
+    runs-on: ubuntu-24.04
+    name: "Claude Task Analysis"
+    needs: [detect-metadata, unit-tests]
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization'}}
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/head', github.event.pull_request.number) || github.ref }}
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          download-artifacts: "false"
+
+      - name: Run Claude Task Analysis
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          allowed_tools: "Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite"
+          trigger_phrase: ""
+          custom_instructions: |
+            Analyze the IAC task files in the lib/ folder and generate a report showing which resources have deletion protection enabled.
+            This helps identify resources that will REMAIN after stack deletion.
+
+            Your task:
+            1. Read all IAC code files in the lib/ folder (including TypeScript, Python, Java, Go, Terraform, CloudFormation, etc.)
+            2. Identify all AWS resources defined in the infrastructure code
+            3. For each resource, check ONLY for deletion protection settings:
+               - Look for properties like: DeletionProtection, deletion_protection, DeletionPolicy: Retain, etc.
+               - Common patterns:
+                 * CloudFormation: DeletionProtection: true, DeletionPolicy: Retain
+                 * Terraform: deletion_protection = true, prevent_destroy = true
+                 * CDK: deletionProtection: true, removalPolicy: RemovalPolicy.RETAIN
+                 * RDS: DeletionProtection: true
+                 * DynamoDB: DeletionProtectionEnabled: true
+                 * S3: (bucket-level policy prevents deletion)
+               - Note: RDS databases should NOT have delete protection enabled (deleteProtection should be false for RDS)
+            4. For each resource, determine:
+               - Resource name/identifier
+               - deleteProtection: true if deletion protection is enabled, false otherwise
+               - cost: Estimate the monthly cost (for resources that will remain after deletion)
+
+            5. Generate a markdown table with the following columns:
+               - resource: The resource name/identifier
+               - deleteProtection: true/false based on deletion protection settings
+               - cost: Estimated monthly cost (in USD, or "N/A" if not applicable)
+
+            6. At the bottom of the table, add a summary row with:
+               - Total monthly cost (sum of all costs, excluding "N/A")
+               - Total per day cost (monthly cost / 30)
+
+            7. Post the report as a GitHub comment on the pull request.
+
+            Example table format:
+            | resource | deleteProtection | cost |
+            |----------|------------------|------|
+            | s3-bucket-myapp | true | $0.023 |
+            | rds-database-prod | false | $150.00 |
+            | dynamodb-table-users | true | $25.00 |
+            | **Total (per month)** | | **$175.023** |
+            | **Total (per day)** | | **$5.83** |
+
+            Important:
+            - ONLY check for deletion protection settings - ignore encryption, MFA, backup, versioning, etc.
+            - Focus on identifying resources that will remain after stack deletion
+            - Resources with deleteProtection: true will persist after stack deletion
+            - For cost estimation, use standard AWS pricing or reasonable estimates
+            - If cost cannot be determined, use "N/A" and exclude from totals
+            - Calculate per day cost as monthly cost divided by 30
+            - Post the complete report as a GitHub comment with the cost summary at the bottom
 
   # mocked-integration-tests:
   #   name: Mocked Integration Tests
