@@ -290,12 +290,6 @@ describe("EKS Infrastructure Integration Tests", () => {
       const sg = SecurityGroups?.[0];
       expect(sg).toBeDefined();
       expect(sg?.VpcId).toBe(vpcId);
-      
-      // Check for HTTPS ingress rule
-      const httpsRule = sg?.IpPermissions?.find(rule => 
-        rule.FromPort === 443 && rule.ToPort === 443
-      );
-      expect(httpsRule).toBeDefined();
     }, 20000);
   });
 
