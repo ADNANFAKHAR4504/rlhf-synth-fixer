@@ -656,7 +656,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/vpc/flowlogs-${EnvironmentSuffix}"
+                    "Fn::Sub": "/aws/vpc/flowloggroup-${EnvironmentSuffix}"
                 },
                 "RetentionInDays": 30,
                 "Tags": [
