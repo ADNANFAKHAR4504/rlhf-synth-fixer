@@ -82,6 +82,8 @@ class StepFunctionsStack:
                         "FunctionName": args['user_arn'],
                         "Payload.$": "$"
                     },
+                    "ResultPath": "$.userResult",
+                    "OutputPath": "$",
                     "Next": "ProcessOrder",
                     "Retry": [{
                         "ErrorEquals": ["States.ALL"],
@@ -101,6 +103,8 @@ class StepFunctionsStack:
                         "FunctionName": args['order_arn'],
                         "Payload.$": "$"
                     },
+                    "ResultPath": "$.orderResult",
+                    "OutputPath": "$",
                     "Next": "UpdateInventory",
                     "Retry": [{
                         "ErrorEquals": ["States.ALL"],
@@ -120,6 +124,8 @@ class StepFunctionsStack:
                         "FunctionName": args['product_arn'],
                         "Payload.$": "$"
                     },
+                    "ResultPath": "$.productResult",
+                    "OutputPath": "$",
                     "End": True,
                     "Retry": [{
                         "ErrorEquals": ["States.ALL"],
