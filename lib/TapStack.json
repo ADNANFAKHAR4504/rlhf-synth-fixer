@@ -12,7 +12,7 @@
             ],
             "Default": "dev"
         },
-        "environmentSuffix": {
+        "EnvironmentSuffix": {
             "Type": "String",
             "Description": "Unique suffix for resource naming to prevent conflicts",
             "MinLength": 1,
@@ -115,7 +115,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "vpc-${environmentSuffix}"
+                            "Fn::Sub": "vpc-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -134,7 +134,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "igw-${environmentSuffix}"
+                            "Fn::Sub": "igw-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -185,7 +185,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "public-subnet-1-${environmentSuffix}"
+                            "Fn::Sub": "public-subnet-1-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -225,7 +225,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "public-subnet-2-${environmentSuffix}"
+                            "Fn::Sub": "public-subnet-2-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -264,7 +264,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "private-subnet-1-${environmentSuffix}"
+                            "Fn::Sub": "private-subnet-1-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -303,7 +303,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "private-subnet-2-${environmentSuffix}"
+                            "Fn::Sub": "private-subnet-2-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -324,7 +324,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "nat-eip-1-${environmentSuffix}"
+                            "Fn::Sub": "nat-eip-1-${EnvironmentSuffix}"
                         }
                     }
                 ]
@@ -339,7 +339,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "nat-eip-2-${environmentSuffix}"
+                            "Fn::Sub": "nat-eip-2-${EnvironmentSuffix}"
                         }
                     }
                 ]
@@ -361,7 +361,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "nat-gateway-1-${environmentSuffix}"
+                            "Fn::Sub": "nat-gateway-1-${EnvironmentSuffix}"
                         }
                     }
                 ]
@@ -383,7 +383,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "nat-gateway-2-${environmentSuffix}"
+                            "Fn::Sub": "nat-gateway-2-${EnvironmentSuffix}"
                         }
                     }
                 ]
@@ -399,7 +399,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "public-rt-${environmentSuffix}"
+                            "Fn::Sub": "public-rt-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -456,7 +456,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "private-rt-1-${environmentSuffix}"
+                            "Fn::Sub": "private-rt-1-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -501,7 +501,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "private-rt-2-${environmentSuffix}"
+                            "Fn::Sub": "private-rt-2-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -540,7 +540,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "alb-sg-${environmentSuffix}"
+                    "Fn::Sub": "alb-sg-${EnvironmentSuffix}"
                 },
                 "GroupDescription": "Security group for Application Load Balancer",
                 "VpcId": {
@@ -573,7 +573,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "alb-sg-${environmentSuffix}"
+                            "Fn::Sub": "alb-sg-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -589,7 +589,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "ecs-sg-${environmentSuffix}"
+                    "Fn::Sub": "ecs-sg-${EnvironmentSuffix}"
                 },
                 "GroupDescription": "Security group for ECS tasks",
                 "VpcId": {
@@ -617,7 +617,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "ecs-sg-${environmentSuffix}"
+                            "Fn::Sub": "ecs-sg-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -633,7 +633,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "db-sg-${environmentSuffix}"
+                    "Fn::Sub": "db-sg-${EnvironmentSuffix}"
                 },
                 "GroupDescription": "Security group for Aurora MySQL database",
                 "VpcId": {
@@ -661,7 +661,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "db-sg-${environmentSuffix}"
+                            "Fn::Sub": "db-sg-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -712,7 +712,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "db-encryption-key-${environmentSuffix}"
+                            "Fn::Sub": "db-encryption-key-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -728,7 +728,7 @@
             "Type": "AWS::KMS::Alias",
             "Properties": {
                 "AliasName": {
-                    "Fn::Sub": "alias/db-key-${environmentSuffix}"
+                    "Fn::Sub": "alias/db-key-${EnvironmentSuffix}"
                 },
                 "TargetKeyId": {
                     "Ref": "DBEncryptionKey"
@@ -739,7 +739,7 @@
             "Type": "AWS::SecretsManager::Secret",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "tapstack-${Environment}-db-master-password-${environmentSuffix}"
+                    "Fn::Sub": "tapstack-${Environment}-db-master-password-${EnvironmentSuffix}"
                 },
                 "Description": {
                     "Fn::Sub": "Master password for Aurora MySQL database in ${Environment} environment"
@@ -760,7 +760,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "db-master-password-${environmentSuffix}"
+                            "Fn::Sub": "db-master-password-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -776,7 +776,7 @@
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
                 "DBSubnetGroupName": {
-                    "Fn::Sub": "db-subnet-group-${environmentSuffix}"
+                    "Fn::Sub": "db-subnet-group-${EnvironmentSuffix}"
                 },
                 "DBSubnetGroupDescription": "Subnet group for Aurora MySQL cluster",
                 "SubnetIds": [
@@ -791,7 +791,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "db-subnet-group-${environmentSuffix}"
+                            "Fn::Sub": "db-subnet-group-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -850,7 +850,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "aurora-cluster-${environmentSuffix}"
+                            "Fn::Sub": "aurora-cluster-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -879,14 +879,14 @@
                     ]
                 },
                 "DBInstanceIdentifier": {
-                    "Fn::Sub": "aurora-instance-1-${environmentSuffix}"
+                    "Fn::Sub": "aurora-instance-1-${EnvironmentSuffix}"
                 },
                 "PubliclyAccessible": false,
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "aurora-instance-1-${environmentSuffix}"
+                            "Fn::Sub": "aurora-instance-1-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -915,14 +915,14 @@
                     ]
                 },
                 "DBInstanceIdentifier": {
-                    "Fn::Sub": "aurora-instance-2-${environmentSuffix}"
+                    "Fn::Sub": "aurora-instance-2-${EnvironmentSuffix}"
                 },
                 "PubliclyAccessible": false,
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "aurora-instance-2-${environmentSuffix}"
+                            "Fn::Sub": "aurora-instance-2-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -938,7 +938,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${Environment}-transaction-logs-${environmentSuffix}"
+                    "Fn::Sub": "${Environment}-transaction-logs-${EnvironmentSuffix}"
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
@@ -972,7 +972,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-transaction-logs-${environmentSuffix}"
+                            "Fn::Sub": "${Environment}-transaction-logs-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -988,7 +988,7 @@
             "Type": "AWS::ECS::Cluster",
             "Properties": {
                 "ClusterName": {
-                    "Fn::Sub": "ecs-cluster-${environmentSuffix}"
+                    "Fn::Sub": "ecs-cluster-${EnvironmentSuffix}"
                 },
                 "ClusterSettings": [
                     {
@@ -1000,7 +1000,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "ecs-cluster-${environmentSuffix}"
+                            "Fn::Sub": "ecs-cluster-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -1016,7 +1016,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/ecs/payment-api-${environmentSuffix}"
+                    "Fn::Sub": "/ecs/payment-api-${EnvironmentSuffix}"
                 },
                 "RetentionInDays": 30
             }
@@ -1025,7 +1025,7 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "ecs-task-execution-role-${environmentSuffix}"
+                    "Fn::Sub": "ecs-task-execution-role-${EnvironmentSuffix}"
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -1046,7 +1046,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "ecs-task-execution-role-${environmentSuffix}"
+                            "Fn::Sub": "ecs-task-execution-role-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -1062,7 +1062,7 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "ecs-task-role-${environmentSuffix}"
+                    "Fn::Sub": "ecs-task-role-${EnvironmentSuffix}"
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -1106,7 +1106,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "ecs-task-role-${environmentSuffix}"
+                            "Fn::Sub": "ecs-task-role-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -1122,7 +1122,7 @@
             "Type": "AWS::ECS::TaskDefinition",
             "Properties": {
                 "Family": {
-                    "Fn::Sub": "payment-api-${environmentSuffix}"
+                    "Fn::Sub": "payment-api-${EnvironmentSuffix}"
                 },
                 "NetworkMode": "awsvpc",
                 "RequiresCompatibilities": [
@@ -1199,7 +1199,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "payment-api-task-${environmentSuffix}"
+                            "Fn::Sub": "payment-api-task-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -1215,7 +1215,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "alb-${environmentSuffix}"
+                    "Fn::Sub": "alb-${EnvironmentSuffix}"
                 },
                 "Type": "application",
                 "Scheme": "internet-facing",
@@ -1237,7 +1237,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "alb-${environmentSuffix}"
+                            "Fn::Sub": "alb-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -1253,7 +1253,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "alb-tg-${environmentSuffix}"
+                    "Fn::Sub": "alb-tg-${EnvironmentSuffix}"
                 },
                 "Port": 80,
                 "Protocol": "HTTP",
@@ -1272,7 +1272,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "alb-tg-${environmentSuffix}"
+                            "Fn::Sub": "alb-tg-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -1333,7 +1333,7 @@
             "DependsOn": "ALBHTTPListener",
             "Properties": {
                 "ServiceName": {
-                    "Fn::Sub": "payment-api-service-${environmentSuffix}"
+                    "Fn::Sub": "payment-api-service-${EnvironmentSuffix}"
                 },
                 "Cluster": {
                     "Ref": "ECSCluster"
@@ -1383,7 +1383,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "payment-api-service-${environmentSuffix}"
+                            "Fn::Sub": "payment-api-service-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -1430,7 +1430,7 @@
             "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
             "Properties": {
                 "PolicyName": {
-                    "Fn::Sub": "ecs-cpu-scaling-policy-${environmentSuffix}"
+                    "Fn::Sub": "ecs-cpu-scaling-policy-${EnvironmentSuffix}"
                 },
                 "PolicyType": "TargetTrackingScaling",
                 "ScalingTargetId": {
@@ -1458,7 +1458,7 @@
             "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
             "Properties": {
                 "PolicyName": {
-                    "Fn::Sub": "ecs-memory-scaling-policy-${environmentSuffix}"
+                    "Fn::Sub": "ecs-memory-scaling-policy-${EnvironmentSuffix}"
                 },
                 "PolicyType": "TargetTrackingScaling",
                 "ScalingTargetId": {
@@ -1486,14 +1486,14 @@
             "Type": "AWS::SNS::Topic",
             "Properties": {
                 "TopicName": {
-                    "Fn::Sub": "cloudwatch-alarms-${environmentSuffix}"
+                    "Fn::Sub": "cloudwatch-alarms-${EnvironmentSuffix}"
                 },
                 "DisplayName": "CloudWatch Alarms for Payment Processing Infrastructure",
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "cloudwatch-alarms-${environmentSuffix}"
+                            "Fn::Sub": "cloudwatch-alarms-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -1509,7 +1509,7 @@
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "AlarmName": {
-                    "Fn::Sub": "ecs-cpu-high-${environmentSuffix}"
+                    "Fn::Sub": "ecs-cpu-high-${EnvironmentSuffix}"
                 },
                 "AlarmDescription": "Alert when ECS CPU utilization is too high",
                 "MetricName": "CPUUtilization",
@@ -1556,7 +1556,7 @@
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "AlarmName": {
-                    "Fn::Sub": "ecs-memory-high-${environmentSuffix}"
+                    "Fn::Sub": "ecs-memory-high-${EnvironmentSuffix}"
                 },
                 "AlarmDescription": "Alert when ECS memory utilization is too high",
                 "MetricName": "MemoryUtilization",
@@ -1603,7 +1603,7 @@
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "AlarmName": {
-                    "Fn::Sub": "db-connections-high-${environmentSuffix}"
+                    "Fn::Sub": "db-connections-high-${EnvironmentSuffix}"
                 },
                 "AlarmDescription": "Alert when database connections are too high",
                 "MetricName": "DatabaseConnections",

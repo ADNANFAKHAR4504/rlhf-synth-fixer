@@ -25,7 +25,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have all required parameters', () => {
       expect(template.Parameters.Environment).toBeDefined();
-      expect(template.Parameters.environmentSuffix).toBeDefined();
+      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
       expect(template.Parameters.DBMasterUsername).toBeDefined();
       expect(template.Parameters.ContainerImage).toBeDefined();
       expect(template.Parameters.CertificateArn).toBeDefined();
@@ -319,10 +319,10 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
-  describe('Resource Naming with environmentSuffix', () => {
-    test('resources should use environmentSuffix parameter', () => {
+  describe('Resource Naming with EnvironmentSuffix', () => {
+    test('resources should use EnvironmentSuffix parameter', () => {
       const vpc = template.Resources.VPC.Properties.Tags.find((t: any) => t.Key === 'Name');
-      expect(vpc.Value['Fn::Sub']).toContain('${environmentSuffix}');
+      expect(vpc.Value['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
   });
 });

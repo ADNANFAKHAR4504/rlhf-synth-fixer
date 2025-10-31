@@ -119,12 +119,12 @@ aws cloudformation deploy \
   --stack-name TapStackprod \
   --parameter-overrides \
     Environment=prod \
-    environmentSuffix=prod-001 \
+    EnvironmentSuffix=prod-001 \
     DBMasterUsername=admin \
     ContainerImage=your-repo/payment-api:v1.0 \
-    CertificateArn=arn:aws:acm:us-east-1:123456789012:certificate/xxxxx \
+    CertificateArn=arn:aws:acm:eu-west-1:123456789012:certificate/xxxxx \
   --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
-  --region us-east-1
+  --region eu-west-1
 ```
 
 ## Testing

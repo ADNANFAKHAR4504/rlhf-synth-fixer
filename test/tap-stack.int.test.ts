@@ -17,8 +17,8 @@ interface StackOutputs {
 }
 
 describe('TapStack Integration Tests - Infrastructure Validation', () => {
-  const stackName = process.env.STACK_NAME || 'TapStackpr5509test';
-  const region = process.env.AWS_REGION || 'us-west-1';
+  const stackName = process.env.STACK_NAME || 'TapStacktest';
+  const region = process.env.AWS_REGION || 'eu-west-1';
   let stackOutputs: StackOutputs = {};
 
   const cloudFormationClient = new CloudFormationClient({ region });
@@ -126,8 +126,8 @@ describe('TapStack Integration Tests - Infrastructure Validation', () => {
       // Check endpoint format and region
       expect(stackOutputs.AuroraClusterEndpoint).toContain('.cluster-');
       expect(stackOutputs.AuroraReaderEndpoint).toContain('.cluster-ro-');
-      expect(stackOutputs.AuroraClusterEndpoint).toContain('.us-west-1.rds.amazonaws.com');
-      expect(stackOutputs.AuroraReaderEndpoint).toContain('.us-west-1.rds.amazonaws.com');
+      expect(stackOutputs.AuroraClusterEndpoint).toContain('.eu-west-1.rds.amazonaws.com');
+      expect(stackOutputs.AuroraReaderEndpoint).toContain('.eu-west-1.rds.amazonaws.com');
 
       // Endpoints should reference our stack
       expect(stackOutputs.AuroraClusterEndpoint).toContain('tapstackpr5509test');
@@ -150,7 +150,7 @@ describe('TapStack Integration Tests - Infrastructure Validation', () => {
   describe('⚖️ Load Balancer Infrastructure Validation', () => {
     test('should have ALB with correct DNS configuration', () => {
       expect(stackOutputs.ALBDNSName).toBeDefined();
-      expect(stackOutputs.ALBDNSName).toContain('.us-west-1.elb.amazonaws.com');
+      expect(stackOutputs.ALBDNSName).toContain('.eu-west-1.elb.amazonaws.com');
       expect(stackOutputs.ALBDNSName).toContain('alb-pr5509test');
     });
 
@@ -208,7 +208,7 @@ describe('TapStack Integration Tests - Infrastructure Validation', () => {
     test('should have SNS topic for CloudWatch alarms', () => {
       expect(stackOutputs.AlarmSNSTopicArn).toBeDefined();
 
-      const expectedArn = `arn:aws:sns:us-west-1:656003592164:cloudwatch-alarms-pr5509test`;
+      const expectedArn = `arn:aws:sns:eu-west-1:656003592164:cloudwatch-alarms-pr5509test`;
       expect(stackOutputs.AlarmSNSTopicArn).toBe(expectedArn);
     });
   });
@@ -240,9 +240,9 @@ describe('TapStack Integration Tests - Infrastructure Validation', () => {
 
   describe('🔒 Security and Architecture Validation', () => {
     test('should have proper regional deployment', () => {
-      const expectedRegion = 'us-west-1';
+      const expectedRegion = 'eu-west-1';
 
-      // All regional resources should be in us-west-1
+      // All regional resources should be in eu-west-1
       expect(stackOutputs.ALBDNSName).toContain(`.${expectedRegion}.elb.amazonaws.com`);
       expect(stackOutputs.AuroraClusterEndpoint).toContain(`.${expectedRegion}.rds.amazonaws.com`);
       expect(stackOutputs.AlarmSNSTopicArn).toContain(`:${expectedRegion}:`);

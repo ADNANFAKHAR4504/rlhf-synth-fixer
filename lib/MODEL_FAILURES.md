@@ -121,11 +121,11 @@ Impact Level: High - Regional Deployment Issues
 
 MODEL_RESPONSE Issue:
 The template deployment failed due to AWS resource quota limitations:
-- Elastic IP address quota exhaustion in primary region (us-east-1)
+- Elastic IP address quota exhaustion in primary region (us-east-1), forcing deployment to eu-west-1
 - S3 bucket naming conflicts during retry deployments
 
 Resolution Applied:
-- Deployed to alternative region (us-west-1) with available EIP quota
+- Deployed to alternative region (eu-west-1) with available EIP quota
 - Used unique environment suffix to prevent resource naming conflicts
 - Verified successful deployment with all 49 resources created
 
@@ -178,7 +178,7 @@ Created comprehensive test suite with 18 real integration tests covering:
 ### Infrastructure Deployment
 - **Stack Status**: CREATE_COMPLETE
 - **Resource Count**: 49/49 resources successfully created
-- **Region**: us-west-1 (alternative region due to quota limits)
+- **Region**: eu-west-1 (alternative region due to quota limits)
 - **Security**: Enhanced with Secrets Manager and KMS encryption
 
 ### Testing Results  

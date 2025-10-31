@@ -11,7 +11,7 @@ Parameters:
       - prod
     Default: dev
 
-  environmentSuffix:
+  EnvironmentSuffix:
     Type: String
     Description: Unique suffix for resource naming to prevent conflicts
     MinLength: 1
@@ -89,7 +89,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub vpc-${environmentSuffix}
+          Value: !Sub vpc-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
@@ -98,7 +98,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub igw-${environmentSuffix}
+          Value: !Sub igw-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
@@ -117,7 +117,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub public-subnet-1-${environmentSuffix}
+          Value: !Sub public-subnet-1-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
@@ -130,7 +130,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub public-subnet-2-${environmentSuffix}
+          Value: !Sub public-subnet-2-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
@@ -142,7 +142,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub private-subnet-1-${environmentSuffix}
+          Value: !Sub private-subnet-1-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
@@ -154,7 +154,7 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub private-subnet-2-${environmentSuffix}
+          Value: !Sub private-subnet-2-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
@@ -165,7 +165,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub nat-eip-1-${environmentSuffix}
+          Value: !Sub nat-eip-1-${EnvironmentSuffix}
 
   NatGateway2EIP:
     Type: AWS::EC2::EIP
@@ -174,7 +174,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub nat-eip-2-${environmentSuffix}
+          Value: !Sub nat-eip-2-${EnvironmentSuffix}
 
   NatGateway1:
     Type: AWS::EC2::NatGateway
@@ -183,7 +183,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub nat-gateway-1-${environmentSuffix}
+          Value: !Sub nat-gateway-1-${EnvironmentSuffix}
 
   NatGateway2:
     Type: AWS::EC2::NatGateway
@@ -192,7 +192,7 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       Tags:
         - Key: Name
-          Value: !Sub nat-gateway-2-${environmentSuffix}
+          Value: !Sub nat-gateway-2-${EnvironmentSuffix}
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -200,7 +200,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub public-rt-${environmentSuffix}
+          Value: !Sub public-rt-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
@@ -230,7 +230,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub private-rt-1-${environmentSuffix}
+          Value: !Sub private-rt-1-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
@@ -253,7 +253,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub private-rt-2-${environmentSuffix}
+          Value: !Sub private-rt-2-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
@@ -274,7 +274,7 @@ Resources:
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub alb-sg-${environmentSuffix}
+      GroupName: !Sub alb-sg-${EnvironmentSuffix}
       GroupDescription: Security group for Application Load Balancer
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -294,14 +294,14 @@ Resources:
           Description: Allow all outbound traffic
       Tags:
         - Key: Name
-          Value: !Sub alb-sg-${environmentSuffix}
+          Value: !Sub alb-sg-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
   ECSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub ecs-sg-${environmentSuffix}
+      GroupName: !Sub ecs-sg-${EnvironmentSuffix}
       GroupDescription: Security group for ECS tasks
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -316,14 +316,14 @@ Resources:
           Description: Allow all outbound traffic
       Tags:
         - Key: Name
-          Value: !Sub ecs-sg-${environmentSuffix}
+          Value: !Sub ecs-sg-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
   DBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub db-sg-${environmentSuffix}
+      GroupName: !Sub db-sg-${EnvironmentSuffix}
       GroupDescription: Security group for Aurora MySQL database
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -338,7 +338,7 @@ Resources:
           Description: Allow all outbound traffic
       Tags:
         - Key: Name
-          Value: !Sub db-sg-${environmentSuffix}
+          Value: !Sub db-sg-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
@@ -367,21 +367,21 @@ Resources:
             Resource: '*'
       Tags:
         - Key: Name
-          Value: !Sub db-encryption-key-${environmentSuffix}
+          Value: !Sub db-encryption-key-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
   DBEncryptionKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub alias/db-key-${environmentSuffix}
+      AliasName: !Sub alias/db-key-${EnvironmentSuffix}
       TargetKeyId: !Ref DBEncryptionKey
 
   # Database Master Password Secret
   DBMasterPasswordSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub tapstack-${Environment}-db-master-password-${environmentSuffix}
+      Name: !Sub tapstack-${Environment}-db-master-password-${EnvironmentSuffix}
       Description: !Sub Master password for Aurora MySQL database in ${Environment} environment
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${DBMasterUsername}"}'
@@ -392,7 +392,7 @@ Resources:
       KmsKeyId: !Ref DBEncryptionKey
       Tags:
         - Key: Name
-          Value: !Sub db-master-password-${environmentSuffix}
+          Value: !Sub db-master-password-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
@@ -400,14 +400,14 @@ Resources:
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub db-subnet-group-${environmentSuffix}
+      DBSubnetGroupName: !Sub db-subnet-group-${EnvironmentSuffix}
       DBSubnetGroupDescription: Subnet group for Aurora MySQL cluster
       SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       Tags:
         - Key: Name
-          Value: !Sub db-subnet-group-${environmentSuffix}
+          Value: !Sub db-subnet-group-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
@@ -433,7 +433,7 @@ Resources:
         - slowquery
       Tags:
         - Key: Name
-          Value: !Sub aurora-cluster-${environmentSuffix}
+          Value: !Sub aurora-cluster-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
@@ -443,11 +443,11 @@ Resources:
       Engine: aurora-mysql
       DBClusterIdentifier: !Ref AuroraCluster
       DBInstanceClass: !FindInMap [EnvironmentConfig, !Ref Environment, DBInstanceClass]
-      DBInstanceIdentifier: !Sub aurora-instance-1-${environmentSuffix}
+      DBInstanceIdentifier: !Sub aurora-instance-1-${EnvironmentSuffix}
       PubliclyAccessible: false
       Tags:
         - Key: Name
-          Value: !Sub aurora-instance-1-${environmentSuffix}
+          Value: !Sub aurora-instance-1-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
@@ -457,11 +457,11 @@ Resources:
       Engine: aurora-mysql
       DBClusterIdentifier: !Ref AuroraCluster
       DBInstanceClass: !FindInMap [EnvironmentConfig, !Ref Environment, DBInstanceClass]
-      DBInstanceIdentifier: !Sub aurora-instance-2-${environmentSuffix}
+      DBInstanceIdentifier: !Sub aurora-instance-2-${EnvironmentSuffix}
       PubliclyAccessible: false
       Tags:
         - Key: Name
-          Value: !Sub aurora-instance-2-${environmentSuffix}
+          Value: !Sub aurora-instance-2-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
@@ -469,7 +469,7 @@ Resources:
   TransactionLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub ${Environment}-transaction-logs-${environmentSuffix}
+      BucketName: !Sub ${Environment}-transaction-logs-${EnvironmentSuffix}
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -489,7 +489,7 @@ Resources:
             NoncurrentVersionExpirationInDays: 30
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-transaction-logs-${environmentSuffix}
+          Value: !Sub ${Environment}-transaction-logs-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
@@ -497,13 +497,13 @@ Resources:
   ECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub ecs-cluster-${environmentSuffix}
+      ClusterName: !Sub ecs-cluster-${EnvironmentSuffix}
       ClusterSettings:
         - Name: containerInsights
           Value: enabled
       Tags:
         - Key: Name
-          Value: !Sub ecs-cluster-${environmentSuffix}
+          Value: !Sub ecs-cluster-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
@@ -511,14 +511,14 @@ Resources:
   ECSLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /ecs/payment-api-${environmentSuffix}
+      LogGroupName: !Sub /ecs/payment-api-${EnvironmentSuffix}
       RetentionInDays: 30
 
   # ECS Task Execution Role
   ECSTaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ecs-task-execution-role-${environmentSuffix}
+      RoleName: !Sub ecs-task-execution-role-${EnvironmentSuffix}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -530,7 +530,7 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
       Tags:
         - Key: Name
-          Value: !Sub ecs-task-execution-role-${environmentSuffix}
+          Value: !Sub ecs-task-execution-role-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
@@ -538,7 +538,7 @@ Resources:
   ECSTaskRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ecs-task-role-${environmentSuffix}
+      RoleName: !Sub ecs-task-role-${EnvironmentSuffix}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -561,7 +561,7 @@ Resources:
                   - !Sub ${TransactionLogsBucket.Arn}/*
       Tags:
         - Key: Name
-          Value: !Sub ecs-task-role-${environmentSuffix}
+          Value: !Sub ecs-task-role-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
@@ -569,7 +569,7 @@ Resources:
   ECSTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: !Sub payment-api-${environmentSuffix}
+      Family: !Sub payment-api-${EnvironmentSuffix}
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
@@ -600,7 +600,7 @@ Resources:
               Value: !Ref TransactionLogsBucket
       Tags:
         - Key: Name
-          Value: !Sub payment-api-task-${environmentSuffix}
+          Value: !Sub payment-api-task-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
@@ -608,7 +608,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub alb-${environmentSuffix}
+      Name: !Sub alb-${EnvironmentSuffix}
       Type: application
       Scheme: internet-facing
       IpAddressType: ipv4
@@ -619,7 +619,7 @@ Resources:
         - !Ref ALBSecurityGroup
       Tags:
         - Key: Name
-          Value: !Sub alb-${environmentSuffix}
+          Value: !Sub alb-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
@@ -627,7 +627,7 @@ Resources:
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub alb-tg-${environmentSuffix}
+      Name: !Sub alb-tg-${EnvironmentSuffix}
       Port: 80
       Protocol: HTTP
       TargetType: ip
@@ -641,7 +641,7 @@ Resources:
       UnhealthyThresholdCount: 3
       Tags:
         - Key: Name
-          Value: !Sub alb-tg-${environmentSuffix}
+          Value: !Sub alb-tg-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
@@ -675,7 +675,7 @@ Resources:
     Type: AWS::ECS::Service
     DependsOn: ALBHTTPListener
     Properties:
-      ServiceName: !Sub payment-api-service-${environmentSuffix}
+      ServiceName: !Sub payment-api-service-${EnvironmentSuffix}
       Cluster: !Ref ECSCluster
       TaskDefinition: !Ref ECSTaskDefinition
       DesiredCount: !FindInMap [EnvironmentConfig, !Ref Environment, ECSDesiredCount]
@@ -695,7 +695,7 @@ Resources:
       HealthCheckGracePeriodSeconds: 60
       Tags:
         - Key: Name
-          Value: !Sub payment-api-service-${environmentSuffix}
+          Value: !Sub payment-api-service-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
@@ -714,7 +714,7 @@ Resources:
   ECSServiceScalingPolicyCPU:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
-      PolicyName: !Sub ecs-cpu-scaling-policy-${environmentSuffix}
+      PolicyName: !Sub ecs-cpu-scaling-policy-${EnvironmentSuffix}
       PolicyType: TargetTrackingScaling
       ScalingTargetId: !Ref ECSServiceScalingTarget
       TargetTrackingScalingPolicyConfiguration:
@@ -728,7 +728,7 @@ Resources:
   ECSServiceScalingPolicyMemory:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
-      PolicyName: !Sub ecs-memory-scaling-policy-${environmentSuffix}
+      PolicyName: !Sub ecs-memory-scaling-policy-${EnvironmentSuffix}
       PolicyType: TargetTrackingScaling
       ScalingTargetId: !Ref ECSServiceScalingTarget
       TargetTrackingScalingPolicyConfiguration:
@@ -742,11 +742,11 @@ Resources:
   AlarmSNSTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub cloudwatch-alarms-${environmentSuffix}
+      TopicName: !Sub cloudwatch-alarms-${EnvironmentSuffix}
       DisplayName: CloudWatch Alarms for Payment Processing Infrastructure
       Tags:
         - Key: Name
-          Value: !Sub cloudwatch-alarms-${environmentSuffix}
+          Value: !Sub cloudwatch-alarms-${EnvironmentSuffix}
         - Key: Environment
           Value: !Ref Environment
 
@@ -754,7 +754,7 @@ Resources:
   ECSCPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub ecs-cpu-high-${environmentSuffix}
+      AlarmName: !Sub ecs-cpu-high-${EnvironmentSuffix}
       AlarmDescription: Alert when ECS CPU utilization is too high
       MetricName: CPUUtilization
       Namespace: AWS/ECS
@@ -775,7 +775,7 @@ Resources:
   ECSMemoryAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub ecs-memory-high-${environmentSuffix}
+      AlarmName: !Sub ecs-memory-high-${EnvironmentSuffix}
       AlarmDescription: Alert when ECS memory utilization is too high
       MetricName: MemoryUtilization
       Namespace: AWS/ECS
@@ -796,7 +796,7 @@ Resources:
   DBConnectionsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub db-connections-high-${environmentSuffix}
+      AlarmName: !Sub db-connections-high-${EnvironmentSuffix}
       AlarmDescription: Alert when database connections are too high
       MetricName: DatabaseConnections
       Namespace: AWS/RDS

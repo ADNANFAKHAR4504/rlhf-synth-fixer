@@ -104,9 +104,9 @@ Create a multi-environment payment processing infrastructure using **AWS CloudFo
 - Use **SNS** for notifications
 - Resource names must include **environmentSuffix** parameter for uniqueness
 - Follow naming convention: `{resource-type}-${environmentSuffix}`
-- Deploy production to **us-east-1** region
-- Deploy staging to **us-east-2** region
-- Deploy development to **us-west-2** region
+- Deploy production to **eu-west-1** region
+- Deploy staging to **eu-west-2** region
+- Deploy development to **eu-central-1** region
 - Single template deployable across all regions
 
 ### Constraints
