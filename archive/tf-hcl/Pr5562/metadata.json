@@ -12,12 +12,23 @@
   ],
   "aws_services": [
     "VPC",
-    "Subnet",
-    "RDS",
     "EC2",
+    "RDS",
     "S3",
-    "Security Groups",
     "CloudFront",
-    "CloudWatch"
-  ]
+    "Route53",
+    "SNS",
+    "CloudWatch",
+    "IAM",
+    "AutoScaling",
+    "ELB",
+    "NAT Gateway"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
 }
