@@ -138,35 +138,6 @@ describe('Security Infrastructure Integration Tests', () => {
     }, 30000);
   });
 
-  describe('IAM Roles Security Validation', () => {
-    describe('EC2 Role', () => {
-      let ec2RoleName: string;
-
-      beforeAll(() => {
-        ec2RoleName = stackOutputs.ec2RoleName;
-      });
-
-    });
-
-    describe('Lambda Role', () => {
-      let lambdaRoleName: string;
-
-      beforeAll(() => {
-        lambdaRoleName = stackOutputs.lambdaRoleName;
-      });
-
-    });
-
-    describe('Cross-Account Role', () => {
-      let crossAccountRoleName: string;
-
-      beforeAll(() => {
-        crossAccountRoleName = stackOutputs.crossAccountRoleName;
-      });
-
-    });
-  });
-
   describe('Secrets Manager Validation', () => {
     let secretArn: string;
 
