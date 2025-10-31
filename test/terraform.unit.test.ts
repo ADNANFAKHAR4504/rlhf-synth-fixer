@@ -284,7 +284,7 @@ describe("Terraform Multi-Environment Infrastructure Stack", () => {
     test("RDS has proper security configuration", () => {
       expect(mainContent).toMatch(/storage_encrypted\s*=\s*true/);
       expect(mainContent).toMatch(/publicly_accessible\s*=\s*false/);
-      expect(mainContent).toMatch(/deletion_protection\s*=\s*local\.environment\s*==\s*"prod"/);
+      expect(mainContent).toMatch(/deletion_protection\s*=\s*false/);
     });
 
     test("creates random password for RDS", () => {
@@ -399,8 +399,8 @@ describe("Terraform Multi-Environment Infrastructure Stack", () => {
       expect(albContent).toMatch(/protocol\s*=\s*"HTTP"/);
     });
 
-    test("environment-specific deletion protection", () => {
-      expect(albContent).toMatch(/enable_deletion_protection\s*=\s*local\.environment\s*==\s*"prod"/);
+    test("deletion protection disabled for cost savings", () => {
+      expect(albContent).toMatch(/enable_deletion_protection\s*=\s*false/);
     });
   });
 

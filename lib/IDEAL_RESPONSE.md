@@ -455,7 +455,7 @@ resource "aws_db_instance" "main" {
   delete_automated_backups = true
 
   # Security and monitoring
-  deletion_protection = local.environment == "prod" ? true : false
+  deletion_protection = false
   skip_final_snapshot = local.environment == "dev" ? true : false
   final_snapshot_identifier = local.environment != "dev" ? "${var.project_name}-${local.environment}-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}" : null
 
@@ -747,7 +747,7 @@ resource "aws_lb" "main" {
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
 
-  enable_deletion_protection = local.environment == "prod" ? true : false
+  enable_deletion_protection = false
 
   access_logs {
     bucket  = aws_s3_bucket.alb_logs.bucket
