@@ -1,0 +1,32 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349687",
+  "team": "6",
+  "startedAt": "2025-10-29T10:04:12.783Z",
+  "subtask": "CI/CD Pipeline",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "Lambda",
+    "S3",
+    "DynamoDB",
+    "CodeBuild",
+    "CodePipeline",
+    "CloudWatch",
+    "KMS",
+    "SNS",
+    "API Gateway",
+    "Parameter Store"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshit-at-turing",
+  "dockerS3Location": ""
+}

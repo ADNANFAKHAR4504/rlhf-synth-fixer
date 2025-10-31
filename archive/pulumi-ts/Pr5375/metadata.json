@@ -1,0 +1,38 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "medium",
+  "team": "synth",
+  "startedAt": "2025-10-30T09:42:53+05:30",
+  "subtask": "Create a Pulumi TypeScript program to migrate existing infrastructure from us-east-1 to eu-west-1. The configuration must: 1. Read existing resource configurations from a provided JSON file containing S3 bucket names and DynamoDB table schemas. 2. Create matching S3 buckets in eu-west-1 with versioning enabled and lifecycle policies for 90-day object expiration. 3. Deploy DynamoDB tables with identical schemas but adjusted read/write capacity based on provided scaling factors. 4. Set up cross-region replication from source buckets to new buckets during migration period. 5. Create Lambda functions for data validation that run post-migration checks. 6. Configure CloudWatch alarms for replication lag monitoring with SNS notifications. 7. Implement IAM roles with least-privilege access for migration processes. 8. Tag all resources with Environment, MigrationBatch, and SourceRegion tags. 9. Output a migration status report including resource ARNs and replication endpoints. Expected output: A fully deployed infrastructure in eu-west-1 that mirrors the us-east-1 setup, with active replication streams and monitoring in place. The program should generate a JSON report listing all created resources, their replication status, and any configuration differences between regions.",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "migration",
+    "s3",
+    "dynamodb"
+  ],
+  "po_id": "7t0nak",
+  "aws_services": [
+    "s3",
+    "dynamodb",
+    "lambda",
+    "cloudwatch",
+    "sns",
+    "iam",
+    "kms"
+  ],
+  "region": "eu-west-1",
+  "turn_type": "single",
+  "training_quality": 9,
+  "test_coverage": 100,
+  "deployment_success": true,
+  "resources_deployed": 26,
+  "review_notes": "Excellent training value with 6 significant security/architecture improvements. Model correctly implemented all 7 AWS services with proper platform (Pulumi TypeScript) and region (eu-west-1).",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
