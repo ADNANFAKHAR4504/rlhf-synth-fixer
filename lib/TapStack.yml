@@ -321,10 +321,10 @@ Resources:
               fraud_result = {
                   'transaction_id': transaction_id,
                   'is_fraudulent': is_fraudulent,
+                  'risk_score': Decimal('0.2') if not is_fraudulent else Decimal('0.8'),
                   'timestamp': int(time.time()),
                   'fraud_details': {
                       'detector_version': '1.0',
-                      'risk_score': Decimal('0.2') if not is_fraudulent else Decimal('0.8'),
                       'checks_performed': ['amount_threshold']
                   }
               }
