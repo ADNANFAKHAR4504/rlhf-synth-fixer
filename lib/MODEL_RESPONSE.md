@@ -137,8 +137,6 @@ Next, let's outline the security and compliance controls:
 
 Develop the complete CloudFormation YAML template that implements all these requirements. This will be a comprehensive template that includes all resources, their configurations, and the necessary wiring between them.
 
-Start by defining the Parameters section of the CloudFormation template:
-
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-grade serverless payment workflow with API Gateway, Lambda, Step Functions, DynamoDB, S3, and monitoring'
