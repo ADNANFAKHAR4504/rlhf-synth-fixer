@@ -651,7 +651,7 @@ resource "aws_rds_cluster" "primary" {
   database_name                   = local.db_name
   master_username                 = "dbadmin"
   master_password                 = random_password.aurora_master.result
-  global_cluster_identifier       = aws_rds_global_cluster.aurora_global.id
+  global_cluster_identifier       = aws_rds_global_cluster.aurora_global.global_cluster_identifier
   db_subnet_group_name            = aws_db_subnet_group.primary.name
   vpc_security_group_ids          = [aws_security_group.aurora_primary.id]
   storage_encrypted               = true
@@ -719,7 +719,7 @@ resource "aws_rds_cluster" "secondary" {
   cluster_identifier              = "${local.db_cluster_identifier}-secondary"
   engine                          = "aurora-postgresql"
   engine_version                  = var.aurora_engine_version
-  global_cluster_identifier       = aws_rds_global_cluster.aurora_global.id
+  global_cluster_identifier       = aws_rds_global_cluster.aurora_global.global_cluster_identifier
   db_subnet_group_name            = aws_db_subnet_group.secondary.name
   vpc_security_group_ids          = [aws_security_group.aurora_secondary.id]
   storage_encrypted               = true
