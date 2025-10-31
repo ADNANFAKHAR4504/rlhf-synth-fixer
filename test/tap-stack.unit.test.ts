@@ -134,6 +134,29 @@ describe('TapStack (with alert email and JWT authorizer)', () => {
   });
 });
 
+describe('TapStack (replicationRegions handling)', () => {
+  test('uses replicationRegions from props when provided (construction succeeds)', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'TestTapStackReplicaProps', {
+      environmentSuffix,
+      env: { account: '111111111111', region: 'us-east-1' },
+      replicationRegions: ['us-east-2'],
+    });
+    const template = Template.fromStack(stack);
+    template.resourceCountIs('AWS::DynamoDB::Table', 1);
+  });
+
+  test('defaults replica selection when not provided (us-west-2 primary)', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'TestTapStackReplicaDefault', {
+      environmentSuffix,
+      env: { account: '111111111111', region: 'us-west-2' },
+    });
+    const template = Template.fromStack(stack);
+    template.resourceCountIs('AWS::DynamoDB::Table', 1);
+  });
+});
+
 describe('TapStack (context env suffix branch)', () => {
   test('uses environmentSuffix from context when prop not provided', () => {
     const app = new cdk.App();

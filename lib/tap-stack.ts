@@ -30,6 +30,8 @@ interface TapStackProps extends cdk.StackProps {
   // Optional JWT authorizer config for HTTP API
   jwtIssuer?: string;
   jwtAudience?: string[];
+  // Optional list of DynamoDB replica regions for the Global Table
+  replicationRegions?: string[];
 }
 
 export class TapStack extends cdk.Stack {
@@ -88,15 +90,14 @@ export class TapStack extends cdk.Stack {
     });
 
     // DynamoDB single-table design with on-demand + PITR and replication
-    // Choose a DR region that is different from the primary, even when the primary is us-west-2
-    const isPrimaryUsWest2 = new cdk.CfnCondition(
-      this,
-      `IsPrimaryUsWest2-${region}-${environmentSuffix}`,
-      { expression: cdk.Fn.conditionEquals(region, 'us-west-2') }
-    );
-    const drRegion = cdk.Token.asString(
-      cdk.Fn.conditionIf(isPrimaryUsWest2.logicalId, 'us-east-1', 'us-west-2')
-    );
+    // Prefer props.replicationRegions; otherwise choose a sane default based on primary region
+    const primaryRegion = process.env.CDK_DEFAULT_REGION || region;
+    const defaultReplica =
+      primaryRegion === 'us-east-1' ? 'us-west-2' : 'us-east-1';
+    const replicationRegions =
+      props?.replicationRegions && props.replicationRegions.length > 0
+        ? props.replicationRegions
+        : [defaultReplica];
     const table = new dynamodb.Table(
       this,
       `EventsTable-${region}-${environmentSuffix}`,
@@ -107,7 +108,7 @@ export class TapStack extends cdk.Stack {
         sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
         pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
         removalPolicy: cdk.RemovalPolicy.DESTROY,
-        replicationRegions: [drRegion],
+        replicationRegions: replicationRegions,
       }
     );
     // GSIs for time-series/analytics
