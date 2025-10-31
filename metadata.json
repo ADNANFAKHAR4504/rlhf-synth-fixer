@@ -17,7 +17,5 @@
     "sqs",
     "iam"
   ],
-  "training_quality": 9,
-  "review_status": "approved",
-  "review_notes": "Excellent training value: Multi-environment event-driven architecture with 7 AWS services. Platform-specific learning (Lambda reserved variables). Score 9/10."
+  "training_quality": 9
 }
