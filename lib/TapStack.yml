@@ -197,8 +197,7 @@ Resources:
           import os
           import boto3
           import time
-          from aws_xray_sdk.core import patch_all
-          patch_all()
+          # X-Ray tracing is enabled via Lambda configuration and IAM policies
 
           dynamodb = boto3.resource('dynamodb')
           transactions_table = dynamodb.Table(os.environ['TRANSACTIONS_TABLE'])
@@ -291,8 +290,7 @@ Resources:
           import os
           import boto3
           import time
-          from aws_xray_sdk.core import patch_all
-          patch_all()
+          # X-Ray tracing is enabled via Lambda configuration and IAM policies
 
           dynamodb = boto3.resource('dynamodb')
           transactions_table = dynamodb.Table(os.environ['TRANSACTIONS_TABLE'])
@@ -367,8 +365,7 @@ Resources:
           import os
           import boto3
           import time
-          from aws_xray_sdk.core import patch_all
-          patch_all()
+          # X-Ray tracing is enabled via Lambda configuration and IAM policies
 
           dynamodb = boto3.resource('dynamodb')
           s3 = boto3.client('s3')
@@ -483,8 +480,7 @@ Resources:
           import os
           import boto3
           import time
-          from aws_xray_sdk.core import patch_all
-          patch_all()
+          # X-Ray tracing is enabled via Lambda configuration and IAM policies
 
           dynamodb = boto3.resource('dynamodb')
           sns = boto3.client('sns')
