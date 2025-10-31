@@ -1126,7 +1126,6 @@ resource "aws_route53_health_check" "primary" {
   fqdn              = aws_rds_cluster.primary.endpoint
   port              = local.db_port
   type              = "TCP"
-  resource_path     = "/"
   failure_threshold = "3"
   request_interval  = "30"
   
@@ -1141,7 +1140,6 @@ resource "aws_route53_health_check" "secondary" {
   fqdn              = aws_rds_cluster.secondary.endpoint
   port              = local.db_port
   type              = "TCP"
-  resource_path     = "/"
   failure_threshold = "3"
   request_interval  = "30"
   

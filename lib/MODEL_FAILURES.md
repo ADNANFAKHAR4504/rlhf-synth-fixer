@@ -116,3 +116,34 @@ fix - Since backtrack is not supported on clusters that belong to global cluster
 ╵
 Error: Terraform exited with code 1.
 ```
+
+5. Medium Failures - Model wornlgy used resource path for route 53 check
+
+Fix:
+Remove resource_path property or parameter from aws_route53_health_check if type = "TCP".
+
+For TCP health checks, AWS expects no resource path because TCP checks operate solely on port connectivity.
+
+If you need to perform HTTP or HTTPS checks, then you can specify resource_path, but not for TCP.
+
+
+```
+╷
+│ Error: creating Route53 Health Check: operation error Route 53: CreateHealthCheck, https response error StatusCode: 400, RequestID: 268e91c1-2f77-406b-8d68-689b28ee5be9, InvalidInput: TCP health checks must not have a resource path specified.
+│ 
+│   with aws_route53_health_check.primary,
+│   on tap_stack.tf line 1124, in resource "aws_route53_health_check" "primary":
+│ 1124: resource "aws_route53_health_check" "primary" {
+│ 
+╵
+╷
+│ Error: creating Route53 Health Check: operation error Route 53: CreateHealthCheck, https response error StatusCode: 400, RequestID: ed5f9d5f-5de5-4723-80b4-f58b301cd5c9, InvalidInput: TCP health checks must not have a resource path specified.
+│ 
+│   with aws_route53_health_check.secondary,
+│   on tap_stack.tf line 1139, in resource "aws_route53_health_check" "secondary":
+│ 1139: resource "aws_route53_health_check" "secondary" {
+│ 
+╵
+Error: Terraform exited with code 1.
+
+```
