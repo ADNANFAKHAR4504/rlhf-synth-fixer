@@ -40,7 +40,7 @@ provider "aws" {
 # US-West-1 spoke provider
 provider "aws" {
   alias  = "eu_west"
-  region = var.spoke_regions["ca-central-1"]
+  region = var.spoke_regions["ap-southeast-2"]
   default_tags {
     tags = var.common_tags
   }

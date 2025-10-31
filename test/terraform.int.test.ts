@@ -57,7 +57,7 @@ const outputs = loadOutputs();
 // AWS clients (initialized with default config)
 const ec2ClientHubRegion = new EC2Client({ region: 'eu-west-3' });
 const ec2ClientUsWest = new EC2Client({ region: 'ap-northeast-1' });
-const ec2ClientEuWest = new EC2Client({ region: 'ca-central-1' });
+const ec2ClientEuWest = new EC2Client({ region: 'ap-southeast-2' });
 const s3Client = new S3Client({ region: 'eu-west-3' });
 const route53Client = new Route53Client({ region: 'eu-west-3' });
 
@@ -109,7 +109,7 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
     );
 
     test(
-      'CA-Central-1 Spoke VPC exists',
+      'AP-Southeast-2 Spoke VPC exists',
       async () => {
         if (!IS_CICD) {
           console.log('Skipping: not in CI/CD environment');
@@ -351,7 +351,7 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
     );
 
     test(
-      'SSM endpoints exist in CA-Central-1 Spoke VPC',
+      'SSM endpoints exist in AP-Southeast-2 Spoke VPC',
       async () => {
         if (!IS_CICD) {
           console.log('Skipping: not in CI/CD environment');

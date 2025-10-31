@@ -62,7 +62,7 @@ resource "aws_route53_record" "eu_west_api" {
   count    = var.enable_route53 ? 1 : 0
   provider = aws.hub
   zone_id  = aws_route53_zone.private[0].zone_id
-  name     = "api.ca-central-1"
+  name     = "api.ap-southeast-2"
   type     = "A"
   ttl      = 300
   records  = ["10.2.1.100"] # Example private IP

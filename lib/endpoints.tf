@@ -106,7 +106,7 @@ resource "aws_vpc_endpoint" "ssm_eu_west" {
   for_each            = toset(local.ssm_endpoints)
   provider            = aws.eu_west
   vpc_id              = module.eu_west_spoke_vpc.vpc_id
-  service_name        = "com.amazonaws.${var.spoke_regions["ca-central-1"]}.${each.key}"
+  service_name        = "com.amazonaws.${var.spoke_regions["ap-southeast-2"]}.${each.key}"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = module.eu_west_spoke_vpc.private_subnet_ids
   security_group_ids  = [module.endpoints_sg_eu_west.security_group_id]

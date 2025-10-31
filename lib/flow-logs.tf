@@ -91,7 +91,7 @@ resource "aws_flow_log" "us_west_spoke" {
 resource "aws_flow_log" "eu_west_spoke" {
   provider                 = aws.eu_west
   log_destination_type     = "s3"
-  log_destination          = "${aws_s3_bucket.flow_logs.arn}/ca-central-1-spoke-vpc/"
+  log_destination          = "${aws_s3_bucket.flow_logs.arn}/ap-southeast-2-spoke-vpc/"
   log_format               = var.flow_log_format
   traffic_type             = "ALL"
   vpc_id                   = module.eu_west_spoke_vpc.vpc_id
@@ -104,7 +104,7 @@ resource "aws_flow_log" "eu_west_spoke" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "ca-central-1-spoke-vpc-flow-logs"
+    Name = "ap-southeast-2-spoke-vpc-flow-logs"
   })
 }
 

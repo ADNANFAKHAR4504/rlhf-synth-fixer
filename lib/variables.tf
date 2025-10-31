@@ -27,7 +27,7 @@ variable "spoke_regions" {
   type        = map(string)
   default = {
     "ap-northeast-1" = "ap-northeast-1"
-    "ca-central-1"   = "ca-central-1"
+    "ap-southeast-2" = "ap-southeast-2"
   }
 }
 
@@ -47,7 +47,7 @@ variable "spoke_vpc_cidrs" {
   type        = map(string)
   default = {
     "ap-northeast-1" = "10.1.0.0/16"
-    "ca-central-1"   = "10.2.0.0/16"
+    "ap-southeast-2" = "10.2.0.0/16"
   }
 
   validation {
