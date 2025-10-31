@@ -1,0 +1,16 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      # Upate repository cache
+      - apt-get update
+
+      # Install and setup docker
+      - chmod u+x docker_install.sh
+      - ./docker_install.sh
+      - apt-get install -y  docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  build:
+    commands:
+      # Deploy application
+      - docker build -t app-pipeline .
