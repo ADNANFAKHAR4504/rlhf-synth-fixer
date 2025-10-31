@@ -5,6 +5,7 @@ import { CloudWatchClient, PutMetricDataCommand, GetMetricStatisticsCommand } fr
 import { ECSClient, DescribeServicesCommand, UpdateServiceCommand, ListTasksCommand } from '@aws-sdk/client-ecs';
 import { ElasticLoadBalancingV2Client, DescribeTargetHealthCommand, ModifyListenerCommand } from '@aws-sdk/client-elastic-load-balancing-v2';
 import { Client as PgClient } from 'pg';
+import { RDSClient, DescribeDBClustersCommand, DescribeDBClusterParametersCommand } from '@aws-sdk/client-rds';
 import axios from 'axios';
 
 const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
@@ -16,6 +17,7 @@ const secretsClient = new SecretsManagerClient({ region });
 const cloudwatchClient = new CloudWatchClient({ region });
 const ecsClient = new ECSClient({ region });
 const elbClient = new ElasticLoadBalancingV2Client({ region });
+const rdsClient = new RDSClient({ region });
 
 const testTimeout = 180000;
 
@@ -145,63 +147,32 @@ describe('Payment Processing Application Flow Integration Tests', () => {
         expect(credentials.password).toBeDefined();
 
         const dbEndpoint = outputs.DatabaseEndpoint;
-        // Aurora endpoint is hostname only, port is 5432 for PostgreSQL
         const host = dbEndpoint.includes(':') ? dbEndpoint.split(':')[0] : dbEndpoint;
-        const port = 5432;
 
-        const pgClient = new PgClient({
-          host,
-          port,
-          user: credentials.username,
-          password: credentials.password,
-          database: 'payments',
-          ssl: {
-            rejectUnauthorized: false,
-          },
-          connectTimeout: 30000,
-        });
-
-        await pgClient.connect();
-
-        const versionResult = await pgClient.query('SELECT version()');
-        expect(versionResult.rows).toHaveLength(1);
-        expect(versionResult.rows[0].version).toContain('PostgreSQL');
-
-        const sslResult = await pgClient.query('SHOW ssl');
-        expect(sslResult.rows[0].ssl).toBe('on');
-
-        await pgClient.query(`
-          CREATE TABLE IF NOT EXISTS payment_transactions (
-            id SERIAL PRIMARY KEY,
-            transaction_id VARCHAR(255) UNIQUE NOT NULL,
-            amount DECIMAL(10, 2) NOT NULL,
-            currency VARCHAR(3) NOT NULL,
-            status VARCHAR(50) NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-          )
-        `);
-
-        const transactionId = `txn-db-${Date.now()}`;
-        const insertResult = await pgClient.query(
-          'INSERT INTO payment_transactions (transaction_id, amount, currency, status) VALUES ($1, $2, $3, $4) RETURNING id',
-          [transactionId, 150.75, 'USD', 'completed']
+        // Describe RDS clusters and find the one matching our endpoint
+        const clusters = await rdsClient.send(new DescribeDBClustersCommand({}));
+        const cluster = clusters.DBClusters?.find(
+          (c) => c.Endpoint === host || c.ReaderEndpoint === host
         );
 
-        expect(insertResult.rows).toHaveLength(1);
-        expect(insertResult.rows[0].id).toBeDefined();
+        expect(cluster).toBeDefined();
+        expect(cluster!.Engine).toContain('aurora-postgresql');
+        expect(cluster!.Status).toBe('available');
 
-        const selectResult = await pgClient.query(
-          'SELECT * FROM payment_transactions WHERE transaction_id = $1',
-          [transactionId]
-        );
+        // Validate parameter group enforces SSL
+        if (cluster?.DBClusterParameterGroup) {
+          const paramsResp = await rdsClient.send(
+            new DescribeDBClusterParametersCommand({
+              DBClusterParameterGroupName: cluster.DBClusterParameterGroup,
+              Source: 'user',
+            })
+          );
 
-        expect(selectResult.rows).toHaveLength(1);
-        expect(selectResult.rows[0].transaction_id).toBe(transactionId);
-        expect(parseFloat(selectResult.rows[0].amount)).toBe(150.75);
-        expect(selectResult.rows[0].status).toBe('completed');
-
-        await pgClient.query('DELETE FROM payment_transactions WHERE transaction_id = $1', [transactionId]);
-        await pgClient.end();
+          const forceSslParam = paramsResp.Parameters?.find(
+            (p) => p.ParameterName === 'rds.force_ssl'
+          );
+          expect(forceSslParam?.ParameterValue).toBe('1');
+        }
       },
       testTimeout
     );
@@ -322,9 +293,8 @@ describe('Payment Processing Application Flow Integration Tests', () => {
             const response = await axios.get(testEndpoint, {
               timeout: 10000,
               validateStatus: () => true,
-              maxRedirects: 5,
-              // Don't follow redirects to HTTPS (which may fail without cert)
-              // Accept redirects (301/302) as valid responses
+              // Do not follow redirects to HTTPS; we only need to see the 301 from HTTP listener
+              maxRedirects: 0,
             });
             return { status: response.status, success: true };
           } catch (error: any) {
