@@ -92,7 +92,7 @@ locals {
 variable "domain_name" {
   description = "Base domain name for Route53 hosted zones"
   type        = string
-  default     = "example.com"
+  default     = "fintech-startup.local"
 }
 
 variable "container_image" {

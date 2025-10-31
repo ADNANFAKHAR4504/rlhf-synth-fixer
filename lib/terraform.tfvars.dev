@@ -6,7 +6,7 @@ aws_region   = "us-east-1"
 managed_by   = "terraform"
 
 # Domain Configuration
-domain_name = "example.com"
+domain_name = "fintech-startup.local"
 
 # Container Configuration
 container_image = "nginx:latest"  # Replace with your actual container image
