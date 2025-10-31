@@ -85,6 +85,8 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: "false"
+          platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Validate commit message
         run: npx commitlint --last
@@ -273,6 +275,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'false'
           is-analysis: 'true'
+          platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Run analysis
         run: ./scripts/analysis.sh
@@ -486,6 +490,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: "true"
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Download Deployment Outputs
         uses: actions/download-artifact@v4
