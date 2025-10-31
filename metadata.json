@@ -18,6 +18,6 @@
     "IAM",
     "Systems Manager"
   ],
-  "training_quality": 8,
+  "training_quality": 9,
   "background": "A financial services company inherited a poorly structured Terraform codebase for AWS networking infrastructure with hardcoded values, duplicated resources, inefficient CIDR allocations causing IP address exhaustion in development environments, broken VPC peering, and excessive NAT Gateway costs. The task requires refactoring into a modular multi-region setup (us-east-1, us-west-2, eu-central-1) using dynamic CIDR allocation with cidrsubnet(), implementing reusable VPC modules, fixing VPC peering with proper routing, optimizing NAT Gateway usage to reduce costs by 60%, configuring Route53 Resolver for DNS resolution, implementing S3 backend with workspace isolation, and establishing proper tagging for cost allocation while adhering to project-specific conventions like keeping all provider configuration in provider.tf."
 }
