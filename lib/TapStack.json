@@ -28,14 +28,6 @@
             "MaxLength": 16,
             "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$"
         },
-        "DBMasterPassword": {
-            "Type": "String",
-            "Description": "Master password for Aurora MySQL database",
-            "NoEcho": true,
-            "MinLength": 8,
-            "MaxLength": 41,
-            "AllowedPattern": "^[a-zA-Z0-9]*$"
-        },
         "ContainerImage": {
             "Type": "String",
             "Description": "Docker image for payment API (e.g., nginx:latest as placeholder)",
@@ -743,6 +735,43 @@
                 }
             }
         },
+        "DBMasterPasswordSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "tapstack-${Environment}-db-master-password-${environmentSuffix}"
+                },
+                "Description": {
+                    "Fn::Sub": "Master password for Aurora MySQL database in ${Environment} environment"
+                },
+                "GenerateSecretString": {
+                    "SecretStringTemplate": {
+                        "Fn::Sub": "{\"username\": \"${DBMasterUsername}\"}"
+                    },
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\",
+                    "RequireEachIncludedType": true
+                },
+                "KmsKeyId": {
+                    "Ref": "DBEncryptionKey"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "db-master-password-${environmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
         "DBSubnetGroup": {
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
@@ -784,7 +813,7 @@
                     "Ref": "DBMasterUsername"
                 },
                 "MasterUserPassword": {
-                    "Ref": "DBMasterPassword"
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBMasterPasswordSecret}:SecretString:password}}"
                 },
                 "DBSubnetGroupName": {
                     "Ref": "DBSubnetGroup"

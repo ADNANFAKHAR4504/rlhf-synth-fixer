@@ -27,7 +27,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters.Environment).toBeDefined();
       expect(template.Parameters.environmentSuffix).toBeDefined();
       expect(template.Parameters.DBMasterUsername).toBeDefined();
-      expect(template.Parameters.DBMasterPassword).toBeDefined();
       expect(template.Parameters.ContainerImage).toBeDefined();
       expect(template.Parameters.CertificateArn).toBeDefined();
     });
@@ -264,8 +263,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(ingress.SourceSecurityGroupId).toBeDefined();
     });
 
-    test('database password parameter should have NoEcho', () => {
-      expect(template.Parameters.DBMasterPassword.NoEcho).toBe(true);
+    test('should have database password secret in Secrets Manager', () => {
+      expect(template.Resources.DBMasterPasswordSecret).toBeDefined();
+      expect(template.Resources.DBMasterPasswordSecret.Type).toBe('AWS::SecretsManager::Secret');
+      expect(template.Resources.DBMasterPasswordSecret.Properties.GenerateSecretString).toBeDefined();
     });
   });
 
