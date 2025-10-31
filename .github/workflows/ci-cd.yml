@@ -516,7 +516,7 @@ jobs:
     runs-on: ubuntu-24.04
     name: "Claude Review"
     needs: [integration-tests-live, analysis]
-    if: always() && !cancelled() && (needs.analysis.result == 'success' || needs.analysis.result == 'skipped') && needs.integration-tests-live.result == 'success'
+    if: always() && !cancelled() && (needs.analysis.result == 'success' || needs.analysis.result == 'skipped') && (needs.integration-tests-live.result == 'success' || needs.integration-tests-live.result == 'skipped')
     permissions:
       contents: write
       pull-requests: write
@@ -675,7 +675,7 @@ jobs:
     name: Cleanup (Destroy Resources)
     runs-on: ubuntu-24.04
     needs: [detect-metadata, integration-tests-live, claude-code-action]
-    if: ${{ always() && !cancelled() && needs.integration-tests-live.result == 'success' && needs.claude-code-action.result == 'success' && ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch' && !inputs.skip_cleanup)) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ always() && !cancelled() && (needs.integration-tests-live.result == 'success' || needs.integration-tests-live.result == 'skipped') && needs.claude-code-action.result == 'success' && ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch' && !inputs.skip_cleanup)) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: stage
 
     steps:
