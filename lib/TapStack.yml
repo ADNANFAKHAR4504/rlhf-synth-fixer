@@ -342,7 +342,7 @@ Resources:
   VPCFlowLogsGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/vpc/flowloggroup-${EnvironmentSuffix}'
+      LogGroupName: !Sub '/aws/vpc/flowlog-groups-${EnvironmentSuffix}'
       RetentionInDays: 30
       Tags:
         - Key: Name
@@ -358,7 +358,7 @@ Resources:
   VPCFlowLogsRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'vpc-flowlogs-role-${EnvironmentSuffix}'
+      RoleName: !Sub 'vpc-flowlogs-iamrole-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:

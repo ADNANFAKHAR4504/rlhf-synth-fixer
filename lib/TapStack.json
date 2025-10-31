@@ -656,7 +656,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/vpc/flowloggroup-${EnvironmentSuffix}"
+                    "Fn::Sub": "/aws/vpc/flowlog-groups-${EnvironmentSuffix}"
                 },
                 "RetentionInDays": 30,
                 "Tags": [
@@ -685,7 +685,7 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "vpc-flowlogs-role-${EnvironmentSuffix}"
+                    "Fn::Sub": "vpc-flowlogs-iamrole-${EnvironmentSuffix}"
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
