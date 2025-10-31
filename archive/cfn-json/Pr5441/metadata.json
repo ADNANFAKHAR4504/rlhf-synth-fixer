@@ -1,0 +1,21 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349028",
+  "team": "3",
+  "startedAt": "2025-10-29T15:19:32.625Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "VPC, EC2, Auto Scaling, Application Load Balancer, NAT Gateway, Internet Gateway, Security Groups, Network ACLs, IAM, CloudTrail, CloudWatch",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Chandan-devs-tech",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349164",
+  "team": "6",
+  "startedAt": "2025-10-30T12:14:14.894Z",
+  "subtask": "Application Deployment",
+  "background": "This problem requires setting up a complex event-driven architecture using AWS serverless services managed by CloudFormation via a Python script, calling for advanced knowledge of AWS services and infrastructure as code.",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "DynamoDB",
+    "API Gateway",
+    "Step Functions",
+    "SQS",
+    "IAM",
+    "CloudWatch",
+    "KMS",
+    "X-Ray"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}

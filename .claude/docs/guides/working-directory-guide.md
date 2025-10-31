@@ -10,6 +10,31 @@ Agents operate in git worktrees, which can cause confusion about:
 
 This guide clarifies working directory context for all agents.
 
+## ⚠️ CRITICAL: Mandatory Verification Requirement
+
+**ALL agents MUST verify their location before ANY file operations.**
+
+Context switching between main repo and worktree is inherently dangerous and has caused:
+- Files created in wrong directory
+- Changes committed to wrong branch
+- Template files copied to main repo instead of worktree
+
+**ENFORCEMENT**: Use the automated verification script:
+
+```bash
+# At the start of EVERY agent phase:
+bash .claude/scripts/verify-worktree.sh || exit 1
+
+# This will:
+# ✅ Verify you're in worktree (not main repo)
+# ✅ Verify branch matches directory name
+# ✅ Verify metadata.json exists
+# ✅ Prevent operations on main branch
+# ✅ Export WORKTREE_DIR environment variable
+```
+
+**This is NOT optional - it is MANDATORY for all sub-agents.**
+
 ---
 
 ## Two Directory Contexts
@@ -25,11 +50,11 @@ pwd
 # Output should be: .../iac-test-automations (NOT inside worktree/)
 
 # Verify main files exist
-ls tasks.csv .claude/ templates/
+ls .claude/tasks.csv .claude/ templates/
 ```
 
 **Key Files**:
-- `tasks.csv` - Task list
+- `.claude/tasks.csv` - Task list
 - `.claude/` - Agent instructions
 - `templates/` - Platform templates
 - `.claude/scripts/` - Utility scripts
@@ -39,8 +64,12 @@ ls tasks.csv .claude/ templates/
 **When**: Code generation, QA, testing, review
 **Who**: iac-infra-generator, iac-infra-qa-trainer, iac-code-reviewer
 
-**Verification**:
+**Verification (MANDATORY)**:
 ```bash
+# REQUIRED: Run automated verification before ANY operations
+bash .claude/scripts/verify-worktree.sh || exit 1
+
+# Alternative manual verification (only if automated script unavailable):
 pwd
 # Output MUST end with: /worktree/synth-{task_id}
 
@@ -50,6 +79,14 @@ ls .claude/ lib/ test/ metadata.json
 # Verify branch
 git branch --show-current
 # Output MUST be: synth-{task_id}
+```
+
+**After Verification**:
+```bash
+# The script exports these variables for your use:
+echo $WORKTREE_DIR  # Full path to worktree
+echo $TASK_BRANCH   # synth-{task_id}
+echo $TASK_ID       # {task_id}
 ```
 
 **Key Files**:
@@ -213,10 +250,10 @@ cat lib/PROMPT.md
 ```bash
 # ❌ WRONG (inconsistent context)
 cd worktree/synth-123
-cat ../../tasks.csv  # This references main repo tasks.csv, not worktree
+cat ../../.claude/tasks.csv  # This references main repo .claude/tasks.csv, not worktree
 
 # ✅ CORRECT (stay in one context)
-# If need tasks.csv, don't be in worktree
+# If need .claude/tasks.csv, don't be in worktree
 # If need metadata.json, be in worktree
 ```
 
@@ -231,7 +268,7 @@ cat ../../tasks.csv  # This references main repo tasks.csv, not worktree
 1. **Phase 1 (Task Selection)**: Main repo
    ```bash
    pwd  # .../iac-test-automations
-   cat tasks.csv
+   cat .claude/tasks.csv
    ```
 
 2. **Setup Worktree**: Create and enter
@@ -310,7 +347,7 @@ jq '.training_quality' metadata.json
 
 | File | Location | Access From Worktree |
 |------|----------|----------------------|
-| tasks.csv | Main repo root | Not accessible (don't try) |
+| .claude/tasks.csv | Main repo .claude/ | Not accessible (don't try) |
 | .claude/scripts/task-manager.sh | Main repo .claude/scripts/ | Via .claude/ symlink |
 
 ### Always in Worktree (Never in Main Repo)
@@ -349,7 +386,7 @@ cd worktree/synth-{task_id}
 ls metadata.json
 ```
 
-### Error: "tasks.csv not found"
+### Error: ".claude/tasks.csv not found"
 
 **Cause**: In worktree, trying to access main repo file
 
@@ -358,7 +395,7 @@ ls metadata.json
 # Return to main repo
 cd ../..
 pwd  # Should be: .../iac-test-automations
-ls tasks.csv
+ls .claude/tasks.csv
 ```
 
 ### Error: "Branch mismatch"
@@ -434,7 +471,7 @@ ls metadata.json
 
 # Before CSV update
 pwd
-ls tasks.csv
+ls .claude/tasks.csv
 ```
 
 ### 4. Document Directory Changes

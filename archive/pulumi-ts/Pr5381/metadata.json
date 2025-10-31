@@ -1,0 +1,32 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "jehl7",
+  "team": "synth",
+  "startedAt": "2025-10-30T10:30:31+05:30",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "networking",
+    "vpc",
+    "security"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "RDS",
+    "IAM",
+    "CloudWatch"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

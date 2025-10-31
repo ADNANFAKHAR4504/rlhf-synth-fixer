@@ -1,0 +1,40 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000058",
+  "team": "4",
+  "startedAt": "2025-10-30T09:30:08.337Z",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "subtask": "Provisioning of Infrastructure Environments",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS Aurora",
+    "Application Load Balancer",
+    "Auto Scaling Groups",
+    "IAM",
+    "KMS",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "CloudTrail",
+    "S3",
+    "Secrets Manager",
+    "WAF v2",
+    "Route 53",
+    "NAT Gateway",
+    "Internet Gateway",
+    "VPC Flow Logs",
+    "SNS"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "jpoola-turing",
+  "dockerS3Location": ""
+}
