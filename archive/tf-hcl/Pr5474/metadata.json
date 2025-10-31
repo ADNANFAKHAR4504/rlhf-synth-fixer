@@ -34,5 +34,11 @@
   "training_quality": 10,
   "task_config": {
     "deploy_env": "dev.tfvars"
-  }
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Gahdloot",
+  "dockerS3Location": ""
 }
