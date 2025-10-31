@@ -569,6 +569,10 @@ Resources:
                 Action:
                   - 'cloudwatch:PutMetricData'
                 Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'secretsmanager:GetSecretValue'
+                Resource: !Ref DBSecret
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
