@@ -1,5 +1,5 @@
 {
-  "app": "gradle run",
+  "app": "go run bin/tap.go",
   "watch": {
     "include": [
       "**"
@@ -7,9 +7,9 @@
     "exclude": [
       "README.md",
       "cdk*.json",
-      "build",
-      ".gradle",
-      "src/test"
+      "go.mod",
+      "go.sum",
+      "tests"
     ]
   },
   "context": {
