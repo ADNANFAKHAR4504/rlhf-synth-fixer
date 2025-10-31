@@ -3,8 +3,7 @@
 This document is a machine-friendly snapshot that embeds the full source
 contents of specific files under `lib/`. Each listed file is included below
 as a fenced code block with an appropriate language hint. This file contains
-only file names and the exact file contents; it does not include QA, unit-test,
-or integration-test commentary.
+only file names and the exact file contents.
 
 Included files:
 - `multi-component-stack.ts`
