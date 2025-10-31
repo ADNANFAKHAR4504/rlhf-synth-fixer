@@ -262,7 +262,7 @@ export class TapStack extends pulumi.ComponentResource {
         handler: 'index.handler',
         role: lambdaRole.arn,
         code: new pulumi.asset.AssetArchive({
-          '.': new pulumi.asset.FileArchive('lib/lambda/webhook-processor'),
+          '.': new pulumi.asset.FileArchive('lib/lambda/'),
         }),
         memorySize: 512,
         timeout: 30,
