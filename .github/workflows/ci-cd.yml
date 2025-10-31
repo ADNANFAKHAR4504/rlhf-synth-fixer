@@ -80,13 +80,15 @@ jobs:
         with:
           fetch-depth: 0 # Required to fetch all history for commitlint
 
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
+      - name: Setup Node for Commitlint
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "false"
-          platform: ${{ needs.detect-metadata.outputs.platform }}
-          language: ${{ needs.detect-metadata.outputs.language }}
+
+      - name: Install Commitlint locally
+        run: |
+          npm install --no-save \
+            @commitlint/{cli,config-conventional}
 
       - name: Validate commit message
         run: npx commitlint --last
