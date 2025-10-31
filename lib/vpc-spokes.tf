@@ -38,17 +38,17 @@ module "eu_west_spoke_vpc" {
     aws = aws.eu_west
   }
 
-  vpc_name             = "us-west-1-spoke-vpc"
-  vpc_cidr             = var.spoke_vpc_cidrs["us-west-1"]
+  vpc_name             = "ca-central-1-spoke-vpc"
+  vpc_cidr             = var.spoke_vpc_cidrs["ca-central-1"]
   azs                  = slice(data.aws_availability_zones.eu_west.names, 0, 3)
-  public_subnet_cidrs  = [for i in range(3) : cidrsubnet(var.spoke_vpc_cidrs["us-west-1"], 4, i)]
-  private_subnet_cidrs = [for i in range(3) : cidrsubnet(var.spoke_vpc_cidrs["us-west-1"], 4, i + 8)]
+  public_subnet_cidrs  = [for i in range(3) : cidrsubnet(var.spoke_vpc_cidrs["ca-central-1"], 4, i)]
+  private_subnet_cidrs = [for i in range(3) : cidrsubnet(var.spoke_vpc_cidrs["ca-central-1"], 4, i + 8)]
   enable_dns_hostnames = true
   enable_dns_support   = true
 
   tags = merge(var.common_tags, {
-    Name   = "us-west-1-spoke-vpc"
+    Name   = "ca-central-1-spoke-vpc"
     Type   = "spoke"
-    Region = "us-west-1"
+    Region = "ca-central-1"
   })
 }
