@@ -1,65 +1,24 @@
-## Ideal response — summary of `lib/` implementation and source
+## IDEAL_RESPONSE.md — snapshot of selected files under `lib/`
 
-This document summarizes the TypeScript files under `lib/` and includes their current source as formatted code blocks. Use this for quick review.
+This document is a machine-friendly snapshot that embeds the full source
+contents of specific files under `lib/`. Each listed file is included below
+as a fenced code block with an appropriate language hint. This file contains
+only file names and the exact file contents; it does not include QA, unit-test,
+or integration-test commentary.
 
 Included files:
 - `multi-component-stack.ts`
-## Ideal response — summary of `lib/` implementation and sources
-
-This document captures the current implementation and key files under `lib/`.
-It includes short explanations of why each file exists and embeds the file contents as fenced code blocks. All TypeScript and JavaScript source blocks are
-marked with ```typescript for consistent editor rendering.
-
-Included files (from `lib/`):
-- `multi-component-stack.ts` — main construct that composes VPC, RDS, Lambda, API Gateway, CloudFront, Route53, S3, SQS and monitoring.
-- `tap-stack.ts` — top-level CDK stack that instantiates the construct and emits prefixed outputs.
-- `name-utils.ts` — canonical resource name helper used across the stack.
-- `string-utils.ts` — small string helper for safe suffix normalization.
-- `lambda/api/index.js` and `lambda/api/package.json` — the Lambda asset used by the ApiLambda construct (kept in `lib/lambda/api`).
+- `tap-stack.ts`
+- `name-utils.ts`
+- `string-utils.ts`
+- `lambda/api/index.js`
+- `lambda/api/package.json`
 
 ---
 
 ### lib/multi-component-stack.ts
 
 ```typescript
-// multi-component-stack.ts
-import * as cdk from 'aws-cdk-lib';
-import { Duration, RemovalPolicy } from 'aws-cdk-lib';
-import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
-import * as cloudfrontOrigins from 'aws-cdk-lib/aws-cloudfront-origins';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as cw_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import * as rds from 'aws-cdk-lib/aws-rds';
-## Snapshot of files in lib/
-
-The following is a current source snapshot of the top-level files under `lib/`.
-Each file is embedded as a fenced code block with the appropriate language hint.
-
-This document intentionally contains only short file descriptions and the exact file contents; it does not include QA/test commentary or procedural notes.
-
-Included files:
-- `multi-component-stack.ts` — main construct composing VPC, RDS, Lambda, API Gateway, CloudFront, Route53, S3, SQS and monitoring.
-- `tap-stack.ts` — top-level CDK stack that instantiates the construct and emits prefixed outputs.
-- `name-utils.ts` — canonical resource name helper used across the stack.
-- `string-utils.ts` — small string helper for safe suffix normalization.
-- `PROMPT.md` — the user-visible prompt template.
-- `AWS_REGION` — plain text specifying the default region.
-- `MODEL_RESPONSE.md` — model-generated response artifact (kept as source here).
-- `MODEL_FAILURES.md` — model-generated failures artifact (kept as source here).
-- `lambda/api/index.js` — Lambda handler source used as an asset.
-- `lambda/api/package.json` — Lambda asset package manifest.
-
----
-
-### lib/multi-component-stack.ts
-
-```typescript
-// multi-component-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -84,6 +43,149 @@ import { Construct } from 'constructs';
 import path from 'path';
 import canonicalResourceName from './name-utils';
 
+export interface MultiComponentProps extends cdk.StackProps {
+  secondaryRegion?: string;
+  baseEnvironmentSuffix?: string;
+  isPrimary?: boolean;
+}
+
+export class MultiComponentApplicationConstruct extends Construct {
+  // String suffix for unique resource naming
+  private readonly stringSuffix: string;
+  // Expose important resource tokens as public properties so other stacks
+  // in the same CDK app can reference them without requiring manual
+  // CloudFormation exports/imports.
+  public readonly vpcId!: string;
+  public readonly apiUrl!: string;
+  public readonly lambdaFunctionArn!: string;
+  public readonly rdsEndpoint!: string;
+  public readonly s3BucketName!: string;
+  public readonly sqsQueueUrl!: string;
+  public readonly cloudFrontDomainName!: string;
+  public readonly hostedZoneId!: string;
+  public readonly databaseSecretArn!: string;
+  public readonly lambdaRoleArn!: string;
+  public readonly databaseSecurityGroupId!: string;
+  public readonly lambdaSecurityGroupId!: string;
+  public readonly lambdaLogGroupName!: string;
+  // Indicate whether WAF creation was skipped (so callers/stacks can emit
+  // equivalent CFN outputs at the stack level if desired).
+  public readonly wafWasSkipped: boolean = false;
+
+  // Expose a small helper to compute the sanitized suffix used for Lambda names.
+  // This is intentionally simple and useful to call from unit tests to exercise
+  // the branches (defined vs falsy suffix).
+  public computeSafeSuffixForLambda(
+    input?: string | cdk.Token
+  ): string | cdk.Aws {
+    // If caller provided an explicit empty string, return Aws.NO_VALUE
+    // so callers that embed the result into CFN-friendly names can
+    // detect omitted values. If the input is a literal string, normalize
+    // it; if it's a CDK token (e.g. derived from the stack id), pass the
+    // token through unchanged.
+    if (input === '') {
+      return cdk.Aws.NO_VALUE;
+    }
+
+    if (typeof input === 'string' && input.length > 0) {
+      return input.toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+    }
+
+    // For token inputs (non-string), return as-is so downstream helpers
+    // can include the token rather than attempting string ops on it.
+    return input as unknown as cdk.Aws;
+  }
+
+  constructor(scope: Construct, id: string, props?: MultiComponentProps) {
+    // Construct (not a NestedStack) - call Construct's constructor and
+    // accept a superset of the previous NestedStack props so callers can
+    // continue forwarding stack-like options.
+    super(scope, id);
+
+    // Read isPrimary flag forwarded from TapStack props. Default to true
+    // to preserve single-region behavior.
+    const isPrimary = props?.isPrimary;
+    const createPrimaryResources =
+      isPrimary === undefined || isPrimary === true;
+
+    // Generate unique string suffix
+    this.stringSuffix = cdk.Fn.select(2, cdk.Fn.split('-', cdk.Aws.STACK_ID));
+
+    // Allow destructive removal only when explicitly enabled (CI or developer opt-in).
+    // By default keep destructive actions off in production to avoid data loss.
+    const allowDestroy =
+      this.node.tryGetContext('allowDestroy') === true ||
+      this.node.tryGetContext('allowDestroy') === 'true' ||
+      process.env.ALLOW_DESTROY === 'true';
+
+    // ========================================
+    // VPC Configuration
+    // ========================================
+    const vpc = new ec2.Vpc(this, 'AppVpc', {
+      // Use a consistent, human-friendly VPC name across code and docs.
+      // Use the canonicalResourceName helper to ensure deterministic names.
+      vpcName: canonicalResourceName(
+        'prod-app-vpc',
+        props?.baseEnvironmentSuffix as string | undefined,
+        this.stringSuffix
+      ) as string,
+      cidr: '10.0.0.0/16',
+      maxAzs: 2,
+      natGateways: 2,
+      enableDnsHostnames: true,
+      enableDnsSupport: true,
+      subnetConfiguration: [
+        {
+          name: 'prod-public-subnet',
+          subnetType: ec2.SubnetType.PUBLIC,
+          cidrMask: 24,
+        },
+        {
+          name: 'prod-private-subnet',
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          cidrMask: 24,
+        },
+      ],
+    });
+
+    // ========================================
+    // Secrets Manager - RDS Credentials
+    // ========================================
+    const databaseSecret = new secretsmanager.Secret(this, 'DatabaseSecret', {
+      secretName: canonicalResourceName(
+        'prod-secretsmanager-db',
+        props?.baseEnvironmentSuffix as string | undefined,
+        this.stringSuffix
+      ) as string,
+      description: 'RDS PostgreSQL database credentials',
+      generateSecretString: {
+        secretStringTemplate: JSON.stringify({
+          username: 'dbadmin',
+        }),
+        generateStringKey: 'password',
+        excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
+        passwordLength: 32,
+      },
+    });
+
+    // ========================================
+    // RDS PostgreSQL Database
+    // ========================================
+    const databaseSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'DatabaseSecurityGroup',
+      {
+        securityGroupName: canonicalResourceName(
+          'prod-ec2-sg-db',
+          props?.baseEnvironmentSuffix as string | undefined,
+          this.stringSuffix
+        ) as string,
+        vpc,
+        description: 'Security group for RDS PostgreSQL',
+        allowAllOutbound: false,
+      }
+    );
+
     // Use a generally-available Postgres engine version. Some regions may not have
     // older minor versions (e.g. 13.7). Prefer Postgres 15.x which has wider availability.
     // Allow reusing an existing DB subnet group to avoid hitting account quotas
@@ -102,11 +204,6 @@ import canonicalResourceName from './name-utils';
       : undefined;
 
     const rdsInstance = new rds.DatabaseInstance(this, 'PostgresDatabase', {
-      instanceIdentifier: canonicalResourceName(
-        'prod-rds-postgres',
-        props?.baseEnvironmentSuffix as string | undefined,
-        this.stringSuffix
-      ) as string,
       engine: rds.DatabaseInstanceEngine.postgres({
         // Use the major Postgres 15 engine constant so CDK/RDS will pick a supported
         // minor version available in the target region. Pinning to a minor (e.g. 15.3)
@@ -815,7 +912,11 @@ import canonicalResourceName from './name-utils';
     // ========================================
     // Lambda errors alarm
     new cdk.aws_cloudwatch.Alarm(this, 'LambdaErrorsAlarm', {
-      alarmName: `prod-cloudwatch-lambda-errors-${safeSuffixForLambda}`,
+      alarmName: canonicalResourceName(
+        'prod-cloudwatch-lambda-errors',
+        props?.baseEnvironmentSuffix as string | undefined,
+        safeSuffixForLambda as string
+      ) as string,
       metric: lambdaFunction.metricErrors(),
       threshold: 5,
       evaluationPeriods: 2,
@@ -825,7 +926,11 @@ import canonicalResourceName from './name-utils';
 
     // RDS CPU utilization alarm
     new cdk.aws_cloudwatch.Alarm(this, 'RdsCpuAlarm', {
-      alarmName: `prod-cloudwatch-rds-cpu-${safeSuffixForLambda}`,
+      alarmName: canonicalResourceName(
+        'prod-cloudwatch-rds-cpu',
+        props?.baseEnvironmentSuffix as string | undefined,
+        safeSuffixForLambda as string
+      ) as string,
       metric: rdsInstance.metricCPUUtilization(),
       threshold: 80,
       evaluationPeriods: 2,
@@ -835,7 +940,11 @@ import canonicalResourceName from './name-utils';
 
     // API Gateway 5xx errors alarm
     new cdk.aws_cloudwatch.Alarm(this, 'ApiGateway5xxAlarm', {
-      alarmName: `prod-cloudwatch-apigateway-5xx-${safeSuffixForLambda}`,
+      alarmName: canonicalResourceName(
+        'prod-cloudwatch-apigateway-5xx',
+        props?.baseEnvironmentSuffix as string | undefined,
+        safeSuffixForLambda as string
+      ) as string,
       metric: api.metricServerError(),
       threshold: 5,
       evaluationPeriods: 2,
@@ -851,7 +960,11 @@ import canonicalResourceName from './name-utils';
     // outputs in the guarded block and avoid creating duplicate constructs here.
 
     new cloudwatch.Alarm(this, 'VpcSshAttemptsAlarm', {
-      alarmName: `prod-vpc-ssh-attempts-${this.stringSuffix}`,
+      alarmName: canonicalResourceName(
+        'prod-vpc-ssh-attempts',
+        props?.baseEnvironmentSuffix as string | undefined,
+        this.stringSuffix
+      ) as string,
       metric: sshAttemptsMetric,
       threshold: 20,
       evaluationPeriods: 1,
@@ -859,7 +972,11 @@ import canonicalResourceName from './name-utils';
     }).addAlarmAction(new cw_actions.SnsAction(alarmsTopic));
 
     new cloudwatch.Alarm(this, 'VpcRdpAttemptsAlarm', {
-      alarmName: `prod-vpc-rdp-attempts-${this.stringSuffix}`,
+      alarmName: canonicalResourceName(
+        'prod-vpc-rdp-attempts',
+        props?.baseEnvironmentSuffix as string | undefined,
+        this.stringSuffix
+      ) as string,
       metric: rdpAttemptsMetric,
       threshold: 10,
       evaluationPeriods: 1,
@@ -868,7 +985,11 @@ import canonicalResourceName from './name-utils';
 
     // SQS alarms
     new cloudwatch.Alarm(this, 'SqsVisibleMessagesAlarm', {
-      alarmName: `prod-cloudwatch-sqs-visible-${safeSuffixForLambda}`,
+      alarmName: canonicalResourceName(
+        'prod-cloudwatch-sqs-visible',
+        props?.baseEnvironmentSuffix as string | undefined,
+        safeSuffixForLambda as string
+      ) as string,
       metric: asyncQueue.metricApproximateNumberOfMessagesVisible(),
       threshold: 100,
       evaluationPeriods: 2,
@@ -876,7 +997,11 @@ import canonicalResourceName from './name-utils';
     });
 
     new cloudwatch.Alarm(this, 'SqsOldestMessageAlarm', {
-      alarmName: `prod-cloudwatch-sqs-oldest-${safeSuffixForLambda}`,
+      alarmName: canonicalResourceName(
+        'prod-cloudwatch-sqs-oldest',
+        props?.baseEnvironmentSuffix as string | undefined,
+        safeSuffixForLambda as string
+      ) as string,
       metric: asyncQueue.metricApproximateAgeOfOldestMessage(),
       threshold: 300, // seconds
       evaluationPeriods: 1,
@@ -899,7 +1024,11 @@ import canonicalResourceName from './name-utils';
     });
 
     new cloudwatch.Alarm(this, 'S34xxAlarm', {
-      alarmName: `prod-cloudwatch-s3-4xx-${safeSuffixForLambda}`,
+      alarmName: canonicalResourceName(
+        'prod-cloudwatch-s3-4xx',
+        props?.baseEnvironmentSuffix as string | undefined,
+        safeSuffixForLambda as string
+      ) as string,
       metric: s34xx,
       threshold: 10,
       evaluationPeriods: 1,
@@ -907,7 +1036,11 @@ import canonicalResourceName from './name-utils';
     });
 
     new cloudwatch.Alarm(this, 'S35xxAlarm', {
-      alarmName: `prod-cloudwatch-s3-5xx-${safeSuffixForLambda}`,
+      alarmName: canonicalResourceName(
+        'prod-cloudwatch-s3-5xx',
+        props?.baseEnvironmentSuffix as string | undefined,
+        safeSuffixForLambda as string
+      ) as string,
       metric: s35xx,
       threshold: 5,
       evaluationPeriods: 1,
@@ -916,7 +1049,11 @@ import canonicalResourceName from './name-utils';
 
     // Lambda duration and throttles
     new cloudwatch.Alarm(this, 'LambdaDurationAlarm', {
-      alarmName: `prod-cloudwatch-lambda-duration-${safeSuffixForLambda}`,
+      alarmName: canonicalResourceName(
+        'prod-cloudwatch-lambda-duration',
+        props?.baseEnvironmentSuffix as string | undefined,
+        safeSuffixForLambda as string
+      ) as string,
       metric: lambdaFunction.metricDuration(),
       threshold: 300000, // milliseconds (5m) - very high, tune as needed
       evaluationPeriods: 1,
@@ -924,7 +1061,11 @@ import canonicalResourceName from './name-utils';
     });
 
     new cloudwatch.Alarm(this, 'LambdaThrottlesAlarm', {
-      alarmName: `prod-cloudwatch-lambda-throttles-${safeSuffixForLambda}`,
+      alarmName: canonicalResourceName(
+        'prod-cloudwatch-lambda-throttles',
+        props?.baseEnvironmentSuffix as string | undefined,
+        safeSuffixForLambda as string
+      ) as string,
       metric: lambdaFunction.metricThrottles(),
       threshold: 1,
       evaluationPeriods: 1,
@@ -1037,7 +1178,11 @@ import canonicalResourceName from './name-utils';
 
     // RDS additional alarm: free storage space low
     new cloudwatch.Alarm(this, 'RdsFreeStorageAlarm', {
-      alarmName: `prod-cloudwatch-rds-free-storage-${safeSuffixForLambda}`,
+      alarmName: canonicalResourceName(
+        'prod-cloudwatch-rds-free-storage',
+        props?.baseEnvironmentSuffix as string | undefined,
+        safeSuffixForLambda as string
+      ) as string,
       metric: rdsInstance.metricFreeStorageSpace(),
       threshold: 20 * 1024 * 1024 * 1024, // 20 GiB
       evaluationPeriods: 1,
@@ -1054,7 +1199,11 @@ import canonicalResourceName from './name-utils';
       this,
       'LambdaErrorsAlarmWithAction',
       {
-        alarmName: `prod-cloudwatch-lambda-errors-${safeSuffixForLambda}-with-action`,
+        alarmName: canonicalResourceName(
+          'prod-cloudwatch-lambda-errors-with-action',
+          props?.baseEnvironmentSuffix as string | undefined,
+          safeSuffixForLambda as string
+        ) as string,
         metric: lambdaFunction.metricErrors(),
         threshold: 5,
         evaluationPeriods: 2,
@@ -1070,7 +1219,11 @@ import canonicalResourceName from './name-utils';
       this,
       'RdsCpuAlarmWithAction',
       {
-        alarmName: `prod-cloudwatch-rds-cpu-${safeSuffixForLambda}-with-action`,
+        alarmName: canonicalResourceName(
+          'prod-cloudwatch-rds-cpu-with-action',
+          props?.baseEnvironmentSuffix as string | undefined,
+          safeSuffixForLambda as string
+        ) as string,
         metric: rdsInstance.metricCPUUtilization(),
         threshold: 80,
         evaluationPeriods: 2,
@@ -1162,7 +1315,6 @@ import canonicalResourceName from './name-utils';
 ### lib/tap-stack.ts
 
 ```typescript
-// tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import {
@@ -1283,18 +1435,33 @@ export function canonicalResourceName(
   baseEnv?: string,
   suffix?: string
 ): string | cdk.Token {
-  const envPart = baseEnv
+  // envPart may be a provided literal string or a CDK token (from stack id).
+  const envPart: string | cdk.Token = baseEnv
     ? baseEnv.toLowerCase().replace(/[^a-z0-9-]/g, '-')
     : cdk.Fn.select(2, cdk.Fn.split('-', cdk.Aws.STACK_ID));
 
-  const suffixPart = suffix
-    ? suffix.toLowerCase().replace(/[^a-z0-9-]/g, '-')
-    : cdk.Aws.NO_VALUE;
+  // suffix can be either a literal string or a CDK token. If it's a
+  // literal string, normalize it; if it's a token, pass it through
+  // unchanged so we don't attempt string operations on token objects.
+  const suffixPart: string | cdk.Token | undefined =
+    typeof suffix === 'string' && suffix.length > 0
+      ? suffix.toLowerCase().replace(/[^a-z0-9-]/g, '-')
+      : suffix && (suffix as unknown as cdk.Token);
 
   // component should be normalized too
   const comp = component.toLowerCase().replace(/[^a-z0-9-]/g, '-');
 
-  return cdk.Fn.join('-', [comp, envPart, cdk.Aws.REGION, suffixPart]);
+  // Build the parts array and only include optional pieces when
+  // provided. Avoid inserting Aws.NO_VALUE into the join list which
+  // results in extra separators ("--") when CloudFormation renders
+  // tokens as empty strings.
+  const parts: Array<string | cdk.Token> = [comp, envPart as any];
+  if (suffixPart) {
+    parts.push(suffixPart as any);
+  }
+  parts.push(cdk.Aws.REGION);
+
+  return cdk.Fn.join('-', parts as any);
 }
 
 export default canonicalResourceName;
@@ -1317,7 +1484,6 @@ export default safeSuffix;
 ### lib/lambda/api/index.js
 
 ```javascript
-
 const AWS = require('aws-sdk');
 const secretsManager = new AWS.SecretsManager();
 const s3 = new AWS.S3();
@@ -1393,10 +1559,10 @@ exports.handler = async (event) => {
 {
   "name": "tap-api-lambda",
   "version": "1.0.0",
+  "description": "API Lambda asset for integration tests (includes aws-sdk v2)",
   "private": true,
   "dependencies": {
     "aws-sdk": "^2.1350.0"
   }
 }
 ```
-
