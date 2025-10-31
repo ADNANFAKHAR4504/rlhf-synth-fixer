@@ -139,8 +139,6 @@ Resources:
             Condition:
               StringEquals:
                 aws:SourceAccount: !Ref 'AWS::AccountId'
-              ArnLike:
-                aws:SourceArn: !Sub 'arn:aws:cloudtrail:*:${AWS::AccountId}:trail/*'
           - Sid: Allow CloudWatch Logs encryption
             Effect: Allow
             Principal:
