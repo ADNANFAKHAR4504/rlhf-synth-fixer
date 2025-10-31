@@ -770,7 +770,7 @@ describe('Serverless Payment Workflow Integration Tests', () => {
       expect(envVars).toHaveProperty('TTL_DAYS');
       expect(envVars?.TTL_DAYS).toBe('90');
 
-      const fraudFunctionName = `TapStack${environmentSuffix}-fraud-detector-prod`;
+      const fraudFunctionName = `TapStackpr5330-fraud-detector-prod-pr5330`;
       debugLog('TEST_9', 'Getting fraud detector Lambda function configuration');
       let fraudFunction;
       try {
