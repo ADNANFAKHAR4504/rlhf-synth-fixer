@@ -5,9 +5,13 @@
 
 set -euo pipefail
 
-CSV_FILE="${CSV_FILE:-tasks.csv}"
-BACKUP_FILE="${BACKUP_FILE:-tasks.csv.backup}"
-LOCK_FILE="${LOCK_FILE:-tasks.csv.lock}"
+# Determine script directory and repo root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+CSV_FILE="${CSV_FILE:-$REPO_ROOT/.claude/tasks.csv}"
+BACKUP_FILE="${BACKUP_FILE:-$REPO_ROOT/.claude/tasks.csv.backup}"
+LOCK_FILE="${LOCK_FILE:-$REPO_ROOT/.claude/tasks.csv.lock}"
 LOCK_TIMEOUT="${LOCK_TIMEOUT:-120}"  # Maximum seconds to wait for lock
 
 # Colors
@@ -515,9 +519,9 @@ Commands:
     get <id>                        Get task details
 
 Environment:
-    CSV_FILE        CSV path (default: tasks.csv)
-    BACKUP_FILE     Backup path (default: tasks.csv.backup)
-    LOCK_FILE       Lock file path (default: tasks.csv.lock)
+    CSV_FILE        CSV path (default: .claude/tasks.csv)
+    BACKUP_FILE     Backup path (default: .claude/tasks.csv.backup)
+    LOCK_FILE       Lock file path (default: .claude/tasks.csv.lock)
     LOCK_TIMEOUT    Lock timeout in seconds (default: 120)
 
 Examples:
@@ -542,7 +546,7 @@ Parallel Execution:
     ✅ Automatic file locking prevents race conditions
     ✅ Configurable timeout for lock acquisition
     ⚠️  If lock timeout is reached, process will fail gracefully
-    ✅ Single backup file (tasks.csv.backup) - no timestamped backups
+    ✅ Single backup file (.claude/tasks.csv.backup) - no timestamped backups
     ✅ Automatic backup before each modification
 
 Performance: ~0.04s vs ~0.5s for Python (12x faster)
