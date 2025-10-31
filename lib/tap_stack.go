@@ -169,7 +169,10 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	})
 
 	// Create rotation schedule for secrets
-	dbSecret.AddRotationSchedule(jsii.String("RotationSchedule"), &awssecretsmanager.RotationScheduleOptions{
+	// Use environmentSuffix in the construct ID so nested/hosted rotation stacks and their
+	// generated resources are unique per deployment (avoids resource name collisions).
+	rotationId := fmt.Sprintf("RotationSchedule-%s", environmentSuffix)
+	dbSecret.AddRotationSchedule(jsii.String(rotationId), &awssecretsmanager.RotationScheduleOptions{
 		AutomaticallyAfter: awscdk.Duration_Days(jsii.Number(30)),
 		HostedRotation:     awssecretsmanager.HostedRotation_PostgreSqlSingleUser(nil),
 	})
