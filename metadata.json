@@ -27,5 +27,6 @@
     "IAM"
   ],
   "region": "us-east-1",
+  "author": "iamarpit-turing",
   "training_quality": 9
 }
