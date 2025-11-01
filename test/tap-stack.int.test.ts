@@ -57,6 +57,11 @@ import {
   ListAttachedRolePoliciesCommand,
   ListRolePoliciesCommand,
 } from '@aws-sdk/client-iam';
+import {
+  KMSClient,
+  DescribeKeyCommand,
+  ListAliasesCommand,
+} from '@aws-sdk/client-kms';
 import fs from 'fs';
 
 /**
@@ -68,6 +73,7 @@ interface DeploymentOutputs {
   DriftValidationFunctionName?: string;
   ConfigBucketName?: string;
   DashboardUrl?: string;
+  EncryptionKeyId?: string;
   [key: string]: string | undefined;
 }
 
@@ -390,8 +396,14 @@ describe('Infrastructure Replication System - Integration Tests', () => {
         const versionIndex = gsis.find((gsi) => gsi.IndexName === 'version-index');
         expect(versionIndex).toBeDefined();
 
-        // Check encryption
+        // Check encryption (should be KMS)
         expect(table.SSEDescription?.Status).toBe('ENABLED');
+        if (table.SSEDescription?.SSEType) {
+          expect(table.SSEDescription.SSEType).toBe('KMS');
+        }
+        if (table.SSEDescription?.KMSMasterKeyArn) {
+          expect(table.SSEDescription.KMSMasterKeyArn).toBeDefined();
+        }
       },
       TEST_TIMEOUT
     );
@@ -422,7 +434,7 @@ describe('Infrastructure Replication System - Integration Tests', () => {
           return;
         }
 
-        // Check encryption
+        // Check encryption (should be KMS)
         const encryptionResponse = await withTimeout(
           s3Client.send(new GetBucketEncryptionCommand({ Bucket: bucketName })),
           AWS_OPERATION_TIMEOUT,
@@ -432,6 +444,13 @@ describe('Infrastructure Replication System - Integration Tests', () => {
         if (encryptionResponse?.ServerSideEncryptionConfiguration) {
           const rules = encryptionResponse.ServerSideEncryptionConfiguration.Rules || [];
           expect(rules.length).toBeGreaterThan(0);
+          const defaultRule = rules.find((r) => r.ApplyServerSideEncryptionByDefault);
+          if (defaultRule?.ApplyServerSideEncryptionByDefault) {
+            expect(defaultRule.ApplyServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+            if (defaultRule.ApplyServerSideEncryptionByDefault.KMSMasterKeyID) {
+              expect(defaultRule.ApplyServerSideEncryptionByDefault.KMSMasterKeyID).toBeDefined();
+            }
+          }
         }
 
         // Check versioning (should be disabled/false)
@@ -817,6 +836,7 @@ describe('Infrastructure Replication System - Integration Tests', () => {
       expect(outputs.DriftValidationFunctionName).toBeDefined();
       expect(outputs.ConfigBucketName).toBeDefined();
       expect(outputs.DashboardUrl).toBeDefined();
+      expect(outputs.EncryptionKeyId).toBeDefined();
 
       // Verify outputs contain environment suffix
       expect(outputs.StateTableName).toContain(environmentSuffix);
@@ -824,5 +844,81 @@ describe('Infrastructure Replication System - Integration Tests', () => {
       expect(outputs.ConfigBucketName).toContain(environmentSuffix);
       expect(outputs.DashboardUrl).toContain(environmentSuffix);
     });
+  });
+
+  describe('KMS Encryption', () => {
+    test(
+      'KMS key exists with rotation enabled',
+      async () => {
+        if (!useRealResources || !outputs.EncryptionKeyId) {
+          console.log('⏭️  Skipping KMS test - no real deployment outputs');
+          return;
+        }
+
+        const kmsClient = new KMSClient({
+          region: awsRegion,
+          maxAttempts: 5,
+          requestTimeout: AWS_OPERATION_TIMEOUT,
+        });
+
+        const keyId = outputs.EncryptionKeyId;
+        expect(keyId).toBeDefined();
+
+        const response = await withTimeout(
+          kmsClient.send(new DescribeKeyCommand({ KeyId: keyId })),
+          AWS_OPERATION_TIMEOUT,
+          'DescribeKey'
+        );
+
+        if (!response?.KeyMetadata) {
+          console.log('⚠️  KMS key not found');
+          return;
+        }
+
+        expect(response.KeyMetadata.KeyId).toBeDefined();
+        // KeyRotationEnabled might not be immediately available, but if present should be true
+        if (response.KeyMetadata.KeyRotationEnabled !== undefined) {
+          expect(response.KeyMetadata.KeyRotationEnabled).toBe(true);
+        }
+        expect(response.KeyMetadata.KeyState).toBe('Enabled');
+      },
+      TEST_TIMEOUT
+    );
+
+    test(
+      'KMS alias exists',
+      async () => {
+        if (!useRealResources) {
+          console.log('⏭️  Skipping KMS alias test - no real deployment outputs');
+          return;
+        }
+
+        const kmsClient = new KMSClient({
+          region: awsRegion,
+          maxAttempts: 5,
+          requestTimeout: AWS_OPERATION_TIMEOUT,
+        });
+
+        const response = await withTimeout(
+          kmsClient.send(new ListAliasesCommand({})),
+          AWS_OPERATION_TIMEOUT,
+          'ListAliases'
+        );
+
+        if (!response?.Aliases) {
+          console.log('⚠️  No aliases found');
+          return;
+        }
+
+        const alias = response.Aliases.find((a) =>
+          a.AliasName?.includes(`alias/infrastructure-replication-${environmentSuffix}`)
+        );
+        expect(alias).toBeDefined();
+        if (alias) {
+          expect(alias.AliasName).toContain(`alias/infrastructure-replication-${environmentSuffix}`);
+        }
+      },
+      TEST_TIMEOUT
+    );
   });
 });

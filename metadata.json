@@ -10,7 +10,7 @@
   "subject_labels": [
     "Multi-Environment Consistency"
   ],
-  "training_quality": 8,
+  "training_quality": 9,
   "aws_services": [
     "VPC",
     "EC2",
@@ -21,6 +21,7 @@
     "EventBridge",
     "CloudWatch",
     "IAM",
+    "KMS",
     "CloudFormation"
   ]
 }

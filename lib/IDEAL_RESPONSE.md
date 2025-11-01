@@ -6,7 +6,7 @@ This document contains the ideal implementation of the multi-environment infrast
 
 ## bin/tap.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -37,7 +37,7 @@ new TapStack(app, stackName, {
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -48,6 +48,7 @@ import * as sns from 'aws-cdk-lib/aws-sns';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as kms from 'aws-cdk-lib/aws-kms';
 import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {
@@ -106,6 +107,18 @@ export class TapStack extends cdk.Stack {
       subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
     });
 
+    // 🔹 KMS Key for Encryption
+    const encryptionKey = new kms.Key(this, `ReplicationEncryptionKey-${environmentSuffix}`, {
+      description: `KMS key for infrastructure replication system - ${environmentSuffix}`,
+      enableKeyRotation: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    new kms.Alias(this, `ReplicationEncryptionKeyAlias-${environmentSuffix}`, {
+      aliasName: `alias/infrastructure-replication-${environmentSuffix}`,
+      targetKey: encryptionKey,
+    });
+
     // 🔹 DynamoDB State Tracker
     const stateTable = new dynamodb.Table(
       this,
@@ -124,7 +137,8 @@ export class TapStack extends cdk.Stack {
         pointInTimeRecoverySpecification: {
           pointInTimeRecoveryEnabled: false,
         },
-        encryption: dynamodb.TableEncryption.AWS_MANAGED,
+        encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
+        encryptionKey: encryptionKey,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
     );
@@ -150,7 +164,8 @@ export class TapStack extends cdk.Stack {
       {
         bucketName: `infra-config-store-${environmentSuffix}-${this.account}-${this.region}`,
         versioned: false,
-        encryption: s3.BucketEncryption.S3_MANAGED,
+        encryption: s3.BucketEncryption.KMS,
+        encryptionKey: encryptionKey,
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
         autoDeleteObjects: true,
@@ -294,6 +309,8 @@ export class TapStack extends cdk.Stack {
     // Grant permissions
     stateTable.grantReadData(driftValidationFunction);
     configBucket.grantRead(driftValidationFunction);
+    encryptionKey.grantDecrypt(driftValidationFunction);
+    encryptionKey.grantEncrypt(driftValidationFunction);
     driftTopic.grantPublish(driftValidationFunction);
     validationTopic.grantPublish(driftValidationFunction);
 
@@ -381,6 +398,8 @@ export class TapStack extends cdk.Stack {
     );
 
     stateTable.grantReadWriteData(environmentUpdateFunction);
+    encryptionKey.grantDecrypt(environmentUpdateFunction);
+    encryptionKey.grantEncrypt(environmentUpdateFunction);
     environmentUpdateFunction.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ['cloudwatch:PutMetricData'],
@@ -521,6 +540,12 @@ export class TapStack extends cdk.Stack {
       value: `https://console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards:name=${dashboard.dashboardName}`,
       description: 'CloudWatch dashboard for monitoring infrastructure drift',
       exportName: `DashboardUrl-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'EncryptionKeyId', {
+      value: encryptionKey.keyId,
+      description: 'KMS key ID for infrastructure encryption',
+      exportName: `EncryptionKeyId-${environmentSuffix}`,
     });
   }
 }

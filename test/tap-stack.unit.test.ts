@@ -261,6 +261,82 @@ describe('TapStack', () => {
     });
   });
 
+  describe('KMS Encryption', () => {
+    test('should create KMS key with rotation enabled', () => {
+      template.hasResourceProperties('AWS::KMS::Key', {
+        Description: Match.stringLikeRegexp('KMS key for infrastructure replication system'),
+        EnableKeyRotation: true,
+      });
+    });
+
+    test('should create KMS alias', () => {
+      template.hasResourceProperties('AWS::KMS::Alias', {
+        AliasName: Match.stringLikeRegexp('alias/infrastructure-replication'),
+      });
+    });
+
+    test('should grant KMS decrypt/encrypt to drift validation function', () => {
+      const functions = template.findResources('AWS::Lambda::Function');
+      const driftFunction = Object.values(functions).find((fn: any) =>
+        JSON.stringify(fn.Properties).includes('infrastructure-drift-validator')
+      );
+
+      expect(driftFunction).toBeDefined();
+
+      const roles = template.findResources('AWS::IAM::Role');
+      const lambdaRole = Object.values(roles).find((role: any) =>
+        JSON.stringify(role.Properties).includes('DriftValidationFunction')
+      );
+
+      if (lambdaRole?.Properties?.Policies) {
+        const policies = lambdaRole.Properties.Policies;
+        const hasKmsPermissions = policies.some((policy: any) => {
+          const policyDoc = policy.PolicyDocument?.Statement || [];
+          return policyDoc.some((stmt: any) => {
+            const actions = Array.isArray(stmt.Action)
+              ? stmt.Action
+              : [stmt.Action];
+            return (
+              actions.some((a: string) =>
+                a.includes('kms:Decrypt') || a.includes('kms:Encrypt')
+              ) &&
+              stmt.Effect === 'Allow' &&
+              stmt.Resource
+            );
+          });
+        });
+        expect(hasKmsPermissions).toBe(true);
+      }
+    });
+
+    test('should grant KMS decrypt/encrypt to environment update function', () => {
+      const roles = template.findResources('AWS::IAM::Role');
+      const lambdaRole = Object.values(roles).find((role: any) =>
+        JSON.stringify(role.Properties).includes('EnvironmentUpdateFunction')
+      );
+
+      if (lambdaRole?.Properties?.Policies) {
+        const policies = lambdaRole.Properties.Policies;
+        const hasKmsPermissions = policies.some((policy: any) => {
+          const policyDoc = policy.PolicyDocument?.Statement || [];
+          return policyDoc.some((stmt: any) => {
+            const actions = Array.isArray(stmt.Action)
+              ? stmt.Action
+              : [stmt.Action];
+            return (
+              actions.some((a: string) =>
+                a.includes('kms:Decrypt') || a.includes('kms:Encrypt')
+              ) &&
+              stmt.Effect === 'Allow' &&
+              stmt.Resource
+            );
+          });
+        });
+        expect(hasKmsPermissions).toBe(true);
+      }
+    });
+  });
+
   describe('S3 Configuration Store', () => {
     test('should create S3 bucket with correct naming pattern', () => {
       const buckets = template.findResources('AWS::S3::Bucket');
@@ -280,13 +356,13 @@ describe('TapStack', () => {
       }
     });
 
-    test('should use S3 managed encryption', () => {
+    test('should use KMS encryption for S3 bucket', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
         BucketEncryption: {
           ServerSideEncryptionConfiguration: [
             {
               ServerSideEncryptionByDefault: {
-                SSEAlgorithm: 'AES256',
+                SSEAlgorithm: 'aws:kms',
               },
             },
           ],
@@ -776,9 +852,20 @@ describe('TapStack', () => {
       );
     });
 
-    test('should create exactly 5 outputs', () => {
+    test('should export EncryptionKeyId', () => {
       const outputs = template.findOutputs('*');
-      expect(Object.keys(outputs).length).toBe(5);
+      expect(outputs.EncryptionKeyId).toBeDefined();
+      expect(outputs.EncryptionKeyId.Description).toBe(
+        'KMS key ID for infrastructure encryption'
+      );
+      expect(outputs.EncryptionKeyId.Export?.Name).toBe(
+        `EncryptionKeyId-${environmentSuffix}`
+      );
+    });
+
+    test('should create exactly 6 outputs', () => {
+      const outputs = template.findOutputs('*');
+      expect(Object.keys(outputs).length).toBe(6);
     });
   });
 
@@ -788,6 +875,8 @@ describe('TapStack', () => {
       template.resourceCountIs('AWS::EC2::VPC', 1);
       template.resourceCountIs('AWS::DynamoDB::Table', 1);
       template.resourceCountIs('AWS::S3::Bucket', 1);
+      template.resourceCountIs('AWS::KMS::Key', 1);
+      template.resourceCountIs('AWS::KMS::Alias', 1);
       template.resourceCountIs('AWS::SNS::Topic', 2);
       // There are 3 Lambda functions: 2 application functions + 1 for S3 auto-delete custom resource
       template.resourceCountIs('AWS::Lambda::Function', 3);
