@@ -49,6 +49,7 @@ env:
   GOCACHE: ${{ github.workspace }}/.cache/go-build
   GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
   IAC_ANALYSIS_SUBJECT_LABEL: "Infrastructure Analysis/Monitoring"
+  CICD_PIPELINE_SUBJECT_LABEL: "CI/CD Pipeline"
 
 jobs:
   detect-metadata:
@@ -62,6 +63,7 @@ jobs:
       subtask: ${{ steps.metadata.outputs.subtask }}
       subject_labels: ${{ steps.metadata.outputs.subject_labels }}
       analysis_subject_label: ${{ env.IAC_ANALYSIS_SUBJECT_LABEL }}
+      cicd_pipeline_subject_label: ${{ env.CICD_PIPELINE_SUBJECT_LABEL }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -101,7 +103,7 @@ jobs:
     name: Build
     runs-on: ubuntu-24.04
     needs: detect-metadata
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label)}}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
     environment: dev
 
     steps:
@@ -124,7 +126,7 @@ jobs:
     name: Synth
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch' && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch' && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
     environment: dev
     permissions:
       contents: read
@@ -296,11 +298,68 @@ jobs:
           name: analysis-results
           path: lib/analysis-results.txt
           if-no-files-found: warn
+
+  cicd-pipeline-optimization:
+    name: CICD Pipeline Optimization
+    runs-on: ubuntu-24.04
+    needs: detect-metadata
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') && contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
+    environment: dev
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          ref: ${{ github.head_ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Validate CI/CD Pipeline Configuration
+        run: |
+          if [ ! -f "lib/ci-cd.yml" ]; then
+            echo "❌ lib/ci-cd.yml not found"
+            exit 1
+          fi
+          echo "✅ CI/CD Pipeline configuration found"
+
+      - name: Parse and Validate Workflow
+        run: |
+          echo "Validating GitHub Actions workflow syntax..."
+          # Install yamllint for validation
+          pip install yamllint
+          yamllint lib/ci-cd.yml || echo "⚠️ YAML validation warnings (non-blocking)"
+
+      - name: Display Pipeline Configuration
+        run: |
+          echo "📋 CI/CD Pipeline Configuration:"
+          cat lib/ci-cd.yml
+
+      - name: Execute CI/CD Pipeline Workflow
+        run: |
+          echo "🚀 Executing CI/CD Pipeline workflow from lib/ci-cd.yml..."
+          echo "Note: This job validates the pipeline configuration."
+          echo "The actual deployment will be handled by the workflow defined in lib/ci-cd.yml"
+          echo "when pushed to the target repository."
+
+      - name: Upload Pipeline Configuration
+        uses: actions/upload-artifact@v4
+        with:
+          name: cicd-pipeline-config
+          path: lib/ci-cd.yml
+          if-no-files-found: error
+
   deploy:
     name: Deploy
     runs-on: ubuntu-24.04
     needs: [detect-metadata, synth]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label)}}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
     environment: dev
 
     steps:
@@ -364,7 +423,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label)}}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
     environment: qa
     outputs:
       platform: ${{ needs.detect-metadata.outputs.platform }}
@@ -391,7 +450,7 @@ jobs:
     name: Unit Testing
     runs-on: ubuntu-24.04
     needs: [detect-metadata, lint]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
     environment: qa
 
     steps:
@@ -566,7 +625,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [detect-metadata, lint, unit-tests, deploy]
     environment: qa
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label)}}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
 
     steps:
       - name: Checkout code
@@ -607,8 +666,8 @@ jobs:
   claude-code-action:
     runs-on: ubuntu-24.04
     name: "Claude Review"
-    needs: [integration-tests-live, analysis]
-    if: always() && !cancelled() && (needs.analysis.result == 'success' || needs.analysis.result == 'skipped') && needs.integration-tests-live.result == 'success'
+    needs: [integration-tests-live, analysis, cicd-pipeline-optimization]
+    if: always() && !cancelled() && (needs.analysis.result == 'success' || needs.analysis.result == 'skipped') && (needs.cicd-pipeline-optimization.result == 'success' || needs.cicd-pipeline-optimization.result == 'skipped') && (needs.integration-tests-live.result == 'success' || needs.integration-tests-live.result == 'skipped')
     permissions:
       contents: write
       pull-requests: write
@@ -766,8 +825,8 @@ jobs:
   cleanup:
     name: Cleanup (Destroy Resources)
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, integration-tests-live, claude-code-action]
-    if: ${{ always() && !cancelled() && needs.integration-tests-live.result == 'success' && needs.claude-code-action.result == 'success' && ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch' && !inputs.skip_cleanup)) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    needs: [detect-metadata, integration-tests-live, claude-code-action, cicd-pipeline-optimization]
+    if: ${{ always() && !cancelled() && (needs.integration-tests-live.result == 'success' || needs.integration-tests-live.result == 'skipped') && needs.claude-code-action.result == 'success' && ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch' && !inputs.skip_cleanup)) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: stage
 
     steps:
@@ -790,6 +849,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Destroy Resources (cleanup any leftover resources)
+        if: ${{ !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
         run: ./scripts/destroy.sh
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
@@ -798,6 +858,12 @@ jobs:
           TERRAFORM_STATE_BUCKET_KEY: ${{ env.ENVIRONMENT_SUFFIX }}
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
+
+      - name: Skip Cleanup (Analysis or CI/CD Pipeline task)
+        if: ${{ contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) || contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
+        run: |
+          echo "ℹ️ Skipping resource cleanup for Analysis or CI/CD Pipeline task"
+          echo "No infrastructure resources were deployed that need cleanup"
   debug-claude-outputs:
     name: Debug Claude outputs
     runs-on: ubuntu-24.04
@@ -829,6 +895,7 @@ jobs:
           ref: ${{ github.head_ref }}
 
       - name: Download coverage reports
+        if: ${{ !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
         uses: actions/download-artifact@v4
         with:
           name: coverage-reports
@@ -845,6 +912,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: analysis-results
+          path: lib/
+
+      - name: Download CI/CD Pipeline configuration
+        if: ${{ contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
+        uses: actions/download-artifact@v4
+        with:
+          name: cicd-pipeline-config
           path: lib/
 
       - name: Configure AWS
@@ -871,7 +945,11 @@ jobs:
           echo "Commit author: $COMMIT_AUTHOR"
 
           # Extract coverage percentages based on language
-          if [ "$LANGUAGE" = "py" ]; then
+          if [ "$LANGUAGE" = "yml" ]; then
+            echo "CI/CD Pipeline task - no unit test coverage required"
+            LINES_COVERAGE=100
+            BRANCHES_COVERAGE=100
+          elif [ "$LANGUAGE" = "py" ]; then
             echo "Extracting Python coverage from cov.json..."
             if [ -f "cov.json" ]; then
               LINES_COVERAGE=$(jq -r '.totals.percent_covered' cov.json)
