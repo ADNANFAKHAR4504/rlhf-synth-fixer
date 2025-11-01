@@ -329,7 +329,7 @@ export class TapStack extends pulumi.ComponentResource {
       `webhook-request-model-${environmentSuffix}`,
       {
         restApi: restApi.id,
-        name: `webhookmodel${environmentSuffix}`,
+        name: `webhookmodel${environmentSuffix.replace(/[^a-zA-Z0-9]/g, '')}`,
         contentType: 'application/json',
         schema: JSON.stringify({
           type: 'object',
@@ -517,7 +517,7 @@ export class TapStack extends pulumi.ComponentResource {
     this.lambdaLogGroupName = lambdaLogGroup.name;
     this.lambdaErrorAlarmName = errorAlarm.name;
 
-    this.registerOutputs({
+    super.registerOutputs({
       apiUrl: this.apiUrl,
       apiEndpoint: this.apiEndpoint,
       dynamoTableName: this.dynamoTableName,
