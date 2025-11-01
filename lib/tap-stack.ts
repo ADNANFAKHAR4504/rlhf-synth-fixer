@@ -157,8 +157,21 @@ export class TapStack extends cdk.Stack {
 
     approvalTopic.addSubscription(new subs.LambdaSubscription(approvalFn));
 
+    const codebuildRole = new iam.Role(this, 'CodeBuildServiceRole', {
+      assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchLogsFullAccess'
+        ),
+      ],
+    });
+
+    configTable.grantReadWriteData(codebuildRole);
+    reportsBucket.grantReadWrite(codebuildRole);
+
     const validationProject = new codebuild.Project(this, 'ValidationProject', {
       projectName: `${env}-config-validation`,
+      role: codebuildRole,
       environment: {
         buildImage: codebuild.LinuxBuildImage.fromEcrRepository(repo),
         computeType: codebuild.ComputeType.SMALL,
@@ -171,8 +184,6 @@ export class TapStack extends cdk.Stack {
       }),
     });
 
-    configTable.grantReadWriteData(validationProject);
-    reportsBucket.grantReadWrite(validationProject);
 
     const promotionFn = new lambda.Function(this, 'ConfigPromotionFn', {
       runtime: lambda.Runtime.NODEJS_20_X,
