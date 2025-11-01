@@ -562,7 +562,9 @@ describe('Fintech Startup Infrastructure Integration Tests', () => {
       expect(dbInstance.Endpoint?.Port).toBe(parseInt(outputs.rds_port));
       expect(dbInstance.MasterUsername).toBe(outputs.rds_username);
       expect(dbInstance.DBName).toBe(outputs.rds_db_name);
-      expect(dbInstance.MultiAZ).toBe(true); // High availability requirement
+      // MultiAZ is environment-specific: false for dev (cost savings), true for staging/prod (high availability)
+      const expectedMultiAZ = environment === 'dev' ? false : true;
+      expect(dbInstance.MultiAZ).toBe(expectedMultiAZ);
       expect(dbInstance.StorageEncrypted).toBe(true); // Security requirement
     });
 
