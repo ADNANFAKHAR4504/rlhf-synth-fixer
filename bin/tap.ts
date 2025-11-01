@@ -28,11 +28,6 @@ const defaultTags = {
   DeployedAt: deploymentTimestamp,
 };
 
-console.log(`
-╔═══════════════════════════════════════════════════════════════════════╗
-║          TAP Infrastructure - All Resources Export                    ║
-╚═══════════════════════════════════════════════════════════════════════╝
-`);
 
 // =========================================================================
 // Stack Instantiation
@@ -321,13 +316,5 @@ export const resourceTags = pulumi.output({
   Author: configCommitAuthor,
 });
 
-// =========================================================================
-// COMPLETE STACK OUTPUTS
-// =========================================================================
 
 export const completeStackOutputs = stack.outputs;
-
-console.log(`
-✅ All resources exported successfully!
-📁 Outputs saved to: cfn-outputs/flat-outputs.json
-`);
