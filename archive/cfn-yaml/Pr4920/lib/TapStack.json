@@ -1,0 +1,2910 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "FinSecure Bank - Project Nova - Production-Grade Secure Infrastructure for Financial Services",
+    "Parameters": {
+        "EnvironmentName": {
+            "Description": "Environment name prefix",
+            "Type": "String",
+            "Default": "ProjectNova",
+            "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9-]{1,30}$",
+            "ConstraintDescription": "Must start with a letter and contain only alphanumeric characters and hyphens"
+        },
+        "CorporateIPRange": {
+            "Description": "IP range for corporate network access (CIDR format)",
+            "Type": "String",
+            "Default": "203.0.113.0/24",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/([0-9]|[1-2][0-9]|3[0-2]))$",
+            "ConstraintDescription": "Must be a valid CIDR block"
+        },
+        "KeyPairName": {
+            "Description": "EC2 Key Pair for SSH access (optional - leave empty to disable SSH access)",
+            "Type": "String",
+            "Default": "",
+            "AllowedPattern": "^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$|^$",
+            "ConstraintDescription": "Must be a valid EC2 KeyPair name or empty string"
+        },
+        "DBMasterUsername": {
+            "Description": "Database master username",
+            "Type": "String",
+            "Default": "dbadmin",
+            "NoEcho": true,
+            "MinLength": 1,
+            "MaxLength": 16,
+            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+            "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters"
+        },
+        "DatabasePort": {
+            "Description": "Database port for RDS instance",
+            "Type": "Number",
+            "Default": 3306,
+            "MinValue": 1150,
+            "MaxValue": 65535
+        },
+        "ACMCertificateArn": {
+            "Description": "ARN of the ACM certificate for HTTPS listeners",
+            "Type": "String",
+            "Default": "",
+            "AllowedPattern": "^arn:aws:acm:.*:.*:certificate/.*$|^$",
+            "ConstraintDescription": "Must be a valid ACM certificate ARN"
+        }
+    },
+    "Conditions": {
+        "HasKeyPair": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "HasACMCertificate": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ACMCertificateArn"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        }
+    },
+    "Resources": {
+        "DBSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Description": "RDS master credentials",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": {
+                        "Fn::Sub": "{\"username\":\"${DBMasterUsername}\"}"
+                    },
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 16,
+                    "ExcludePunctuation": true
+                }
+            }
+        },
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "10.0.0.0/16",
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "InstanceTenancy": "default",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-VPC"
+                        }
+                    },
+                    {
+                        "Key": "Compliance",
+                        "Value": "PCI-DSS"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "Nova"
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-IGW"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "InternetGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Public-Subnet-AZ1"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": "10.0.2.0/24",
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Public-Subnet-AZ2"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": "10.0.10.0/24",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Private-Subnet-AZ1"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": "10.0.11.0/24",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Private-Subnet-AZ2"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DBSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": "10.0.20.0/24",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-DB-Subnet-AZ1"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DBSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": "10.0.21.0/24",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-DB-Subnet-AZ2"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NatGateway1EIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-NAT-GW1-EIP"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NatGateway2EIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-NAT-GW2-EIP"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NatGateway1": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatGateway1EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-NAT-GW1"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NatGateway2": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatGateway2EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-NAT-GW2"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Public-Routes"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DefaultPublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                }
+            }
+        },
+        "PublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                }
+            }
+        },
+        "PrivateRouteTable1": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Private-Routes-AZ1"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DefaultPrivateRoute1": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGateway1"
+                }
+            }
+        },
+        "PrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                }
+            }
+        },
+        "PrivateRouteTable2": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Private-Routes-AZ2"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DefaultPrivateRoute2": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable2"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGateway2"
+                }
+            }
+        },
+        "PrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable2"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                }
+            }
+        },
+        "ALBSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${EnvironmentName}-ALB-SG"
+                },
+                "GroupDescription": "Security group for Application Load Balancer",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": {
+                            "Ref": "CorporateIPRange"
+                        },
+                        "Description": "HTTPS from corporate network"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": {
+                            "Ref": "CorporateIPRange"
+                        },
+                        "Description": "HTTP redirect to HTTPS from corporate network"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-ALB-SG"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "WebServerSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${EnvironmentName}-WebServer-SG"
+                },
+                "GroupDescription": "Security group for web servers",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "SourceSecurityGroupId": {
+                            "Ref": "ALBSecurityGroup"
+                        },
+                        "Description": "HTTPS traffic from ALB"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": {
+                            "Ref": "CorporateIPRange"
+                        },
+                        "Description": "SSH from corporate network (bastion)"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-WebServer-SG"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DatabaseSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${EnvironmentName}-Database-SG"
+                },
+                "GroupDescription": "Security group for RDS database",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": {
+                            "Ref": "DatabasePort"
+                        },
+                        "ToPort": {
+                            "Ref": "DatabasePort"
+                        },
+                        "SourceSecurityGroupId": {
+                            "Ref": "WebServerSecurityGroup"
+                        },
+                        "Description": "Database access from web servers"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Database-SG"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "EC2InstanceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${EnvironmentName}-EC2-Instance-Role-${AWS::Region}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "S3Access",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject",
+                                        "s3:DeleteObject"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${AppDataBucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "AppDataBucket",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-EC2-Instance-Role"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "EC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Roles": [
+                    {
+                        "Ref": "EC2InstanceRole"
+                    }
+                ]
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${EnvironmentName}-Lambda-Execution-Role-${AWS::Region}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "DynamoDBAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:DeleteItem"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "AuditTable",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "KMSDecrypt",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Lambda-Execution-Role"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "MFAPolicy": {
+            "Type": "AWS::IAM::ManagedPolicy",
+            "Properties": {
+                "Description": "Policy to enforce MFA for all IAM user actions",
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "BlockMostAccessUnlessSignedInWithMFA",
+                            "Effect": "Deny",
+                            "NotAction": [
+                                "iam:CreateVirtualMFADevice",
+                                "iam:EnableMFADevice",
+                                "iam:GetUser",
+                                "iam:ListMFADevices",
+                                "iam:ListVirtualMFADevices",
+                                "iam:ResyncMFADevice",
+                                "sts:GetSessionToken"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "BoolIfExists": {
+                                    "aws:MultiFactorAuthPresent": false
+                                }
+                            }
+                        }
+                    ]
+                },
+                "ManagedPolicyName": {
+                    "Fn::Sub": "${EnvironmentName}-MFA-Enforcement"
+                }
+            }
+        },
+        "AppDataBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "projectnova-app-data-${AWS::AccountId}-${AWS::Region}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldVersions",
+                            "Status": "Enabled",
+                            "NoncurrentVersionExpirationInDays": 90
+                        },
+                        {
+                            "Id": "DeleteIncompleteUploads",
+                            "Status": "Enabled",
+                            "AbortIncompleteMultipartUpload": {
+                                "DaysAfterInitiation": 7
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-App-Data-Bucket"
+                        }
+                    },
+                    {
+                        "Key": "Compliance",
+                        "Value": "PCI-DSS"
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "CloudTrailBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "projectnova-cloudtrail-${AWS::AccountId}-${AWS::Region}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "RetentionPolicy",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 2555
+                        },
+                        {
+                            "Id": "DeleteIncompleteUploads",
+                            "Status": "Enabled",
+                            "AbortIncompleteMultipartUpload": {
+                                "DaysAfterInitiation": 7
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-CloudTrail-Bucket"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "CloudTrailBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "CloudTrailBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AWSCloudTrailAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "CloudTrailBucket",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        {
+                            "Sid": "AWSCloudTrailWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${CloudTrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "DBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupDescription": "Subnet group for RDS database",
+                "SubnetIds": [
+                    {
+                        "Ref": "DBSubnet1"
+                    },
+                    {
+                        "Ref": "DBSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-DB-SubnetGroup"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "RDSDatabase": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "DBName": "appdb123",
+                "Engine": "mysql",
+                "EngineVersion": "8.0.43",
+                "DBInstanceClass": "db.t3.medium",
+                "AllocatedStorage": 100,
+                "MaxAllocatedStorage": 500,
+                "StorageType": "gp3",
+                "StorageEncrypted": true,
+                "MasterUsername": {
+                    "Ref": "DBMasterUsername"
+                },
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}::password}}"
+                },
+                "VPCSecurityGroups": [
+                    {
+                        "Fn::GetAtt": [
+                            "DatabaseSecurityGroup",
+                            "GroupId"
+                        ]
+                    }
+                ],
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroup"
+                },
+                "BackupRetentionPeriod": 30,
+                "PreferredBackupWindow": "03:00-04:00",
+                "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+                "MultiAZ": true,
+                "EnableCloudwatchLogsExports": [
+                    "error",
+                    "general",
+                    "slowquery"
+                ],
+                "AutoMinorVersionUpgrade": true,
+                "DeletionProtection": false,
+                "MonitoringInterval": 60,
+                "MonitoringRoleArn": {
+                    "Fn::GetAtt": [
+                        "RDSMonitoringRole",
+                        "Arn"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-RDS-Instance"
+                        }
+                    },
+                    {
+                        "Key": "Compliance",
+                        "Value": "PCI-DSS"
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "RDSMonitoringRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "monitoring.rds.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-RDS-Monitoring-Role"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "AuditTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${EnvironmentName}-audit-table"
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "TransactionId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "Timestamp",
+                        "AttributeType": "N"
+                    },
+                    {
+                        "AttributeName": "UserId",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "TransactionId",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "Timestamp",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "BillingMode": "PAY_PER_REQUEST",
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true
+                },
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "UserIdIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "UserId",
+                                "KeyType": "HASH"
+                            },
+                            {
+                                "AttributeName": "Timestamp",
+                                "KeyType": "RANGE"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Audit-Table"
+                        }
+                    },
+                    {
+                        "Key": "Compliance",
+                        "Value": "SOX"
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "LaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Properties": {
+                "LaunchTemplateName": {
+                    "Fn::Sub": "${EnvironmentName}-launch-template"
+                },
+                "LaunchTemplateData": {
+                    "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
+                    "InstanceType": "t3.medium",
+                    "IamInstanceProfile": {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "EC2InstanceProfile",
+                                "Arn"
+                            ]
+                        }
+                    },
+                    "KeyName": {
+                        "Fn::If": [
+                            "HasKeyPair",
+                            {
+                                "Ref": "KeyPairName"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    },
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "WebServerSecurityGroup"
+                        }
+                    ],
+                    "BlockDeviceMappings": [
+                        {
+                            "DeviceName": "/dev/xvda",
+                            "Ebs": {
+                                "VolumeSize": 30,
+                                "VolumeType": "gp3",
+                                "Encrypted": true,
+                                "DeleteOnTermination": true
+                            }
+                        }
+                    ],
+                    "TagSpecifications": [
+                        {
+                            "ResourceType": "instance",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": {
+                                        "Fn::Sub": "${EnvironmentName}-WebServer"
+                                    }
+                                },
+                                {
+                                    "Key": "Environment",
+                                    "Value": {
+                                        "Ref": "EnvironmentName"
+                                    }
+                                },
+                                {
+                                    "Key": "team",
+                                    "Value": "2"
+                                },
+                                {
+                                    "Key": "iac-rlhf-amazon",
+                                    "Value": "true"
+                                }
+                            ]
+                        }
+                    ],
+                    "UserData": {
+                        "Fn::Base64": {
+                            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent nginx\n\n# Configure CloudWatch agent\ncat <<EOF > /opt/aws/amazon-cloudwatch-agent/etc/config.json\n{\n  \"metrics\": {\n    \"namespace\": \"FinSecure/Application\",\n    \"metrics_collected\": {\n      \"cpu\": {\n        \"resources\": [\"*\"],\n        \"measurement\": [\n          {\"name\": \"cpu_usage_idle\", \"rename\": \"CPUUtilization\", \"unit\": \"Percent\"}\n        ],\n        \"totalcpu\": true\n      },\n      \"mem\": {\n        \"measurement\": [\n          {\"name\": \"mem_used_percent\", \"rename\": \"MemoryUtilization\", \"unit\": \"Percent\"}\n        ]\n      },\n      \"disk\": {\n        \"measurement\": [\n          {\"name\": \"used_percent\", \"rename\": \"DiskUtilization\", \"unit\": \"Percent\"}\n        ],\n        \"resources\": [\"/\"]\n      }\n    }\n  },\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/nginx/access.log\",\n            \"log_group_name\": \"${EnvironmentName}-nginx-access\",\n            \"log_stream_name\": \"{instance_id}\"\n          }\n        ]\n      }\n    }\n  }\n}\nEOF\n\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a fetch-config \\\n  -m ec2 \\\n  -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/config.json\n\n# Simple health check endpoint\nmkdir -p /var/www/html\ncat <<'HEALTH' > /var/www/html/health\n{\n  \"status\": \"healthy\",\n  \"timestamp\": \"$(date -Iseconds)\",\n  \"service\": \"financial-app\"\n}\nHEALTH\n\nsystemctl start nginx\nsystemctl enable nginx\n"
+                        }
+                    }
+                }
+            }
+        },
+        "ApplicationLoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-ALB"
+                },
+                "Type": "application",
+                "Scheme": "internet-facing",
+                "SecurityGroups": [
+                    {
+                        "Ref": "ALBSecurityGroup"
+                    }
+                ],
+                "Subnets": [
+                    {
+                        "Ref": "PublicSubnet1"
+                    },
+                    {
+                        "Ref": "PublicSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-ALB"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "ALBTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-TG"
+                },
+                "Port": 443,
+                "Protocol": "HTTPS",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "TargetType": "instance",
+                "HealthCheckEnabled": true,
+                "HealthCheckIntervalSeconds": 30,
+                "HealthCheckPath": "/health",
+                "HealthCheckProtocol": "HTTPS",
+                "HealthCheckTimeoutSeconds": 5,
+                "HealthyThresholdCount": 2,
+                "UnhealthyThresholdCount": 3,
+                "Matcher": {
+                    "HttpCode": "200"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Target-Group"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "ALBHTTPSListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Condition": "HasACMCertificate",
+            "Properties": {
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "ALBTargetGroup"
+                        }
+                    }
+                ],
+                "LoadBalancerArn": {
+                    "Ref": "ApplicationLoadBalancer"
+                },
+                "Port": 443,
+                "Protocol": "HTTPS",
+                "Certificates": [
+                    {
+                        "CertificateArn": {
+                            "Ref": "ACMCertificateArn"
+                        }
+                    }
+                ],
+                "SslPolicy": "ELBSecurityPolicy-TLS13-1-2-2021-06"
+            }
+        },
+        "ALBHTTPListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "LoadBalancerArn": {
+                    "Ref": "ApplicationLoadBalancer"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "DefaultActions": [
+                    {
+                        "Type": "redirect",
+                        "RedirectConfig": {
+                            "Protocol": "HTTPS",
+                            "Port": "443",
+                            "StatusCode": "HTTP_301"
+                        }
+                    }
+                ]
+            }
+        },
+        "AutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Fn::Sub": "${EnvironmentName}-ASG"
+                },
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "LaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
+                },
+                "MinSize": 2,
+                "MaxSize": 6,
+                "DesiredCapacity": 2,
+                "VPCZoneIdentifier": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "TargetGroupARNs": [
+                    {
+                        "Ref": "ALBTargetGroup"
+                    }
+                ],
+                "HealthCheckType": "ELB",
+                "HealthCheckGracePeriod": 300,
+                "TerminationPolicies": [
+                    "Default"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-ASG-Instance"
+                        },
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        },
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2",
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true",
+                        "PropagateAtLaunch": true
+                    }
+                ]
+            }
+        },
+        "ScalingPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Ref": "AutoScalingGroup"
+                },
+                "PolicyType": "TargetTrackingScaling",
+                "TargetTrackingConfiguration": {
+                    "PredefinedMetricSpecification": {
+                        "PredefinedMetricType": "ASGAverageCPUUtilization"
+                    },
+                    "TargetValue": 70.0
+                }
+            }
+        },
+        "AuditLambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${EnvironmentName}-audit-processor-${AWS::Region}"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\nimport hashlib\n\ndynamodb = boto3.resource('dynamodb')\n\ndef handler(event, context):\n    table_name = os.environ['AUDIT_TABLE']\n    table = dynamodb.Table(table_name)\n    \n    # Generate transaction ID if not provided\n    transaction_id = event.get('transaction_id') \n    if not transaction_id:\n        transaction_id = hashlib.md5(\n            f\"{event.get('user_id', 'unknown')}{datetime.now().isoformat()}\".encode()\n        ).hexdigest()\n    \n    # Process audit event\n    audit_record = {\n        'TransactionId': transaction_id,\n        'Timestamp': int(datetime.now().timestamp()),\n        'Action': event.get('action', 'unknown'),\n        'UserId': event.get('user_id', 'anonymous'),\n        'Resource': event.get('resource', ''),\n        'Details': json.dumps(event.get('details', {})),\n        'IPAddress': event.get('ip_address', ''),\n        'UserAgent': event.get('user_agent', ''),\n        'Status': event.get('status', 'success')\n    }\n    \n    try:\n        table.put_item(Item=audit_record)\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Audit record created successfully',\n                'transactionId': transaction_id\n            })\n        }\n    except Exception as e:\n        print(f\"Error creating audit record: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'body': json.dumps({\n                'error': 'Failed to create audit record',\n                'transactionId': transaction_id\n            })\n        }\n"
+                },
+                "Environment": {
+                    "Variables": {
+                        "AUDIT_TABLE": {
+                            "Ref": "AuditTable"
+                        }
+                    }
+                },
+                "KmsKeyArn": {
+                    "Fn::GetAtt": [
+                        "LambdaKMSKey",
+                        "Arn"
+                    ]
+                },
+                "MemorySize": 256,
+                "Timeout": 30,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Audit-Lambda"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "LambdaKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "KMS key for ${EnvironmentName} Lambda environment variables encryption"
+                },
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Id": "key-policy-lambda",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM policies",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow Lambda to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:SourceArn": {
+                                        "Fn::Sub": "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${EnvironmentName}-audit-processor"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                },
+                "EnableKeyRotation": true
+            }
+        },
+        "LambdaKMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${EnvironmentName}-lambda-key-${AWS::Region}"
+                },
+                "TargetKeyId": {
+                    "Ref": "LambdaKMSKey"
+                }
+            }
+        },
+        "StaticContentBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "projectnova-static-content-${AWS::AccountId}-${AWS::Region}"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Static-Content-Bucket"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "OriginAccessIdentity": {
+            "Type": "AWS::CloudFront::CloudFrontOriginAccessIdentity",
+            "Properties": {
+                "CloudFrontOriginAccessIdentityConfig": {
+                    "Comment": {
+                        "Fn::Sub": "OAI for ${EnvironmentName} static content"
+                    }
+                }
+            }
+        },
+        "StaticContentBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "StaticContentBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowCloudFrontAccess",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${OriginAccessIdentity}"
+                                }
+                            },
+                            "Action": [
+                                "s3:GetObject",
+                                "s3:ListBucket"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "${StaticContentBucket.Arn}/*"
+                                },
+                                {
+                                    "Fn::GetAtt": [
+                                        "StaticContentBucket",
+                                        "Arn"
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "CloudFrontDistribution": {
+            "Type": "AWS::CloudFront::Distribution",
+            "Properties": {
+                "DistributionConfig": {
+                    "Origins": [
+                        {
+                            "Id": "S3Origin",
+                            "DomainName": {
+                                "Fn::GetAtt": [
+                                    "StaticContentBucket",
+                                    "RegionalDomainName"
+                                ]
+                            },
+                            "S3OriginConfig": {
+                                "OriginAccessIdentity": {
+                                    "Fn::Sub": "origin-access-identity/cloudfront/${OriginAccessIdentity}"
+                                }
+                            }
+                        }
+                    ],
+                    "Enabled": true,
+                    "DefaultRootObject": "index.html",
+                    "DefaultCacheBehavior": {
+                        "TargetOriginId": "S3Origin",
+                        "ViewerProtocolPolicy": "redirect-to-https",
+                        "AllowedMethods": [
+                            "GET",
+                            "HEAD",
+                            "OPTIONS"
+                        ],
+                        "CachedMethods": [
+                            "GET",
+                            "HEAD",
+                            "OPTIONS"
+                        ],
+                        "ForwardedValues": {
+                            "QueryString": false,
+                            "Cookies": {
+                                "Forward": "none"
+                            }
+                        },
+                        "MinTTL": 0,
+                        "DefaultTTL": 86400,
+                        "MaxTTL": 31536000,
+                        "Compress": true
+                    },
+                    "PriceClass": "PriceClass_100",
+                    "ViewerCertificate": {
+                        "CloudFrontDefaultCertificate": true
+                    },
+                    "HttpVersion": "http2",
+                    "IPV6Enabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-CloudFront"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "CloudTrail": {
+            "Type": "AWS::CloudTrail::Trail",
+            "DependsOn": "CloudTrailBucketPolicy",
+            "Properties": {
+                "TrailName": {
+                    "Fn::Sub": "${EnvironmentName}-trail-${AWS::Region}"
+                },
+                "S3BucketName": {
+                    "Ref": "CloudTrailBucket"
+                },
+                "IncludeGlobalServiceEvents": true,
+                "IsLogging": true,
+                "IsMultiRegionTrail": true,
+                "EnableLogFileValidation": true,
+                "KMSKeyId": {
+                    "Ref": "CloudTrailKMSKey"
+                },
+                "EventSelectors": [
+                    {
+                        "ReadWriteType": "All",
+                        "IncludeManagementEvents": true,
+                        "DataResources": [
+                            {
+                                "Type": "AWS::S3::Object",
+                                "Values": [
+                                    {
+                                        "Fn::Sub": "${AppDataBucket.Arn}/"
+                                    }
+                                ]
+                            },
+                            {
+                                "Type": "AWS::DynamoDB::Table",
+                                "Values": [
+                                    {
+                                        "Fn::GetAtt": [
+                                            "AuditTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-CloudTrail"
+                        }
+                    },
+                    {
+                        "Key": "Compliance",
+                        "Value": "SOX"
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "CloudTrailKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "KMS key for ${EnvironmentName} CloudTrail encryption"
+                },
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Id": "key-policy-cloudtrail",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM policies",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow CloudTrail to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:GenerateDataKey",
+                                "kms:Decrypt"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringLike": {
+                                    "kms:EncryptionContext:aws:cloudtrail:arn": {
+                                        "Fn::Sub": "arn:aws:cloudtrail:*:${AWS::AccountId}:trail/*"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                },
+                "EnableKeyRotation": true
+            }
+        },
+        "CloudTrailKMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${EnvironmentName}-cloudtrail-key-${AWS::Region}"
+                },
+                "TargetKeyId": {
+                    "Ref": "CloudTrailKMSKey"
+                }
+            }
+        },
+        "ConfigRecorder": {
+            "Type": "AWS::Config::ConfigurationRecorder",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-config-recorder"
+                },
+                "RoleARN": {
+                    "Fn::GetAtt": [
+                        "ConfigRole",
+                        "Arn"
+                    ]
+                },
+                "RecordingGroup": {
+                    "AllSupported": true,
+                    "IncludeGlobalResourceTypes": true
+                }
+            }
+        },
+        "ConfigDeliveryChannel": {
+            "Type": "AWS::Config::DeliveryChannel",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-config-delivery"
+                },
+                "S3BucketName": {
+                    "Ref": "ConfigBucket"
+                },
+                "S3KeyPrefix": "config"
+            }
+        },
+        "ConfigBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "projectnova-config-${AWS::AccountId}-${AWS::Region}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "ConfigRetention",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 2555
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Config-Bucket"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "ConfigBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "ConfigBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AWSConfigBucketPermissionsCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "ConfigBucket",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        {
+                            "Sid": "AWSConfigBucketExistenceCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:ListBucket",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "ConfigBucket",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        {
+                            "Sid": "AWSConfigBucketWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${ConfigBucket.Arn}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "ConfigRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${EnvironmentName}-config-role-${AWS::Region}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "ConfigBucketAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetBucketAcl",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "ConfigBucket",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject",
+                                        "s3:GetObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${ConfigBucket.Arn}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "config:Put*",
+                                        "config:Get*",
+                                        "config:List*",
+                                        "config:Describe*"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Config-Role"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "HighCPUAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${EnvironmentName}-High-CPU"
+                },
+                "AlarmDescription": "Alert when average CPU utilization exceeds 80%",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 80,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "NotificationTopic"
+                    }
+                ],
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "AutoScalingGroup"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-High-CPU-Alarm"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DatabaseConnectionAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${EnvironmentName}-DB-Connection"
+                },
+                "AlarmDescription": "Alert on high database connections",
+                "MetricName": "DatabaseConnections",
+                "Namespace": "AWS/RDS",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 50,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "NotificationTopic"
+                    }
+                ],
+                "Dimensions": [
+                    {
+                        "Name": "DBInstanceIdentifier",
+                        "Value": {
+                            "Ref": "RDSDatabase"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-DB-Connection-Alarm"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "LambdaErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${EnvironmentName}-Lambda-Errors"
+                },
+                "AlarmDescription": "Alert on Lambda function errors",
+                "MetricName": "Errors",
+                "Namespace": "AWS/Lambda",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "NotificationTopic"
+                    }
+                ],
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "AuditLambdaFunction"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Lambda-Error-Alarm"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NotificationTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "${EnvironmentName}-notifications-${AWS::Region}"
+                },
+                "KmsMasterKeyId": {
+                    "Ref": "NotificationKMSKey"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Notification-Topic"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NotificationKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "KMS key for ${EnvironmentName} SNS encryption"
+                },
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Id": "key-policy-sns",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM policies",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow SNS to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "sns.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "EnableKeyRotation": true
+            }
+        },
+        "NotificationKMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${EnvironmentName}-sns-key-${AWS::Region}"
+                },
+                "TargetKeyId": {
+                    "Ref": "NotificationKMSKey"
+                }
+            }
+        },
+        "DefaultVPCCleanupRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "VPCCleanupPermissions",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ec2:DescribeVpcs",
+                                        "ec2:DeleteVpc",
+                                        "ec2:DescribeRegions"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-DefaultVPC-Cleanup-Role"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DefaultVPCCleanupFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Runtime": "python3.9",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "DefaultVPCCleanupRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 300,
+                "Code": {
+                    "ZipFile": "import boto3\nimport json\nimport urllib3\n\ndef send_response(event, context, response_status, response_data):\n    response_body = json.dumps({\n        'Status': response_status,\n        'Reason': 'See CloudWatch logs for details',\n        'PhysicalResourceId': context.log_stream_name,\n        'StackId': event['StackId'],\n        'RequestId': event['RequestId'],\n        'LogicalResourceId': event['LogicalResourceId'],\n        'Data': response_data\n    })\n    http = urllib3.PoolManager()\n    http.request('PUT', event['ResponseURL'], body=response_body, headers={'content-type': ''})\n\ndef handler(event, context):\n    try:\n        ec2 = boto3.client('ec2')\n        regions = [region['RegionName'] for region in ec2.describe_regions()['Regions']]\n        results = []\n        for region in regions:\n            if region == 'us-east-1':\n                continue\n            try:\n                regional_ec2 = boto3.client('ec2', region_name=region)\n                vpcs = regional_ec2.describe_vpcs(Filters=[{'Name': 'is-default', 'Values': ['true']}])['Vpcs']\n                for vpc in vpcs:\n                    vpc_id = vpc['VpcId']\n                    try:\n                        igws = regional_ec2.describe_internet_gateways(Filters=[{'Name': 'attachment.vpc-id', 'Values': [vpc_id]}])['InternetGateways']\n                        for igw in igws:\n                            regional_ec2.detach_internet_gateway(InternetGatewayId=igw['InternetGatewayId'], VpcId=vpc_id)\n                            regional_ec2.delete_internet_gateway(InternetGatewayId=igw['InternetGatewayId'])\n                    except Exception as e:\n                        pass\n                    try:\n                        regional_ec2.delete_vpc(VpcId=vpc_id)\n                        results.append(f\"Successfully deleted default VPC {vpc_id} in {region}\")\n                    except Exception as e:\n                        results.append(f\"Failed to delete default VPC {vpc_id} in {region}: {str(e)}\")\n            except Exception as e:\n                results.append(f\"Error processing region {region}: {str(e)}\")\n        send_response(event, context, 'SUCCESS', {'Message': 'Default VPC cleanup completed', 'Results': results})\n    except Exception as e:\n        send_response(event, context, 'FAILED', {'Message': str(e)})\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-DefaultVPC-Cleanup"
+                        }
+                    },
+                    {
+                        "Key": "team",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DefaultVPCCleanupTrigger": {
+            "Type": "AWS::CloudFormation::CustomResource",
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::GetAtt": [
+                        "DefaultVPCCleanupFunction",
+                        "Arn"
+                    ]
+                }
+            },
+            "DeletionPolicy": "Delete"
+        }
+    },
+    "Outputs": {
+        "VPCId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-VPC-ID"
+                }
+            }
+        },
+        "VPCCidr": {
+            "Description": "VPC CIDR Block",
+            "Value": {
+                "Fn::GetAtt": [
+                    "VPC",
+                    "CidrBlock"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-VPC-CIDR"
+                }
+            }
+        },
+        "ALBEndpoint": {
+            "Description": "Application Load Balancer DNS Name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ApplicationLoadBalancer",
+                    "DNSName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-ALB-DNS"
+                }
+            }
+        },
+        "ALBSecurityGroupId": {
+            "Description": "ALB Security Group ID",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ALBSecurityGroup",
+                    "GroupId"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-ALB-SG-ID"
+                }
+            }
+        },
+        "RDSEndpoint": {
+            "Description": "RDS Database Endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "RDSDatabase",
+                    "Endpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-RDS-Endpoint"
+                }
+            }
+        },
+        "RDSPort": {
+            "Description": "RDS Database Port",
+            "Value": {
+                "Fn::GetAtt": [
+                    "RDSDatabase",
+                    "Endpoint.Port"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-RDS-Port"
+                }
+            }
+        },
+        "DynamoDBTableName": {
+            "Description": "DynamoDB Audit Table Name",
+            "Value": {
+                "Ref": "AuditTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-Audit-Table"
+                }
+            }
+        },
+        "DynamoDBTableArn": {
+            "Description": "DynamoDB Audit Table ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AuditTable",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-Audit-Table-ARN"
+                }
+            }
+        },
+        "AppDataBucketName": {
+            "Description": "Application Data S3 Bucket",
+            "Value": {
+                "Ref": "AppDataBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-App-Bucket"
+                }
+            }
+        },
+        "AppDataBucketArn": {
+            "Description": "Application Data S3 Bucket ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AppDataBucket",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-App-Bucket-ARN"
+                }
+            }
+        },
+        "CloudTrailBucketName": {
+            "Description": "CloudTrail S3 Bucket",
+            "Value": {
+                "Ref": "CloudTrailBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-CloudTrail-Bucket"
+                }
+            }
+        },
+        "CloudTrailName": {
+            "Description": "CloudTrail Name",
+            "Value": {
+                "Ref": "CloudTrail"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-CloudTrail-Name"
+                }
+            }
+        },
+        "CloudFrontDistributionDomain": {
+            "Description": "CloudFront Distribution Domain Name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "CloudFrontDistribution",
+                    "DomainName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-CloudFront-Domain"
+                }
+            }
+        },
+        "CloudFrontDistributionId": {
+            "Description": "CloudFront Distribution ID",
+            "Value": {
+                "Ref": "CloudFrontDistribution"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-CloudFront-ID"
+                }
+            }
+        },
+        "LambdaFunctionArn": {
+            "Description": "Audit Lambda Function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AuditLambdaFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-Lambda-ARN"
+                }
+            }
+        },
+        "LambdaFunctionName": {
+            "Description": "Audit Lambda Function Name",
+            "Value": {
+                "Ref": "AuditLambdaFunction"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-Lambda-Name"
+                }
+            }
+        },
+        "AutoScalingGroupName": {
+            "Description": "Auto Scaling Group Name",
+            "Value": {
+                "Ref": "AutoScalingGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-ASG-Name"
+                }
+            }
+        },
+        "LaunchTemplateId": {
+            "Description": "Launch Template ID",
+            "Value": {
+                "Ref": "LaunchTemplate"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-LaunchTemplate-ID"
+                }
+            }
+        },
+        "ConfigRecorderName": {
+            "Description": "AWS Config Recorder Name",
+            "Value": {
+                "Ref": "ConfigRecorder"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-Config-Recorder"
+                }
+            }
+        },
+        "MFAPolicyArn": {
+            "Description": "MFA Enforcement Policy ARN",
+            "Value": {
+                "Ref": "MFAPolicy"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-MFA-Policy-ARN"
+                }
+            }
+        },
+        "NotificationTopicArn": {
+            "Description": "SNS Notification Topic ARN",
+            "Value": {
+                "Ref": "NotificationTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-Notification-Topic-ARN"
+                }
+            }
+        },
+        "PrivateSubnetIds": {
+            "Description": "Private Subnet IDs for EC2 instances",
+            "Value": {
+                "Fn::Join": [
+                    ",",
+                    [
+                        {
+                            "Ref": "PrivateSubnet1"
+                        },
+                        {
+                            "Ref": "PrivateSubnet2"
+                        }
+                    ]
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-Private-Subnet-IDs"
+                }
+            }
+        },
+        "PublicSubnetIds": {
+            "Description": "Public Subnet IDs for ALB and NAT Gateways",
+            "Value": {
+                "Fn::Join": [
+                    ",",
+                    [
+                        {
+                            "Ref": "PublicSubnet1"
+                        },
+                        {
+                            "Ref": "PublicSubnet2"
+                        }
+                    ]
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-Public-Subnet-IDs"
+                }
+            }
+        },
+        "DatabaseSubnetGroupName": {
+            "Description": "Database Subnet Group Name",
+            "Value": {
+                "Ref": "DBSubnetGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-DB-SubnetGroup-Name"
+                }
+            }
+        },
+        "KMSKeyIdLambda": {
+            "Description": "KMS Key ID for Lambda Encryption",
+            "Value": {
+                "Ref": "LambdaKMSKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-Lambda-KMS-Key-ID"
+                }
+            }
+        },
+        "KMSKeyIdCloudTrail": {
+            "Description": "KMS Key ID for CloudTrail Encryption",
+            "Value": {
+                "Ref": "CloudTrailKMSKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-CloudTrail-KMS-Key-ID"
+                }
+            }
+        },
+        "TargetGroupArn": {
+            "Description": "ALB Target Group ARN",
+            "Value": {
+                "Ref": "ALBTargetGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-TargetGroup-ARN"
+                }
+            }
+        },
+        "StaticContentBucketName": {
+            "Description": "Static Content S3 Bucket Name",
+            "Value": {
+                "Ref": "StaticContentBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-Static-Content-Bucket"
+                }
+            }
+        },
+        "DefaultVPCCleanupStatus": {
+            "Description": "Default VPC Cleanup Function Status",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DefaultVPCCleanupFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-DefaultVPC-Cleanup-Status"
+                }
+            }
+        }
+    }
+}
