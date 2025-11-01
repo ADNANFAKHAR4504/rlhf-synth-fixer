@@ -46,15 +46,52 @@ describe('Live integration end-to-end workflow tests', () => {
 
   const outputs = loadOutputs();
 
-  // Basic runtime artifacts
-  const apiUrl: string | undefined = outputs.TapStackdevApiGatewayUrl || outputs.MultiComponentApplicationApiGatewayEndpointEE74D018;
-  const lambdaArn: string | undefined = outputs.TapStackdevLambdaFunctionArn;
-  const s3Bucket: string | undefined = outputs.TapStackdevS3BucketName;
-  const sqsUrl: string | undefined = outputs.TapStackdevSqsQueueUrl;
-  const ddbTable: string | undefined = outputs.TEST_DDB_TABLE || outputs.TestDdbTableName || outputs.TestDdbTable || outputs.TapStackdevDynamoDbTableName;
+  // Helper to find an output value by suffix. This makes the integration
+  // tests resilient to different stack name prefixes (e.g. TapStackdev,
+  // TapStackprNNNN) used by CI builds and PR environments.
+  function findOutputBySuffix(suffix: string): string | undefined {
+    // Prefer exact known keys if present, then search all keys for a suffix match.
+    // Example suffixes: 'S3BucketName', 'SqsQueueUrl', 'LambdaFunctionArn', 'ApiGatewayUrl'
+    const exact = Object.keys(outputs).find((k) => k.endsWith(suffix));
+    if (exact) return outputs[exact];
+    return undefined;
+  }
 
-  // Region inference: prefer AWS_REGION env, else default to us-east-1
-  const region = process.env.AWS_REGION || 'us-east-1';
+  // Basic runtime artifacts — discover keys by suffix so CI-generated
+  // outputs with PR-specific prefixes are handled correctly.
+  const apiUrl: string | undefined =
+    findOutputBySuffix('ApiGatewayUrl') ||
+    findOutputBySuffix('ApiGatewayEndpoint');
+  const lambdaArn: string | undefined = findOutputBySuffix('LambdaFunctionArn') || findOutputBySuffix('LambdaArn');
+  const s3Bucket: string | undefined = findOutputBySuffix('S3BucketName') || findOutputBySuffix('BucketName');
+  const sqsUrl: string | undefined = findOutputBySuffix('SqsQueueUrl') || findOutputBySuffix('SQSQueueUrl') || findOutputBySuffix('QueueUrl');
+  const ddbTable: string | undefined =
+    (outputs as any).TEST_DDB_TABLE ||
+    (outputs as any).TestDdbTableName ||
+    (outputs as any).TestDdbTable ||
+    findOutputBySuffix('DynamoDbTableName') ||
+    findOutputBySuffix('DynamoDbTable') ||
+    findOutputBySuffix('DdbTable');
+
+  // Region inference: prefer AWS_REGION env, else try to infer from the
+  // discovered outputs (Lambda ARN or API Gateway URL). We do NOT fall back
+  // to a hard-coded region to avoid embedding environment-specific values.
+  function inferRegionFromOutputs(): string | undefined {
+    // Try Lambda ARN (arn:aws:lambda:<region>:<acct>:function:...)
+    if (lambdaArn) {
+      const m = String(lambdaArn).match(/^arn:aws:[^:]+:([^:]+):/);
+      if (m && m[1]) return m[1];
+    }
+    // Try API Gateway hostname: execute-api.<region>.amazonaws.com
+    if (apiUrl) {
+      const m = String(apiUrl).match(/execute-api[.-]([^.]+)\.amazonaws\.com/);
+      if (m && m[1]) return m[1];
+    }
+    return undefined;
+  }
+
+  const region = process.env.AWS_REGION || inferRegionFromOutputs();
+  if (!region) throw new Error('AWS region not provided; set AWS_REGION or ensure outputs contain a Lambda ARN or API Gateway URL with region information');
   AWS.config.update({ region });
 
   const s3 = new AWS.S3();
