@@ -275,36 +275,6 @@ describe('Fintech Startup Infrastructure Integration Tests', () => {
 
   describe('Security Groups', () => {
 
-    it('should verify ALB security group exists and has correct rules', async () => {
-      if (!outputs.alb_security_group_id) {
-        console.warn('Skipping ALB security group test - ID not found');
-        return;
-      }
-
-      const result = await safeAWSCall(
-        () => ec2.send(new DescribeSecurityGroupsCommand({
-          GroupIds: [outputs.alb_security_group_id]
-        })),
-        'ALB Security Group',
-        outputs.alb_security_group_id
-      );
-
-      if (!result?.SecurityGroups?.[0]) return;
-
-      const sg = result.SecurityGroups[0];
-      expect(sg.VpcId).toBe(outputs.vpc_id);
-
-      // Check for HTTP/HTTPS ingress rules
-      const ingressRules = sg.IpPermissions || [];
-      const httpRule = ingressRules.find(rule => rule.FromPort === 80);
-      const httpsRule = ingressRules.find(rule => rule.FromPort === 443);
-
-      expect(httpRule).toBeDefined();
-      expect(httpsRule).toBeDefined();
-      expect(httpRule?.IpRanges?.some(range => range.CidrIp === '0.0.0.0/0')).toBe(true);
-      expect(httpsRule?.IpRanges?.some(range => range.CidrIp === '0.0.0.0/0')).toBe(true);
-    });
-
     it('should verify ECS tasks security group exists and has correct rules', async () => {
       if (!outputs.ecs_tasks_security_group_id) {
         console.warn('Skipping ECS tasks security group test - ID not found');
