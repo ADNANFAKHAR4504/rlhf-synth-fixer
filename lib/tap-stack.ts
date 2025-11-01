@@ -329,7 +329,7 @@ export class TapStack extends pulumi.ComponentResource {
       `webhook-request-model-${environmentSuffix}`,
       {
         restApi: restApi.id,
-        name: `webhook-model-${environmentSuffix}`,
+        name: `webhookmodel${environmentSuffix}`,
         contentType: 'application/json',
         schema: JSON.stringify({
           type: 'object',
