@@ -215,8 +215,8 @@ export class TapStack extends pulumi.ComponentResource {
     // Convert VPC peering array to Output - handle empty arrays properly
     const vpcPeeringIds = vpcPeering.length > 0
       ? pulumi.output(
-          Promise.all(vpcPeering.map(p => p.id.apply(id => id)))
-        )
+        Promise.all(vpcPeering.map(p => p.id.apply(id => id)))
+      )
       : pulumi.output([] as string[]); // Line 183 - now properly covered
 
     // Export outputs
@@ -324,8 +324,8 @@ export class TapStack extends pulumi.ComponentResource {
         environmentSuffix === 'prod'
           ? 'db.r5.large'
           : environmentSuffix === 'staging'
-          ? 'db.t3.medium'
-          : 'db.t3.medium'; // Changed from db.t3.micro to db.t3.medium (minimum for Aurora)
+            ? 'db.t3.medium'
+            : 'db.t3.medium'; // Changed from db.t3.micro to db.t3.medium (minimum for Aurora)
     }
 
     return {
@@ -350,15 +350,15 @@ export class TapStack extends pulumi.ComponentResource {
         (environmentSuffix === 'prod'
           ? '1024'
           : environmentSuffix === 'staging'
-          ? '512'
-          : '256'),
+            ? '512'
+            : '256'),
       ecsTaskMemory:
         config.get('ecsTaskMemory') ||
         (environmentSuffix === 'prod'
           ? '2048'
           : environmentSuffix === 'staging'
-          ? '1024'
-          : '512'),
+            ? '1024'
+            : '512'),
       rdsAllocatedStorage:
         config.getNumber('rdsAllocatedStorage') ||
         (environmentSuffix === 'prod' ? 100 : 20),
@@ -1352,15 +1352,15 @@ export class TapStack extends pulumi.ComponentResource {
   * Write outputs to JSON file - REFACTORED FOR TESTABILITY
   */
   private writeOutputsToFile(outputs: TapStackOutputs): void {
-    // Check if file writing should be skipped (for testing)
+    // Check if file writing should be skipped for testing
     const config = new pulumi.Config();
-    const skipFileWrite = config.getBoolean('skipFileWrite');
+    const skipFileWrite = config.getBoolean("skipFileWrite");
 
     if (skipFileWrite === true) {
       return; // Skip file writing in test mode
     }
 
-    const outputDir = path.join(process.cwd(), 'cfn-outputs');
+    const outputDir = path.join(process.cwd(), "cfn-outputs");
 
     // Collect all outputs in an object for pulumi.output
     const outputsObject = pulumi.output({
@@ -1383,8 +1383,17 @@ export class TapStack extends pulumi.ComponentResource {
     });
 
     // Apply to write the file using the extracted utility function
-    outputsObject.apply(flatOutputs => {
-      OutputFileWriter.writeJsonToFile(outputDir, 'flat-outputs.json', flatOutputs);
+    outputsObject.apply((flatOutputs) => {
+      // Double-check skipFileWrite inside apply to prevent race conditions
+      const runtimeConfig = new pulumi.Config();
+      const skipAtRuntime = runtimeConfig.getBoolean("skipFileWrite");
+
+      if (skipAtRuntime === true) {
+        return; // Skip file writing in test mode
+      }
+
+      OutputFileWriter.writeJsonToFile(outputDir, "flat-outputs.json", flatOutputs);
     });
   }
+
 }
