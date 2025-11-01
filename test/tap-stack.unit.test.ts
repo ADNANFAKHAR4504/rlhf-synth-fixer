@@ -23,7 +23,7 @@ describe('TapStack', () => {
     test('should use default environmentSuffix when none provided', () => {
       // Save original ENVIRONMENT_SUFFIX if it exists
       const originalEnvSuffix = process.env.ENVIRONMENT_SUFFIX;
-      
+
       // Temporarily remove ENVIRONMENT_SUFFIX to test default behavior
       delete process.env.ENVIRONMENT_SUFFIX;
 
@@ -72,11 +72,11 @@ describe('TapStack', () => {
       const originalEnv = process.env.ENVIRONMENT_SUFFIX;
       // Remove context to ensure env var is used
       delete process.env.ENVIRONMENT_SUFFIX;
-      
+
       const testApp = new cdk.App();
       // Don't pass props or context to test env var fallback
       const testStack = new TapStack(testApp, 'TestStackEnvVar');
-      
+
       // Set env var after stack creation attempt to test fallback chain
       // Actually, we need to test the priority: props > context > env var > default
       // So let's set env var and create new app/stack
@@ -134,7 +134,10 @@ describe('TapStack', () => {
       const endpoints = template.findResources('AWS::EC2::VPCEndpoint');
       const s3Endpoint = Object.values(endpoints).find((ep: any) => {
         const serviceName = JSON.stringify(ep.Properties.ServiceName || '');
-        return serviceName.includes('s3') && ep.Properties.VpcEndpointType === 'Gateway';
+        return (
+          serviceName.includes('s3') &&
+          ep.Properties.VpcEndpointType === 'Gateway'
+        );
       });
       expect(s3Endpoint).toBeDefined();
     });
@@ -143,7 +146,10 @@ describe('TapStack', () => {
       const endpoints = template.findResources('AWS::EC2::VPCEndpoint');
       const dynamoEndpoint = Object.values(endpoints).find((ep: any) => {
         const serviceName = JSON.stringify(ep.Properties.ServiceName || '');
-        return serviceName.includes('dynamodb') && ep.Properties.VpcEndpointType === 'Gateway';
+        return (
+          serviceName.includes('dynamodb') &&
+          ep.Properties.VpcEndpointType === 'Gateway'
+        );
       });
       expect(dynamoEndpoint).toBeDefined();
     });
@@ -152,7 +158,10 @@ describe('TapStack', () => {
       const endpoints = template.findResources('AWS::EC2::VPCEndpoint');
       const lambdaEndpoint = Object.values(endpoints).find((ep: any) => {
         const serviceName = JSON.stringify(ep.Properties.ServiceName || '');
-        return serviceName.includes('lambda') && ep.Properties.VpcEndpointType === 'Interface';
+        return (
+          serviceName.includes('lambda') &&
+          ep.Properties.VpcEndpointType === 'Interface'
+        );
       });
       expect(lambdaEndpoint).toBeDefined();
     });
@@ -161,7 +170,10 @@ describe('TapStack', () => {
       const endpoints = template.findResources('AWS::EC2::VPCEndpoint');
       const snsEndpoint = Object.values(endpoints).find((ep: any) => {
         const serviceName = JSON.stringify(ep.Properties.ServiceName || '');
-        return serviceName.includes('sns') && ep.Properties.VpcEndpointType === 'Interface';
+        return (
+          serviceName.includes('sns') &&
+          ep.Properties.VpcEndpointType === 'Interface'
+        );
       });
       expect(snsEndpoint).toBeDefined();
     });
@@ -264,7 +276,9 @@ describe('TapStack', () => {
   describe('KMS Encryption', () => {
     test('should create KMS key with rotation enabled', () => {
       template.hasResourceProperties('AWS::KMS::Key', {
-        Description: Match.stringLikeRegexp('KMS key for infrastructure replication system'),
+        Description: Match.stringLikeRegexp(
+          'KMS key for infrastructure replication system'
+        ),
         EnableKeyRotation: true,
       });
     });
@@ -297,8 +311,9 @@ describe('TapStack', () => {
               ? stmt.Action
               : [stmt.Action];
             return (
-              actions.some((a: string) =>
-                a.includes('kms:Decrypt') || a.includes('kms:Encrypt')
+              actions.some(
+                (a: string) =>
+                  a.includes('kms:Decrypt') || a.includes('kms:Encrypt')
               ) &&
               stmt.Effect === 'Allow' &&
               stmt.Resource
@@ -324,8 +339,9 @@ describe('TapStack', () => {
               ? stmt.Action
               : [stmt.Action];
             return (
-              actions.some((a: string) =>
-                a.includes('kms:Decrypt') || a.includes('kms:Encrypt')
+              actions.some(
+                (a: string) =>
+                  a.includes('kms:Decrypt') || a.includes('kms:Encrypt')
               ) &&
               stmt.Effect === 'Allow' &&
               stmt.Resource
@@ -342,7 +358,9 @@ describe('TapStack', () => {
       const buckets = template.findResources('AWS::S3::Bucket');
       const bucket = Object.values(buckets)[0] as any;
       const bucketNameStr = JSON.stringify(bucket.Properties.BucketName || '');
-      expect(bucketNameStr).toContain(`infra-config-store-${environmentSuffix}`);
+      expect(bucketNameStr).toContain(
+        `infra-config-store-${environmentSuffix}`
+      );
     });
 
     test('should have versioning disabled', () => {
@@ -654,9 +672,7 @@ describe('TapStack', () => {
       const roles = template.findResources('AWS::IAM::Role');
       const hasVpcRole = Object.values(roles).some((role: any) => {
         const policies =
-          role.Properties.ManagedPolicyArns ||
-          role.Properties.Policies ||
-          [];
+          role.Properties.ManagedPolicyArns || role.Properties.Policies || [];
         return policies.some(
           (policy: any) =>
             (typeof policy === 'string' &&
@@ -696,8 +712,8 @@ describe('TapStack', () => {
       // Check if any target references the environment update function
       expect(
         targetStr.includes('EnvironmentUpdate') ||
-        targetStr.includes('environment-update-handler') ||
-        targets.length >= 1
+          targetStr.includes('environment-update-handler') ||
+          targets.length >= 1
       ).toBe(true);
     });
 
@@ -709,8 +725,8 @@ describe('TapStack', () => {
       // Check if any target references the drift validation function
       expect(
         targetStr.includes('DriftValidation') ||
-        targetStr.includes('infrastructure-drift-validator') ||
-        targets.length >= 2
+          targetStr.includes('infrastructure-drift-validator') ||
+          targets.length >= 2
       ).toBe(true);
     });
 
@@ -731,21 +747,24 @@ describe('TapStack', () => {
       const dashboard = Object.values(dashboards)[0] as any;
       expect(dashboard.Properties.DashboardBody).toBeDefined();
       // Dashboard body might be a string or already an object
-      const bodyStr = typeof dashboard.Properties.DashboardBody === 'string' 
-        ? dashboard.Properties.DashboardBody 
-        : JSON.stringify(dashboard.Properties.DashboardBody);
-      const body = typeof dashboard.Properties.DashboardBody === 'string'
-        ? JSON.parse(bodyStr)
-        : dashboard.Properties.DashboardBody;
+      const bodyStr =
+        typeof dashboard.Properties.DashboardBody === 'string'
+          ? dashboard.Properties.DashboardBody
+          : JSON.stringify(dashboard.Properties.DashboardBody);
+      const body =
+        typeof dashboard.Properties.DashboardBody === 'string'
+          ? JSON.parse(bodyStr)
+          : dashboard.Properties.DashboardBody;
       expect(body.widgets || body).toBeDefined();
     });
 
     test('should include environment suffix in dashboard', () => {
       const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
       const dashboard = Object.values(dashboards)[0] as any;
-      const bodyStr = typeof dashboard.Properties.DashboardBody === 'string' 
-        ? dashboard.Properties.DashboardBody 
-        : JSON.stringify(dashboard.Properties.DashboardBody);
+      const bodyStr =
+        typeof dashboard.Properties.DashboardBody === 'string'
+          ? dashboard.Properties.DashboardBody
+          : JSON.stringify(dashboard.Properties.DashboardBody);
       expect(bodyStr).toContain(environmentSuffix);
     });
   });
@@ -819,7 +838,9 @@ describe('TapStack', () => {
       expect(outputs.DriftValidationFunctionName).toBeDefined();
       // Value is a CloudFormation reference to the Lambda function
       expect(outputs.DriftValidationFunctionName.Value).toBeDefined();
-      const valueString = JSON.stringify(outputs.DriftValidationFunctionName.Value);
+      const valueString = JSON.stringify(
+        outputs.DriftValidationFunctionName.Value
+      );
       expect(valueString).toMatch(/DriftValidation|Ref/);
       expect(outputs.DriftValidationFunctionName.Description).toBe(
         'Lambda function for drift validation'

@@ -1,9 +1,9 @@
 /**
  * Infrastructure Replication System Integration Tests
- * 
+ *
  * These tests validate the complete infrastructure deployment
  * using real AWS resources based on cfn-outputs/flat-outputs.json.
- * 
+ *
  * Following iac-infra-qa-trainer.md guidelines:
  * - No mocking - uses actual deployment results
  * - Validates complete workflows and resource connections
@@ -81,19 +81,25 @@ let outputs: DeploymentOutputs = {};
 let useRealResources = false;
 
 try {
-  const outputsContent = fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8');
+  const outputsContent = fs.readFileSync(
+    'cfn-outputs/flat-outputs.json',
+    'utf8'
+  );
   outputs = JSON.parse(outputsContent) as DeploymentOutputs;
   useRealResources = true;
   console.log('✅ Integration Tests: Using real AWS deployment outputs');
   console.log('📊 Loaded outputs:', Object.keys(outputs).join(', '));
 } catch (error) {
-  console.log('⚠️  Integration Tests: Using mock outputs - real resources not deployed yet');
+  console.log(
+    '⚠️  Integration Tests: Using mock outputs - real resources not deployed yet'
+  );
   outputs = {
     StateTableName: 'infrastructure-state-tracker-dev',
     VpcId: 'vpc-0123456789abcdef0',
     DriftValidationFunctionName: 'infrastructure-drift-validator-dev',
     ConfigBucketName: 'infra-config-store-dev-123456789012-us-east-1',
-    DashboardUrl: 'https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=InfrastructureDrift-dev',
+    DashboardUrl:
+      'https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=InfrastructureDrift-dev',
   };
 }
 
@@ -101,13 +107,16 @@ try {
  * Environment Configuration
  */
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const awsRegion = process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || 'us-east-1';
+const awsRegion =
+  process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || 'us-east-1';
 const isCI = Boolean(process.env.CI);
 
 // Enhanced timeout configuration for CI environments
 const BASE_TIMEOUT = 30000; // 30 seconds base timeout
 const CI_TIMEOUT_MULTIPLIER = 2;
-const AWS_OPERATION_TIMEOUT = isCI ? BASE_TIMEOUT * CI_TIMEOUT_MULTIPLIER : BASE_TIMEOUT;
+const AWS_OPERATION_TIMEOUT = isCI
+  ? BASE_TIMEOUT * CI_TIMEOUT_MULTIPLIER
+  : BASE_TIMEOUT;
 const TEST_TIMEOUT = isCI ? 120000 : 90000; // 2 minutes in CI, 1.5 minutes locally
 
 console.log(`🔧 Test Configuration:`);
@@ -127,19 +136,31 @@ const withTimeout = async <T>(
 ): Promise<T | null> => {
   try {
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`${operationName} timed out after ${timeoutMs}ms`)), timeoutMs)
+      setTimeout(
+        () =>
+          reject(new Error(`${operationName} timed out after ${timeoutMs}ms`)),
+        timeoutMs
+      )
     );
 
     const result = await Promise.race([operation, timeoutPromise]);
     console.log(`✅ ${operationName}: Success`);
     return result;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
     console.log(`⚠️  ${operationName}: ${errorMessage}`);
 
     // In CI environments, log but don't fail tests for AWS service issues
-    if (isCI && (errorMessage.includes('timeout') || errorMessage.includes('AccessDenied') || errorMessage.includes('Throttling'))) {
-      console.log(`ℹ️  ${operationName}: Gracefully handling CI environment limitation`);
+    if (
+      isCI &&
+      (errorMessage.includes('timeout') ||
+        errorMessage.includes('AccessDenied') ||
+        errorMessage.includes('Throttling'))
+    ) {
+      console.log(
+        `ℹ️  ${operationName}: Gracefully handling CI environment limitation`
+      );
       return null;
     }
 
@@ -275,8 +296,8 @@ describe('Infrastructure Replication System - Integration Tests', () => {
         const subnets = response.Subnets;
         expect(subnets.length).toBeGreaterThanOrEqual(4); // At least 2 public + 2 private
 
-        const publicSubnets = subnets.filter((s) => s.MapPublicIpOnLaunch);
-        const privateSubnets = subnets.filter((s) => !s.MapPublicIpOnLaunch);
+        const publicSubnets = subnets.filter(s => s.MapPublicIpOnLaunch);
+        const privateSubnets = subnets.filter(s => !s.MapPublicIpOnLaunch);
 
         expect(publicSubnets.length).toBeGreaterThanOrEqual(2);
         expect(privateSubnets.length).toBeGreaterThanOrEqual(2);
@@ -288,7 +309,9 @@ describe('Infrastructure Replication System - Integration Tests', () => {
       'NAT Gateways exist for private subnets',
       async () => {
         if (!useRealResources || !outputs.VpcId) {
-          console.log('⏭️  Skipping NAT Gateway test - no real deployment outputs');
+          console.log(
+            '⏭️  Skipping NAT Gateway test - no real deployment outputs'
+          );
           return;
         }
 
@@ -321,7 +344,9 @@ describe('Infrastructure Replication System - Integration Tests', () => {
       'VPC Endpoints are configured',
       async () => {
         if (!useRealResources || !outputs.VpcId) {
-          console.log('⏭️  Skipping VPC endpoint test - no real deployment outputs');
+          console.log(
+            '⏭️  Skipping VPC endpoint test - no real deployment outputs'
+          );
           return;
         }
 
@@ -344,11 +369,11 @@ describe('Infrastructure Replication System - Integration Tests', () => {
         const endpoints = response.VpcEndpoints;
         expect(endpoints.length).toBeGreaterThanOrEqual(4); // S3, DynamoDB, Lambda, SNS
 
-        const serviceNames = endpoints.map((ep) => ep.ServiceName || '');
-        expect(serviceNames.some((name) => name.includes('s3'))).toBe(true);
-        expect(serviceNames.some((name) => name.includes('dynamodb'))).toBe(true);
-        expect(serviceNames.some((name) => name.includes('lambda'))).toBe(true);
-        expect(serviceNames.some((name) => name.includes('sns'))).toBe(true);
+        const serviceNames = endpoints.map(ep => ep.ServiceName || '');
+        expect(serviceNames.some(name => name.includes('s3'))).toBe(true);
+        expect(serviceNames.some(name => name.includes('dynamodb'))).toBe(true);
+        expect(serviceNames.some(name => name.includes('lambda'))).toBe(true);
+        expect(serviceNames.some(name => name.includes('sns'))).toBe(true);
       },
       TEST_TIMEOUT
     );
@@ -359,7 +384,9 @@ describe('Infrastructure Replication System - Integration Tests', () => {
       'DynamoDB table exists with correct configuration',
       async () => {
         if (!useRealResources || !outputs.StateTableName) {
-          console.log('⏭️  Skipping DynamoDB test - no real deployment outputs');
+          console.log(
+            '⏭️  Skipping DynamoDB test - no real deployment outputs'
+          );
           return;
         }
 
@@ -385,15 +412,17 @@ describe('Infrastructure Replication System - Integration Tests', () => {
 
         // Check key schema
         const keySchema = table.KeySchema || [];
-        const partitionKey = keySchema.find((key) => key.KeyType === 'HASH');
-        const sortKey = keySchema.find((key) => key.KeyType === 'RANGE');
+        const partitionKey = keySchema.find(key => key.KeyType === 'HASH');
+        const sortKey = keySchema.find(key => key.KeyType === 'RANGE');
 
         expect(partitionKey?.AttributeName).toBe('environment');
         expect(sortKey?.AttributeName).toBe('deploymentTimestamp');
 
         // Check GSI
         const gsis = table.GlobalSecondaryIndexes || [];
-        const versionIndex = gsis.find((gsi) => gsi.IndexName === 'version-index');
+        const versionIndex = gsis.find(
+          gsi => gsi.IndexName === 'version-index'
+        );
         expect(versionIndex).toBeDefined();
 
         // Check encryption (should be KMS)
@@ -442,13 +471,20 @@ describe('Infrastructure Replication System - Integration Tests', () => {
         );
 
         if (encryptionResponse?.ServerSideEncryptionConfiguration) {
-          const rules = encryptionResponse.ServerSideEncryptionConfiguration.Rules || [];
+          const rules =
+            encryptionResponse.ServerSideEncryptionConfiguration.Rules || [];
           expect(rules.length).toBeGreaterThan(0);
-          const defaultRule = rules.find((r) => r.ApplyServerSideEncryptionByDefault);
+          const defaultRule = rules.find(
+            r => r.ApplyServerSideEncryptionByDefault
+          );
           if (defaultRule?.ApplyServerSideEncryptionByDefault) {
-            expect(defaultRule.ApplyServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+            expect(
+              defaultRule.ApplyServerSideEncryptionByDefault.SSEAlgorithm
+            ).toBe('aws:kms');
             if (defaultRule.ApplyServerSideEncryptionByDefault.KMSMasterKeyID) {
-              expect(defaultRule.ApplyServerSideEncryptionByDefault.KMSMasterKeyID).toBeDefined();
+              expect(
+                defaultRule.ApplyServerSideEncryptionByDefault.KMSMasterKeyID
+              ).toBeDefined();
             }
           }
         }
@@ -466,7 +502,9 @@ describe('Infrastructure Replication System - Integration Tests', () => {
 
         // Check public access block
         const publicAccessResponse = await withTimeout(
-          s3Client.send(new GetPublicAccessBlockCommand({ Bucket: bucketName })),
+          s3Client.send(
+            new GetPublicAccessBlockCommand({ Bucket: bucketName })
+          ),
           AWS_OPERATION_TIMEOUT,
           'GetPublicAccessBlock'
         );
@@ -497,7 +535,9 @@ describe('Infrastructure Replication System - Integration Tests', () => {
         expect(functionName).toContain(environmentSuffix);
 
         const response = await withTimeout(
-          lambdaClient.send(new GetFunctionCommand({ FunctionName: functionName })),
+          lambdaClient.send(
+            new GetFunctionCommand({ FunctionName: functionName })
+          ),
           AWS_OPERATION_TIMEOUT,
           'GetFunction'
         );
@@ -544,7 +584,9 @@ describe('Infrastructure Replication System - Integration Tests', () => {
 
         const functionName = `environment-update-handler-${environmentSuffix}`;
         const response = await withTimeout(
-          lambdaClient.send(new GetFunctionCommand({ FunctionName: functionName })),
+          lambdaClient.send(
+            new GetFunctionCommand({ FunctionName: functionName })
+          ),
           AWS_OPERATION_TIMEOUT,
           'GetFunction Environment Update'
         );
@@ -589,24 +631,30 @@ describe('Infrastructure Replication System - Integration Tests', () => {
         }
 
         const topics = response.Topics;
-        const topicArns = topics.map((topic) => topic.TopicArn || '').filter(Boolean);
+        const topicArns = topics
+          .map(topic => topic.TopicArn || '')
+          .filter(Boolean);
 
-        const driftTopic = topicArns.find((arn) =>
+        const driftTopic = topicArns.find(arn =>
           arn.includes(`infrastructure-drift-alerts-${environmentSuffix}`)
         );
-        const validationTopic = topicArns.find((arn) =>
+        const validationTopic = topicArns.find(arn =>
           arn.includes(`validation-failure-alerts-${environmentSuffix}`)
         );
 
         if (driftTopic) {
           expect(driftTopic).toBeDefined();
           const attributes = await withTimeout(
-            snsClient.send(new GetTopicAttributesCommand({ TopicArn: driftTopic })),
+            snsClient.send(
+              new GetTopicAttributesCommand({ TopicArn: driftTopic })
+            ),
             AWS_OPERATION_TIMEOUT,
             'GetTopicAttributes Drift'
           );
           if (attributes?.Attributes) {
-            expect(attributes.Attributes.DisplayName).toBe('Infrastructure Drift Detection Alerts');
+            expect(attributes.Attributes.DisplayName).toBe(
+              'Infrastructure Drift Detection Alerts'
+            );
           }
         }
 
@@ -623,7 +671,9 @@ describe('Infrastructure Replication System - Integration Tests', () => {
       'EventBridge rule exists for stack updates',
       async () => {
         if (!useRealResources) {
-          console.log('⏭️  Skipping EventBridge test - no real deployment outputs');
+          console.log(
+            '⏭️  Skipping EventBridge test - no real deployment outputs'
+          );
           return;
         }
 
@@ -643,13 +693,17 @@ describe('Infrastructure Replication System - Integration Tests', () => {
         }
 
         const rule = response.Rules[0];
-        expect(rule.Name).toContain(`infrastructure-stack-updates-${environmentSuffix}`);
+        expect(rule.Name).toContain(
+          `infrastructure-stack-updates-${environmentSuffix}`
+        );
         expect(rule.State).toBe('ENABLED');
 
         // Check targets
         if (rule.Name) {
           const targetsResponse = await withTimeout(
-            eventsClient.send(new ListTargetsByRuleCommand({ Rule: rule.Name })),
+            eventsClient.send(
+              new ListTargetsByRuleCommand({ Rule: rule.Name })
+            ),
             AWS_OPERATION_TIMEOUT,
             'ListTargetsByRule'
           );
@@ -658,12 +712,14 @@ describe('Infrastructure Replication System - Integration Tests', () => {
             const targets = targetsResponse.Targets;
             expect(targets.length).toBeGreaterThanOrEqual(2);
 
-            const targetArns = targets.map((t) => t.Arn || '').filter(Boolean);
+            const targetArns = targets.map(t => t.Arn || '').filter(Boolean);
             expect(
-              targetArns.some((arn) => arn.includes('infrastructure-drift-validator'))
+              targetArns.some(arn =>
+                arn.includes('infrastructure-drift-validator')
+              )
             ).toBe(true);
             expect(
-              targetArns.some((arn) => arn.includes('environment-update-handler'))
+              targetArns.some(arn => arn.includes('environment-update-handler'))
             ).toBe(true);
           }
         }
@@ -677,7 +733,9 @@ describe('Infrastructure Replication System - Integration Tests', () => {
       'CloudWatch dashboard exists',
       async () => {
         if (!useRealResources || !outputs.DashboardUrl) {
-          console.log('⏭️  Skipping CloudWatch test - no real deployment outputs');
+          console.log(
+            '⏭️  Skipping CloudWatch test - no real deployment outputs'
+          );
           return;
         }
 
@@ -758,18 +816,20 @@ describe('Infrastructure Replication System - Integration Tests', () => {
 
         // Check attached policies
         const attachedPoliciesResponse = await withTimeout(
-          iamClient.send(new ListAttachedRolePoliciesCommand({ RoleName: roleName })),
+          iamClient.send(
+            new ListAttachedRolePoliciesCommand({ RoleName: roleName })
+          ),
           AWS_OPERATION_TIMEOUT,
           'ListAttachedRolePolicies'
         );
 
         if (attachedPoliciesResponse?.AttachedPolicies) {
           const policyNames = attachedPoliciesResponse.AttachedPolicies.map(
-            (p) => p.PolicyName || ''
+            p => p.PolicyName || ''
           );
           // Lambda in VPC should have VPC access execution role
           expect(
-            policyNames.some((name) => name.includes('VPCAccessExecutionRole'))
+            policyNames.some(name => name.includes('VPCAccessExecutionRole'))
           ).toBe(true);
         }
 
@@ -815,7 +875,7 @@ describe('Infrastructure Replication System - Integration Tests', () => {
         const tags = vpc.Tags || [];
 
         const tagMap: Record<string, string> = {};
-        tags.forEach((tag) => {
+        tags.forEach(tag => {
           if (tag.Key && tag.Value) {
             tagMap[tag.Key] = tag.Value;
           }
@@ -889,7 +949,9 @@ describe('Infrastructure Replication System - Integration Tests', () => {
       'KMS alias exists',
       async () => {
         if (!useRealResources) {
-          console.log('⏭️  Skipping KMS alias test - no real deployment outputs');
+          console.log(
+            '⏭️  Skipping KMS alias test - no real deployment outputs'
+          );
           return;
         }
 
@@ -910,12 +972,16 @@ describe('Infrastructure Replication System - Integration Tests', () => {
           return;
         }
 
-        const alias = response.Aliases.find((a) =>
-          a.AliasName?.includes(`alias/infrastructure-replication-${environmentSuffix}`)
+        const alias = response.Aliases.find(a =>
+          a.AliasName?.includes(
+            `alias/infrastructure-replication-${environmentSuffix}`
+          )
         );
         expect(alias).toBeDefined();
         if (alias) {
-          expect(alias.AliasName).toContain(`alias/infrastructure-replication-${environmentSuffix}`);
+          expect(alias.AliasName).toContain(
+            `alias/infrastructure-replication-${environmentSuffix}`
+          );
         }
       },
       TEST_TIMEOUT

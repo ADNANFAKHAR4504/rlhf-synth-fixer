@@ -68,11 +68,15 @@ export class TapStack extends cdk.Stack {
     });
 
     // 🔹 KMS Key for Encryption
-    const encryptionKey = new kms.Key(this, `ReplicationEncryptionKey-${environmentSuffix}`, {
-      description: `KMS key for infrastructure replication system - ${environmentSuffix}`,
-      enableKeyRotation: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
+    const encryptionKey = new kms.Key(
+      this,
+      `ReplicationEncryptionKey-${environmentSuffix}`,
+      {
+        description: `KMS key for infrastructure replication system - ${environmentSuffix}`,
+        enableKeyRotation: true,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
 
     new kms.Alias(this, `ReplicationEncryptionKeyAlias-${environmentSuffix}`, {
       aliasName: `alias/infrastructure-replication-${environmentSuffix}`,
