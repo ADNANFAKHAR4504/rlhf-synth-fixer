@@ -1,0 +1,13 @@
+{
+  "platform": "cicd",
+  "language": "yml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "455678",
+  "team": "stf",
+  "startedAt": "2025-11-01T22:15:52.591Z",
+  "subtask": "CI/CD Pipeline",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ]
+}
