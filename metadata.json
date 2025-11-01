@@ -10,12 +10,17 @@
   "subject_labels": [
     "Multi-Environment Consistency"
   ],
+  "training_quality": 8,
   "aws_services": [
-    "S3 Bucket",
-    "CloudFormation",
+    "VPC",
+    "EC2",
+    "DynamoDB",
+    "S3",
     "Lambda",
+    "SNS",
     "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
+    "CloudWatch",
+    "IAM",
+    "CloudFormation"
   ]
 }

@@ -21,6 +21,12 @@ describe('TapStack', () => {
     });
 
     test('should use default environmentSuffix when none provided', () => {
+      // Save original ENVIRONMENT_SUFFIX if it exists
+      const originalEnvSuffix = process.env.ENVIRONMENT_SUFFIX;
+      
+      // Temporarily remove ENVIRONMENT_SUFFIX to test default behavior
+      delete process.env.ENVIRONMENT_SUFFIX;
+
       const testApp = new cdk.App();
       const testStack = new TapStack(testApp, 'TestStack');
       const testTemplate = Template.fromStack(testStack);
@@ -29,6 +35,11 @@ describe('TapStack', () => {
       testTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
         TableName: 'infrastructure-state-tracker-dev',
       });
+
+      // Restore original ENVIRONMENT_SUFFIX
+      if (originalEnvSuffix !== undefined) {
+        process.env.ENVIRONMENT_SUFFIX = originalEnvSuffix;
+      }
     });
 
     test('should use props environmentSuffix when provided', () => {
@@ -59,11 +70,20 @@ describe('TapStack', () => {
 
     test('should use ENVIRONMENT_SUFFIX env var when available', () => {
       const originalEnv = process.env.ENVIRONMENT_SUFFIX;
-      process.env.ENVIRONMENT_SUFFIX = 'envtest';
-
+      // Remove context to ensure env var is used
+      delete process.env.ENVIRONMENT_SUFFIX;
+      
       const testApp = new cdk.App();
+      // Don't pass props or context to test env var fallback
       const testStack = new TapStack(testApp, 'TestStackEnvVar');
-      const testTemplate = Template.fromStack(testStack);
+      
+      // Set env var after stack creation attempt to test fallback chain
+      // Actually, we need to test the priority: props > context > env var > default
+      // So let's set env var and create new app/stack
+      process.env.ENVIRONMENT_SUFFIX = 'envtest';
+      const testApp2 = new cdk.App();
+      const testStack2 = new TapStack(testApp2, 'TestStackEnvVar2');
+      const testTemplate = Template.fromStack(testStack2);
 
       testTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
         TableName: 'infrastructure-state-tracker-envtest',
