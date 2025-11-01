@@ -907,6 +907,52 @@ The architecture balances high availability with security requirements for serve
         ]
       }
     },
+    "APIGatewayCloudWatchRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "apigateway.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "APIGatewayCloudWatchRole-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "ServerlessSecurityConfig"
+          },
+          {
+            "Key": "Owner",
+            "Value": "SecurityTeam"
+          },
+          {
+            "Key": "CostCenter",
+            "Value": "Security"
+          }
+        ]
+      }
+    },
     "LambdaFunction": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
@@ -1056,6 +1102,18 @@ The architecture balances high availability with security requirements for serve
         ]
       }
     },
+    "APIGatewayAccount": {
+      "Type": "AWS::ApiGateway::Account",
+      "Properties": {
+        "CloudWatchRoleArn": {
+          "Fn::GetAtt": [
+            "APIGatewayCloudWatchRole",
+            "Arn"
+          ]
+        }
+      },
+      "DependsOn": "APIGatewayCloudWatchRole"
+    },
     "APIGatewayRequestValidator": {
       "Type": "AWS::ApiGateway::RequestValidator",
       "Properties": {
@@ -1132,7 +1190,7 @@ The architecture balances high availability with security requirements for serve
           "DestinationArn": {
             "Fn::GetAtt": ["APIGatewayLogGroup", "Arn"]
           },
-          "Format": "$context.requestId $context.error.message $context.error.messageString"
+          "Format": "$context.requestId $context.requestTime $context.httpMethod $context.resourcePath $context.status $context.error.message"
         },
         "MethodSettings": [
           {
