@@ -8,9 +8,9 @@ export interface TapStackProps {
 
 export class TapStack extends pulumi.ComponentResource {
   public readonly vpcId: pulumi.Output<string>;
-  public readonly privateSubnetIds: pulumi.Output<string>[];  // Add this
-  public readonly publicSubnetIds: pulumi.Output<string>[];   // Add this
-  public readonly s3BucketName: pulumi.Output<string>;        // Add this
+  public readonly privateSubnetIds: pulumi.Output<string>[];
+  public readonly publicSubnetIds: pulumi.Output<string>[];
+  public readonly s3BucketName: pulumi.Output<string>;
   public readonly primaryDbEndpoint: pulumi.Output<string>;
   public readonly primaryDbIdentifier: pulumi.Output<string>;
   public readonly replicaDbEndpoint: pulumi.Output<string>;
@@ -191,8 +191,7 @@ export class TapStack extends pulumi.ComponentResource {
         dbSubnetGroupName: dbSubnetGroup.name,
         vpcSecurityGroupIds: [dbSecurityGroup.id],
         username: 'dbadmin',
-        // Use traditional password for read replica compatibility
-        password: 'AdminPassword123!', // Will be stored in Secrets Manager separately
+        password: 'AdminPassword123!',
         backupRetentionPeriod: 7,
         backupWindow: '03:00-04:00',
         maintenanceWindow: 'mon:04:00-mon:05:00',
@@ -238,20 +237,21 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Add encryption separately
-    const primaryBucketEncryption = new aws.s3.BucketServerSideEncryptionConfiguration(
-      `dr-backup-primary-encryption-${environmentSuffix}`,
-      {
-        bucket: backupBucketPrimary.id,
-        rules: [
-          {
-            applyServerSideEncryptionByDefault: {
-              sseAlgorithm: 'AES256',
+    const primaryBucketEncryption =
+      new aws.s3.BucketServerSideEncryptionConfiguration(
+        `dr-backup-primary-encryption-${environmentSuffix}`,
+        {
+          bucket: backupBucketPrimary.id,
+          rules: [
+            {
+              applyServerSideEncryptionByDefault: {
+                sseAlgorithm: 'AES256',
+              },
             },
-          },
-        ],
-      },
-      { provider, parent: this }
-    );
+          ],
+        },
+        { provider, parent: this }
+      );
 
     // Add lifecycle separately
     const primaryBucketLifecycle = new aws.s3.BucketLifecycleConfiguration(
@@ -293,20 +293,21 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Add encryption for replica bucket
-    const replicaBucketEncryption = new aws.s3.BucketServerSideEncryptionConfiguration(
-      `dr-backup-replica-encryption-${environmentSuffix}`,
-      {
-        bucket: backupBucketReplica.id,
-        rules: [
-          {
-            applyServerSideEncryptionByDefault: {
-              sseAlgorithm: 'AES256',
+    const replicaBucketEncryption =
+      new aws.s3.BucketServerSideEncryptionConfiguration(
+        `dr-backup-replica-encryption-${environmentSuffix}`,
+        {
+          bucket: backupBucketReplica.id,
+          rules: [
+            {
+              applyServerSideEncryptionByDefault: {
+                sseAlgorithm: 'AES256',
+              },
             },
-          },
-        ],
-      },
-      { provider, parent: this }
-    );
+          ],
+        },
+        { provider, parent: this }
+      );
 
     const replicaBucketVersioning = new aws.s3.BucketVersioning(
       `dr-backup-replica-versioning-${environmentSuffix}`,
@@ -665,9 +666,9 @@ export class TapStack extends pulumi.ComponentResource {
     // Register outputs
     this.registerOutputs({
       vpcId: vpc.id,
-      privateSubnetIds: [privateSubnet1.id, privateSubnet2.id],  // Add this
-      publicSubnetIds: [],  // Add this (empty since no public subnets)
-      s3BucketName: backupBucketPrimary.bucket,  // Add this
+      privateSubnetIds: [privateSubnet1.id, privateSubnet2.id],
+      publicSubnetIds: [],
+      s3BucketName: backupBucketPrimary.bucket,
       primaryDbEndpoint: primaryDb.endpoint,
       primaryDbIdentifier: primaryDb.identifier,
       replicaDbEndpoint: replicaDb.endpoint,
