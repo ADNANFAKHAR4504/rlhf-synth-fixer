@@ -32,6 +32,23 @@ async function generateMetadataFile(metadata: TaskMetadata): Promise<void> {
   }
 }
 
+async function createTfvarsFiles(): Promise<void> {
+  const libDir = path.join(__dirname, '..', 'lib');
+  const tfvarsFiles = ['dev.tfvars', 'staging.tfvars', 'prod.tfvars'];
+
+  try {
+    await fs.ensureDir(libDir);
+
+    for (const filename of tfvarsFiles) {
+      const filePath = path.join(libDir, filename);
+      await fs.writeFile(filePath, '', 'utf8');
+      console.log(`✓ Created ${filename}`);
+    }
+  } catch (err: unknown) {
+    console.error('Error creating tfvars files:', err);
+  }
+}
+
 async function copyTemplate(templateName: string): Promise<void> {
   const templatesDir = path.join(__dirname, '..', 'templates');
   const templatePath = path.join(templatesDir, templateName);
@@ -146,8 +163,7 @@ const SUBTASK_CHOICES = [
 const subjectLabelsBySubtask: Record<string, string> = {
   'Environment Migration': 'Provisioning of Infrastructure Environments',
   'Cloud Environment Setup': 'Provisioning of Infrastructure Environments',
-  'Multi-Environment Consistency':
-    'Provisioning of Infrastructure Environments',
+  'Multi-Environment Consistency': 'IaC-Multi-Environment-Management',
   'Web Application Deployment': 'Provisioning of Infrastructure Environments',
 
   'Serverless Infrastructure (Functions as Code)': 'Application Deployment',
@@ -295,16 +311,13 @@ async function main(): Promise<void> {
       taskSubCategory === 'Multi-Environment Consistency' &&
       platform === 'tf'
     ) {
-      deployEnv = await input({
-        message:
-          'Enter the deployment environment tfvars (e.g., dev.tfvars, staging.tfvars, prod.tfvars):',
-        validate: value => {
-          if (!value || !value.trim()) {
-            return 'Deployment environment is required';
-          }
-          return true;
-        },
-        default: 'dev.tfvars',
+      deployEnv = await select({
+        message: 'Select the deployment environment tfvars:',
+        choices: [
+          { name: 'dev.tfvars', value: 'dev.tfvars' },
+          { name: 'staging.tfvars', value: 'staging.tfvars' },
+          { name: 'prod.tfvars', value: 'prod.tfvars' },
+        ],
       });
     }
 
@@ -361,6 +374,15 @@ async function main(): Promise<void> {
     if (confirmApply) {
       await copyTemplate(templateName);
       await generateMetadataFile(metadata);
+
+      // Create tfvars files for Multi-Environment Consistency with Terraform
+      if (
+        taskSubCategory === 'Multi-Environment Consistency' &&
+        platform === 'tf'
+      ) {
+        await createTfvarsFiles();
+      }
+
       console.log('\n🎉 RLHF task created successfully!');
     } else {
       console.log('Operation cancelled');
