@@ -11,19 +11,19 @@ export interface TapStackArgs {
     account?: string;
     region?: string;
   };
-  
+
   // ADD THIS PROPERTY TO FIX THE ERROR
   tags?: {
     [key: string]: string;
   };
-  
+
   // Dev environment resource IDs for import
   devRdsInstanceId?: string;
   devVpcId?: string;
-  
+
   // Migration configuration
   migrationPhase?: "initial" | "snapshot" | "blue-green" | "traffic-shift-10" | "traffic-shift-50" | "traffic-shift-100" | "complete";
-  
+
   // Existing resources to import
   devEnvironment?: {
     rdsInstanceIdentifier: string;
@@ -633,36 +633,36 @@ export class TapStack extends pulumi.ComponentResource {
         storageType: "gp3",
         storageEncrypted: true,
         kmsKeyId: this.kmsKey.arn,
-        
+
         multiAz: true,
-        
+
         dbSubnetGroupName: dbSubnetGroup.name,
         vpcSecurityGroupIds: [this.dbSecurityGroup.id],
         publiclyAccessible: false,
-        
+
         backupRetentionPeriod: 7,
         backupWindow: "03:00-04:00",
         maintenanceWindow: "mon:04:00-mon:05:00",
-        
+
         username: "admin",
         password: pulumi.secret("ChangeMe12345!"),
-        
+
         monitoringInterval: 60,
         monitoringRoleArn: this.createRdsMonitoringRole(args, defaultOpts).arn,
         enabledCloudwatchLogsExports: ["error", "general", "slowquery"],
-        
+
         performanceInsightsEnabled: true,
         performanceInsightsKmsKeyId: this.kmsKey.arn,
         performanceInsightsRetentionPeriod: 7,
-        
+
         snapshotIdentifier: snapshotIdentifier,
         skipFinalSnapshot: false,
         finalSnapshotIdentifier: `prod-final-snapshot-${randomSuffix}`,
-        
+
         deletionProtection: true,
-        
+
         parameterGroupName: dbParameterGroup.name,
-        
+
         tags: {
           Environment: "production",
           ManagedBy: "pulumi",
@@ -684,11 +684,11 @@ export class TapStack extends pulumi.ComponentResource {
       `prod-logs-${args.environmentSuffix}`,
       {
         bucket: `prod-logs-${args.environmentSuffix}-${randomSuffix}`,
-        
+
         versioning: {
           enabled: true,
         },
-        
+
         serverSideEncryptionConfiguration: {
           rule: {
             applyServerSideEncryptionByDefault: {
@@ -697,7 +697,7 @@ export class TapStack extends pulumi.ComponentResource {
             bucketKeyEnabled: true,
           },
         },
-        
+
         lifecycleRules: [
           {
             id: "transition-to-ia",
@@ -717,7 +717,7 @@ export class TapStack extends pulumi.ComponentResource {
             },
           },
         ],
-        
+
         tags: {
           Environment: "production",
           ManagedBy: "pulumi",
@@ -897,13 +897,13 @@ export class TapStack extends pulumi.ComponentResource {
         securityGroups: [this.albSecurityGroup.id],
         enableHttp2: true,
         enableDeletionProtection: true,
-        
+
         accessLogs: {
           bucket: this.prodLogBucket.id,
           prefix: "alb-logs",
           enabled: true,
         },
-        
+
         tags: {
           Environment: "production",
           ManagedBy: "pulumi",
@@ -923,7 +923,7 @@ export class TapStack extends pulumi.ComponentResource {
         protocol: "HTTP",
         vpcId: this.vpc.id,
         targetType: "instance",
-        
+
         healthCheck: {
           enabled: true,
           path: "/health",
@@ -934,9 +934,9 @@ export class TapStack extends pulumi.ComponentResource {
           healthyThreshold: 2,
           unhealthyThreshold: 2,
         },
-        
+
         deregistrationDelay: 30,
-        
+
         tags: {
           Environment: "production",
           ManagedBy: "pulumi",
@@ -955,7 +955,7 @@ export class TapStack extends pulumi.ComponentResource {
         protocol: "HTTP",
         vpcId: this.vpc.id,
         targetType: "instance",
-        
+
         healthCheck: {
           enabled: true,
           path: "/health",
@@ -966,9 +966,9 @@ export class TapStack extends pulumi.ComponentResource {
           healthyThreshold: 2,
           unhealthyThreshold: 2,
         },
-        
+
         deregistrationDelay: 30,
-        
+
         tags: {
           Environment: "production",
           ManagedBy: "pulumi",
@@ -987,7 +987,7 @@ export class TapStack extends pulumi.ComponentResource {
         port: 443,
         protocol: "HTTPS",
         sslPolicy: "ELBSecurityPolicy-TLS-1-2-2017-01",
-        
+
         defaultActions: [
           {
             type: "forward",
@@ -1023,19 +1023,19 @@ export class TapStack extends pulumi.ComponentResource {
       {
         imageId: ami.then((a) => a.id),
         instanceType: "m5.large",
-        
+
         iamInstanceProfile: {
           arn: instanceProfile.arn,
         },
-        
+
         vpcSecurityGroupIds: [this.prodSecurityGroup.id],
-        
+
         metadataOptions: {
           httpEndpoint: "enabled",
           httpTokens: "required",
           httpPutResponseHopLimit: 1,
         },
-        
+
         blockDeviceMappings: [
           {
             deviceName: "/dev/xvda",
@@ -1048,7 +1048,7 @@ export class TapStack extends pulumi.ComponentResource {
             },
           },
         ],
-        
+
         userData: pulumi.output(this.prodRdsInstance.endpoint).apply(endpoint =>
           Buffer.from(`#!/bin/bash
 yum update -y
@@ -1083,7 +1083,7 @@ echo "DB_ENDPOINT=${endpoint}" >> /etc/environment
 docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
 `).toString("base64")
         ),
-        
+
         tagSpecifications: [
           {
             resourceType: "instance",
@@ -1096,7 +1096,7 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
             },
           },
         ],
-        
+
         tags: {
           Environment: "production",
           ManagedBy: "pulumi",
@@ -1111,19 +1111,19 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
       {
         vpcZoneIdentifiers: this.privateSubnets.map((s) => s.id),
         targetGroupArns: [this.targetGroupGreen.arn],
-        
+
         minSize: 3,
         maxSize: 9,
         desiredCapacity: 3,
-        
+
         healthCheckType: "ELB",
         healthCheckGracePeriod: 300,
-        
+
         launchTemplate: {
           id: launchTemplateGreen.id,
           version: "$Latest",
         },
-        
+
         tags: [
           {
             key: "Environment",
@@ -1178,19 +1178,19 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
         {
           imageId: ami.then((a) => a.id),
           instanceType: "t3.micro",
-          
+
           iamInstanceProfile: {
             arn: instanceProfile.arn,
           },
-          
+
           vpcSecurityGroupIds: [this.prodSecurityGroup.id],
-          
+
           metadataOptions: {
             httpEndpoint: "enabled",
             httpTokens: "required",
             httpPutResponseHopLimit: 1,
           },
-          
+
           blockDeviceMappings: [
             {
               deviceName: "/dev/xvda",
@@ -1203,7 +1203,7 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
               },
             },
           ],
-          
+
           tags: {
             Environment: "development",
             ManagedBy: "pulumi",
@@ -1218,19 +1218,19 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
         {
           vpcZoneIdentifiers: this.privateSubnets.map((s) => s.id),
           targetGroupArns: [this.targetGroupBlue.arn],
-          
+
           minSize: 0,
           maxSize: 3,
           desiredCapacity: migrationPhase === "initial" || migrationPhase === "traffic-shift-10" ? 1 : 0,
-          
+
           healthCheckType: "ELB",
           healthCheckGracePeriod: 300,
-          
+
           launchTemplate: {
             id: launchTemplateBlue.id,
             version: "$Latest",
           },
-          
+
           tags: [
             {
               key: "Environment",
@@ -1254,13 +1254,14 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
     }
 
     // =========================================================================
-    // 9. Route53
+    // 9. Route53 - FIXED
     // =========================================================================
 
     this.route53Zone = new aws.route53.Zone(
       `prod-zone-${args.environmentSuffix}`,
       {
-        name: `production-${args.environmentSuffix}.example.com`,
+        // FIXED: Changed from production-pr5597.example.com to valid domain
+        name: `app-${args.environmentSuffix}.internal.local`,
         comment: "Production hosted zone for payment processing",
         tags: {
           Environment: "production",
@@ -1279,9 +1280,10 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
       `prod-record-green-${args.environmentSuffix}`,
       {
         zoneId: this.route53Zone.zoneId,
-        name: `app.production-${args.environmentSuffix}.example.com`,
+        // FIXED: Updated to match new zone name
+        name: `app.app-${args.environmentSuffix}.internal.local`,
         type: "A",
-        
+
         aliases: [
           {
             name: this.alb.dnsName,
@@ -1289,7 +1291,7 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
             evaluateTargetHealth: true,
           },
         ],
-        
+
         setIdentifier: "green-production",
         weightedRoutingPolicies: [
           {
@@ -1305,9 +1307,10 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
         `prod-record-blue-${args.environmentSuffix}`,
         {
           zoneId: this.route53Zone.zoneId,
-          name: `app.production-${args.environmentSuffix}.example.com`,
+          // FIXED: Updated to match new zone name
+          name: `app.app-${args.environmentSuffix}.internal.local`,
           type: "A",
-          
+
           aliases: [
             {
               name: this.alb.dnsName,
@@ -1315,7 +1318,7 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
               evaluateTargetHealth: true,
             },
           ],
-          
+
           setIdentifier: "blue-development",
           weightedRoutingPolicies: [
             {
@@ -1326,6 +1329,7 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
         defaultOpts
       );
     }
+
 
     // =========================================================================
     // 10. CloudWatch Alarms
