@@ -295,31 +295,22 @@ describe('Integration Tests for Serverless Security Configuration Stack', () => 
   describe('[SERVICE-LEVEL] CloudWatch Logs - Query Lambda Execution Logs', () => {
     test('should query CloudWatch Logs for Lambda execution records', async () => {
       const logGroupName = `/aws/lambda/${lambdaFunctionName}`;
-      const startTime = Date.now() - 600000; // Last 10 minutes
+      const startTime = Date.now();
 
       // First, invoke Lambda to generate logs
       await invokeLambda(lambdaFunctionName, { testType: 'log-generation' });
 
-      // Wait a bit for logs to propagate
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-
-      // ACTION: Actually query CloudWatch Logs
-      const logsResponse = await cloudWatchLogsClient.send(
-        new FilterLogEventsCommand({
-          logGroupName,
-          startTime,
-          limit: 50,
-        })
-      );
+      // ACTION: Wait for logs to appear in CloudWatch (using waitForLogs helper for VPC Lambda cold start)
+      const logs = await waitForLogs(logGroupName, '', startTime, 60000);
 
       // Verify logs exist
-      expect(logsResponse.events).toBeDefined();
-      expect(logsResponse.events!.length).toBeGreaterThan(0);
+      expect(logs).toBeDefined();
+      expect(logs.length).toBeGreaterThan(0);
 
       // Verify log events contain Lambda execution information
-      const logMessages = logsResponse.events!.map((e) => e.message || '').join(' ');
+      const logMessages = logs.map((e) => e.message || '').join(' ');
       expect(logMessages).toContain('START RequestId');
-    }, 60000);
+    }, 90000);
 
     test('should verify Lambda log group has correct retention period', async () => {
       const logGroupName = `/aws/lambda/${lambdaFunctionName}`;
@@ -451,22 +442,13 @@ describe('Integration Tests for Serverless Security Configuration Stack', () => 
       // ACTION: Call API Gateway
       await fetch(apiGatewayUrl, { method: 'GET' });
 
-      // Wait for logs to propagate
-      await new Promise((resolve) => setTimeout(resolve, 8000));
-
-      // Verify Lambda was invoked by API Gateway (check logs)
+      // Verify Lambda was invoked by API Gateway (wait for logs using waitForLogs helper for VPC Lambda cold start)
       const logGroupName = `/aws/lambda/${lambdaFunctionName}`;
-      const logsResponse = await cloudWatchLogsClient.send(
-        new FilterLogEventsCommand({
-          logGroupName,
-          startTime,
-          limit: 50,
-        })
-      );
+      const logs = await waitForLogs(logGroupName, '', startTime, 60000);
 
-      expect(logsResponse.events).toBeDefined();
-      expect(logsResponse.events!.length).toBeGreaterThan(0);
-    }, 60000);
+      expect(logs).toBeDefined();
+      expect(logs.length).toBeGreaterThan(0);
+    }, 90000);
   });
 
   describe('[CROSS-SERVICE] Lambda → CloudWatch Logs Integration', () => {
