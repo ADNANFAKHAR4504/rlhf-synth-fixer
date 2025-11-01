@@ -7,9 +7,9 @@
  * It orchestrates the instantiation of other resource-specific components
  * and manages environment-specific configurations.
  */
+import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
-import * as aws from '@pulumi/aws';
 import * as path from 'path';
 
 export interface TapStackArgs {
@@ -23,10 +23,15 @@ export interface TapStackArgs {
 
 export class TapStack extends pulumi.ComponentResource {
   public readonly apiUrl: pulumi.Output<string>;
+  public readonly apiEndpoint: pulumi.Output<string>;
   public readonly dynamoTableName: pulumi.Output<string>;
   public readonly lambdaFunctionName: pulumi.Output<string>;
+  public readonly lambdaRoleArn: pulumi.Output<string>;
   public readonly snsTopicArn: pulumi.Output<string>;
   public readonly dlqUrl: pulumi.Output<string>;
+  public readonly usagePlanId: pulumi.Output<string>;
+  public readonly lambdaLogGroupName: pulumi.Output<string>;
+  public readonly lambdaErrorAlarmName: pulumi.Output<string>;
 
   constructor(name: string, args: TapStackArgs = {}, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
@@ -401,7 +406,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         restApi: restApi.id,
         deployment: deployment.id,
-        stageName: environmentSuffix,
+        stageName: 'prod',
         xrayTracingEnabled: true,
         accessLogSettings: {
           destinationArn: apiLogGroup.arn,
@@ -479,13 +484,13 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, provider }
     );
 
-    new aws.cloudwatch.MetricAlarm(
+    const errorAlarm = new aws.cloudwatch.MetricAlarm(
       `webhook-error-alarm-${environmentSuffix}`,
       {
         name: `webhook-error-alarm-${environmentSuffix}`,
         alarmDescription:
           'Alarm when webhook processor errors exceed 5 within five minutes',
-        comparisonOperator: 'GreaterThanOrEqualToThreshold',
+        comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 1,
         threshold: 5,
         metricName: 'Errors',
@@ -502,19 +507,30 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     this.apiUrl = pulumi.interpolate`https://${restApi.id}.execute-api.${region}.amazonaws.com/${stage.stageName}`;
+    this.apiEndpoint = pulumi.interpolate`${this.apiUrl}/webhook`;
     this.dynamoTableName = table.name;
     this.lambdaFunctionName = lambdaFunction.name;
+    this.lambdaRoleArn = lambdaRole.arn;
     this.snsTopicArn = failureTopic.arn;
     this.dlqUrl = deadLetterQueue.id;
+    this.usagePlanId = usagePlan.id;
+    this.lambdaLogGroupName = lambdaLogGroup.name;
+    this.lambdaErrorAlarmName = errorAlarm.name;
 
     this.registerOutputs({
       apiUrl: this.apiUrl,
+      apiEndpoint: this.apiEndpoint,
       dynamoTableName: this.dynamoTableName,
       lambdaFunctionName: this.lambdaFunctionName,
+      lambdaRoleArn: this.lambdaRoleArn,
       snsTopicArn: this.snsTopicArn,
       dlqUrl: this.dlqUrl,
+      usagePlanId: this.usagePlanId,
+      lambdaLogGroupName: this.lambdaLogGroupName,
+      lambdaErrorAlarmName: this.lambdaErrorAlarmName,
       environmentSuffix,
       region,
+      region_output: region,
       stateBucket: args.stateBucket ?? config.get('stateBucket') ?? null,
       stateBucketRegion:
         args.stateBucketRegion ?? config.get('stateBucketRegion') ?? null,
