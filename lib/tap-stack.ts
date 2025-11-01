@@ -392,6 +392,39 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, provider }
     );
 
+    // IAM role for API Gateway CloudWatch logging
+    const apiGatewayLoggingRole = new aws.iam.Role(
+      `api-gateway-logging-role-${environmentSuffix}`,
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: {
+                Service: 'apigateway.amazonaws.com',
+              },
+              Action: 'sts:AssumeRole',
+            },
+          ],
+        }),
+        managedPolicyArns: [
+          'arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs',
+        ],
+        tags: mergedTags,
+      },
+      { parent: this, provider }
+    );
+
+    // Set API Gateway account settings (required for CloudWatch logging)
+    const apiGatewayAccount = new aws.apigateway.Account(
+      `api-gateway-account-${environmentSuffix}`,
+      {
+        cloudwatchRoleArn: apiGatewayLoggingRole.arn,
+      },
+      { parent: this, provider }
+    );
+
     const deployment = new aws.apigateway.Deployment(
       `webhook-deployment-${environmentSuffix}`,
       {
@@ -423,7 +456,7 @@ export class TapStack extends pulumi.ComponentResource {
         },
         tags: mergedTags,
       },
-      { parent: this, provider }
+      { parent: this, provider, dependsOn: [apiGatewayAccount] }
     );
 
     new aws.apigateway.MethodSettings(
