@@ -1111,8 +1111,7 @@ The architecture balances high availability with security requirements for serve
             "Arn"
           ]
         }
-      },
-      "DependsOn": "APIGatewayCloudWatchRole"
+      }
     },
     "APIGatewayRequestValidator": {
       "Type": "AWS::ApiGateway::RequestValidator",
