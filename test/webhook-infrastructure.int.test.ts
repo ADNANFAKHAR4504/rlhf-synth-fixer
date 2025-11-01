@@ -300,7 +300,7 @@ describe('Webhook Infrastructure Integration Tests', () => {
     it('should verify CloudWatch alarm exists with correct configuration', async () => {
       const alarmName = outputs.lambdaErrorAlarmName;
       expect(alarmName).toBeDefined();
-      expect(alarmName).toContain('webhook-lambda-error-alarm');
+      expect(alarmName).toContain('webhook-error-alarm');
 
       const command = new DescribeAlarmsCommand({
         AlarmNames: [alarmName],

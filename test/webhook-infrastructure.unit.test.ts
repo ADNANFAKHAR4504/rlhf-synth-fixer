@@ -76,7 +76,7 @@ describe('TapStack outputs', () => {
     });
 
     expect(outputs.apiUrl).toContain('https://');
-    expect(outputs.apiUrl).toContain('/test');
+    expect(outputs.apiUrl).toContain('/prod');
   });
 
   it('exports the failure notification topic ARN', async () => {
@@ -199,6 +199,6 @@ describe('TapStack configuration fallbacks', () => {
     });
 
     expect(outputs.apiUrl).toContain('.eu-west-1.amazonaws.com/');
-    expect(outputs.apiUrl).toContain('/dev');
+    expect(outputs.apiUrl).toContain('/prod');
   });
 });
