@@ -160,9 +160,7 @@ export class TapStack extends cdk.Stack {
     const codebuildRole = new iam.Role(this, 'CodeBuildServiceRole', {
       assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'CloudWatchLogsFullAccess'
-        ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchLogsFullAccess'),
       ],
     });
 
@@ -183,7 +181,6 @@ export class TapStack extends cdk.Stack {
         },
       }),
     });
-
 
     const promotionFn = new lambda.Function(this, 'ConfigPromotionFn', {
       runtime: lambda.Runtime.NODEJS_20_X,
