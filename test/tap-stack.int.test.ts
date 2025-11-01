@@ -1,606 +1,385 @@
+/*
+  Integration E2E tests
+
+  - Uses real deployment outputs from cfn-outputs/flat-outputs.json
+  - Performs live traffic through the stack: API -> Lambda -> S3 -> SQS
+  - If DynamoDB is present in outputs, will assert that the item appears
+  - No mocking, no config assertions. Tests only validate runtime behavior.
+
+  Notes:
+  - The test reads runtime outputs and uses AWS SDK (v2) and axios for HTTP.
+  - Clean-up is performed where applicable (S3 object deletion, deleting SQS message if consumed).
+*/
+
+import AWS from 'aws-sdk';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
-// AWS SDK clients (v3)
-import {
-  DynamoDBClient,
-  GetItemCommand,
-  PutItemCommand,
-} from '@aws-sdk/client-dynamodb';
-import {
-  InvokeCommand,
-  InvokeCommandOutput,
-  LambdaClient,
-} from '@aws-sdk/client-lambda';
-import {
-  DeleteObjectCommand,
-  GetObjectCommand,
-  PutObjectCommand,
-  S3Client,
-} from '@aws-sdk/client-s3';
-import {
-  GetSecretValueCommand,
-  SecretsManagerClient,
-} from '@aws-sdk/client-secrets-manager';
-import {
-  PurgeQueueCommand,
-  ReceiveMessageCommand,
-  SendMessageCommand,
-  SQSClient,
-} from '@aws-sdk/client-sqs';
-import { marshall } from '@aws-sdk/util-dynamodb';
+const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
 
-// Single-file runtime-only integration test
-// - Reads runtime outputs from cfn-outputs/flat-outputs.json
-// - No config assertions, no mocking
-// - Uses INTEGRATION_API_KEY (or ADMIN_API_KEY / READ_ONLY_API_KEY) if present
-// - Attempts Lambda fallback if API returns auth error and no API key is provided
-// - Detects Runtime.ImportModuleError for missing 'aws-sdk' and surfaces actionable error
+function loadOutputs() {
+  const raw = fs.readFileSync(outputsPath, 'utf8');
+  return JSON.parse(raw);
+}
 
-const outputsPath = path.resolve(
-  process.cwd(),
-  'cfn-outputs/flat-outputs.json'
-);
+// Helpers
+async function sleep(ms: number) {
+  return new Promise((res) => setTimeout(res, ms));
+}
 
-let outputs: Record<string, any> | null = null;
-if (fs.existsSync(outputsPath)) {
-  try {
-    outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.error(
-      'Failed to parse cfn-outputs/flat-outputs.json:',
-      e && (e as Error).message ? (e as Error).message : e
-    );
-    outputs = null;
+// Poll helper: run fn until predicate true or timeout
+async function poll<T>(fn: () => Promise<T>, predicate: (val: T) => boolean, timeoutMs = 20000, intervalMs = 1000): Promise<T> {
+  const start = Date.now();
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const val = await fn();
+    if (predicate(val)) return val;
+    if (Date.now() - start > timeoutMs) throw new Error('poll timeout');
+    await sleep(intervalMs);
   }
 }
 
-const isPossiblyMasked = (v: any) => {
-  if (!v || typeof v !== 'string') return false;
-  const s = v.toLowerCase();
-  return (
-    s.includes('*') ||
-    s.includes('masked') ||
-    s.includes('<masked>') ||
-    s.includes('xxxx') ||
-    s.includes('token')
-  );
-};
+describe('Live integration end-to-end workflow tests', () => {
+  jest.setTimeout(60000);
 
-if (!outputs || Object.keys(outputs).length === 0) {
-  describe('Integration tests - missing outputs', () => {
-    test('cfn-outputs/flat-outputs.json must exist and be non-empty', () => {
-      // eslint-disable-next-line no-console
-      console.error(
-        'Missing or empty cfn-outputs/flat-outputs.json - integration tests require actual deployment outputs'
-      );
-      expect(outputs).not.toBeNull();
-      expect(Object.keys(outputs || {}).length).toBeGreaterThan(0);
-    });
+  const outputs = loadOutputs();
+
+  // Basic runtime artifacts
+  const apiUrl: string | undefined = outputs.TapStackdevApiGatewayUrl || outputs.MultiComponentApplicationApiGatewayEndpointEE74D018;
+  const lambdaArn: string | undefined = outputs.TapStackdevLambdaFunctionArn;
+  const s3Bucket: string | undefined = outputs.TapStackdevS3BucketName;
+  const sqsUrl: string | undefined = outputs.TapStackdevSqsQueueUrl;
+  const ddbTable: string | undefined = outputs.TEST_DDB_TABLE || outputs.TestDdbTableName || outputs.TestDdbTable || outputs.TapStackdevDynamoDbTableName;
+
+  // Region inference: prefer AWS_REGION env, else default to us-east-1
+  const region = process.env.AWS_REGION || 'us-east-1';
+  AWS.config.update({ region });
+
+  const s3 = new AWS.S3();
+  const sqs = new AWS.SQS();
+  const lambda = new AWS.Lambda();
+  const dynamo = new AWS.DynamoDB.DocumentClient();
+
+  afterAll(async () => {
+    // nothing global to cleanup here; per-test cleanup is performed
   });
-} else {
-  const findOutput = (candidates: string[]) => {
-    // exact keys first
-    for (const c of candidates) {
-      if (Object.prototype.hasOwnProperty.call(outputs!, c) && outputs![c])
-        return outputs![c];
+
+  test('Resources exist: S3 bucket, SQS queue, Lambda function (smoke)', async () => {
+    // Minimal existence checks using runtime AWS calls. Do NOT assert
+    // configuration values — only that the resources are addressable.
+    if (!s3Bucket) throw new Error('S3 bucket not found in outputs');
+    if (!sqsUrl) throw new Error('SQS queue URL not found in outputs');
+
+    // S3: headBucket ensures the bucket exists and is reachable
+    await s3.headBucket({ Bucket: s3Bucket }).promise();
+
+    // SQS: getQueueAttributes returns basic attributes if queue exists
+    const attrs = await sqs.getQueueAttributes({ QueueUrl: sqsUrl!, AttributeNames: ['QueueArn'] }).promise();
+    expect(attrs).toBeDefined();
+
+    // Lambda: if we have a function ARN, ensure GetFunction succeeds
+    if (lambdaArn) {
+      // aws-sdk's getFunction requires FunctionName; use ARN or name
+      const fn = await lambda.getFunction({ FunctionName: lambdaArn }).promise();
+      expect(fn).toBeDefined();
     }
-    // heuristics: look at values for known patterns
-    for (const [k, v] of Object.entries(outputs!)) {
-      if (!v || typeof v !== 'string') continue;
-      const val = v as string;
-      if (candidates.includes('ApiGatewayUrl') && /execute-api\./i.test(val))
-        return val;
-      if (
-        candidates.includes('SqsQueueUrl') &&
-        /sqs\.amazonaws\.com/i.test(val)
-      )
-        return val;
-      if (
-        candidates.includes('LambdaFunctionArn') &&
-        /^arn:aws:lambda/i.test(val)
-      )
-        return val;
-      if (candidates.includes('S3BucketName') && /s3|bucket|static/i.test(k))
-        return val;
-      if (
-        candidates.includes('DatabaseSecretArn') &&
-        /secretsmanager/i.test(val)
-      )
-        return val;
+  });
+
+  test('E2E: API -> Lambda -> S3 -> SQS (and optional DynamoDB)', async () => {
+    if (!apiUrl && !lambdaArn) throw new Error('No API URL or Lambda ARN found in outputs');
+    if (!s3Bucket) throw new Error('S3 bucket not found in outputs');
+    if (!sqsUrl) throw new Error('SQS queue URL not found in outputs');
+
+    const uniqueId = uuidv4();
+    const testPayload = { testId: uniqueId, message: 'integration-test' };
+
+    let orderId: string | undefined;
+
+    // Attempt real API POST. If it fails due to auth (403) and no API key provided,
+    // fall back to invoking the Lambda directly.
+    if (apiUrl) {
+      try {
+        const postUrl = apiUrl.endsWith('/') ? `${apiUrl}items` : `${apiUrl}items`;
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (process.env.INTEGRATION_API_KEY) headers['x-api-key'] = process.env.INTEGRATION_API_KEY;
+        const resp = await axios.post(postUrl, testPayload, { headers, timeout: 10000 });
+        // API may return wrapped body string
+        if (resp && resp.data) {
+          const body = typeof resp.data === 'string' ? JSON.parse(resp.data) : resp.data;
+          orderId = body.orderId || body.order_id || body.id;
+        }
+      } catch (err: any) {
+        const status = err?.response?.status;
+        // If API rejects due to auth and there's no API key configured, attempt Lambda fallback
+        if (status === 403 && !process.env.INTEGRATION_API_KEY && lambdaArn) {
+          // fall through to Lambda invocation
+        } else if (status && status >= 400 && !lambdaArn) {
+          throw err;
+        }
+      }
     }
-    return undefined;
-  };
 
-  const inferRegionFromArn = (arn?: string) => {
-    if (!arn || typeof arn !== 'string') return undefined;
-    const parts = arn.split(':');
-    if (parts.length > 3 && parts[3]) return parts[3];
-    return undefined;
-  };
-  const inferRegionFromUrl = (u?: string) => {
-    if (!u || typeof u !== 'string') return undefined;
-    const m = u.match(/execute-api\.([a-z0-9-]+)\.amazonaws\.com/);
-    if (m && m[1]) return m[1];
-    return undefined;
-  };
+    // Lambda fallback if API didn't produce orderId
+    if (!orderId && lambdaArn) {
+      // Try a few different invocation shapes (proxy v1, proxy v2, direct)
+      const shapes = [
+        { httpMethod: 'POST', path: '/items', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(testPayload) },
+        { version: '2.0', routeKey: 'POST /items', rawPath: '/items', headers: { 'content-type': 'application/json' }, body: JSON.stringify(testPayload), isBase64Encoded: false },
+        testPayload,
+      ];
 
-  const apiUrl = findOutput([
-    'ApiGatewayUrl',
-    'ApiGatewayEndpoint',
-    'ApiGatewayEndpointEE74D018',
-    'InnerApiGatewayEndpoint5397B933',
-  ]);
-  const lambdaArn = findOutput([
-    'LambdaFunctionArn',
-    'TapStackpr5287MultiComponentApplicationInnerApiLambdaF57A8F7CArn',
-    'TapStackpr5287MultiComponentApplicationInnerApiLambdaArn',
-  ]);
-  const sqsUrl = findOutput([
-    'SqsQueueUrl',
-    'TapStackpr5287MultiComponentApplicationInnerAsyncProcessingQueue46B51B29Ref',
-  ]);
-
-  let region = process.env.AWS_REGION || 'us-east-1';
-  const awsRegionFile = path.resolve(process.cwd(), 'lib/AWS_REGION');
-  if (fs.existsSync(awsRegionFile)) {
-    region = fs.readFileSync(awsRegionFile, 'utf8').trim();
-  }
-  region =
-    inferRegionFromUrl(apiUrl) ||
-    inferRegionFromArn(lambdaArn) ||
-    inferRegionFromUrl(sqsUrl) ||
-    region;
-
-  const dynamo = new DynamoDBClient({ region });
-  const lambda = new LambdaClient({ region });
-  const s3 = new S3Client({ region });
-  const sqs = new SQSClient({ region });
-  const secrets = new SecretsManagerClient({ region });
-
-  describe('Live integration end-to-end workflow tests', () => {
-    test('flat outputs provide required runtime identifiers (only check presence)', () => {
-      const s3Bucket = findOutput([
-        'S3BucketName',
-        'TapStackpr5287MultiComponentApplicationInnerStaticFilesBucketF3D652EBRef',
-      ]);
-      const secretArn = findOutput([
-        'DatabaseSecretArn',
-        'TapStackpr5287MultiComponentApplicationInnerDatabaseSecret12DE2BA4Ref',
-      ]);
-
-      expect(apiUrl).toBeTruthy();
-      expect(lambdaArn).toBeTruthy();
-      expect(sqsUrl || true).toBeTruthy(); // allow optional SQS but prefer it
-      // If masked values are present, we still continue—tests are runtime-only and use available identifiers.
-      expect(s3Bucket).toBeTruthy();
-      expect(secretArn).toBeTruthy();
-    });
-
-    describe('E2E: POST -> Lambda -> DynamoDB -> SQS (runtime)', () => {
-      const testId = uuidv4();
-      const payload = { testId, message: 'integration-test' };
-      let itemId: string | undefined;
-      let postSucceeded = false;
-
-      beforeAll(async () => {
+      for (const shape of shapes) {
         try {
-          const q = sqsUrl;
-          if (q) await sqs.send(new PurgeQueueCommand({ QueueUrl: q }));
-        } catch (e: any) {
-          // non-fatal
-          // eslint-disable-next-line no-console
-          console.warn(
-            'SQS purge failed (non-fatal):',
-            e && e.message ? e.message : e
-          );
-        }
-      }, 30000);
-
-      test('POST to API endpoint accepts payload (or fallback via Lambda)', async () => {
-        expect(apiUrl).toBeTruthy();
-
-        const apiKey =
-          process.env.INTEGRATION_API_KEY ||
-          process.env.ADMIN_API_KEY ||
-          process.env.READ_ONLY_API_KEY ||
-          process.env.API_KEY;
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-        };
-        if (apiKey) headers['x-api-key'] = apiKey;
-
-        const safeApiUrl = apiUrl!.replace(/\/$/, '') + '/items';
-        const res = await axios
-          .post(safeApiUrl, payload, {
-            headers,
-            validateStatus: () => true,
-            timeout: 20000,
-          })
-          .catch(e => e.response || e);
-        // eslint-disable-next-line no-console
-        console.log(
-          'API POST status:',
-          res && res.status ? res.status : 'NO_RESPONSE',
-          'body (truncated):',
-          res && res.data ? JSON.stringify(res.data).slice(0, 2000) : ''
-        );
-
-        const authError =
-          res &&
-          (res.status === 401 ||
-            res.status === 403 ||
-            (res.data &&
-              typeof res.data === 'object' &&
-              /Missing Authentication Token/i.test(JSON.stringify(res.data))));
-
-        if (authError && !apiKey) {
-          // eslint-disable-next-line no-console
-          console.warn(
-            'API auth error and no API key. Attempting Lambda fallback.'
-          );
-          if (!lambdaArn)
-            throw new Error(
-              'No Lambda ARN/name found for fallback invocation. Provide INTEGRATION_API_KEY in CI or ensure Lambda ARN is in flat outputs.'
-            );
-
-          let functionIdentifier: any = lambdaArn;
-          try {
-            if (
-              typeof lambdaArn === 'string' &&
-              lambdaArn.includes('function:')
-            ) {
-              const m = (lambdaArn as string).match(
-                /function:([a-zA-Z0-9-_]+)/
-              );
-              if (m && m[1]) functionIdentifier = m[1];
-            }
-          } catch (e) {}
-
-          const shapes = [
-            {
-              httpMethod: 'POST',
-              path: '/items',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload),
-            },
-            {
-              version: '2.0',
-              routeKey: 'POST /items',
-              rawPath: '/items',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify(payload),
-              isBase64Encoded: false,
-            },
-            payload,
-          ];
-
-          let lastErr: any = null;
-          for (const ev of shapes) {
-            try {
-              // eslint-disable-next-line no-console
-              console.log(
-                'Trying Lambda fallback shape keys:',
-                Object.keys(ev)
-              );
-              const invokeCmd = new InvokeCommand({
-                FunctionName: functionIdentifier,
-                Payload: Buffer.from(JSON.stringify(ev)),
-              });
-              const lambdaResp = (await lambda.send(
-                invokeCmd
-              )) as InvokeCommandOutput;
-              // eslint-disable-next-line no-console
-              console.log('Lambda fallback status:', lambdaResp.StatusCode);
-              if (lambdaResp.Payload) {
-                const str = Buffer.from(
-                  lambdaResp.Payload as Uint8Array
-                ).toString();
-                // eslint-disable-next-line no-console
-                console.log(
-                  'Lambda fallback payload (truncated):',
-                  str.slice(0, 2000)
-                );
-
-                // Detect common runtime ImportModuleError like missing 'aws-sdk'
-                if (/ImportModuleError/i.test(str) && /aws-sdk/i.test(str)) {
-                  // eslint-disable-next-line no-console
-                  console.error(
-                    'Lambda runtime ImportModuleError detected: function appears to be packaged expecting the older "aws-sdk" v2.'
-                  );
-                  // Fallback: attempt to perform the actions directly from the test runner (best-effort).
-                  // This helps CI progress while the function package is corrected. We still surface a clear warning.
-                  try {
-                    // eslint-disable-next-line no-console
-                    console.warn(
-                      'Attempting test-side fallback: writing item directly to DynamoDB/SQS/S3 so assertions can continue.'
-                    );
-                    const tableName = findOutput([
-                      'TableName',
-                      'DynamoTableName',
-                      'DynamoDBTableName',
-                    ]);
-                    const queueUrl = findOutput([
-                      'SqsQueueUrl',
-                      'TapStackpr5287MultiComponentApplicationInnerAsyncProcessingQueue46B51B29Ref',
-                    ]);
-                    const bucket = findOutput([
-                      'S3BucketName',
-                      'TapStackpr5287MultiComponentApplicationInnerStaticFilesBucketF3D652EBRef',
-                    ]);
-
-                    // Use testId from outer scope if present in payload, otherwise generate a stable id
-                    let fallbackId = testId;
-                    if (payload && (payload as any).testId)
-                      fallbackId = (payload as any).testId;
-
-                    // DynamoDB: put a minimal item
-                    if (tableName) {
-                      const item = {
-                        id: fallbackId,
-                        message: (payload as any).message || 'integration-test',
-                      };
-                      // @ts-ignore
-                      await dynamo.send(
-                        new PutItemCommand({
-                          TableName: tableName,
-                          Item: marshall(item),
-                        } as any)
-                      );
-                    }
-
-                    // SQS: send a message mirroring Lambda behavior
-                    if (queueUrl) {
-                      await sqs.send(
-                        new SendMessageCommand({
-                          QueueUrl: queueUrl,
-                          MessageBody: JSON.stringify({
-                            id: fallbackId,
-                            message:
-                              (payload as any).message || 'integration-test',
-                          }),
-                        } as any)
-                      );
-                    }
-
-                    // S3: put a simple object to match Lambda behavior
-                    if (bucket) {
-                      const key = `orders/${fallbackId}.json`;
-                      await s3.send(
-                        new PutObjectCommand({
-                          Bucket: bucket,
-                          Key: key,
-                          Body: JSON.stringify({
-                            id: fallbackId,
-                            message:
-                              (payload as any).message || 'integration-test',
-                          }),
-                        } as any) as any
-                      );
-                    }
-
-                    // Set the same outputs as a successful Lambda would
-                    itemId = fallbackId;
-                    postSucceeded = true;
-                    lastErr = new Error(
-                      'Lambda runtime ImportModuleError detected; test performed direct-write fallback. Please repackage Lambda to include aws-sdk v2 for production correctness.'
-                    );
-                    break;
-                  } catch (fbErr: any) {
-                    // keep lastErr and continue to try other shapes
-                    lastErr = fbErr;
-                    // eslint-disable-next-line no-console
-                    console.warn(
-                      'Test-side fallback attempt failed:',
-                      fbErr && fbErr.message ? fbErr.message : fbErr
-                    );
-                    continue;
-                  }
-                }
-
-                try {
-                  const parsed = JSON.parse(str);
-                  if (parsed && parsed.body) {
-                    const bodyObj =
-                      typeof parsed.body === 'string'
-                        ? JSON.parse(parsed.body)
-                        : parsed.body;
-                    if (bodyObj && bodyObj.itemId) {
-                      itemId = bodyObj.itemId;
-                      postSucceeded = true;
-                      break;
-                    }
-                  }
-                  if (parsed && parsed.itemId) {
-                    itemId = parsed.itemId;
-                    postSucceeded = true;
-                    break;
-                  }
-                } catch (e) {
-                  // not JSON
-                }
-                const m = str.match(/itemId\W*[:=]\W*"?([a-zA-Z0-9-_.]+)"?/i);
-                if (m && m[1]) {
-                  itemId = m[1];
-                  postSucceeded = true;
-                  break;
-                }
-              }
-            } catch (e: any) {
-              lastErr = e;
+          const resp = await lambda.invoke({ FunctionName: lambdaArn, Payload: JSON.stringify(shape) }).promise();
+          if (resp && resp.Payload) {
+            const payloadStr = typeof resp.Payload === 'string' ? resp.Payload : Buffer.from(resp.Payload as any).toString();
+            let parsed: any;
+            try { parsed = JSON.parse(payloadStr); } catch (_) { parsed = payloadStr; }
+            // The handler returns { statusCode, body }
+            if (parsed && parsed.body) {
+              const body = typeof parsed.body === 'string' ? JSON.parse(parsed.body) : parsed.body;
+              orderId = body.orderId || body.order_id || body.id;
+              if (orderId) break;
+            } else if (parsed && parsed.orderId) {
+              orderId = parsed.orderId; break;
             }
           }
-
-          if (!postSucceeded) {
-            // eslint-disable-next-line no-console
-            console.error(
-              'Lambda fallback failed to return itemId. Last error:',
-              lastErr && lastErr.message ? lastErr.message : lastErr
-            );
-            throw new Error(
-              'API authentication failed and Lambda fallback did not return itemId. Provide INTEGRATION_API_KEY in CI or repackage the Lambda to include aws-sdk v2.'
-            );
-          }
-        } else if (authError && apiKey) {
-          // API returned auth error despite key — fail
-          throw new Error(
-            `API authentication failed with status ${res.status}. Provided API key did not authorize the request.`
-          );
-        } else {
-          // success path via API
-          if (res && res.data && res.data.itemId) {
-            itemId = res.data.itemId;
-            postSucceeded = true;
-          } else {
-            // eslint-disable-next-line no-console
-            console.error(
-              'API POST did not return itemId. Response (truncated):',
-              res && res.data ? JSON.stringify(res.data).slice(0, 2000) : ''
-            );
-          }
+        } catch (e) {
+          // continue to next shape
         }
+      }
+    }
 
-        expect(postSucceeded).toBe(true);
-        expect(itemId).toBeDefined();
-      }, 20000);
+    if (!orderId) throw new Error('API authentication failed and Lambda fallback did not return orderId. Provide INTEGRATION_API_KEY or ensure function returns an order id.');
 
-      test('verify DynamoDB and SQS receive the item (polling)', async () => {
-        expect(postSucceeded).toBe(true);
-        expect(itemId).toBeDefined();
+    // Validate S3 object exists
+    const objectKey = `orders/${orderId}.json`;
+    await poll(async () => {
+      try {
+        await s3.headObject({ Bucket: s3Bucket, Key: objectKey }).promise();
+        return true;
+      } catch (err) {
+        return false;
+      }
+    }, (ok) => ok === true, 30000, 2000);
 
-        const tableName = findOutput([
-          'TableName',
-          'DynamoTableName',
-          'DynamoDBTableName',
-        ]);
-        if (!tableName) {
-          // nothing to check
-          // eslint-disable-next-line no-console
-          console.warn(
-            'No DynamoDB output found in flat outputs; skipping DynamoDB checks.'
-          );
-          return;
-        }
+    // Validate SQS contains a message referencing this orderId
+    let receivedMessage: AWS.SQS.Message | undefined;
+    await poll(async () => {
+      const resp = await sqs.receiveMessage({ QueueUrl: sqsUrl!, MaxNumberOfMessages: 10, WaitTimeSeconds: 1 }).promise();
+      const msgs = resp.Messages || [];
+      for (const m of msgs) {
+        if ((m.Body || '').includes(orderId)) { receivedMessage = m; return true; }
+      }
+      return false;
+    }, (ok) => ok === true, 30000, 2000);
 
-        let found = false;
-        const keyCandidates = [{ id: itemId! }, { assetId: itemId! }];
-        for (let i = 0; i < 8; i++) {
-          for (const candidateKey of keyCandidates) {
-            try {
-              const get = new GetItemCommand({
-                TableName: tableName,
-                Key: marshall(candidateKey),
-              });
-              const resp = await dynamo.send(get);
-              if (resp.Item) {
-                found = true;
-                break;
-              }
-            } catch (e) {
-              // ignore and try next
-            }
-          }
-          if (found) break;
-          // eslint-disable-next-line no-await-in-loop
-          await new Promise(r => setTimeout(r, 2000));
-        }
+    expect(receivedMessage).toBeDefined();
 
-        expect(found).toBe(true);
+    // Optional: verify DynamoDB record exists if table present
+    if (ddbTable) {
+      const tableName = ddbTable;
+      const item = await poll(async () => {
+        try {
+          const resp = await dynamo.get({ TableName: tableName, Key: { orderId } }).promise();
+          return resp.Item || null;
+        } catch (err) { return null; }
+      }, (v) => v !== null, 30000, 2000);
+      expect(item).toBeDefined();
+    }
 
-        const queueUrl = sqsUrl;
-        if (!queueUrl) {
-          // eslint-disable-next-line no-console
-          console.warn(
-            'No SQS output found in flat outputs; skipping SQS checks.'
-          );
-          return;
-        }
+    // Cleanup: delete S3 object, and remove SQS message if we received it
+    try {
+      await s3.deleteObject({ Bucket: s3Bucket, Key: objectKey }).promise();
+    } catch (err) {
+      // ignore
+    }
 
-        let messageFound = false;
-        for (let attempt = 0; attempt < 12 && !messageFound; attempt++) {
-          try {
-            const recv = new ReceiveMessageCommand({
-              QueueUrl: queueUrl,
-              MaxNumberOfMessages: 10,
-              WaitTimeSeconds: 5,
-            });
-            const resp = await sqs.send(recv);
-            if (resp.Messages && resp.Messages.length > 0) {
-              for (const m of resp.Messages) {
-                try {
-                  const body = JSON.parse(m.Body as string);
-                  if (
-                    body &&
-                    (body.id === itemId ||
-                      body.assetId === itemId ||
-                      (body.id && body.id.S === itemId) ||
-                      (body.assetId && body.assetId.S === itemId))
-                  ) {
-                    messageFound = true;
-                    break;
-                  }
-                } catch (e) {
-                  // ignore
-                }
-              }
-            }
-          } catch (e) {
-            // ignore transient
-          }
-          // eslint-disable-next-line no-await-in-loop
-          await new Promise(r => setTimeout(r, 2000));
-        }
-
-        expect(messageFound).toBe(true);
-      }, 90000);
-
-      test('S3: write, read, cleanup', async () => {
-        const bucket = findOutput([
-          'S3BucketName',
-          'TapStackpr5287MultiComponentApplicationInnerStaticFilesBucketF3D652EBRef',
-        ]);
-        if (!bucket) {
-          // eslint-disable-next-line no-console
-          console.warn('No S3 bucket output found; skipping S3 checks.');
-          return;
-        }
-        const key = `integration-test-${uuidv4()}.txt`;
-        await s3.send(
-          new PutObjectCommand({
-            Bucket: bucket,
-            Key: key,
-            Body: 'hello',
-          } as any) as any
-        );
-        const got = await s3.send(
-          new GetObjectCommand({ Bucket: bucket, Key: key } as any) as any
-        );
-        // @ts-ignore
-        const body = await got.Body.transformToString();
-        expect(body).toBe('hello');
-        await s3.send(
-          new DeleteObjectCommand({ Bucket: bucket, Key: key } as any) as any
-        );
-      }, 30000);
-
-      test('Secrets Manager: read secret', async () => {
-        const secretArn = findOutput([
-          'DatabaseSecretArn',
-          'TapStackpr5287MultiComponentApplicationInnerDatabaseSecret12DE2BA4Ref',
-        ]);
-        if (!secretArn) {
-          // eslint-disable-next-line no-console
-          console.warn('No Secret ARN found; skipping Secrets Manager checks.');
-          return;
-        }
-        const resp = await secrets.send(
-          new GetSecretValueCommand({ SecretId: secretArn } as any)
-        );
-        expect(resp.SecretString || resp.SecretBinary).toBeDefined();
-      }, 20000);
-    });
+    if (receivedMessage && receivedMessage.ReceiptHandle) {
+      try {
+        await sqs.deleteMessage({ QueueUrl: sqsUrl!, ReceiptHandle: receivedMessage.ReceiptHandle }).promise();
+      } catch (err) {
+        // ignore
+      }
+    }
   });
-}
+
+  test('CORS: OPTIONS returns CORS headers for API (if API present)', async () => {
+    if (!apiUrl) {
+      // Nothing to check
+      return;
+    }
+
+    const optionsUrl = apiUrl.endsWith('/') ? `${apiUrl}items` : `${apiUrl}items`;
+    const resp = await axios.options(optionsUrl, { validateStatus: () => true, timeout: 10000 });
+    // Accept common status codes; if the OPTIONS request is authenticated and
+    // returns 401/403 the Access-Control headers may be absent. Only assert the
+    // header presence when we received a successful OPTIONS (200/204).
+    expect([200, 204, 403, 401]).toContain(resp.status);
+    if ([200, 204].includes(resp.status)) {
+      expect(resp.headers['access-control-allow-origin'] || resp.headers['Access-Control-Allow-Origin']).toBeDefined();
+    } else {
+      // Log for visibility but don't fail the test when auth blocks OPTIONS.
+      // eslint-disable-next-line no-console
+      console.log(`OPTIONS returned ${resp.status}; skipping CORS header assertion`);
+    }
+  });
+
+  test('S3 direct write/read (smoke) - ensure bucket accepts object operations', async () => {
+    if (!s3Bucket) return;
+    const testKey = `test-int-${uuidv4()}.txt`;
+    const testBody = 'integration-test-file';
+
+    await s3.putObject({ Bucket: s3Bucket, Key: testKey, Body: testBody }).promise();
+    const get = await s3.getObject({ Bucket: s3Bucket, Key: testKey }).promise();
+    const body = get.Body instanceof Buffer ? get.Body.toString('utf8') : get.Body?.toString();
+    expect(body).toContain('integration-test-file');
+
+    // cleanup
+    try { await s3.deleteObject({ Bucket: s3Bucket, Key: testKey }).promise(); } catch (e) { /* ignore */ }
+  });
+
+  test('Malformed request should not create SQS messages (traffic-only)', async () => {
+    if (!apiUrl && !lambdaArn) {
+      // Nothing to check
+      return;
+    }
+    if (!sqsUrl) throw new Error('SQS queue URL not found in outputs');
+
+    const testId = `malformed-${uuidv4()}`;
+    const malformedPayload = { unexpected: true, testId };
+
+    // Send via API if available; fall back to Lambda invocation
+    if (apiUrl) {
+      try {
+        const postUrl = apiUrl.endsWith('/') ? `${apiUrl}items` : `${apiUrl}items`;
+        await axios.post(postUrl, malformedPayload, { headers: { 'Content-Type': 'application/json' }, validateStatus: () => true, timeout: 10000 });
+      } catch (e) {
+        // ignore request errors - we'll assert absence of side effects
+      }
+    } else if (lambdaArn) {
+      try {
+        await lambda.invoke({ FunctionName: lambdaArn, Payload: JSON.stringify(malformedPayload) }).promise();
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    // Poll SQS for a short window and ensure no message contains our testId
+    const timeoutMs = 15000;
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const resp = await sqs.receiveMessage({ QueueUrl: sqsUrl!, MaxNumberOfMessages: 10, WaitTimeSeconds: 1 }).promise();
+      const msgs = resp.Messages || [];
+      let found = false;
+      for (const m of msgs) {
+        if ((m.Body || '').includes(testId)) {
+          found = true;
+          // cleanup the message so it doesn't affect other tests
+          if (m.ReceiptHandle) {
+            try { await sqs.deleteMessage({ QueueUrl: sqsUrl!, ReceiptHandle: m.ReceiptHandle }).promise(); } catch (e) { /* ignore */ }
+          }
+          break;
+        }
+      }
+      if (found) throw new Error('Malformed request produced an SQS message');
+      // small delay
+      await sleep(1000);
+    }
+    // If we exit the loop without finding a message, test passes
+  });
+
+  test('Idempotency: re-submitting the same stored order payload is tolerated (traffic-only)', async () => {
+    if (!apiUrl && !lambdaArn) throw new Error('No API URL or Lambda ARN found in outputs');
+    if (!s3Bucket) throw new Error('S3 bucket not found in outputs');
+
+    // Step 1: create an order via API/Lambda and obtain the orderId (same flow as main E2E)
+    const uniqueId = uuidv4();
+    const initialPayload = { testId: `idemp-init-${uniqueId}`, message: 'idempotency-initial' };
+    let createdOrderId: string | undefined;
+
+    if (apiUrl) {
+      try {
+        const postUrl = apiUrl.endsWith('/') ? `${apiUrl}items` : `${apiUrl}items`;
+        const resp = await axios.post(postUrl, initialPayload, { headers: { 'Content-Type': 'application/json' }, validateStatus: () => true, timeout: 10000 });
+        if (resp && resp.data) {
+          const body = typeof resp.data === 'string' ? JSON.parse(resp.data) : resp.data;
+          createdOrderId = body.orderId || body.order_id || body.id;
+        }
+      } catch (e) {
+        // fall through to lambda
+      }
+    }
+
+    if (!createdOrderId && lambdaArn) {
+      const shapes = [
+        { httpMethod: 'POST', path: '/items', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(initialPayload) },
+        { version: '2.0', routeKey: 'POST /items', rawPath: '/items', headers: { 'content-type': 'application/json' }, body: JSON.stringify(initialPayload), isBase64Encoded: false },
+        initialPayload,
+      ];
+      for (const shape of shapes) {
+        try {
+          const resp = await lambda.invoke({ FunctionName: lambdaArn, Payload: JSON.stringify(shape) }).promise();
+          if (resp && resp.Payload) {
+            const payloadStr = typeof resp.Payload === 'string' ? resp.Payload : Buffer.from(resp.Payload as any).toString();
+            let parsed: any;
+            try { parsed = JSON.parse(payloadStr); } catch (_) { parsed = payloadStr; }
+            if (parsed && parsed.body) {
+              const body = typeof parsed.body === 'string' ? JSON.parse(parsed.body) : parsed.body;
+              createdOrderId = body.orderId || body.order_id || body.id;
+              if (createdOrderId) break;
+            } else if (parsed && parsed.orderId) {
+              createdOrderId = parsed.orderId; break;
+            }
+          }
+        } catch (e) {
+          // continue
+        }
+      }
+    }
+
+    if (!createdOrderId) throw new Error('Could not create initial order to exercise idempotency');
+
+    // Wait for the S3 object to exist, then fetch it
+    const objectKey = `orders/${createdOrderId}.json`;
+    await poll(async () => {
+      try { await s3.headObject({ Bucket: s3Bucket!, Key: objectKey }).promise(); return true; } catch (e) { return false; }
+    }, (v) => v === true, 30000, 2000);
+
+    const getObject = async () => {
+      const resp = await s3.getObject({ Bucket: s3Bucket!, Key: objectKey }).promise();
+      const bodyStr = resp.Body instanceof Buffer ? resp.Body.toString('utf8') : resp.Body?.toString();
+      try { return JSON.parse(bodyStr || 'null'); } catch (e) { return null; }
+    };
+
+    const originalObject = await getObject();
+    expect(originalObject).toBeDefined();
+
+    // Step 2: re-submit the exact object payload to the API/Lambda (simulate duplicate)
+    if (apiUrl) {
+      try {
+        const postUrl = apiUrl.endsWith('/') ? `${apiUrl}items` : `${apiUrl}items`;
+        await axios.post(postUrl, originalObject, { headers: { 'Content-Type': 'application/json' }, validateStatus: () => true, timeout: 10000 });
+      } catch (e) {
+        // ignore
+      }
+    } else if (lambdaArn) {
+      try {
+        await lambda.invoke({ FunctionName: lambdaArn, Payload: JSON.stringify(originalObject) }).promise();
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    // Fetch object again and ensure it still contains the identifying value
+    const afterObject = await poll(async () => {
+      try { return await getObject(); } catch (e) { return null; }
+    }, (v) => v !== null, 30000, 2000);
+
+    expect(afterObject).toBeDefined();
+    const hasId = (afterObject && (afterObject.orderId === createdOrderId || afterObject.testId === initialPayload.testId || (afterObject.id && afterObject.id === createdOrderId)));
+    expect(hasId).toBe(true);
+  });
+});

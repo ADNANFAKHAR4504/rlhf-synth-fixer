@@ -205,8 +205,10 @@ export class MultiComponentApplicationConstruct extends Construct {
       allocatedStorage: 20,
       storageEncrypted: true,
       backupRetention: Duration.days(7),
-      // Protect DB from accidental deletion by default; allowDestroy opt-in disables protection
-      deletionProtection: !allowDestroy,
+      // Disable deletion protection in this branch to allow test/deployment cleanup
+      // (CI or developers can still control removalPolicy via the allowDestroy flag).
+      // Set deletionProtection=false so the DB can be removed when necessary.
+      deletionProtection: false,
       // Default to RETAIN for production; allowDestroy enables DESTROY for CI/dev
       removalPolicy: allowDestroy
         ? RemovalPolicy.DESTROY
@@ -223,12 +225,11 @@ export class MultiComponentApplicationConstruct extends Construct {
     // Prefer a deterministic base suffix for cross-region deployments when provided
     const baseEnvSuffix = props?.baseEnvironmentSuffix as string | undefined;
 
-    const staticFilesBucket = new s3.Bucket(this, 'StaticFilesBucket', {
-      bucketName: canonicalResourceName(
-        'prod-s3-static',
-        baseEnvSuffix,
-        this.stringSuffix
-      ) as string,
+    // Use deterministic bucket names by default so cross-stack references
+    // and deterministic output keys remain stable. This mirrors the prior
+    // behavior and avoids surprises for pipeline deployments.
+
+    const staticFilesBucketProps: s3.BucketProps = {
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -248,7 +249,20 @@ export class MultiComponentApplicationConstruct extends Construct {
           abortIncompleteMultipartUploadAfter: Duration.days(7),
         },
       ],
-    });
+    };
+
+    // Always use a deterministic bucket name (was the default behavior).
+    (staticFilesBucketProps as any).bucketName = canonicalResourceName(
+      'prod-s3-static',
+      baseEnvSuffix,
+      this.stringSuffix
+    ) as string;
+
+    const staticFilesBucket = new s3.Bucket(
+      this,
+      'StaticFilesBucket',
+      staticFilesBucketProps
+    );
 
     // Optional S3 replication: if the CDK context `enableReplication=true`
     // and a `secondaryRegion` prop was forwarded to this nested stack, then
@@ -616,7 +630,9 @@ export class MultiComponentApplicationConstruct extends Construct {
       tracing: lambda.Tracing.ACTIVE,
       role: lambdaRole,
       logRetention: logs.RetentionDays.ONE_WEEK,
-      reservedConcurrentExecutions: 100,
+      // Do not hard-code reserved concurrency here; account limits vary and
+      // can cause deployment failures. Operators can set a reserved concurrency
+      // value via context or overrides if needed.
     });
 
     // Allow Lambda to connect to RDS
