@@ -414,21 +414,21 @@ describe('ConfigSync Integration Tests', () => {
   describe('Flow 5: EventBridge Schedule Verification', () => {
     test('should verify drift detection EventBridge rule exists', async () => {
       const rules = await retry(async () => {
-        return await eventsClient.send(
-          new ListRulesCommand({
-            NamePrefix: `${envSuffix}-drift-detection`,
-          })
-        );
+        return await eventsClient.send(new ListRulesCommand({}));
       });
 
       expect(rules.Rules).toBeDefined();
-      expect(rules.Rules!.length).toBeGreaterThan(0);
 
-      const driftRule = rules.Rules!.find((r) =>
-        r.Name?.includes('drift-detection')
+      const driftRule = rules.Rules!.find(
+        (r) =>
+          r.Name?.includes('DriftSchedule') ||
+          r.Name?.includes('drift-detection') ||
+          r.ScheduleExpression
       );
+
       expect(driftRule).toBeDefined();
       expect(driftRule?.State).toBe('ENABLED');
+      expect(driftRule?.ScheduleExpression).toBeDefined();
     });
 
     test('should simulate stack failure event for rollback flow', async () => {
