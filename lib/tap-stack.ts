@@ -990,11 +990,7 @@ export class TapStack extends pulumi.ComponentResource {
         securityGroups: [this.albSecurityGroup.id],
         enableHttp2: true,
         enableDeletionProtection: true,
-        accessLogs: {
-          bucket: this.prodLogBucket.id,
-          prefix: "alb-logs",
-          enabled: true,
-        },
+        // Remove accessLogs entirely
         tags: {
           Environment: "production",
           ManagedBy: "pulumi",
@@ -1002,7 +998,7 @@ export class TapStack extends pulumi.ComponentResource {
           ...(args.tags || {}),
         },
       },
-      { ...defaultOpts, dependsOn: [albS3Policy] }
+      defaultOpts
     );
 
     this.albDnsName = this.alb.dnsName;
