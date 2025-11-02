@@ -323,10 +323,6 @@ jobs:
           GITHUB_HEAD_REF: ${{ github.head_ref }}
         run: ./scripts/cicd-pipeline.sh
 
-      - name: Cleanup Auto-Generated Workflow File
-        if: always()
-        run: ./scripts/cicd-pipeline-cleanup.sh
-
       - name: Upload Pipeline Configuration
         uses: actions/upload-artifact@v4
         with:
