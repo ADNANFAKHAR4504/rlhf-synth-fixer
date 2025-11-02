@@ -62,17 +62,53 @@ describe('ConfigSync Integration Tests', () => {
   let validationProjectName: string;
 
   beforeAll(() => {
-    const raw = fs.readFileSync(outputsPath, 'utf8');
-    outputs = JSON.parse(raw);
+    if (!fs.existsSync(outputsPath)) {
+      throw new Error(
+        `Outputs file not found: ${outputsPath}. Please deploy the stack first.`
+      );
+    }
+
+    const raw = fs.readFileSync(outputsPath, 'utf8').trim();
+    if (!raw || raw === '{}') {
+      throw new Error(
+        `Outputs file is empty: ${outputsPath}. Stack deployment may not have completed successfully.`
+      );
+    }
+
+    try {
+      outputs = JSON.parse(raw);
+    } catch (error) {
+      throw new Error(
+        `Failed to parse outputs file: ${outputsPath}. Error: ${error}`
+      );
+    }
+
+    if (!outputs || Object.keys(outputs).length === 0) {
+      throw new Error(
+        `Outputs file contains no values: ${outputsPath}. Stack may not have outputs defined.`
+      );
+    }
 
     configTableName = outputs[`${envSuffix}-ConfigTableName`];
     reportsBucketName = outputs[`${envSuffix}-ReportsBucketName`];
     approvalTopicArn = outputs[`${envSuffix}-ApprovalTopicArn`];
     validationProjectName = `${envSuffix}-config-validation`;
 
-    expect(configTableName).toBeDefined();
-    expect(reportsBucketName).toBeDefined();
-    expect(approvalTopicArn).toBeDefined();
+    if (!configTableName) {
+      throw new Error(
+        `Missing output: ${envSuffix}-ConfigTableName. Found keys: ${Object.keys(outputs).join(', ')}`
+      );
+    }
+    if (!reportsBucketName) {
+      throw new Error(
+        `Missing output: ${envSuffix}-ReportsBucketName. Found keys: ${Object.keys(outputs).join(', ')}`
+      );
+    }
+    if (!approvalTopicArn) {
+      throw new Error(
+        `Missing output: ${envSuffix}-ApprovalTopicArn. Found keys: ${Object.keys(outputs).join(', ')}`
+      );
+    }
   });
 
   describe('Flow 1: Drift Detection and Report Storage', () => {
