@@ -175,7 +175,7 @@ variable "log_retention_days" {
 variable "enable_codecommit" {
   description = "Enable CodeCommit repository creation (disable if account doesn't have CodeCommit enabled)"
   type        = bool
-  default     = true
+  default     = false
 }
 
 # ======================================================================================

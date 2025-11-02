@@ -221,7 +221,7 @@ variable "log_retention_days" {
 variable "enable_codecommit" {
   description = "Enable CodeCommit repository creation (disable if account doesn't have CodeCommit enabled)"
   type        = bool
-  default     = true
+  default     = false
 }
 
 # ======================================================================================
@@ -1565,3 +1565,4 @@ The integration tests validate the complete CI/CD workflow from end to end:
 3. **Manual Approval**: Production only, dev/staging auto-deploy
 4. **State Isolation**: Separate state files per environment
 5. **Comprehensive Variables**: Extensive configuration with validation
+6. **Optional CodeCommit**: Set `enable_codecommit = false` by default for accounts without CodeCommit enabled. Set to `true` to enable CodeCommit repository creation.
