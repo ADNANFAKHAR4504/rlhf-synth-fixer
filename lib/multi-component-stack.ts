@@ -176,10 +176,10 @@ export class MultiComponentApplicationConstruct extends Construct {
       this.node.tryGetContext('rdsSubnetGroupName');
     const importedSubnetGroup = importedSubnetGroupName
       ? rds.SubnetGroup.fromSubnetGroupName(
-          this,
-          'ImportedRdsSubnetGroup',
-          String(importedSubnetGroupName)
-        )
+        this,
+        'ImportedRdsSubnetGroup',
+        String(importedSubnetGroupName)
+      )
       : undefined;
 
     const rdsInstance = new rds.DatabaseInstance(this, 'PostgresDatabase', {
@@ -612,9 +612,18 @@ export class MultiComponentApplicationConstruct extends Construct {
       runtime: lambda.Runtime.NODEJS_18_X, // Updated to supported version
       handler: 'index.handler',
       // Use a simple asset path. In CI/local we must ensure dependencies
-      // are present in `lib/lambda/api/node_modules` (e.g. run `npm ci`
-      // under that directory) so the packaged asset includes runtime deps.
-      code: lambda.Code.fromAsset(path.join(__dirname, 'lambda', 'api')),
+      // are present in `lib/lambda/api/node_modules`. To avoid requiring a
+      // manual `prepare.sh` step in CI, use Docker bundling so CDK will run
+      // `npm ci --production` inside a container at synth time and produce
+      // a bundled asset. This makes the deployment more robust across CI
+      // environments that support Docker.
+      code: lambda.Code.fromAsset(path.join(__dirname, 'lambda', 'api'), {
+        bundling: {
+          image: cdk.BundlingDockerImage.fromRegistry('node:18'),
+          // Install production deps and copy the result to /asset-output
+          command: ['bash', '-lc', 'npm ci --production && cp -r . /asset-output'],
+        },
+      }),
       vpc,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
