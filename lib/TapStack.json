@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "NovaCart Secure Foundation - Production-Grade Security Baseline Template (Fixed)",
+    "Description": "NovaCart Secure Foundation - Production-Grade Security Baseline Template",
     "Metadata": {
         "AWS::CloudFormation::Interface": {
             "ParameterGroups": [
