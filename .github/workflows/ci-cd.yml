@@ -768,7 +768,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [detect-metadata, integration-tests-live, claude-code-action]
     if: ${{ always() && !cancelled() && needs.integration-tests-live.result == 'success' && needs.claude-code-action.result == 'success' && ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch' && !inputs.skip_cleanup)) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
-    environment: stage
+    environment: qa
 
     steps:
       - name: Checkout code
