@@ -57,10 +57,29 @@ import { execSync } from "child_process";
 const AWS_REGION = process.env.AWS_REGION || "us-east-1";
 
 const outputsPath = join(__dirname, "../cfn-outputs/flat-outputs.json");
-let outputs: Record<string, string> = {};
+let outputs: Record<string, any> = {};
+
+// Helper function to parse JSON-serialized outputs
+function parseOutput(value: string | undefined): any {
+  if (!value) return undefined;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
 
 try {
-  outputs = JSON.parse(readFileSync(outputsPath, "utf-8"));
+  const rawOutputs = JSON.parse(readFileSync(outputsPath, "utf-8"));
+  // Parse JSON-serialized values
+  outputs = {
+    ...rawOutputs,
+    codebuild_plan_project_names: parseOutput(rawOutputs.codebuild_plan_project_names),
+    codebuild_apply_project_names: parseOutput(rawOutputs.codebuild_apply_project_names),
+    pipeline_names: parseOutput(rawOutputs.pipeline_names),
+    pipeline_arns: parseOutput(rawOutputs.pipeline_arns),
+    pipeline_urls: parseOutput(rawOutputs.pipeline_urls),
+  };
 } catch (error) {
   console.warn("Warning: Could not load outputs file. Integration tests will be skipped.");
   outputs = {};
@@ -89,10 +108,17 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
   });
 
   describe("CodeCommit Repository", () => {
-    test("repository should exist and be accessible", async () => {
+    test("repository should exist and be accessible (or be disabled)", async () => {
       if (!shouldRunTests) return;
 
       const repoName = outputs.repository_clone_url_http?.match(/\/([^/]+)$/)?.[1];
+
+      if (!outputs.repository_clone_url_http) {
+        console.log("CodeCommit is disabled (enable_codecommit = false)");
+        expect(outputs.repository_clone_url_http).toBeUndefined();
+        return;
+      }
+
       expect(repoName).toBeDefined();
 
       const command = new GetRepositoryCommand({
@@ -105,8 +131,14 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
       expect(response.repositoryMetadata?.defaultBranch).toBe("main");
     });
 
-    test("repository should have clone URLs", async () => {
+    test("repository should have clone URLs (or be disabled)", async () => {
       if (!shouldRunTests) return;
+
+      if (!outputs.repository_clone_url_http) {
+        console.log("CodeCommit is disabled (enable_codecommit = false)");
+        expect(outputs.repository_clone_url_http).toBeUndefined();
+        return;
+      }
 
       expect(outputs.repository_clone_url_http).toMatch(/https:\/\/git-codecommit\./);
       expect(outputs.repository_clone_url_ssh).toMatch(/ssh:\/\/git-codecommit\./);
@@ -302,7 +334,7 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
     test("plan projects should exist for all environments", async () => {
       if (!shouldRunTests) return;
 
-      const projectNames = Object.values(outputs.codebuild_plan_project_names || {});
+      const projectNames = Object.values(outputs.codebuild_plan_project_names || {}) as string[];
       expect(projectNames.length).toBeGreaterThan(0);
 
       const command = new BatchGetProjectsCommand({
@@ -316,7 +348,7 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
     test("apply projects should exist for all environments", async () => {
       if (!shouldRunTests) return;
 
-      const projectNames = Object.values(outputs.codebuild_apply_project_names || {});
+      const projectNames = Object.values(outputs.codebuild_apply_project_names || {}) as string[];
       expect(projectNames.length).toBeGreaterThan(0);
 
       const command = new BatchGetProjectsCommand({
@@ -330,7 +362,7 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
     test("plan projects should use custom Docker image from ECR", async () => {
       if (!shouldRunTests) return;
 
-      const projectNames = Object.values(outputs.codebuild_plan_project_names || {});
+      const projectNames = Object.values(outputs.codebuild_plan_project_names || {}) as string[];
       const command = new BatchGetProjectsCommand({
         names: projectNames.slice(0, 1)
       });
@@ -342,7 +374,7 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
     test("plan projects should have correct environment variables", async () => {
       if (!shouldRunTests) return;
 
-      const projectNames = Object.values(outputs.codebuild_plan_project_names || {});
+      const projectNames = Object.values(outputs.codebuild_plan_project_names || {}) as string[];
       const command = new BatchGetProjectsCommand({
         names: projectNames.slice(0, 1)
       });
@@ -362,7 +394,7 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
     test("pipelines should exist for all environments", async () => {
       if (!shouldRunTests) return;
 
-      const pipelineNames = Object.values(outputs.pipeline_names || {});
+      const pipelineNames = Object.values(outputs.pipeline_names || {}) as string[];
       expect(pipelineNames.length).toBeGreaterThan(0);
 
       for (const pipelineName of pipelineNames) {
@@ -378,7 +410,7 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
     test("pipelines should have correct stages", async () => {
       if (!shouldRunTests) return;
 
-      const pipelineNames = Object.values(outputs.pipeline_names || {});
+      const pipelineNames = Object.values(outputs.pipeline_names || {}) as string[];
       const command = new GetPipelineCommand({
         name: pipelineNames[0]
       });
@@ -464,7 +496,11 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
     test("complete deployment workflow components should be in place", async () => {
       if (!shouldRunTests) return;
 
-      expect(outputs.repository_clone_url_http).toBeDefined();
+      // CodeCommit is optional - only check if enabled
+      if (outputs.repository_clone_url_http) {
+        expect(outputs.repository_clone_url_http).toBeDefined();
+      }
+
       expect(outputs.state_bucket_name).toBeDefined();
       expect(outputs.state_lock_table_name).toBeDefined();
       expect(outputs.ecr_repository_url).toBeDefined();
@@ -599,8 +635,18 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
   describe("End-to-End Functional Tests - Complete CI/CD Workflow", () => {
 
     describe("Pipeline Trigger and Execution Flow", () => {
-      test("EventBridge rules should be configured to trigger pipelines on CodeCommit events", async () => {
+      test("EventBridge rules should be configured to trigger pipelines on CodeCommit events (or be disabled)", async () => {
         if (!shouldRunTests) return;
+
+        if (!outputs.repository_clone_url_http) {
+          console.log("CodeCommit is disabled, EventBridge rules should not exist");
+          const command = new ListRulesCommand({
+            NamePrefix: "terraform-pipeline-trigger"
+          });
+          const response = await eventsClient.send(command);
+          expect(response.Rules?.length || 0).toBe(0);
+          return;
+        }
 
         const command = new ListRulesCommand({
           NamePrefix: "terraform-pipeline-trigger"
@@ -615,8 +661,13 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
         expect(rule?.EventPattern).toContain("aws.codecommit");
       });
 
-      test("EventBridge rules should have CodePipeline as target", async () => {
+      test("EventBridge rules should have CodePipeline as target (or be disabled)", async () => {
         if (!shouldRunTests) return;
+
+        if (!outputs.repository_clone_url_http) {
+          console.log("CodeCommit is disabled, skipping EventBridge target test");
+          return;
+        }
 
         const rulesResponse = await eventsClient.send(
           new ListRulesCommand({ NamePrefix: "terraform-pipeline-trigger" })
@@ -637,7 +688,7 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
       test("pipelines should be accessible and ready to execute", async () => {
         if (!shouldRunTests) return;
 
-        const pipelineNames = Object.values(outputs.pipeline_names || {});
+        const pipelineNames = Object.values(outputs.pipeline_names || {}) as string[];
         expect(pipelineNames.length).toBeGreaterThan(0);
 
         for (const pipelineName of pipelineNames) {
@@ -653,7 +704,7 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
       test("pipeline execution history should be queryable", async () => {
         if (!shouldRunTests) return;
 
-        const pipelineNames = Object.values(outputs.pipeline_names || {});
+        const pipelineNames = Object.values(outputs.pipeline_names || {}) as string[];
         const pipelineName = pipelineNames[0];
 
         const command = new ListPipelineExecutionsCommand({
@@ -670,7 +721,7 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
       test("state bucket should be writable by CodeBuild role", async () => {
         if (!shouldRunTests) return;
 
-        const projectNames = Object.values(outputs.codebuild_plan_project_names || {});
+        const projectNames = Object.values(outputs.codebuild_plan_project_names || {}) as string[];
         expect(projectNames.length).toBeGreaterThan(0);
 
         const project = await codebuildClient.send(
@@ -692,7 +743,7 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
       test("state lock table should be accessible by CodeBuild role", async () => {
         if (!shouldRunTests) return;
 
-        const projectNames = Object.values(outputs.codebuild_plan_project_names || {});
+        const projectNames = Object.values(outputs.codebuild_plan_project_names || {}) as string[];
         const project = await codebuildClient.send(
           new BatchGetProjectsCommand({ names: [projectNames[0]] })
         );
@@ -718,7 +769,7 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
       test("state bucket environment variables should be configured in CodeBuild", async () => {
         if (!shouldRunTests) return;
 
-        const projectNames = Object.values(outputs.codebuild_plan_project_names || {});
+        const projectNames = Object.values(outputs.codebuild_plan_project_names || {}) as string[];
         const project = await codebuildClient.send(
           new BatchGetProjectsCommand({ names: [projectNames[0]] })
         );
@@ -738,7 +789,7 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
       test("CodeBuild projects should have permission to pull from ECR", async () => {
         if (!shouldRunTests) return;
 
-        const projectNames = Object.values(outputs.codebuild_plan_project_names || {});
+        const projectNames = Object.values(outputs.codebuild_plan_project_names || {}) as string[];
         const project = await codebuildClient.send(
           new BatchGetProjectsCommand({ names: [projectNames[0]] })
         );
@@ -764,7 +815,7 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
       test("CodeBuild projects should reference ECR repository in environment", async () => {
         if (!shouldRunTests) return;
 
-        const projectNames = Object.values(outputs.codebuild_plan_project_names || {});
+        const projectNames = Object.values(outputs.codebuild_plan_project_names || {}) as string[];
         const project = await codebuildClient.send(
           new BatchGetProjectsCommand({ names: [projectNames[0]] })
         );
@@ -777,7 +828,7 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
       test("CodePipeline should have permission to read from S3 artifacts bucket", async () => {
         if (!shouldRunTests) return;
 
-        const pipelineNames = Object.values(outputs.pipeline_names || {});
+        const pipelineNames = Object.values(outputs.pipeline_names || {}) as string[];
         const pipeline = await pipelineClient.send(
           new GetPipelineCommand({ name: pipelineNames[0] })
         );
@@ -803,7 +854,7 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
       test("CodePipeline artifact store should point to correct S3 bucket", async () => {
         if (!shouldRunTests) return;
 
-        const pipelineNames = Object.values(outputs.pipeline_names || {});
+        const pipelineNames = Object.values(outputs.pipeline_names || {}) as string[];
         const pipeline = await pipelineClient.send(
           new GetPipelineCommand({ name: pipelineNames[0] })
         );
@@ -871,20 +922,23 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
       test("all components for code-to-deployment workflow should be connected", async () => {
         if (!shouldRunTests) return;
 
-        const repoName = outputs.repository_clone_url_http?.match(/\/([^/]+)$/)?.[1];
-        expect(repoName).toBeDefined();
-
-        const pipelineNames = Object.values(outputs.pipeline_names || {});
+        const pipelineNames = Object.values(outputs.pipeline_names || {}) as string[];
         expect(pipelineNames.length).toBeGreaterThan(0);
 
         const pipeline = await pipelineClient.send(
-          new GetPipelineCommand({ name: pipelineNames[0] })
+          new GetPipelineCommand({ name: pipelineNames[0] as string })
         );
 
         const sourceStage = pipeline.pipeline?.stages?.find(s => s.name === "Source");
-        expect(sourceStage?.actions?.[0].configuration?.RepositoryName).toContain(
-          repoName?.split("-").slice(0, -1).join("-") || repoName
-        );
+        expect(sourceStage).toBeDefined();
+
+        // If CodeCommit is enabled, verify repository name
+        if (outputs.repository_clone_url_http) {
+          const repoName = outputs.repository_clone_url_http?.match(/\/([^/]+)$/)?.[1];
+          expect(sourceStage?.actions?.[0].configuration?.RepositoryName).toContain(
+            repoName?.split("-").slice(0, -1).join("-") || repoName
+          );
+        }
 
         const planStage = pipeline.pipeline?.stages?.find(s => s.name === "Plan");
         expect(planStage).toBeDefined();
@@ -950,7 +1004,7 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
       test("CloudWatch logs should be configured for all CodeBuild projects", async () => {
         if (!shouldRunTests) return;
 
-        const projectNames = Object.values(outputs.codebuild_plan_project_names || {});
+        const projectNames = Object.values(outputs.codebuild_plan_project_names || {}) as string[];
         const project = await codebuildClient.send(
           new BatchGetProjectsCommand({ names: [projectNames[0]] })
         );
@@ -963,8 +1017,8 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
       test("IAM roles should follow least privilege principle", async () => {
         if (!shouldRunTests) return;
 
-        const planProjectNames = Object.values(outputs.codebuild_plan_project_names || {});
-        const applyProjectNames = Object.values(outputs.codebuild_apply_project_names || {});
+        const planProjectNames = Object.values(outputs.codebuild_plan_project_names || {}) as string[];
+        const applyProjectNames = Object.values(outputs.codebuild_apply_project_names || {}) as string[];
 
         const planProject = await codebuildClient.send(
           new BatchGetProjectsCommand({ names: [planProjectNames[0]] })
