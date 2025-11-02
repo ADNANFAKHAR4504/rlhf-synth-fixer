@@ -854,7 +854,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         name: `/aws/alb/prod-alb-${args.environmentSuffix}`,
         retentionInDays: 30,
-        kmsKeyId: this.kmsKey.arn,
+        kmsKeyId: this.kmsKey.keyId,
         tags: {
           Environment: "production",
           ManagedBy: "pulumi",
