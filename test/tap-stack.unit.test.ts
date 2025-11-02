@@ -1,3 +1,7 @@
+/* eslint-disable quotes */
+/* eslint-disable @typescript-eslint/quotes */
+/* eslint-disable prettier/prettier */
+
 import * as pulumi from "@pulumi/pulumi";
 import * as assert from "assert";
 import { TapStack } from "../lib/tap-stack";

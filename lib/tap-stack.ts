@@ -1,3 +1,7 @@
+/* eslint-disable quotes */
+/* eslint-disable @typescript-eslint/quotes */
+/* eslint-disable prettier/prettier */
+
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as crypto from "crypto";
@@ -850,22 +854,31 @@ export class TapStack extends pulumi.ComponentResource {
       `prod-logs-alb-policy-${args.environmentSuffix}`,
       {
         bucket: this.prodLogBucket.id,
-        policy: pulumi.all([this.prodLogBucket.arn]).apply(([bucketArn]) =>
-          JSON.stringify({
+        policy: pulumi.output(this.prodLogBucket.arn).apply((bucketArn) => {
+          // ELB account IDs by region
+          const elbAccountMap: { [key: string]: string } = {
+            "us-east-1": "127311341714",
+            "us-east-2": "033677994240",
+            "us-west-1": "027434742980",
+            "us-west-2": "797873946194",
+            "eu-west-1": "156460612806",
+            "eu-central-1": "054676820928",
+            "ap-southeast-1": "114774131450",
+            "ap-southeast-2": "783225319266",
+            "ap-northeast-1": "582318560864",
+          };
+
+          const region = args.env?.region || "us-east-1";
+          const elbAccount = elbAccountMap[region] || "127311341714";
+
+          return JSON.stringify({
             Version: "2012-10-17",
             Statement: [
               {
+                Sid: "AWSLogDeliveryWrite",
                 Effect: "Allow",
                 Principal: {
-                  AWS: `arn:aws:iam::127311341714:root`, // ELB account for us-east-1
-                },
-                Action: "s3:PutObject",
-                Resource: `${bucketArn}/*`,
-              },
-              {
-                Effect: "Allow",
-                Principal: {
-                  Service: "logdelivery.elasticloadbalancing.amazonaws.com",
+                  Service: "logging.s3.amazonaws.com",
                 },
                 Action: "s3:PutObject",
                 Resource: `${bucketArn}/*`,
@@ -876,19 +889,30 @@ export class TapStack extends pulumi.ComponentResource {
                 },
               },
               {
+                Sid: "AWSLogDeliveryAclCheck",
                 Effect: "Allow",
                 Principal: {
-                  Service: "logdelivery.elasticloadbalancing.amazonaws.com",
+                  Service: "logging.s3.amazonaws.com",
                 },
                 Action: "s3:GetBucketAcl",
                 Resource: bucketArn,
               },
+              {
+                Sid: "AllowELBAccount",
+                Effect: "Allow",
+                Principal: {
+                  AWS: `arn:aws:iam::${elbAccount}:root`,
+                },
+                Action: "s3:PutObject",
+                Resource: `${bucketArn}/alb-logs/*`,
+              },
             ],
-          })
-        ),
+          });
+        }),
       },
       defaultOpts
     );
+
 
     this.alb = new aws.lb.LoadBalancer(
       `prod-alb-${args.environmentSuffix}`,
@@ -1509,7 +1533,7 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
         JSON.stringify(outputs, null, 2),
         "utf-8"
       );
-      console.log(`✅ Outputs written to: ${outputFile}`);
+      console.log(`Outputs written to: ${outputFile}`);
     });
   }
 }

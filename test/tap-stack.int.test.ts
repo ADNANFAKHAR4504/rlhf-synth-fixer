@@ -1,5 +1,7 @@
-import * as pulumi from "@pulumi/pulumi";
-import * as aws from "@pulumi/aws";
+/* eslint-disable quotes */
+/* eslint-disable @typescript-eslint/quotes */
+/* eslint-disable prettier/prettier */
+
 import * as assert from "assert";
 import { TapStack } from "../lib/tap-stack";
 import * as fs from "fs";
