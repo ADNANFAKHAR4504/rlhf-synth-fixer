@@ -20,7 +20,14 @@ export interface TapStackArgs {
   };
   devRdsInstanceId?: string;
   devVpcId?: string;
-  migrationPhase?: "initial" | "snapshot" | "blue-green" | "traffic-shift-10" | "traffic-shift-50" | "traffic-shift-100" | "complete";
+  migrationPhase?:
+    | "initial"
+    | "snapshot"
+    | "blue-green"
+    | "traffic-shift-10"
+    | "traffic-shift-50"
+    | "traffic-shift-100"
+    | "complete";
   devEnvironment?: {
     rdsInstanceIdentifier: string;
     vpcId?: string;
@@ -71,7 +78,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     const defaultOpts: pulumi.ResourceOptions = { parent: this };
     const migrationPhase = args.migrationPhase || "initial";
-    const randomSuffix = crypto.randomBytes(4).toString('hex');
+    const randomSuffix = crypto.randomBytes(4).toString("hex");
 
     // =========================================================================
     // 1. KMS Key for Encryption
@@ -159,6 +166,7 @@ export class TapStack extends pulumi.ComponentResource {
         },
         defaultOpts
       );
+
       this.publicSubnets.push(publicSubnet);
     });
 
@@ -180,10 +188,12 @@ export class TapStack extends pulumi.ComponentResource {
         },
         defaultOpts
       );
+
       this.privateSubnets.push(privateSubnet);
     });
 
     const eips: aws.ec2.Eip[] = [];
+
     this.availabilityZones.forEach((az, index) => {
       const eip = new aws.ec2.Eip(
         `prod-eip-${az}-${args.environmentSuffix}`,
@@ -198,6 +208,7 @@ export class TapStack extends pulumi.ComponentResource {
         },
         defaultOpts
       );
+
       eips.push(eip);
     });
 
@@ -216,6 +227,7 @@ export class TapStack extends pulumi.ComponentResource {
         },
         defaultOpts
       );
+
       this.natGateways.push(natGateway);
     });
 
@@ -582,7 +594,10 @@ export class TapStack extends pulumi.ComponentResource {
 
     let snapshotIdentifier: pulumi.Output<string> | undefined;
 
-    if (args.devEnvironment?.rdsInstanceIdentifier && migrationPhase !== "initial") {
+    if (
+      args.devEnvironment?.rdsInstanceIdentifier &&
+      migrationPhase !== "initial"
+    ) {
       this.devRdsSnapshot = new aws.rds.ClusterSnapshot(
         `dev-snapshot-${args.environmentSuffix}`,
         {
@@ -735,6 +750,48 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
+    // =========================================================================
+    // 6A. S3 Bucket Policy for ALB Access Logs (CRITICAL FIX)
+    // =========================================================================
+
+    const s3BucketPolicy = new aws.s3.BucketPolicy(
+      `prod-logs-policy-${args.environmentSuffix}`,
+      {
+        bucket: this.prodLogBucket.id,
+        policy: pulumi.all([this.prodLogBucket.arn]).apply(([bucketArn]) =>
+          JSON.stringify({
+            Version: "2012-10-17",
+            Statement: [
+              {
+                Sid: "AWSLogDeliveryWrite",
+                Effect: "Allow",
+                Principal: {
+                  Service: "elasticloadbalancing.amazonaws.com",
+                },
+                Action: "s3:PutObject",
+                Resource: `${bucketArn}/*`,
+                Condition: {
+                  StringEquals: {
+                    "s3:x-amz-acl": "bucket-owner-full-control",
+                  },
+                },
+              },
+              {
+                Sid: "AWSLogDeliveryAclCheck",
+                Effect: "Allow",
+                Principal: {
+                  Service: "elasticloadbalancing.amazonaws.com",
+                },
+                Action: "s3:GetBucketAcl",
+                Resource: bucketArn,
+              },
+            ],
+          })
+        ),
+      },
+      defaultOpts
+    );
+
     // Replica Bucket
     const replicaProvider = new aws.Provider(
       `replica-provider-${args.environmentSuffix}`,
@@ -807,12 +864,18 @@ export class TapStack extends pulumi.ComponentResource {
               Statement: [
                 {
                   Effect: "Allow",
-                  Action: ["s3:GetReplicationConfiguration", "s3:ListBucket"],
+                  Action: [
+                    "s3:GetReplicationConfiguration",
+                    "s3:ListBucket",
+                  ],
                   Resource: sourceArn,
                 },
                 {
                   Effect: "Allow",
-                  Action: ["s3:GetObjectVersionForReplication", "s3:GetObjectVersionAcl"],
+                  Action: [
+                    "s3:GetObjectVersionForReplication",
+                    "s3:GetObjectVersionAcl",
+                  ],
                   Resource: `${sourceArn}/*`,
                 },
                 {
@@ -860,7 +923,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // =========================================================================
-    // 7. Application Load Balancer (HTTP ONLY - No HTTPS, No Policy)
+    // 7. Application Load Balancer (WITH S3 BUCKET POLICY DEPENDENCY)
     // =========================================================================
 
     this.alb = new aws.lb.LoadBalancer(
@@ -883,7 +946,7 @@ export class TapStack extends pulumi.ComponentResource {
           ...(args.tags || {}),
         },
       },
-      defaultOpts
+      { ...defaultOpts, dependsOn: [s3BucketPolicy] }
     );
 
     this.albDnsName = this.alb.dnsName;
@@ -946,7 +1009,7 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // HTTP Listener Only
+    // HTTP Listener
     new aws.lb.Listener(
       `prod-listener-http-${args.environmentSuffix}`,
       {
@@ -1004,8 +1067,9 @@ export class TapStack extends pulumi.ComponentResource {
             },
           },
         ],
-        userData: pulumi.output(this.prodRdsInstance.endpoint).apply((endpoint) =>
-          Buffer.from(`#!/bin/bash
+        userData: pulumi.output(this.prodRdsInstance.endpoint).apply(
+          (endpoint) =>
+            Buffer.from(`#!/bin/bash
 yum update -y
 yum install -y amazon-cloudwatch-agent docker
 systemctl start docker
@@ -1140,7 +1204,11 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
           targetGroupArns: [this.targetGroupBlue.arn],
           minSize: 0,
           maxSize: 3,
-          desiredCapacity: migrationPhase === "initial" || migrationPhase === "traffic-shift-10" ? 1 : 0,
+          desiredCapacity:
+            migrationPhase === "initial" ||
+            migrationPhase === "traffic-shift-10"
+              ? 1
+              : 0,
           healthCheckType: "ELB",
           healthCheckGracePeriod: 300,
           launchTemplate: {
@@ -1361,8 +1429,8 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
 
     this.outputs = {
       vpcId: this.vpcId,
-      publicSubnetIds: pulumi.all(this.publicSubnets.map(s => s.id)),
-      privateSubnetIds: pulumi.all(this.privateSubnets.map(s => s.id)),
+      publicSubnetIds: pulumi.all(this.publicSubnets.map((s) => s.id)),
+      privateSubnetIds: pulumi.all(this.privateSubnets.map((s) => s.id)),
       prodRdsEndpoint: this.prodRdsEndpoint,
       prodRdsPort: this.prodRdsPort,
       albDnsName: this.albDnsName,
@@ -1384,7 +1452,9 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
     this.registerOutputs(this.outputs);
   }
 
-  private getTrafficWeights(phase: string): { blue: number; green: number } {
+  private getTrafficWeights(
+    phase: string
+  ): { blue: number; green: number } {
     switch (phase) {
       case "initial":
       case "snapshot":
@@ -1452,14 +1522,8 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
         fs.mkdirSync(outputDir, { recursive: true });
       }
 
-      fs.writeFileSync(
-        outputFile,
-        JSON.stringify(outputs, null, 2),
-        "utf-8"
-      );
-
+      fs.writeFileSync(outputFile, JSON.stringify(outputs, null, 2), "utf-8");
       console.log(`Outputs written to: ${outputFile}`);
     });
   }
 }
-``
