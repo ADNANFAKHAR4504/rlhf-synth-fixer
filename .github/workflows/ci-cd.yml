@@ -308,6 +308,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      actions: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -316,37 +317,15 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.head_ref }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
+      - name: Execute CI/CD Pipeline Script
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+        run: ./scripts/cicd-pipeline.sh
 
-      - name: Validate CI/CD Pipeline Configuration
-        run: |
-          if [ ! -f "lib/ci-cd.yml" ]; then
-            echo "❌ lib/ci-cd.yml not found"
-            exit 1
-          fi
-          echo "✅ CI/CD Pipeline configuration found"
-
-      - name: Parse and Validate Workflow
-        run: |
-          echo "Validating GitHub Actions workflow syntax..."
-          # Install yamllint for validation
-          pip install yamllint
-          yamllint lib/ci-cd.yml || echo "⚠️ YAML validation warnings (non-blocking)"
-
-      - name: Display Pipeline Configuration
-        run: |
-          echo "📋 CI/CD Pipeline Configuration:"
-          cat lib/ci-cd.yml
-
-      - name: Execute CI/CD Pipeline Workflow
-        run: |
-          echo "🚀 Executing CI/CD Pipeline workflow from lib/ci-cd.yml..."
-          echo "Note: This job validates the pipeline configuration."
-          echo "The actual deployment will be handled by the workflow defined in lib/ci-cd.yml"
-          echo "when pushed to the target repository."
+      - name: Cleanup Auto-Generated Workflow File
+        if: always()
+        run: ./scripts/cicd-pipeline-cleanup.sh
 
       - name: Upload Pipeline Configuration
         uses: actions/upload-artifact@v4
