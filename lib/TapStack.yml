@@ -1370,11 +1370,35 @@ Outputs:
     Export:
       Name: !Sub '${EnvironmentName}-cloudtrail-bucket-name'
 
+  AppDataBucketName:
+    Description: App Data S3 bucket name for static content storage
+    Value: !Ref AppDataBucket
+    Export:
+      Name: !Sub '${EnvironmentName}-app-data-bucket-name'
+
+  AppConfigBucketName:
+    Description: App Config S3 bucket name for configuration storage
+    Value: !Ref AppConfigBucket
+    Export:
+      Name: !Sub '${EnvironmentName}-app-config-bucket-name'
+
+  DBPasswordSecretArn:
+    Description: Secrets Manager ARN for RDS database password
+    Value: !Ref DBPasswordSecret
+    Export:
+      Name: !Sub '${EnvironmentName}-db-password-secret-arn'
+
   DlqUrl:
     Description: SQS Dead Letter Queue URL for Lambda error handling
     Value: !Ref LambdaDeadLetterQueue
     Export:
       Name: !Sub '${EnvironmentName}-dlq-url'
+
+  ApiGatewayId:
+    Description: API Gateway REST API ID for integration testing
+    Value: !Ref RestApi
+    Export:
+      Name: !Sub '${EnvironmentName}-apigateway-id'
 
   ApiGatewayUrl:
     Description: API Gateway URL for endpoint testing
