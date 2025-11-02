@@ -55,7 +55,6 @@ export class TapStack extends pulumi.ComponentResource {
   private targetGroupGreen: aws.lb.TargetGroup;
   private prodLogBucket: aws.s3.Bucket;
   private replicaLogBucket: aws.s3.Bucket;
-  private acmCertificate: aws.acm.Certificate;
   private prodAutoScalingGroup: aws.autoscaling.Group;
   private devAutoScalingGroup?: aws.autoscaling.Group;
   private route53Zone: aws.route53.Zone;
@@ -72,12 +71,10 @@ export class TapStack extends pulumi.ComponentResource {
 
     const defaultOpts: pulumi.ResourceOptions = { parent: this };
     const migrationPhase = args.migrationPhase || "initial";
-
-    // Generate random suffix using crypto
     const randomSuffix = crypto.randomBytes(4).toString('hex');
 
     // =========================================================================
-    // 1. KMS Key for Encryption (AES-256)
+    // 1. KMS Key for Encryption
     // =========================================================================
 
     this.kmsKey = new aws.kms.Key(
@@ -127,7 +124,6 @@ export class TapStack extends pulumi.ComponentResource {
 
     this.vpcId = this.vpc.id;
 
-    // Internet Gateway
     const internetGateway = new aws.ec2.InternetGateway(
       `prod-igw-${args.environmentSuffix}`,
       {
@@ -142,11 +138,9 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // Public and Private Subnets across 3 AZs
     const publicCidrs = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"];
     const privateCidrs = ["10.0.11.0/24", "10.0.12.0/24", "10.0.13.0/24"];
 
-    // Create Public Subnets
     this.availabilityZones.forEach((az, index) => {
       const publicSubnet = new aws.ec2.Subnet(
         `prod-public-subnet-${az}-${args.environmentSuffix}`,
@@ -168,7 +162,6 @@ export class TapStack extends pulumi.ComponentResource {
       this.publicSubnets.push(publicSubnet);
     });
 
-    // Create Private Subnets
     this.availabilityZones.forEach((az, index) => {
       const privateSubnet = new aws.ec2.Subnet(
         `prod-private-subnet-${az}-${args.environmentSuffix}`,
@@ -190,7 +183,6 @@ export class TapStack extends pulumi.ComponentResource {
       this.privateSubnets.push(privateSubnet);
     });
 
-    // Create Elastic IPs for NAT Gateways
     const eips: aws.ec2.Eip[] = [];
     this.availabilityZones.forEach((az, index) => {
       const eip = new aws.ec2.Eip(
@@ -209,7 +201,6 @@ export class TapStack extends pulumi.ComponentResource {
       eips.push(eip);
     });
 
-    // Create NAT Gateways
     this.publicSubnets.forEach((subnet, index) => {
       const natGateway = new aws.ec2.NatGateway(
         `prod-nat-${this.availabilityZones[index]}-${args.environmentSuffix}`,
@@ -228,7 +219,6 @@ export class TapStack extends pulumi.ComponentResource {
       this.natGateways.push(natGateway);
     });
 
-    // Route Tables
     const publicRouteTable = new aws.ec2.RouteTable(
       `prod-public-rt-${args.environmentSuffix}`,
       {
@@ -253,7 +243,6 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // Associate public subnets with public route table
     this.publicSubnets.forEach((subnet, index) => {
       new aws.ec2.RouteTableAssociation(
         `prod-public-rta-${index}-${args.environmentSuffix}`,
@@ -265,7 +254,6 @@ export class TapStack extends pulumi.ComponentResource {
       );
     });
 
-    // Private route tables
     this.privateSubnets.forEach((subnet, index) => {
       const privateRouteTable = new aws.ec2.RouteTable(
         `prod-private-rt-${this.availabilityZones[index]}-${args.environmentSuffix}`,
@@ -302,48 +290,21 @@ export class TapStack extends pulumi.ComponentResource {
     });
 
     // =========================================================================
-    // 3. ACM Certificate (HTTPS)
+    // 3. Security Groups
     // =========================================================================
 
-    this.acmCertificate = new aws.acm.Certificate(
-      `prod-cert-${args.environmentSuffix}`,
-      {
-        domainName: `app-${args.environmentSuffix}.internal.local`,
-        validationMethod: "DNS",
-        tags: {
-          Environment: "production",
-          ManagedBy: "pulumi",
-          Name: `prod-cert-${randomSuffix}`,
-          ...(args.tags || {}),
-        },
-      },
-      defaultOpts
-    );
-
-    // =========================================================================
-    // 4. Security Groups
-    // =========================================================================
-
-    // ALB Security Group
     this.albSecurityGroup = new aws.ec2.SecurityGroup(
       `prod-alb-sg-${args.environmentSuffix}`,
       {
         vpcId: this.vpc.id,
-        description: "Security group for production ALB - HTTPS only",
+        description: "Security group for production ALB",
         ingress: [
-          {
-            protocol: "tcp",
-            fromPort: 443,
-            toPort: 443,
-            cidrBlocks: ["0.0.0.0/0"],
-            description: "Allow HTTPS from internet",
-          },
           {
             protocol: "tcp",
             fromPort: 80,
             toPort: 80,
             cidrBlocks: ["0.0.0.0/0"],
-            description: "Allow HTTP from internet (redirect to HTTPS)",
+            description: "Allow HTTP from internet",
           },
         ],
         egress: [
@@ -365,7 +326,6 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // Application Security Group
     this.prodSecurityGroup = new aws.ec2.SecurityGroup(
       `prod-app-sg-${args.environmentSuffix}`,
       {
@@ -381,7 +341,6 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // Add ingress rule to app SG
     new aws.ec2.SecurityGroupRule(
       `prod-app-ingress-${args.environmentSuffix}`,
       {
@@ -396,7 +355,6 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // Add egress rule to app SG
     new aws.ec2.SecurityGroupRule(
       `prod-app-egress-${args.environmentSuffix}`,
       {
@@ -411,12 +369,11 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // Database Security Group
     this.dbSecurityGroup = new aws.ec2.SecurityGroup(
       `prod-db-sg-${args.environmentSuffix}`,
       {
         vpcId: this.vpc.id,
-        description: "Security group for production RDS - restricted to app subnet",
+        description: "Security group for production RDS",
         tags: {
           Environment: "production",
           ManagedBy: "pulumi",
@@ -427,7 +384,6 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // Add ingress rule to DB SG
     new aws.ec2.SecurityGroupRule(
       `prod-db-ingress-${args.environmentSuffix}`,
       {
@@ -437,12 +393,11 @@ export class TapStack extends pulumi.ComponentResource {
         protocol: "tcp",
         fromPort: 3306,
         toPort: 3306,
-        description: "Allow MySQL from application instances only",
+        description: "Allow MySQL from application instances",
       },
       defaultOpts
     );
 
-    // Add egress rule to DB SG
     new aws.ec2.SecurityGroupRule(
       `prod-db-egress-${args.environmentSuffix}`,
       {
@@ -458,7 +413,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // =========================================================================
-    // 5. IAM Roles
+    // 4. IAM Roles
     // =========================================================================
 
     this.ec2Role = new aws.iam.Role(
@@ -586,7 +541,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // =========================================================================
-    // 6. RDS MySQL
+    // 5. RDS MySQL
     // =========================================================================
 
     const dbSubnetGroup = new aws.rds.SubnetGroup(
@@ -691,7 +646,7 @@ export class TapStack extends pulumi.ComponentResource {
     this.prodRdsPort = this.prodRdsInstance.port;
 
     // =========================================================================
-    // 7. S3 Buckets with Separate Configuration Resources
+    // 6. S3 Buckets with Updated APIs (v1 not v2)
     // =========================================================================
 
     this.prodLogBucket = new aws.s3.Bucket(
@@ -710,8 +665,8 @@ export class TapStack extends pulumi.ComponentResource {
 
     this.prodLogBucketName = this.prodLogBucket.id;
 
-    // S3 Bucket Versioning
-    new aws.s3.BucketVersioningV2(
+    // S3 Bucket Versioning - Using v1 API (NOT V2)
+    new aws.s3.BucketVersioning(
       `prod-logs-versioning-${args.environmentSuffix}`,
       {
         bucket: this.prodLogBucket.id,
@@ -722,8 +677,8 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // S3 Server-Side Encryption
-    new aws.s3.BucketServerSideEncryptionConfigurationV2(
+    // S3 Server-Side Encryption - Using v1 API (NOT V2)
+    new aws.s3.BucketServerSideEncryptionConfiguration(
       `prod-logs-sse-${args.environmentSuffix}`,
       {
         bucket: this.prodLogBucket.id,
@@ -739,8 +694,8 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // S3 Lifecycle Configuration
-    new aws.s3.BucketLifecycleConfigurationV2(
+    // S3 Lifecycle Configuration - Using v1 API (NOT V2)
+    new aws.s3.BucketLifecycleConfiguration(
       `prod-logs-lifecycle-${args.environmentSuffix}`,
       {
         bucket: this.prodLogBucket.id,
@@ -805,8 +760,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     this.replicaLogBucketName = this.replicaLogBucket.id;
 
-    // Replica Bucket Versioning
-    new aws.s3.BucketVersioningV2(
+    new aws.s3.BucketVersioning(
       `prod-logs-replica-versioning-${args.environmentSuffix}`,
       {
         bucket: this.replicaLogBucket.id,
@@ -853,26 +807,17 @@ export class TapStack extends pulumi.ComponentResource {
               Statement: [
                 {
                   Effect: "Allow",
-                  Action: [
-                    "s3:GetReplicationConfiguration",
-                    "s3:ListBucket",
-                  ],
+                  Action: ["s3:GetReplicationConfiguration", "s3:ListBucket"],
                   Resource: sourceArn,
                 },
                 {
                   Effect: "Allow",
-                  Action: [
-                    "s3:GetObjectVersionForReplication",
-                    "s3:GetObjectVersionAcl",
-                  ],
+                  Action: ["s3:GetObjectVersionForReplication", "s3:GetObjectVersionAcl"],
                   Resource: `${sourceArn}/*`,
                 },
                 {
                   Effect: "Allow",
-                  Action: [
-                    "s3:ReplicateObject",
-                    "s3:ReplicateDelete",
-                  ],
+                  Action: ["s3:ReplicateObject", "s3:ReplicateDelete"],
                   Resource: `${destArn}/*`,
                 },
               ],
@@ -915,72 +860,8 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // =========================================================================
-    // 8. Application Load Balancer
+    // 7. Application Load Balancer (HTTP ONLY - No HTTPS, No Policy)
     // =========================================================================
-
-    // Add S3 bucket policy for ALB access logs
-    const albS3Policy = new aws.s3.BucketPolicy(
-      `prod-logs-alb-policy-${args.environmentSuffix}`,
-      {
-        bucket: this.prodLogBucket.id,
-        policy: pulumi.output(this.prodLogBucket.arn).apply((bucketArn) => {
-          // ELB account IDs by region
-          const elbAccountMap: { [key: string]: string } = {
-            "us-east-1": "127311341714",
-            "us-east-2": "033677994240",
-            "us-west-1": "027434742980",
-            "us-west-2": "797873946194",
-            "eu-west-1": "156460612806",
-            "eu-central-1": "054676820928",
-            "ap-southeast-1": "114774131450",
-            "ap-southeast-2": "783225319266",
-            "ap-northeast-1": "582318560864",
-          };
-
-          const region = args.env?.region || "us-east-1";
-          const elbAccount = elbAccountMap[region] || "127311341714";
-
-          return JSON.stringify({
-            Version: "2012-10-17",
-            Statement: [
-              {
-                Sid: "AWSLogDeliveryWrite",
-                Effect: "Allow",
-                Principal: {
-                  Service: "logging.s3.amazonaws.com",
-                },
-                Action: "s3:PutObject",
-                Resource: `${bucketArn}/*`,
-                Condition: {
-                  StringEquals: {
-                    "s3:x-amz-acl": "bucket-owner-full-control",
-                  },
-                },
-              },
-              {
-                Sid: "AWSLogDeliveryAclCheck",
-                Effect: "Allow",
-                Principal: {
-                  Service: "logging.s3.amazonaws.com",
-                },
-                Action: "s3:GetBucketAcl",
-                Resource: bucketArn,
-              },
-              {
-                Sid: "AllowELBAccount",
-                Effect: "Allow",
-                Principal: {
-                  AWS: `arn:aws:iam::${elbAccount}:root`,
-                },
-                Action: "s3:PutObject",
-                Resource: `${bucketArn}/alb-logs/*`,
-              },
-            ],
-          });
-        }),
-      },
-      defaultOpts
-    );
 
     this.alb = new aws.lb.LoadBalancer(
       `prod-alb-${args.environmentSuffix}`,
@@ -990,7 +871,11 @@ export class TapStack extends pulumi.ComponentResource {
         securityGroups: [this.albSecurityGroup.id],
         enableHttp2: true,
         enableDeletionProtection: true,
-        // Remove accessLogs entirely
+        accessLogs: {
+          bucket: this.prodLogBucket.id,
+          prefix: "alb-logs",
+          enabled: true,
+        },
         tags: {
           Environment: "production",
           ManagedBy: "pulumi",
@@ -1061,15 +946,13 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // HTTPS Listener with Certificate
-    const listener = new aws.lb.Listener(
-      `prod-listener-https-${args.environmentSuffix}`,
+    // HTTP Listener Only
+    new aws.lb.Listener(
+      `prod-listener-http-${args.environmentSuffix}`,
       {
         loadBalancerArn: this.alb.arn,
-        port: 443,
-        protocol: "HTTPS",
-        certificateArn: this.acmCertificate.arn,
-        sslPolicy: "ELBSecurityPolicy-TLS-1-2-2017-01",
+        port: 80,
+        protocol: "HTTP",
         defaultActions: [
           {
             type: "forward",
@@ -1080,29 +963,8 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // HTTP Listener (redirect to HTTPS)
-    new aws.lb.Listener(
-      `prod-listener-http-${args.environmentSuffix}`,
-      {
-        loadBalancerArn: this.alb.arn,
-        port: 80,
-        protocol: "HTTP",
-        defaultActions: [
-          {
-            type: "redirect",
-            redirect: {
-              port: "443",
-              protocol: "HTTPS",
-              statusCode: "HTTP_301",
-            },
-          },
-        ],
-      },
-      defaultOpts
-    );
-
     // =========================================================================
-    // 9. EC2 Auto Scaling Groups
+    // 8. EC2 Auto Scaling Groups
     // =========================================================================
 
     const ami = aws.ec2.getAmi({
@@ -1148,23 +1010,6 @@ yum update -y
 yum install -y amazon-cloudwatch-agent docker
 systemctl start docker
 systemctl enable docker
-cat > /opt/aws/amazon-cloudwatch-agent/etc/config.json <<EOF
-{
-  "logs": {
-    "logs_collected": {
-      "files": {
-        "collect_list": [
-          {
-            "file_path": "/var/log/messages",
-            "log_group_name": "/aws/ec2/production",
-            "log_stream_name": "{instance_id}"
-          }
-        ]
-      }
-    }
-  }
-}
-EOF
 echo "DB_ENDPOINT=${endpoint}" >> /etc/environment
 docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
 `).toString("base64")
@@ -1325,14 +1170,14 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
     }
 
     // =========================================================================
-    // 10. Route53
+    // 9. Route53
     // =========================================================================
 
     this.route53Zone = new aws.route53.Zone(
       `prod-zone-${args.environmentSuffix}`,
       {
         name: `app-${args.environmentSuffix}.internal.local`,
-        comment: "Production hosted zone for payment processing",
+        comment: "Production hosted zone",
         tags: {
           Environment: "production",
           ManagedBy: "pulumi",
@@ -1346,7 +1191,7 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
 
     const weights = this.getTrafficWeights(migrationPhase);
 
-    const recordGreen = new aws.route53.Record(
+    new aws.route53.Record(
       `prod-record-green-${args.environmentSuffix}`,
       {
         zoneId: this.route53Zone.zoneId,
@@ -1370,7 +1215,7 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
     );
 
     if (migrationPhase !== "complete") {
-      const recordBlue = new aws.route53.Record(
+      new aws.route53.Record(
         `prod-record-blue-${args.environmentSuffix}`,
         {
           zoneId: this.route53Zone.zoneId,
@@ -1395,7 +1240,7 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
     }
 
     // =========================================================================
-    // 11. CloudWatch Alarms
+    // 10. CloudWatch Alarms
     // =========================================================================
 
     const alarmTopic = new aws.sns.Topic(
@@ -1531,7 +1376,6 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
       replicaLogBucketName: this.replicaLogBucketName,
       kmsKeyId: this.kmsKey.keyId,
       ec2RoleArn: this.ec2Role.arn,
-      acmCertificateArn: this.acmCertificate.arn,
       migrationPhase: this.migrationStatus,
       trafficWeights: pulumi.output(weights),
     };
@@ -1618,3 +1462,4 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
     });
   }
 }
+``
