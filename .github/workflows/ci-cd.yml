@@ -815,6 +815,7 @@ jobs:
     name: Archive Folders and Reset Repository
     runs-on: ubuntu-24.04
     needs: [detect-metadata, cleanup]
+    environment: stage
     if: ${{ always() && !cancelled() && needs.cleanup.result == 'success' && needs.detect-metadata.result == 'success' && ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch')) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     permissions:
       contents: write
@@ -1090,7 +1091,7 @@ jobs:
     runs-on: ubuntu-24.04
     # This job should run regardless of the [skip-jobs] tag since it's for cleanup
     if: github.event_name == 'pull_request' && github.event.action == 'closed' && !github.event.pull_request.merged
-    environment: stage
+    environment: release
 
     steps:
       - name: Checkout code
