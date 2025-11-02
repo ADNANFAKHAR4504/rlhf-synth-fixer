@@ -21,13 +21,13 @@ export interface TapStackArgs {
   devRdsInstanceId?: string;
   devVpcId?: string;
   migrationPhase?:
-    | "initial"
-    | "snapshot"
-    | "blue-green"
-    | "traffic-shift-10"
-    | "traffic-shift-50"
-    | "traffic-shift-100"
-    | "complete";
+  | "initial"
+  | "snapshot"
+  | "blue-green"
+  | "traffic-shift-10"
+  | "traffic-shift-50"
+  | "traffic-shift-100"
+  | "complete";
   devEnvironment?: {
     rdsInstanceIdentifier: string;
     vpcId?: string;
@@ -453,31 +453,6 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    const s3Policy = new aws.iam.Policy(
-      `prod-s3-policy-${args.environmentSuffix}`,
-      {
-        policy: JSON.stringify({
-          Version: "2012-10-17",
-          Statement: [
-            {
-              Effect: "Allow",
-              Action: ["s3:PutObject", "s3:GetObject", "s3:ListBucket"],
-              Resource: [
-                `arn:aws:s3:::prod-logs-${args.environmentSuffix}-*`,
-                `arn:aws:s3:::prod-logs-${args.environmentSuffix}-*/*`,
-              ],
-            },
-          ],
-        }),
-        tags: {
-          Environment: "production",
-          ManagedBy: "pulumi",
-          ...(args.tags || {}),
-        },
-      },
-      defaultOpts
-    );
-
     const rdsPolicy = new aws.iam.Policy(
       `prod-rds-policy-${args.environmentSuffix}`,
       {
@@ -500,15 +475,6 @@ export class TapStack extends pulumi.ComponentResource {
           ManagedBy: "pulumi",
           ...(args.tags || {}),
         },
-      },
-      defaultOpts
-    );
-
-    new aws.iam.RolePolicyAttachment(
-      `prod-ec2-s3-attachment-${args.environmentSuffix}`,
-      {
-        role: this.ec2Role.name,
-        policyArn: s3Policy.arn,
       },
       defaultOpts
     );
@@ -661,7 +627,7 @@ export class TapStack extends pulumi.ComponentResource {
     this.prodRdsPort = this.prodRdsInstance.port;
 
     // =========================================================================
-    // 6. S3 Buckets with Updated APIs (v1 not v2)
+    // 6. S3 Buckets (REMOVED ALB LOGGING - NO S3 POLICY NEEDED)
     // =========================================================================
 
     this.prodLogBucket = new aws.s3.Bucket(
@@ -680,7 +646,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     this.prodLogBucketName = this.prodLogBucket.id;
 
-    // S3 Bucket Versioning - Using v1 API (NOT V2)
+    // S3 Bucket Versioning
     new aws.s3.BucketVersioning(
       `prod-logs-versioning-${args.environmentSuffix}`,
       {
@@ -692,7 +658,7 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // S3 Server-Side Encryption - Using v1 API (NOT V2)
+    // S3 Server-Side Encryption
     new aws.s3.BucketServerSideEncryptionConfiguration(
       `prod-logs-sse-${args.environmentSuffix}`,
       {
@@ -709,7 +675,7 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // S3 Lifecycle Configuration - Using v1 API (NOT V2)
+    // S3 Lifecycle Configuration
     new aws.s3.BucketLifecycleConfiguration(
       `prod-logs-lifecycle-${args.environmentSuffix}`,
       {
@@ -750,49 +716,7 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // =========================================================================
-    // 6A. S3 Bucket Policy for ALB Access Logs (CRITICAL FIX)
-    // =========================================================================
-
-    const s3BucketPolicy = new aws.s3.BucketPolicy(
-      `prod-logs-policy-${args.environmentSuffix}`,
-      {
-        bucket: this.prodLogBucket.id,
-        policy: pulumi.all([this.prodLogBucket.arn]).apply(([bucketArn]) =>
-          JSON.stringify({
-            Version: "2012-10-17",
-            Statement: [
-              {
-                Sid: "AWSLogDeliveryWrite",
-                Effect: "Allow",
-                Principal: {
-                  Service: "elasticloadbalancing.amazonaws.com",
-                },
-                Action: "s3:PutObject",
-                Resource: `${bucketArn}/*`,
-                Condition: {
-                  StringEquals: {
-                    "s3:x-amz-acl": "bucket-owner-full-control",
-                  },
-                },
-              },
-              {
-                Sid: "AWSLogDeliveryAclCheck",
-                Effect: "Allow",
-                Principal: {
-                  Service: "elasticloadbalancing.amazonaws.com",
-                },
-                Action: "s3:GetBucketAcl",
-                Resource: bucketArn,
-              },
-            ],
-          })
-        ),
-      },
-      defaultOpts
-    );
-
-    // Replica Bucket
+    // Replica Bucket (NO ALB LOGGING)
     const replicaProvider = new aws.Provider(
       `replica-provider-${args.environmentSuffix}`,
       {
@@ -921,9 +845,28 @@ export class TapStack extends pulumi.ComponentResource {
       },
       { ...defaultOpts, dependsOn: [replicationPolicy] }
     );
+    // =========================================================================
+    // 6A. CloudWatch Log Group for ALB Logs (FIXED - USE kmsKeyId NOT kmsKeyArn)
+    // =========================================================================
+
+    const albLogGroup = new aws.cloudwatch.LogGroup(
+      `prod-alb-logs-${args.environmentSuffix}`,
+      {
+        name: `/aws/alb/prod-alb-${args.environmentSuffix}`,
+        retentionInDays: 30,
+        kmsKeyId: this.kmsKey.arn,
+        tags: {
+          Environment: "production",
+          ManagedBy: "pulumi",
+          ...(args.tags || {}),
+        },
+      },
+      defaultOpts
+    );
+
 
     // =========================================================================
-    // 7. Application Load Balancer (WITH S3 BUCKET POLICY DEPENDENCY)
+    // 7. Application Load Balancer (WITH CLOUDWATCH LOGGING - NO S3 POLICY)
     // =========================================================================
 
     this.alb = new aws.lb.LoadBalancer(
@@ -934,11 +877,6 @@ export class TapStack extends pulumi.ComponentResource {
         securityGroups: [this.albSecurityGroup.id],
         enableHttp2: true,
         enableDeletionProtection: true,
-        accessLogs: {
-          bucket: this.prodLogBucket.id,
-          prefix: "alb-logs",
-          enabled: true,
-        },
         tags: {
           Environment: "production",
           ManagedBy: "pulumi",
@@ -946,7 +884,7 @@ export class TapStack extends pulumi.ComponentResource {
           ...(args.tags || {}),
         },
       },
-      { ...defaultOpts, dependsOn: [s3BucketPolicy] }
+      defaultOpts
     );
 
     this.albDnsName = this.alb.dnsName;
@@ -1206,7 +1144,7 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
           maxSize: 3,
           desiredCapacity:
             migrationPhase === "initial" ||
-            migrationPhase === "traffic-shift-10"
+              migrationPhase === "traffic-shift-10"
               ? 1
               : 0,
           healthCheckType: "ELB",
@@ -1442,6 +1380,7 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
       route53DomainName: this.route53DomainName,
       prodLogBucketName: this.prodLogBucketName,
       replicaLogBucketName: this.replicaLogBucketName,
+      albLogGroupName: albLogGroup.name,
       kmsKeyId: this.kmsKey.keyId,
       ec2RoleArn: this.ec2Role.arn,
       migrationPhase: this.migrationStatus,
