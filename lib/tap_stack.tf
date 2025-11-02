@@ -172,6 +172,12 @@ variable "log_retention_days" {
   }
 }
 
+variable "enable_codecommit" {
+  description = "Enable CodeCommit repository creation (disable if account doesn't have CodeCommit enabled)"
+  type        = bool
+  default     = true
+}
+
 # ======================================================================================
 # DATA SOURCES
 # ======================================================================================
@@ -219,7 +225,12 @@ locals {
 # CODECOMMIT REPOSITORY
 # ======================================================================================
 
+# Note: CodeCommit repository creation is optional
+# If your AWS account doesn't have CodeCommit enabled, comment out this resource
+# and use an external Git provider (GitHub, GitLab, Bitbucket)
 resource "aws_codecommit_repository" "terraform_repo" {
+  count = var.enable_codecommit ? 1 : 0
+
   repository_name = "${var.repository_name}-${local.env_suffix}"
   description     = "Terraform infrastructure code repository for automated CI/CD deployments"
   default_branch  = "main"
@@ -478,7 +489,7 @@ resource "aws_iam_role_policy" "codepipeline_policy" {
           "codecommit:GetUploadArchiveStatus",
           "codecommit:CancelUploadArchive"
         ]
-        Resource = aws_codecommit_repository.terraform_repo.arn
+        Resource = var.enable_codecommit ? aws_codecommit_repository.terraform_repo[0].arn : "*"
       },
       {
         Effect = "Allow"
@@ -1052,6 +1063,7 @@ resource "aws_sns_topic_policy" "pipeline_notifications" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid    = "AllowCloudWatchEventsPublish"
         Effect = "Allow"
         Principal = {
           Service = "events.amazonaws.com"
@@ -1060,6 +1072,7 @@ resource "aws_sns_topic_policy" "pipeline_notifications" {
         Resource = aws_sns_topic.pipeline_notifications.arn
       },
       {
+        Sid    = "AllowCodePipelinePublish"
         Effect = "Allow"
         Principal = {
           Service = "codepipeline.amazonaws.com"
@@ -1098,7 +1111,7 @@ resource "aws_codepipeline" "terraform_pipeline" {
       output_artifacts = ["SourceOutput"]
 
       configuration = {
-        RepositoryName       = aws_codecommit_repository.terraform_repo.repository_name
+        RepositoryName       = var.enable_codecommit ? aws_codecommit_repository.terraform_repo[0].repository_name : var.repository_name
         BranchName           = each.key == "prod" ? "main" : each.key
         PollForSourceChanges = false
       }
@@ -1182,7 +1195,7 @@ resource "aws_cloudwatch_event_rule" "codecommit_trigger" {
   event_pattern = jsonencode({
     source      = ["aws.codecommit"]
     detail-type = ["CodeCommit Repository State Change"]
-    resources   = [aws_codecommit_repository.terraform_repo.arn]
+    resources   = var.enable_codecommit ? [aws_codecommit_repository.terraform_repo[0].arn] : []
     detail = {
       event         = ["referenceCreated", "referenceUpdated"]
       referenceType = ["branch"]
@@ -1281,17 +1294,17 @@ resource "aws_cloudwatch_metric_alarm" "pipeline_failures" {
 
 output "repository_clone_url_http" {
   description = "HTTP clone URL for the CodeCommit repository"
-  value       = aws_codecommit_repository.terraform_repo.clone_url_http
+  value       = var.enable_codecommit ? aws_codecommit_repository.terraform_repo[0].clone_url_http : null
 }
 
 output "repository_clone_url_ssh" {
   description = "SSH clone URL for the CodeCommit repository"
-  value       = aws_codecommit_repository.terraform_repo.clone_url_ssh
+  value       = var.enable_codecommit ? aws_codecommit_repository.terraform_repo[0].clone_url_ssh : null
 }
 
 output "repository_arn" {
   description = "ARN of the CodeCommit repository"
-  value       = aws_codecommit_repository.terraform_repo.arn
+  value       = var.enable_codecommit ? aws_codecommit_repository.terraform_repo[0].arn : null
 }
 
 output "state_bucket_name" {

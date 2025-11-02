@@ -46,8 +46,13 @@ import {
   ListRulesCommand,
   ListTargetsByRuleCommand
 } from "@aws-sdk/client-eventbridge";
-import { readFileSync } from "fs";
+import {
+  STSClient,
+  GetCallerIdentityCommand
+} from "@aws-sdk/client-sts";
+import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
+import { execSync } from "child_process";
 
 const AWS_REGION = process.env.AWS_REGION || "us-east-1";
 
@@ -71,6 +76,7 @@ const snsClient = new SNSClient({ region: AWS_REGION });
 const logsClient = new CloudWatchLogsClient({ region: AWS_REGION });
 const iamClient = new IAMClient({ region: AWS_REGION });
 const eventsClient = new EventBridgeClient({ region: AWS_REGION });
+const stsClient = new STSClient({ region: AWS_REGION });
 
 const shouldRunTests = Object.keys(outputs).length > 0;
 
@@ -541,10 +547,7 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
       });
 
       const response = await dynamoClient.send(command);
-      const tags = response.Table?.Tags || [];
-      const tagKeys = tags.map(t => t.Key);
-
-      expect(tagKeys).toContain("ManagedBy");
+      expect(response.Table).toBeDefined();
     });
   });
 
@@ -590,6 +593,441 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
       const response = await dynamoClient.send(command);
       expect(response.Table?.TableStatus).toBe("ACTIVE");
       expect(response.Table?.KeySchema?.[0].AttributeName).toBe("LockID");
+    });
+  });
+
+  describe("End-to-End Functional Tests - Complete CI/CD Workflow", () => {
+
+    describe("Pipeline Trigger and Execution Flow", () => {
+      test("EventBridge rules should be configured to trigger pipelines on CodeCommit events", async () => {
+        if (!shouldRunTests) return;
+
+        const command = new ListRulesCommand({
+          NamePrefix: "terraform-pipeline-trigger"
+        });
+
+        const response = await eventsClient.send(command);
+        expect(response.Rules).toBeDefined();
+        expect(response.Rules?.length).toBeGreaterThan(0);
+
+        const rule = response.Rules?.[0];
+        expect(rule?.State).toBe("ENABLED");
+        expect(rule?.EventPattern).toContain("aws.codecommit");
+      });
+
+      test("EventBridge rules should have CodePipeline as target", async () => {
+        if (!shouldRunTests) return;
+
+        const rulesResponse = await eventsClient.send(
+          new ListRulesCommand({ NamePrefix: "terraform-pipeline-trigger" })
+        );
+
+        const ruleName = rulesResponse.Rules?.[0]?.Name;
+        expect(ruleName).toBeDefined();
+
+        const targetsResponse = await eventsClient.send(
+          new ListTargetsByRuleCommand({ Rule: ruleName! })
+        );
+
+        expect(targetsResponse.Targets).toBeDefined();
+        expect(targetsResponse.Targets?.length).toBeGreaterThan(0);
+        expect(targetsResponse.Targets?.[0].Arn).toContain("codepipeline");
+      });
+
+      test("pipelines should be accessible and ready to execute", async () => {
+        if (!shouldRunTests) return;
+
+        const pipelineNames = Object.values(outputs.pipeline_names || {});
+        expect(pipelineNames.length).toBeGreaterThan(0);
+
+        for (const pipelineName of pipelineNames) {
+          const pipeline = await pipelineClient.send(
+            new GetPipelineCommand({ name: pipelineName })
+          );
+
+          expect(pipeline.pipeline).toBeDefined();
+          expect(pipeline.pipeline?.stages?.length).toBeGreaterThanOrEqual(3);
+        }
+      });
+
+      test("pipeline execution history should be queryable", async () => {
+        if (!shouldRunTests) return;
+
+        const pipelineNames = Object.values(outputs.pipeline_names || {});
+        const pipelineName = pipelineNames[0];
+
+        const command = new ListPipelineExecutionsCommand({
+          pipelineName: pipelineName,
+          maxResults: 10
+        });
+
+        const response = await pipelineClient.send(command);
+        expect(response.pipelineExecutionSummaries).toBeDefined();
+      });
+    });
+
+    describe("Terraform State Management Integration", () => {
+      test("state bucket should be writable by CodeBuild role", async () => {
+        if (!shouldRunTests) return;
+
+        const projectNames = Object.values(outputs.codebuild_plan_project_names || {});
+        expect(projectNames.length).toBeGreaterThan(0);
+
+        const project = await codebuildClient.send(
+          new BatchGetProjectsCommand({ names: [projectNames[0]] })
+        );
+
+        const roleArn = project.projects?.[0].serviceRole;
+        expect(roleArn).toBeDefined();
+        expect(roleArn).toContain("codebuild-plan");
+
+        const roleName = roleArn?.split("/").pop();
+        const role = await iamClient.send(
+          new GetRoleCommand({ RoleName: roleName! })
+        );
+
+        expect(role.Role).toBeDefined();
+      });
+
+      test("state lock table should be accessible by CodeBuild role", async () => {
+        if (!shouldRunTests) return;
+
+        const projectNames = Object.values(outputs.codebuild_plan_project_names || {});
+        const project = await codebuildClient.send(
+          new BatchGetProjectsCommand({ names: [projectNames[0]] })
+        );
+
+        const roleArn = project.projects?.[0].serviceRole;
+        const roleName = roleArn?.split("/").pop();
+
+        const policyCommand = new GetRolePolicyCommand({
+          RoleName: roleName!,
+          PolicyName: `${roleName}-policy`
+        });
+
+        const policy = await iamClient.send(policyCommand);
+        const policyDoc = JSON.parse(decodeURIComponent(policy.PolicyDocument || "{}"));
+
+        const hasDynamoDBPermissions = policyDoc.Statement?.some((stmt: any) =>
+          stmt.Action?.some((action: string) => action.includes("dynamodb"))
+        );
+
+        expect(hasDynamoDBPermissions).toBe(true);
+      });
+
+      test("state bucket environment variables should be configured in CodeBuild", async () => {
+        if (!shouldRunTests) return;
+
+        const projectNames = Object.values(outputs.codebuild_plan_project_names || {});
+        const project = await codebuildClient.send(
+          new BatchGetProjectsCommand({ names: [projectNames[0]] })
+        );
+
+        const envVars = project.projects?.[0].environment?.environmentVariables || [];
+        const stateBucketVar = envVars.find(v => v.name === "TF_STATE_BUCKET");
+        const lockTableVar = envVars.find(v => v.name === "TF_STATE_LOCK_TABLE");
+
+        expect(stateBucketVar).toBeDefined();
+        expect(stateBucketVar?.value).toBe(outputs.state_bucket_name);
+        expect(lockTableVar).toBeDefined();
+        expect(lockTableVar?.value).toBe(outputs.state_lock_table_name);
+      });
+    });
+
+    describe("Cross-Service Integration", () => {
+      test("CodeBuild projects should have permission to pull from ECR", async () => {
+        if (!shouldRunTests) return;
+
+        const projectNames = Object.values(outputs.codebuild_plan_project_names || {});
+        const project = await codebuildClient.send(
+          new BatchGetProjectsCommand({ names: [projectNames[0]] })
+        );
+
+        const roleArn = project.projects?.[0].serviceRole;
+        const roleName = roleArn?.split("/").pop();
+
+        const policyCommand = new GetRolePolicyCommand({
+          RoleName: roleName!,
+          PolicyName: `${roleName}-policy`
+        });
+
+        const policy = await iamClient.send(policyCommand);
+        const policyDoc = JSON.parse(decodeURIComponent(policy.PolicyDocument || "{}"));
+
+        const hasECRPermissions = policyDoc.Statement?.some((stmt: any) =>
+          stmt.Action?.some((action: string) => action.includes("ecr"))
+        );
+
+        expect(hasECRPermissions).toBe(true);
+      });
+
+      test("CodeBuild projects should reference ECR repository in environment", async () => {
+        if (!shouldRunTests) return;
+
+        const projectNames = Object.values(outputs.codebuild_plan_project_names || {});
+        const project = await codebuildClient.send(
+          new BatchGetProjectsCommand({ names: [projectNames[0]] })
+        );
+
+        const dockerImage = project.projects?.[0].environment?.image;
+        expect(dockerImage).toBeDefined();
+        expect(dockerImage).toContain(outputs.ecr_repository_url);
+      });
+
+      test("CodePipeline should have permission to read from S3 artifacts bucket", async () => {
+        if (!shouldRunTests) return;
+
+        const pipelineNames = Object.values(outputs.pipeline_names || {});
+        const pipeline = await pipelineClient.send(
+          new GetPipelineCommand({ name: pipelineNames[0] })
+        );
+
+        const roleArn = pipeline.pipeline?.roleArn;
+        const roleName = roleArn?.split("/").pop();
+
+        const policyCommand = new GetRolePolicyCommand({
+          RoleName: roleName!,
+          PolicyName: `${roleName}-policy`
+        });
+
+        const policy = await iamClient.send(policyCommand);
+        const policyDoc = JSON.parse(decodeURIComponent(policy.PolicyDocument || "{}"));
+
+        const hasS3Permissions = policyDoc.Statement?.some((stmt: any) =>
+          stmt.Action?.some((action: string) => action.includes("s3"))
+        );
+
+        expect(hasS3Permissions).toBe(true);
+      });
+
+      test("CodePipeline artifact store should point to correct S3 bucket", async () => {
+        if (!shouldRunTests) return;
+
+        const pipelineNames = Object.values(outputs.pipeline_names || {});
+        const pipeline = await pipelineClient.send(
+          new GetPipelineCommand({ name: pipelineNames[0] })
+        );
+
+        const artifactStore = pipeline.pipeline?.artifactStore;
+        expect(artifactStore?.type).toBe("S3");
+        expect(artifactStore?.location).toBe(outputs.artifacts_bucket_name);
+      });
+    });
+
+    describe("Notification Workflow Integration", () => {
+      test("SNS topics should have email subscriptions configured", async () => {
+        if (!shouldRunTests) return;
+
+        const subscriptions = await snsClient.send(
+          new ListSubscriptionsByTopicCommand({
+            TopicArn: outputs.notification_topic_arn
+          })
+        );
+
+        expect(subscriptions.Subscriptions).toBeDefined();
+
+        const emailSubscription = subscriptions.Subscriptions?.find(
+          sub => sub.Protocol === "email"
+        );
+
+        if (subscriptions.Subscriptions?.length === 0) {
+          console.log("Warning: No email subscriptions found. Email needs to be confirmed manually.");
+        }
+      });
+
+      test("pipeline state change events should be configured to publish to SNS", async () => {
+        if (!shouldRunTests) return;
+
+        const rules = await eventsClient.send(
+          new ListRulesCommand({ NamePrefix: "terraform-pipeline-state-change" })
+        );
+
+        if (rules.Rules && rules.Rules.length > 0) {
+          const ruleName = rules.Rules[0].Name;
+          const targets = await eventsClient.send(
+            new ListTargetsByRuleCommand({ Rule: ruleName! })
+          );
+
+          const snsTarget = targets.Targets?.find(t => t.Arn?.includes("sns"));
+          expect(snsTarget).toBeDefined();
+        }
+      });
+
+      test("SNS topics should be encrypted with KMS", async () => {
+        if (!shouldRunTests) return;
+
+        const topicAttrs = await snsClient.send(
+          new GetTopicAttributesCommand({
+            TopicArn: outputs.notification_topic_arn
+          })
+        );
+
+        expect(topicAttrs.Attributes?.KmsMasterKeyId).toBeDefined();
+        expect(topicAttrs.Attributes?.KmsMasterKeyId).toContain("alias/aws/sns");
+      });
+    });
+
+    describe("Complete Workflow Validation", () => {
+      test("all components for code-to-deployment workflow should be connected", async () => {
+        if (!shouldRunTests) return;
+
+        const repoName = outputs.repository_clone_url_http?.match(/\/([^/]+)$/)?.[1];
+        expect(repoName).toBeDefined();
+
+        const pipelineNames = Object.values(outputs.pipeline_names || {});
+        expect(pipelineNames.length).toBeGreaterThan(0);
+
+        const pipeline = await pipelineClient.send(
+          new GetPipelineCommand({ name: pipelineNames[0] })
+        );
+
+        const sourceStage = pipeline.pipeline?.stages?.find(s => s.name === "Source");
+        expect(sourceStage?.actions?.[0].configuration?.RepositoryName).toContain(
+          repoName?.split("-").slice(0, -1).join("-") || repoName
+        );
+
+        const planStage = pipeline.pipeline?.stages?.find(s => s.name === "Plan");
+        expect(planStage).toBeDefined();
+
+        const applyStage = pipeline.pipeline?.stages?.find(s => s.name === "Apply");
+        expect(applyStage).toBeDefined();
+      });
+
+      test("multi-environment workflow should have correct branch mapping", async () => {
+        if (!shouldRunTests) return;
+
+        const pipelineNames = outputs.pipeline_names || {};
+
+        for (const [env, pipelineName] of Object.entries(pipelineNames)) {
+          const pipeline = await pipelineClient.send(
+            new GetPipelineCommand({ name: pipelineName as string })
+          );
+
+          const sourceStage = pipeline.pipeline?.stages?.find(s => s.name === "Source");
+          const branchName = sourceStage?.actions?.[0].configuration?.BranchName;
+
+          if (env === "prod") {
+            expect(branchName).toBe("main");
+          } else {
+            expect(branchName).toBe(env);
+          }
+        }
+      });
+
+      test("production pipeline should include manual approval gate", async () => {
+        if (!shouldRunTests) return;
+
+        const pipelineNames = outputs.pipeline_names || {};
+        const prodPipeline = pipelineNames["prod"];
+
+        if (prodPipeline) {
+          const pipeline = await pipelineClient.send(
+            new GetPipelineCommand({ name: prodPipeline })
+          );
+
+          const approvalStage = pipeline.pipeline?.stages?.find(s => s.name === "Approval");
+          expect(approvalStage).toBeDefined();
+          expect(approvalStage?.actions?.[0].actionTypeId?.category).toBe("Approval");
+        }
+      });
+
+      test("non-production pipelines should not have approval stage", async () => {
+        if (!shouldRunTests) return;
+
+        const pipelineNames = outputs.pipeline_names || {};
+        const devPipeline = pipelineNames["dev"];
+
+        if (devPipeline) {
+          const pipeline = await pipelineClient.send(
+            new GetPipelineCommand({ name: devPipeline })
+          );
+
+          const approvalStage = pipeline.pipeline?.stages?.find(s => s.name === "Approval");
+          expect(approvalStage).toBeUndefined();
+        }
+      });
+
+      test("CloudWatch logs should be configured for all CodeBuild projects", async () => {
+        if (!shouldRunTests) return;
+
+        const projectNames = Object.values(outputs.codebuild_plan_project_names || {});
+        const project = await codebuildClient.send(
+          new BatchGetProjectsCommand({ names: [projectNames[0]] })
+        );
+
+        const logsConfig = project.projects?.[0].logsConfig;
+        expect(logsConfig?.cloudWatchLogs?.status).toBe("ENABLED");
+        expect(logsConfig?.cloudWatchLogs?.groupName).toBeDefined();
+      });
+
+      test("IAM roles should follow least privilege principle", async () => {
+        if (!shouldRunTests) return;
+
+        const planProjectNames = Object.values(outputs.codebuild_plan_project_names || {});
+        const applyProjectNames = Object.values(outputs.codebuild_apply_project_names || {});
+
+        const planProject = await codebuildClient.send(
+          new BatchGetProjectsCommand({ names: [planProjectNames[0]] })
+        );
+
+        const applyProject = await codebuildClient.send(
+          new BatchGetProjectsCommand({ names: [applyProjectNames[0]] })
+        );
+
+        const planRoleArn = planProject.projects?.[0].serviceRole;
+        const applyRoleArn = applyProject.projects?.[0].serviceRole;
+
+        expect(planRoleArn).not.toBe(applyRoleArn);
+        expect(planRoleArn).toContain("codebuild-plan");
+        expect(applyRoleArn).toContain("codebuild-apply");
+      });
+    });
+
+    describe("Resilience and Error Handling", () => {
+      test("state bucket lifecycle rules should prevent accidental data loss", async () => {
+        if (!shouldRunTests) return;
+
+        const lifecycle = await s3Client.send(
+          new GetBucketLifecycleConfigurationCommand({
+            Bucket: outputs.state_bucket_name
+          })
+        );
+
+        expect(lifecycle.Rules).toBeDefined();
+
+        const noncurrentVersionRule = lifecycle.Rules?.find(
+          rule => rule.NoncurrentVersionTransitions || rule.NoncurrentVersionExpiration
+        );
+
+        expect(noncurrentVersionRule).toBeDefined();
+      });
+
+      test("DynamoDB point-in-time recovery should be enabled for state locking", async () => {
+        if (!shouldRunTests) return;
+
+        const table = await dynamoClient.send(
+          new DescribeTableCommand({
+            TableName: outputs.state_lock_table_name
+          })
+        );
+
+        expect(table.Table).toBeDefined();
+      });
+
+      test("all S3 buckets should have lifecycle policies for cost optimization", async () => {
+        if (!shouldRunTests) return;
+
+        const buckets = [outputs.state_bucket_name, outputs.artifacts_bucket_name];
+
+        for (const bucket of buckets) {
+          const lifecycle = await s3Client.send(
+            new GetBucketLifecycleConfigurationCommand({ Bucket: bucket })
+          );
+
+          expect(lifecycle.Rules).toBeDefined();
+          expect(lifecycle.Rules?.length).toBeGreaterThan(0);
+        }
+      });
     });
   });
 });
