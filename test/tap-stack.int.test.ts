@@ -45,6 +45,9 @@ import {
 import {
   KMSClient, DescribeKeyCommand, GetKeyPolicyCommand
 } from '@aws-sdk/client-kms';
+import {
+  SSMClient, SendCommandCommand, GetCommandInvocationCommand, ListCommandInvocationsCommand
+} from '@aws-sdk/client-ssm';
 
 // Load CloudFormation outputs
 const outputsPath = join(__dirname, '../cfn-outputs/flat-outputs.json');
@@ -83,6 +86,7 @@ const cloudWatchLogsClient = new CloudWatchLogsClient({ region: AWS_REGION });
 const cloudFrontClient = new CloudFrontClient({ region: AWS_REGION });
 const wafv2Client = new WAFV2Client({ region: 'us-east-1' }); // WAFv2 CloudFront scope is always us-east-1
 const kmsClient = new KMSClient({ region: AWS_REGION });
+const ssmClient = new SSMClient({ region: AWS_REGION });
 
 // Extract output values from JSON file
 const vpcId = outputs.VpcId;
@@ -133,8 +137,7 @@ const TEST_OBJECT_CONTENT = 'Integration test content for NovaCart workflow vali
 describe('NovaCart Secure Foundation - End-to-End Integration Tests', () => {
 
   // WORKFLOW 1: Static Content Delivery
-  // User → CloudFront → WAF → S3 → CloudTrail
-  describe('Workflow 1: Static Content Delivery', () => {
+  describe('Workflow 1: Static Content Delivery (User → CloudFront → WAF → S3 → CloudTrail)', () => {
 
     test('S3 AppDataBucket stores encrypted content with versioning', async () => {
       // Verify bucket exists and is accessible
@@ -195,19 +198,28 @@ describe('NovaCart Secure Foundation - End-to-End Integration Tests', () => {
       expect(lookupEventsResponse.Events).toBeDefined();
       
       // Check CloudTrail log group exists
-      const logGroupArnParts = cloudTrailLogGroupArn.split(':');
-      const logGroupName = logGroupArnParts[logGroupArnParts.length - 1];
+      // Extract log group name from ARN format: arn:aws:logs:region:account-id:log-group:log-group-name:*
+      // Use regex to extract log group name more reliably
+      const arnMatch = cloudTrailLogGroupArn.match(/arn:aws:logs:[^:]+:[^:]+:log-group:([^:*]+)/);
+      if (!arnMatch || !arnMatch[1]) {
+        throw new Error(`Invalid CloudTrail log group ARN format: ${cloudTrailLogGroupArn}`);
+      }
+      const cleanLogGroupName = arnMatch[1];
+      
+      expect(cleanLogGroupName).toBeTruthy();
+      expect(cleanLogGroupName).not.toBe('');
+      expect(cleanLogGroupName).not.toBe('*');
       
       const describeLogGroupsResponse = await cloudWatchLogsClient.send(
-        new DescribeLogGroupsCommand({ logGroupNamePrefix: logGroupName })
+        new DescribeLogGroupsCommand({ logGroupNamePrefix: cleanLogGroupName })
       );
       
-      expect(describeLogGroupsResponse.logGroups?.some(lg => lg.logGroupName === logGroupName)).toBe(true);
+      expect(describeLogGroupsResponse.logGroups?.some(lg => lg.logGroupName === cleanLogGroupName)).toBe(true);
       
       // Verify logs are being written
       const filterLogsResponse = await cloudWatchLogsClient.send(
         new FilterLogEventsCommand({
-          logGroupName: logGroupName,
+          logGroupName: cleanLogGroupName,
           startTime: Date.now() - 10 * 60 * 1000, // Last 10 minutes
           limit: 10,
         })
@@ -219,9 +231,10 @@ describe('NovaCart Secure Foundation - End-to-End Integration Tests', () => {
     test('CloudFront Distribution is protected by WAF', async () => {
       // Verify WAF WebACL exists
       expect(wafWebAclArn).toBeTruthy();
-      expect(wafWebAclArn).not.toBe('WAF not created in this region');
+      expect(wafWebAclArn).not.toBe('');
       
       // Extract WebACL ID and scope from ARN
+      // ARN format: arn:aws:wafv2:region:account-id:global/webacl/name/id
       const arnParts = wafWebAclArn.split('/');
       const webAclId = arnParts[arnParts.length - 1];
       const webAclName = arnParts[arnParts.length - 2];
@@ -230,6 +243,7 @@ describe('NovaCart Secure Foundation - End-to-End Integration Tests', () => {
       expect(webAclName).toBeTruthy();
       
       // Verify WAF WebACL exists
+      // Note: CLOUDFRONT scope WAFs are always in us-east-1 regardless of stack region
       const getWebAclResponse = await wafv2Client.send(
         new GetWebACLCommand({
           Scope: 'CLOUDFRONT',
@@ -241,9 +255,8 @@ describe('NovaCart Secure Foundation - End-to-End Integration Tests', () => {
       expect(getWebAclResponse.WebACL).toBeDefined();
       expect(getWebAclResponse.WebACL?.Name).toBeDefined();
       
-      // Verify CloudFront exists and is configured (must exist if WAF exists)
+      // Verify CloudFront exists and is configured
       expect(cloudFrontDomainName).toBeTruthy();
-      expect(cloudFrontDomainName).not.toBe('WAF not created in this region');
       expect(cloudFrontDomainName).not.toBe('');
       
       // Verify CloudFront distribution exists
@@ -262,8 +275,7 @@ describe('NovaCart Secure Foundation - End-to-End Integration Tests', () => {
   });
 
   // WORKFLOW 2: API Request Flow
-  // User → API Gateway → Validation → Lambda → DLQ → CloudTrail
-  describe('Workflow 2: API Request Flow', () => {
+  describe('Workflow 2: API Request Flow (API Gateway → Lambda → S3 → CloudTrail)', () => {
 
     test('API Gateway validates request and forwards to Lambda', async () => {
       // Verify API Gateway ID is available
@@ -420,34 +432,85 @@ describe('NovaCart Secure Foundation - End-to-End Integration Tests', () => {
   });
 
   // WORKFLOW 3: Application Server Flow
-  // EC2 → AppConfig → Secrets Manager → RDS → CloudWatch
-  describe('Workflow 3: Application Server Flow', () => {
+  describe('Workflow 3: Application Server Flow (EC2 → AppConfig → Secrets Manager → RDS → CloudWatch)', () => {
 
     test('EC2 instances can access S3 AppConfigBucket via IAM role', async () => {
-      // Verify EC2 instances exist
+      // Verify EC2 instances exist and are running
       const describeInstancesResponse = await ec2Client.send(
         new DescribeInstancesCommand({
           InstanceIds: [ec2InstanceId],
         })
       );
       
-      expect(describeInstancesResponse.Reservations?.[0]?.Instances?.[0]?.InstanceId).toBe(ec2InstanceId);
-      expect(describeInstancesResponse.Reservations?.[0]?.Instances?.[0]?.State?.Name).toBe('running');
+      const instance = describeInstancesResponse.Reservations?.[0]?.Instances?.[0];
+      expect(instance?.InstanceId).toBe(ec2InstanceId);
+      expect(instance?.State?.Name).toBe('running');
       
       // Verify IAM instance profile is attached
-      const instanceProfile = describeInstancesResponse.Reservations?.[0]?.Instances?.[0]?.IamInstanceProfile;
+      const instanceProfile = instance?.IamInstanceProfile;
       expect(instanceProfile).toBeDefined();
       
-      // Verify AppConfigBucket exists and is accessible
+      // Verify AppConfigBucket exists
       expect(appConfigBucketName).toBeTruthy();
-      // Verify bucket encryption
-      const encryptionResponse = await s3Client.send(
-        new GetBucketEncryptionCommand({ Bucket: appConfigBucketName })
+      
+      // Actually execute command on EC2 instance to verify S3 access
+      const testObjectKey = `test/ssm-test-${Date.now()}.txt`;
+      const ssmCommand = `aws s3 ls s3://${appConfigBucketName}/ --region ${AWS_REGION}`;
+      
+      const sendCommandResponse = await ssmClient.send(
+        new SendCommandCommand({
+          InstanceIds: [ec2InstanceId],
+          DocumentName: 'AWS-RunShellScript',
+          Parameters: {
+            commands: [ssmCommand],
+          },
+        })
       );
-      expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
-    }, 30000);
+      
+      expect(sendCommandResponse.Command?.CommandId).toBeDefined();
+      const commandId = sendCommandResponse.Command!.CommandId!;
+      
+      // Wait for command to complete
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      
+      // Get command invocation result
+      let invocationResponse;
+      let attempts = 0;
+      const maxAttempts = 12; // Wait up to 60 seconds
+      
+      while (attempts < maxAttempts) {
+        invocationResponse = await ssmClient.send(
+          new GetCommandInvocationCommand({
+            CommandId: commandId,
+            InstanceId: ec2InstanceId,
+          })
+        );
+        
+        if (invocationResponse.Status === 'Success' || invocationResponse.Status === 'Failed') {
+          break;
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        attempts++;
+      }
+      
+      expect(invocationResponse?.Status).toBe('Success');
+      expect(invocationResponse?.StandardOutputContent).toBeDefined();
+      // Verify output contains bucket name or access confirmation
+      expect(invocationResponse?.StandardOutputContent).toContain(appConfigBucketName);
+    }, 90000);
 
-    test('Secrets Manager stores encrypted RDS credentials', async () => {
+    test('EC2 can access Secrets Manager to retrieve encrypted RDS credentials', async () => {
+      // Verify EC2 instance is running
+      const describeInstancesResponse = await ec2Client.send(
+        new DescribeInstancesCommand({
+          InstanceIds: [ec2InstanceId],
+        })
+      );
+      
+      const instance = describeInstancesResponse.Reservations?.[0]?.Instances?.[0];
+      expect(instance?.State?.Name).toBe('running');
+      
       // Verify RDS endpoint exists
       expect(rdsEndpoint).toBeTruthy();
       
@@ -472,7 +535,56 @@ describe('NovaCart Secure Foundation - End-to-End Integration Tests', () => {
       
       expect(describeSecretResponse.ARN).toBe(dbPasswordSecretArn);
       expect(describeSecretResponse.KmsKeyId).toBeDefined();
-    }, 30000);
+      
+      // Extract secret name from ARN
+      const secretName = dbPasswordSecretArn.split(':').pop()?.split('/').pop();
+      expect(secretName).toBeTruthy();
+      
+      // Actually execute command on EC2 instance to verify Secrets Manager access
+      const ssmCommand = `aws secretsmanager describe-secret --secret-id ${secretName} --region ${AWS_REGION}`;
+      
+      const sendCommandResponse = await ssmClient.send(
+        new SendCommandCommand({
+          InstanceIds: [ec2InstanceId],
+          DocumentName: 'AWS-RunShellScript',
+          Parameters: {
+            commands: [ssmCommand],
+          },
+        })
+      );
+      
+      expect(sendCommandResponse.Command?.CommandId).toBeDefined();
+      const commandId = sendCommandResponse.Command!.CommandId!;
+      
+      // Wait for command to complete
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      
+      // Get command invocation result
+      let invocationResponse;
+      let attempts = 0;
+      const maxAttempts = 12;
+      
+      while (attempts < maxAttempts) {
+        invocationResponse = await ssmClient.send(
+          new GetCommandInvocationCommand({
+            CommandId: commandId,
+            InstanceId: ec2InstanceId,
+          })
+        );
+        
+        if (invocationResponse.Status === 'Success' || invocationResponse.Status === 'Failed') {
+          break;
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        attempts++;
+      }
+      
+      expect(invocationResponse?.Status).toBe('Success');
+      expect(invocationResponse?.StandardOutputContent).toBeDefined();
+      // Verify output contains secret ARN or name
+      expect(invocationResponse?.StandardOutputContent).toContain(secretName!);
+    }, 90000);
 
     test('EC2 can connect to RDS via VPC', async () => {
       // Verify EC2 and RDS are in the same VPC
@@ -531,7 +643,8 @@ describe('NovaCart Secure Foundation - End-to-End Integration Tests', () => {
         db => db.Endpoint?.Address === rdsEndpoint
       );
       
-      expect(dbInstance?.MonitoringInterval).toBeGreaterThan(0);
+      // Verify enhanced monitoring is configured (MonitoringInterval > 0 means enabled)
+      expect(dbInstance?.MonitoringInterval).toBe(60); // Template sets this to 60 seconds
       expect(dbInstance?.MonitoringRoleArn).toBeDefined();
     }, 30000);
 
@@ -562,8 +675,7 @@ describe('NovaCart Secure Foundation - End-to-End Integration Tests', () => {
   });
 
   // WORKFLOW 4: Audit & Compliance Flow
-  // All Actions → CloudTrail → S3 + CloudWatch Logs
-  describe('Workflow 4: Audit & Compliance Flow', () => {
+  describe('Workflow 4: Audit & Compliance Flow (All Actions → CloudTrail → S3 + CloudWatch Logs)', () => {
     test('CloudTrail is logging to S3 bucket', async () => {
       // Verify CloudTrail trail exists
       const describeTrailsResponse = await cloudTrailClient.send(
@@ -624,15 +736,23 @@ describe('NovaCart Secure Foundation - End-to-End Integration Tests', () => {
       expect(trail?.CloudWatchLogsRoleArn).toBeDefined();
       
       // Verify CloudWatch Log Group exists
-      const logGroupArnParts = cloudTrailLogGroupArn.split(':');
-      const logGroupName = logGroupArnParts[logGroupArnParts.length - 1];
+      // Extract log group name from ARN format: arn:aws:logs:region:account-id:log-group:log-group-name:*
+      const arnMatch = cloudTrailLogGroupArn.match(/arn:aws:logs:[^:]+:[^:]+:log-group:([^:*]+)/);
+      if (!arnMatch || !arnMatch[1]) {
+        throw new Error(`Invalid CloudTrail log group ARN format: ${cloudTrailLogGroupArn}`);
+      }
+      const cleanLogGroupName = arnMatch[1];
+      
+      expect(cleanLogGroupName).toBeTruthy();
+      expect(cleanLogGroupName).not.toBe('');
+      expect(cleanLogGroupName).not.toBe('*');
       
       const describeLogGroupsResponse = await cloudWatchLogsClient.send(
-        new DescribeLogGroupsCommand({ logGroupNamePrefix: logGroupName })
+        new DescribeLogGroupsCommand({ logGroupNamePrefix: cleanLogGroupName })
       );
       
       const logGroup = describeLogGroupsResponse.logGroups?.find(
-        lg => lg.logGroupName === logGroupName
+        lg => lg.logGroupName === cleanLogGroupName
       );
       
       expect(logGroup).toBeDefined();
@@ -675,8 +795,7 @@ describe('NovaCart Secure Foundation - End-to-End Integration Tests', () => {
 
 
   // WORKFLOW 5: Administrative Access Flow
-  // Administrator → Security Group → EC2 → Secure Operations
-  describe('Workflow 5: Administrative Access Flow', () => {
+  describe('Workflow 5: Administrative Access Flow (Administrator → Security Group → EC2 → Secure Operations)', () => {
     test('Security Group restricts SSH to allowed IP only', async () => {
       // Get EC2 instance security groups
       const describeInstancesResponse = await ec2Client.send(
@@ -734,23 +853,6 @@ describe('NovaCart Secure Foundation - End-to-End Integration Tests', () => {
       expect(subnet?.MapPublicIpOnLaunch).toBe(false);
     }, 30000);
 
-    test('EC2 IAM role provides secure access to S3 and Secrets Manager', async () => {
-      // Verify EC2 instance has IAM instance profile
-      const describeInstancesResponse = await ec2Client.send(
-        new DescribeInstancesCommand({
-          InstanceIds: [ec2InstanceId],
-        })
-      );
-      
-      const instanceProfile = describeInstancesResponse.Reservations?.[0]?.Instances?.[0]?.IamInstanceProfile;
-      expect(instanceProfile?.Arn).toBeDefined();
-      
-      // The instance profile allows EC2 to access:
-      // - S3 AppConfigBucket (read)
-      // - Secrets Manager (GetSecretValue for DB password)
-      // - KMS (decrypt)
-      // These are verified by the fact that resources are created and accessible
-    }, 30000);
 
     test('All EC2 operations are logged in CloudTrail', async () => {
       // Perform an EC2 API operation

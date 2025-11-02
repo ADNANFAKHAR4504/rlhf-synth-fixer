@@ -103,9 +103,6 @@ Parameters:
       - 't3.medium'
       - 't3.large'
 
-Conditions:
-  CreateCloudFront: !Equals [!Ref 'AWS::Region', 'us-east-1']
-
 Resources:
   # ========================================
   # KMS Keys for Encryption (FIXED)
@@ -854,7 +851,6 @@ Resources:
 
   WebACL:
     Type: AWS::WAFv2::WebACL
-    Condition: CreateCloudFront
     Properties:
       Name: !Sub '${EnvironmentName}-web-acl-${AWS::Region}'
       Scope: CLOUDFRONT
@@ -909,7 +905,6 @@ Resources:
 
   CloudFrontOriginAccessControl:
     Type: AWS::CloudFront::OriginAccessControl
-    Condition: CreateCloudFront
     Properties:
       OriginAccessControlConfig:
         Name: !Sub '${EnvironmentName}-oac-${AWS::Region}'
@@ -920,7 +915,6 @@ Resources:
 
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
-    Condition: CreateCloudFront
     Properties:
       DistributionConfig:
         Enabled: true
@@ -945,7 +939,6 @@ Resources:
 
   AppDataBucketPolicyForCloudFront:
     Type: AWS::S3::BucketPolicy
-    Condition: CreateCloudFront
     Properties:
       Bucket: !Ref AppDataBucket
       PolicyDocument:
@@ -1345,10 +1338,7 @@ Outputs:
 
   WafWebAclArn:
     Description: WAF Web ACL ARN for CloudFront protection
-    Value: !If 
-      - CreateCloudFront
-      - !GetAtt WebACL.Arn
-      - 'WAF not created in this region'
+    Value: !GetAtt WebACL.Arn
     Export:
       Name: !Sub '${EnvironmentName}-waf-webacl-arn'
 
@@ -1419,7 +1409,6 @@ Outputs:
       Name: !Sub '${EnvironmentName}-ec2-instance-id-az2'
 
   CloudFrontDomainName:
-    Condition: CreateCloudFront
     Description: CloudFront distribution domain name
     Value: !GetAtt CloudFrontDistribution.DomainName
     Export:
