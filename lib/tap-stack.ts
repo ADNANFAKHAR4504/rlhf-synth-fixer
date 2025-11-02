@@ -21,13 +21,13 @@ export interface TapStackArgs {
   devRdsInstanceId?: string;
   devVpcId?: string;
   migrationPhase?:
-  | "initial"
-  | "snapshot"
-  | "blue-green"
-  | "traffic-shift-10"
-  | "traffic-shift-50"
-  | "traffic-shift-100"
-  | "complete";
+    | "initial"
+    | "snapshot"
+    | "blue-green"
+    | "traffic-shift-10"
+    | "traffic-shift-50"
+    | "traffic-shift-100"
+    | "complete";
   devEnvironment?: {
     rdsInstanceIdentifier: string;
     vpcId?: string;
@@ -627,7 +627,7 @@ export class TapStack extends pulumi.ComponentResource {
     this.prodRdsPort = this.prodRdsInstance.port;
 
     // =========================================================================
-    // 6. S3 Buckets (REMOVED ALB LOGGING - NO S3 POLICY NEEDED)
+    // 6. S3 Buckets (NO ALB LOGGING)
     // =========================================================================
 
     this.prodLogBucket = new aws.s3.Bucket(
@@ -646,7 +646,6 @@ export class TapStack extends pulumi.ComponentResource {
 
     this.prodLogBucketName = this.prodLogBucket.id;
 
-    // S3 Bucket Versioning
     new aws.s3.BucketVersioning(
       `prod-logs-versioning-${args.environmentSuffix}`,
       {
@@ -658,7 +657,6 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // S3 Server-Side Encryption
     new aws.s3.BucketServerSideEncryptionConfiguration(
       `prod-logs-sse-${args.environmentSuffix}`,
       {
@@ -675,7 +673,6 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // S3 Lifecycle Configuration
     new aws.s3.BucketLifecycleConfiguration(
       `prod-logs-lifecycle-${args.environmentSuffix}`,
       {
@@ -703,7 +700,6 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // S3 Block Public Access
     new aws.s3.BucketPublicAccessBlock(
       `prod-logs-public-block-${args.environmentSuffix}`,
       {
@@ -716,7 +712,6 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // Replica Bucket (NO ALB LOGGING)
     const replicaProvider = new aws.Provider(
       `replica-provider-${args.environmentSuffix}`,
       {
@@ -752,7 +747,6 @@ export class TapStack extends pulumi.ComponentResource {
       { ...defaultOpts, provider: replicaProvider }
     );
 
-    // Replication Role
     const replicationRole = new aws.iam.Role(
       `prod-replication-role-${args.environmentSuffix}`,
       {
@@ -845,28 +839,32 @@ export class TapStack extends pulumi.ComponentResource {
       },
       { ...defaultOpts, dependsOn: [replicationPolicy] }
     );
+
     // =========================================================================
-    // 6A. CloudWatch Log Group for ALB Logs (FIXED - USE kmsKeyId NOT kmsKeyArn)
+    // 6A. CloudWatch Log Group for ALB Logs (OPTIONAL)
     // =========================================================================
 
-    const albLogGroup = new aws.cloudwatch.LogGroup(
-      `prod-alb-logs-${args.environmentSuffix}`,
-      {
-        name: `/aws/alb/prod-alb-${args.environmentSuffix}`,
-        retentionInDays: 30,
-        kmsKeyId: this.kmsKey.keyId,
-        tags: {
-          Environment: "production",
-          ManagedBy: "pulumi",
-          ...(args.tags || {}),
+    let albLogGroup: aws.cloudwatch.LogGroup | undefined;
+    const createAlbLogs = false; // Set to true to enable ALB logging
+
+    if (createAlbLogs) {
+      albLogGroup = new aws.cloudwatch.LogGroup(
+        `prod-alb-logs-${args.environmentSuffix}`,
+        {
+          name: `/aws/alb/prod-alb-${args.environmentSuffix}`,
+          retentionInDays: 30,
+          tags: {
+            Environment: "production",
+            ManagedBy: "pulumi",
+            ...(args.tags || {}),
+          },
         },
-      },
-      defaultOpts
-    );
-
+        defaultOpts
+      );
+    }
 
     // =========================================================================
-    // 7. Application Load Balancer (WITH CLOUDWATCH LOGGING - NO S3 POLICY)
+    // 7. Application Load Balancer (NO S3 LOGGING)
     // =========================================================================
 
     this.alb = new aws.lb.LoadBalancer(
@@ -947,7 +945,6 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // HTTP Listener
     new aws.lb.Listener(
       `prod-listener-http-${args.environmentSuffix}`,
       {
@@ -1144,7 +1141,7 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
           maxSize: 3,
           desiredCapacity:
             migrationPhase === "initial" ||
-              migrationPhase === "traffic-shift-10"
+            migrationPhase === "traffic-shift-10"
               ? 1
               : 0,
           healthCheckType: "ELB",
@@ -1380,12 +1377,13 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
       route53DomainName: this.route53DomainName,
       prodLogBucketName: this.prodLogBucketName,
       replicaLogBucketName: this.replicaLogBucketName,
-      albLogGroupName: albLogGroup.name,
+      albLogGroupName: pulumi.output(albLogGroup?.name || "not-enabled"),
       kmsKeyId: this.kmsKey.keyId,
       ec2RoleArn: this.ec2Role.arn,
       migrationPhase: this.migrationStatus,
       trafficWeights: pulumi.output(weights),
     };
+    
 
     this.writeOutputsToFile(args);
     this.registerOutputs(this.outputs);
