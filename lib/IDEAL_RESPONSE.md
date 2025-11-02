@@ -1230,7 +1230,7 @@ resource "aws_codepipeline" "terraform_pipeline" {
 
 # CloudWatch Event to trigger pipeline on code changes
 resource "aws_cloudwatch_event_rule" "codecommit_trigger" {
-  for_each = toset(var.environments)
+  for_each = var.enable_codecommit ? toset(var.environments) : []
 
   name        = "terraform-pipeline-trigger-${each.key}-${local.env_suffix}"
   description = "Trigger Terraform pipeline on CodeCommit changes for ${each.key} environment"
@@ -1238,7 +1238,7 @@ resource "aws_cloudwatch_event_rule" "codecommit_trigger" {
   event_pattern = jsonencode({
     source      = ["aws.codecommit"]
     detail-type = ["CodeCommit Repository State Change"]
-    resources   = var.enable_codecommit ? [aws_codecommit_repository.terraform_repo[0].arn] : []
+    resources   = [aws_codecommit_repository.terraform_repo[0].arn]
     detail = {
       event         = ["referenceCreated", "referenceUpdated"]
       referenceType = ["branch"]
@@ -1253,7 +1253,7 @@ resource "aws_cloudwatch_event_rule" "codecommit_trigger" {
 }
 
 resource "aws_cloudwatch_event_target" "pipeline_trigger" {
-  for_each = toset(var.environments)
+  for_each = var.enable_codecommit ? toset(var.environments) : []
 
   rule      = aws_cloudwatch_event_rule.codecommit_trigger[each.key].name
   target_id = "TriggerPipeline"

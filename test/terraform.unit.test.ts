@@ -569,8 +569,8 @@ describe("Terraform CI/CD Pipeline Infrastructure - Unit Tests", () => {
       expect(terraformCode).toMatch(/resource\s+"aws_cloudwatch_event_rule"\s+"codecommit_trigger"/);
     });
 
-    test("trigger rules use for_each", () => {
-      expect(terraformCode).toMatch(/resource\s+"aws_cloudwatch_event_rule"\s+"codecommit_trigger"[\s\S]*?for_each\s*=\s*toset\(var\.environments\)/);
+    test("trigger rules use conditional for_each", () => {
+      expect(terraformCode).toMatch(/resource\s+"aws_cloudwatch_event_rule"\s+"codecommit_trigger"[\s\S]*?for_each\s*=\s*var\.enable_codecommit\s*\?\s*toset\(var\.environments\)\s*:\s*\[\]/);
     });
 
     test("declares event target for pipeline trigger", () => {
