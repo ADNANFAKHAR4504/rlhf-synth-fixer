@@ -39,7 +39,8 @@ import {
 import {
   IAMClient,
   GetRoleCommand,
-  GetRolePolicyCommand
+  GetRolePolicyCommand,
+  ListRolePoliciesCommand
 } from "@aws-sdk/client-iam";
 import {
   EventBridgeClient,
@@ -751,9 +752,19 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
         const roleArn = project.projects?.[0].serviceRole;
         const roleName = roleArn?.split("/").pop();
 
+        // List role policies to get actual policy names
+        const listPoliciesCommand = new ListRolePoliciesCommand({
+          RoleName: roleName!
+        });
+        const policiesList = await iamClient.send(listPoliciesCommand);
+
+        expect(policiesList.PolicyNames).toBeDefined();
+        expect(policiesList.PolicyNames?.length).toBeGreaterThan(0);
+
+        // Get the first policy (main policy)
         const policyCommand = new GetRolePolicyCommand({
           RoleName: roleName!,
-          PolicyName: `${roleName}-policy`
+          PolicyName: policiesList.PolicyNames![0]
         });
 
         const policy = await iamClient.send(policyCommand);
@@ -797,9 +808,19 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
         const roleArn = project.projects?.[0].serviceRole;
         const roleName = roleArn?.split("/").pop();
 
+        // List role policies to get actual policy names
+        const listPoliciesCommand = new ListRolePoliciesCommand({
+          RoleName: roleName!
+        });
+        const policiesList = await iamClient.send(listPoliciesCommand);
+
+        expect(policiesList.PolicyNames).toBeDefined();
+        expect(policiesList.PolicyNames?.length).toBeGreaterThan(0);
+
+        // Get the first policy (main policy)
         const policyCommand = new GetRolePolicyCommand({
           RoleName: roleName!,
-          PolicyName: `${roleName}-policy`
+          PolicyName: policiesList.PolicyNames![0]
         });
 
         const policy = await iamClient.send(policyCommand);
@@ -836,9 +857,19 @@ describe("Terraform CI/CD Pipeline Infrastructure - Integration Tests", () => {
         const roleArn = pipeline.pipeline?.roleArn;
         const roleName = roleArn?.split("/").pop();
 
+        // List role policies to get actual policy names
+        const listPoliciesCommand = new ListRolePoliciesCommand({
+          RoleName: roleName!
+        });
+        const policiesList = await iamClient.send(listPoliciesCommand);
+
+        expect(policiesList.PolicyNames).toBeDefined();
+        expect(policiesList.PolicyNames?.length).toBeGreaterThan(0);
+
+        // Get the first policy (main policy)
         const policyCommand = new GetRolePolicyCommand({
           RoleName: roleName!,
-          PolicyName: `${roleName}-policy`
+          PolicyName: policiesList.PolicyNames![0]
         });
 
         const policy = await iamClient.send(policyCommand);
