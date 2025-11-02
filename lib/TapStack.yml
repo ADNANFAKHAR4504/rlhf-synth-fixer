@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'NovaCart Secure Foundation - Production-Grade Security Baseline Template'
+Description: 'NovaCart Secure Foundation - Production-Grade Security Baseline Template (Fixed)'
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -108,7 +108,7 @@ Conditions:
 
 Resources:
   # ========================================
-  # KMS Keys for Encryption
+  # KMS Keys for Encryption (FIXED)
   # ========================================
 
   MasterKMSKey:
@@ -119,34 +119,67 @@ Resources:
       KeyPolicy:
         Version: '2012-10-17'
         Statement:
-          - Sid: Allow administration of the key
+          # Admin permissions
+          - Sid: Enable IAM User Permissions
             Effect: Allow
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
             Resource: '*'
+          
+          # CloudTrail permissions with proper conditions
           - Sid: Allow CloudTrail to encrypt logs
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action:
-              - kms:GenerateDataKey*
-              - kms:Encrypt
-              - kms:Decrypt
-              - kms:ReEncrypt*
-              - kms:DescribeKey
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
             Resource: '*'
-          - Sid: Allow CloudWatch Logs encryption
+            Condition:
+              StringLike:
+                'kms:EncryptionContext:aws:cloudtrail:arn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/*'
+          
+          - Sid: Allow CloudTrail to decrypt logs
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:ReEncryptFrom'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:CallerAccount': !Sub '${AWS::AccountId}'
+              StringLike:
+                'kms:EncryptionContext:aws:cloudtrail:arn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/*'
+          
+          # CloudWatch Logs permissions
+          - Sid: Allow CloudWatch Logs
             Effect: Allow
             Principal:
               Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
             Action:
-              - kms:Encrypt
-              - kms:Decrypt
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey*
-              - kms:DescribeKey
-              - kms:CreateGrant
+              - 'kms:Encrypt*'
+              - 'kms:Decrypt*'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+            Resource: '*'
+            Condition:
+              ArnLike:
+                'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*'
+          
+          # S3 permissions for encrypted buckets
+          - Sid: Allow S3 service
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+              - 'kms:CreateGrant'
             Resource: '*'
 
   MasterKMSKeyAlias:
@@ -665,7 +698,7 @@ Resources:
           Value: 'true'
 
   # ========================================
-  # CloudTrail for Comprehensive Logging
+  # CloudTrail for Comprehensive Logging (FIXED)
   # ========================================
 
   CloudTrailLogGroup:
@@ -673,19 +706,7 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/cloudtrail/${EnvironmentName}-${AWS::Region}'
       RetentionInDays: 90
-      Tags:
-        - Key: Name
-          Value: !Sub '/aws/cloudtrail/${EnvironmentName}'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Department
-          Value: !Ref Department
-        - Key: Owner
-          Value: !Ref Owner
-        - Key: team
-          Value: '2'
-        - Key: iac-rlhf-amazon
-          Value: 'true'
+      KmsKeyId: !GetAtt MasterKMSKey.Arn
 
   CloudTrailBucket:
     Type: AWS::S3::Bucket
@@ -703,6 +724,13 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 90
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-cloudtrail'
@@ -717,6 +745,7 @@ Resources:
         - Key: iac-rlhf-amazon
           Value: 'true'
 
+  # FIXED: Corrected S3 Bucket Policy for CloudTrail
   CloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -724,30 +753,28 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
+          # Allow CloudTrail to check bucket ACL
           - Sid: AWSCloudTrailAclCheck
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
-            Action: s3:GetBucketAcl
+            Action: 's3:GetBucketAcl'
             Resource: !GetAtt CloudTrailBucket.Arn
+            Condition:
+              StringEquals:
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${EnvironmentName}-trail-${AWS::Region}'
+          
+          # Allow CloudTrail to write logs
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: s3:PutObject
-            Resource: !Sub '${CloudTrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
-            Condition:
-              StringEquals:
-                s3:x-amz-acl: bucket-owner-full-control
-          - Sid: AWSCloudTrailWriteService
-            Effect: Allow
-            Principal:
               Service: cloudtrail.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub '${CloudTrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
+            Action: 's3:PutObject'
+            Resource: !Sub '${CloudTrailBucket.Arn}/*'
             Condition:
               StringEquals:
-                s3:x-amz-acl: bucket-owner-full-control
+                's3:x-amz-acl': 'bucket-owner-full-control'
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${EnvironmentName}-trail-${AWS::Region}'
 
   CloudTrailLogRole:
     Type: AWS::IAM::Role
@@ -784,6 +811,7 @@ Resources:
         - Key: iac-rlhf-amazon
           Value: 'true'
 
+  # FIXED: CloudTrail with proper dependencies and configuration
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     DependsOn:
@@ -791,14 +819,21 @@ Resources:
     Properties:
       TrailName: !Sub '${EnvironmentName}-trail-${AWS::Region}'
       S3BucketName: !Ref CloudTrailBucket
-      S3KeyPrefix: 'cloudtrail'
       IncludeGlobalServiceEvents: true
       IsLogging: true
-      IsMultiRegionTrail: true
+      IsMultiRegionTrail: false  # Changed to false for regional trail
       EnableLogFileValidation: true
       CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailLogRole.Arn
-      KMSKeyId: !Ref MasterKMSKey
+      KMSKeyId: !GetAtt MasterKMSKey.Arn
+      EventSelectors:
+        - IncludeManagementEvents: true
+          ReadWriteType: All
+          DataResources:
+            - Type: AWS::S3::Object
+              Values:
+                - !Sub '${AppDataBucket.Arn}/'
+                - !Sub '${AppConfigBucket.Arn}/'
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-trail'
@@ -906,6 +941,7 @@ Resources:
             QueryString: false
         HttpVersion: http2
         PriceClass: PriceClass_100
+        WebACLId: !GetAtt WebACL.Arn
 
   AppDataBucketPolicyForCloudFront:
     Type: AWS::S3::BucketPolicy
@@ -923,14 +959,7 @@ Resources:
             Resource: !Sub '${AppDataBucket.Arn}/*'
             Condition:
               StringEquals:
-                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution.Id}'
-
-  WebACLAssociation:
-    Type: AWS::WAFv2::WebACLAssociation
-    Condition: CreateCloudFront
-    Properties:
-      ResourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution.Id}'
-      WebACLArn: !GetAtt WebACL.Arn
+                'AWS:SourceArn': !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
 
   # ========================================
   # Lambda Function with Dead Letter Queue
@@ -1045,19 +1074,6 @@ Resources:
       LogGroupName: !Sub '/aws/lambda/${EnvironmentName}-sample-function-${AWS::Region}'
       RetentionInDays: 30
       KmsKeyId: !GetAtt MasterKMSKey.Arn
-      Tags:
-        - Key: Name
-          Value: !Sub '/aws/lambda/${EnvironmentName}-sample-function-${AWS::Region}'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Department
-          Value: !Ref Department
-        - Key: Owner
-          Value: !Ref Owner
-        - Key: team
-          Value: '2'
-        - Key: iac-rlhf-amazon
-          Value: 'true'
 
   # ========================================
   # API Gateway with Request Validation
@@ -1121,6 +1137,8 @@ Resources:
         PassthroughBehavior: WHEN_NO_TEMPLATES
         RequestTemplates:
           'application/json': '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
 
   ApiGatewayInvokeLambdaPermission:
     Type: AWS::Lambda::Permission
@@ -1128,7 +1146,7 @@ Resources:
       FunctionName: !Ref SampleLambdaFunction
       Action: 'lambda:InvokeFunction'
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/prod/POST/order'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/POST/order'
 
   ApiRequestValidator:
     Type: AWS::ApiGateway::RequestValidator
@@ -1180,12 +1198,7 @@ Resources:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: !Ref EC2InstanceType
-      ImageId:
-        'Fn::Sub':
-          - '{{resolve:ssm:${ParamName}:1}}'
-          - {
-              ParamName: '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64',
-            }
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
       SubnetId: !Ref PrivateSubnet1
       IamInstanceProfile: !Ref EC2InstanceProfile
       SecurityGroupIds:
@@ -1230,12 +1243,7 @@ Resources:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: !Ref EC2InstanceType
-      ImageId:
-        'Fn::Sub':
-          - '{{resolve:ssm:${ParamName}:1}}'
-          - {
-              ParamName: '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64',
-            }
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
       SubnetId: !Ref PrivateSubnet2
       IamInstanceProfile: !Ref EC2InstanceProfile
       SecurityGroupIds:
@@ -1295,20 +1303,6 @@ Resources:
       Dimensions:
         - Name: InstanceId
           Value: !Ref WebServerInstance
-      AlarmActions: []
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-ec2-high-cpu'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Department
-          Value: !Ref Department
-        - Key: Owner
-          Value: !Ref Owner
-        - Key: team
-          Value: '2'
-        - Key: iac-rlhf-amazon
-          Value: 'true'
 
   EC2CPUAlarmAz2:
     Type: AWS::CloudWatch::Alarm
@@ -1325,20 +1319,6 @@ Resources:
       Dimensions:
         - Name: InstanceId
           Value: !Ref WebServerInstanceAz2
-      AlarmActions: []
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-ec2-high-cpu-az2'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Department
-          Value: !Ref Department
-        - Key: Owner
-          Value: !Ref Owner
-        - Key: team
-          Value: '2'
-        - Key: iac-rlhf-amazon
-          Value: 'true'
 
   RDSCPUAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -1355,20 +1335,6 @@ Resources:
       Dimensions:
         - Name: DBInstanceIdentifier
           Value: !Ref RDSDatabase
-      AlarmActions: []
-      Tags:
-        - Key: Name
-          Value: !Sub '${EnvironmentName}-rds-high-cpu'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Department
-          Value: !Ref Department
-        - Key: Owner
-          Value: !Ref Owner
-        - Key: team
-          Value: '2'
-        - Key: iac-rlhf-amazon
-          Value: 'true'
 
 Outputs:
   VpcId:
@@ -1379,12 +1345,10 @@ Outputs:
 
   WafWebAclArn:
     Description: WAF Web ACL ARN for CloudFront protection
-    Value:
-      !If [
-        CreateCloudFront,
-        !GetAtt WebACL.Arn,
-        'WAF not created in this region',
-      ]
+    Value: !If 
+      - CreateCloudFront
+      - !GetAtt WebACL.Arn
+      - 'WAF not created in this region'
     Export:
       Name: !Sub '${EnvironmentName}-waf-webacl-arn'
 
