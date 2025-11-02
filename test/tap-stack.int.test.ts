@@ -89,24 +89,27 @@ describe('ConfigSync Integration Tests', () => {
       );
     }
 
-    configTableName = outputs[`${envSuffix}-ConfigTableName`];
-    reportsBucketName = outputs[`${envSuffix}-ReportsBucketName`];
-    approvalTopicArn = outputs[`${envSuffix}-ApprovalTopicArn`];
+    configTableName =
+      outputs[`${envSuffix}-ConfigTableName`] || outputs['ConfigTableName'];
+    reportsBucketName =
+      outputs[`${envSuffix}-ReportsBucketName`] || outputs['ReportsBucketName'];
+    approvalTopicArn =
+      outputs[`${envSuffix}-ApprovalTopicArn`] || outputs['ApprovalTopicArn'];
     validationProjectName = `${envSuffix}-config-validation`;
 
     if (!configTableName) {
       throw new Error(
-        `Missing output: ${envSuffix}-ConfigTableName. Found keys: ${Object.keys(outputs).join(', ')}`
+        `Missing output: ${envSuffix}-ConfigTableName or ConfigTableName. Found keys: ${Object.keys(outputs).join(', ')}`
       );
     }
     if (!reportsBucketName) {
       throw new Error(
-        `Missing output: ${envSuffix}-ReportsBucketName. Found keys: ${Object.keys(outputs).join(', ')}`
+        `Missing output: ${envSuffix}-ReportsBucketName or ReportsBucketName. Found keys: ${Object.keys(outputs).join(', ')}`
       );
     }
     if (!approvalTopicArn) {
       throw new Error(
-        `Missing output: ${envSuffix}-ApprovalTopicArn. Found keys: ${Object.keys(outputs).join(', ')}`
+        `Missing output: ${envSuffix}-ApprovalTopicArn or ApprovalTopicArn. Found keys: ${Object.keys(outputs).join(', ')}`
       );
     }
   });
