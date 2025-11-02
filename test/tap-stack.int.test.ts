@@ -229,7 +229,15 @@ describe('NovaCart Secure Foundation - End-to-End Integration Tests', () => {
     }, 60000);
 
     test('CloudFront Distribution is protected by WAF', async () => {
-      // Verify WAF WebACL exists
+      // CloudFront/WAF only created in us-east-1 (due to AWS requirement for CLOUDFRONT scope WAF)
+      if (AWS_REGION !== 'us-east-1') {
+        // Verify outputs are not present when not in us-east-1
+        expect(wafWebAclArn).toBeUndefined();
+        expect(cloudFrontDomainName).toBeUndefined();
+        return;
+      }
+      
+      // Verify WAF WebACL exists (only in us-east-1)
       expect(wafWebAclArn).toBeTruthy();
       expect(wafWebAclArn).not.toBe('');
       
@@ -243,7 +251,7 @@ describe('NovaCart Secure Foundation - End-to-End Integration Tests', () => {
       expect(webAclName).toBeTruthy();
       
       // Verify WAF WebACL exists
-      // Note: CLOUDFRONT scope WAFs are always in us-east-1 regardless of stack region
+      // CLOUDFRONT scope WAFs are always in us-east-1 regardless of stack region
       const getWebAclResponse = await wafv2Client.send(
         new GetWebACLCommand({
           Scope: 'CLOUDFRONT',
@@ -748,7 +756,7 @@ describe('NovaCart Secure Foundation - End-to-End Integration Tests', () => {
       );
       
       expect(trail).toBeDefined();
-      // Note: IsLogging may be checked differently in API response
+      // IsLogging may be checked differently in API response
       // Verify trail is configured and active
       expect(trail?.S3BucketName).toBe(cloudTrailBucketName);
       expect(trail?.KmsKeyId).toBeDefined();
@@ -910,7 +918,6 @@ describe('NovaCart Secure Foundation - End-to-End Integration Tests', () => {
       expect(subnet?.VpcId).toBe(vpcId);
       
       // Verify subnet doesn't have auto-assign public IP (indicates private subnet)
-      // Note: This is a best practice check - actual private subnet definition is by route table
       expect(subnet?.MapPublicIpOnLaunch).toBe(false);
     }, 30000);
 

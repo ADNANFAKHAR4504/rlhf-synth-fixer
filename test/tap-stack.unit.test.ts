@@ -276,10 +276,10 @@ describe('NovaCart Secure Foundation CloudFormation Template - Unit Tests', () =
       expect(write.Condition.StringEquals['s3:x-amz-acl']).toBe('bucket-owner-full-control');
     });
 
-    test('should have AppDataBucketPolicyForCloudFront for CloudFront access', () => {
+    test('should have AppDataBucketPolicyForCloudFront with condition for CloudFront access', () => {
       const policy = template.Resources.AppDataBucketPolicyForCloudFront;
       expect(policy).toBeDefined();
-      expect(policy.Condition).toBeUndefined();
+      expect(policy.Condition).toBe('CreateCloudFront');
       expect(policy.Properties.Bucket).toEqual({ Ref: 'AppDataBucket' });
     });
   });
@@ -389,10 +389,19 @@ describe('NovaCart Secure Foundation CloudFormation Template - Unit Tests', () =
 
   // WAF AND CLOUDFRONT VALIDATION
   describe('WAF and CloudFront', () => {
-    test('WebACL should be created in all regions', () => {
+    test('CreateCloudFront condition should exist', () => {
+      expect(template.Conditions).toBeDefined();
+      expect(template.Conditions.CreateCloudFront).toBeDefined();
+      expect(template.Conditions.CreateCloudFront['Fn::Equals']).toEqual([
+        { Ref: 'AWS::Region' },
+        'us-east-1'
+      ]);
+    });
+
+    test('WebACL should be created only in us-east-1', () => {
       const webacl = template.Resources.WebACL;
       expect(webacl).toBeDefined();
-      expect(webacl.Condition).toBeUndefined();
+      expect(webacl.Condition).toBe('CreateCloudFront');
       expect(webacl.Type).toBe('AWS::WAFv2::WebACL');
       expect(webacl.Properties.Scope).toBe('CLOUDFRONT');
     });
@@ -407,10 +416,10 @@ describe('NovaCart Secure Foundation CloudFormation Template - Unit Tests', () =
       expect(commonRuleSet.Statement.ManagedRuleGroupStatement.VendorName).toBe('AWS');
     });
 
-    test('CloudFrontDistribution should be created in all regions', () => {
+    test('CloudFrontDistribution should be created only in us-east-1', () => {
       const distribution = template.Resources.CloudFrontDistribution;
       expect(distribution).toBeDefined();
-      expect(distribution.Condition).toBeUndefined();
+      expect(distribution.Condition).toBe('CreateCloudFront');
       expect(distribution.Type).toBe('AWS::CloudFront::Distribution');
     });
 
@@ -435,10 +444,10 @@ describe('NovaCart Secure Foundation CloudFormation Template - Unit Tests', () =
       });
     });
 
-    test('should have CloudFrontOriginAccessControl', () => {
+    test('should have CloudFrontOriginAccessControl with condition', () => {
       const oac = template.Resources.CloudFrontOriginAccessControl;
       expect(oac).toBeDefined();
-      expect(oac.Condition).toBeUndefined();
+      expect(oac.Condition).toBe('CreateCloudFront');
       expect(oac.Type).toBe('AWS::CloudFront::OriginAccessControl');
       expect(oac.Properties.OriginAccessControlConfig.SigningProtocol).toBe('sigv4');
     });
@@ -677,18 +686,18 @@ describe('NovaCart Secure Foundation CloudFormation Template - Unit Tests', () =
       });
     });
 
-    test('WafWebAclArn output should not be conditional', () => {
+    test('WafWebAclArn output should be conditional', () => {
       const output = template.Outputs.WafWebAclArn;
       expect(output).toBeDefined();
+      expect(output.Condition).toBe('CreateCloudFront');
       expect(output.Value).toBeDefined();
-      // Should directly reference WebACL ARN, not use !If condition
       expect(output.Value['Fn::GetAtt']).toEqual(['WebACL', 'Arn']);
     });
 
-    test('CloudFrontDomainName output should not be conditional', () => {
+    test('CloudFrontDomainName output should be conditional', () => {
       const output = template.Outputs.CloudFrontDomainName;
       expect(output).toBeDefined();
-      expect(output.Condition).toBeUndefined();
+      expect(output.Condition).toBe('CreateCloudFront');
       expect(output.Value).toBeDefined();
       expect(output.Value['Fn::GetAtt']).toEqual(['CloudFrontDistribution', 'DomainName']);
     });

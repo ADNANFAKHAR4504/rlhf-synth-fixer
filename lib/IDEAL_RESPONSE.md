@@ -106,9 +106,12 @@ Parameters:
       - 't3.medium'
       - 't3.large'
 
+Conditions:
+  CreateCloudFront: !Equals [!Ref 'AWS::Region', 'us-east-1']
+
 Resources:
   # ========================================
-  # KMS Keys for Encryption (FIXED)
+  # KMS Keys for Encryption 
   # ========================================
 
   MasterKMSKey:
@@ -698,7 +701,7 @@ Resources:
           Value: 'true'
 
   # ========================================
-  # CloudTrail for Comprehensive Logging (FIXED)
+  # CloudTrail for Comprehensive Logging 
   # ========================================
 
   CloudTrailLogGroup:
@@ -745,7 +748,7 @@ Resources:
         - Key: iac-rlhf-amazon
           Value: 'true'
 
-  # FIXED: Corrected S3 Bucket Policy for CloudTrail
+  # Corrected S3 Bucket Policy for CloudTrail
   CloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -811,7 +814,7 @@ Resources:
         - Key: iac-rlhf-amazon
           Value: 'true'
 
-  # FIXED: CloudTrail with proper dependencies and configuration
+  # CloudTrail with proper dependencies and configuration
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     DependsOn:
@@ -854,6 +857,7 @@ Resources:
 
   WebACL:
     Type: AWS::WAFv2::WebACL
+    Condition: CreateCloudFront
     Properties:
       Name: !Sub '${EnvironmentName}-web-acl-${AWS::Region}'
       Scope: CLOUDFRONT
@@ -908,6 +912,7 @@ Resources:
 
   CloudFrontOriginAccessControl:
     Type: AWS::CloudFront::OriginAccessControl
+    Condition: CreateCloudFront
     Properties:
       OriginAccessControlConfig:
         Name: !Sub '${EnvironmentName}-oac-${AWS::Region}'
@@ -918,6 +923,7 @@ Resources:
 
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
+    Condition: CreateCloudFront
     Properties:
       DistributionConfig:
         Enabled: true
@@ -942,6 +948,7 @@ Resources:
 
   AppDataBucketPolicyForCloudFront:
     Type: AWS::S3::BucketPolicy
+    Condition: CreateCloudFront
     Properties:
       Bucket: !Ref AppDataBucket
       PolicyDocument:
@@ -1340,6 +1347,7 @@ Outputs:
       Name: !Sub '${EnvironmentName}-vpc-id'
 
   WafWebAclArn:
+    Condition: CreateCloudFront
     Description: WAF Web ACL ARN for CloudFront protection
     Value: !GetAtt WebACL.Arn
     Export:
@@ -1412,6 +1420,7 @@ Outputs:
       Name: !Sub '${EnvironmentName}-ec2-instance-id-az2'
 
   CloudFrontDomainName:
+    Condition: CreateCloudFront
     Description: CloudFront distribution domain name
     Value: !GetAtt CloudFrontDistribution.DomainName
     Export:
