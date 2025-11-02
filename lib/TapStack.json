@@ -2460,7 +2460,7 @@
     },
     "Outputs": {
         "VpcId": {
-            "Description": "VPC ID for integration testing",
+            "Description": "VPC ID",
             "Value": {
                 "Ref": "VPC"
             },
@@ -2499,7 +2499,7 @@
             }
         },
         "RdsInstanceEndpoint": {
-            "Description": "RDS Database endpoint for connectivity testing",
+            "Description": "RDS Database endpoint",
             "Value": {
                 "Fn::GetAtt": [
                     "RDSDatabase",
@@ -2568,7 +2568,7 @@
             }
         },
         "ApiGatewayId": {
-            "Description": "API Gateway REST API ID for integration testing",
+            "Description": "API Gateway REST API ID",
             "Value": {
                 "Ref": "RestApi"
             },
@@ -2579,7 +2579,7 @@
             }
         },
         "ApiGatewayUrl": {
-            "Description": "API Gateway URL for endpoint testing",
+            "Description": "API Gateway URL",
             "Value": {
                 "Fn::Sub": "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
             },
@@ -2590,7 +2590,7 @@
             }
         },
         "Ec2InstanceId": {
-            "Description": "EC2 Instance ID for compute testing",
+            "Description": "EC2 Instance ID",
             "Value": {
                 "Ref": "WebServerInstance"
             },
@@ -2601,7 +2601,7 @@
             }
         },
         "Ec2InstanceIdAz2": {
-            "Description": "EC2 Instance ID in AZ2 for compute testing",
+            "Description": "EC2 Instance ID in AZ2",
             "Value": {
                 "Ref": "WebServerInstanceAz2"
             },
@@ -2637,7 +2637,7 @@
             }
         },
         "LambdaFunctionArn": {
-            "Description": "Lambda Function ARN for serverless testing",
+            "Description": "Lambda Function ARN",
             "Value": {
                 "Fn::GetAtt": [
                     "SampleLambdaFunction",

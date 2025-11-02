@@ -1331,7 +1331,7 @@ Resources:
 
 Outputs:
   VpcId:
-    Description: VPC ID for integration testing
+    Description: VPC ID 
     Value: !Ref VPC
     Export:
       Name: !Sub '${EnvironmentName}-vpc-id'
@@ -1349,7 +1349,7 @@ Outputs:
       Name: !Sub '${EnvironmentName}-cloudtrail-loggroup-arn'
 
   RdsInstanceEndpoint:
-    Description: RDS Database endpoint for connectivity testing
+    Description: RDS Database endpoint 
     Value: !GetAtt RDSDatabase.Endpoint.Address
     Export:
       Name: !Sub '${EnvironmentName}-rds-endpoint'
@@ -1385,25 +1385,25 @@ Outputs:
       Name: !Sub '${EnvironmentName}-dlq-url'
 
   ApiGatewayId:
-    Description: API Gateway REST API ID for integration testing
+    Description: API Gateway REST API ID 
     Value: !Ref RestApi
     Export:
       Name: !Sub '${EnvironmentName}-apigateway-id'
 
   ApiGatewayUrl:
-    Description: API Gateway URL for endpoint testing
+    Description: API Gateway URL 
     Value: !Sub 'https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
     Export:
       Name: !Sub '${EnvironmentName}-apigateway-url'
 
   Ec2InstanceId:
-    Description: EC2 Instance ID for compute testing
+    Description: EC2 Instance ID 
     Value: !Ref WebServerInstance
     Export:
       Name: !Sub '${EnvironmentName}-ec2-instance-id'
 
   Ec2InstanceIdAz2:
-    Description: EC2 Instance ID in AZ2 for compute testing
+    Description: EC2 Instance ID in AZ2 
     Value: !Ref WebServerInstanceAz2
     Export:
       Name: !Sub '${EnvironmentName}-ec2-instance-id-az2'
@@ -1421,7 +1421,7 @@ Outputs:
       Name: !Sub '${EnvironmentName}-kms-key-id'
 
   LambdaFunctionArn:
-    Description: Lambda Function ARN for serverless testing
+    Description: Lambda Function ARN 
     Value: !GetAtt SampleLambdaFunction.Arn
     Export:
       Name: !Sub '${EnvironmentName}-lambda-function-arn'
