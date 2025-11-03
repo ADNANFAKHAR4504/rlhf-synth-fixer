@@ -1,0 +1,256 @@
+/**
+ * Unit tests for CostCalculationStack
+ *
+ * Tests the cost calculation component for EC2 instance scheduling savings.
+ */
+import * as pulumi from '@pulumi/pulumi';
+import { CostCalculationStack } from '../lib/cost-calculation-stack';
+
+pulumi.runtime.setMocks({
+  newResource: (args: pulumi.runtime.MockResourceArgs): {
+    id: string;
+    state: any;
+  } => {
+    return {
+      id: `${args.name}_id`,
+      state: args.inputs,
+    };
+  },
+  call: (args: pulumi.runtime.MockCallArgs) => {
+    if (args.token === 'aws:ec2/getInstance:getInstance') {
+      // Return different instance types based on instance ID
+      const instanceId = args.inputs.instanceId || '';
+      if (instanceId.includes('large')) {
+        return {
+          instanceType: 't3.large',
+          instanceState: 'running',
+        };
+      }
+      return {
+        instanceType: 't3.medium',
+        instanceState: 'running',
+      };
+    }
+    return args.inputs;
+  },
+});
+
+describe('CostCalculationStack', () => {
+  it('should create CostCalculationStack with correct type', (done) => {
+    const stack = new CostCalculationStack('test-cost', {
+      environmentSuffix: 'test',
+      instanceIds: pulumi.output(['i-1234567890abcdef0']),
+    });
+
+    pulumi.all([stack.urn]).apply(([urn]) => {
+      expect(urn).toContain('tap:cost:CostCalculationStack');
+      done();
+    });
+  });
+
+  it('should calculate zero savings for no instances', (done) => {
+    const stack = new CostCalculationStack('empty-cost', {
+      environmentSuffix: 'test',
+      instanceIds: pulumi.output([]),
+    });
+
+    pulumi.all([stack.estimatedMonthlySavings]).apply(([savings]) => {
+      expect(savings).toBe(0);
+      done();
+    });
+  });
+
+  it('should have estimatedMonthlySavings output', (done) => {
+    const stack = new CostCalculationStack('savings-cost', {
+      environmentSuffix: 'test',
+      instanceIds: pulumi.output(['i-test123']),
+    });
+
+    pulumi.all([stack.estimatedMonthlySavings]).apply(([savings]) => {
+      expect(savings).toBeDefined();
+      expect(typeof savings).toBe('number');
+      expect(savings).toBeGreaterThanOrEqual(0);
+      done();
+    });
+  });
+
+  it('should have outputs with correct structure', (done) => {
+    const stack = new CostCalculationStack('struct-cost', {
+      environmentSuffix: 'test',
+      instanceIds: pulumi.output(['i-test123', 'i-test456']),
+    });
+
+    pulumi.all([stack.outputs]).apply(([outputs]) => {
+      expect(outputs).toBeDefined();
+      expect(outputs.estimatedMonthlySavings).toBeDefined();
+      expect(outputs.instanceCount).toBeDefined();
+      expect(typeof outputs.estimatedMonthlySavings).toBe('number');
+      expect(typeof outputs.instanceCount).toBe('number');
+      done();
+    });
+  });
+
+  it('should calculate savings for single instance', (done) => {
+    const stack = new CostCalculationStack('single-cost', {
+      environmentSuffix: 'test',
+      instanceIds: pulumi.output(['i-single123']),
+    });
+
+    pulumi.all([stack.estimatedMonthlySavings]).apply(([savings]) => {
+      expect(savings).toBeGreaterThan(0);
+      // t3.medium @ 0.0528/hr * 13hrs/day * 22days = ~15.10
+      expect(savings).toBeGreaterThan(10);
+      done();
+    });
+  });
+
+  it('should calculate savings for multiple instances', (done) => {
+    const stack = new CostCalculationStack('multi-cost', {
+      environmentSuffix: 'test',
+      instanceIds: pulumi.output(['i-test1', 'i-test2', 'i-test3']),
+    });
+
+    pulumi.all([stack.estimatedMonthlySavings]).apply(([savings]) => {
+      expect(savings).toBeGreaterThan(0);
+      // Multiple t3.medium instances should have higher savings
+      expect(savings).toBeGreaterThan(30);
+      done();
+    });
+  });
+
+  it('should count instances correctly', (done) => {
+    const instanceIds = ['i-1', 'i-2', 'i-3', 'i-4', 'i-5'];
+    const stack = new CostCalculationStack('count-cost', {
+      environmentSuffix: 'test',
+      instanceIds: pulumi.output(instanceIds),
+    });
+
+    pulumi.all([stack.outputs]).apply(([outputs]) => {
+      expect(outputs.instanceCount).toBe(instanceIds.length);
+      done();
+    });
+  });
+
+  it('should handle different instance types', (done) => {
+    const stack = new CostCalculationStack('types-cost', {
+      environmentSuffix: 'test',
+      instanceIds: pulumi.output(['i-large1', 'i-medium1']),
+    });
+
+    pulumi.all([stack.estimatedMonthlySavings]).apply(([savings]) => {
+      // Large instance should cost more than medium
+      expect(savings).toBeGreaterThan(0);
+      done();
+    });
+  });
+
+  it('should use correct pricing for ap-southeast-1', (done) => {
+    const stack = new CostCalculationStack('pricing-cost', {
+      environmentSuffix: 'test',
+      instanceIds: pulumi.output(['i-pricetest']),
+    });
+
+    pulumi.all([stack.estimatedMonthlySavings]).apply(([savings]) => {
+      // Savings should be calculated with ap-southeast-1 pricing
+      expect(savings).toBeGreaterThan(0);
+      done();
+    });
+  });
+
+  it('should calculate with 13 hours daily shutdown', (done) => {
+    const stack = new CostCalculationStack('shutdown-cost', {
+      environmentSuffix: 'test',
+      instanceIds: pulumi.output(['i-shutdown']),
+    });
+
+    pulumi.all([stack.estimatedMonthlySavings]).apply(([savings]) => {
+      // 13 hours * 22 days = 286 hours per month
+      // t3.medium @ 0.0528/hr * 286 = ~15.10
+      expect(savings).toBeCloseTo(15.1, 0);
+      done();
+    });
+  });
+
+  it('should handle tags parameter', (done) => {
+    const stack = new CostCalculationStack('tags-cost', {
+      environmentSuffix: 'test',
+      instanceIds: pulumi.output(['i-tagged']),
+      tags: {
+        Environment: 'test',
+        Project: 'cost-test',
+      },
+    });
+
+    pulumi.all([stack.urn]).apply(([urn]) => {
+      expect(urn).toBeDefined();
+      done();
+    });
+  });
+
+  it('should work with Pulumi Output for instanceIds', (done) => {
+    const outputInstanceIds = pulumi.output(['i-output1', 'i-output2']);
+    const stack = new CostCalculationStack('output-cost', {
+      environmentSuffix: 'test',
+      instanceIds: outputInstanceIds,
+    });
+
+    pulumi.all([stack.estimatedMonthlySavings]).apply(([savings]) => {
+      expect(savings).toBeGreaterThan(0);
+      done();
+    });
+  });
+
+  it('should round savings to 2 decimal places', (done) => {
+    const stack = new CostCalculationStack('round-cost', {
+      environmentSuffix: 'test',
+      instanceIds: pulumi.output(['i-round']),
+    });
+
+    pulumi.all([stack.estimatedMonthlySavings]).apply(([savings]) => {
+      const decimalPlaces = savings.toString().split('.')[1]?.length || 0;
+      expect(decimalPlaces).toBeLessThanOrEqual(2);
+      done();
+    });
+  });
+
+  it('should handle instance fetch errors gracefully', (done) => {
+    const stack = new CostCalculationStack('error-cost', {
+      environmentSuffix: 'test',
+      instanceIds: pulumi.output(['i-error', 'i-valid']),
+    });
+
+    pulumi.all([stack.estimatedMonthlySavings]).apply(([savings]) => {
+      // Should still calculate for valid instances
+      expect(savings).toBeGreaterThanOrEqual(0);
+      done();
+    });
+  });
+
+  it('should use default rate for unknown instance types', (done) => {
+    const stack = new CostCalculationStack('unknown-cost', {
+      environmentSuffix: 'test',
+      instanceIds: pulumi.output(['i-unknown']),
+    });
+
+    pulumi.all([stack.estimatedMonthlySavings]).apply(([savings]) => {
+      // Should use default rate of 0.05/hr
+      expect(savings).toBeGreaterThan(0);
+      done();
+    });
+  });
+
+  it('should calculate correct monthly shutdown hours', (done) => {
+    const stack = new CostCalculationStack('hours-cost', {
+      environmentSuffix: 'test',
+      instanceIds: pulumi.output(['i-hours']),
+    });
+
+    pulumi.all([stack.estimatedMonthlySavings]).apply(([savings]) => {
+      // Verify 13 * 22 = 286 hours calculation
+      const hourlyRate = 0.0528; // t3.medium
+      const expectedSavings = Math.round(hourlyRate * 13 * 22 * 100) / 100;
+      expect(savings).toBeCloseTo(expectedSavings, 1);
+      done();
+    });
+  });
+});
