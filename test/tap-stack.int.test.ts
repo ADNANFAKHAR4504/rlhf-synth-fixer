@@ -239,7 +239,9 @@ describe('TapStack Integration Tests', () => {
       const content = fs.readFileSync(stackPath, 'utf-8');
 
       expect(content).toContain('public readonly tableNames');
-      expect(content).toContain('this.tableNames = pulumi.output(tableNamesList)');
+      expect(content).toContain(
+        'this.tableNames = pulumi.output(tableNamesList)'
+      );
     });
 
     it('should export tableArns output', () => {

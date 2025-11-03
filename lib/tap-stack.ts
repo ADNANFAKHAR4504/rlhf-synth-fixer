@@ -66,7 +66,7 @@ export class TapStack extends pulumi.ComponentResource {
     const streamArnsList: pulumi.Output<string | undefined>[] = [];
 
     // Create DynamoDB tables
-    tableConfigs.map(config => {
+    tableConfigs.forEach(config => {
       const tableName = config.name;
       const resourceName = `${tableName}-${environmentSuffix}`;
 

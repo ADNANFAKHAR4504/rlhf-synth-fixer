@@ -3,7 +3,10 @@ import { TapStack } from '../lib/tap-stack';
 
 // Mock Pulumi runtime
 pulumi.runtime.setMocks({
-  newResource: function (args: pulumi.runtime.MockResourceArgs): { id: string; state: any } {
+  newResource: function (args: pulumi.runtime.MockResourceArgs): {
+    id: string;
+    state: any;
+  } {
     return {
       id: `${args.name}-id`,
       state: {
