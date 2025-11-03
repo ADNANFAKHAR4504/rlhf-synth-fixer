@@ -11,16 +11,21 @@
     "Multi-Environment Consistency & Replication"
   ],
   "aws_services": [
-    "ASG",
+    "KMS",
     "EC2",
-    "S3",
     "VPC",
-    "CloudWatch",
-    "IAM",
-    "RDS",
     "ELB",
+    "ASG",
+    "RDS",
+    "S3",
     "Secrets Manager",
     "CloudTrail",
+    "CloudWatch",
+    "SNS",
+    "Lambda",
+    "Events",
+    "IAM",
+    "SSM",
     "NAT Gateway"
   ],
   "coverage": {
@@ -28,5 +33,6 @@
     "branches": 100
   },
   "author": "kanishkah-turing",
-  "dockerS3Location": ""
+  "dockerS3Location": "",
+  "training_quality": 9
 }
