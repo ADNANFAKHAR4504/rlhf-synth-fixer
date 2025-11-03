@@ -1,8 +1,0 @@
-{
-  "name": "shared-dependencies",
-  "version": "1.0.0",
-  "description": "Shared dependencies for Lambda functions",
-  "dependencies": {
-    "aws-xray-sdk-core": "^3.5.0"
-  }
-}
