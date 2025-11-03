@@ -160,12 +160,12 @@ describe('Ec2SchedulerStack', () => {
     );
   });
 
-  it('should create stop and start CloudWatch rules', (done) => {
+  it('should create stop and start EventBridge schedules', (done) => {
     pulumi.all([stack.stopRuleArn, stack.startRuleArn]).apply(
       ([stopArn, startArn]) => {
         expect(stopArn).not.toBe(startArn);
-        expect(stopArn).toContain('rule');
-        expect(startArn).toContain('rule');
+        expect(stopArn).toContain('schedule');
+        expect(startArn).toContain('schedule');
         done();
       }
     );
@@ -213,10 +213,10 @@ describe('Ec2SchedulerStack', () => {
     );
   });
 
-  it('should create Lambda permissions for CloudWatch Events', (done) => {
+  it('should create EventBridge schedules with proper configuration', (done) => {
     pulumi.all([stack.stopRuleArn, stack.startRuleArn]).apply(
       ([stopRuleArn, startRuleArn]) => {
-        // Permissions must exist for rules to invoke functions
+        // Schedules must exist to invoke functions
         expect(stopRuleArn).toBeDefined();
         expect(startRuleArn).toBeDefined();
         done();

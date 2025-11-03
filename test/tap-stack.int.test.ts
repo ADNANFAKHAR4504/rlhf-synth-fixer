@@ -12,10 +12,9 @@ import {
   InvokeCommand,
 } from '@aws-sdk/client-lambda';
 import {
-  EventBridgeClient,
-  DescribeRuleCommand,
-  ListTargetsByRuleCommand,
-} from '@aws-sdk/client-eventbridge';
+  SchedulerClient,
+  GetScheduleCommand,
+} from '@aws-sdk/client-scheduler';
 import {
   CloudWatchClient,
   DescribeAlarmsCommand,
@@ -27,7 +26,7 @@ import {
 
 const AWS_REGION = process.env.AWS_REGION || 'ap-southeast-1';
 const lambdaClient = new LambdaClient({ region: AWS_REGION });
-const eventBridgeClient = new EventBridgeClient({ region: AWS_REGION });
+const schedulerClient = new SchedulerClient({ region: AWS_REGION });
 const cloudWatchClient = new CloudWatchClient({ region: AWS_REGION });
 const logsClient = new CloudWatchLogsClient({ region: AWS_REGION });
 
@@ -188,45 +187,45 @@ describe('TapStack Integration Tests', () => {
     });
   });
 
-  describe('EventBridge Rules', () => {
-    testRunner('should have deployed stop rule', async () => {
-      const ruleName = outputs.stopRuleArn.split('/').pop();
-      const command = new DescribeRuleCommand({ Name: ruleName });
-      const response = await eventBridgeClient.send(command);
+  describe('EventBridge Scheduler', () => {
+    testRunner('should have deployed stop schedule', async () => {
+      const scheduleName = outputs.stopRuleArn.split('/').pop();
+      const command = new GetScheduleCommand({ Name: scheduleName });
+      const response = await schedulerClient.send(command);
 
-      expect(response.Name).toBe(ruleName);
-      expect(response.ScheduleExpression).toBe('cron(0 0 ? * MON-FRI *)');
+      expect(response.Name).toBe(scheduleName);
+      expect(response.ScheduleExpression).toBe('cron(0 19 ? * MON-FRI *)');
+      expect(response.ScheduleExpressionTimezone).toBe('America/New_York');
       expect(response.State).toBe('ENABLED');
     });
 
-    testRunner('should have deployed start rule', async () => {
-      const ruleName = outputs.startRuleArn.split('/').pop();
-      const command = new DescribeRuleCommand({ Name: ruleName });
-      const response = await eventBridgeClient.send(command);
+    testRunner('should have deployed start schedule', async () => {
+      const scheduleName = outputs.startRuleArn.split('/').pop();
+      const command = new GetScheduleCommand({ Name: scheduleName });
+      const response = await schedulerClient.send(command);
 
-      expect(response.Name).toBe(ruleName);
-      expect(response.ScheduleExpression).toBe('cron(0 13 ? * MON-FRI *)');
+      expect(response.Name).toBe(scheduleName);
+      expect(response.ScheduleExpression).toBe('cron(0 8 ? * MON-FRI *)');
+      expect(response.ScheduleExpressionTimezone).toBe('America/New_York');
       expect(response.State).toBe('ENABLED');
     });
 
-    testRunner('should have stop rule targeting stop Lambda', async () => {
-      const ruleName = outputs.stopRuleArn.split('/').pop();
-      const command = new ListTargetsByRuleCommand({ Rule: ruleName });
-      const response = await eventBridgeClient.send(command);
+    testRunner('should have stop schedule targeting stop Lambda', async () => {
+      const scheduleName = outputs.stopRuleArn.split('/').pop();
+      const command = new GetScheduleCommand({ Name: scheduleName });
+      const response = await schedulerClient.send(command);
 
-      expect(response.Targets).toBeDefined();
-      expect(response.Targets?.length).toBeGreaterThan(0);
-      expect(response.Targets?.[0].Arn).toBe(outputs.stopLambdaArn);
+      expect(response.Target).toBeDefined();
+      expect(response.Target?.Arn).toBe(outputs.stopLambdaArn);
     });
 
-    testRunner('should have start rule targeting start Lambda', async () => {
-      const ruleName = outputs.startRuleArn.split('/').pop();
-      const command = new ListTargetsByRuleCommand({ Rule: ruleName });
-      const response = await eventBridgeClient.send(command);
+    testRunner('should have start schedule targeting start Lambda', async () => {
+      const scheduleName = outputs.startRuleArn.split('/').pop();
+      const command = new GetScheduleCommand({ Name: scheduleName });
+      const response = await schedulerClient.send(command);
 
-      expect(response.Targets).toBeDefined();
-      expect(response.Targets?.length).toBeGreaterThan(0);
-      expect(response.Targets?.[0].Arn).toBe(outputs.startLambdaArn);
+      expect(response.Target).toBeDefined();
+      expect(response.Target?.Arn).toBe(outputs.startLambdaArn);
     });
   });
 

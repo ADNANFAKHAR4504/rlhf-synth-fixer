@@ -230,82 +230,89 @@ export class Ec2SchedulerStack extends pulumi.ComponentResource {
       { parent: this, dependsOn: [startLogsGroup, ec2Policy] }
     );
 
-    // Create CloudWatch Events rule to stop instances at 7 PM EST (midnight UTC during EST, 11 PM UTC during EDT)
-    // Using UTC time that works for EST (midnight UTC = 7 PM EST during winter)
-    // Note: During EDT (Mar-Nov), this will be 8 PM EDT. For true DST support, use EventBridge Scheduler.
-    const stopRule = new aws.cloudwatch.EventRule(
-      `ec2-stop-rule-${environmentSuffix}`,
+    // Create IAM role for EventBridge Scheduler
+    const schedulerRole = new aws.iam.Role(
+      `ec2-scheduler-eventbridge-role-${environmentSuffix}`,
       {
-        description:
-          'Stop development and staging EC2 instances at 7 PM EST on weekdays',
-        scheduleExpression: 'cron(0 0 ? * MON-FRI *)',
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'scheduler.amazonaws.com',
+              },
+            },
+          ],
+        }),
         tags: {
           ...tags,
-          Name: `ec2-stop-rule-${environmentSuffix}`,
+          Name: `ec2-scheduler-eventbridge-role-${environmentSuffix}`,
         },
       },
       { parent: this }
     );
 
-    // Create CloudWatch Events rule to start instances at 8 AM EST (1 PM UTC during EST, 12 PM UTC during EDT)
-    // Using UTC time that works for EST (1 PM UTC = 8 AM EST during winter)
-    // Note: During EDT (Mar-Nov), this will be 9 AM EDT. For true DST support, use EventBridge Scheduler.
-    const startRule = new aws.cloudwatch.EventRule(
-      `ec2-start-rule-${environmentSuffix}`,
+    // Create inline policy for EventBridge Scheduler to invoke Lambda
+    new aws.iam.RolePolicy(
+      `scheduler-lambda-policy-${environmentSuffix}`,
       {
-        description:
-          'Start development and staging EC2 instances at 8 AM EST on weekdays',
-        scheduleExpression: 'cron(0 13 ? * MON-FRI *)',
-        tags: {
-          ...tags,
-          Name: `ec2-start-rule-${environmentSuffix}`,
+        role: schedulerRole.id,
+        policy: pulumi.all([stopFunction.arn, startFunction.arn]).apply(([stopArn, startArn]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: 'lambda:InvokeFunction',
+                Resource: [stopArn, startArn],
+              },
+            ],
+          })
+        ),
+      },
+      { parent: this }
+    );
+
+    // Create EventBridge Scheduler schedule to stop instances at 7 PM EST on weekdays
+    // Uses America/New_York timezone with automatic DST handling
+    const stopSchedule = new aws.scheduler.Schedule(
+      `ec2-stop-schedule-${environmentSuffix}`,
+      {
+        description: 'Stop development and staging EC2 instances at 7 PM EST on weekdays',
+        scheduleExpression: 'cron(0 19 ? * MON-FRI *)',
+        scheduleExpressionTimezone: 'America/New_York',
+        flexibleTimeWindow: {
+          mode: 'OFF',
+        },
+        target: {
+          arn: stopFunction.arn,
+          roleArn: schedulerRole.arn,
+          input: JSON.stringify({}),
         },
       },
       { parent: this }
     );
 
-    // Add Lambda permissions for CloudWatch Events
-    const stopPermission = new aws.lambda.Permission(
-      `stop-invoke-permission-${environmentSuffix}`,
+    // Create EventBridge Scheduler schedule to start instances at 8 AM EST on weekdays
+    // Uses America/New_York timezone with automatic DST handling
+    const startSchedule = new aws.scheduler.Schedule(
+      `ec2-start-schedule-${environmentSuffix}`,
       {
-        action: 'lambda:InvokeFunction',
-        function: stopFunction.name,
-        principal: 'events.amazonaws.com',
-        sourceArn: stopRule.arn,
+        description: 'Start development and staging EC2 instances at 8 AM EST on weekdays',
+        scheduleExpression: 'cron(0 8 ? * MON-FRI *)',
+        scheduleExpressionTimezone: 'America/New_York',
+        flexibleTimeWindow: {
+          mode: 'OFF',
+        },
+        target: {
+          arn: startFunction.arn,
+          roleArn: schedulerRole.arn,
+          input: JSON.stringify({}),
+        },
       },
       { parent: this }
-    );
-
-    const startPermission = new aws.lambda.Permission(
-      `start-invoke-permission-${environmentSuffix}`,
-      {
-        action: 'lambda:InvokeFunction',
-        function: startFunction.name,
-        principal: 'events.amazonaws.com',
-        sourceArn: startRule.arn,
-      },
-      { parent: this }
-    );
-
-    // Create CloudWatch Events targets
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const stopTarget = new aws.cloudwatch.EventTarget(
-      `ec2-stop-target-${environmentSuffix}`,
-      {
-        rule: stopRule.name,
-        arn: stopFunction.arn,
-      },
-      { parent: this, dependsOn: [stopPermission] }
-    );
-
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const startTarget = new aws.cloudwatch.EventTarget(
-      `ec2-start-target-${environmentSuffix}`,
-      {
-        rule: startRule.name,
-        arn: startFunction.arn,
-      },
-      { parent: this, dependsOn: [startPermission] }
     );
 
     // Create CloudWatch Alarm for failed instance starts
@@ -334,14 +341,14 @@ export class Ec2SchedulerStack extends pulumi.ComponentResource {
 
     this.stopFunctionArn = stopFunction.arn;
     this.startFunctionArn = startFunction.arn;
-    this.stopRuleArn = stopRule.arn;
-    this.startRuleArn = startRule.arn;
+    this.stopRuleArn = stopSchedule.arn;
+    this.startRuleArn = startSchedule.arn;
 
     this.outputs = pulumi.output({
       stopFunctionArn: stopFunction.arn,
       startFunctionArn: startFunction.arn,
-      stopRuleArn: stopRule.arn,
-      startRuleArn: startRule.arn,
+      stopRuleArn: stopSchedule.arn,
+      startRuleArn: startSchedule.arn,
       managedInstanceIds: this.managedInstanceIds,
     });
 
