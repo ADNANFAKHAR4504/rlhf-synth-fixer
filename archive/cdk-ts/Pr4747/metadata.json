@@ -1,0 +1,37 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349428",
+  "team": "6",
+  "startedAt": "2025-10-17T16:22:42.606Z",
+  "subtask": "CI/CD Pipeline",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "SQS",
+    "Secrets Manager",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "CloudWatch Logs",
+    "CodeDeploy",
+    "EventBridge",
+    "VPC",
+    "CloudFormation",
+    "X-Ray"
+  ],
+  "training_quality": 10,
+  "training_quality_notes": "Excellent implementation with comprehensive AWS services, security best practices, and advanced patterns. Significant model learning from 25 categorized improvements including architecture (VPC, EventBridge), security (KMS, IAM), and complex integrations.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "enyachoke-turing",
+  "dockerS3Location": ""
+}

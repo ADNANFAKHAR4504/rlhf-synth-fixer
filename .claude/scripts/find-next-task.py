@@ -10,12 +10,13 @@ agents run in parallel. The task-manager.sh script provides:
 - 3-5x better performance
 - Thread-safe parallel execution
 
-Find the next available task with hard or medium difficulty from tasks.csv
+Find the next available task with hard or medium difficulty from .claude/tasks.csv
 Tasks with empty status, or status not in ['in_progress', 'done'] are considered available
 """
 import csv
 import sys
 import json
+from pathlib import Path
 
 # Print deprecation warning to stderr
 print("⚠️  WARNING: find-next-task.py is deprecated for parallel execution!", file=sys.stderr)
@@ -23,8 +24,13 @@ print("⚠️  Use: ./.claude/scripts/task-manager.sh select-and-update", file=s
 print("", file=sys.stderr)
 
 def find_next_task():
+    # Get path to .claude/tasks.csv
+    script_dir = Path(__file__).parent
+    claude_dir = script_dir.parent
+    csv_path = claude_dir / "tasks.csv"
+    
     try:
-        with open('/Users/mayanksethi/Projects/turing/iac-test-automations/tasks.csv', 'r', newline='', encoding='utf-8') as f:
+        with open(csv_path, 'r', newline='', encoding='utf-8') as f:
             reader = csv.DictReader(f)
 
             for row in reader:

@@ -1,0 +1,9 @@
+{
+  "name": "common-dependencies",
+  "version": "1.0.0",
+  "description": "Common dependencies layer for Lambda functions",
+  "dependencies": {
+    "aws-xray-sdk-core": "^3.5.0",
+    "lodash": "^4.17.21"
+  }
+}

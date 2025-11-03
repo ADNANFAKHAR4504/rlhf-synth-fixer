@@ -3,14 +3,15 @@
 # CSV Safety Pre-flight Check
 #
 # This script checks for common CSV safety issues in agent files before execution.
-# Run this before executing any agent that modifies tasks.csv
+# Run this before executing any agent that modifies .claude/tasks.csv
 #
-# Usage: ./scripts/check-csv-safety.sh
+# Usage: ./.claude/scripts/check-csv-safety.sh
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+CLAUDE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$CLAUDE_DIR/.." && pwd)"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -22,20 +23,20 @@ echo "CSV Safety Pre-flight Check"
 echo "======================================"
 echo ""
 
-# Check 1: Validate current tasks.csv
-echo "🔍 Checking tasks.csv integrity..."
+# Check 1: Validate current .claude/tasks.csv
+echo "🔍 Checking .claude/tasks.csv integrity..."
 if ! python3 "$SCRIPT_DIR/validate-tasks-csv.py" > /dev/null 2>&1; then
-    echo -e "${RED}❌ tasks.csv validation failed!${NC}"
+    echo -e "${RED}❌ .claude/tasks.csv validation failed!${NC}"
     echo "   Run: python3 .claude/scripts/validate-tasks-csv.py for details"
     exit 1
 else
-    echo -e "${GREEN}✅ tasks.csv is valid${NC}"
+    echo -e "${GREEN}✅ .claude/tasks.csv is valid${NC}"
 fi
 
 # Check 2: Verify backup exists
 echo ""
 echo "🔍 Checking for backup file..."
-if [ -f "$REPO_ROOT/tasks.csv.backup" ]; then
+if [ -f "$CLAUDE_DIR/tasks.csv.backup" ]; then
     # Validate backup
     if python3 "$SCRIPT_DIR/validate-tasks-csv.py" > /dev/null 2>&1; then
         echo -e "${GREEN}✅ Backup file exists and is valid${NC}"
@@ -106,7 +107,7 @@ echo "  • Always read ALL rows, modify specific ones, write ALL rows"
 echo "  • Always validate row counts before and after"
 echo "  • Always use error handling with backup restore"
 echo ""
-echo "See .claude/csv_safety_guide.md for detailed guidelines"
+echo "See .claude/docs/policies/csv_safety_guide.md for detailed guidelines"
 echo ""
 
 exit 0

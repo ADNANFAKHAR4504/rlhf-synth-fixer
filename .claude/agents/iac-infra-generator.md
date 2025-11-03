@@ -19,18 +19,45 @@ All file operations are relative to this directory.
 
 **Before Starting**:
 - Review `.claude/lessons_learnt.md` for common patterns and pitfalls
+- Review `.claude/docs/references/metadata-requirements.md` for strict metadata validation rules
 - Review `.claude/validation_and_testing_guide.md` Phase 1 for quality requirements
 
 ### PHASE 0: Pre-Generation Validation (CRITICAL)
 
-**FIRST**: Verify worktree location
+**⚠️ MANDATORY FIRST STEP**: Verify worktree location with automated script
+```bash
+# REQUIRED: Run this before ANY file operations
+bash .claude/scripts/verify-worktree.sh || exit 1
+
+# This automatically verifies:
+# - You're in worktree directory (not main repo)
+# - Branch matches directory name (synth-{task_id})
+# - metadata.json exists
+# - Not on main/master branch
+# - Exports $WORKTREE_DIR, $TASK_ID, $TASK_BRANCH
+```
+
+**If verification fails**: STOP immediately, report error, do NOT proceed.
+
+**Manual verification (fallback only)**:
 ```bash
 pwd  # MUST end with: /worktree/synth-{task_id}
 ```
 If not in worktree, STOP and report error.
 
 **Validation**: Run Checkpoint A: Metadata Completeness
-- See `docs/references/validation-checkpoints.md` for field requirements
+```bash
+# REQUIRED: Validate metadata.json before proceeding
+./.claude/scripts/validate-metadata.sh metadata.json || {
+  echo "❌ BLOCKED: Metadata validation failed"
+  echo "📖 Review: .claude/docs/references/metadata-requirements.md"
+  exit 1
+}
+```
+- **CRITICAL**: Read `.claude/docs/references/metadata-requirements.md` for strict field requirements
+- Verify all required fields: platform, language, complexity, turn_type, po_id, team, startedAt, subtask
+- Verify aws_services is string[] (array), NOT string
+- Verify subject_labels is string[] (array), NOT string
 - On failure, see `docs/references/error-handling.md` Standard Error Response
 
 **Validation**: Run Checkpoint B: Platform-Language Compatibility

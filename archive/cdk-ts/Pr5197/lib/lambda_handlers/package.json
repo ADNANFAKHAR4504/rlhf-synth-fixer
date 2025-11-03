@@ -1,0 +1,9 @@
+{
+  "name": "compliance-lambda-handlers",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "aws-sdk": "^2.1692.0",
+    "jmespath": "^0.16.0"
+  }
+}
