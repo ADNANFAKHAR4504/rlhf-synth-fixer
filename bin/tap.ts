@@ -4,7 +4,6 @@ import { TapStack } from '../lib/tap-stack';
 
 const app = new App();
 
-
 // Generate a timestamp string (YYYYMMDDHHMMSS)
 const now = new Date();
 const pad = (n: number) => n.toString().padStart(2, '0');

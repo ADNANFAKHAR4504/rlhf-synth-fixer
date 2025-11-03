@@ -19,7 +19,6 @@ import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmana
 import { TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
-
 // environmentSuffix now includes a timestamp for uniqueness (see bin/tap.ts)
 export interface TapStackProps {
   environmentSuffix: string;
