@@ -10,7 +10,22 @@
   "subject_labels": [
     "Multi-Environment Consistency"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC",
+  "aws_services": [
+    "VPC",
+    "Internet Gateway",
+    "Subnet",
+    "Elastic IP",
+    "NAT Gateway",
+    "Route Table",
+    "Security Group",
+    "Application Load Balancer",
+    "Target Group",
+    "Listener",
+    "Launch Template",
+    "Auto Scaling Group",
+    "RDS"
+  ],
+  "training_quality": 9,
   "task_config": {
     "deploy_env": "dev.tfvars"
   }
