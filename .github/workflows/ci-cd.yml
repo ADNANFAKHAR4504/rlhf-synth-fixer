@@ -753,11 +753,30 @@ jobs:
             Sum all category scores directly (no conversion needed).
             - Minimum passing score: 8/10
 
-            ## Step 4: Post Review Comment
+            ## Step 4: Update metadata.json with Training Quality
+
+            **IMPORTANT**: Update metadata.json with the training quality score:
+
+            ```bash
+            # For CI/CD Pipeline tasks: Only add training_quality (NO aws_services needed)
+            TRAINING_QUALITY=<your_calculated_score>  # Replace with actual score (0-10)
+
+            jq --arg tq "$TRAINING_QUALITY" \
+              '.training_quality = ($tq | tonumber)' \
+              metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json
+
+            # Verify the update
+            echo "✅ metadata.json updated with training_quality: $TRAINING_QUALITY/10"
+            jq '.training_quality' metadata.json
+            ```
+
+            **Note**: CI/CD Pipeline tasks do NOT require aws_services field. Do NOT flag aws_services as missing.
+
+            ## Step 5: Post Review Comment
 
             Post a GitHub comment with the format specified in `.claude/prompts/cicd-pipeline-review.md`.
 
-            ## Step 5: Output Score
+            ## Step 6: Output Score
 
             At the very end of your output, on its own line:
             ```
