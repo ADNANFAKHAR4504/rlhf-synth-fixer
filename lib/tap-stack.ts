@@ -35,6 +35,17 @@ export class TapStack extends TerraformStack {
     super(scope, id);
 
     const { environmentSuffix, region } = config;
+    /* istanbul ignore next */
+    const runId =
+      process.env.GITHUB_RUN_ID ||
+      process.env.GITHUB_RUN_ATTEMPT ||
+      process.env.CI_PIPELINE_ID ||
+      process.env.CI_RUN_ID ||
+      'local';
+    /* istanbul ignore next */
+    const deploymentSuffix = runId === 'local' ? '' : `-${runId}`;
+    const resourceName = (base: string) =>
+      `${base}-${environmentSuffix}${deploymentSuffix}`;
 
     // Configure AWS Provider
     new AwsProvider(this, 'aws', {
@@ -50,7 +61,7 @@ export class TapStack extends TerraformStack {
       enableDnsHostnames: true,
       enableDnsSupport: true,
       tags: {
-        Name: `location-tracking-vpc-${environmentSuffix}`,
+        Name: resourceName('location-tracking-vpc'),
         EnvironmentSuffix: environmentSuffix,
       },
     });
@@ -61,7 +72,7 @@ export class TapStack extends TerraformStack {
       cidrBlock: '10.0.1.0/24',
       availabilityZone: `${region}a`,
       tags: {
-        Name: `location-tracking-private-subnet-1-${environmentSuffix}`,
+        Name: resourceName('location-tracking-private-subnet-1'),
         EnvironmentSuffix: environmentSuffix,
       },
     });
@@ -71,14 +82,14 @@ export class TapStack extends TerraformStack {
       cidrBlock: '10.0.2.0/24',
       availabilityZone: `${region}b`,
       tags: {
-        Name: `location-tracking-private-subnet-2-${environmentSuffix}`,
+        Name: resourceName('location-tracking-private-subnet-2'),
         EnvironmentSuffix: environmentSuffix,
       },
     });
 
     // Security Group for Lambda functions
     const lambdaSecurityGroup = new SecurityGroup(this, 'LambdaSecurityGroup', {
-      name: `lambda-sg-${environmentSuffix}`,
+      name: resourceName('lambda-sg'),
       description: 'Security group for location tracking Lambda functions',
       vpcId: vpc.id,
       egress: [
@@ -91,14 +102,14 @@ export class TapStack extends TerraformStack {
         },
       ],
       tags: {
-        Name: `lambda-sg-${environmentSuffix}`,
+        Name: resourceName('lambda-sg'),
         EnvironmentSuffix: environmentSuffix,
       },
     });
 
     // DynamoDB Table for location tracking
     const locationTable = new DynamodbTable(this, 'LocationTable', {
-      name: `driver-locations-${environmentSuffix}`,
+      name: resourceName('driver-locations'),
       billingMode: 'PAY_PER_REQUEST',
       hashKey: 'driverId',
       rangeKey: 'timestamp',
@@ -119,42 +130,42 @@ export class TapStack extends TerraformStack {
         enabled: true,
       },
       tags: {
-        Name: `driver-locations-${environmentSuffix}`,
+        Name: resourceName('driver-locations'),
         EnvironmentSuffix: environmentSuffix,
       },
     });
 
     // Dead Letter Queues for Lambda functions
     const updateLocationDLQ = new SqsQueue(this, 'UpdateLocationDLQ', {
-      name: `update-location-dlq-${environmentSuffix}`,
+      name: resourceName('update-location-dlq'),
       messageRetentionSeconds: 1209600, // 14 days
       tags: {
-        Name: `update-location-dlq-${environmentSuffix}`,
+        Name: resourceName('update-location-dlq'),
         EnvironmentSuffix: environmentSuffix,
       },
     });
 
     const getLocationDLQ = new SqsQueue(this, 'GetLocationDLQ', {
-      name: `get-location-dlq-${environmentSuffix}`,
+      name: resourceName('get-location-dlq'),
       messageRetentionSeconds: 1209600, // 14 days
       tags: {
-        Name: `get-location-dlq-${environmentSuffix}`,
+        Name: resourceName('get-location-dlq'),
         EnvironmentSuffix: environmentSuffix,
       },
     });
 
     const getHistoryDLQ = new SqsQueue(this, 'GetHistoryDLQ', {
-      name: `get-history-dlq-${environmentSuffix}`,
+      name: resourceName('get-history-dlq'),
       messageRetentionSeconds: 1209600, // 14 days
       tags: {
-        Name: `get-history-dlq-${environmentSuffix}`,
+        Name: resourceName('get-history-dlq'),
         EnvironmentSuffix: environmentSuffix,
       },
     });
 
     // IAM Role for Update Location Lambda
     const updateLocationRole = new IamRole(this, 'UpdateLocationRole', {
-      namePrefix: `update-location-role-${environmentSuffix}-`,
+      namePrefix: `${resourceName('upd-loc-role')}-`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -168,14 +179,14 @@ export class TapStack extends TerraformStack {
         ],
       }),
       tags: {
-        Name: `update-location-role-${environmentSuffix}`,
+        Name: resourceName('update-location-role'),
         EnvironmentSuffix: environmentSuffix,
       },
     });
 
     // IAM Policy for Update Location Lambda
     const updateLocationPolicy = new IamPolicy(this, 'UpdateLocationPolicy', {
-      namePrefix: `update-location-policy-${environmentSuffix}-`,
+      namePrefix: `${resourceName('upd-loc-policy')}-`,
       description: 'Policy for update location Lambda function',
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -216,7 +227,7 @@ export class TapStack extends TerraformStack {
         ],
       }),
       tags: {
-        Name: `update-location-policy-${environmentSuffix}`,
+        Name: resourceName('update-location-policy'),
         EnvironmentSuffix: environmentSuffix,
       },
     });
@@ -228,7 +239,7 @@ export class TapStack extends TerraformStack {
 
     // IAM Role for Get Location Lambda
     const getLocationRole = new IamRole(this, 'GetLocationRole', {
-      namePrefix: `get-location-role-${environmentSuffix}-`,
+      namePrefix: `${resourceName('get-loc-role')}-`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -242,14 +253,14 @@ export class TapStack extends TerraformStack {
         ],
       }),
       tags: {
-        Name: `get-location-role-${environmentSuffix}`,
+        Name: resourceName('get-location-role'),
         EnvironmentSuffix: environmentSuffix,
       },
     });
 
     // IAM Policy for Get Location Lambda
     const getLocationPolicy = new IamPolicy(this, 'GetLocationPolicy', {
-      namePrefix: `get-location-policy-${environmentSuffix}-`,
+      namePrefix: `${resourceName('get-loc-policy')}-`,
       description: 'Policy for get location Lambda function',
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -290,7 +301,7 @@ export class TapStack extends TerraformStack {
         ],
       }),
       tags: {
-        Name: `get-location-policy-${environmentSuffix}`,
+        Name: resourceName('get-location-policy'),
         EnvironmentSuffix: environmentSuffix,
       },
     });
@@ -302,7 +313,7 @@ export class TapStack extends TerraformStack {
 
     // IAM Role for Get History Lambda
     const getHistoryRole = new IamRole(this, 'GetHistoryRole', {
-      namePrefix: `get-history-role-${environmentSuffix}-`,
+      namePrefix: `${resourceName('get-hist-role')}-`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -316,14 +327,14 @@ export class TapStack extends TerraformStack {
         ],
       }),
       tags: {
-        Name: `get-history-role-${environmentSuffix}`,
+        Name: resourceName('get-history-role'),
         EnvironmentSuffix: environmentSuffix,
       },
     });
 
     // IAM Policy for Get History Lambda
     const getHistoryPolicy = new IamPolicy(this, 'GetHistoryPolicy', {
-      namePrefix: `get-history-policy-${environmentSuffix}-`,
+      namePrefix: `${resourceName('get-hist-policy')}-`,
       description: 'Policy for get history Lambda function',
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -402,10 +413,10 @@ export class TapStack extends TerraformStack {
       this,
       'UpdateLocationLogGroup',
       {
-        name: `/aws/lambda/update-location-${environmentSuffix}`,
+        name: `/aws/lambda/${resourceName('update-location')}`,
         retentionInDays: 7,
         tags: {
-          Name: `update-location-logs-${environmentSuffix}`,
+          Name: resourceName('update-location-logs'),
           EnvironmentSuffix: environmentSuffix,
         },
       }
@@ -415,10 +426,10 @@ export class TapStack extends TerraformStack {
       this,
       'GetLocationLogGroup',
       {
-        name: `/aws/lambda/get-location-${environmentSuffix}`,
+        name: `/aws/lambda/${resourceName('get-location')}`,
         retentionInDays: 7,
         tags: {
-          Name: `get-location-logs-${environmentSuffix}`,
+          Name: resourceName('get-location-logs'),
           EnvironmentSuffix: environmentSuffix,
         },
       }
@@ -428,10 +439,10 @@ export class TapStack extends TerraformStack {
       this,
       'GetHistoryLogGroup',
       {
-        name: `/aws/lambda/get-history-${environmentSuffix}`,
+        name: `/aws/lambda/${resourceName('get-history')}`,
         retentionInDays: 7,
         tags: {
-          Name: `get-history-logs-${environmentSuffix}`,
+          Name: resourceName('get-history-logs'),
           EnvironmentSuffix: environmentSuffix,
         },
       }
@@ -442,7 +453,7 @@ export class TapStack extends TerraformStack {
       this,
       'UpdateLocationFunction',
       {
-        functionName: `update-location-${environmentSuffix}`,
+        functionName: resourceName('update-location'),
         role: updateLocationRole.arn,
         handler: 'index.handler',
         runtime: 'nodejs18.x',
@@ -452,8 +463,8 @@ export class TapStack extends TerraformStack {
         timeout: 30,
         environment: {
           variables: {
-            TABLE_NAME: `driver-locations-${environmentSuffix}`,
-            AWS_REGION: region,
+            TABLE_NAME: resourceName('driver-locations'),
+            REGION: region,
           },
         },
         deadLetterConfig: {
@@ -467,7 +478,7 @@ export class TapStack extends TerraformStack {
           securityGroupIds: [lambdaSecurityGroup.id],
         },
         tags: {
-          Name: `update-location-${environmentSuffix}`,
+          Name: resourceName('update-location'),
           EnvironmentSuffix: environmentSuffix,
         },
         dependsOn: [updateLocationLogGroup],
@@ -478,7 +489,7 @@ export class TapStack extends TerraformStack {
       this,
       'GetLocationFunction',
       {
-        functionName: `get-location-${environmentSuffix}`,
+        functionName: resourceName('get-location'),
         role: getLocationRole.arn,
         handler: 'index.handler',
         runtime: 'nodejs18.x',
@@ -488,8 +499,8 @@ export class TapStack extends TerraformStack {
         timeout: 10,
         environment: {
           variables: {
-            TABLE_NAME: `driver-locations-${environmentSuffix}`,
-            AWS_REGION: region,
+            TABLE_NAME: resourceName('driver-locations'),
+            REGION: region,
           },
         },
         deadLetterConfig: {
@@ -503,7 +514,7 @@ export class TapStack extends TerraformStack {
           securityGroupIds: [lambdaSecurityGroup.id],
         },
         tags: {
-          Name: `get-location-${environmentSuffix}`,
+          Name: resourceName('get-location'),
           EnvironmentSuffix: environmentSuffix,
         },
         dependsOn: [getLocationLogGroup],
@@ -511,7 +522,7 @@ export class TapStack extends TerraformStack {
     );
 
     const getHistoryFunction = new LambdaFunction(this, 'GetHistoryFunction', {
-      functionName: `get-history-${environmentSuffix}`,
+      functionName: resourceName('get-history'),
       role: getHistoryRole.arn,
       handler: 'index.handler',
       runtime: 'nodejs18.x',
@@ -521,8 +532,8 @@ export class TapStack extends TerraformStack {
       timeout: 10,
       environment: {
         variables: {
-          TABLE_NAME: `driver-locations-${environmentSuffix}`,
-          AWS_REGION: region,
+          TABLE_NAME: resourceName('driver-locations'),
+          REGION: region,
         },
       },
       deadLetterConfig: {
@@ -536,7 +547,7 @@ export class TapStack extends TerraformStack {
         securityGroupIds: [lambdaSecurityGroup.id],
       },
       tags: {
-        Name: `get-history-${environmentSuffix}`,
+        Name: resourceName('get-history'),
         EnvironmentSuffix: environmentSuffix,
       },
       dependsOn: [getHistoryLogGroup],
@@ -544,7 +555,7 @@ export class TapStack extends TerraformStack {
 
     // CloudWatch Alarms for Lambda errors
     new CloudwatchMetricAlarm(this, 'UpdateLocationErrorAlarm', {
-      alarmName: `update-location-errors-${environmentSuffix}`,
+      alarmName: resourceName('update-location-errors'),
       comparisonOperator: 'GreaterThanThreshold',
       evaluationPeriods: 1,
       metricName: 'Errors',
@@ -558,13 +569,13 @@ export class TapStack extends TerraformStack {
       alarmDescription:
         'Alert when update location Lambda error rate exceeds 1%',
       tags: {
-        Name: `update-location-errors-${environmentSuffix}`,
+        Name: resourceName('update-location-errors'),
         EnvironmentSuffix: environmentSuffix,
       },
     });
 
     new CloudwatchMetricAlarm(this, 'GetLocationErrorAlarm', {
-      alarmName: `get-location-errors-${environmentSuffix}`,
+      alarmName: resourceName('get-location-errors'),
       comparisonOperator: 'GreaterThanThreshold',
       evaluationPeriods: 1,
       metricName: 'Errors',
@@ -577,13 +588,13 @@ export class TapStack extends TerraformStack {
       },
       alarmDescription: 'Alert when get location Lambda error rate exceeds 1%',
       tags: {
-        Name: `get-location-errors-${environmentSuffix}`,
+        Name: resourceName('get-location-errors'),
         EnvironmentSuffix: environmentSuffix,
       },
     });
 
     new CloudwatchMetricAlarm(this, 'GetHistoryErrorAlarm', {
-      alarmName: `get-history-errors-${environmentSuffix}`,
+      alarmName: resourceName('get-history-errors'),
       comparisonOperator: 'GreaterThanThreshold',
       evaluationPeriods: 1,
       metricName: 'Errors',
@@ -596,20 +607,20 @@ export class TapStack extends TerraformStack {
       },
       alarmDescription: 'Alert when get history Lambda error rate exceeds 1%',
       tags: {
-        Name: `get-history-errors-${environmentSuffix}`,
+        Name: resourceName('get-history-errors'),
         EnvironmentSuffix: environmentSuffix,
       },
     });
 
     // API Gateway REST API
     const api = new ApiGatewayRestApi(this, 'LocationTrackingApi', {
-      name: `location-tracking-api-${environmentSuffix}`,
+      name: resourceName('location-tracking-api'),
       description: 'REST API for location tracking',
       endpointConfiguration: {
         types: ['EDGE'],
       },
       tags: {
-        Name: `location-tracking-api-${environmentSuffix}`,
+        Name: resourceName('location-tracking-api'),
         EnvironmentSuffix: environmentSuffix,
       },
     });
@@ -619,7 +630,7 @@ export class TapStack extends TerraformStack {
       this,
       'RequestValidator',
       {
-        name: `location-validator-${environmentSuffix}`,
+        name: resourceName('location-validator'),
         restApiId: api.id,
         validateRequestBody: true,
         validateRequestParameters: true,
@@ -773,7 +784,7 @@ export class TapStack extends TerraformStack {
       stageName: 'prod',
       xrayTracingEnabled: true,
       tags: {
-        Name: `location-api-prod-${environmentSuffix}`,
+        Name: resourceName('location-api-prod'),
         EnvironmentSuffix: environmentSuffix,
       },
     });

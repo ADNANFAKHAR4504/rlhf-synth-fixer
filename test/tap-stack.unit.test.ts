@@ -280,7 +280,7 @@ describe('TapStack', () => {
         environment: expect.objectContaining({
           variables: expect.objectContaining({
             TABLE_NAME: `driver-locations-${environmentSuffix}`,
-            AWS_REGION: region,
+            REGION: region,
           }),
         }),
       });

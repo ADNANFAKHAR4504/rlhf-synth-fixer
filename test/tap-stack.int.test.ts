@@ -47,6 +47,9 @@ describe('Location Tracking API Integration Tests', () => {
     }
 
     outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+    if (outputs.TapStack) {
+      outputs = outputs.TapStack;
+    }
 
     apiEndpoint = outputs.ApiEndpoint;
     tableName = outputs.DynamoDbTableName;

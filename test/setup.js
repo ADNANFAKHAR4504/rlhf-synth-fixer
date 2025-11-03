@@ -1,4 +1,9 @@
 // CDKTF Test Setup
+process.env.GITHUB_RUN_ID = 'local';
+process.env.GITHUB_RUN_ATTEMPT = '';
+process.env.CI_PIPELINE_ID = '';
+process.env.CI_RUN_ID = '';
+
 const resolveActual = (resource, key) => {
   if (Object.prototype.hasOwnProperty.call(resource, key)) {
     return resource[key];
