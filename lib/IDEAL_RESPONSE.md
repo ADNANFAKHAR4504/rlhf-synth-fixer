@@ -1,28 +1,3 @@
-### Reasoning Trace
----
-
-This is a comprehensive request for a production-ready AWS cfn template. Let me break down the requirements:
-
-1. **Networking**: VPC with 2+ subnets across AZs, IGW, Route Tables, parameterized CIDRs
-2. **Compute**: Launch Template, ASG with ALB, IAM roles, Security Groups (80/443 only)
-3. **Database**: RDS (MySQL/PostgreSQL), encrypted, Multi-AZ for prod/Single-AZ for dev
-4. **Monitoring**: CloudWatch monitoring, alarms, logs
-5. **Security**: Least privilege IAM, no wildcard permissions unless necessary
-6. **Tagging**: Cost tracking tags on all resources
-7. **Outputs**: Export key infrastructure details
-8. **Conditions**: Environment-based configurations
-9. **Parameters**: No hardcoded values, everything parameterized
-10. **Naming**: Strict naming convention with StackName-Region-EnvironmentSuffix-ResourceType
-11. **Compliance**: Must pass validation, follow AWS best practices
-
-Let me create a comprehensive cfn template that meets all these requirements.
-### Answer 
----
-
-# Production-Ready AWS cfn Template
-
-I'll create a comprehensive cfn YAML template that meets all your requirements for a scalable, secure cloud environment with full parameterization and cross-account compatibility.
-
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-ready scalable and secure AWS cloud environment with VPC, ALB, ASG, RDS, and CloudWatch monitoring'
