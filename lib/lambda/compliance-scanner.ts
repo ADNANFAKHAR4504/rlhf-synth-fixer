@@ -54,7 +54,11 @@ export class ComplianceScannerLambda extends pulumi.ComponentResource {
       {
         role: lambdaRole.id,
         policy: pulumi
-          .all([args.bucketName, args.snsTopicArn, args.deadLetterQueueArn || ''])
+          .all([
+            args.bucketName,
+            args.snsTopicArn,
+            args.deadLetterQueueArn || '',
+          ])
           .apply(([bucketName, topicArn, dlqArn]) => {
             const statements: any[] = [
               {

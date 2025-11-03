@@ -51,57 +51,59 @@ export class RemediationLambda extends pulumi.ComponentResource {
       `remediation-lambda-policy-${suffix}`,
       {
         role: lambdaRole.id,
-        policy: pulumi.all([args.snsTopicArn, args.deadLetterQueueArn || '']).apply(([topicArn, dlqArn]) => {
-          const statements: any[] = [
-            {
-              Effect: 'Allow',
-              Action: ['s3:PutBucketEncryption', 's3:PutBucketTagging'],
-              Resource: '*',
-            },
-            {
-              Effect: 'Allow',
-              Action: ['ec2:CreateTags', 'ec2:ModifyInstanceAttribute'],
-              Resource: '*',
-            },
-            {
-              Effect: 'Allow',
-              Action: ['sns:Publish'],
-              Resource: topicArn,
-            },
-            {
-              Effect: 'Allow',
-              Action: [
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-              ],
-              Resource: 'arn:aws:logs:*:*:*',
-            },
-            {
-              Effect: 'Allow',
-              Action: [
-                'ec2:CreateNetworkInterface',
-                'ec2:DescribeNetworkInterfaces',
-                'ec2:DeleteNetworkInterface',
-              ],
-              Resource: '*',
-            },
-          ];
+        policy: pulumi
+          .all([args.snsTopicArn, args.deadLetterQueueArn || ''])
+          .apply(([topicArn, dlqArn]) => {
+            const statements: any[] = [
+              {
+                Effect: 'Allow',
+                Action: ['s3:PutBucketEncryption', 's3:PutBucketTagging'],
+                Resource: '*',
+              },
+              {
+                Effect: 'Allow',
+                Action: ['ec2:CreateTags', 'ec2:ModifyInstanceAttribute'],
+                Resource: '*',
+              },
+              {
+                Effect: 'Allow',
+                Action: ['sns:Publish'],
+                Resource: topicArn,
+              },
+              {
+                Effect: 'Allow',
+                Action: [
+                  'logs:CreateLogGroup',
+                  'logs:CreateLogStream',
+                  'logs:PutLogEvents',
+                ],
+                Resource: 'arn:aws:logs:*:*:*',
+              },
+              {
+                Effect: 'Allow',
+                Action: [
+                  'ec2:CreateNetworkInterface',
+                  'ec2:DescribeNetworkInterfaces',
+                  'ec2:DeleteNetworkInterface',
+                ],
+                Resource: '*',
+              },
+            ];
 
-          // Add SQS permissions if DLQ is provided
-          if (dlqArn) {
-            statements.push({
-              Effect: 'Allow',
-              Action: ['sqs:SendMessage'],
-              Resource: dlqArn,
+            // Add SQS permissions if DLQ is provided
+            if (dlqArn) {
+              statements.push({
+                Effect: 'Allow',
+                Action: ['sqs:SendMessage'],
+                Resource: dlqArn,
+              });
+            }
+
+            return JSON.stringify({
+              Version: '2012-10-17',
+              Statement: statements,
             });
-          }
-
-          return JSON.stringify({
-            Version: '2012-10-17',
-            Statement: statements,
-          });
-        }),
+          }),
       },
       { parent: this }
     );

@@ -27,7 +27,8 @@ export class ComplianceMonitoringStack extends pulumi.ComponentResource {
 
     const suffix = args.environmentSuffix;
     const tags = args.tags;
-    const complianceEmail = args.complianceEmailEndpoint || 'compliance-team@example.com';
+    const complianceEmail =
+      args.complianceEmailEndpoint || 'compliance-team@example.com';
 
     // Get the current AWS region
     const currentRegion = aws.getRegionOutput();
@@ -102,14 +103,16 @@ export class ComplianceMonitoringStack extends pulumi.ComponentResource {
     );
 
     // CloudWatch Log Group for compliance scanner
+    // Using skipDestroy to handle existing log groups from previous deployments
     const logGroup = new aws.cloudwatch.LogGroup(
       `compliance-logs-${suffix}`,
       {
         name: `/aws/lambda/compliance-scanner-${suffix}`,
         retentionInDays: 90,
         tags: tags,
+        skipDestroy: true,
       },
-      { parent: this }
+      { parent: this, ignoreChanges: ['retentionInDays'] }
     );
 
     // CloudWatch custom metrics namespace
