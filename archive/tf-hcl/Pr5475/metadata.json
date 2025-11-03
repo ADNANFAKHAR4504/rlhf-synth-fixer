@@ -1,0 +1,36 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350138",
+  "team": "4",
+  "startedAt": "2025-10-30T13:00:01.736Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ELB",
+    "RDS",
+    "IAM",
+    "S3",
+    "KMS",
+    "CloudWatch",
+    "Config",
+    "CloudTrail",
+    "SNS",
+    "SecretsManager",
+    "ACM"
+  ],
+  "training_quality": 9,
+  "background": "Production-grade AWS infrastructure implementing comprehensive security controls with encryption, compliance monitoring, threat detection, and multi-AZ high availability. Single-file Terraform architecture (tap_stack.tf) with complete security implementation including VPC with public/private subnets, Application Load Balancer with HTTPS, RDS MySQL with encryption and automated backups, KMS key rotation, four S3 buckets with encryption and versioning, security groups with IP restrictions, IAM roles with least privilege, AWS Config for resource tracking, CloudTrail for audit logging, and CloudWatch alarms for security events. Features 159 unit tests and 57 integration tests (216 total, 100% passing) validating infrastructure structure, security configurations, and deployed resources.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}
