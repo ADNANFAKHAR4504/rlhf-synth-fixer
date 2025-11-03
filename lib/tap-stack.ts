@@ -49,6 +49,9 @@ export class TapStack extends pulumi.ComponentResource {
     const primaryRegion = 'ap-northeast-2';
     const secondaryRegion = 'ap-northeast-1';
 
+    // Add unique identifier to avoid resource conflicts
+    const uniqueId = Date.now().toString().slice(-6);
+
     // Common tags for all resources
     const defaultTags = pulumi.output(args.tags || {}).apply(t => ({
       ...t,
@@ -120,7 +123,7 @@ export class TapStack extends pulumi.ComponentResource {
     const _primaryKmsAlias = new aws.kms.Alias(
       `migration-kms-alias-${environmentSuffix}`,
       {
-        name: `alias/migration-${environmentSuffix}`,
+        name: `alias/migration-${environmentSuffix}-${uniqueId}`,
         targetKeyId: primaryKmsKey.keyId,
       },
       { parent: this }
@@ -153,7 +156,7 @@ export class TapStack extends pulumi.ComponentResource {
     const dbMasterPassword = new aws.secretsmanager.Secret(
       `db-master-password-${environmentSuffix}`,
       {
-        name: `migration/db-master-password-${environmentSuffix}`,
+        name: `migration/db-master-password-${environmentSuffix}-${uniqueId}`,
         description: 'RDS master password with automatic rotation',
         kmsKeyId: primaryKmsKey.arn,
         recoveryWindowInDays: 7,
@@ -491,8 +494,8 @@ export class TapStack extends pulumi.ComponentResource {
               "s3:DeleteObject"
             ],
             "Resource": [
-              "arn:aws:s3:::migration-backups-${environmentSuffix}",
-              "arn:aws:s3:::migration-backups-${environmentSuffix}/*"
+              "arn:aws:s3:::migration-backups-${environmentSuffix}-${uniqueId}",
+              "arn:aws:s3:::migration-backups-${environmentSuffix}-${uniqueId}/*"
             ]
           },
           {
@@ -533,7 +536,7 @@ export class TapStack extends pulumi.ComponentResource {
     const backupBucket = new aws.s3.Bucket(
       `migration-backups-${environmentSuffix}`,
       {
-        bucket: `migration-backups-${environmentSuffix}`,
+        bucket: `migration-backups-${environmentSuffix}-${uniqueId}`,
         versioning: {
           enabled: true,
         },
@@ -601,7 +604,7 @@ export class TapStack extends pulumi.ComponentResource {
     const secondaryBackupBucket = new aws.s3.Bucket(
       `migration-backups-secondary-${environmentSuffix}`,
       {
-        bucket: `migration-backups-secondary-${environmentSuffix}`,
+        bucket: `migration-backups-secondary-${environmentSuffix}-${uniqueId}`,
         versioning: {
           enabled: true,
         },
@@ -960,12 +963,12 @@ cat > /opt/aws/amazon-cloudwatch-agent/etc/config.json <<EOF
         "collect_list": [
           {
             "file_path": "/var/log/messages",
-            "log_group_name": "/migration/bastion/${environmentSuffix}",
+            "log_group_name": "/migration/bastion/${environmentSuffix}-${uniqueId}",
             "log_stream_name": "{instance_id}/messages"
           },
           {
             "file_path": "/var/log/secure",
-            "log_group_name": "/migration/bastion/${environmentSuffix}",
+            "log_group_name": "/migration/bastion/${environmentSuffix}-${uniqueId}",
             "log_stream_name": "{instance_id}/secure"
           }
         ]
@@ -1087,7 +1090,7 @@ echo "Bastion host initialized successfully"
     const bastionLogGroup = new aws.cloudwatch.LogGroup(
       `bastion-logs-${environmentSuffix}`,
       {
-        name: `/migration/bastion/${environmentSuffix}`,
+        name: `/migration/bastion/${environmentSuffix}-${uniqueId}`,
         retentionInDays: 30,
         kmsKeyId: primaryKmsKey.arn,
         tags: defaultTags,
@@ -1098,7 +1101,7 @@ echo "Bastion host initialized successfully"
     const rdsLogGroup = new aws.cloudwatch.LogGroup(
       `rds-logs-${environmentSuffix}`,
       {
-        name: `/aws/rds/instance/migration-db-${environmentSuffix}/error`,
+        name: `/aws/rds/instance/migration-db-${environmentSuffix}-${uniqueId}/error`,
         retentionInDays: 30,
         kmsKeyId: primaryKmsKey.arn,
         tags: defaultTags,
@@ -1423,7 +1426,7 @@ echo "Bastion host initialized successfully"
                   width: 24,
                   height: 6,
                   properties: {
-                    query: `SOURCE '/migration/bastion/${environmentSuffix}' | fields @timestamp, @message | filter @message like /Failed/ | sort @timestamp desc | limit 50`,
+                    query: `SOURCE '/migration/bastion/${environmentSuffix}-${uniqueId}' | fields @timestamp, @message | filter @message like /Failed/ | sort @timestamp desc | limit 50`,
                     region: region,
                     title: 'Recent Failed SSH Attempts',
                   },
@@ -1487,7 +1490,7 @@ echo "Bastion host initialized successfully"
     const alarmTopic = new aws.sns.Topic(
       `migration-alarms-${environmentSuffix}`,
       {
-        name: `migration-alarms-${environmentSuffix}`,
+        name: `migration-alarms-${environmentSuffix}-${uniqueId}`,
         displayName: 'Migration Infrastructure Alarms',
         kmsMasterKeyId: primaryKmsKey.id,
         tags: defaultTags,
