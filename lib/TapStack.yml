@@ -157,7 +157,7 @@ Resources:
         SecretStringTemplate: '{"username": "admin"}'
         GenerateStringKey: password
         PasswordLength: 32
-        ExcludeCharacters: '"@/\'
+        ExcludeCharacters: '"@/\\;:?"{}[](),=$%#^*+|<>~`'
         RequireEachIncludedType: true
 
   OnPremisesDBPasswordSecret:
@@ -171,7 +171,7 @@ Resources:
         SecretStringTemplate: '{"username": "migrationuser"}'
         GenerateStringKey: password
         PasswordLength: 32
-        ExcludeCharacters: '"@/\'
+        ExcludeCharacters: "\"@/\\;"
         RequireEachIncludedType: true
 
   # ==================== VPC and Networking ====================
