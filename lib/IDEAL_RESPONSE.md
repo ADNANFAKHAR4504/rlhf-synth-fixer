@@ -22,7 +22,7 @@ This solution creates a complete document management infrastructure with:
 
 ## File: lib/document-management-stack.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { TerraformOutput } from 'cdktf';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
@@ -376,7 +376,7 @@ export class DocumentManagementStack extends Construct {
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -444,7 +444,7 @@ export class TapStack extends TerraformStack {
 
 ## File: lib/lambda/index.ts
 
-```typescript
+```ts
 import { S3Event } from 'aws-lambda';
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { DynamoDB } from 'aws-sdk';
