@@ -668,10 +668,11 @@ class TestCrossServiceInteractions(BaseIntegrationTest):
             self.assertIn('requestId', result)
             print(f"[INFO] API Gateway response: {json.dumps(result)}")
             
-            time.sleep(5)
+            print(f"[INFO] Waiting 10 seconds for logs to propagate to CloudWatch...")
+            time.sleep(10)
             
             print(f"[INFO] ACTION: Verifying Lambda processed the request via logs")
-            logs = get_recent_lambda_logs(function_name, minutes=2)
+            logs = get_recent_lambda_logs(function_name, minutes=3)
             
             self.assertGreater(len(logs), 0)
             print(f"[INFO] Retrieved {len(logs)} log messages")
