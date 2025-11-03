@@ -1026,10 +1026,10 @@ resource "aws_ecs_service" "main" {
     container_port   = 8080
   }
 
-  deployment_configuration {
-    maximum_percent         = 200
-    minimum_healthy_percent = 50
-  }
+  # Deployment configuration for rolling updates
+  desired_count                      = local.current_config.ecs_desired_count
+  deployment_maximum_percent         = 200
+  deployment_minimum_healthy_percent = 50
 
   deployment_circuit_breaker {
     enable   = true
