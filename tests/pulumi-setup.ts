@@ -1,13 +1,18 @@
 import * as pulumi from '@pulumi/pulumi';
 
+process.env.ENVIRONMENT_SUFFIX = 'test';
+process.env.AWS_REGION = 'us-east-1';
+process.env.INPUT_BUCKET_NAME = 'image-input-test';
+process.env.OUTPUT_BUCKET_NAME = 'image-output-test';
+
 // Set up Pulumi mocks
 pulumi.runtime.setMocks(
   {
     newResource: function (args: pulumi.runtime.MockResourceArgs): {
       id: string;
-      state: any;
+      state: Record<string, unknown>;
     } {
-      const outputs: any = {
+      const outputs: Record<string, unknown> = {
         ...args.inputs,
         arn:
           args.type === 'aws:s3/bucket:Bucket'
@@ -49,8 +54,13 @@ pulumi.runtime.setMocks(
         outputs.keyId = 'test-key-id';
       }
 
+      const idValue =
+        typeof outputs.id === 'string' && outputs.id.length > 0
+          ? (outputs.id as string)
+          : args.name;
+
       return {
-        id: outputs.id || args.name,
+        id: idValue,
         state: outputs,
       };
     },

@@ -1,19 +1,43 @@
-# Lambda Image Processing Optimization - Pulumi TypeScript Implementation
+# Pulumi Library Snapshot
 
-This implementation provides an optimized Lambda-based image processing infrastructure using Pulumi with TypeScript, focusing on cost reduction and performance improvements.
+The following sections capture the current TypeScript sources under `lib/`. Each code block mirrors the file contents exactly.
 
-## File: index.ts
+## File: `lib/index.ts`
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
-const config = new pulumi.Config();
-const environmentSuffix = config.require('environmentSuffix');
-const inputBucketName =
-  config.get('inputBucketName') || `image-input-${environmentSuffix}`;
-const outputBucketName =
-  config.get('outputBucketName') || `image-output-${environmentSuffix}`;
+const normalize = (value?: string): string => (value ? value.trim() : '');
+
+export interface ResolvedEnvironmentConfig {
+  environmentSuffix: string;
+  awsRegion: string;
+  inputBucketName: string;
+  outputBucketName: string;
+}
+
+export const resolveEnvironmentConfig = (
+  env: NodeJS.ProcessEnv,
+  fallbackRegion: string = aws.config.region ?? 'us-east-1'
+): ResolvedEnvironmentConfig => {
+  const environmentSuffix = normalize(env.ENVIRONMENT_SUFFIX) || 'dev';
+  const awsRegion = normalize(env.AWS_REGION) || fallbackRegion || 'us-east-1';
+  const inputBucketName =
+    normalize(env.INPUT_BUCKET_NAME) || `image-input-${environmentSuffix}`;
+  const outputBucketName =
+    normalize(env.OUTPUT_BUCKET_NAME) || `image-output-${environmentSuffix}`;
+
+  return {
+    environmentSuffix,
+    awsRegion,
+    inputBucketName,
+    outputBucketName,
+  };
+};
+
+const { environmentSuffix, awsRegion, inputBucketName, outputBucketName } =
+  resolveEnvironmentConfig(process.env);
 
 // Create KMS key for Lambda environment variable encryption
 const kmsKey = new aws.kms.Key(`lambda-encryption-key-${environmentSuffix}`, {
@@ -406,180 +430,6 @@ export const watermarkUrl = watermarkFunctionUrl.functionUrl;
 export const metadataUrl = metadataFunctionUrl.functionUrl;
 export const kmsKeyId = kmsKey.keyId;
 export const sharedLayerArn = sharedLayer.arn;
+export const region = awsRegion;
+export const environment = environmentSuffix;
 ```
-
-## File: lambda-functions/thumbnail-generator/index.js
-
-```javascript
-// Thumbnail Generator Lambda Function
-exports.handler = async (event) => {
-    console.log('Thumbnail generation started', JSON.stringify(event));
-
-    const inputBucket = process.env.INPUT_BUCKET;
-    const outputBucket = process.env.OUTPUT_BUCKET;
-
-    // Simulate thumbnail generation logic
-    // In production, this would use sharp or similar library from the layer
-    const response = {
-        statusCode: 200,
-        body: JSON.stringify({
-            message: 'Thumbnail generated successfully',
-            inputBucket,
-            outputBucket,
-            architecture: 'arm64',
-            memorySize: '1024MB'
-        })
-    };
-
-    return response;
-};
-```
-
-## File: lambda-functions/watermark-applier/WatermarkHandler.java
-
-```java
-package com.example;
-
-import com.amazonaws.services.lambda.runtime.Context;
-import com.amazonaws.services.lambda.runtime.RequestHandler;
-import java.util.Map;
-import java.util.HashMap;
-
-public class WatermarkHandler implements RequestHandler<Map<String, Object>, Map<String, Object>> {
-
-    @Override
-    public Map<String, Object> handleRequest(Map<String, Object> event, Context context) {
-        context.getLogger().log("Watermark application started: " + event.toString());
-
-        String inputBucket = System.getenv("INPUT_BUCKET");
-        String outputBucket = System.getenv("OUTPUT_BUCKET");
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("statusCode", 200);
-
-        Map<String, String> body = new HashMap<>();
-        body.put("message", "Watermark applied successfully");
-        body.put("inputBucket", inputBucket);
-        body.put("outputBucket", outputBucket);
-        body.put("architecture", "arm64");
-        body.put("memorySize", "512MB");
-        body.put("snapStart", "enabled");
-
-        response.put("body", body.toString());
-
-        return response;
-    }
-}
-```
-
-## File: lambda-functions/metadata-extractor/index.js
-
-```javascript
-// Metadata Extractor Lambda Function
-exports.handler = async (event) => {
-    console.log('Metadata extraction started', JSON.stringify(event));
-
-    const inputBucket = process.env.INPUT_BUCKET;
-    const outputBucket = process.env.OUTPUT_BUCKET;
-
-    // Simulate metadata extraction logic
-    // In production, this would use exif-parser or similar library from the layer
-    const response = {
-        statusCode: 200,
-        body: JSON.stringify({
-            message: 'Metadata extracted successfully',
-            inputBucket,
-            outputBucket,
-            architecture: 'arm64',
-            memorySize: '256MB'
-        })
-    };
-
-    return response;
-};
-```
-
-## File: lambda-layers/shared-dependencies/nodejs/package.json
-
-```json
-{
-  "name": "image-processing-shared-dependencies",
-  "version": "1.0.0",
-  "description": "Shared dependencies for Lambda image processing functions",
-  "main": "index.js",
-  "dependencies": {
-    "sharp": "^0.32.0",
-    "aws-xray-sdk-core": "^3.5.0"
-  }
-}
-```
-
-## File: Pulumi.yaml
-
-```yaml
-name: lambda-image-processing-optimization
-runtime: nodejs
-description: Optimized Lambda-based image processing infrastructure with ARM64, SnapStart, and cost optimizations
-main: lib/
-```
-
-## File: Pulumi.dev.yaml
-
-```yaml
-config:
-  lambda-image-processing-optimization:environmentSuffix: "dev"
-  lambda-image-processing-optimization:inputBucketName: "image-input-dev"
-  lambda-image-processing-optimization:outputBucketName: "image-output-dev"
-```
-
-## Architecture Overview
-
-This implementation provides:
-
-1. **ARM64 Architecture**: All Lambda functions use ARM64 (Graviton2) for ~20% cost savings
-2. **Right-Sized Memory**: Functions allocated based on profiling (1024MB, 512MB, 256MB)
-3. **Reserved Concurrency**: Thumbnail (50), Watermark (25), Metadata (25) - total 100
-4. **Lambda SnapStart**: Java watermark function uses SnapStart to reduce cold starts
-5. **Lambda Layers**: Shared dependencies layer reduces deployment package sizes
-6. **7-Day Log Retention**: CloudWatch logs configured for cost control
-7. **X-Ray Tracing**: 10% sampling rate for cost-effective observability
-8. **Function URLs**: Direct invocation with IAM auth and CORS configuration
-9. **Least Privilege IAM**: Specific S3 permissions (read from input, write to output)
-10. **KMS Encryption**: Shared KMS key for environment variable encryption
-
-## Cost Optimization Highlights
-
-- **ARM64 Architecture**: ~20% reduction in compute costs
-- **Memory Right-Sizing**: No over-provisioning based on profiling data
-- **Reserved Concurrency**: Prevents runaway costs from unlimited scaling
-- **Log Retention**: 7-day retention vs indefinite storage saves on CloudWatch costs
-- **X-Ray Sampling**: 10% sampling reduces tracing costs while maintaining visibility
-- **Lambda Layers**: Reduces deployment package sizes and speeds up deployments
-
-## Deployment Instructions
-
-1. Install dependencies:
-```bash
-npm install
-```
-
-2. Configure Pulumi stack:
-```bash
-pulumi config set environmentSuffix <your-suffix>
-pulumi config set inputBucketName <input-bucket-name>
-pulumi config set outputBucketName <output-bucket-name>
-```
-
-3. Deploy infrastructure:
-```bash
-pulumi up
-```
-
-4. Access function URLs from outputs for direct invocation with IAM authentication
-
-## Key Improvements from MODEL_RESPONSE
-
-1. **Correct Pulumi API Usage**: Changed `architecture: 'arm64'` to `architectures: ['arm64']` to match Pulumi AWS provider's Lambda function API (uses array, not string)
-2. **Removed Unused Imports**: Removed `import * as path from 'path'` which was not used
-3. **Code Style Compliance**: Applied ESLint and Prettier formatting rules for consistency
-4. **Added main field**: Added `main: lib/` to Pulumi.yaml to correctly point to the entry point

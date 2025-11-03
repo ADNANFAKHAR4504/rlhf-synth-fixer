@@ -237,9 +237,34 @@ describe('Lambda Image Processing Infrastructure', () => {
     });
 
     it('should handle default bucket names when config not provided', () => {
-      // This test verifies that the fallback logic exists for config.get()
-      // In our mock setup, we're providing the config, but the code has fallbacks
-      expect(true).toBe(true);
+      const defaults = stack.resolveEnvironmentConfig(
+        {} as NodeJS.ProcessEnv,
+        'us-west-2'
+      );
+      expect(defaults.environmentSuffix).toBe('dev');
+      expect(defaults.inputBucketName).toBe('image-input-dev');
+      expect(defaults.outputBucketName).toBe('image-output-dev');
+      expect(defaults.awsRegion).toBe('us-west-2');
+
+      const fallbackOnly = stack.resolveEnvironmentConfig(
+        {} as NodeJS.ProcessEnv,
+        ''
+      );
+      expect(fallbackOnly.awsRegion).toBe('us-east-1');
+
+      const trimmed = stack.resolveEnvironmentConfig(
+        {
+          ENVIRONMENT_SUFFIX: '  qa  ',
+          AWS_REGION: '  eu-central-1 ',
+          INPUT_BUCKET_NAME: ' custom-input ',
+          OUTPUT_BUCKET_NAME: ' custom-output ',
+        } as NodeJS.ProcessEnv,
+        'us-east-1'
+      );
+      expect(trimmed.environmentSuffix).toBe('qa');
+      expect(trimmed.awsRegion).toBe('eu-central-1');
+      expect(trimmed.inputBucketName).toBe('custom-input');
+      expect(trimmed.outputBucketName).toBe('custom-output');
     });
   });
 

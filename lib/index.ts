@@ -1,21 +1,36 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
-const readEnv = (name: string): string | undefined => {
-  const value = process.env[name];
-  if (!value) {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
+const normalize = (value?: string): string => (value ? value.trim() : '');
+
+export interface ResolvedEnvironmentConfig {
+  environmentSuffix: string;
+  awsRegion: string;
+  inputBucketName: string;
+  outputBucketName: string;
+}
+
+export const resolveEnvironmentConfig = (
+  env: NodeJS.ProcessEnv,
+  fallbackRegion: string = aws.config.region ?? 'us-east-1'
+): ResolvedEnvironmentConfig => {
+  const environmentSuffix = normalize(env.ENVIRONMENT_SUFFIX) || 'dev';
+  const awsRegion = normalize(env.AWS_REGION) || fallbackRegion || 'us-east-1';
+  const inputBucketName =
+    normalize(env.INPUT_BUCKET_NAME) || `image-input-${environmentSuffix}`;
+  const outputBucketName =
+    normalize(env.OUTPUT_BUCKET_NAME) || `image-output-${environmentSuffix}`;
+
+  return {
+    environmentSuffix,
+    awsRegion,
+    inputBucketName,
+    outputBucketName,
+  };
 };
 
-const environmentSuffix = readEnv('ENVIRONMENT_SUFFIX') ?? 'dev';
-const awsRegion = readEnv('AWS_REGION') ?? aws.config.region ?? 'us-east-1';
-const inputBucketName =
-  readEnv('INPUT_BUCKET_NAME') ?? `image-input-${environmentSuffix}`;
-const outputBucketName =
-  readEnv('OUTPUT_BUCKET_NAME') ?? `image-output-${environmentSuffix}`;
+const { environmentSuffix, awsRegion, inputBucketName, outputBucketName } =
+  resolveEnvironmentConfig(process.env);
 
 // Create KMS key for Lambda environment variable encryption
 const kmsKey = new aws.kms.Key(`lambda-encryption-key-${environmentSuffix}`, {
