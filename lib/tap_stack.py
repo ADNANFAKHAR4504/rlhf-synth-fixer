@@ -286,7 +286,7 @@ class TapStack(TerraformStack):
             log_destination_type="cloud-watch-logs",
             log_destination=log_group.arn,
             iam_role_arn=flow_logs_role.arn,
-            max_aggregation_interval=300,  # 5 minutes
+            max_aggregation_interval=600,  # 10 minutes (valid values: 60 or 600)
             tags={
                 **common_tags,
                 "Name": f"vpc-flow-logs-{environment_suffix}"

@@ -23,5 +23,6 @@
     "IAM"
   ],
   "region": "ap-northeast-1",
+  "author": "chriscrsov",
   "training_quality": 8
 }

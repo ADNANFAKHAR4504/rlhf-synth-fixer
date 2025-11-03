@@ -1,5 +1,6 @@
 """Unit tests for TAP Stack VPC infrastructure."""
 
+import json
 import pytest
 from cdktf import Testing
 from lib.tap_stack import TapStack
@@ -36,11 +37,11 @@ class TestTapStack:
             aws_region="ap-northeast-1",
         )
 
-        synthesized = Testing.synth(stack)
+        synthesized_json = Testing.synth(stack)
+        synthesized = json.loads(synthesized_json)
 
         # Check VPC exists with correct CIDR
         assert any(
-            resource.get("type") == "aws_vpc" and
             resource.get("cidr_block") == "10.0.0.0/16"
             for resource in synthesized.get("resource", {}).get("aws_vpc", {}).values()
         )
@@ -55,7 +56,8 @@ class TestTapStack:
             aws_region="ap-northeast-1",
         )
 
-        synthesized = Testing.synth(stack)
+        synthesized_json = Testing.synth(stack)
+        synthesized = json.loads(synthesized_json)
 
         # Count public subnets
         public_subnets = [
@@ -75,7 +77,8 @@ class TestTapStack:
             aws_region="ap-northeast-1",
         )
 
-        synthesized = Testing.synth(stack)
+        synthesized_json = Testing.synth(stack)
+        synthesized = json.loads(synthesized_json)
 
         # Count private subnets
         private_subnets = [
@@ -95,7 +98,8 @@ class TestTapStack:
             aws_region="ap-northeast-1",
         )
 
-        synthesized = Testing.synth(stack)
+        synthesized_json = Testing.synth(stack)
+        synthesized = json.loads(synthesized_json)
 
         # Expected CIDR blocks
         expected_public_cidrs = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
@@ -120,7 +124,8 @@ class TestTapStack:
             aws_region="ap-northeast-1",
         )
 
-        synthesized = Testing.synth(stack)
+        synthesized_json = Testing.synth(stack)
+        synthesized = json.loads(synthesized_json)
 
         # Check IGW exists
         assert "aws_internet_gateway" in synthesized.get("resource", {})
@@ -135,7 +140,8 @@ class TestTapStack:
             aws_region="ap-northeast-1",
         )
 
-        synthesized = Testing.synth(stack)
+        synthesized_json = Testing.synth(stack)
+        synthesized = json.loads(synthesized_json)
 
         # Check NAT Gateway exists
         assert "aws_nat_gateway" in synthesized.get("resource", {})
@@ -153,7 +159,8 @@ class TestTapStack:
             aws_region="ap-northeast-1",
         )
 
-        synthesized = Testing.synth(stack)
+        synthesized_json = Testing.synth(stack)
+        synthesized = json.loads(synthesized_json)
 
         # Check route tables exist
         assert "aws_route_table" in synthesized.get("resource", {})
@@ -172,7 +179,8 @@ class TestTapStack:
             aws_region="ap-northeast-1",
         )
 
-        synthesized = Testing.synth(stack)
+        synthesized_json = Testing.synth(stack)
+        synthesized = json.loads(synthesized_json)
 
         # Check Flow Log exists
         assert "aws_flow_log" in synthesized.get("resource", {})
@@ -190,7 +198,8 @@ class TestTapStack:
             aws_region="ap-northeast-1",
         )
 
-        synthesized = Testing.synth(stack)
+        synthesized_json = Testing.synth(stack)
+        synthesized = json.loads(synthesized_json)
 
         # Check log group retention
         log_groups = synthesized.get("resource", {}).get("aws_cloudwatch_log_group", {})
@@ -210,7 +219,8 @@ class TestTapStack:
             aws_region="ap-northeast-1",
         )
 
-        synthesized = Testing.synth(stack)
+        synthesized_json = Testing.synth(stack)
+        synthesized = json.loads(synthesized_json)
 
         # Check S3 VPC Endpoint exists
         assert "aws_vpc_endpoint" in synthesized.get("resource", {})
@@ -225,7 +235,8 @@ class TestTapStack:
             aws_region="ap-northeast-1",
         )
 
-        synthesized = Testing.synth(stack)
+        synthesized_json = Testing.synth(stack)
+        synthesized = json.loads(synthesized_json)
 
         # Check VPC tags
         vpcs = synthesized.get("resource", {}).get("aws_vpc", {})
@@ -245,7 +256,8 @@ class TestTapStack:
             aws_region="ap-northeast-1",
         )
 
-        synthesized = Testing.synth(stack)
+        synthesized_json = Testing.synth(stack)
+        synthesized = json.loads(synthesized_json)
 
         # Check VPC name includes suffix
         vpcs = synthesized.get("resource", {}).get("aws_vpc", {})
@@ -263,7 +275,8 @@ class TestTapStack:
             aws_region="ap-northeast-1",
         )
 
-        synthesized = Testing.synth(stack)
+        synthesized_json = Testing.synth(stack)
+        synthesized = json.loads(synthesized_json)
 
         # Check outputs exist
         outputs = synthesized.get("output", {})
@@ -289,7 +302,8 @@ class TestTapStack:
             aws_region="ap-northeast-1",
         )
 
-        synthesized = Testing.synth(stack)
+        synthesized_json = Testing.synth(stack)
+        synthesized = json.loads(synthesized_json)
 
         # Check IAM role exists
         assert "aws_iam_role" in synthesized.get("resource", {})
