@@ -9,5 +9,17 @@
   "subtask": "IaC Program Optimization",
   "subject_labels": [
     "Infrastructure Analysis/Monitoring"
-  ]
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "IAM",
+    "Access Analyzer",
+    "STS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
 }
