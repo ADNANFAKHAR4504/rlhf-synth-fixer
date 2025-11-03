@@ -450,7 +450,7 @@ class TestAPIGatewayServiceLevel(BaseIntegrationTest):
 
     def test_api_gateway_get_request(self):
         """
-        Test API Gateway: GET request to health endpoint.
+        Test API Gateway: GET request to pipeline endpoint.
         
         ACTION: Send GET request to API Gateway, verify response.
         
@@ -458,7 +458,7 @@ class TestAPIGatewayServiceLevel(BaseIntegrationTest):
         """
         self.assert_output_exists('api_endpoint_url', 'api_key_value')
         
-        api_url = OUTPUTS['api_endpoint_url']
+        api_url = OUTPUTS['api_endpoint_url'] + '/pipeline'
         api_key = OUTPUTS['api_key_value']
         
         print(f"[INFO] ACTION: Sending GET request to {api_url}")
@@ -500,7 +500,7 @@ class TestAPIGatewayServiceLevel(BaseIntegrationTest):
         """
         self.assert_output_exists('api_endpoint_url', 'api_key_value')
         
-        api_url = OUTPUTS['api_endpoint_url']
+        api_url = OUTPUTS['api_endpoint_url'] + '/pipeline'
         api_key = OUTPUTS['api_key_value']
         
         print(f"[INFO] ACTION: Testing rate limiting on {api_url}")
@@ -570,10 +570,11 @@ class TestCloudWatchServiceLevel(BaseIntegrationTest):
             )
             print(f"[INFO] Successfully published metric to CloudWatch")
             
-            time.sleep(10)
+            print(f"[INFO] Waiting 20 seconds for metric to appear in CloudWatch...")
+            time.sleep(20)
             
             end_time = datetime.utcnow()
-            start_time = datetime.utcfromtimestamp(time.time() - 300)
+            start_time = datetime.utcfromtimestamp(time.time() - 120)
             
             print(f"[INFO] ACTION: Querying CloudWatch for published metric")
             response = cloudwatch_client.get_metric_statistics(
@@ -710,11 +711,11 @@ class TestCrossServiceInteractions(BaseIntegrationTest):
             self.assertEqual(response['StatusCode'], 200)
             print(f"[INFO] Lambda invoked successfully")
             
-            print(f"[INFO] Waiting 15 seconds for CloudWatch metric to appear...")
-            time.sleep(15)
+            print(f"[INFO] Waiting 20 seconds for CloudWatch metric to appear...")
+            time.sleep(20)
             
             end_time = datetime.utcnow()
-            start_time = datetime.utcfromtimestamp(time.time() - 300)
+            start_time = datetime.utcfromtimestamp(time.time() - 120)
             
             print(f"[INFO] ACTION: Verifying metric in CloudWatch")
             response = cloudwatch_client.get_metric_statistics(
@@ -797,7 +798,7 @@ class TestCrossServiceInteractions(BaseIntegrationTest):
         """
         self.assert_output_exists('api_endpoint_url', 'api_key_value', 'lambda_function_name')
         
-        api_url = OUTPUTS['api_endpoint_url']
+        api_url = OUTPUTS['api_endpoint_url'] + '/pipeline'
         api_key = OUTPUTS['api_key_value']
         function_name = OUTPUTS['lambda_function_name']
         
@@ -865,9 +866,9 @@ class TestCrossServiceInteractions(BaseIntegrationTest):
         print(f"[INFO] ACTION: Publishing test metric to CloudWatch")
         
         try:
-            # Publish a test metric
+            # Publish a test metric (use custom namespace, not AWS/)
             cloudwatch_client.put_metric_data(
-                Namespace='AWS/Lambda',
+                Namespace='CICDPipeline/IntegrationTest',
                 MetricData=[
                     {
                         'MetricName': 'Errors',
@@ -950,7 +951,7 @@ class TestEndToEndWorkflows(BaseIntegrationTest):
             'log_group_name'
         )
         
-        api_url = OUTPUTS['api_endpoint_url']
+        api_url = OUTPUTS['api_endpoint_url'] + '/pipeline'
         api_key = OUTPUTS['api_key_value']
         function_name = OUTPUTS['lambda_function_name']
         bucket_name = OUTPUTS['log_bucket_name']
@@ -1090,7 +1091,11 @@ class TestEndToEndWorkflows(BaseIntegrationTest):
             # ============================================================
             # ENTRY POINT: Invoke Lambda with error ONLY (single manual action)
             # ============================================================
-            invalid_payload = "invalid-json-string-to-trigger-error"
+            # Use valid JSON but with missing required fields to trigger runtime error
+            invalid_payload = json.dumps({
+                'httpMethod': 'POST',
+                'body': None  # This will cause an error when Lambda tries to process it
+            })
             
             print(f"[INFO] ENTRY POINT: Invoking Lambda with invalid payload (ONLY manual trigger)")
             print(f"[INFO] All error handling will happen AUTOMATICALLY")
