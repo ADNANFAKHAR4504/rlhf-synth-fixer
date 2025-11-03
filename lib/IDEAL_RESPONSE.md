@@ -768,7 +768,6 @@ exports.handler = async (event) => {
         inputParameters: JSON.stringify({
           instanceType: 't2.micro,t2.small,t3.micro,t3.small,t3.medium',
         }),
-        maximumExecutionFrequency: 'Six_Hours',
         tags: defaultTags,
       },
       { parent: this, dependsOn: [configRecorderStatus] }
@@ -784,7 +783,6 @@ exports.handler = async (event) => {
           owner: 'AWS',
           sourceIdentifier: 'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED',
         },
-        maximumExecutionFrequency: 'Six_Hours',
         tags: defaultTags,
       },
       { parent: this, dependsOn: [configRecorderStatus] }
@@ -800,7 +798,6 @@ exports.handler = async (event) => {
           owner: 'AWS',
           sourceIdentifier: 'DB_INSTANCE_BACKUP_ENABLED',
         },
-        maximumExecutionFrequency: 'Six_Hours',
         tags: defaultTags,
       },
       { parent: this, dependsOn: [configRecorderStatus] }
@@ -1023,11 +1020,13 @@ pulumi stack output
 
 ## Compliance Rules Configured
 
-All rules are configured to evaluate resources every 6 hours using `maximumExecutionFrequency: 'Six_Hours'`:
+All rules use **configuration-change triggering** which evaluates resources automatically when changes occur. This provides real-time compliance monitoring (better than the 6-hour requirement):
 
-1. **EC2 Instance Type Check**: Ensures only approved instance types (t2/t3 micro, small, medium) are used
-2. **S3 Bucket Encryption Check**: Verifies all S3 buckets have server-side encryption enabled
-3. **RDS Backup Check**: Validates that RDS instances have automatic backups enabled
+1. **EC2 Instance Type Check** (`DESIRED_INSTANCE_TYPE`): Ensures only approved instance types (t2/t3 micro, small, medium) are used
+2. **S3 Bucket Encryption Check** (`S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED`): Verifies all S3 buckets have server-side encryption enabled
+3. **RDS Backup Check** (`DB_INSTANCE_BACKUP_ENABLED`): Validates that RDS instances have automatic backups enabled
+
+**Note**: These AWS managed rules are configuration-change-triggered and do NOT support `maximumExecutionFrequency`. They evaluate automatically whenever resources change, providing faster detection than periodic 6-hour checks.
 
 ## Lambda Functions
 
