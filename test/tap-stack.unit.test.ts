@@ -864,7 +864,7 @@ describe('TapStack Unit Tests', () => {
       template.hasResourceProperties('AWS::Lambda::LayerVersion', {
         LayerName: 'prod-transaction-test123-shared',
       });
-      
+
       // Verify Lambda functions have layers when layer exists
       template.hasResourceProperties('AWS::Lambda::Function', {
         FunctionName: 'prod-transaction-test123-realtime',
@@ -875,21 +875,26 @@ describe('TapStack Unit Tests', () => {
     test('Lambda functions work without layer when lambda-layer directory does not exist', () => {
       // Mock fs.existsSync to return false for lambda-layer directory
       const fs = require('fs');
-      const existsSyncSpy = jest.spyOn(fs, 'existsSync').mockImplementation((path: string) => {
-        const pathStr = path.toString();
-        // Return false for lambda-layer directory to cover the branch
-        if (pathStr.includes('lambda-layer')) {
-          return false;
-        }
-        // For all other paths, check if the directory/file actually exists
-        // Use fs.statSync to avoid recursive calls
-        try {
-          return require('fs').statSync(pathStr).isDirectory() || require('fs').statSync(pathStr).isFile();
-        } catch {
-          return false;
-        }
-      });
-      
+      const existsSyncSpy = jest
+        .spyOn(fs, 'existsSync')
+        .mockImplementation((path: string) => {
+          const pathStr = path.toString();
+          // Return false for lambda-layer directory to cover the branch
+          if (pathStr.includes('lambda-layer')) {
+            return false;
+          }
+          // For all other paths, check if the directory/file actually exists
+          // Use fs.statSync to avoid recursive calls
+          try {
+            return (
+              require('fs').statSync(pathStr).isDirectory() ||
+              require('fs').statSync(pathStr).isFile()
+            );
+          } catch {
+            return false;
+          }
+        });
+
       try {
         const app3 = new cdk.App();
         const stack3 = new TapStack(app3, 'TestStackNoLayer', {
@@ -900,16 +905,16 @@ describe('TapStack Unit Tests', () => {
           },
         });
         const template3 = Template.fromStack(stack3);
-        
+
         // Verify Lambda functions are created without layers
         template3.hasResourceProperties('AWS::Lambda::Function', {
           FunctionName: 'prod-transaction-nolayer-realtime',
         });
-        
+
         // Verify no Lambda Layer resource exists
         const layers = template3.findResources('AWS::Lambda::LayerVersion');
         expect(Object.keys(layers).length).toBe(0);
-        
+
         // Verify Lambda functions don't have Layers property
         const functions = template3.findResources('AWS::Lambda::Function');
         Object.values(functions).forEach((func: any) => {

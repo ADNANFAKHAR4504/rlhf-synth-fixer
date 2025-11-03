@@ -15,10 +15,7 @@ import {
   GetPublicAccessBlockCommand,
   GetBucketLifecycleConfigurationCommand,
 } from '@aws-sdk/client-s3';
-import {
-  DynamoDBClient,
-  DescribeTableCommand,
-} from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient, DescribeTableCommand } from '@aws-sdk/client-dynamodb';
 import {
   LambdaClient,
   GetFunctionCommand,
@@ -93,631 +90,754 @@ describe('TapStack Integration Tests', () => {
   };
 
   describe('Stack Outputs Validation', () => {
-    test('API Endpoint output exists and is accessible', async () => {
-      if (!requiresOutputs()) return;
-      
-      expect(outputs.APIEndpoint).toBeDefined();
-      expect(outputs.APIEndpoint).toMatch(/^https:\/\/.*\.execute-api\./);
-    }, testTimeout);
+    test(
+      'API Endpoint output exists and is accessible',
+      async () => {
+        if (!requiresOutputs()) return;
 
-    test('DynamoDB Table Name output exists', async () => {
-      if (!requiresOutputs()) return;
-      
-      expect(outputs.DynamoDBTableName).toBeDefined();
-      expect(outputs.DynamoDBTableName).toBe(`${namingPrefix}-transactions`);
-    }, testTimeout);
+        expect(outputs.APIEndpoint).toBeDefined();
+        expect(outputs.APIEndpoint).toMatch(/^https:\/\/.*\.execute-api\./);
+      },
+      testTimeout
+    );
 
-    test('Dashboard URL output exists', async () => {
-      if (!requiresOutputs()) return;
-      
-      expect(outputs.DashboardURL).toBeDefined();
-      expect(outputs.DashboardURL).toContain('cloudwatch');
-    }, testTimeout);
+    test(
+      'DynamoDB Table Name output exists',
+      async () => {
+        if (!requiresOutputs()) return;
+
+        expect(outputs.DynamoDBTableName).toBeDefined();
+        expect(outputs.DynamoDBTableName).toBe(`${namingPrefix}-transactions`);
+      },
+      testTimeout
+    );
+
+    test(
+      'Dashboard URL output exists',
+      async () => {
+        if (!requiresOutputs()) return;
+
+        expect(outputs.DashboardURL).toBeDefined();
+        expect(outputs.DashboardURL).toContain('cloudwatch');
+      },
+      testTimeout
+    );
   });
 
   describe('VPC Resources', () => {
-    test('VPC exists and is configured correctly', async () => {
-      if (!requiresOutputs()) return;
+    test(
+      'VPC exists and is configured correctly',
+      async () => {
+        if (!requiresOutputs()) return;
 
-      // Find VPC by name tag
-      const vpcsResponse = await ec2.send(
-        new DescribeVpcsCommand({
-          Filters: [
-            { Name: 'tag:Name', Values: [`${namingPrefix}-vpc`] },
-          ],
-        })
-      );
+        // Find VPC by name tag
+        const vpcsResponse = await ec2.send(
+          new DescribeVpcsCommand({
+            Filters: [{ Name: 'tag:Name', Values: [`${namingPrefix}-vpc`] }],
+          })
+        );
 
-      expect(vpcsResponse.Vpcs).toBeDefined();
-      expect(vpcsResponse.Vpcs!.length).toBeGreaterThan(0);
+        expect(vpcsResponse.Vpcs).toBeDefined();
+        expect(vpcsResponse.Vpcs!.length).toBeGreaterThan(0);
 
-      const vpc = vpcsResponse.Vpcs![0];
-      const vpcId = vpc.VpcId!;
+        const vpc = vpcsResponse.Vpcs![0];
+        const vpcId = vpc.VpcId!;
 
-      // Check DNS settings
-      const dnsHostnamesResponse = await ec2.send(
-        new DescribeVpcAttributeCommand({
-          VpcId: vpcId,
-          Attribute: 'enableDnsHostnames',
-        })
-      );
+        // Check DNS settings
+        const dnsHostnamesResponse = await ec2.send(
+          new DescribeVpcAttributeCommand({
+            VpcId: vpcId,
+            Attribute: 'enableDnsHostnames',
+          })
+        );
 
-      const dnsSupportResponse = await ec2.send(
-        new DescribeVpcAttributeCommand({
-          VpcId: vpcId,
-          Attribute: 'enableDnsSupport',
-        })
-      );
+        const dnsSupportResponse = await ec2.send(
+          new DescribeVpcAttributeCommand({
+            VpcId: vpcId,
+            Attribute: 'enableDnsSupport',
+          })
+        );
 
-      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
-      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
-    }, testTimeout);
+        expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
+        expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
+      },
+      testTimeout
+    );
 
-    test('VPC has public and private subnets', async () => {
-      if (!requiresOutputs()) return;
+    test(
+      'VPC has public and private subnets',
+      async () => {
+        if (!requiresOutputs()) return;
 
-      const vpcsResponse = await ec2.send(
-        new DescribeVpcsCommand({
-          Filters: [
-            { Name: 'tag:Name', Values: [`${namingPrefix}-vpc`] },
-          ],
-        })
-      );
+        const vpcsResponse = await ec2.send(
+          new DescribeVpcsCommand({
+            Filters: [{ Name: 'tag:Name', Values: [`${namingPrefix}-vpc`] }],
+          })
+        );
 
-      const vpcId = vpcsResponse.Vpcs![0].VpcId!;
+        const vpcId = vpcsResponse.Vpcs![0].VpcId!;
 
-      const subnetsResponse = await ec2.send(
-        new DescribeSubnetsCommand({
-          Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
-        })
-      );
+        const subnetsResponse = await ec2.send(
+          new DescribeSubnetsCommand({
+            Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
+          })
+        );
 
-      const subnets = subnetsResponse.Subnets || [];
-      expect(subnets.length).toBeGreaterThanOrEqual(2);
+        const subnets = subnetsResponse.Subnets || [];
+        expect(subnets.length).toBeGreaterThanOrEqual(2);
 
-      const publicSubnets = subnets.filter((s) => s.MapPublicIpOnLaunch);
-      const privateSubnets = subnets.filter((s) => !s.MapPublicIpOnLaunch);
+        const publicSubnets = subnets.filter(s => s.MapPublicIpOnLaunch);
+        const privateSubnets = subnets.filter(s => !s.MapPublicIpOnLaunch);
 
-      expect(publicSubnets.length).toBeGreaterThan(0);
-      expect(privateSubnets.length).toBeGreaterThan(0);
-    }, testTimeout);
+        expect(publicSubnets.length).toBeGreaterThan(0);
+        expect(privateSubnets.length).toBeGreaterThan(0);
+      },
+      testTimeout
+    );
 
-    test('NAT Gateway exists for private subnets', async () => {
-      if (!requiresOutputs()) return;
+    test(
+      'NAT Gateway exists for private subnets',
+      async () => {
+        if (!requiresOutputs()) return;
 
-      const vpcsResponse = await ec2.send(
-        new DescribeVpcsCommand({
-          Filters: [
-            { Name: 'tag:Name', Values: [`${namingPrefix}-vpc`] },
-          ],
-        })
-      );
+        const vpcsResponse = await ec2.send(
+          new DescribeVpcsCommand({
+            Filters: [{ Name: 'tag:Name', Values: [`${namingPrefix}-vpc`] }],
+          })
+        );
 
-      const vpcId = vpcsResponse.Vpcs![0].VpcId!;
+        const vpcId = vpcsResponse.Vpcs![0].VpcId!;
 
-      const natGatewaysResponse = await ec2.send(
-        new DescribeNatGatewaysCommand({
-          Filter: [
-            { Name: 'vpc-id', Values: [vpcId] },
-            { Name: 'state', Values: ['available'] },
-          ],
-        })
-      );
+        const natGatewaysResponse = await ec2.send(
+          new DescribeNatGatewaysCommand({
+            Filter: [
+              { Name: 'vpc-id', Values: [vpcId] },
+              { Name: 'state', Values: ['available'] },
+            ],
+          })
+        );
 
-      expect(natGatewaysResponse.NatGateways!.length).toBeGreaterThan(0);
-    }, testTimeout);
+        expect(natGatewaysResponse.NatGateways!.length).toBeGreaterThan(0);
+      },
+      testTimeout
+    );
 
-    test('VPC has DynamoDB interface endpoint', async () => {
-      if (!requiresOutputs()) return;
+    test(
+      'VPC has DynamoDB interface endpoint',
+      async () => {
+        if (!requiresOutputs()) return;
 
-      const vpcsResponse = await ec2.send(
-        new DescribeVpcsCommand({
-          Filters: [
-            { Name: 'tag:Name', Values: [`${namingPrefix}-vpc`] },
-          ],
-        })
-      );
+        const vpcsResponse = await ec2.send(
+          new DescribeVpcsCommand({
+            Filters: [{ Name: 'tag:Name', Values: [`${namingPrefix}-vpc`] }],
+          })
+        );
 
-      const vpcId = vpcsResponse.Vpcs![0].VpcId!;
+        const vpcId = vpcsResponse.Vpcs![0].VpcId!;
 
-      const endpointsResponse = await ec2.send(
-        new DescribeVpcEndpointsCommand({
-          Filters: [
-            { Name: 'vpc-id', Values: [vpcId] },
-            { Name: 'service-name', Values: [`com.amazonaws.${region}.dynamodb`] },
-          ],
-        })
-      );
+        const endpointsResponse = await ec2.send(
+          new DescribeVpcEndpointsCommand({
+            Filters: [
+              { Name: 'vpc-id', Values: [vpcId] },
+              {
+                Name: 'service-name',
+                Values: [`com.amazonaws.${region}.dynamodb`],
+              },
+            ],
+          })
+        );
 
-      expect(endpointsResponse.VpcEndpoints!.length).toBeGreaterThan(0);
-      const endpoint = endpointsResponse.VpcEndpoints![0];
-      expect(endpoint.VpcEndpointType).toBe('Interface');
-      expect(endpoint.PrivateDnsEnabled).toBe(false); // DynamoDB doesn't support private DNS
-    }, testTimeout);
+        expect(endpointsResponse.VpcEndpoints!.length).toBeGreaterThan(0);
+        const endpoint = endpointsResponse.VpcEndpoints![0];
+        expect(endpoint.VpcEndpointType).toBe('Interface');
+        expect(endpoint.PrivateDnsEnabled).toBe(false); // DynamoDB doesn't support private DNS
+      },
+      testTimeout
+    );
 
-    test('VPC has S3 gateway endpoint', async () => {
-      if (!requiresOutputs()) return;
+    test(
+      'VPC has S3 gateway endpoint',
+      async () => {
+        if (!requiresOutputs()) return;
 
-      const vpcsResponse = await ec2.send(
-        new DescribeVpcsCommand({
-          Filters: [
-            { Name: 'tag:Name', Values: [`${namingPrefix}-vpc`] },
-          ],
-        })
-      );
+        const vpcsResponse = await ec2.send(
+          new DescribeVpcsCommand({
+            Filters: [{ Name: 'tag:Name', Values: [`${namingPrefix}-vpc`] }],
+          })
+        );
 
-      const vpcId = vpcsResponse.Vpcs![0].VpcId!;
+        const vpcId = vpcsResponse.Vpcs![0].VpcId!;
 
-      const endpointsResponse = await ec2.send(
-        new DescribeVpcEndpointsCommand({
-          Filters: [
-            { Name: 'vpc-id', Values: [vpcId] },
-            { Name: 'service-name', Values: [`com.amazonaws.${region}.s3`] },
-          ],
-        })
-      );
+        const endpointsResponse = await ec2.send(
+          new DescribeVpcEndpointsCommand({
+            Filters: [
+              { Name: 'vpc-id', Values: [vpcId] },
+              { Name: 'service-name', Values: [`com.amazonaws.${region}.s3`] },
+            ],
+          })
+        );
 
-      expect(endpointsResponse.VpcEndpoints!.length).toBeGreaterThan(0);
-      const endpoint = endpointsResponse.VpcEndpoints![0];
-      expect(endpoint.VpcEndpointType).toBe('Gateway');
-    }, testTimeout);
+        expect(endpointsResponse.VpcEndpoints!.length).toBeGreaterThan(0);
+        const endpoint = endpointsResponse.VpcEndpoints![0];
+        expect(endpoint.VpcEndpointType).toBe('Gateway');
+      },
+      testTimeout
+    );
   });
 
   describe('DynamoDB Table', () => {
-    test('DynamoDB table exists with correct configuration', async () => {
-      if (!requiresOutputs()) return;
+    test(
+      'DynamoDB table exists with correct configuration',
+      async () => {
+        if (!requiresOutputs()) return;
 
-      const tableName = outputs.DynamoDBTableName;
-      expect(tableName).toBeDefined();
+        const tableName = outputs.DynamoDBTableName;
+        expect(tableName).toBeDefined();
 
-      const response = await dynamodb.send(
-        new DescribeTableCommand({ TableName: tableName })
-      );
+        const response = await dynamodb.send(
+          new DescribeTableCommand({ TableName: tableName })
+        );
 
-      const table = response.Table;
-      expect(table).toBeDefined();
-      expect(table!.TableName).toBe(tableName);
-      
-      // Check billing mode - PROVISIONED tables may not have BillingModeSummary in DescribeTable
-      // Instead check for ProvisionedThroughput
-      expect(table!.ProvisionedThroughput).toBeDefined();
-      expect(table!.ProvisionedThroughput!.ReadCapacityUnits).toBeGreaterThan(0);
-      expect(table!.ProvisionedThroughput!.WriteCapacityUnits).toBeGreaterThan(0);
-      
-      // Check Point-in-Time Recovery
-      // PITR status may not be immediately available in DescribeTable, but it should be enabled
-      if (table!.ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus) {
-        expect(table!.ContinuousBackupsDescription.PointInTimeRecoveryDescription.PointInTimeRecoveryStatus).toBe('ENABLED');
-      } else {
-        // If not in description, PITR may still be enabled but not yet propagated
-        // This is acceptable - the important check is in the encryption test
-        console.log('PITR status not yet available in table description');
-      }
-      
-      // Check for GSIs
-      const gsis = table!.GlobalSecondaryIndexes || [];
-      expect(gsis.length).toBeGreaterThanOrEqual(2);
+        const table = response.Table;
+        expect(table).toBeDefined();
+        expect(table!.TableName).toBe(tableName);
 
-      const userIdIndex = gsis.find((gsi) => gsi.IndexName === 'userId-timestamp-index');
-      const statusIndex = gsis.find((gsi) => gsi.IndexName === 'status-timestamp-index');
+        // Check billing mode - PROVISIONED tables may not have BillingModeSummary in DescribeTable
+        // Instead check for ProvisionedThroughput
+        expect(table!.ProvisionedThroughput).toBeDefined();
+        expect(table!.ProvisionedThroughput!.ReadCapacityUnits).toBeGreaterThan(
+          0
+        );
+        expect(
+          table!.ProvisionedThroughput!.WriteCapacityUnits
+        ).toBeGreaterThan(0);
 
-      expect(userIdIndex).toBeDefined();
-      expect(statusIndex).toBeDefined();
-    }, testTimeout);
+        // Check Point-in-Time Recovery
+        // PITR status may not be immediately available in DescribeTable, but it should be enabled
+        if (
+          table!.ContinuousBackupsDescription?.PointInTimeRecoveryDescription
+            ?.PointInTimeRecoveryStatus
+        ) {
+          expect(
+            table!.ContinuousBackupsDescription.PointInTimeRecoveryDescription
+              .PointInTimeRecoveryStatus
+          ).toBe('ENABLED');
+        } else {
+          // If not in description, PITR may still be enabled but not yet propagated
+          // This is acceptable - the important check is in the encryption test
+          console.log('PITR status not yet available in table description');
+        }
 
-    test('DynamoDB table has encryption enabled', async () => {
-      if (!requiresOutputs()) return;
+        // Check for GSIs
+        const gsis = table!.GlobalSecondaryIndexes || [];
+        expect(gsis.length).toBeGreaterThanOrEqual(2);
 
-      const tableName = outputs.DynamoDBTableName;
-      const response = await dynamodb.send(
-        new DescribeTableCommand({ TableName: tableName })
-      );
+        const userIdIndex = gsis.find(
+          gsi => gsi.IndexName === 'userId-timestamp-index'
+        );
+        const statusIndex = gsis.find(
+          gsi => gsi.IndexName === 'status-timestamp-index'
+        );
 
-      expect(response.Table!.SSEDescription).toBeDefined();
-      expect(response.Table!.SSEDescription!.Status).toBe('ENABLED');
-    }, testTimeout);
+        expect(userIdIndex).toBeDefined();
+        expect(statusIndex).toBeDefined();
+      },
+      testTimeout
+    );
+
+    test(
+      'DynamoDB table has encryption enabled',
+      async () => {
+        if (!requiresOutputs()) return;
+
+        const tableName = outputs.DynamoDBTableName;
+        const response = await dynamodb.send(
+          new DescribeTableCommand({ TableName: tableName })
+        );
+
+        expect(response.Table!.SSEDescription).toBeDefined();
+        expect(response.Table!.SSEDescription!.Status).toBe('ENABLED');
+      },
+      testTimeout
+    );
   });
 
   describe('Lambda Functions', () => {
-    test('Realtime Lambda function exists with correct configuration', async () => {
-      if (!requiresOutputs()) return;
+    test(
+      'Realtime Lambda function exists with correct configuration',
+      async () => {
+        if (!requiresOutputs()) return;
 
-      const functionName = `${namingPrefix}-realtime`;
-      const response = await lambda.send(
-        new GetFunctionCommand({ FunctionName: functionName })
-      );
+        const functionName = `${namingPrefix}-realtime`;
+        const response = await lambda.send(
+          new GetFunctionCommand({ FunctionName: functionName })
+        );
 
-      const func = response.Configuration!;
-      expect(func).toBeDefined();
-      expect(func.FunctionName).toBe(functionName);
-      expect(func.Runtime).toBe('nodejs18.x');
-      expect(func.Architectures).toEqual(['arm64']);
-      expect(func.MemorySize).toBe(768);
-      expect(func.Timeout).toBe(10);
-      // ReservedConcurrentExecutions is available in GetFunctionConfiguration
-      expect(func.TracingConfig?.Mode).toBe('Active');
-      expect(func.VpcConfig).toBeDefined();
-    }, testTimeout);
+        const func = response.Configuration!;
+        expect(func).toBeDefined();
+        expect(func.FunctionName).toBe(functionName);
+        expect(func.Runtime).toBe('nodejs18.x');
+        expect(func.Architectures).toEqual(['arm64']);
+        expect(func.MemorySize).toBe(768);
+        expect(func.Timeout).toBe(10);
+        // ReservedConcurrentExecutions is available in GetFunctionConfiguration
+        expect(func.TracingConfig?.Mode).toBe('Active');
+        expect(func.VpcConfig).toBeDefined();
+      },
+      testTimeout
+    );
 
-    test('Batch Lambda function exists with correct configuration', async () => {
-      if (!requiresOutputs()) return;
+    test(
+      'Batch Lambda function exists with correct configuration',
+      async () => {
+        if (!requiresOutputs()) return;
 
-      const functionName = `${namingPrefix}-batch`;
-      const response = await lambda.send(
-        new GetFunctionCommand({ FunctionName: functionName })
-      );
+        const functionName = `${namingPrefix}-batch`;
+        const response = await lambda.send(
+          new GetFunctionCommand({ FunctionName: functionName })
+        );
 
-      const func = response.Configuration!;
-      expect(func).toBeDefined();
-      expect(func.FunctionName).toBe(functionName);
-      expect(func.Runtime).toBe('nodejs18.x');
-      expect(func.Architectures).toEqual(['arm64']);
-      expect(func.MemorySize).toBe(1024);
-      expect(func.Timeout).toBe(300);
-      // ReservedConcurrentExecutions is available in GetFunctionConfiguration
-      expect(func.TracingConfig?.Mode).toBe('Active');
-      expect(func.VpcConfig).toBeDefined();
-    }, testTimeout);
+        const func = response.Configuration!;
+        expect(func).toBeDefined();
+        expect(func.FunctionName).toBe(functionName);
+        expect(func.Runtime).toBe('nodejs18.x');
+        expect(func.Architectures).toEqual(['arm64']);
+        expect(func.MemorySize).toBe(1024);
+        expect(func.Timeout).toBe(300);
+        // ReservedConcurrentExecutions is available in GetFunctionConfiguration
+        expect(func.TracingConfig?.Mode).toBe('Active');
+        expect(func.VpcConfig).toBeDefined();
+      },
+      testTimeout
+    );
 
-    test('Lambda functions have log groups with retention', async () => {
-      if (!requiresOutputs()) return;
+    test(
+      'Lambda functions have log groups with retention',
+      async () => {
+        if (!requiresOutputs()) return;
 
-      const logGroupsResponse = await logs.send(
-        new DescribeLogGroupsCommand({
-          logGroupNamePrefix: `/aws/lambda/${namingPrefix}`,
-        })
-      );
+        const logGroupsResponse = await logs.send(
+          new DescribeLogGroupsCommand({
+            logGroupNamePrefix: `/aws/lambda/${namingPrefix}`,
+          })
+        );
 
-      const logGroups = logGroupsResponse.logGroups || [];
-      expect(logGroups.length).toBeGreaterThanOrEqual(2);
+        const logGroups = logGroupsResponse.logGroups || [];
+        expect(logGroups.length).toBeGreaterThanOrEqual(2);
 
-      const realtimeLogGroup = logGroups.find(
-        (lg) => lg.logGroupName?.includes('realtime')
-      );
-      const batchLogGroup = logGroups.find(
-        (lg) => lg.logGroupName?.includes('batch')
-      );
+        const realtimeLogGroup = logGroups.find(lg =>
+          lg.logGroupName?.includes('realtime')
+        );
+        const batchLogGroup = logGroups.find(lg =>
+          lg.logGroupName?.includes('batch')
+        );
 
-      expect(realtimeLogGroup).toBeDefined();
-      expect(batchLogGroup).toBeDefined();
+        expect(realtimeLogGroup).toBeDefined();
+        expect(batchLogGroup).toBeDefined();
 
-      // Check retention (30 days)
-      if (realtimeLogGroup?.retentionInDays) {
-        expect(realtimeLogGroup.retentionInDays).toBe(30);
-      }
-    }, testTimeout);
+        // Check retention (30 days)
+        if (realtimeLogGroup?.retentionInDays) {
+          expect(realtimeLogGroup.retentionInDays).toBe(30);
+        }
+      },
+      testTimeout
+    );
   });
 
   describe('SQS Queues', () => {
-    test('Batch processing queue exists with correct configuration', async () => {
-      if (!requiresOutputs()) return;
+    test(
+      'Batch processing queue exists with correct configuration',
+      async () => {
+        if (!requiresOutputs()) return;
 
-      const queueName = `${namingPrefix}-batch`;
-      const queueUrlResponse = await sqs.send(
-        new GetQueueUrlCommand({ QueueName: queueName })
-      );
+        const queueName = `${namingPrefix}-batch`;
+        const queueUrlResponse = await sqs.send(
+          new GetQueueUrlCommand({ QueueName: queueName })
+        );
 
-      expect(queueUrlResponse.QueueUrl).toBeDefined();
+        expect(queueUrlResponse.QueueUrl).toBeDefined();
 
-      const attributesResponse = await sqs.send(
-        new GetQueueAttributesCommand({
-          QueueUrl: queueUrlResponse.QueueUrl,
-          AttributeNames: ['All'],
-        })
-      );
+        const attributesResponse = await sqs.send(
+          new GetQueueAttributesCommand({
+            QueueUrl: queueUrlResponse.QueueUrl,
+            AttributeNames: ['All'],
+          })
+        );
 
-      const attributes = attributesResponse.Attributes!;
-      expect(attributes.VisibilityTimeout).toBe('300');
-      expect(attributes.ReceiveMessageWaitTimeSeconds).toBe('20');
-      // MessageRetentionPeriod can vary, just check it's set
-      expect(attributes.MessageRetentionPeriod).toBeDefined();
-      expect(attributes.RedrivePolicy).toBeDefined(); // DLQ configured
-    }, testTimeout);
+        const attributes = attributesResponse.Attributes!;
+        expect(attributes.VisibilityTimeout).toBe('300');
+        expect(attributes.ReceiveMessageWaitTimeSeconds).toBe('20');
+        // MessageRetentionPeriod can vary, just check it's set
+        expect(attributes.MessageRetentionPeriod).toBeDefined();
+        expect(attributes.RedrivePolicy).toBeDefined(); // DLQ configured
+      },
+      testTimeout
+    );
 
-    test('Dead Letter Queue exists with correct configuration', async () => {
-      if (!requiresOutputs()) return;
+    test(
+      'Dead Letter Queue exists with correct configuration',
+      async () => {
+        if (!requiresOutputs()) return;
 
-      const queueName = `${namingPrefix}-dlq`;
-      const queueUrlResponse = await sqs.send(
-        new GetQueueUrlCommand({ QueueName: queueName })
-      );
+        const queueName = `${namingPrefix}-dlq`;
+        const queueUrlResponse = await sqs.send(
+          new GetQueueUrlCommand({ QueueName: queueName })
+        );
 
-      expect(queueUrlResponse.QueueUrl).toBeDefined();
+        expect(queueUrlResponse.QueueUrl).toBeDefined();
 
-      const attributesResponse = await sqs.send(
-        new GetQueueAttributesCommand({
-          QueueUrl: queueUrlResponse.QueueUrl,
-          AttributeNames: ['MessageRetentionPeriod'],
-        })
-      );
+        const attributesResponse = await sqs.send(
+          new GetQueueAttributesCommand({
+            QueueUrl: queueUrlResponse.QueueUrl,
+            AttributeNames: ['MessageRetentionPeriod'],
+          })
+        );
 
-      expect(attributesResponse.Attributes!.MessageRetentionPeriod).toBe('1209600'); // 14 days
-    }, testTimeout);
+        expect(attributesResponse.Attributes!.MessageRetentionPeriod).toBe(
+          '1209600'
+        ); // 14 days
+      },
+      testTimeout
+    );
   });
 
   describe('S3 Bucket', () => {
-    test('Transaction logs bucket exists with encryption', async () => {
-      if (!requiresOutputs()) return;
+    test(
+      'Transaction logs bucket exists with encryption',
+      async () => {
+        if (!requiresOutputs()) return;
 
-      const bucketName = `${namingPrefix}-logs-${process.env.CDK_DEFAULT_ACCOUNT || '342597974367'}-${region}`;
-      
-      // Check bucket location
-      const locationResponse = await s3.send(
-        new GetBucketLocationCommand({ Bucket: bucketName })
-      );
-      expect(locationResponse).toBeDefined();
+        const bucketName = `${namingPrefix}-logs-${process.env.CDK_DEFAULT_ACCOUNT || '342597974367'}-${region}`;
 
-      // Check encryption
-      const encryptionResponse = await s3.send(
-        new GetBucketEncryptionCommand({ Bucket: bucketName })
-      );
+        // Check bucket location
+        const locationResponse = await s3.send(
+          new GetBucketLocationCommand({ Bucket: bucketName })
+        );
+        expect(locationResponse).toBeDefined();
 
-      const rules =
-        encryptionResponse.ServerSideEncryptionConfiguration?.Rules || [];
-      expect(rules.length).toBeGreaterThan(0);
-    }, testTimeout);
+        // Check encryption
+        const encryptionResponse = await s3.send(
+          new GetBucketEncryptionCommand({ Bucket: bucketName })
+        );
 
-    test('S3 bucket has versioning enabled', async () => {
-      if (!requiresOutputs()) return;
+        const rules =
+          encryptionResponse.ServerSideEncryptionConfiguration?.Rules || [];
+        expect(rules.length).toBeGreaterThan(0);
+      },
+      testTimeout
+    );
 
-      const bucketName = `${namingPrefix}-logs-${process.env.CDK_DEFAULT_ACCOUNT || '342597974367'}-${region}`;
+    test(
+      'S3 bucket has versioning enabled',
+      async () => {
+        if (!requiresOutputs()) return;
 
-      const response = await s3.send(
-        new GetBucketVersioningCommand({ Bucket: bucketName })
-      );
+        const bucketName = `${namingPrefix}-logs-${process.env.CDK_DEFAULT_ACCOUNT || '342597974367'}-${region}`;
 
-      expect(response.Status).toBe('Enabled');
-    }, testTimeout);
+        const response = await s3.send(
+          new GetBucketVersioningCommand({ Bucket: bucketName })
+        );
 
-    test('S3 bucket blocks public access', async () => {
-      if (!requiresOutputs()) return;
+        expect(response.Status).toBe('Enabled');
+      },
+      testTimeout
+    );
 
-      const bucketName = `${namingPrefix}-logs-${process.env.CDK_DEFAULT_ACCOUNT || '342597974367'}-${region}`;
+    test(
+      'S3 bucket blocks public access',
+      async () => {
+        if (!requiresOutputs()) return;
 
-      const response = await s3.send(
-        new GetPublicAccessBlockCommand({ Bucket: bucketName })
-      );
+        const bucketName = `${namingPrefix}-logs-${process.env.CDK_DEFAULT_ACCOUNT || '342597974367'}-${region}`;
 
-      const config = response.PublicAccessBlockConfiguration;
-      expect(config?.BlockPublicAcls).toBe(true);
-      expect(config?.BlockPublicPolicy).toBe(true);
-      expect(config?.IgnorePublicAcls).toBe(true);
-      expect(config?.RestrictPublicBuckets).toBe(true);
-    }, testTimeout);
+        const response = await s3.send(
+          new GetPublicAccessBlockCommand({ Bucket: bucketName })
+        );
 
-    test('S3 bucket has lifecycle policies configured', async () => {
-      if (!requiresOutputs()) return;
+        const config = response.PublicAccessBlockConfiguration;
+        expect(config?.BlockPublicAcls).toBe(true);
+        expect(config?.BlockPublicPolicy).toBe(true);
+        expect(config?.IgnorePublicAcls).toBe(true);
+        expect(config?.RestrictPublicBuckets).toBe(true);
+      },
+      testTimeout
+    );
 
-      const bucketName = `${namingPrefix}-logs-${process.env.CDK_DEFAULT_ACCOUNT || '342597974367'}-${region}`;
+    test(
+      'S3 bucket has lifecycle policies configured',
+      async () => {
+        if (!requiresOutputs()) return;
 
-      const response = await s3.send(
-        new GetBucketLifecycleConfigurationCommand({ Bucket: bucketName })
-      );
+        const bucketName = `${namingPrefix}-logs-${process.env.CDK_DEFAULT_ACCOUNT || '342597974367'}-${region}`;
 
-      const rules = response.Rules || [];
-      expect(rules.length).toBeGreaterThan(0);
+        const response = await s3.send(
+          new GetBucketLifecycleConfigurationCommand({ Bucket: bucketName })
+        );
 
-      const glacierRule = rules.find((r) => r.ID === 'transition-to-glacier');
-      expect(glacierRule).toBeDefined();
-    }, testTimeout);
+        const rules = response.Rules || [];
+        expect(rules.length).toBeGreaterThan(0);
+
+        const glacierRule = rules.find(r => r.ID === 'transition-to-glacier');
+        expect(glacierRule).toBeDefined();
+      },
+      testTimeout
+    );
   });
 
   describe('API Gateway', () => {
-    test('API Gateway exists and is accessible', async () => {
-      if (!requiresOutputs()) return;
+    test(
+      'API Gateway exists and is accessible',
+      async () => {
+        if (!requiresOutputs()) return;
 
-      const apiEndpoint = outputs.APIEndpoint;
-      expect(apiEndpoint).toBeDefined();
+        const apiEndpoint = outputs.APIEndpoint;
+        expect(apiEndpoint).toBeDefined();
 
-      // Extract API ID from endpoint URL
-      const apiIdMatch = apiEndpoint.match(/https:\/\/([^.]+)\.execute-api/);
-      expect(apiIdMatch).toBeDefined();
+        // Extract API ID from endpoint URL
+        const apiIdMatch = apiEndpoint.match(/https:\/\/([^.]+)\.execute-api/);
+        expect(apiIdMatch).toBeDefined();
 
-      // Get API details
-      const apiResponse = await apigateway.send(
-        new GetRestApiCommand({ restApiId: apiIdMatch![1] })
-      );
+        // Get API details
+        const apiResponse = await apigateway.send(
+          new GetRestApiCommand({ restApiId: apiIdMatch![1] })
+        );
 
-      expect(apiResponse).toBeDefined();
-      expect(apiResponse.name).toBe(`${namingPrefix}-api`);
-    }, testTimeout);
+        expect(apiResponse).toBeDefined();
+        expect(apiResponse.name).toBe(`${namingPrefix}-api`);
+      },
+      testTimeout
+    );
 
-    test('API Gateway has correct stage configuration', async () => {
-      if (!requiresOutputs()) return;
+    test(
+      'API Gateway has correct stage configuration',
+      async () => {
+        if (!requiresOutputs()) return;
 
-      const apiEndpoint = outputs.APIEndpoint;
-      const apiIdMatch = apiEndpoint.match(/https:\/\/([^.]+)\.execute-api/);
-      const stageMatch = apiEndpoint.match(/execute-api\.[^/]+\/([^/]+)/);
+        const apiEndpoint = outputs.APIEndpoint;
+        const apiIdMatch = apiEndpoint.match(/https:\/\/([^.]+)\.execute-api/);
+        const stageMatch = apiEndpoint.match(/execute-api\.[^/]+\/([^/]+)/);
 
-      expect(stageMatch).toBeDefined();
-      const stageName = stageMatch![1];
+        expect(stageMatch).toBeDefined();
+        const stageName = stageMatch![1];
 
-      const stageResponse = await apigateway.send(
-        new GetStageCommand({
-          restApiId: apiIdMatch![1],
-          stageName: stageName,
-        })
-      );
+        const stageResponse = await apigateway.send(
+          new GetStageCommand({
+            restApiId: apiIdMatch![1],
+            stageName: stageName,
+          })
+        );
 
-      expect(stageResponse).toBeDefined();
-      expect(stageResponse.stageName).toBe(stageName);
-    }, testTimeout);
+        expect(stageResponse).toBeDefined();
+        expect(stageResponse.stageName).toBe(stageName);
+      },
+      testTimeout
+    );
 
-    test('API Gateway has realtime and async endpoints', async () => {
-      if (!requiresOutputs()) return;
+    test(
+      'API Gateway has realtime and async endpoints',
+      async () => {
+        if (!requiresOutputs()) return;
 
-      const apiEndpoint = outputs.APIEndpoint;
-      const apiIdMatch = apiEndpoint.match(/https:\/\/([^.]+)\.execute-api/);
+        const apiEndpoint = outputs.APIEndpoint;
+        const apiIdMatch = apiEndpoint.match(/https:\/\/([^.]+)\.execute-api/);
 
-      const resourcesResponse = await apigateway.send(
-        new GetResourcesCommand({ restApiId: apiIdMatch![1] })
-      );
+        const resourcesResponse = await apigateway.send(
+          new GetResourcesCommand({ restApiId: apiIdMatch![1] })
+        );
 
-      const resources = resourcesResponse.items || [];
-      const realtimeResource = resources.find(
-        (r) => r.pathPart === 'realtime'
-      );
-      const asyncResource = resources.find((r) => r.pathPart === 'async');
+        const resources = resourcesResponse.items || [];
+        const realtimeResource = resources.find(r => r.pathPart === 'realtime');
+        const asyncResource = resources.find(r => r.pathPart === 'async');
 
-      expect(realtimeResource).toBeDefined();
-      expect(asyncResource).toBeDefined();
-    }, testTimeout);
+        expect(realtimeResource).toBeDefined();
+        expect(asyncResource).toBeDefined();
+      },
+      testTimeout
+    );
   });
 
   describe('CloudWatch Alarms', () => {
-    test('Lambda duration alarm exists', async () => {
-      if (!requiresOutputs()) return;
+    test(
+      'Lambda duration alarm exists',
+      async () => {
+        if (!requiresOutputs()) return;
 
-      const alarmsResponse = await cloudwatch.send(
-        new DescribeAlarmsCommand({
-          AlarmNamePrefix: `${namingPrefix}-lambda-duration`,
-        })
-      );
+        const alarmsResponse = await cloudwatch.send(
+          new DescribeAlarmsCommand({
+            AlarmNamePrefix: `${namingPrefix}-lambda-duration`,
+          })
+        );
 
-      const alarms = alarmsResponse.MetricAlarms || [];
-      expect(alarms.length).toBeGreaterThan(0);
+        const alarms = alarmsResponse.MetricAlarms || [];
+        expect(alarms.length).toBeGreaterThan(0);
 
-      const alarm = alarms[0];
-      expect(alarm.AlarmName).toContain('lambda-duration');
-      expect(alarm.Threshold).toBe(1000);
-      expect(alarm.EvaluationPeriods).toBe(2);
-    }, testTimeout);
+        const alarm = alarms[0];
+        expect(alarm.AlarmName).toContain('lambda-duration');
+        expect(alarm.Threshold).toBe(1000);
+        expect(alarm.EvaluationPeriods).toBe(2);
+      },
+      testTimeout
+    );
 
-    test('Lambda error alarm exists', async () => {
-      if (!requiresOutputs()) return;
+    test(
+      'Lambda error alarm exists',
+      async () => {
+        if (!requiresOutputs()) return;
 
-      const alarmsResponse = await cloudwatch.send(
-        new DescribeAlarmsCommand({
-          AlarmNamePrefix: `${namingPrefix}-lambda-errors`,
-        })
-      );
+        const alarmsResponse = await cloudwatch.send(
+          new DescribeAlarmsCommand({
+            AlarmNamePrefix: `${namingPrefix}-lambda-errors`,
+          })
+        );
 
-      const alarms = alarmsResponse.MetricAlarms || [];
-      expect(alarms.length).toBeGreaterThan(0);
+        const alarms = alarmsResponse.MetricAlarms || [];
+        expect(alarms.length).toBeGreaterThan(0);
 
-      const alarm = alarms[0];
-      expect(alarm.AlarmName).toContain('lambda-errors');
-    }, testTimeout);
+        const alarm = alarms[0];
+        expect(alarm.AlarmName).toContain('lambda-errors');
+      },
+      testTimeout
+    );
 
-    test('DynamoDB throttle alarm exists', async () => {
-      if (!requiresOutputs()) return;
+    test(
+      'DynamoDB throttle alarm exists',
+      async () => {
+        if (!requiresOutputs()) return;
 
-      const alarmsResponse = await cloudwatch.send(
-        new DescribeAlarmsCommand({
-          AlarmNamePrefix: `${namingPrefix}-dynamodb-throttles`,
-        })
-      );
+        const alarmsResponse = await cloudwatch.send(
+          new DescribeAlarmsCommand({
+            AlarmNamePrefix: `${namingPrefix}-dynamodb-throttles`,
+          })
+        );
 
-      const alarms = alarmsResponse.MetricAlarms || [];
-      expect(alarms.length).toBeGreaterThan(0);
-    }, testTimeout);
+        const alarms = alarmsResponse.MetricAlarms || [];
+        expect(alarms.length).toBeGreaterThan(0);
+      },
+      testTimeout
+    );
 
-    test('DLQ messages alarm exists', async () => {
-      if (!requiresOutputs()) return;
+    test(
+      'DLQ messages alarm exists',
+      async () => {
+        if (!requiresOutputs()) return;
 
-      const alarmsResponse = await cloudwatch.send(
-        new DescribeAlarmsCommand({
-          AlarmNamePrefix: `${namingPrefix}-dlq-messages`,
-        })
-      );
+        const alarmsResponse = await cloudwatch.send(
+          new DescribeAlarmsCommand({
+            AlarmNamePrefix: `${namingPrefix}-dlq-messages`,
+          })
+        );
 
-      const alarms = alarmsResponse.MetricAlarms || [];
-      expect(alarms.length).toBeGreaterThan(0);
-    }, testTimeout);
+        const alarms = alarmsResponse.MetricAlarms || [];
+        expect(alarms.length).toBeGreaterThan(0);
+      },
+      testTimeout
+    );
   });
 
   describe('IAM Roles', () => {
-    test('Lambda functions have execution roles with correct policies', async () => {
-      if (!requiresOutputs()) return;
+    test(
+      'Lambda functions have execution roles with correct policies',
+      async () => {
+        if (!requiresOutputs()) return;
 
-      // Get Lambda functions to find their role ARNs
-      const realtimeFunctionName = `${namingPrefix}-realtime`;
-      const batchFunctionName = `${namingPrefix}-batch`;
+        // Get Lambda functions to find their role ARNs
+        const realtimeFunctionName = `${namingPrefix}-realtime`;
+        const batchFunctionName = `${namingPrefix}-batch`;
 
-      const realtimeResponse = await lambda.send(
-        new GetFunctionCommand({ FunctionName: realtimeFunctionName })
-      );
-      const batchResponse = await lambda.send(
-        new GetFunctionCommand({ FunctionName: batchFunctionName })
-      );
+        const realtimeResponse = await lambda.send(
+          new GetFunctionCommand({ FunctionName: realtimeFunctionName })
+        );
+        const batchResponse = await lambda.send(
+          new GetFunctionCommand({ FunctionName: batchFunctionName })
+        );
 
-      const realtimeRoleArn = realtimeResponse.Configuration!.Role!;
-      const batchRoleArn = batchResponse.Configuration!.Role!;
+        const realtimeRoleArn = realtimeResponse.Configuration!.Role!;
+        const batchRoleArn = batchResponse.Configuration!.Role!;
 
-      expect(realtimeRoleArn).toBeDefined();
-      expect(batchRoleArn).toBeDefined();
-      expect(realtimeRoleArn).not.toBe(batchRoleArn);
+        expect(realtimeRoleArn).toBeDefined();
+        expect(batchRoleArn).toBeDefined();
+        expect(realtimeRoleArn).not.toBe(batchRoleArn);
 
-      // Extract role name from ARN and verify it exists
-      const realtimeRoleName = realtimeRoleArn.split('/').pop()!;
-      const batchRoleName = batchRoleArn.split('/').pop()!;
+        // Extract role name from ARN and verify it exists
+        const realtimeRoleName = realtimeRoleArn.split('/').pop()!;
+        const batchRoleName = batchRoleArn.split('/').pop()!;
 
-      const realtimeRoleResponse = await iam.send(
-        new GetRoleCommand({ RoleName: realtimeRoleName })
-      );
-      expect(realtimeRoleResponse.Role).toBeDefined();
-      expect(realtimeRoleResponse.Role!.AssumeRolePolicyDocument).toBeDefined();
+        const realtimeRoleResponse = await iam.send(
+          new GetRoleCommand({ RoleName: realtimeRoleName })
+        );
+        expect(realtimeRoleResponse.Role).toBeDefined();
+        expect(
+          realtimeRoleResponse.Role!.AssumeRolePolicyDocument
+        ).toBeDefined();
 
-      const batchRoleResponse = await iam.send(
-        new GetRoleCommand({ RoleName: batchRoleName })
-      );
-      expect(batchRoleResponse.Role).toBeDefined();
+        const batchRoleResponse = await iam.send(
+          new GetRoleCommand({ RoleName: batchRoleName })
+        );
+        expect(batchRoleResponse.Role).toBeDefined();
 
-      // Check for managed policies on realtime role
-      const realtimePolicies = await iam.send(
-        new ListAttachedRolePoliciesCommand({ RoleName: realtimeRoleName })
-      );
-      expect(realtimePolicies.AttachedPolicies!.length).toBeGreaterThan(0);
-    }, testTimeout);
+        // Check for managed policies on realtime role
+        const realtimePolicies = await iam.send(
+          new ListAttachedRolePoliciesCommand({ RoleName: realtimeRoleName })
+        );
+        expect(realtimePolicies.AttachedPolicies!.length).toBeGreaterThan(0);
+      },
+      testTimeout
+    );
 
-    test('API Gateway CloudWatch role exists with correct policy', async () => {
-      if (!requiresOutputs()) return;
+    test(
+      'API Gateway CloudWatch role exists with correct policy',
+      async () => {
+        if (!requiresOutputs()) return;
 
-      // API Gateway CloudWatch role validation
-      // Note: API Gateway may use service-linked roles or roles managed automatically by CDK
-      // The specific role name pattern may vary, so we verify logging capability through API Gateway tests
-      // This test verifies that API Gateway is configured (which we test in API Gateway section)
-      
-      // API Gateway CloudWatch logging is verified through:
-      // 1. API Gateway exists and is accessible (tested in API Gateway section)
-      // 2. CloudWatch logs are generated (implicitly through API Gateway operations)
-      
-      // Since CDK manages API Gateway roles automatically, we don't fail if the role name doesn't match expected patterns
-      expect(true).toBe(true);
-    }, testTimeout);
+        // API Gateway CloudWatch role validation
+        // Note: API Gateway may use service-linked roles or roles managed automatically by CDK
+        // The specific role name pattern may vary, so we verify logging capability through API Gateway tests
+        // This test verifies that API Gateway is configured (which we test in API Gateway section)
+
+        // API Gateway CloudWatch logging is verified through:
+        // 1. API Gateway exists and is accessible (tested in API Gateway section)
+        // 2. CloudWatch logs are generated (implicitly through API Gateway operations)
+
+        // Since CDK manages API Gateway roles automatically, we don't fail if the role name doesn't match expected patterns
+        expect(true).toBe(true);
+      },
+      testTimeout
+    );
   });
 
   describe('Resource Tagging', () => {
-    test('VPC has appropriate tags', async () => {
-      if (!requiresOutputs()) return;
+    test(
+      'VPC has appropriate tags',
+      async () => {
+        if (!requiresOutputs()) return;
 
-      const vpcsResponse = await ec2.send(
-        new DescribeVpcsCommand({
-          Filters: [
-            { Name: 'tag:Name', Values: [`${namingPrefix}-vpc`] },
-          ],
-        })
-      );
+        const vpcsResponse = await ec2.send(
+          new DescribeVpcsCommand({
+            Filters: [{ Name: 'tag:Name', Values: [`${namingPrefix}-vpc`] }],
+          })
+        );
 
-      const vpcId = vpcsResponse.Vpcs![0].VpcId!;
+        const vpcId = vpcsResponse.Vpcs![0].VpcId!;
 
-      const tagsResponse = await ec2.send(
-        new DescribeTagsCommand({
-          Filters: [{ Name: 'resource-id', Values: [vpcId] }],
-        })
-      );
+        const tagsResponse = await ec2.send(
+          new DescribeTagsCommand({
+            Filters: [{ Name: 'resource-id', Values: [vpcId] }],
+          })
+        );
 
-      const tags = tagsResponse.Tags || [];
-      const tagMap = tags.reduce(
-        (acc: any, tag: any) => {
-          acc[tag.Key!] = tag.Value!;
-          return acc;
-        },
-        {} as Record<string, string>
-      );
+        const tags = tagsResponse.Tags || [];
+        const tagMap = tags.reduce(
+          (acc: any, tag: any) => {
+            acc[tag.Key!] = tag.Value!;
+            return acc;
+          },
+          {} as Record<string, string>
+        );
 
-      expect(tagMap['Component']).toBe('optimization-stack');
-      expect(tagMap['Environment']).toBe(environmentSuffix);
-    }, testTimeout);
+        expect(tagMap['Component']).toBe('optimization-stack');
+        expect(tagMap['Environment']).toBe(environmentSuffix);
+      },
+      testTimeout
+    );
   });
 });

@@ -322,14 +322,18 @@ export class TapStack extends cdk.Stack {
     transactionLogsBucket.grantWrite(batchLambda);
 
     // 🔹 CloudWatch Logs role for API Gateway (required for logging)
-    const apiGatewayCloudWatchRole = new iam.Role(this, 'ApiGatewayCloudWatchRole', {
-      assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/AmazonAPIGatewayPushToCloudWatchLogs'
-        ),
-      ],
-    });
+    const apiGatewayCloudWatchRole = new iam.Role(
+      this,
+      'ApiGatewayCloudWatchRole',
+      {
+        assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'service-role/AmazonAPIGatewayPushToCloudWatchLogs'
+          ),
+        ],
+      }
+    );
 
     // Set the CloudWatch role for API Gateway account settings
     new apigateway.CfnAccount(this, 'ApiGatewayAccount', {
