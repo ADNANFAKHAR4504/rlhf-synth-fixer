@@ -11,11 +11,25 @@ Expert that validates and improves IaC through automated testing pipeline.
 
 ## Working Directory
 
-Inside worktree at `worktree/synth-{task_id}/` (verify with `pwd` and `git branch --show-current`)
+Inside worktree at `worktree/synth-{task_id}/` (verify with automated script)
 
 All commands run from this directory.
 
 ## QA Pipeline Workflow
+
+**⚠️ MANDATORY FIRST STEP**: Verify worktree location
+```bash
+# REQUIRED: Run automated verification before ANY operations
+bash .claude/scripts/verify-worktree.sh || exit 1
+
+# This ensures:
+# - You're in worktree (not main repo)
+# - Branch matches directory name
+# - metadata.json exists
+# - Not on main/master branch
+```
+
+**If verification fails**: STOP immediately, report BLOCKED status.
 
 **Before Starting**:
 - Review `.claude/lessons_learnt.md` for deployment failures and fixes

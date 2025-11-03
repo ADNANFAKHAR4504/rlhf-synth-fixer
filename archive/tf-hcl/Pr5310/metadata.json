@@ -1,0 +1,43 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "5293",
+  "team": "5",
+  "startedAt": "2025-10-29T09:07:25.702Z",
+  "subtask": "Serverless Payment Webhook Processing System",
+  "subject_labels": [
+    "API Gateway",
+    "Lambda Functions",
+    "DynamoDB",
+    "S3 Storage",
+    "SQS",
+    "CloudWatch Monitoring",
+    "Secrets Manager",
+    "X-Ray Tracing",
+    "IAM Roles and Policies",
+    "Serverless Architecture"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "SQS",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "Secrets Manager",
+    "IAM",
+    "X-Ray",
+    "SNS"
+  ],
+  "training_quality": 10,
+  "background": "This is a comprehensive serverless payment webhook processing system for a fintech startup handling webhooks from multiple payment providers (Stripe, PayPal, and Square) at scale. The system is designed to handle 10,000+ webhooks per minute with sub-second response times while maintaining PCI compliance. It implements a multi-file Terraform architecture with complete separation of concerns across 17 Terraform files. The infrastructure includes API Gateway with JSON schema validation for all POST endpoints, three provider-specific Lambda validators, a central processor function with DLQ support, a query function, DynamoDB with two GSIs for efficient querying, S3 buckets with lifecycle policies for raw and processed data, SQS dead letter queue, Secrets Manager for webhook signing secrets, and comprehensive CloudWatch monitoring with 15+ alarms. All Lambda functions use ARM64 architecture for cost optimization, X-Ray tracing is enabled across all services, and the environment_suffix pattern ensures unique resource naming. The system demonstrates advanced patterns including async Lambda invocations, signature validation, data normalization across providers, point-in-time recovery, and production-ready monitoring and alerting.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raaj1021",
+  "dockerS3Location": ""
+}
