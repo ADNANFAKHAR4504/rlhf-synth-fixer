@@ -154,7 +154,7 @@ export class TapStack extends TerraformStack {
 
     // IAM Role for Update Location Lambda
     const updateLocationRole = new IamRole(this, 'UpdateLocationRole', {
-      name: `update-location-role-${environmentSuffix}`,
+      namePrefix: `update-location-role-${environmentSuffix}-`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -175,7 +175,7 @@ export class TapStack extends TerraformStack {
 
     // IAM Policy for Update Location Lambda
     const updateLocationPolicy = new IamPolicy(this, 'UpdateLocationPolicy', {
-      name: `update-location-policy-${environmentSuffix}`,
+      namePrefix: `update-location-policy-${environmentSuffix}-`,
       description: 'Policy for update location Lambda function',
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -228,7 +228,7 @@ export class TapStack extends TerraformStack {
 
     // IAM Role for Get Location Lambda
     const getLocationRole = new IamRole(this, 'GetLocationRole', {
-      name: `get-location-role-${environmentSuffix}`,
+      namePrefix: `get-location-role-${environmentSuffix}-`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -249,7 +249,7 @@ export class TapStack extends TerraformStack {
 
     // IAM Policy for Get Location Lambda
     const getLocationPolicy = new IamPolicy(this, 'GetLocationPolicy', {
-      name: `get-location-policy-${environmentSuffix}`,
+      namePrefix: `get-location-policy-${environmentSuffix}-`,
       description: 'Policy for get location Lambda function',
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -302,7 +302,7 @@ export class TapStack extends TerraformStack {
 
     // IAM Role for Get History Lambda
     const getHistoryRole = new IamRole(this, 'GetHistoryRole', {
-      name: `get-history-role-${environmentSuffix}`,
+      namePrefix: `get-history-role-${environmentSuffix}-`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -323,7 +323,7 @@ export class TapStack extends TerraformStack {
 
     // IAM Policy for Get History Lambda
     const getHistoryPolicy = new IamPolicy(this, 'GetHistoryPolicy', {
-      name: `get-history-policy-${environmentSuffix}`,
+      namePrefix: `get-history-policy-${environmentSuffix}-`,
       description: 'Policy for get history Lambda function',
       policy: JSON.stringify({
         Version: '2012-10-17',

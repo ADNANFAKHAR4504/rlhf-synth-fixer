@@ -1,5 +1,19 @@
 // CDKTF Test Setup
-const matchesValue = (actual, expected) => {
+const resolveActual = (resource, key) => {
+  if (Object.prototype.hasOwnProperty.call(resource, key)) {
+    return resource[key];
+  }
+
+  if (key === 'name' && Object.prototype.hasOwnProperty.call(resource, 'name_prefix')) {
+    return resource.name_prefix;
+  }
+
+  return undefined;
+};
+
+const matchesValue = (resource, key, expected) => {
+  const actual = resolveActual(resource, key);
+
   if (
     expected &&
     typeof expected === 'object' &&
@@ -59,7 +73,7 @@ expect.extend({
 
       for (const resource of resourcesOfType) {
         const matches = Object.entries(properties).every(([key, value]) =>
-          matchesValue(resource[key], value)
+          matchesValue(resource, key, value)
         );
 
         if (matches) {
