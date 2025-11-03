@@ -1113,7 +1113,7 @@ echo "Bastion host initialized successfully"
     const _insightsQuery1 = new aws.cloudwatch.QueryDefinition(
       `failed-ssh-attempts-${environmentSuffix}`,
       {
-        name: `Failed SSH Attempts - ${environmentSuffix}`,
+        name: `Failed SSH Attempts - ${environmentSuffix}-${uniqueId}`,
         logGroupNames: [bastionLogGroup.name],
         queryString: `fields @timestamp, @message
 | filter @message like /Failed password/
@@ -1127,7 +1127,7 @@ echo "Bastion host initialized successfully"
     const _insightsQuery2 = new aws.cloudwatch.QueryDefinition(
       `rds-slow-queries-${environmentSuffix}`,
       {
-        name: `RDS Slow Queries - ${environmentSuffix}`,
+        name: `RDS Slow Queries - ${environmentSuffix}-${uniqueId}`,
         logGroupNames: [rdsLogGroup.name],
         queryString: `fields @timestamp, @message
 | filter @message like /Query_time/
@@ -1143,7 +1143,7 @@ echo "Bastion host initialized successfully"
     const _insightsQuery3 = new aws.cloudwatch.QueryDefinition(
       `database-connection-errors-${environmentSuffix}`,
       {
-        name: `Database Connection Errors - ${environmentSuffix}`,
+        name: `Database Connection Errors - ${environmentSuffix}-${uniqueId}`,
         logGroupNames: [rdsLogGroup.name],
         queryString: `fields @timestamp, @message
 | filter @message like /ERROR/ or @message like /FATAL/
