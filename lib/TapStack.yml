@@ -1235,3 +1235,153 @@ Outputs:
     Value: !Ref KMSKey
     Export:
       Name: !Sub '${EnvironmentName}-KMS-Key'
+
+  KMSKeyArn:
+    Description: KMS Key ARN for encryption
+    Value: !GetAtt KMSKey.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-KMS-Key-Arn'
+
+  DBSecretArn:
+    Description: ARN of the database password secret
+    Value: !Ref DBPasswordSecret
+    Export:
+      Name: !Sub '${EnvironmentName}-DB-Secret-ARN'
+
+  LoggingBucketName:
+    Description: Name of the logging S3 bucket
+    Value: !Ref LoggingBucket
+    Export:
+      Name: !Sub '${EnvironmentName}-Logging-Bucket'
+
+  AutoScalingGroupName:
+    Description: Name of the Auto Scaling Group
+    Value: !Ref AutoScalingGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-ASG-Name'
+
+  LaunchTemplateId:
+    Description: ID of the Launch Template
+    Value: !Ref LaunchTemplate
+    Export:
+      Name: !Sub '${EnvironmentName}-Launch-Template-ID'
+
+  EC2SecurityGroupId:
+    Description: ID of the EC2 Security Group
+    Value: !Ref EC2SecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-EC2-SG-ID'
+
+  RDSSecurityGroupId:
+    Description: ID of the RDS Security Group
+    Value: !Ref RDSSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-RDS-SG-ID'
+
+  ALBSecurityGroupId:
+    Description: ID of the ALB Security Group
+    Value: !Ref ALBSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-ALB-SG-ID'
+
+  LambdaSecurityGroupId:
+    Description: ID of the Lambda Security Group
+    Value: !Ref LambdaSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-Lambda-SG-ID'
+
+  TargetGroupArn:
+    Description: ARN of the ALB Target Group
+    Value: !Ref ALBTargetGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-Target-Group-ARN'
+
+  CleanupLambdaArn:
+    Description: ARN of the Cleanup Lambda Function
+    Value: !GetAtt CleanupLambda.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-Cleanup-Lambda-ARN'
+
+  CloudTrailArn:
+    Description: ARN of the CloudTrail
+    Value: !GetAtt CloudTrail.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-CloudTrail-ARN'
+
+  GuardDutyDetectorId:
+    Description: ID of the GuardDuty Detector
+    Value: !Ref GuardDutyDetector
+    Export:
+      Name: !Sub '${EnvironmentName}-GuardDuty-Detector-ID'
+
+  WebACLArn:
+    Description: ARN of the WAF WebACL
+    Value: !GetAtt WebACL.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-WebACL-ARN'
+
+  HighCPUAlarmName:
+    Description: Name of the High CPU CloudWatch Alarm
+    Value: !Ref HighCPUAlarm
+    Export:
+      Name: !Sub '${EnvironmentName}-High-CPU-Alarm'
+
+  RDSStorageAlarmName:
+    Description: Name of the RDS Storage CloudWatch Alarm
+    Value: !Ref RDSStorageAlarm
+    Export:
+      Name: !Sub '${EnvironmentName}-RDS-Storage-Alarm'
+
+  PrivateSubnet1Id:
+    Description: ID of Private Subnet 1
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${EnvironmentName}-Private-Subnet-1'
+
+  PrivateSubnet2Id:
+    Description: ID of Private Subnet 2
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${EnvironmentName}-Private-Subnet-2'
+
+  PublicSubnet1Id:
+    Description: ID of Public Subnet 1
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${EnvironmentName}-Public-Subnet-1'
+
+  PublicSubnet2Id:
+    Description: ID of Public Subnet 2
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub '${EnvironmentName}-Public-Subnet-2'
+
+  DBSubnetGroupName:
+    Description: Name of the RDS DB Subnet Group
+    Value: !Ref DBSubnetGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-DB-Subnet-Group'
+
+  EC2RoleArn:
+    Description: ARN of the EC2 IAM Role
+    Value: !GetAtt EC2Role.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-EC2-Role-ARN'
+
+  LambdaRoleArn:
+    Description: ARN of the Lambda IAM Role
+    Value: !GetAtt LambdaRole.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-Lambda-Role-ARN'
+
+  CloudFrontOAIId:
+    Description: ID of the CloudFront Origin Access Identity
+    Value: !Ref CloudFrontOAI
+    Export:
+      Name: !Sub '${EnvironmentName}-CloudFront-OAI-ID'
+
+  CleanupScheduleArn:
+    Description: ARN of the EventBridge Cleanup Schedule
+    Value: !GetAtt CleanupSchedule.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-Cleanup-Schedule-ARN'
