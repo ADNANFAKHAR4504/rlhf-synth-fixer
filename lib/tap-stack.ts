@@ -204,7 +204,7 @@ export class TapStack extends pulumi.ComponentResource {
       `config-role-policy-${args.environmentSuffix}`,
       {
         role: configRole.name,
-        policyArn: 'arn:aws:iam::aws:policy/service-role/ConfigRole',
+        policyArn: 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole',
       },
       { parent: this }
     );
