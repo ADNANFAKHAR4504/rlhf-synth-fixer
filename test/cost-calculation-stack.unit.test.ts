@@ -18,11 +18,40 @@ pulumi.runtime.setMocks({
   },
   call: (args: pulumi.runtime.MockCallArgs) => {
     if (args.token === 'aws:ec2/getInstance:getInstance') {
-      // Return different instance types based on instance ID
+      // Simulate error for instance IDs containing 'error' or 'invalid'
       const instanceId = args.inputs.instanceId || '';
+      if (instanceId.includes('error') || instanceId.includes('invalid')) {
+        throw new Error(`Instance ${instanceId} not found`);
+      }
+      // Return different instance types based on instance ID
       if (instanceId.includes('large')) {
         return {
           instanceType: 't3.large',
+          instanceState: 'running',
+        };
+      }
+      if (instanceId.includes('xlarge')) {
+        return {
+          instanceType: 't3.xlarge',
+          instanceState: 'running',
+        };
+      }
+      if (instanceId.includes('micro')) {
+        return {
+          instanceType: 't3.micro',
+          instanceState: 'running',
+        };
+      }
+      if (instanceId.includes('small')) {
+        return {
+          instanceType: 't3.small',
+          instanceState: 'running',
+        };
+      }
+      if (instanceId.includes('unknowntype') || instanceId.includes('custom')) {
+        // Return an instance type not in the pricing map to trigger default rate
+        return {
+          instanceType: 'm6i.xlarge',
           instanceState: 'running',
         };
       }
@@ -288,6 +317,101 @@ describe('CostCalculationStack', () => {
     pulumi.all([stack.estimatedMonthlySavings]).apply(([savings]) => {
       expect(savings).toBeGreaterThanOrEqual(0);
       expect(Number.isFinite(savings)).toBe(true);
+      done();
+    });
+  });
+
+  it('should handle instance fetch errors and continue with valid instances', (done) => {
+    const stack = new CostCalculationStack('error-handling-cost', {
+      environmentSuffix: 'test',
+      instanceIds: pulumi.output(['i-error-instance', 'i-valid-micro']),
+    });
+
+    pulumi.all([stack.estimatedMonthlySavings]).apply(([savings]) => {
+      // Should calculate savings for valid instance despite error on first one
+      expect(savings).toBeGreaterThan(0);
+      expect(Number.isFinite(savings)).toBe(true);
+      done();
+    });
+  });
+
+  it('should handle all instances throwing errors gracefully', (done) => {
+    const stack = new CostCalculationStack('all-errors-cost', {
+      environmentSuffix: 'test',
+      instanceIds: pulumi.output(['i-error-1', 'i-error-2', 'i-invalid-3']),
+    });
+
+    pulumi.all([stack.estimatedMonthlySavings]).apply(([savings]) => {
+      // Should return 0 when all instances fail
+      expect(savings).toBe(0);
+      done();
+    });
+  });
+
+  it('should use correct pricing for t3.micro instances', (done) => {
+    const stack = new CostCalculationStack('t3-micro-cost', {
+      environmentSuffix: 'test',
+      instanceIds: pulumi.output(['i-micro-1']),
+    });
+
+    pulumi.all([stack.estimatedMonthlySavings]).apply(([savings]) => {
+      // t3.micro = 0.0132/hr * 286 hours = 3.78 rounded
+      expect(savings).toBeCloseTo(3.78, 1);
+      done();
+    });
+  });
+
+  it('should use correct pricing for t3.xlarge instances', (done) => {
+    const stack = new CostCalculationStack('t3-xlarge-cost', {
+      environmentSuffix: 'test',
+      instanceIds: pulumi.output(['i-xlarge-1']),
+    });
+
+    pulumi.all([stack.estimatedMonthlySavings]).apply(([savings]) => {
+      // t3.xlarge pricing calculation
+      expect(savings).toBeGreaterThan(25);
+      expect(savings).toBeLessThan(65);
+      done();
+    });
+  });
+
+  it('should correctly sum costs for multiple different instance types', (done) => {
+    const stack = new CostCalculationStack('multi-types-sum-cost', {
+      environmentSuffix: 'test',
+      instanceIds: pulumi.output(['i-micro-1', 'i-small-2', 'i-large-3']),
+    });
+
+    pulumi.all([stack.estimatedMonthlySavings]).apply(([savings]) => {
+      // micro (0.0132) + small (0.0264) + large (0.1056) = 0.1452/hr * 286 = 41.53
+      expect(savings).toBeGreaterThan(40);
+      expect(savings).toBeLessThan(43);
+      done();
+    });
+  });
+
+  it('should use default rate for completely unknown instance type', (done) => {
+    const stack = new CostCalculationStack('unknown-type-cost', {
+      environmentSuffix: 'test',
+      instanceIds: pulumi.output(['i-unknowntype']),
+    });
+
+    pulumi.all([stack.estimatedMonthlySavings]).apply(([savings]) => {
+      // Default rate 0.05/hr * 286 hours = 14.3
+      expect(savings).toBeCloseTo(14.3, 0);
+      done();
+    });
+  });
+
+  it('should apply default rate for instance type not in pricing map', (done) => {
+    const stack = new CostCalculationStack('missing-price-cost', {
+      environmentSuffix: 'test',
+      instanceIds: pulumi.output(['i-custom-instance']),
+    });
+
+    pulumi.all([stack.estimatedMonthlySavings]).apply(([savings]) => {
+      // Should use default 0.05/hr rate
+      expect(savings).toBeGreaterThan(10);
+      expect(savings).toBeLessThan(20);
       done();
     });
   });

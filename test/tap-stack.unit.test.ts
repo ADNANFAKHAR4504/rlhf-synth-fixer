@@ -6,6 +6,9 @@
 import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
 
+// Variable to control region mock behavior
+let mockRegion: string | null = 'ap-southeast-1';
+
 pulumi.runtime.setMocks({
   newResource: (args: pulumi.runtime.MockResourceArgs): {
     id: string;
@@ -29,8 +32,14 @@ pulumi.runtime.setMocks({
         instanceState: 'running',
       };
     } else if (args.token === 'aws:getRegion:getRegion') {
+      if (mockRegion === null) {
+        // Simulate no region configured
+        return {
+          name: undefined,
+        };
+      }
       return {
-        name: 'ap-southeast-1',
+        name: mockRegion,
       };
     }
     return args.inputs;
@@ -193,5 +202,53 @@ describe('TapStack', () => {
         done();
       }
     );
+  });
+
+  it('should use fallback region when aws.config.region is undefined', (done) => {
+    // Temporarily set mockRegion to null to test fallback
+    const originalMockRegion = mockRegion;
+    mockRegion = null;
+
+    const fallbackStack = new TapStack('fallback-region-stack', {
+      environmentSuffix: 'fallback',
+    });
+
+    pulumi.all([fallbackStack.urn]).apply(([urn]) => {
+      expect(urn).toBeDefined();
+      expect(urn).toContain('TapStack');
+      // Restore original mockRegion
+      mockRegion = originalMockRegion;
+      done();
+    });
+  });
+
+  it('should work with us-east-1 region', (done) => {
+    const originalMockRegion = mockRegion;
+    mockRegion = 'us-east-1';
+
+    const usEastStack = new TapStack('us-east-stack', {
+      environmentSuffix: 'useast',
+    });
+
+    pulumi.all([usEastStack.urn]).apply(([urn]) => {
+      expect(urn).toBeDefined();
+      mockRegion = originalMockRegion;
+      done();
+    });
+  });
+
+  it('should work with eu-west-1 region', (done) => {
+    const originalMockRegion = mockRegion;
+    mockRegion = 'eu-west-1';
+
+    const euStack = new TapStack('eu-west-stack', {
+      environmentSuffix: 'eu',
+    });
+
+    pulumi.all([euStack.urn]).apply(([urn]) => {
+      expect(urn).toBeDefined();
+      mockRegion = originalMockRegion;
+      done();
+    });
   });
 });
