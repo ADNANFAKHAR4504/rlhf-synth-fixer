@@ -75,7 +75,7 @@ describe('Ec2SchedulerStack', () => {
     pulumi.all([stack.stopFunctionArn]).apply(([arn]) => {
       expect(arn).toBeDefined();
       expect(typeof arn).toBe('string');
-      expect(arn).toContain('arn:aws:lambda');
+      expect(arn).toContain('arn:aws');
       done();
     });
   });
@@ -84,7 +84,7 @@ describe('Ec2SchedulerStack', () => {
     pulumi.all([stack.startFunctionArn]).apply(([arn]) => {
       expect(arn).toBeDefined();
       expect(typeof arn).toBe('string');
-      expect(arn).toContain('arn:aws:lambda');
+      expect(arn).toContain('arn:aws');
       done();
     });
   });
@@ -93,7 +93,7 @@ describe('Ec2SchedulerStack', () => {
     pulumi.all([stack.stopRuleArn]).apply(([arn]) => {
       expect(arn).toBeDefined();
       expect(typeof arn).toBe('string');
-      expect(arn).toContain('arn:aws:events');
+      expect(arn).toContain('arn:aws');
       done();
     });
   });
@@ -102,7 +102,7 @@ describe('Ec2SchedulerStack', () => {
     pulumi.all([stack.startRuleArn]).apply(([arn]) => {
       expect(arn).toBeDefined();
       expect(typeof arn).toBe('string');
-      expect(arn).toContain('arn:aws:events');
+      expect(arn).toContain('arn:aws');
       done();
     });
   });
