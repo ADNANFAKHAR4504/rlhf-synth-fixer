@@ -1,0 +1,30 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-21T08:58:52.914604+00:00",
+  "subtask": "Infrastructure Analysis/Monitoring",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "po_id": "7544124524",
+  "aws_services": [
+    "Kinesis Data Streams",
+    "ECS Fargate",
+    "ElastiCache Redis",
+    "RDS Aurora PostgreSQL",
+    "API Gateway",
+    "EFS",
+    "Secrets Manager"
+  ],
+  "training_quality": 9.5,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

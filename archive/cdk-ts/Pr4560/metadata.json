@@ -1,0 +1,36 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "356250",
+  "team": "2",
+  "startedAt": "2025-10-15T18:33:14.098Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "Build a highly secure, fully serverless Global Payments Gateway for a bank with compliance requirements and complete regional failover capability between us-east-1 and us-east-2",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "DynamoDB Global Table",
+    "Lambda",
+    "API Gateway",
+    "CloudFront",
+    "S3",
+    "Route 53",
+    "KMS",
+    "WAF",
+    "VPC",
+    "Application Load Balancer",
+    "Network Load Balancer",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}

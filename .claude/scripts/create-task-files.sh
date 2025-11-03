@@ -58,19 +58,19 @@ csv_to_json() {
     
     {
         n = parse_csv_line($0, fields)
-        
-        # CSV header: task_id,status,platform,difficulty,subtask,background,problem,language,environment,constraints,subject_labels
+
+        # CSV header: task_id,status,platform,language,difficulty,subtask,subject_labels,problem,background,environment,constraints
         task_id = fields[1]
         status = fields[2]
         platform = fields[3]
-        difficulty = fields[4]
-        subtask = fields[5]
-        background = fields[6]
-        problem = fields[7]
-        language = fields[8]
-        environment = fields[9]
-        constraints = fields[10]
-        subject_labels = fields[11]
+        language = fields[4]
+        difficulty = fields[5]
+        subtask = fields[6]
+        subject_labels = fields[7]
+        problem = fields[8]
+        background = fields[9]
+        environment = fields[10]
+        constraints = fields[11]
         
         # Clean quotes from fields
         gsub(/^"|"$/, "", task_id)
@@ -115,13 +115,29 @@ fi
 
 # Extract fields using grep (no jq dependency)
 TASK_ID=$(json_val "$TASK_JSON" "task_id")
+# Convert to lowercase first (CRITICAL: platform and language must be lowercase)
 PLATFORM=$(json_val "$TASK_JSON" "platform" | tr '[:upper:]' '[:lower:]')
 LANGUAGE=$(json_val "$TASK_JSON" "language" | tr '[:upper:]' '[:lower:]')
 DIFFICULTY=$(json_val "$TASK_JSON" "difficulty" | tr '[:upper:]' '[:lower:]')
 SUBTASK=$(json_val "$TASK_JSON" "subtask")
 
+# Normalize platform to match CLI tool format (must be lowercase abbreviated form)
+case "$PLATFORM" in
+    cloudformation) PLATFORM="cfn" ;;
+    # cdk, cdktf, pulumi, tf, cfn remain as-is (already lowercase)
+esac
+
+# Normalize language to match CLI tool format (must be lowercase abbreviated form)
+case "$LANGUAGE" in
+    typescript) LANGUAGE="ts" ;;
+    python) LANGUAGE="py" ;;
+    javascript) LANGUAGE="js" ;;
+    terraform) LANGUAGE="hcl" ;;
+    # go, java, yaml, json, hcl remain as-is (already lowercase)
+esac
+
 # CRITICAL: Use exact difficulty value as complexity (no mapping)
-# This ensures PR body shows the same complexity as tasks.csv
+# This ensures PR body shows the same complexity as .claude/tasks.csv
 COMPLEXITY="$DIFFICULTY"
 
 # Get timestamp
@@ -167,10 +183,10 @@ cat > "$METADATA_FILE" <<EOF
   "platform": "$PLATFORM",
   "language": "$LANGUAGE",
   "complexity": "$COMPLEXITY",
+  "turn_type": "single",
   "team": "synth",
   "startedAt": "$STARTED_AT",
   "subtask": "$SUBTASK",
-  "background": "$BACKGROUND",
   "subject_labels": $SUBJECT_LABELS,
   "po_id": "$TASK_ID",
   "aws_services": [],
@@ -358,7 +374,7 @@ fi
 log_info "Created PROMPT.md"
 
 # Validate metadata
-REQUIRED=("platform" "language" "complexity" "team" "startedAt" "subtask" "po_id")
+REQUIRED=("platform" "language" "complexity" "turn_type" "team" "startedAt" "subtask" "po_id")
 MISSING=()
 
 for field in "${REQUIRED[@]}"; do

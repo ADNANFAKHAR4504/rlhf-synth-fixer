@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349618",
+  "team": "3",
+  "startedAt": "2025-10-21T11:49:14.265Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "ec2",
+    "rds",
+    "cloudfront",
+    "cloudwatch",
+    "s3",
+    "lambda",
+    "ecs",
+    "autoscaling",
+    "elbv2",
+    "secretsmanager",
+    "logs",
+    "sns",
+    "iam"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "veera-turing",
+  "dockerS3Location": ""
+}

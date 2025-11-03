@@ -1,13 +1,8 @@
-// In main.go
+// This file is not needed for Pulumi Go projects
+// The main entry point is in lib/tap_stack.go
 package main
 
-import (
-	"github.com/TuringGpt/iac-test-automations/lib"
-	"github.com/hashicorp/terraform-cdk-go/cdktf"
-)
-
 func main() {
-	app := cdktf.NewApp(nil)
-	lib.NewTapStack(app, "tap-iac-stack")
-	app.Synth()
+	// This file exists for compatibility with repository structure
+	// Actual Pulumi code is in lib/tap_stack.go
 }

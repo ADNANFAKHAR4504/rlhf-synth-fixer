@@ -1,0 +1,30 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-21T11:09:50.110246Z",
+  "po_id": "9000420391",
+  "subtask": "Failure Recovery and High Availability",
+  "background": "Infrastructure task for CDKTF Python.",
+  "subject_labels": [
+    "Failure Recovery Automation",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "RDS",
+    "Secrets Manager",
+    "KMS",
+    "VPC",
+    "Security Groups"
+  ],
+  "training_quality": 9,
+  "region": "eu-central-1",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

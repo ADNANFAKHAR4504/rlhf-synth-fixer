@@ -1,0 +1,37 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "7709030832",
+  "team": "synth",
+  "startedAt": "2025-10-21T13:25:14.641150+05:30",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation",
+    "IaC Optimization",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "Amazon VPC",
+    "Amazon ECS Fargate",
+    "Amazon ElastiCache Serverless",
+    "AWS Secrets Manager",
+    "Elastic Load Balancing (Application Load Balancer)",
+    "Amazon CloudWatch Logs",
+    "Amazon CloudWatch Alarms",
+    "Amazon SNS",
+    "AWS Application Auto Scaling",
+    "AWS WAF v2",
+    "AWS IAM",
+    "AWS Cloud Map (Service Discovery)",
+    "Amazon EC2 (NAT Gateway, Internet Gateway, Security Groups)"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

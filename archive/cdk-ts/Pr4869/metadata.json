@@ -1,0 +1,34 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000541",
+  "team": "1",
+  "startedAt": "2025-10-20T19:37:58.194Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "background": "Secure multi-tier AWS environment with CDK for financial services trading platform",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "IAM",
+    "Route53",
+    "CloudWatch Logs",
+    "CloudWatch",
+    "Lambda",
+    "EventBridge",
+    "Systems Manager",
+    "S3",
+    "CloudFormation"
+  ],
+  "training_quality": 3,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
+}

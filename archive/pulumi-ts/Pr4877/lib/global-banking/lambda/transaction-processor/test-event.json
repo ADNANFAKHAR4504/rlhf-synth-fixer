@@ -1,0 +1,19 @@
+{
+  "body": "{\"amount\":150.50,\"currency\":\"USD\",\"type\":\"PAYMENT\",\"description\":\"Coffee shop purchase\",\"fromAccountId\":\"acct_12345\",\"merchantId\":\"merch_starbucks\",\"merchantName\":\"Starbucks\",\"merchantCategory\":\"FOOD_BEVERAGE\",\"sourceCountry\":\"US\",\"deviceId\":\"device_iphone_xyz\",\"paymentMethod\":\"CREDIT_CARD\"}",
+  "headers": {
+    "Content-Type": "application/json",
+    "X-Forwarded-For": "203.0.113.45",
+    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)",
+    "Idempotency-Key": "req-2024-001"
+  },
+  "requestContext": {
+    "authorizer": {
+      "claims": {
+        "sub": "user-12745",
+        "email": "okorie.j@turing.com"
+      }
+    }
+  },
+  "httpMethod": "POST",
+  "path": "/transactions"
+}

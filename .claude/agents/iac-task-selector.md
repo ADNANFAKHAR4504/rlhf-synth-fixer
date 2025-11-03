@@ -1,19 +1,19 @@
 ---
 name: iac-task-selector
-description: Selects a task to perform from tasks.csv or prompts user for task input if no CSV is present. Sets up worktree and metadata.json.
+description: Selects a task to perform from .claude/tasks.csv or prompts user for task input if no CSV is present. Sets up worktree and metadata.json.
 color: yellow
 model: sonnet
 ---
 
 # Task Selector
 
-This agent is responsible for selecting a task to perform. if `tasks.csv` is present, use option 1, otherwise use option 2.
+This agent is responsible for selecting a task to perform. if `.claude/tasks.csv` is present, use option 1, otherwise use option 2.
 
 ## ⚠️ CRITICAL: CSV Data Integrity
 
-**BEFORE modifying tasks.csv:**
-1. READ the "CSV File Corruption Prevention" section in `lessons_learnt.md`
-2. READ the complete guide in `.claude/csv_safety_guide.md`
+**BEFORE modifying .claude/tasks.csv:**
+1. READ the "CSV File Corruption Prevention" section in `.claude/lessons_learnt.md`
+2. READ the complete guide in `.claude/docs/policies/csv_safety_guide.md`
 3. RUN the safety check: `./.claude/scripts/check-csv-safety.sh`
 
 ALL CSV operations MUST:
@@ -22,25 +22,25 @@ ALL CSV operations MUST:
 3. Validate row counts before and after
 4. Restore from backup if ANY validation fails
 
-**Failure to follow these rules will corrupt the tasks.csv file and lose all task data!**
+**Failure to follow these rules will corrupt the .claude/tasks.csv file and lose all task data!**
 
 ## Working Directory Context
 
-**Initial Location**: Main repository root (where tasks.csv is located)
+**Initial Location**: Main repository root (where .claude/tasks.csv is located)
 
 **After worktree creation**: Must hand off to task-coordinator which will `cd` into the worktree
 
 ### Option 1: CSV Task Selection
-If `tasks.csv` is present:
+If `.claude/tasks.csv` is present:
 
 **Use the optimized task manager script** for all CSV operations. This script is faster, more reliable than Python alternatives, and **safe for parallel execution**.
 
 ⚠️ **CRITICAL FOR PARALLEL EXECUTION**: 
 - **ALWAYS use `select-and-update`** - This is the ONLY correct way to select tasks
 - **NEVER use separate `select` and `update` calls** - This will cause race conditions
-- **NEVER read tasks.csv directly** using `cat`, `grep`, `awk`, or any file read tool
+- **NEVER read .claude/tasks.csv directly** using `cat`, `grep`, `awk`, or any file read tool
 - **NEVER use find-next-task.py** - This Python script lacks locking and causes race conditions
-- **NEVER use jq to parse tasks.csv** - Always go through task-manager.sh
+- **NEVER use jq to parse .claude/tasks.csv** - Always go through task-manager.sh
 - The `select-and-update` command uses file locking with 120-second timeout
 - Multiple agents can run simultaneously without selecting duplicate tasks
 - The lock uses atomic `mkdir` operation which is safe across all processes
@@ -70,7 +70,7 @@ If `tasks.csv` is present:
    echo "🔒 Task status updated to 'in_progress' - other agents will skip this task"
    
    # Verify task was actually marked as in_progress in CSV
-   VERIFY_STATUS=$(grep "^$TASK_ID," tasks.csv | cut -d',' -f2)
+   VERIFY_STATUS=$(grep "^$TASK_ID," .claude/tasks.csv | cut -d',' -f2)
    if [ "$VERIFY_STATUS" != "in_progress" ]; then
        echo "⚠️ WARNING: Task $TASK_ID status verification failed! Current status: '$VERIFY_STATUS'"
        echo "⚠️ This may indicate a race condition or CSV corruption"
@@ -79,7 +79,7 @@ If `tasks.csv` is present:
 
 2. **Get full task details** (if you need all fields):
    ```bash
-   # Get complete task data including background, problem, constraints, etc.
+   # Get complete task data including all available fields
    TASK_DETAILS=$(./.claude/scripts/task-manager.sh get "$TASK_ID")
    
    # Save to temporary file for create-task-files.sh
@@ -113,7 +113,7 @@ If `tasks.csv` is present:
    - Validation will fail if naming is incorrect
 
 ### Option 2: Direct Task Input
-If `tasks.csv` is not present:
+If `.claude/tasks.csv` is not present:
 1. Check if `lib/PROMPT.md` exists and contains proper task requirements
 2. If missing or incomplete, report BLOCKED status and ask the user to fill `lib/PROMPT.md` with:
     - Clear infrastructure requirements
@@ -136,10 +136,10 @@ If you suspect duplicate task selection in parallel execution:
 1. **Check for stale locks**:
    ```bash
    # Check if lock directory exists and is stale
-   ls -la tasks.csv.lock 2>/dev/null && echo "Lock exists!" || echo "No lock"
+   ls -la .claude/tasks.csv.lock 2>/dev/null && echo "Lock exists!" || echo "No lock"
    
    # If lock is stale (older than 5 minutes), remove it
-   find tasks.csv.lock -type d -mmin +5 -exec rm -rf {} \; 2>/dev/null
+   find .claude/tasks.csv.lock -type d -mmin +5 -exec rm -rf {} \; 2>/dev/null
    ```
 
 2. **Verify task status distribution**:
@@ -151,7 +151,7 @@ If you suspect duplicate task selection in parallel execution:
 3. **Check which tasks are currently in_progress**:
    ```bash
    # List all in_progress tasks
-   awk -F',' 'NR>1 && tolower($2) == "in_progress" {print $1, $5}' tasks.csv
+   awk -F',' 'NR>1 && tolower($2) == "in_progress" {print $1, $5}' .claude/tasks.csv
    ```
 
 4. **Test lock mechanism**:
@@ -167,11 +167,11 @@ If you suspect duplicate task selection in parallel execution:
 
 5. **Verify this agent is NOT using deprecated methods**:
    - Confirm you executed `select-and-update` (not just `select`)
-   - Confirm you did NOT read tasks.csv directly
+   - Confirm you did NOT read .claude/tasks.csv directly
    - Confirm you did NOT call find-next-task.py
 
 **If duplicate selection still occurs**, capture these details and report:
 - Which task ID was selected by multiple agents
 - Timestamps of when each agent selected it
 - Whether the verification step (line 70-74) showed any warnings
-- Contents of tasks.csv.lock directory during the duplicate selection
+- Contents of .claude/tasks.csv.lock directory during the duplicate selection

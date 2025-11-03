@@ -1,0 +1,48 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "stf-378",
+  "team": "stf",
+  "startedAt": "2025-10-23T10:18:07.725Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "task_sub_category": "IaC-Multi-Environment-Management",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Route Table",
+    "Security Group",
+    "VPC Endpoint",
+    "KMS",
+    "S3",
+    "DynamoDB",
+    "RDS Aurora",
+    "Lambda",
+    "Step Functions",
+    "EventBridge",
+    "CloudWatch Logs",
+    "CloudWatch Dashboards",
+    "CloudWatch Alarms",
+    "SSM Parameter Store",
+    "SSM Automation",
+    "IAM Role",
+    "IAM Policy",
+    "Application Auto Scaling"
+  ],
+  "task_config": {
+    "deploy_env": "dev.tfvars"
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Gahdloot",
+  "dockerS3Location": ""
+}
