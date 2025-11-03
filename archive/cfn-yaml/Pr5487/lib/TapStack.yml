@@ -1,0 +1,1504 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Production-grade multi-tier web application stack for financial services with HA, blue-green deployment, and compliance'
+
+# ============================
+# Parameters
+# ============================
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: dev
+    AllowedPattern: '^[a-z0-9-]+$'
+    ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
+    Description: Environment suffix for resource naming (e.g., dev, staging, prod, pr1234)
+
+  ProjectName:
+    Type: String
+    Default: fintech-app
+    Description: Project name for resource identification
+
+  DBMasterUsername:
+    Type: String
+    Default: admin
+    Description: Database master username
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+
+  DBInstanceClass:
+    Type: String
+    Default: db.r5.large
+    Description: Aurora instance class
+
+  DesiredTaskCount:
+    Type: Number
+    Default: 2
+    Description: Number of ECS tasks to run
+
+  # CertificateArn:
+  #   Type: String
+  #   Default: ''
+  #   Description: Optional ACM Certificate ARN for HTTPS. Leave empty to use HTTP only.
+
+# ============================
+# Mappings
+# ============================
+Mappings:
+  SubnetConfig:
+    VPC:
+      CIDR: 10.0.0.0/16
+    PublicSubnet1:
+      CIDR: 10.0.1.0/24
+    PublicSubnet2:
+      CIDR: 10.0.2.0/24
+    PublicSubnet3:
+      CIDR: 10.0.3.0/24
+    PrivateSubnet1:
+      CIDR: 10.0.11.0/24
+    PrivateSubnet2:
+      CIDR: 10.0.12.0/24
+    PrivateSubnet3:
+      CIDR: 10.0.13.0/24
+    DatabaseSubnet1:
+      CIDR: 10.0.21.0/24
+    DatabaseSubnet2:
+      CIDR: 10.0.22.0/24
+    DatabaseSubnet3:
+      CIDR: 10.0.23.0/24
+
+# ============================
+# Conditions
+# ============================
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentSuffix, prod]
+  # HasCertificate: !Not [!Equals [!Ref CertificateArn, '']]
+
+# ============================
+# Resources
+# ============================
+Resources:
+  # ============================
+  # VPC and Networking
+  # ============================
+  VPC:
+    Type: AWS::EC2::VPC
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      CidrBlock: !FindInMap [SubnetConfig, VPC, CIDR]
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-vpc
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-igw
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [SubnetConfig, PublicSubnet1, CIDR]
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-public-subnet-1
+        - Key: Type
+          Value: Public
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [SubnetConfig, PublicSubnet2, CIDR]
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-public-subnet-2
+        - Key: Type
+          Value: Public
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicSubnet3:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [SubnetConfig, PublicSubnet3, CIDR]
+      AvailabilityZone: !Select [2, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-public-subnet-3
+        - Key: Type
+          Value: Public
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Private Subnets (for ECS)
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [SubnetConfig, PrivateSubnet1, CIDR]
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-private-subnet-1
+        - Key: Type
+          Value: Private
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [SubnetConfig, PrivateSubnet2, CIDR]
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-private-subnet-2
+        - Key: Type
+          Value: Private
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [SubnetConfig, PrivateSubnet3, CIDR]
+      AvailabilityZone: !Select [2, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-private-subnet-3
+        - Key: Type
+          Value: Private
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Database Subnets
+  DatabaseSubnet1:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [SubnetConfig, DatabaseSubnet1, CIDR]
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-db-subnet-1
+        - Key: Type
+          Value: Database
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  DatabaseSubnet2:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [SubnetConfig, DatabaseSubnet2, CIDR]
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-db-subnet-2
+        - Key: Type
+          Value: Database
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  DatabaseSubnet3:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [SubnetConfig, DatabaseSubnet3, CIDR]
+      AvailabilityZone: !Select [2, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-db-subnet-3
+        - Key: Type
+          Value: Database
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # NAT Gateways and EIPs
+  NATGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-eip-1
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  NATGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-eip-2
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  NATGateway3EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-eip-3
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  NATGateway1:
+    Type: AWS::EC2::NatGateway
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      AllocationId: !GetAtt NATGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-natgw-1
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  NATGateway2:
+    Type: AWS::EC2::NatGateway
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      AllocationId: !GetAtt NATGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-natgw-2
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  NATGateway3:
+    Type: AWS::EC2::NatGateway
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      AllocationId: !GetAtt NATGateway3EIP.AllocationId
+      SubnetId: !Ref PublicSubnet3
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-natgw-3
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Route Tables
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-public-rt
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociation3:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet3
+      RouteTableId: !Ref PublicRouteTable
+
+  # Private Route Tables
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-private-rt-1
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway1
+
+  PrivateSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-private-rt-2
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway2
+
+  PrivateSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable2
+
+  PrivateRouteTable3:
+    Type: AWS::EC2::RouteTable
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-private-rt-3
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateRoute3:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable3
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway3
+
+  PrivateSubnetRouteTableAssociation3:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet3
+      RouteTableId: !Ref PrivateRouteTable3
+
+  # Database Route Table
+  DatabaseRouteTable:
+    Type: AWS::EC2::RouteTable
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-db-rt
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  DatabaseSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref DatabaseSubnet1
+      RouteTableId: !Ref DatabaseRouteTable
+
+  DatabaseSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref DatabaseSubnet2
+      RouteTableId: !Ref DatabaseRouteTable
+
+  DatabaseSubnetRouteTableAssociation3:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref DatabaseSubnet3
+      RouteTableId: !Ref DatabaseRouteTable
+
+  # ============================
+  # Security Groups
+  # ============================
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      GroupDescription: Security group for ALB
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS from anywhere (optional, requires certificate)
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP from anywhere
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-alb-sg
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ECSTaskSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      GroupDescription: Security group for ECS tasks
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: HTTP from ALB
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-ecs-task-sg
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      GroupDescription: Security group for RDS Aurora cluster
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref ECSTaskSecurityGroup
+          Description: MySQL from ECS tasks
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-db-sg
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ============================
+  # KMS Keys
+  # ============================
+  ApplicationKMSKey:
+    Type: AWS::KMS::Key
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Description: !Sub KMS key for ${ProjectName}-${EnvironmentSuffix} encryption
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: '*'
+          - Sid: Allow S3 to use the key
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:GenerateDataKey
+            Resource: '*'
+            Condition:
+              StringEquals:
+                kms:ViaService: !Sub s3.${AWS::Region}.amazonaws.com
+          - Sid: Allow CloudWatch Logs
+            Effect: Allow
+            Principal:
+              Service: !Sub logs.${AWS::Region}.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:CreateGrant
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              ArnLike:
+                kms:EncryptionContext:aws:logs:arn: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*
+          - Sid: Allow Secrets Manager to use the key
+            Effect: Allow
+            Principal:
+              Service: secretsmanager.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:GenerateDataKey
+              - kms:CreateGrant
+            Resource: '*'
+            Condition:
+              StringEquals:
+                kms:ViaService: !Sub secretsmanager.${AWS::Region}.amazonaws.com
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-kms
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ApplicationKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub alias/${ProjectName}-${EnvironmentSuffix}-app-key
+      TargetKeyId: !Ref ApplicationKMSKey
+
+  # ============================
+  # S3 Buckets
+  # ============================
+  StaticAssetsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub ${ProjectName}-${EnvironmentSuffix}-static-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref ApplicationKMSKey
+            BucketKeyEnabled: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 90
+          - Id: TransitionToIA
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-static-bucket
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  StaticAssetsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref StaticAssetsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt StaticAssetsBucket.Arn
+              - !Sub ${StaticAssetsBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+  # ============================
+  # Secrets Manager
+  # ============================
+  DBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: !Sub ${ProjectName}-${EnvironmentSuffix}-db-password
+      Description: RDS Aurora master password
+      KmsKeyId: !Ref ApplicationKMSKey
+      GenerateSecretString:
+        SecretStringTemplate: !Sub |
+          {
+            "username": "${DBMasterUsername}"
+          }
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-db-secret
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  SecretRDSAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties:
+      SecretId: !Ref DBPasswordSecret
+      TargetId: !Ref AuroraDBCluster
+      TargetType: AWS::RDS::DBCluster
+
+  # ============================
+  # RDS Aurora MySQL
+  # ============================
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      DBSubnetGroupName: !Sub ${ProjectName}-${EnvironmentSuffix}-db-subnet-group
+      DBSubnetGroupDescription: Subnet group for Aurora cluster
+      SubnetIds:
+        - !Ref DatabaseSubnet1
+        - !Ref DatabaseSubnet2
+        - !Ref DatabaseSubnet3
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-db-subnet-group
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  DBClusterParameterGroup:
+    Type: AWS::RDS::DBClusterParameterGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Description: Aurora MySQL cluster parameter group with SSL enforcement
+      Family: aurora-mysql5.7
+      Parameters:
+        require_secure_transport: 'ON'
+        character_set_server: utf8mb4
+        character_set_database: utf8mb4
+        character_set_client: utf8mb4
+        character_set_connection: utf8mb4
+        character_set_results: utf8mb4
+        collation_server: utf8mb4_unicode_ci
+        collation_connection: utf8mb4_unicode_ci
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-db-cluster-param-group
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  AuroraDBCluster:
+    Type: AWS::RDS::DBCluster
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Engine: aurora-mysql
+      EngineMode: provisioned
+      EngineVersion: 5.7.mysql_aurora.2.11.3
+      DBClusterIdentifier: !Sub ${ProjectName}-${EnvironmentSuffix}-aurora
+      MasterUsername: !Ref DBMasterUsername
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
+      DatabaseName: fintechdb
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref DatabaseSecurityGroup
+      DBClusterParameterGroupName: !Ref DBClusterParameterGroup
+      BackupRetentionPeriod: !If [IsProduction, 30, 7]
+      PreferredBackupWindow: 03:00-04:00
+      PreferredMaintenanceWindow: sun:04:00-sun:05:00
+      EnableCloudwatchLogsExports:
+        - error
+        - general
+        - slowquery
+      StorageEncrypted: true
+      KmsKeyId: !Ref ApplicationKMSKey
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-aurora-cluster
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  AuroraDBInstance1:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      DBInstanceIdentifier: !Sub ${ProjectName}-${EnvironmentSuffix}-aurora-1
+      DBClusterIdentifier: !Ref AuroraDBCluster
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: aurora-mysql
+      PubliclyAccessible: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-aurora-instance-1
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  AuroraDBInstance2:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      DBInstanceIdentifier: !Sub ${ProjectName}-${EnvironmentSuffix}-aurora-2
+      DBClusterIdentifier: !Ref AuroraDBCluster
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: aurora-mysql
+      PubliclyAccessible: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-aurora-instance-2
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ============================
+  # ECS Cluster and Task Definition
+  # ============================
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      ClusterName: !Sub ${ProjectName}-${EnvironmentSuffix}-cluster
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE
+          Weight: 2
+          Base: 2
+        - CapacityProvider: FARGATE_SPOT
+          Weight: 1
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-cluster
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # IAM Roles for ECS
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RoleName: !Sub ${ProjectName}-${EnvironmentSuffix}-ecs-exec-role
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: SecretManagerAccess
+          PolicyDocument:
+            Statement:
+              - Sid: GetSecretValue
+                Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref DBPasswordSecret
+              - Sid: DecryptSecrets
+                Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:DescribeKey
+                Resource: !GetAtt ApplicationKMSKey.Arn
+                Condition:
+                  StringEquals:
+                    kms:ViaService: !Sub secretsmanager.${AWS::Region}.amazonaws.com
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-ecs-execution-role
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RoleName: !Sub ${ProjectName}-${EnvironmentSuffix}-ecs-task-role
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Statement:
+              - Sid: S3ObjectAccess
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub ${StaticAssetsBucket.Arn}/*
+              - Sid: S3BucketAccess
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt StaticAssetsBucket.Arn
+              - Sid: KMSForS3
+                Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                Resource: !GetAtt ApplicationKMSKey.Arn
+        - PolicyName: CloudWatchLogs
+          PolicyDocument:
+            Statement:
+              - Sid: CloudWatchLogsAccess
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/ecs/${ProjectName}-${EnvironmentSuffix}:*
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-ecs-task-role
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # CloudWatch Log Group
+  ECSLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub /ecs/${ProjectName}-${EnvironmentSuffix}
+      RetentionInDays: !If [IsProduction, 90, 30]
+      KmsKeyId: !GetAtt ApplicationKMSKey.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-ecs-logs
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ECS Task Definition
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${ProjectName}-${EnvironmentSuffix}-task
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: '1024'
+      Memory: '2048'
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        - Name: !Sub ${ProjectName}-app
+          Image: public.ecr.aws/nginx/nginx:latest
+          Essential: true
+          PortMappings:
+            - ContainerPort: 80
+              Protocol: tcp
+          Environment:
+            - Name: ENVIRONMENT
+              Value: !Ref EnvironmentSuffix
+            - Name: DB_HOST
+              Value: !GetAtt AuroraDBCluster.Endpoint.Address
+            - Name: DB_NAME
+              Value: fintechdb
+          Secrets:
+            - Name: DB_USERNAME
+              ValueFrom: !Sub '${DBPasswordSecret}:username::'
+            - Name: DB_PASSWORD
+              ValueFrom: !Sub '${DBPasswordSecret}:password::'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ECSLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - curl -f http://localhost/ || exit 1
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 60
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-task-def
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ============================
+  # ACM Certificate (Optional - Commented Out)
+  # ============================
+  # NOTE: ACM Certificate requires DNS validation which needs a real domain.
+  # To enable HTTPS:
+  # 1. Create an ACM certificate in AWS Console or CLI
+  # 2. Complete DNS validation
+  # 3. Pass the Certificate ARN as CertificateArn parameter
+  #
+  # Uncomment the resource below if you want CloudFormation to create it:
+  #
+  # ACMCertificate:
+  #   Type: AWS::CertificateManager::Certificate
+  #   DeletionPolicy: Delete
+  #   UpdateReplacePolicy: Delete
+  #   Condition: CreateCertificate
+  #   Properties:
+  #     DomainName: !Sub ${ProjectName}-${EnvironmentSuffix}.example.com
+  #     ValidationMethod: DNS
+  #     SubjectAlternativeNames:
+  #       - !Sub '*.${ProjectName}-${EnvironmentSuffix}.example.com'
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub ${ProjectName}-${EnvironmentSuffix}-cert
+  #       - Key: project
+  #         Value: iac-rlhf-amazon
+  #       - Key: team-number
+  #         Value: 2
+  #       - Key: Environment
+  #         Value: !Ref EnvironmentSuffix
+
+  # ============================
+  # Application Load Balancer
+  # ============================
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: !Sub ${ProjectName}-${EnvironmentSuffix}-alb
+      Type: application
+      Scheme: internet-facing
+      IpAddressType: ipv4
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+        - !Ref PublicSubnet3
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-alb
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: !Sub ${ProjectName}-${EnvironmentSuffix}-tg
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: ip
+      HealthCheckEnabled: true
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: 200-299
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '30'
+        - Key: stickiness.enabled
+          Value: 'true'
+        - Key: stickiness.type
+          Value: lb_cookie
+        - Key: stickiness.lb_cookie.duration_seconds
+          Value: '86400'
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-tg
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ALBListenerHTTPS:
+  #   Type: AWS::ElasticLoadBalancingV2::Listener
+  #   Condition: HasCertificate
+  #   Properties:
+  #     LoadBalancerArn: !Ref ApplicationLoadBalancer
+  #     Port: 443
+  #     Protocol: HTTPS
+  #     Certificates:
+  #       - CertificateArn: !Ref CertificateArn
+  #     SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
+  #     DefaultActions:
+  #       - Type: forward
+  #         TargetGroupArn: !Ref ALBTargetGroup
+
+  ALBListenerHTTP:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+
+  # ============================
+  # ECS Service
+  # ============================
+  ECSService:
+    Type: AWS::ECS::Service
+    DependsOn: ALBListenerHTTP
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      ServiceName: !Sub ${ProjectName}-${EnvironmentSuffix}-service
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref TaskDefinition
+      DesiredCount: !Ref DesiredTaskCount
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - !Ref ECSTaskSecurityGroup
+          Subnets:
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet2
+            - !Ref PrivateSubnet3
+      LoadBalancers:
+        - ContainerName: !Sub ${ProjectName}-app
+          ContainerPort: 80
+          TargetGroupArn: !Ref ALBTargetGroup
+      HealthCheckGracePeriodSeconds: 60
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${EnvironmentSuffix}-service
+        - Key: project
+          Value: iac-rlhf-amazon
+        - Key: team-number
+          Value: 2
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ============================
+  # Auto Scaling
+  # ============================
+  ServiceScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: 10
+      MinCapacity: !If [IsProduction, 3, 2]
+      ResourceId: !Sub service/${ECSCluster}/${ECSService.Name}
+      RoleARN: !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+
+  ServiceScalingPolicyCPU:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub ${ProjectName}-${EnvironmentSuffix}-cpu-scaling
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ServiceScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 75.0
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        ScaleInCooldown: 300
+        ScaleOutCooldown: 60
+
+  ServiceScalingPolicyMemory:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub ${ProjectName}-${EnvironmentSuffix}-memory-scaling
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ServiceScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 75.0
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageMemoryUtilization
+        ScaleInCooldown: 300
+        ScaleOutCooldown: 60
+
+  # ============================
+  # CloudWatch Alarms
+  # ============================
+  HighCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ProjectName}-${EnvironmentSuffix}-high-cpu
+      AlarmDescription: Alarm when ECS service CPU exceeds 85%
+      MetricName: CPUUtilization
+      Namespace: AWS/ECS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 85
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ServiceName
+          Value: !GetAtt ECSService.Name
+        - Name: ClusterName
+          Value: !Ref ECSCluster
+      TreatMissingData: notBreaching
+
+  HighMemoryAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ProjectName}-${EnvironmentSuffix}-high-memory
+      AlarmDescription: Alarm when ECS service memory exceeds 85%
+      MetricName: MemoryUtilization
+      Namespace: AWS/ECS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 85
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ServiceName
+          Value: !GetAtt ECSService.Name
+        - Name: ClusterName
+          Value: !Ref ECSCluster
+      TreatMissingData: notBreaching
+
+  DatabaseCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ProjectName}-${EnvironmentSuffix}-db-high-cpu
+      AlarmDescription: Alarm when database CPU exceeds 80%
+      MetricName: CPUUtilization
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBClusterIdentifier
+          Value: !Ref AuroraDBCluster
+      TreatMissingData: notBreaching
+
+  TargetResponseTimeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ProjectName}-${EnvironmentSuffix}-slow-response
+      AlarmDescription: Alarm when target response time exceeds 1 second
+      MetricName: TargetResponseTime
+      Namespace: AWS/ApplicationELB
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 1.0
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt ApplicationLoadBalancer.LoadBalancerFullName
+      TreatMissingData: notBreaching
+
+# ============================
+# Outputs
+# ============================
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub ${ProjectName}-${EnvironmentSuffix}-vpc-id
+
+  ECSClusterName:
+    Description: ECS Cluster Name
+    Value: !Ref ECSCluster
+    Export:
+      Name: !Sub ${ProjectName}-${EnvironmentSuffix}-cluster-name
+
+  ALBDNSName:
+    Description: Application Load Balancer DNS Name
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub ${ProjectName}-${EnvironmentSuffix}-alb-dns
+
+  RDSEndpoint:
+    Description: RDS Aurora Cluster Endpoint
+    Value: !GetAtt AuroraDBCluster.Endpoint.Address
+    Export:
+      Name: !Sub ${ProjectName}-${EnvironmentSuffix}-db-endpoint
+
+  RDSReadEndpoint:
+    Description: RDS Aurora Cluster Read Endpoint
+    Value: !GetAtt AuroraDBCluster.ReadEndpoint.Address
+    Export:
+      Name: !Sub ${ProjectName}-${EnvironmentSuffix}-db-read-endpoint
+
+  DBSecretArn:
+    Description: Database Secret ARN
+    Value: !Ref DBPasswordSecret
+    Export:
+      Name: !Sub ${ProjectName}-${EnvironmentSuffix}-db-secret
+
+  StaticAssetsBucketName:
+    Description: Static Assets S3 Bucket Name
+    Value: !Ref StaticAssetsBucket
+    Export:
+      Name: !Sub ${ProjectName}-${EnvironmentSuffix}-static-bucket
+
+  ServiceName:
+    Description: ECS Service Name
+    Value: !GetAtt ECSService.Name
+    Export:
+      Name: !Sub ${ProjectName}-${EnvironmentSuffix}-service-name
+
+  TaskDefinitionArn:
+    Description: ECS Task Definition ARN
+    Value: !Ref TaskDefinition
+    Export:
+      Name: !Sub ${ProjectName}-${EnvironmentSuffix}-task-definition
+
+  EnvironmentSuffix:
+    Description: Environment suffix used for resource naming
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub ${ProjectName}-${EnvironmentSuffix}-env-suffix
+
+  KMSKeyId:
+    Description: KMS Key ID for encryption
+    Value: !Ref ApplicationKMSKey
+    Export:
+      Name: !Sub ${ProjectName}-${EnvironmentSuffix}-kms-key

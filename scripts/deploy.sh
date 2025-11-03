@@ -54,6 +54,36 @@ echo "=== Bootstrap Phase ==="
 echo "=== Deploy Phase ==="
 if [ "$PLATFORM" = "cdk" ]; then
   echo "✅ CDK project detected, running CDK deploy..."
+
+  # Check if stack is in failed state and needs cleanup
+  STACK_NAME="TapStack${ENVIRONMENT_SUFFIX}"
+  STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "NOT_FOUND")
+
+  if [[ "$STACK_STATUS" =~ ^(ROLLBACK_COMPLETE|UPDATE_ROLLBACK_COMPLETE|CREATE_FAILED|DELETE_FAILED)$ ]]; then
+    echo "⚠️ Stack is in $STACK_STATUS state. Attempting to delete..."
+
+    # Try CDK destroy first
+    npm run cdk:destroy -- --force || true
+
+    # If stack still exists and in DELETE_FAILED, force delete with AWS CLI
+    STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "NOT_FOUND")
+
+    if [[ "$STACK_STATUS" == "DELETE_FAILED" ]]; then
+      echo "⚠️ Stack still in DELETE_FAILED state. Force deleting with AWS CLI..."
+      # Get stuck resources and continue-update-rollback to unstick
+      aws cloudformation continue-update-rollback --stack-name "$STACK_NAME" \
+        --resources-to-skip "TapVpcRestrictDefaultSecurityGroupCustomResource2332DAD5" 2>/dev/null || true
+      sleep 5
+      # Now try delete again
+      aws cloudformation delete-stack --stack-name "$STACK_NAME"
+      echo "⏳ Waiting for stack deletion..."
+      aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" || true
+    fi
+
+    echo "✅ Stack cleanup completed"
+    sleep 10
+  fi
+
   npm run cdk:deploy
 
 elif [ "$PLATFORM" = "cdktf" ]; then
@@ -139,7 +169,7 @@ elif [ "$PLATFORM" = "tf" ]; then
   
   # Determine var-file to use based on metadata.json
   VAR_FILE=""
-  if [ "$(jq -r '.task_sub_category // ""' ../metadata.json)" = "IaC-Multi-Environment-Management" ]; then
+  if [ "$(jq -r '.subtask // ""' ../metadata.json)" = "IaC-Multi-Environment-Management" ]; then
     DEPLOY_ENV_FILE=$(jq -r '.task_config.deploy_env // ""' ../metadata.json)
     if [ -n "$DEPLOY_ENV_FILE" ]; then
       VAR_FILE="-var-file=${DEPLOY_ENV_FILE}"
@@ -188,58 +218,112 @@ elif [ "$PLATFORM" = "tf" ]; then
 
 elif [ "$PLATFORM" = "pulumi" ]; then
   echo "✅ Pulumi project detected, running Pulumi deploy..."
-  
+
   if [ -z "$PULUMI_BACKEND_URL" ]; then
     echo "❌ PULUMI_BACKEND_URL environment variable is required for Pulumi projects"
     exit 1
   fi
-  
+
   echo "Using environment suffix: $ENVIRONMENT_SUFFIX"
   echo "Selecting or creating Pulumi stack Using ENVIRONMENT_SUFFIX=$ENVIRONMENT_SUFFIX"
-  
-  if [ "$LANGUAGE" = "go" ]; then
-    echo "🔧 Go Pulumi project detected"
-    pulumi login "$PULUMI_BACKEND_URL"
-    cd lib
-    echo "Selecting or creating Pulumi stack..."
-    pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
-    
-    # Clear any existing locks before deployment
-    echo "🔓 Clearing any stuck locks..."
-    pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes 2>/dev/null || echo "No locks to clear or cancel failed"
-    
-    echo "Deploying infrastructure ..."
-    if ! pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"; then
-      echo "⚠️ Deployment failed, attempting lock recovery..."
-      pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes || echo "Lock cancellation failed"
-      echo "🔄 Retrying deployment after lock cancellation..."
-      pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" || {
-        echo "❌ Deployment failed after retry"
-        cd ..
-        exit 1
-      }
-    fi
-    cd ..
-  else
-    echo "🔧 Python Pulumi project detected"
-    export PYTHONPATH=.:bin
-    pipenv run pulumi-create-stack
-    
-    # Clear any existing locks before deployment
-    echo "🔓 Clearing any stuck locks..."
-    pulumi cancel --yes 2>/dev/null || echo "No locks to clear or cancel failed"
-    
-    echo "Deploying infrastructure ..."
-    if ! pipenv run pulumi-deploy; then
-      echo "⚠️ Deployment failed, attempting lock recovery..."
-      pulumi cancel --yes || echo "Lock cancellation failed"
-      echo "🔄 Retrying deployment after lock cancellation..."
-      pipenv run pulumi-deploy || {
-        echo "❌ Deployment failed after retry"
-        exit 1
-      }
-    fi
-  fi
+
+  case "$LANGUAGE" in
+    py)
+      echo "🔧 Pulumi Python project detected"
+      export PYTHONPATH=.:bin
+      if command -v pipenv >/dev/null 2>&1; then
+        pipenv run pulumi-create-stack
+      else
+        echo "⚠️ pipenv not found, running Pulumi directly"
+        pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
+      fi
+
+      echo "🔓 Clearing any stuck locks..."
+      pulumi cancel --yes 2>/dev/null || echo "No locks to clear or cancel failed"
+
+      echo "🚀 Deploying infrastructure..."
+      if command -v pipenv >/dev/null 2>&1; then
+        if ! pipenv run pulumi-deploy; then
+          echo "⚠️ Deployment failed, retrying..."
+          pulumi cancel --yes || true
+          pipenv run pulumi-deploy || {
+            echo "❌ Deployment failed after retry"
+            exit 1
+          }
+        fi
+      else
+        if ! pulumi up --yes --refresh; then
+          echo "⚠️ Deployment failed, retrying..."
+          pulumi cancel --yes || true
+          pulumi up --yes --refresh || {
+            echo "❌ Deployment failed after retry"
+            exit 1
+          }
+        fi
+      fi
+      ;;
+
+    ts|js)
+      echo "🔧 Pulumi TypeScript/JavaScript project detected"
+      pulumi login "$PULUMI_BACKEND_URL"
+      echo "Selecting or creating Pulumi stack..."
+      pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
+
+      echo "🔓 Clearing any stuck locks..."
+      pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes 2>/dev/null || true
+
+      echo "🚀 Deploying infrastructure..."
+      if ! pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"; then
+        echo "⚠️ Deployment failed, attempting retry..."
+        pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes || true
+        pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" || {
+          echo "❌ Deployment failed after retry"
+          exit 1
+        }
+      fi
+      ;;
+
+    go)
+      echo "🔧 Pulumi Go project detected"
+      pulumi login "$PULUMI_BACKEND_URL"
+      echo "Selecting or creating Pulumi stack..."
+      pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
+
+      echo "🔓 Clearing any stuck locks..."
+      pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes 2>/dev/null || true
+
+      echo "🚀 Deploying infrastructure..."
+      if ! pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"; then
+        echo "⚠️ Deployment failed, attempting retry..."
+        pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes || true
+        pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" || {
+          echo "❌ Deployment failed after retry"
+          exit 1
+        }
+      fi
+      ;;
+
+    java)
+      echo "🔧 Pulumi Java project detected"
+      pulumi login "$PULUMI_BACKEND_URL"
+      echo "Selecting or creating Pulumi stack..."
+      pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
+
+      echo "🚀 Deploying infrastructure via Gradle..."
+      if ! ./gradlew pulumiDeploy; then
+        echo "⚠️ Gradle Pulumi deploy failed, retrying..."
+        ./gradlew pulumiDeploy || {
+          echo "❌ Deployment failed after retry"
+          exit 1
+        }
+      fi
+      ;;
+
+    *)
+      echo "⚠️ Unknown Pulumi language ($LANGUAGE), running Pulumi directly..."
+      pulumi up --yes --refresh
+      ;;
+  esac
 
 else
   echo "ℹ️ Unknown deployment method for platform: $PLATFORM, language: $LANGUAGE"
