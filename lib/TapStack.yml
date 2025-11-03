@@ -238,17 +238,29 @@ Resources:
         StreamViewType: NEW_AND_OLD_IMAGES
       SSESpecification:
         SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: ConfigId
+          AttributeType: S
+        - AttributeName: ConfigType
+          AttributeType: S
+        - AttributeName: UpdatedAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ConfigId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: ConfigTypeIndex
+          KeySchema:
+            - AttributeName: ConfigType
+              KeyType: HASH
+            - AttributeName: UpdatedAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
       Replicas:
         - Region: !Ref AWS::Region
           GlobalSecondaryIndexes:
             - IndexName: ConfigTypeIndex
-              Keys:
-                - AttributeName: ConfigType
-                  KeyType: HASH
-                - AttributeName: UpdatedAt
-                  KeyType: RANGE
-              Projection:
-                ProjectionType: ALL
           Tags:
             - Key: Name
               Value: !Sub "${ApplicationName}-metadata-${Environment}"
@@ -260,16 +272,6 @@ Resources:
               Value: CloudFormation
             - Key: iac-rlhf-amazon
               Value: "true"
-      AttributeDefinitions:
-        - AttributeName: ConfigId
-          AttributeType: S
-        - AttributeName: ConfigType
-          AttributeType: S
-        - AttributeName: UpdatedAt
-          AttributeType: S
-      KeySchema:
-        - AttributeName: ConfigId
-          KeyType: HASH
 
   # ===========================
   # Lambda Execution Role

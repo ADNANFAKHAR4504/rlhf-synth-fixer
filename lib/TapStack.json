@@ -422,6 +422,44 @@
         "SSESpecification": {
           "SSEEnabled": true
         },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "ConfigId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "ConfigType",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "UpdatedAt",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "ConfigId",
+            "KeyType": "HASH"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "ConfigTypeIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "ConfigType",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "UpdatedAt",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
         "Replicas": [
           {
             "Region": {
@@ -429,20 +467,7 @@
             },
             "GlobalSecondaryIndexes": [
               {
-                "IndexName": "ConfigTypeIndex",
-                "Keys": [
-                  {
-                    "AttributeName": "ConfigType",
-                    "KeyType": "HASH"
-                  },
-                  {
-                    "AttributeName": "UpdatedAt",
-                    "KeyType": "RANGE"
-                  }
-                ],
-                "Projection": {
-                  "ProjectionType": "ALL"
-                }
+                "IndexName": "ConfigTypeIndex"
               }
             ],
             "Tags": [
@@ -473,26 +498,6 @@
                 "Value": "true"
               }
             ]
-          }
-        ],
-        "AttributeDefinitions": [
-          {
-            "AttributeName": "ConfigId",
-            "AttributeType": "S"
-          },
-          {
-            "AttributeName": "ConfigType",
-            "AttributeType": "S"
-          },
-          {
-            "AttributeName": "UpdatedAt",
-            "AttributeType": "S"
-          }
-        ],
-        "KeySchema": [
-          {
-            "AttributeName": "ConfigId",
-            "KeyType": "HASH"
           }
         ]
       }
