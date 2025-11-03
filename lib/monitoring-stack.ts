@@ -175,12 +175,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
                         'AutoScalingGroupName',
                         asgName,
                       ],
-                      [
-                        '.',
-                        'GroupInServiceInstances',
-                        '.',
-                        '.',
-                      ],
+                      ['.', 'GroupInServiceInstances', '.', '.'],
                     ],
                     period: 60,
                     stat: 'Average',

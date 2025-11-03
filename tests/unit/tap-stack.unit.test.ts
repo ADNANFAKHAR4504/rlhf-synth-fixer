@@ -1,5 +1,5 @@
 import * as pulumi from '@pulumi/pulumi';
-import { TapStack } from '../lib/tap-stack';
+import { TapStack } from '../../lib/tap-stack';
 
 /**
  * Unit tests for TapStack multi-AZ failover infrastructure

@@ -201,7 +201,7 @@ yum install -y amazon-cloudwatch-agent
           'GroupTerminatingInstances',
           'GroupTotalInstances',
         ],
-        tags: pulumi.output(args.tags).apply((t) => {
+        tags: pulumi.output(args.tags).apply(t => {
           const baseTags = [
             {
               key: 'Name',
