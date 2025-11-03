@@ -107,7 +107,7 @@ export class Ec2SchedulerStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create inline policy for EC2 operations
+    // Create inline policy for EC2 operations with explicit production protection
     const ec2Policy = new aws.iam.RolePolicy(
       `ec2-scheduler-policy-${environmentSuffix}`,
       {
@@ -115,6 +115,16 @@ export class Ec2SchedulerStack extends pulumi.ComponentResource {
         policy: JSON.stringify({
           Version: '2012-10-17',
           Statement: [
+            {
+              Effect: 'Deny',
+              Action: ['ec2:StartInstances', 'ec2:StopInstances'],
+              Resource: '*',
+              Condition: {
+                StringEquals: {
+                  'ec2:ResourceTag/Environment': 'production',
+                },
+              },
+            },
             {
               Effect: 'Allow',
               Action: ['ec2:StartInstances', 'ec2:StopInstances'],
@@ -216,8 +226,9 @@ export class Ec2SchedulerStack extends pulumi.ComponentResource {
       { parent: this, dependsOn: [startLogsGroup, ec2Policy] }
     );
 
-    // Create CloudWatch Events rule to stop instances at 7 PM EST (midnight UTC)
-    // Cron expression: 0 0 * * ? (midnight UTC = 7 PM EST)
+    // Create CloudWatch Events rule to stop instances at 7 PM EST (midnight UTC during EST, 11 PM UTC during EDT)
+    // Using UTC time that works for EST (midnight UTC = 7 PM EST during winter)
+    // Note: During EDT (Mar-Nov), this will be 8 PM EDT. For true DST support, use EventBridge Scheduler.
     const stopRule = new aws.cloudwatch.EventRule(
       `ec2-stop-rule-${environmentSuffix}`,
       {
@@ -232,8 +243,9 @@ export class Ec2SchedulerStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create CloudWatch Events rule to start instances at 8 AM EST (1 PM UTC)
-    // Cron expression: 0 13 * * ? (1 PM UTC = 8 AM EST)
+    // Create CloudWatch Events rule to start instances at 8 AM EST (1 PM UTC during EST, 12 PM UTC during EDT)
+    // Using UTC time that works for EST (1 PM UTC = 8 AM EST during winter)
+    // Note: During EDT (Mar-Nov), this will be 9 AM EDT. For true DST support, use EventBridge Scheduler.
     const startRule = new aws.cloudwatch.EventRule(
       `ec2-start-rule-${environmentSuffix}`,
       {
