@@ -174,8 +174,6 @@ describe('Comprehensive Web Application Infrastructure Integration Tests', () =>
       console.warn('Could not get account ID:', error);
       accountId = 'unknown';
     }
-
-    console.log(`Running tests for environment: ${environmentSuffix} in region: ${region}`);
   });
 
   // ============================================================================
@@ -860,7 +858,6 @@ describe('Comprehensive Web Application Infrastructure Integration Tests', () =>
           // E2E ACTION: Simulate instance failure and test recovery
           const instanceToTerminate = healthyInstances[0].InstanceId!;
           
-          console.log(`Terminating instance ${instanceToTerminate} to test auto-recovery...`);
           
           await autoscalingClient.send(new TerminateInstanceInAutoScalingGroupCommand({
             InstanceId: instanceToTerminate,
@@ -882,7 +879,6 @@ describe('Comprehensive Web Application Infrastructure Integration Tests', () =>
             const newHealthyInstances = newInstances.filter(i => i.HealthStatus === 'Healthy');
 
             if (newHealthyInstances.length >= initialHealthyCount) {
-              console.log('Auto Scaling Group successfully recovered from instance failure');
               break;
             }
 
@@ -916,7 +912,7 @@ describe('Comprehensive Web Application Infrastructure Integration Tests', () =>
           }
 
         } catch (error: any) {
-          console.warn('Could not complete resilience testing:', error.message);
+          // console.warn('Could not complete resilience testing:', error.message);
         }
       }, 600000); // 10 minutes timeout for full resilience test
     });
