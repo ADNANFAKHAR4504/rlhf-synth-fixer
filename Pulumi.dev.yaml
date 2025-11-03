@@ -1,5 +1,0 @@
-config:
-  compliance-monitoring:environmentSuffix: "synthi14kbq"
-  compliance-monitoring:complianceEmail: "compliance-team@example.com"
-  aws:region: eu-west-1
-encryptionsalt: v1:1aCsMBoirjg=:v1:oFqY9mZI9Gvnp3iF:e0jdBtbyKFsl1f9YW3oRbTQdCq/YNA==
