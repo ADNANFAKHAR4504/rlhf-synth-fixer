@@ -6,12 +6,7 @@
   "team": "synth",
   "startedAt": "2025-11-03T14:56:59+00:00",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": [
-    "networking",
-    "vpc",
-    "security",
-    "pci-dss"
-  ],
+  "subject_labels": ["Cloud Environment Setup"],
   "po_id": "101000811",
   "aws_services": [
     "vpc",
@@ -24,5 +19,6 @@
     "elastic-ip"
   ],
   "region": "us-east-1",
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "iamarpit-turing"
 }
