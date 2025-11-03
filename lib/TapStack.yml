@@ -26,6 +26,15 @@ Parameters:
       - 'false'
     Description: 'Enable NAT Gateway for private subnet internet access (requires 1 EIP, set to false if you have EIP limit issues)'
 
+  BucketPrefix:
+    Type: String
+    Default: 'tapstack'
+    Description: 'Lowercase prefix for S3 bucket names (must be lowercase, alphanumeric, and hyphens only)'
+    AllowedPattern: '^[a-z0-9][a-z0-9-]*[a-z0-9]$'
+    MinLength: 3
+    MaxLength: 37
+    ConstraintDescription: 'Must be lowercase letters, numbers, and hyphens only. Must start and end with letter or number.'
+
 Mappings:
   SubnetConfig:
     VPC:
@@ -309,8 +318,8 @@ Resources:
                   - 's3:DeleteObject'
                   - 's3:DeleteObjectVersion'
                 Resource:
-                  - !Sub 'arn:aws:s3:::${AWS::StackName}-*'
-                  - !Sub 'arn:aws:s3:::${AWS::StackName}-*/*'
+                  - !Sub 'arn:aws:s3:::${BucketPrefix}-*'
+                  - !Sub 'arn:aws:s3:::${BucketPrefix}-*/*'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-Empty-S3-Lambda-Role'
@@ -364,7 +373,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     Properties:
-      BucketName: !Sub '${AWS::StackName}-cloudtrail-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${BucketPrefix}-cloudtrail-logs-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -395,7 +404,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     Properties:
-      BucketName: !Sub '${AWS::StackName}-access-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${BucketPrefix}-access-logs-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -502,14 +511,14 @@ Resources:
                 Action:
                   - 's3:ListBucket'
                   - 's3:GetBucketLocation'
-                Resource: !Sub 'arn:aws:s3:::${AWS::StackName}-*'
+                Resource: !Sub 'arn:aws:s3:::${BucketPrefix}-*'
               - Sid: AllowS3ObjectOperations
                 Effect: Allow
                 Action:
                   - 's3:GetObject'
                   - 's3:PutObject'
                   - 's3:DeleteObject'
-                Resource: !Sub 'arn:aws:s3:::${AWS::StackName}-*/*'
+                Resource: !Sub 'arn:aws:s3:::${BucketPrefix}-*/*'
               - Sid: DenyAllOtherServices
                 Effect: Deny
                 NotAction:
@@ -541,65 +550,24 @@ Resources:
       SubnetId: !Ref PrivateSubnet1
       SecurityGroupIds:
         - !Ref PrivateInstanceSecurityGroup
-      BlockDeviceMappings:
-        - DeviceName: /dev/xvda
-          Ebs:
-            VolumeSize: 20
-            VolumeType: gp3
-            Encrypted: true
-            DeleteOnTermination: true
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
-          yum update -y
+          set -e
           
-          # Install CloudWatch Agent
-          wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-          rpm -U ./amazon-cloudwatch-agent.rpm
+          # Log output for debugging
+          exec > >(tee /var/log/user-data.log)
+          exec 2>&1
           
-          # Install AWS CLI
-          yum install -y aws-cli
+          # Create a marker file
+          echo "Private EC2 instance initialized at $(date)" > /home/ec2-user/instance-info.txt
+          echo "Stack: ${AWS::StackName}" >> /home/ec2-user/instance-info.txt
+          echo "Region: ${AWS::Region}" >> /home/ec2-user/instance-info.txt
           
-          # Configure CloudWatch Agent
-          cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
-          {
-            "logs": {
-              "logs_collected": {
-                "files": {
-                  "collect_list": [
-                    {
-                      "file_path": "/var/log/messages",
-                      "log_group_name": "${AWS::StackName}/var/log/messages",
-                      "log_stream_name": "{instance_id}"
-                    }
-                  ]
-                }
-              }
-            },
-            "metrics": {
-              "namespace": "${AWS::StackName}/EC2",
-              "metrics_collected": {
-                "cpu": {
-                  "measurement": [
-                    {"name": "cpu_usage_idle", "rename": "CPU_IDLE", "unit": "Percent"}
-                  ],
-                  "totalcpu": false
-                },
-                "mem": {
-                  "measurement": [
-                    {"name": "mem_used_percent", "rename": "MEM_USED", "unit": "Percent"}
-                  ]
-                }
-              }
-            }
-          }
-          EOF
+          # Note: CloudWatch Agent installation requires internet access
+          # If EnableNATGateway is false, install CloudWatch Agent manually or via Systems Manager
           
-          # Start CloudWatch Agent
-          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-            -a fetch-config \
-            -m ec2 \
-            -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+          echo "Private instance UserData completed successfully"
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-Private-Instance'
@@ -618,28 +586,25 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       SecurityGroupIds:
         - !Ref BastionSecurityGroup
-      BlockDeviceMappings:
-        - DeviceName: /dev/xvda
-          Ebs:
-            VolumeSize: 8
-            VolumeType: gp3
-            Encrypted: true
-            DeleteOnTermination: true
       UserData:
         Fn::Base64: |
           #!/bin/bash
-          yum update -y
+          set -e
           
-          # Harden SSH
-          sed -i 's/#PermitRootLogin yes/PermitRootLogin no/g' /etc/ssh/sshd_config
-          sed -i 's/#MaxAuthTries 6/MaxAuthTries 3/g' /etc/ssh/sshd_config
+          # Log output for debugging
+          exec > >(tee /var/log/user-data.log)
+          exec 2>&1
+          
+          # Harden SSH configuration
+          sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+          sed -i 's/^#*MaxAuthTries.*/MaxAuthTries 3/' /etc/ssh/sshd_config
+          sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+          
+          # Restart SSH service
           systemctl restart sshd
           
-          # Install fail2ban
-          amazon-linux-extras install -y epel
-          yum install -y fail2ban
-          systemctl enable fail2ban
-          systemctl start fail2ban
+          # Signal success
+          echo "Bastion host UserData completed successfully"
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-Bastion-Host'
