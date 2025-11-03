@@ -485,7 +485,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "alb_logs" {
 
 
 resource "aws_lb" "main" {
-  name               = "${local.name_prefix}-alb"
+  name               = "${local.name_prefix}-alb-ts"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -778,7 +778,7 @@ resource "aws_iam_role_policy_attachment" "web_cloudwatch" {
 }
 
 resource "aws_iam_instance_profile" "web" {
-  name = "${local.name_prefix}-web-profile"
+  name = "${local.name_prefix}-web-profile-ts"
   role = aws_iam_role.web.name
 
   tags = merge(
