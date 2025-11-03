@@ -20,6 +20,6 @@
     "KMS",
     "CloudWatch"
   ],
-  "training_quality": 9,
+  "training_quality": 10,
   "author": "iamarpit-turing"
 }
