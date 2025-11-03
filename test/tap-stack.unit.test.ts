@@ -29,7 +29,7 @@ describe('TapStack', () => {
         template.resourceCountIs('AWS::DynamoDB::GlobalTable', 1);
 
         template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
-          TableName: 'test-service-transactions-us-east-1-dev',
+          TableName: `test-service-transactions-us-east-1-${environmentSuffix}`,
           KeySchema: [
             { AttributeName: 'transactionId', KeyType: 'HASH' },
             { AttributeName: 'timestamp', KeyType: 'RANGE' },
@@ -76,7 +76,7 @@ describe('TapStack', () => {
 
       test('should create primary bucket with correct naming', () => {
         template.hasResourceProperties('AWS::S3::Bucket', {
-          BucketName: 'test-service-primary-123456789012-us-east-1-dev',
+          BucketName: `test-service-primary-123456789012-us-east-1-${environmentSuffix}`,
           VersioningConfiguration: {
             Status: 'Enabled',
           },
@@ -85,7 +85,7 @@ describe('TapStack', () => {
 
       test('should create replica bucket with correct naming', () => {
         template.hasResourceProperties('AWS::S3::Bucket', {
-          BucketName: 'test-service-replica-123456789012-eu-central-1-dev',
+          BucketName: `test-service-replica-123456789012-eu-central-1-${environmentSuffix}`,
           VersioningConfiguration: {
             Status: 'Enabled',
           },
@@ -94,7 +94,7 @@ describe('TapStack', () => {
 
       test('should create CloudFront logs bucket with ACL enabled', () => {
         template.hasResourceProperties('AWS::S3::Bucket', {
-          BucketName: 'test-service-cf-logs-123456789012-us-east-1-dev',
+          BucketName: `test-service-cf-logs-123456789012-us-east-1-${environmentSuffix}`,
           OwnershipControls: {
             Rules: [
               {
@@ -107,7 +107,7 @@ describe('TapStack', () => {
 
       test('should have lifecycle rules on primary bucket', () => {
         template.hasResourceProperties('AWS::S3::Bucket', {
-          BucketName: 'test-service-primary-123456789012-us-east-1-dev',
+          BucketName: `test-service-primary-123456789012-us-east-1-${environmentSuffix}`,
           LifecycleConfiguration: {
             Rules: Match.arrayWith([
               Match.objectLike({
@@ -172,7 +172,7 @@ describe('TapStack', () => {
         // CDK creates additional Lambda functions for custom resources (log retention, auto-delete S3)
         // So we just verify our specific function exists
         template.hasResourceProperties('AWS::Lambda::Function', {
-          FunctionName: 'test-service-processor-us-east-1-dev',
+          FunctionName: `test-service-processor-us-east-1-${environmentSuffix}`,
           Runtime: 'nodejs18.x',
           Handler: 'index.handler',
           Timeout: 30,
@@ -194,7 +194,7 @@ describe('TapStack', () => {
             Variables: {
               TABLE_NAME: Match.anyValue(),
               BUCKET_NAME: Match.anyValue(),
-              ENVIRONMENT: 'dev',
+              ENVIRONMENT: environmentSuffix,
               SERVICE: 'test-service',
             },
           },
@@ -221,7 +221,7 @@ describe('TapStack', () => {
         // CDK creates log groups via custom resources, check the function has logRetention
         const functions = template.findResources('AWS::Lambda::Function', {
           Properties: {
-            FunctionName: 'test-service-processor-us-east-1-dev',
+            FunctionName: `test-service-processor-us-east-1-${environmentSuffix}`,
           },
         });
         expect(Object.keys(functions).length).toBeGreaterThan(0);
@@ -231,7 +231,7 @@ describe('TapStack', () => {
     describe('IAM Roles', () => {
       test('should create Lambda execution role', () => {
         template.hasResourceProperties('AWS::IAM::Role', {
-          RoleName: 'test-service-lambda-processor-us-east-1-dev',
+          RoleName: `test-service-lambda-processor-us-east-1-${environmentSuffix}`,
           AssumeRolePolicyDocument: Match.objectLike({
             Statement: Match.arrayWith([
               Match.objectLike({
@@ -248,7 +248,7 @@ describe('TapStack', () => {
 
       test('should create S3 replication role', () => {
         template.hasResourceProperties('AWS::IAM::Role', {
-          RoleName: 'test-service-s3-replication-us-east-1-dev',
+          RoleName: `test-service-s3-replication-us-east-1-${environmentSuffix}`,
           AssumeRolePolicyDocument: Match.objectLike({
             Statement: Match.arrayWith([
               Match.objectLike({
@@ -263,7 +263,7 @@ describe('TapStack', () => {
 
       test('should create EventBridge cross-region role', () => {
         template.hasResourceProperties('AWS::IAM::Role', {
-          RoleName: 'test-service-eventbridge-cross-region-us-east-1-dev',
+          RoleName: `test-service-eventbridge-cross-region-us-east-1-${environmentSuffix}`,
           AssumeRolePolicyDocument: Match.objectLike({
             Statement: Match.arrayWith([
               Match.objectLike({
@@ -308,7 +308,7 @@ describe('TapStack', () => {
         template.resourceCountIs('AWS::SNS::Topic', 1);
 
         template.hasResourceProperties('AWS::SNS::Topic', {
-          TopicName: 'test-service-alerts-us-east-1-dev',
+          TopicName: `test-service-alerts-us-east-1-${environmentSuffix}`,
           DisplayName: 'Transaction Migration Alerts',
         });
       });
@@ -328,7 +328,7 @@ describe('TapStack', () => {
         template.resourceCountIs('AWS::Events::EventBus', 1);
 
         template.hasResourceProperties('AWS::Events::EventBus', {
-          Name: 'test-service-migration-us-east-1-dev',
+          Name: `test-service-migration-us-east-1-${environmentSuffix}`,
         });
       });
 
@@ -336,7 +336,7 @@ describe('TapStack', () => {
         template.resourceCountIs('AWS::Events::Rule', 1);
 
         template.hasResourceProperties('AWS::Events::Rule', {
-          Name: 'test-service-transaction-events-us-east-1-dev',
+          Name: `test-service-transaction-events-us-east-1-${environmentSuffix}`,
           EventPattern: {
             source: ['transaction.processing'],
             'detail-type': ['Transaction Created', 'Transaction Updated'],
@@ -363,13 +363,13 @@ describe('TapStack', () => {
         template.resourceCountIs('AWS::CloudWatch::Dashboard', 1);
 
         template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
-          DashboardName: 'test-service-migration-us-east-1-dev',
+          DashboardName: `test-service-migration-us-east-1-${environmentSuffix}`,
         });
       });
 
       test('should create replication lag alarm', () => {
         template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-          AlarmName: 'test-service-replication-lag-us-east-1-dev',
+          AlarmName: `test-service-replication-lag-us-east-1-${environmentSuffix}`,
           MetricName: 'ReplicationLatency',
           Namespace: 'AWS/DynamoDB',
           Threshold: 60000,
@@ -379,7 +379,7 @@ describe('TapStack', () => {
 
       test('should create Lambda error alarm', () => {
         template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-          AlarmName: 'test-service-lambda-errors-us-east-1-dev',
+          AlarmName: `test-service-lambda-errors-us-east-1-${environmentSuffix}`,
           Threshold: 5,
           ComparisonOperator: 'GreaterThanThreshold',
         });
@@ -399,7 +399,7 @@ describe('TapStack', () => {
     describe('SSM Parameters', () => {
       test('should create migration state parameter', () => {
         template.hasResourceProperties('AWS::SSM::Parameter', {
-          Name: '/test-service/migration/state/dev',
+          Name: `/test-service/migration/state/${environmentSuffix}`,
           Type: 'String',
           Description: 'Migration state tracking',
         });
@@ -407,7 +407,7 @@ describe('TapStack', () => {
 
       test('should create migration config parameter', () => {
         template.hasResourceProperties('AWS::SSM::Parameter', {
-          Name: '/test-service/migration/config/dev',
+          Name: `/test-service/migration/config/${environmentSuffix}`,
           Type: 'String',
           Description: 'Migration configuration metadata',
         });
@@ -415,14 +415,14 @@ describe('TapStack', () => {
 
       test('should have correct state parameter value', () => {
         template.hasResourceProperties('AWS::SSM::Parameter', {
-          Name: '/test-service/migration/state/dev',
+          Name: `/test-service/migration/state/${environmentSuffix}`,
           Value: Match.stringLikeRegexp('primaryRegion'),
         });
       });
 
       test('should have correct config parameter value', () => {
         template.hasResourceProperties('AWS::SSM::Parameter', {
-          Name: '/test-service/migration/config/dev',
+          Name: `/test-service/migration/config/${environmentSuffix}`,
           Value: Match.stringLikeRegexp('trafficWeightPrimary'),
         });
       });
@@ -433,7 +433,7 @@ describe('TapStack', () => {
         template.resourceCountIs('AWS::StepFunctions::StateMachine', 1);
 
         template.hasResourceProperties('AWS::StepFunctions::StateMachine', {
-          StateMachineName: 'test-service-migration-orchestration-us-east-1-dev',
+          StateMachineName: `test-service-migration-orchestration-us-east-1-${environmentSuffix}`,
         });
       });
 
@@ -519,7 +519,7 @@ describe('TapStack', () => {
           expect.arrayContaining([
             expect.objectContaining({
               Key: 'Environment',
-              Value: 'dev',
+              Value: environmentSuffix,
             }),
           ])
         );
@@ -546,7 +546,7 @@ describe('TapStack', () => {
         template.hasOutput('TransactionTableName', {
           Value: Match.anyValue(),
           Export: {
-            Name: 'test-service-table-us-east-1-dev',
+            Name: `test-service-table-us-east-1-${environmentSuffix}`,
           },
         });
       });
@@ -555,7 +555,7 @@ describe('TapStack', () => {
         template.hasOutput('PrimaryBucketName', {
           Value: Match.anyValue(),
           Export: {
-            Name: 'test-service-primary-bucket-us-east-1-dev',
+            Name: `test-service-primary-bucket-us-east-1-${environmentSuffix}`,
           },
         });
       });
@@ -564,7 +564,7 @@ describe('TapStack', () => {
         template.hasOutput('TransactionProcessorArn', {
           Value: Match.anyValue(),
           Export: {
-            Name: 'test-service-lambda-us-east-1-dev',
+            Name: `test-service-lambda-us-east-1-${environmentSuffix}`,
           },
         });
       });
