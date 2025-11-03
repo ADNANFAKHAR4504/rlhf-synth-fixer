@@ -220,7 +220,62 @@ test "$TRAINING_QUALITY" -ge 8
 
 ---
 
-## Checkpoint K: PR Prerequisites
+## Checkpoint K: File Location Compliance
+
+**When**: Before PR creation (after code-reviewer, before task-coordinator Phase 5)
+**Who**: iac-code-reviewer (Phase 1.5 Step 9), task-coordinator (Phase 5)
+
+**Validation**:
+```bash
+# Check what files will be in the PR
+git diff --name-only origin/main...HEAD
+
+# Verify all files are in allowed locations
+# This mimics what scripts/check-project-files.sh will check in CI/CD
+
+# Allowed folders: bin/, lib/, test/, tests/
+# Allowed root files: metadata.json, cdk.json, cdktf.json, Pulumi.yaml, 
+#                     tap.py, tap.go, package.json, package-lock.json
+
+# Manual check - each file must match one of:
+# - bin/*
+# - lib/*
+# - test/*
+# - tests/*
+# - metadata.json
+# - cdk.json
+# - cdktf.json
+# - Pulumi.yaml
+# - tap.py
+# - tap.go
+# - package.json
+# - package-lock.json
+```
+
+**Pass criteria**: All files in allowed locations
+**Fail action**: 
+- Report: "❌ BLOCKED: Files in wrong locations will FAIL CI/CD"
+- List violating files and correct locations
+- Training quality penalty: -3 points
+- Do NOT proceed to PR creation until fixed
+**Reference**: cicd-file-restrictions.md
+
+**Common Violations and Fixes**:
+| Wrong Location | Correct Location |
+|----------------|------------------|
+| `/README.md` | `/lib/README.md` |
+| `/PROMPT.md` | `/lib/PROMPT.md` |
+| `/MODEL_RESPONSE.md` | `/lib/MODEL_RESPONSE.md` |
+| `/IDEAL_RESPONSE.md` | `/lib/IDEAL_RESPONSE.md` |
+| `/MODEL_FAILURES.md` | `/lib/MODEL_FAILURES.md` |
+| `/lambda/handler.py` | `/lib/lambda/handler.py` |
+| `/docs/*` | Not allowed |
+| `/.github/*` | Not allowed (managed by repo) |
+| `/scripts/*` | Not allowed (managed by repo) |
+
+---
+
+## Checkpoint L: PR Prerequisites
 
 **When**: Before PR creation
 **Who**: task-coordinator (Phase 5)
@@ -235,6 +290,7 @@ pwd | grep -E 'worktree/synth-[^/]+$'
 
 # Verify code-reviewer reported "Ready"
 # Verify training_quality ≥ 8 (Checkpoint J)
+# Verify file locations valid (Checkpoint K)
 ```
 
 **Pass criteria**: All prerequisites met
@@ -257,7 +313,8 @@ pwd | grep -E 'worktree/synth-[^/]+$'
 | H | 3 | qa-trainer | Unit test coverage | ≥90% |
 | I | 3 | qa-trainer | Integration tests | No mocking, uses outputs |
 | J | 4, 5 | reviewer, coordinator | Training quality | ≥8/10 |
-| K | 5 | coordinator | PR prerequisites | gh + worktree + ready |
+| K | 4, 5 | reviewer, coordinator | File locations | All in allowed locations |
+| L | 5 | coordinator | PR prerequisites | gh + worktree + ready |
 
 ## Usage Pattern
 

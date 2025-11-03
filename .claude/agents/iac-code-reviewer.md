@@ -31,7 +31,9 @@ bash .claude/scripts/verify-worktree.sh || exit 1
 
 **If verification fails**: STOP immediately, report BLOCKED.
 
-**Before Starting**: Review `.claude/lessons_learnt.md` for common issues and quality patterns.
+**Before Starting**:
+- Review `.claude/lessons_learnt.md` for common issues and quality patterns
+- Review `.claude/docs/references/cicd-file-restrictions.md` for CRITICAL file location requirements that fail CI/CD
 
 ### Phase 1: Prerequisites Check
 
@@ -216,7 +218,32 @@ jq -e '.aws_services | type == "array"' metadata.json || echo "❌ ERROR: aws_se
 
 Report: "✅ metadata.json enhanced with training_quality: {SCORE}/10"
 
-#### Step 9: Final Quality Gate
+#### Step 9: File Location Validation
+
+**CRITICAL CI/CD CHECK**: Verify all files are in allowed locations
+
+```bash
+# Check changed files against allowed locations
+git diff --name-only origin/main...HEAD
+
+# Verify no violations exist
+# See .claude/docs/references/cicd-file-restrictions.md for rules
+```
+
+**Common Violations**:
+- ❌ `README.md` at root → Must be `lib/README.md`
+- ❌ `PROMPT.md` at root → Must be `lib/PROMPT.md`
+- ❌ `IDEAL_RESPONSE.md` at root → Must be `lib/IDEAL_RESPONSE.md`
+- ❌ `MODEL_FAILURES.md` at root → Must be `lib/MODEL_FAILURES.md`
+- ❌ Files in `.github/`, `scripts/`, `docs/`, etc. → Not allowed
+
+**If violations found**:
+- Training quality penalty: -3 points (Critical issue)
+- Report: "❌ BLOCKED: Files in wrong locations will FAIL CI/CD"
+- List violating files and correct locations
+- Do NOT proceed to PR creation
+
+#### Step 10: Final Quality Gate
 
 **Before reporting "Ready" status**:
 
@@ -231,6 +258,7 @@ FINAL CHECKLIST:
 ☐ AWS services implemented
 ☐ No Retain policies
 ☐ Tests exist and pass
+☐ All files in allowed locations (Step 9)
 
 If ALL checked:
 - Report: "✅ READY for PR creation"
