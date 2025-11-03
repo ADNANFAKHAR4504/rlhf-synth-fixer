@@ -1,0 +1,25 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-30T09:24:11+00:00",
+  "po_id": "101000764",
+  "subtask": "Environment Migration",
+  "subject_labels": [
+    "example-label"
+  ],
+  "aws_services": [
+    "RDS",
+    "EC2",
+    "SecretsManager"
+  ],
+  "training_quality": 8,
+  "author": "iamarpit-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
