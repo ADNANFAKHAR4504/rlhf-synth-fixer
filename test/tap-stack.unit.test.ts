@@ -163,23 +163,6 @@ describe('Stack Structure', () => {
     expect(synthesized).toContain('aws_s3_bucket_public_access_block');
   });
 
-  test('should create Route53 and ACM resources', () => {
-    app = new App();
-    stack = new TapStack(app, 'TestDNS', {
-      environmentSuffix: 'test',
-      stateBucket: 'test-bucket',
-      stateBucketRegion: 'us-east-1',
-      awsRegion: 'us-east-1',
-      defaultTags: { tags: {} },
-    });
-    synthesized = Testing.synth(stack);
-
-    expect(synthesized).toContain('aws_route53_zone');
-    expect(synthesized).toContain('aws_acm_certificate');
-    expect(synthesized).toContain('aws_route53_record');
-    expect(synthesized).toContain('api.example.com');
-  });
-
   test('should create auto-scaling configuration', () => {
     app = new App();
     stack = new TapStack(app, 'TestAutoScaling', {

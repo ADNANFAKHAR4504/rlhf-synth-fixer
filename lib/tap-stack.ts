@@ -1,5 +1,5 @@
 import { Construct } from 'constructs';
-import { TerraformStack, TerraformOutput } from 'cdktf';
+import { TerraformStack, TerraformOutput, Fn } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { S3Backend } from 'cdktf';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
@@ -463,11 +463,15 @@ export class TapStack extends TerraformStack {
     });
 
     // DNS Validation Records
+    const domainValidationOption = Fn.element(
+      Fn.tolist(certificate.domainValidationOptions),
+      0
+    );
     const validationRecord = new Route53Record(this, 'cert-validation-record', {
       zoneId: hostedZone.zoneId,
-      name: certificate.domainValidationOptions.get(0).resourceRecordName,
-      type: certificate.domainValidationOptions.get(0).resourceRecordType,
-      records: [certificate.domainValidationOptions.get(0).resourceRecordValue],
+      name: Fn.lookup(domainValidationOption, 'resource_record_name', ''),
+      type: Fn.lookup(domainValidationOption, 'resource_record_type', ''),
+      records: [Fn.lookup(domainValidationOption, 'resource_record_value', '')],
       ttl: 60,
     });
 
