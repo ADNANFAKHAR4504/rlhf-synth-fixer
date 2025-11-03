@@ -928,7 +928,7 @@ jobs:
   cleanup:
     name: Cleanup (Destroy Resources)
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, integration-tests-live, claude-code-action, cicd-pipeline-optimization]
+    needs: [detect-metadata, integration-tests-live, claude-code-action, analysis, cicd-pipeline-optimization]
     # Cleanup runs when:
     # 1. Claude review succeeded
     # 2. For Analysis/CI/CD tasks: int-tests can be success OR skipped
