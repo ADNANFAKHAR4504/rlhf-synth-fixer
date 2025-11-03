@@ -1,16 +1,10 @@
 # Provisioning of Infrastructure Environments
 
-> **⚠️ CRITICAL: Use cdktf with TypeScript**
->
-> Platform: **cdktf**
-> Language: **ts**
-> Region: **eu-west-2**
->
-> Don't change the platform or language - stick with what's specified above.
+We need to set up a new PostgreSQL database for our production environment. I've been working on this migration for a while and wanted to document the requirements.
 
----
+This needs to be implemented using cdktf with TypeScript in the eu-west-2 region. Please don't change the platform or language - we're standardized on this stack.
 
-We need to migrate an existing RDS PostgreSQL instance from dev to production. Here's what needs to happen:
+Here's what I need to get done:
 
 1. Create a new RDS PostgreSQL instance in the production VPC with Multi-AZ deployment
 2. Use db.t3.large instance type with 100GB encrypted storage
@@ -28,45 +22,29 @@ We need to migrate an existing RDS PostgreSQL instance from dev to production. H
 
 The goal is a production-ready RDS instance with all security, monitoring, and compliance configs in place, ready for data migration from dev.
 
----
-
 ## Additional Context
 
-### Background
 We're a financial services company migrating our PostgreSQL database from dev to production. Data integrity is critical, and we need production-grade security and monitoring.
 
-### Constraints and Requirements
+Some constraints I need to keep in mind:
 - Deploy the RDS instance in private subnets only (no public access)
 - Never hardcode database credentials - use Secrets Manager
 - All CloudWatch alarms should use the existing SNS topic
 - Use CDK L2 constructs where possible, avoid L1 constructs
 - Define security group rules using CIDR blocks, not security group references
 
-### Environment Setup
 We're running in eu-west-2 with an existing production VPC (vpc-prod-123456). The VPC has private subnets for RDS across 2 availability zones.
 
 Tech requirements: CDK 2.x with TypeScript, Node.js 16+, and AWS CLI configured with production credentials. This stack will integrate with our existing CloudWatch dashboards and SNS topics.
 
 ## Project-Specific Conventions
 
-### Resource Naming
-- All resources must use the `environmentSuffix` variable in their names to support multiple PR environments
-- Example: `myresource-${environmentSuffix}` or tagging with EnvironmentSuffix
+For resource naming, I need to make sure all resources use the `environmentSuffix` variable in their names to support multiple PR environments. Something like `myresource-${environmentSuffix}` or tagging with EnvironmentSuffix should work.
 
-### Testing Integration  
-- Integration tests should load stack outputs from `cfn-outputs/flat-outputs.json`
-- Tests should validate actual deployed resources
+For testing, integration tests should load stack outputs from `cfn-outputs/flat-outputs.json` and validate actual deployed resources.
 
-### Resource Management
-- Infrastructure should be fully destroyable for CI/CD workflows
-- **Exception**: Secrets should be fetched from existing AWS Secrets Manager entries, not created by the stack
-- Avoid using DeletionPolicy: Retain unless absolutely necessary
+One thing to keep in mind - infrastructure should be fully destroyable for CI/CD workflows, with one exception - secrets should be fetched from existing AWS Secrets Manager entries rather than created by the stack. Try to avoid using DeletionPolicy: Retain unless absolutely necessary.
 
-### Security Baseline
-- Implement encryption at rest and in transit
-- Follow principle of least privilege for IAM roles
-- Use AWS Secrets Manager for credential management where applicable
-- Enable appropriate logging and monitoring
+Security wise, I need to implement encryption at rest and in transit, follow principle of least privilege for IAM roles, use AWS Secrets Manager for credential management where applicable, and enable appropriate logging and monitoring.
 
-## Target Region
-All resources should be deployed to: **eu-west-2**
+All resources should be deployed to eu-west-2.
