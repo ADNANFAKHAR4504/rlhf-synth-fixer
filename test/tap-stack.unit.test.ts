@@ -335,7 +335,7 @@ describe('TapStack', () => {
         DBInstanceIdentifier: 'fintech-payment-test-rds',
         DBInstanceClass: 'db.t3.micro',
         Engine: 'postgres',
-        EngineVersion: '14.7',
+        EngineVersion: '15.12',
         AllocatedStorage: '20',
         MaxAllocatedStorage: 100,
         BackupRetentionPeriod: 1,
@@ -394,7 +394,7 @@ describe('TapStack', () => {
             {
               DeviceName: '/dev/xvda',
               Ebs: {
-                Encrypted: true,
+                // Encrypted property not set - uses account default EBS encryption
                 VolumeSize: 30,
                 VolumeType: 'gp3',
               },

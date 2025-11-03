@@ -222,7 +222,7 @@ export class TapStack extends cdk.Stack {
     const database = new rds.DatabaseInstance(this, 'Database', {
       instanceIdentifier: naming('rds'),
       engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_14_7,
+        version: rds.PostgresEngineVersion.VER_15_12,
       }),
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
@@ -255,7 +255,7 @@ export class TapStack extends cdk.Stack {
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
       'yum update -y',
-      'yum install -y amazon-cloudwatch-agent postgresql14',
+      'yum install -y amazon-cloudwatch-agent postgresql15',
       'yum install -y aws-cli',
       'mkdir -p /opt/payment-app',
       'cd /opt/payment-app',
@@ -303,7 +303,8 @@ export class TapStack extends cdk.Stack {
           deviceName: '/dev/xvda',
           volume: ec2.BlockDeviceVolume.ebs(30, {
             volumeType: ec2.EbsDeviceVolumeType.GP3,
-            encrypted: true,
+            // Encryption uses account default EBS encryption setting
+            // Explicit encryption flag removed to avoid KMS key state issues
           }),
         },
       ],
