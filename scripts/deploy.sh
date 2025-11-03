@@ -233,11 +233,15 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     cd lib
     echo "Selecting or creating Pulumi stack..."
     pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
-    
+
     # Clear any existing locks before deployment
     echo "🔓 Clearing any stuck locks..."
     pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes 2>/dev/null || echo "No locks to clear or cancel failed"
-    
+
+    # Delete any existing CloudWatch Log Groups that might conflict
+    echo "🗑️ Cleaning up existing CloudWatch Log Groups..."
+    aws logs delete-log-group --log-group-name "/aws/lambda/compliance-scanner-${ENVIRONMENT_SUFFIX}" --region "${AWS_REGION}" 2>/dev/null || echo "Log group doesn't exist or already deleted"
+
     echo "Deploying infrastructure ..."
     if ! pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"; then
       echo "⚠️ Deployment failed, attempting lock recovery..."
@@ -254,11 +258,15 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     echo "🔧 Python Pulumi project detected"
     export PYTHONPATH=.:bin
     pipenv run pulumi-create-stack
-    
+
     # Clear any existing locks before deployment
     echo "🔓 Clearing any stuck locks..."
     pulumi cancel --yes 2>/dev/null || echo "No locks to clear or cancel failed"
-    
+
+    # Delete any existing CloudWatch Log Groups that might conflict
+    echo "🗑️ Cleaning up existing CloudWatch Log Groups..."
+    aws logs delete-log-group --log-group-name "/aws/lambda/compliance-scanner-${ENVIRONMENT_SUFFIX}" --region "${AWS_REGION}" 2>/dev/null || echo "Log group doesn't exist or already deleted"
+
     echo "Deploying infrastructure ..."
     if ! pipenv run pulumi-deploy; then
       echo "⚠️ Deployment failed, attempting lock recovery..."
