@@ -73,6 +73,34 @@ if [ "$EXPECTED_PLATFORM" = "analysis" ]; then
     fi
 fi
 
+# Special handling for cicd platform
+if [ "$EXPECTED_PLATFORM" = "cicd" ]; then
+    print_success "CI/CD platform detected - skipping IaC platform validation"
+
+    # For CI/CD pipeline tasks, verify that pipeline configuration exists
+    if [ -f "lib/ci-cd.yml" ] || [ -f "lib/ci-cd.yaml" ] || [ -f "lib/pipeline.yml" ]; then
+        print_success "CI/CD pipeline configuration found in lib/"
+
+        # Only validate language (should be yml or yaml)
+        if [ "$EXPECTED_LANGUAGE" = "yml" ] || [ "$EXPECTED_LANGUAGE" = "yaml" ]; then
+            if grep -qE '```yaml|```yml|^name:|^on:|^jobs:' lib/IDEAL_RESPONSE.md; then
+                print_success "Language matches: YAML pipeline configuration detected"
+                exit 0
+            else
+                print_error "Expected YAML code in IDEAL_RESPONSE.md for CI/CD pipeline task"
+                exit 1
+            fi
+        else
+            print_warning "Unexpected language '$EXPECTED_LANGUAGE' for CI/CD pipeline task"
+            print_success "Proceeding with validation (CI/CD pipeline tasks are flexible)"
+            exit 0
+        fi
+    else
+        print_error "No CI/CD pipeline configuration found (expected lib/ci-cd.yml, lib/ci-cd.yaml, or lib/pipeline.yml)"
+        exit 1
+    fi
+fi
+
 # Detect actual platform by searching IDEAL_RESPONSE.md directly
 DETECTED_PLATFORM="unknown"
 

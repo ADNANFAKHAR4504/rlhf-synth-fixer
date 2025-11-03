@@ -809,10 +809,17 @@ jobs:
 
             Follow instructions in .claude/agents/iac-code-reviewer.md. Do not commit any changes, but allow the metadata.json file to be updated.
             Important: The Metadata Enhancement phase in .claude/agents/iac-code-reviewer.md is very important for this project. Make sure that the
-            metadata.json file is updated with the fields stated there. If the metadata.json file after the review does not contain the fields:
-            - training_quality
-            - aws_services
-            then add a github comment indicating the issue
+            metadata.json file is updated with the required fields:
+
+            For standard IaC tasks:
+            - training_quality (required)
+            - aws_services (required)
+
+            For CI/CD Pipeline tasks (subject_label: "CI/CD Pipeline" OR platform: "cicd"):
+            - training_quality (required)
+            - aws_services (NOT required - CI/CD pipelines don't deploy AWS services)
+
+            If metadata.json is missing required fields for the task type, add a github comment indicating the issue.
 
             This validation is mandatory and must be completed before any other review activities.
 
