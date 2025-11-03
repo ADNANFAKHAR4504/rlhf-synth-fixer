@@ -81,6 +81,37 @@ const stack = (() => {
 })();
 
 describe('Lambda Image Processing Infrastructure', () => {
+  describe('Environment config utilities', () => {
+    it('should handle malformed environment variables gracefully', () => {
+      const config = stack.resolveEnvironmentConfig({
+        ENVIRONMENT_SUFFIX: '',
+        AWS_REGION: null,
+        INPUT_BUCKET_NAME: undefined,
+      } as unknown as NodeJS.ProcessEnv);
+
+      expect(config.environmentSuffix).toBe('dev');
+      expect(config.awsRegion).toBe('us-east-1');
+      expect(config.inputBucketName).toBe('image-input-dev');
+      expect(config.outputBucketName).toBe('image-output-dev');
+    });
+
+    it('should parse ALLOWED_ORIGINS lists with trimming', () => {
+      const origins = stack.parseAllowedOrigins(
+        'https://example.com, https://app.example.com  ,'
+      );
+
+      expect(origins).toEqual([
+        'https://example.com',
+        'https://app.example.com',
+      ]);
+    });
+
+    it('should default ALLOWED_ORIGINS to wildcard when unset', () => {
+      expect(stack.parseAllowedOrigins()).toEqual(['*']);
+      expect(stack.parseAllowedOrigins(' , ')).toEqual(['*']);
+    });
+  });
+
   describe('S3 Buckets', () => {
     it('should create input bucket with correct configuration', (done) => {
       pulumi.all([stack.inputBucketArn]).apply(([arn]) => {

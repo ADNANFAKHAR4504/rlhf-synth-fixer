@@ -3,6 +3,15 @@ import * as aws from '@pulumi/aws';
 
 const normalize = (value?: string): string => (value ? value.trim() : '');
 
+export const parseAllowedOrigins = (value?: string): string[] => {
+  const sanitized = (value ?? '')
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(origin => origin.length > 0);
+
+  return sanitized.length > 0 ? sanitized : ['*'];
+};
+
 export interface ResolvedEnvironmentConfig {
   environmentSuffix: string;
   awsRegion: string;
@@ -31,6 +40,8 @@ export const resolveEnvironmentConfig = (
 
 const { environmentSuffix, awsRegion, inputBucketName, outputBucketName } =
   resolveEnvironmentConfig(process.env);
+
+const allowedOrigins = parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
 
 // Create KMS key for Lambda environment variable encryption
 const kmsKey = new aws.kms.Key(`lambda-encryption-key-${environmentSuffix}`, {
@@ -249,6 +260,7 @@ const thumbnailFunction = new aws.lambda.Function(
       variables: {
         INPUT_BUCKET: inputBucketName,
         OUTPUT_BUCKET: outputBucketName,
+        ALLOWED_ORIGINS: allowedOrigins.join(','),
       },
     },
     kmsKeyArn: kmsKey.arn,
@@ -282,6 +294,7 @@ const watermarkFunction = new aws.lambda.Function(
       variables: {
         INPUT_BUCKET: inputBucketName,
         OUTPUT_BUCKET: outputBucketName,
+        ALLOWED_ORIGINS: allowedOrigins.join(','),
       },
     },
     kmsKeyArn: kmsKey.arn,
@@ -321,6 +334,7 @@ const metadataFunction = new aws.lambda.Function(
       variables: {
         INPUT_BUCKET: inputBucketName,
         OUTPUT_BUCKET: outputBucketName,
+        ALLOWED_ORIGINS: allowedOrigins.join(','),
       },
     },
     kmsKeyArn: kmsKey.arn,
@@ -361,7 +375,7 @@ const thumbnailFunctionUrl = new aws.lambda.FunctionUrl(
     functionName: thumbnailFunction.name,
     authorizationType: 'AWS_IAM',
     cors: {
-      allowOrigins: ['*'],
+      allowOrigins: allowedOrigins,
       allowMethods: ['POST'],
       allowHeaders: [
         'content-type',
@@ -380,7 +394,7 @@ const watermarkFunctionUrl = new aws.lambda.FunctionUrl(
     functionName: watermarkFunction.name,
     authorizationType: 'AWS_IAM',
     cors: {
-      allowOrigins: ['*'],
+      allowOrigins: allowedOrigins,
       allowMethods: ['POST'],
       allowHeaders: [
         'content-type',
@@ -399,7 +413,7 @@ const metadataFunctionUrl = new aws.lambda.FunctionUrl(
     functionName: metadataFunction.name,
     authorizationType: 'AWS_IAM',
     cors: {
-      allowOrigins: ['*'],
+      allowOrigins: allowedOrigins,
       allowMethods: ['POST'],
       allowHeaders: [
         'content-type',
