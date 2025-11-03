@@ -212,47 +212,20 @@
           "Version": "2012-10-17",
           "Statement": [
             {
-              "Sid": "AllowCrossAccountRead",
+              "Sid": "AllowCurrentAccountAccess",
               "Effect": "Allow",
               "Principal": {
                 "AWS": {
-                  "Fn::If": [
-                    "IsDevEnvironment",
-                    [
-                      {
-                        "Fn::Sub": "arn:aws:iam::${AccountIdStaging}:root"
-                      },
-                      {
-                        "Fn::Sub": "arn:aws:iam::${AccountIdProd}:root"
-                      }
-                    ],
-                    {
-                      "Fn::If": [
-                        "IsStagingEnvironment",
-                        [
-                          {
-                            "Fn::Sub": "arn:aws:iam::${AccountIdDev}:root"
-                          },
-                          {
-                            "Fn::Sub": "arn:aws:iam::${AccountIdProd}:root"
-                          }
-                        ],
-                        [
-                          {
-                            "Fn::Sub": "arn:aws:iam::${AccountIdDev}:root"
-                          },
-                          {
-                            "Fn::Sub": "arn:aws:iam::${AccountIdStaging}:root"
-                          }
-                        ]
-                      ]
-                    }
-                  ]
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
                 }
               },
               "Action": [
                 "s3:GetObject",
-                "s3:ListBucket"
+                "s3:GetObjectVersion",
+                "s3:ListBucket",
+                "s3:ListBucketVersions",
+                "s3:PutObject",
+                "s3:DeleteObject"
               ],
               "Resource": [
                 {

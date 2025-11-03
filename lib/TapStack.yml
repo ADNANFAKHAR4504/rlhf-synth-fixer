@@ -126,7 +126,7 @@ Resources:
           Value: "true"
 
   # ===========================
-  # S3 Bucket Policy - Cross-Account Read Access
+  # S3 Bucket Policy - Simplified for Initial Deployment
   # ===========================
   ConfigurationBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -136,22 +136,17 @@ Resources:
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
-          - Sid: AllowCrossAccountRead
+          - Sid: AllowCurrentAccountAccess
             Effect: Allow
             Principal:
-              AWS: !If
-                - IsDevEnvironment
-                - - !Sub "arn:aws:iam::${AccountIdStaging}:root"
-                  - !Sub "arn:aws:iam::${AccountIdProd}:root"
-                - !If
-                  - IsStagingEnvironment
-                  - - !Sub "arn:aws:iam::${AccountIdDev}:root"
-                    - !Sub "arn:aws:iam::${AccountIdProd}:root"
-                  - - !Sub "arn:aws:iam::${AccountIdDev}:root"
-                    - !Sub "arn:aws:iam::${AccountIdStaging}:root"
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
             Action:
               - "s3:GetObject"
+              - "s3:GetObjectVersion"
               - "s3:ListBucket"
+              - "s3:ListBucketVersions" 
+              - "s3:PutObject"
+              - "s3:DeleteObject"
             Resource:
               - !Sub "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}"
               - !Sub "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}/*"
