@@ -1,4 +1,4 @@
-```typescript
+```ts
 import { Construct } from 'constructs';
 import {
   TerraformStack,
@@ -54,10 +54,12 @@ export class TapStack extends TerraformStack {
         instance_types: ['t3.medium'],
       },
     };
+    // Add environmentSuffix for multi-environment support
+    const environmentSuffix = 'prod'; // Or pass as a constructor/config argument
     const randomSuffix = Fn.substr(Fn.uuid(), 0, 8);
     const tags = {
       Project: 'MultiAzRecovery',
-      Environment: 'Production',
+      Environment: environmentSuffix,
       ManagedBy: 'CDKTF',
     };
 
@@ -72,13 +74,13 @@ export class TapStack extends TerraformStack {
       cidrBlock: config.infrastructure_config.vpc_cidr,
       enableDnsHostnames: true,
       enableDnsSupport: true,
-      tags: { ...tags, Name: `vpc-${randomSuffix}` },
+  tags: { ...tags, Name: `vpc-${environmentSuffix}-${randomSuffix}` },
     });
 
     const igw = new InternetGateway(this, 'igw', {
       provider: provider,
       vpcId: vpc.id,
-      tags: { ...tags, Name: `igw-${randomSuffix}` },
+  tags: { ...tags, Name: `igw-${environmentSuffix}-${randomSuffix}` },
     });
 
     const publicSubnets: Subnet[] = [];
@@ -100,7 +102,7 @@ export class TapStack extends TerraformStack {
         ), // e.g., 10.0.0.0/24, 10.0.2.0/24
         availabilityZone: az,
         mapPublicIpOnLaunch: true,
-        tags: { ...tags, Name: `public-${azSuffix}-${randomSuffix}` },
+  tags: { ...tags, Name: `public-${azSuffix}-${environmentSuffix}-${randomSuffix}` },
       });
       publicSubnets.push(publicSubnet);
 
@@ -114,20 +116,20 @@ export class TapStack extends TerraformStack {
           index * 2 + 1
         ), // e.g., 10.0.1.0/24, 10.0.3.0/24
         availabilityZone: az,
-        tags: { ...tags, Name: `private-${azSuffix}-${randomSuffix}` },
+  tags: { ...tags, Name: `private-${azSuffix}-${environmentSuffix}-${randomSuffix}` },
       });
       privateSubnets.push(privateSubnet);
 
       // NAT Gateway (one per AZ for HA)
       const eip = new Eip(this, `nat-eip-${azSuffix}`, {
         provider: provider,
-        tags: { ...tags, Name: `nat-eip-${azSuffix}-${randomSuffix}` },
+  tags: { ...tags, Name: `nat-eip-${azSuffix}-${environmentSuffix}-${randomSuffix}` },
       });
       const natGw = new NatGateway(this, `nat-gw-${azSuffix}`, {
         provider: provider,
         allocationId: eip.id,
         subnetId: publicSubnet.id,
-        tags: { ...tags, Name: `nat-gw-${azSuffix}-${randomSuffix}` },
+  tags: { ...tags, Name: `nat-gw-${azSuffix}-${environmentSuffix}-${randomSuffix}` },
         dependsOn: [igw],
       });
       natGateways.push(natGw);
@@ -137,7 +139,7 @@ export class TapStack extends TerraformStack {
         provider: provider,
         vpcId: vpc.id,
         route: [{ cidrBlock: '0.0.0.0/0', natGatewayId: natGw.id }],
-        tags: { ...tags, Name: `private-rt-${azSuffix}-${randomSuffix}` },
+  tags: { ...tags, Name: `private-rt-${azSuffix}-${environmentSuffix}-${randomSuffix}` },
       });
       new RouteTableAssociation(this, `private-rta-${azSuffix}`, {
         provider: provider,
@@ -151,7 +153,7 @@ export class TapStack extends TerraformStack {
       provider: provider,
       vpcId: vpc.id,
       route: [{ cidrBlock: '0.0.0.0/0', gatewayId: igw.id }],
-      tags: { ...tags, Name: `public-rt-${randomSuffix}` },
+  tags: { ...tags, Name: `public-rt-${environmentSuffix}-${randomSuffix}` },
     });
     publicSubnets.forEach((subnet, index) => {
       new RouteTableAssociation(this, `public-rta-${index}`, {
@@ -164,7 +166,7 @@ export class TapStack extends TerraformStack {
     // --- Security ---
     const albSg = new SecurityGroup(this, 'alb-sg', {
       provider: provider,
-      name: `alb-sg-${randomSuffix}`,
+  name: `alb-sg-${environmentSuffix}-${randomSuffix}`,
       vpcId: vpc.id,
       ingress: [
         {
@@ -177,12 +179,12 @@ export class TapStack extends TerraformStack {
       egress: [
         { fromPort: 0, toPort: 0, protocol: '-1', cidrBlocks: ['0.0.0.0/0'] },
       ],
-      tags: { ...tags, Name: `alb-sg-${randomSuffix}` },
+  tags: { ...tags, Name: `alb-sg-${environmentSuffix}-${randomSuffix}` },
     });
 
     const asgSg = new SecurityGroup(this, 'asg-sg', {
       provider: provider,
-      name: `asg-sg-${randomSuffix}`,
+  name: `asg-sg-${environmentSuffix}-${randomSuffix}`,
       vpcId: vpc.id,
       ingress: [
         {
@@ -195,7 +197,7 @@ export class TapStack extends TerraformStack {
       egress: [
         { fromPort: 0, toPort: 0, protocol: '-1', cidrBlocks: ['0.0.0.0/0'] },
       ], // Allow outbound via NAT
-      tags: { ...tags, Name: `asg-sg-${randomSuffix}` },
+  tags: { ...tags, Name: `asg-sg-${environmentSuffix}-${randomSuffix}` },
     });
 
     // --- Compute (ASG) ---
@@ -211,7 +213,7 @@ export class TapStack extends TerraformStack {
 
     const ec2Role = new IamRole(this, 'ec2-role', {
       provider: provider,
-      name: `ec2-role-${randomSuffix}`,
+  name: `ec2-role-${environmentSuffix}-${randomSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -230,7 +232,7 @@ export class TapStack extends TerraformStack {
 
     const instanceProfile = new IamInstanceProfile(this, 'instance-profile', {
       provider: provider,
-      name: `instance-profile-${randomSuffix}`,
+  name: `instance-profile-${environmentSuffix}-${randomSuffix}`,
       role: ec2Role.name,
     });
 
@@ -260,15 +262,15 @@ echo 'OK' > /var/www/html/health
       tagSpecifications: [
         {
           resourceType: 'instance',
-          tags: { ...tags, Name: `app-instance-${randomSuffix}` },
+          tags: { ...tags, Name: `app-instance-${environmentSuffix}-${randomSuffix}` },
         },
       ],
-      tags: { ...tags },
+  tags: { ...tags },
     });
 
     const asg = new AutoscalingGroup(this, 'asg', {
       provider: provider,
-      name: `asg-${randomSuffix}`,
+  name: `asg-${environmentSuffix}-${randomSuffix}`,
       minSize: config.app_config.min_healthy_instances, // Start with minimum healthy
       maxSize: config.app_config.min_healthy_instances + 2, // Allow some buffer
       desiredCapacity: config.app_config.min_healthy_instances,
@@ -277,7 +279,7 @@ echo 'OK' > /var/www/html/health
       healthCheckType: 'ELB',
       healthCheckGracePeriod: config.app_config.recovery_timeout_seconds, // Use configured timeout
       tag: [
-        { key: 'Name', value: `asg-${randomSuffix}`, propagateAtLaunch: true },
+  { key: 'Name', value: `asg-${environmentSuffix}-${randomSuffix}`, propagateAtLaunch: true },
         ...Object.entries(tags).map(([key, value]) => ({
           key,
           value,
@@ -290,17 +292,17 @@ echo 'OK' > /var/www/html/health
     // --- Load Balancer (ALB) ---
     const alb = new Lb(this, 'alb', {
       provider: provider,
-      name: `alb-${randomSuffix}`,
+  name: `alb-${environmentSuffix}-${randomSuffix}`,
       internal: false,
       loadBalancerType: 'application',
       securityGroups: [albSg.id],
       subnets: publicSubnets.map(subnet => subnet.id),
-      tags: { ...tags, Name: `alb-${randomSuffix}` },
+  tags: { ...tags, Name: `alb-${environmentSuffix}-${randomSuffix}` },
     });
 
     const targetGroup = new LbTargetGroup(this, 'target-group', {
       provider: provider,
-      name: `tg-${randomSuffix}`,
+  name: `tg-${environmentSuffix}-${randomSuffix}`,
       port: 80,
       protocol: 'HTTP',
       vpcId: vpc.id,
@@ -316,7 +318,7 @@ echo 'OK' > /var/www/html/health
         interval: 10,
         matcher: '200',
       },
-      tags: { ...tags, Name: `tg-${randomSuffix}` },
+  tags: { ...tags, Name: `tg-${environmentSuffix}-${randomSuffix}` },
     });
 
     // Attach ASG to Target Group
@@ -334,11 +336,11 @@ echo 'OK' > /var/www/html/health
     // --- State (DynamoDB) ---
     const dynamoTable = new DynamodbTable(this, 'dynamodb-state', {
       provider: provider,
-      name: `app-state-${randomSuffix}`,
+  name: `app-state-${environmentSuffix}-${randomSuffix}`,
       billingMode: 'PAY_PER_REQUEST',
       hashKey: 'stateKey',
       attribute: [{ name: 'stateKey', type: 'S' }],
-      tags: { ...tags, Name: `dynamodb-${randomSuffix}` },
+  tags: { ...tags, Name: `dynamodb-${environmentSuffix}-${randomSuffix}` },
     });
 
     // --- Monitoring (CloudWatch Alarm) ---
@@ -348,7 +350,7 @@ echo 'OK' > /var/www/html/health
       'unhealthy-host-alarm',
       {
         provider: provider,
-        alarmName: `unhealthy-host-alarm-${randomSuffix}`,
+  alarmName: `unhealthy-host-alarm-${environmentSuffix}-${randomSuffix}`,
         alarmDescription:
           'Triggers recovery when healthy hosts drop below minimum',
         comparisonOperator: 'LessThanThreshold',
@@ -371,7 +373,7 @@ echo 'OK' > /var/www/html/health
     // --- Recovery Automation (EventBridge + Lambda) ---
     const lambdaRole = new IamRole(this, 'lambda-role', {
       provider: provider,
-      name: `recovery-lambda-role-${randomSuffix}`,
+  name: `recovery-lambda-role-${environmentSuffix}-${randomSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -388,7 +390,7 @@ echo 'OK' > /var/www/html/health
     // Lambda Policy
     const lambdaPolicy = new IamPolicy(this, 'lambda-policy', {
       provider: provider,
-      name: `recovery-lambda-policy-${randomSuffix}`,
+  name: `recovery-lambda-policy-${environmentSuffix}-${randomSuffix}`,
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -446,7 +448,7 @@ echo 'OK' > /var/www/html/health
 
     const recoveryLambda = new LambdaFunction(this, 'recovery-lambda', {
       provider: provider,
-      functionName: `recovery-lambda-${randomSuffix}`,
+  functionName: `recovery-lambda-${environmentSuffix}-${randomSuffix}`,
       role: lambdaRole.arn,
       handler: 'recovery.lambda_handler', // Assumes recovery.py with lambda_handler function
       runtime: 'python3.9',
@@ -468,7 +470,7 @@ echo 'OK' > /var/www/html/health
     // EventBridge Rule to trigger Lambda from CloudWatch Alarm
     const eventRule = new CloudwatchEventRule(this, 'event-rule', {
       provider: provider,
-      name: `alarm-trigger-rule-${randomSuffix}`,
+  name: `alarm-trigger-rule-${environmentSuffix}-${randomSuffix}`,
       description: 'Triggers recovery Lambda when unhealthy host alarm fires',
       eventPattern: JSON.stringify({
         source: ['aws.cloudwatch'],
