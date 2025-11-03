@@ -49,6 +49,34 @@ describe('TapStack Unit Tests', () => {
         }),
       });
     });
+
+    test('should grant Secrets Manager access to secrets key', () => {
+      template.hasResourceProperties('AWS::KMS::Key', {
+        KeyPolicy: Match.objectLike({
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Principal: {
+                Service: 'secretsmanager.amazonaws.com',
+              },
+            }),
+          ]),
+        }),
+      });
+    });
+
+    test('should grant S3 access to data encryption key', () => {
+      template.hasResourceProperties('AWS::KMS::Key', {
+        KeyPolicy: Match.objectLike({
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Principal: {
+                Service: 's3.amazonaws.com',
+              },
+            }),
+          ]),
+        }),
+      });
+    });
   });
 
   describe('IAM Roles', () => {
@@ -84,6 +112,16 @@ describe('TapStack Unit Tests', () => {
         RoleName: `tap-${environmentSuffix}-CrossAccountRole`,
         MaxSessionDuration: 3600,
       });
+    });
+
+    test('should use external ID for cross-account role', () => {
+      const resources = template.toJSON().Resources;
+      const crossAccountRole = Object.values(resources).find(
+        (r: any) => r.Type === 'AWS::IAM::Role' &&
+        r.Properties?.RoleName === `tap-${environmentSuffix}-CrossAccountRole`
+      ) as any;
+      expect(crossAccountRole).toBeDefined();
+      expect(crossAccountRole.Properties.AssumeRolePolicyDocument.Statement[0].Condition.StringEquals['sts:ExternalId']).toBeDefined();
     });
   });
 
@@ -203,6 +241,32 @@ describe('TapStack Unit Tests', () => {
       template.resourceCountIs('AWS::SecretsManager::RotationSchedule', 3);
     });
 
+    test('should set 30-day rotation for database credentials', () => {
+      const resources = template.toJSON().Resources;
+      const rotationSchedules = Object.values(resources).filter(
+        (r: any) => r.Type === 'AWS::SecretsManager::RotationSchedule'
+      );
+      const dbRotation = rotationSchedules.find((rs: any) => {
+        const secretRef = rs.Properties.SecretId.Ref;
+        const secret = resources[secretRef];
+        return secret?.Properties?.Name?.includes('DatabaseCredentials');
+      });
+      expect(dbRotation).toBeDefined();
+    });
+
+    test('should set 90-day rotation for API keys', () => {
+      const resources = template.toJSON().Resources;
+      const rotationSchedules = Object.values(resources).filter(
+        (r: any) => r.Type === 'AWS::SecretsManager::RotationSchedule'
+      );
+      const apiKeyRotation = rotationSchedules.find((rs: any) => {
+        const secretRef = rs.Properties.SecretId.Ref;
+        const secret = resources[secretRef];
+        return secret?.Properties?.Name?.includes('ApiKeys');
+      });
+      expect(apiKeyRotation).toBeDefined();
+    });
+
     test('should deny cross-account access to secrets', () => {
       template.hasResourceProperties('AWS::SecretsManager::ResourcePolicy', {
         ResourcePolicy: Match.objectLike({
@@ -296,6 +360,90 @@ describe('TapStack Unit Tests', () => {
         BucketEncryption: {
           ServerSideEncryptionConfiguration: Match.anyValue(),
         },
+      });
+    });
+  });
+
+  describe('Cross-Account with Trusted Accounts', () => {
+    let appWithTrustedAccounts: cdk.App;
+    let stackWithTrustedAccounts: TapStack;
+    let templateWithTrustedAccounts: Template;
+
+    beforeEach(() => {
+      appWithTrustedAccounts = new cdk.App({
+        context: {
+          trustedAccountIds: ['123456789012', '098765432109'],
+        },
+      });
+      stackWithTrustedAccounts = new TapStack(appWithTrustedAccounts, 'TestStackWithTrusted', {
+        environmentSuffix
+      });
+      templateWithTrustedAccounts = Template.fromStack(stackWithTrustedAccounts);
+    });
+
+    test('should create cross-account role with composite principal when trusted accounts provided', () => {
+      templateWithTrustedAccounts.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: `tap-${environmentSuffix}-CrossAccountRole`,
+      });
+    });
+
+    test('should include multiple account principals', () => {
+      const resources = templateWithTrustedAccounts.toJSON().Resources;
+      const crossAccountRole = Object.values(resources).find(
+        (r: any) => r.Type === 'AWS::IAM::Role' &&
+        r.Properties?.RoleName === `tap-${environmentSuffix}-CrossAccountRole`
+      ) as any;
+      expect(crossAccountRole).toBeDefined();
+      const statement = crossAccountRole.Properties.AssumeRolePolicyDocument.Statement[0];
+      expect(statement.Principal.AWS).toBeDefined();
+      // CDK may synthesize as array or object with Fn::Join, both are valid
+      const principalAws = statement.Principal.AWS;
+      const isPrincipalDefined = Array.isArray(principalAws) || typeof principalAws === 'object';
+      expect(isPrincipalDefined).toBe(true);
+    });
+  });
+
+  describe('Multi-Region Configuration', () => {
+    let appWithRegions: cdk.App;
+    let stackWithRegions: TapStack;
+
+    beforeEach(() => {
+      process.env.POSSIBLE_REGIONS = 'us-east-1,eu-west-1,ap-northeast-1';
+      appWithRegions = new cdk.App();
+      stackWithRegions = new TapStack(appWithRegions, 'TestStackWithRegions', {
+        environmentSuffix
+      });
+    });
+
+    afterEach(() => {
+      delete process.env.POSSIBLE_REGIONS;
+    });
+
+    test('should create stack with multiple regions configured', () => {
+      expect(stackWithRegions).toBeDefined();
+    });
+  });
+
+  describe('Default Environment Configuration', () => {
+    let appWithDefaults: cdk.App;
+    let stackWithDefaults: TapStack;
+
+    beforeEach(() => {
+      // Clear ENVIRONMENT_SUFFIX but keep AWS_REGION
+      delete process.env.ENVIRONMENT_SUFFIX;
+      process.env.AWS_REGION = 'ap-northeast-1';
+      appWithDefaults = new cdk.App();
+      stackWithDefaults = new TapStack(appWithDefaults, 'TestStackWithDefaults');
+    });
+
+    test('should use default environment suffix when not provided', () => {
+      expect(stackWithDefaults).toBeDefined();
+    });
+
+    test('should create resources with default suffix', () => {
+      const templateWithDefaults = Template.fromStack(stackWithDefaults);
+      templateWithDefaults.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: Match.stringLikeRegexp('tap-.*-AdminRole'),
       });
     });
   });

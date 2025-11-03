@@ -477,32 +477,6 @@ export class TapStack extends cdk.Stack {
   }
 
   /**
-   * Create assume role policy with MFA enforcement
-   */
-  private createAssumeRolePolicyWithMfa(): iam.PolicyDocument {
-    return new iam.PolicyDocument({
-      statements: [
-        new iam.PolicyStatement({
-          effect: iam.Effect.ALLOW,
-          principals: [new iam.AccountPrincipal(cdk.Stack.of(this).account)],
-          actions: ['sts:AssumeRole'],
-          conditions: {
-            Bool: {
-              'aws:MultiFactorAuthPresent': 'true',
-            },
-            NumericLessThan: {
-              'aws:MultiFactorAuthAge': '3600', // MFA must be used within last hour
-            },
-            IpAddress: {
-              'aws:SourceIp': this.config.allowedIpRanges,
-            },
-          },
-        }),
-      ],
-    });
-  }
-
-  /**
    * Create service account policy
    */
   private createServiceAccountPolicy(): iam.PolicyDocument {
