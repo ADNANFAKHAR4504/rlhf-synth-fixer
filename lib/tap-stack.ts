@@ -682,6 +682,11 @@ export class TapStack extends pulumi.ComponentResource {
               status: 'Enabled',
             },
             filter: {},
+            sourceSelectionCriteria: {
+              sseKmsEncryptedObjects: {
+                status: 'Enabled',
+              },
+            },
             destination: {
               bucket: secondaryBackupBucket.arn,
               replicationTime: {
