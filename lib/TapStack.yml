@@ -122,7 +122,7 @@ Parameters:
   DesiredCapacity:
     Description: Desired number of EC2 instances
     Type: Number
-    Default: 2
+    Default: 3
 
   LatestAmiId:
     Description: Latest Amazon Linux 2 AMI ID from SSM Parameter Store (region-agnostic)
