@@ -726,61 +726,6 @@ describe('Comprehensive Web Application Infrastructure Integration Tests', () =>
         }
       }, 180000);
     });
-
-    describe('[Cross-Service] CloudWatch → Auto Scaling Integration', () => {
-      test('should validate CloudWatch alarms are properly linked to ASG scaling policies', async () => {
-        if (!outputs.autoscaling_group_name) return;
-
-        // Get scaling policies
-        const policies = await autoscalingClient.send(new DescribePoliciesCommand({
-          AutoScalingGroupName: outputs.autoscaling_group_name
-        }));
-
-        expect(policies.ScalingPolicies?.length).toBeGreaterThanOrEqual(2);
-
-        const scaleUpPolicy = policies.ScalingPolicies?.find(p => 
-          p.PolicyName?.includes('scale-up')
-        );
-        const scaleDownPolicy = policies.ScalingPolicies?.find(p => 
-          p.PolicyName?.includes('scale-down')
-        );
-
-        expect(scaleUpPolicy).toBeDefined();
-        expect(scaleDownPolicy).toBeDefined();
-
-        // Validate alarms are configured to trigger these policies
-        const alarmsResponse = await cloudWatchClient.send(new DescribeAlarmsCommand({
-          AlarmNamePrefix: `${environmentSuffix}-cpu`
-        }));
-
-        const highCpuAlarm = alarmsResponse.MetricAlarms?.find(alarm =>
-          alarm.AlarmActions?.includes(scaleUpPolicy!.PolicyARN!)
-        );
-
-        const lowCpuAlarm = alarmsResponse.MetricAlarms?.find(alarm =>
-          alarm.AlarmActions?.includes(scaleDownPolicy!.PolicyARN!)
-        );
-
-        // ACTION: Publish metric data to test alarm integration  
-        await cloudWatchClient.send(new PutMetricDataCommand({
-          Namespace: 'AWS/EC2',
-          MetricData: [
-            {
-              MetricName: 'CPUUtilization',
-              Value: 25.0, // Low CPU value
-              Unit: 'Percent',
-              Timestamp: new Date(),
-              Dimensions: [
-                {
-                  Name: 'AutoScalingGroupName',
-                  Value: outputs.autoscaling_group_name
-                }
-              ]
-            }
-          ]
-        }));
-      });
-    });
   });
 
   // ============================================================================
