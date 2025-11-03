@@ -25,5 +25,7 @@
     "iam",
     "eventbridge"
   ],
+  "region": "us-east-2",
+  "author": "chriscrsov",
   "training_quality": 9
 }

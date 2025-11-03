@@ -116,6 +116,13 @@ webhook_lambda_role = aws.iam.Role(
     tags=common_tags
 )
 
+# Attach AWS Lambda Basic Execution Role for webhook lambda
+webhook_lambda_basic_execution = aws.iam.RolePolicyAttachment(
+    f"webhook-lambda-basic-execution-{environment_suffix}",
+    role=webhook_lambda_role.name,
+    policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+)
+
 # Policy for Webhook Lambda to write to DynamoDB
 webhook_lambda_policy = aws.iam.RolePolicy(
     f"webhook-lambda-policy-{environment_suffix}",
@@ -201,6 +208,13 @@ analytics_lambda_role = aws.iam.Role(
         }]
     }),
     tags=common_tags
+)
+
+# Attach AWS Lambda Basic Execution Role for analytics lambda
+analytics_lambda_basic_execution = aws.iam.RolePolicyAttachment(
+    f"analytics-lambda-basic-execution-{environment_suffix}",
+    role=analytics_lambda_role.name,
+    policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 )
 
 # Policy for Analytics Lambda to read DynamoDB Streams
@@ -301,6 +315,13 @@ archival_lambda_role = aws.iam.Role(
         }]
     }),
     tags=common_tags
+)
+
+# Attach AWS Lambda Basic Execution Role for archival lambda
+archival_lambda_basic_execution = aws.iam.RolePolicyAttachment(
+    f"archival-lambda-basic-execution-{environment_suffix}",
+    role=archival_lambda_role.name,
+    policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 )
 
 # Policy for Archival Lambda
