@@ -5,6 +5,7 @@
     "EnvironmentName": {
       "Type": "String",
       "Description": "Environment name (dev, staging, prod)",
+      "Default": "dev",
       "AllowedValues": ["dev", "staging", "prod"]
     },
     "EnvironmentSuffix": {
