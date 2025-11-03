@@ -6,7 +6,9 @@
   "team": "synth",
   "startedAt": "2025-11-03T14:48:09+05:30",
   "subtask": "Infrastructure QA and Management",
-  "subject_labels": [],
+  "subject_labels": [
+    "Compliance and Governance Platform"
+  ],
   "po_id": "1au4og",
   "aws_services": [
     "S3",
