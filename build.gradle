@@ -45,7 +45,7 @@ ext {
 
     switch (platform) {
         case "pulumi":
-            minimumTestCoverage = 1.0
+            minimumTestCoverage = 90.0
             break
         case "cdk":
             minimumTestCoverage = 90.0
