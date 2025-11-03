@@ -53,88 +53,523 @@ The generated Terraform configuration demonstrates:
 6. **Clean Code**: Well-organized, properly formatted, clear descriptions
 7. **Complete Outputs**: 14 output values for integration with other modules
 
-## Testing Coverage
 
-### Unit Tests (77 tests, 100% pass rate)
-- File structure validation (4 tests)
-- Provider configuration (3 tests)
-- Variables configuration (9 tests)
-- VPC resources (5 tests)
-- Subnet resources (8 tests)
-- Internet Gateway (3 tests)
-- NAT Gateways (7 tests)
-- Route Tables (6 tests)
-- Security Groups (7 tests)
-- Network ACLs (6 tests)
-- Outputs configuration (8 tests)
-- Resource naming conventions (2 tests)
-- High availability configuration (3 tests)
-- CIDR block configuration (4 tests)
-- Terraform tfvars configuration (2 tests)
+Below is the deployed IAC ideal response:
 
-### Integration Tests (29 tests)
-- VPC configuration validation (3 tests)
-- Subnet configuration (5 tests)
-- Internet Gateway (1 test)
-- NAT Gateways (4 tests)
-- Route Tables (4 tests)
-- Security Groups (6 tests)
-- Network ACLs (3 tests)
-- Elastic IPs (1 test)
-- High Availability (2 tests)
+## terraform.tf
 
-All tests use actual AWS SDK calls to validate deployed resources against deployment outputs (flat-outputs.json).
+```hcl
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
 
-## PCI DSS Compliance Alignment
+provider "aws" {
+  region = var.aws_region
 
-The configuration implements key PCI DSS requirements:
-1. **Requirement 1.2**: Network segmentation between cardholder data environment (private subnets) and untrusted networks
-2. **Requirement 1.3**: Prohibit direct public access between internet and cardholder data (NAT Gateways, private subnets)
-3. **Requirement 2.1**: Security groups with vendor-supplied defaults changed (custom rules)
-4. **Requirement 10.2**: Network ACLs and Security Groups log-ready for audit trails (when VPC Flow Logs enabled)
+  default_tags {
+    tags = var.tags
+  }
+}
+```
 
-## Infrastructure Code Structure
+## variables.tf
 
-The code is organized into four files following Terraform best practices:
+```hcl
+variable "environment_suffix" {
+  description = "Environment suffix for resource naming to ensure uniqueness"
+  type        = string
+  default     = "dev"
+}
 
-1. **variables.tf** (47 lines): All input variables with types, descriptions, and sensible defaults
-2. **main.tf** (359 lines): Complete infrastructure definition with provider, data sources, and all AWS resources
-3. **outputs.tf** (70 lines): 14 output values for resource IDs, CIDRs, and availability zones
-4. **terraform.tfvars** (21 lines): Environment-specific values
+variable "aws_region" {
+  description = "AWS region for resource deployment"
+  type        = string
+  default     = "us-east-1"
+}
 
-Total: 497 lines of clean, well-documented HCL code.
+variable "vpc_cidr" {
+  description = "CIDR block for VPC"
+  type        = string
+  default     = "10.0.0.0/16"
+}
 
-## Cost Analysis
+variable "public_subnet_cidrs" {
+  description = "CIDR blocks for public subnets"
+  type        = list(string)
+  default     = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+}
 
-Monthly infrastructure costs (us-east-1):
-- NAT Gateways: 3 × $0.045/hour × 730 hours = ~$98.55
-- NAT Gateway data transfer: Variable (charged per GB)
-- Elastic IPs: Free (when associated with NAT Gateways)
-- VPC, Subnets, Route Tables, Security Groups, NACLs: Free
-- Internet Gateway: Free
+variable "private_subnet_cidrs" {
+  description = "CIDR blocks for private subnets"
+  type        = list(string)
+  default     = ["10.0.11.0/24", "10.0.12.0/24", "10.0.13.0/24"]
+}
 
-**Estimated base cost**: ~$100/month (before data transfer charges)
+variable "allowed_ssh_cidr" {
+  description = "CIDR block allowed for SSH access"
+  type        = string
+  default     = "0.0.0.0/0"
+}
 
-## Deployment Process
+variable "tags" {
+  description = "Additional tags for all resources"
+  type        = map(string)
+  default = {
+    Project     = "payment-processing"
+    Environment = "production"
+    Compliance  = "PCI-DSS"
+    ManagedBy   = "terraform"
+  }
+}
+```
 
-The infrastructure deployed successfully following this process:
-1. **Validation**: terraform fmt, terraform validate (all passed)
-2. **Plan**: terraform plan (28 resources to add)
-3. **Apply**: terraform apply (completed in ~3 minutes)
-4. **Verification**: All outputs generated correctly
-5. **Testing**: Integration tests validated actual AWS resources
+## terraform.tfvars
 
-## Production Recommendations
+```hcl
+# Environment configuration
+environment_suffix = "synth101000811"
+aws_region         = "us-east-1"
 
-1. Enable VPC Flow Logs for network traffic analysis
-2. Implement AWS Config rules for continuous compliance monitoring
-3. Enable CloudTrail for comprehensive audit logging
-4. Deploy AWS GuardDuty for threat detection
-5. Restrict SSH access to bastion host IP ranges only
-6. Consider VPC endpoints for AWS services to reduce NAT Gateway costs
-7. Implement automated disaster recovery procedures
-8. Use AWS Organizations SCPs for additional security controls
+# Network configuration
+vpc_cidr             = "10.0.0.0/16"
+public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+private_subnet_cidrs = ["10.0.11.0/24", "10.0.12.0/24", "10.0.13.0/24"]
 
-## Conclusion
+# Security configuration
+allowed_ssh_cidr = "10.0.0.0/8"
 
-This Terraform configuration provides a solid, production-ready foundation for a payment processing application with proper network segmentation, high availability, and security controls aligned with PCI DSS requirements. The code is clean, well-tested, and deployed successfully on the first attempt.
+# Resource tags
+tags = {
+  Project     = "payment-processing"
+  Environment = "production"
+  Compliance  = "PCI-DSS"
+  ManagedBy   = "terraform"
+  CostCenter  = "fintech-ops"
+}
+```
+
+## main.tf
+
+```hcl
+
+# Data source for availability zones
+data "aws_availability_zones" "available" {
+  state = "available"
+  filter {
+    name   = "opt-in-status"
+    values = ["opt-in-not-required"]
+  }
+}
+
+# VPC
+resource "aws_vpc" "main" {
+  cidr_block           = var.vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+
+  tags = {
+    Name = "vpc-${var.environment_suffix}"
+  }
+}
+
+# Internet Gateway
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "igw-${var.environment_suffix}"
+  }
+}
+
+# Public Subnets
+resource "aws_subnet" "public" {
+  count                   = 3
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = var.public_subnet_cidrs[count.index]
+  availability_zone       = data.aws_availability_zones.available.names[count.index]
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name = "public-subnet-${count.index + 1}-${var.environment_suffix}"
+    Tier = "public"
+  }
+}
+
+# Private Subnets
+resource "aws_subnet" "private" {
+  count             = 3
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = var.private_subnet_cidrs[count.index]
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+
+  tags = {
+    Name = "private-subnet-${count.index + 1}-${var.environment_suffix}"
+    Tier = "private"
+  }
+}
+
+# Elastic IPs for NAT Gateways
+resource "aws_eip" "nat" {
+  count  = 3
+  domain = "vpc"
+
+  tags = {
+    Name = "eip-nat-${count.index + 1}-${var.environment_suffix}"
+  }
+
+  depends_on = [aws_internet_gateway.main]
+}
+
+# NAT Gateways (one per public subnet for high availability)
+resource "aws_nat_gateway" "main" {
+  count         = 3
+  allocation_id = aws_eip.nat[count.index].id
+  subnet_id     = aws_subnet.public[count.index].id
+
+  tags = {
+    Name = "nat-gateway-${count.index + 1}-${var.environment_suffix}"
+  }
+
+  depends_on = [aws_internet_gateway.main]
+}
+
+# Route Table for Public Subnets
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
+
+  tags = {
+    Name = "public-route-table-${var.environment_suffix}"
+  }
+}
+
+# Public Subnet Route Table Associations
+resource "aws_route_table_association" "public" {
+  count          = 3
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}
+
+# Route Tables for Private Subnets (one per AZ with dedicated NAT Gateway)
+resource "aws_route_table" "private" {
+  count  = 3
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main[count.index].id
+  }
+
+  tags = {
+    Name = "private-route-table-${count.index + 1}-${var.environment_suffix}"
+  }
+}
+
+# Private Subnet Route Table Associations
+resource "aws_route_table_association" "private" {
+  count          = 3
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private[count.index].id
+}
+
+# Security Group for Web Tier
+resource "aws_security_group" "web_tier" {
+  name_prefix = "web-tier-${var.environment_suffix}-"
+  description = "Security group for web tier - allows HTTPS from internet"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description = "HTTPS from anywhere"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "SSH from allowed CIDR"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.allowed_ssh_cidr]
+  }
+
+  egress {
+    description = "Allow all outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "web-tier-sg-${var.environment_suffix}"
+    Tier = "web"
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# Security Group for Application Tier
+resource "aws_security_group" "app_tier" {
+  name_prefix = "app-tier-${var.environment_suffix}-"
+  description = "Security group for application tier - allows traffic only from web tier"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description     = "Allow traffic from web tier"
+    from_port       = 0
+    to_port         = 65535
+    protocol        = "tcp"
+    security_groups = [aws_security_group.web_tier.id]
+  }
+
+  egress {
+    description = "Allow all outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "app-tier-sg-${var.environment_suffix}"
+    Tier = "application"
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# Network ACL for Public Subnets
+resource "aws_network_acl" "public" {
+  vpc_id     = aws_vpc.main.id
+  subnet_ids = aws_subnet.public[*].id
+
+  # Inbound Rules - Deny by default, explicit allows below
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 443
+    to_port    = 443
+  }
+
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 110
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 80
+    to_port    = 80
+  }
+
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 120
+    action     = "allow"
+    cidr_block = var.allowed_ssh_cidr
+    from_port  = 22
+    to_port    = 22
+  }
+
+  # Ephemeral ports for return traffic
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 130
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 1024
+    to_port    = 65535
+  }
+
+  # Outbound Rules
+  egress {
+    protocol   = "tcp"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 443
+    to_port    = 443
+  }
+
+  egress {
+    protocol   = "tcp"
+    rule_no    = 110
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 80
+    to_port    = 80
+  }
+
+  # Ephemeral ports for response traffic
+  egress {
+    protocol   = "tcp"
+    rule_no    = 120
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 1024
+    to_port    = 65535
+  }
+
+  tags = {
+    Name = "public-nacl-${var.environment_suffix}"
+  }
+}
+
+# Network ACL for Private Subnets
+resource "aws_network_acl" "private" {
+  vpc_id     = aws_vpc.main.id
+  subnet_ids = aws_subnet.private[*].id
+
+  # Inbound Rules - Allow from VPC CIDR
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = var.vpc_cidr
+    from_port  = 0
+    to_port    = 65535
+  }
+
+  # Ephemeral ports for return traffic from internet
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 110
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 1024
+    to_port    = 65535
+  }
+
+  # Outbound Rules
+  egress {
+    protocol   = "tcp"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 443
+    to_port    = 443
+  }
+
+  egress {
+    protocol   = "tcp"
+    rule_no    = 110
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 80
+    to_port    = 80
+  }
+
+  egress {
+    protocol   = "tcp"
+    rule_no    = 120
+    action     = "allow"
+    cidr_block = var.vpc_cidr
+    from_port  = 0
+    to_port    = 65535
+  }
+
+  # Ephemeral ports for response traffic
+  egress {
+    protocol   = "tcp"
+    rule_no    = 130
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 1024
+    to_port    = 65535
+  }
+
+  tags = {
+    Name = "private-nacl-${var.environment_suffix}"
+  }
+}
+```
+
+## outputs.tf
+
+```hcl
+output "vpc_id" {
+  description = "ID of the VPC"
+  value       = aws_vpc.main.id
+}
+
+output "vpc_cidr" {
+  description = "CIDR block of the VPC"
+  value       = aws_vpc.main.cidr_block
+}
+
+output "public_subnet_ids" {
+  description = "IDs of public subnets"
+  value       = aws_subnet.public[*].id
+}
+
+output "private_subnet_ids" {
+  description = "IDs of private subnets"
+  value       = aws_subnet.private[*].id
+}
+
+output "public_subnet_cidrs" {
+  description = "CIDR blocks of public subnets"
+  value       = aws_subnet.public[*].cidr_block
+}
+
+output "private_subnet_cidrs" {
+  description = "CIDR blocks of private subnets"
+  value       = aws_subnet.private[*].cidr_block
+}
+
+output "internet_gateway_id" {
+  description = "ID of the Internet Gateway"
+  value       = aws_internet_gateway.main.id
+}
+
+output "nat_gateway_ids" {
+  description = "IDs of NAT Gateways"
+  value       = aws_nat_gateway.main[*].id
+}
+
+output "nat_gateway_eips" {
+  description = "Elastic IP addresses of NAT Gateways"
+  value       = aws_eip.nat[*].public_ip
+}
+
+output "web_tier_security_group_id" {
+  description = "ID of web tier security group"
+  value       = aws_security_group.web_tier.id
+}
+
+output "app_tier_security_group_id" {
+  description = "ID of application tier security group"
+  value       = aws_security_group.app_tier.id
+}
+
+output "public_route_table_id" {
+  description = "ID of public route table"
+  value       = aws_route_table.public.id
+}
+
+output "private_route_table_ids" {
+  description = "IDs of private route tables"
+  value       = aws_route_table.private[*].id
+}
+
+output "availability_zones" {
+  description = "Availability zones used for subnet deployment"
+  value       = data.aws_availability_zones.available.names
+}
+```

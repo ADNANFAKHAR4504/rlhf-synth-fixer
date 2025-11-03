@@ -1,6 +1,6 @@
 # Cloud Environment Setup
 
-> **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using Terraform with HCL**
+> **CRITICAL REQUIREMENT: This task MUST be implemented using Terraform with HCL**
 > 
 > Platform: **tf**  
 > Language: **hcl**  
