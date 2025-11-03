@@ -85,11 +85,12 @@ const iamMock = mockClient(IAMClient);
 
 // Check if real resources are deployed
 const hasDeployedResources = () => {
-  return (
-    outputs.vpcId &&
-    outputs.vpcId !== 'vpc-0123456789abcdef0' && // Not the mock value
-    !useLocalStack
-  );
+  // Check if we have real AWS resources (not mock data)
+  const hasRealVpc = outputs.vpcId && outputs.vpcId !== 'vpc-0123456789abcdef0';
+  const hasRealLambda = outputs.lambdaFunctionArn &&
+    !outputs.lambdaFunctionArn.includes('123456789012'); // Mock account ID
+
+  return hasRealVpc && hasRealLambda && !useLocalStack;
 };
 
 // Use mocks for local testing
@@ -98,11 +99,11 @@ const useMocks = !hasDeployedResources() && !useLocalStack;
 describe('TapStack Integration Tests', () => {
   beforeAll(() => {
     if (useMocks) {
-      console.log('Running integration tests with mocked AWS SDK responses');
+      console.log('🧪 Running integration tests with mocked AWS SDK responses');
     } else if (useLocalStack) {
-      console.log('Running integration tests against LocalStack');
+      console.log('🐳 Running integration tests against LocalStack');
     } else {
-      console.log('Running integration tests against real AWS resources');
+      console.log('☁️  Running integration tests against real AWS resources');
     }
   });
 
