@@ -11,11 +11,11 @@ import (
 	"fmt"
 
 	"github.com/aws/aws-cdk-go/awscdk/v2"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudwatch"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awskms"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsrds"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awssecretsmanager"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awskms"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudwatch"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 )
@@ -32,7 +32,7 @@ type TapStack struct {
 
 func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *TapStack {
 	var sprops awscdk.StackProps
-	if props != nil {
+	if props != nil && props.StackProps != nil {
 		sprops = *props.StackProps
 	}
 	stack := awscdk.NewStack(scope, id, &sprops)
@@ -41,17 +41,21 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	var environmentSuffix string
 	if props != nil && props.EnvironmentSuffix != nil {
 		environmentSuffix = *props.EnvironmentSuffix
-	} else if suffix := stack.Node().TryGetContext(jsii.String("environmentSuffix")); suffix != nil {
-		environmentSuffix = *suffix.(*string)
+	} else if val := stack.Node().TryGetContext(jsii.String("environmentSuffix")); val != nil {
+		if suffix, ok := val.(string); ok {
+			environmentSuffix = suffix
+		} else {
+			environmentSuffix = "dev"
+		}
 	} else {
 		environmentSuffix = "dev"
 	}
 
 	// Create VPC with 3 AZs
 	vpc := awsec2.NewVpc(stack, jsii.String("PaymentDbVpc"), &awsec2.VpcProps{
-		VpcName:          jsii.String(fmt.Sprintf("payment-db-vpc-%s", environmentSuffix)),
-		MaxAzs:           jsii.Number(3),
-		NatGateways:      jsii.Number(1),
+		VpcName:     jsii.String(fmt.Sprintf("payment-db-vpc-%s", environmentSuffix)),
+		MaxAzs:      jsii.Number(3),
+		NatGateways: jsii.Number(1),
 		SubnetConfiguration: &[]*awsec2.SubnetConfiguration{
 			{
 				Name:       jsii.String("Public"),
@@ -68,14 +72,14 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 
 	// Create KMS key for encryption
 	encryptionKey := awskms.NewKey(stack, jsii.String("AuroraEncryptionKey"), &awskms.KeyProps{
-		Description:        jsii.String(fmt.Sprintf("KMS key for Aurora cluster encryption - %s", environmentSuffix)),
-		EnableKeyRotation:  jsii.Bool(true),
-		RemovalPolicy:      awscdk.RemovalPolicy_DESTROY,
+		Description:       jsii.String(fmt.Sprintf("KMS key for Aurora cluster encryption - %s", environmentSuffix)),
+		EnableKeyRotation: jsii.Bool(true),
+		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
 	})
 
 	// Create database credentials secret
-	dbSecret := awssecretsmanager.NewSecret(stack, jsii.String("AuroraSecret"), &awssecretsmanager.SecretProps{
-		SecretName: jsii.String(fmt.Sprintf("payment-db-credentials-%s", environmentSuffix)),
+	dbSecret := awssecretsmanager.NewSecret(stack, jsii.String("DBSecret"), &awssecretsmanager.SecretProps{
+		SecretName:  jsii.String(fmt.Sprintf("payment-db-credentials-%s", environmentSuffix)),
 		Description: jsii.String("Master credentials for Aurora PostgreSQL cluster"),
 		GenerateSecretString: &awssecretsmanager.SecretStringGenerator{
 			SecretStringTemplate: jsii.String(`{"username": "dbadmin"}`),
@@ -94,7 +98,6 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		Description: jsii.String(fmt.Sprintf("Parameter group for payment processing - %s", environmentSuffix)),
 		Parameters: &map[string]*string{
 			"rds.force_ssl": jsii.String("1"),
-			"shared_buffers": jsii.String("{DBInstanceClassMemory/10240}"),
 		},
 	})
 
@@ -132,12 +135,12 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		VpcSubnets: &awsec2.SubnetSelection{
 			SubnetType: awsec2.SubnetType_PRIVATE_WITH_EGRESS,
 		},
-		StorageEncrypted:    jsii.Bool(true),
+		StorageEncrypted:     jsii.Bool(true),
 		StorageEncryptionKey: encryptionKey,
-		ParameterGroup:      parameterGroup,
+		ParameterGroup:       parameterGroup,
 		Backup: &awsrds.BackupProps{
-			Retention:          awscdk.Duration_Days(jsii.Number(7)),
-			PreferredWindow:    jsii.String("03:00-04:00"),
+			Retention:       awscdk.Duration_Days(jsii.Number(7)),
+			PreferredWindow: jsii.String("03:00-04:00"),
 		},
 		CloudwatchLogsExports: &[]*string{
 			jsii.String("postgresql"),
@@ -151,6 +154,12 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		jsii.String("postgresql"),
 	})
 
+	if cfn, ok := cluster.Node().DefaultChild().(awsrds.CfnDBCluster); ok {
+		cfn.SetEnableCloudwatchLogsExports(&[]*string{
+			jsii.String("postgresql"),
+		})
+	}
+
 	// Create CloudWatch alarms for CPU
 	awscloudwatch.NewAlarm(stack, jsii.String("ClusterCPUAlarm"), &awscloudwatch.AlarmProps{
 		AlarmName:        jsii.String(fmt.Sprintf("payment-db-cpu-alarm-%s", environmentSuffix)),
@@ -158,8 +167,8 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		Metric: cluster.MetricCPUUtilization(&awscloudwatch.MetricOptions{
 			Period: awscdk.Duration_Minutes(jsii.Number(5)),
 		}),
-		Threshold:         jsii.Number(80),
-		EvaluationPeriods: jsii.Number(2),
+		Threshold:          jsii.Number(80),
+		EvaluationPeriods:  jsii.Number(2),
 		ComparisonOperator: awscloudwatch.ComparisonOperator_GREATER_THAN_THRESHOLD,
 	})
 
@@ -170,13 +179,16 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		Metric: cluster.MetricFreeableMemory(&awscloudwatch.MetricOptions{
 			Period: awscdk.Duration_Minutes(jsii.Number(5)),
 		}),
-		Threshold:         jsii.Number(15),
-		EvaluationPeriods: jsii.Number(2),
+		Threshold:          jsii.Number(15),
+		EvaluationPeriods:  jsii.Number(2),
 		ComparisonOperator: awscloudwatch.ComparisonOperator_LESS_THAN_THRESHOLD,
 	})
 
 	// Create rotation schedule for secrets
-	dbSecret.AddRotationSchedule(jsii.String("RotationSchedule"), &awssecretsmanager.RotationScheduleOptions{
+	// Use environmentSuffix in the construct ID so nested/hosted rotation stacks and their
+	// generated resources are unique per deployment (avoids resource name collisions).
+	rotationId := fmt.Sprintf("R-%s", environmentSuffix)
+	dbSecret.AddRotationSchedule(jsii.String(rotationId), &awssecretsmanager.RotationScheduleOptions{
 		AutomaticallyAfter: awscdk.Duration_Days(jsii.Number(30)),
 		HostedRotation:     awssecretsmanager.HostedRotation_PostgreSqlSingleUser(nil),
 	})
@@ -210,16 +222,19 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 ## Key Improvements Over MODEL_RESPONSE
 
 ### 1. Correct Aurora Version
+
 - Used `AuroraPostgresEngineVersion_VER_15_7()` instead of non-existent `VER_15_4()`
 - Applied to both parameter group and cluster engine configuration
 - Prevents deployment failure
 
 ### 2. Complete Secrets Rotation
+
 - Added `HostedRotation: awssecretsmanager.HostedRotation_PostgreSqlSingleUser(nil)`
 - Enables automatic 30-day credential rotation with AWS-managed Lambda function
 - Required for Secrets Manager rotation to work
 
 ### 3. Modern CDK API
+
 - Replaced deprecated `InstanceProps` + `Instances` with `Writer` + `Readers`
 - Explicit configuration for writer and reader instances
 - Future-proof implementation aligned with current CDK best practices
@@ -227,17 +242,20 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 ### 4. Complete Infrastructure
 
 **Network Layer**:
+
 - VPC with 3 availability zones
 - Public and private subnets in each AZ
 - NAT Gateway for private subnet egress (cost-optimized to 1 gateway)
 
 **Security Layer**:
+
 - Customer-managed KMS key with automatic rotation
 - Private subnet placement for all database instances
 - No public accessibility
 - SSL enforcement via parameter group (`rds.force_ssl: 1`)
 
 **Database Layer**:
+
 - Aurora PostgreSQL 15.7 cluster
 - 1 writer instance + 2 reader instances
 - Multi-AZ deployment for high availability
@@ -246,19 +264,23 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 - Point-in-time recovery enabled
 
 **Monitoring Layer**:
+
 - CloudWatch CPU utilization alarm (>80%)
 - CloudWatch memory alarm (freeable memory <15%)
 - PostgreSQL query logs exported to CloudWatch
 - 5-minute evaluation periods with 2-period threshold
 
 **Credentials Management**:
+
 - Secrets Manager secret with auto-generated password
 - 32-character password (no punctuation for compatibility)
 - Automatic 30-day rotation with PostgreSQL-specific Lambda
 - Credentials accessible via ARN output
 
 ### 5. Resource Naming
+
 All resources include `environmentSuffix` for uniqueness:
+
 - `payment-db-vpc-{environmentSuffix}`
 - `payment-db-cluster-{environmentSuffix}`
 - `payment-db-credentials-{environmentSuffix}`
@@ -266,7 +288,9 @@ All resources include `environmentSuffix` for uniqueness:
 - `payment-db-storage-alarm-{environmentSuffix}`
 
 ### 6. Destroyability
+
 All resources configured with `RemovalPolicy_DESTROY` for testing:
+
 - KMS key
 - Secrets Manager secret
 - Aurora cluster
@@ -274,7 +298,9 @@ All resources configured with `RemovalPolicy_DESTROY` for testing:
 - No `Retain` policies
 
 ### 7. Stack Outputs
+
 Exports for integration testing and application configuration:
+
 - Cluster writer endpoint (read/write operations)
 - Cluster reader endpoint (read-only queries)
 - Secrets Manager ARN (credential retrieval)
@@ -282,6 +308,7 @@ Exports for integration testing and application configuration:
 ## Requirements Compliance
 
 ### Functional Requirements
+
 - VPC with 3 AZs: YES
 - Aurora PostgreSQL cluster: YES (version 15.7)
 - 1 writer + 2 readers: YES
@@ -300,6 +327,7 @@ Exports for integration testing and application configuration:
 - Performance Insights: PARTIAL (logs enabled, PI needs instance-level config)
 
 ### Technical Requirements
+
 - CDK Go implementation: YES
 - us-east-1 region: YES
 - environmentSuffix in names: YES
@@ -310,6 +338,7 @@ Exports for integration testing and application configuration:
 ## Deployment Characteristics
 
 **Estimated Deployment Time**: 20-30 minutes
+
 - VPC: 2-3 minutes
 - KMS key: 1 minute
 - Secrets Manager: 1 minute
@@ -317,6 +346,7 @@ Exports for integration testing and application configuration:
 - CloudWatch alarms: <1 minute
 
 **Resource Count**: ~49 resources
+
 - VPC and networking: 15-20 resources
 - RDS cluster and instances: 4 resources
 - Security groups: 1 resource
@@ -326,6 +356,7 @@ Exports for integration testing and application configuration:
 - IAM roles and policies: 5-10 resources
 
 **Cost Factors**:
+
 - NAT Gateway: ~$0.045/hour (~$32/month)
 - Aurora instances (3x db.t3.medium): ~$0.082/hour each (~$180/month total)
 - KMS key: $1/month + usage
@@ -335,12 +366,14 @@ Exports for integration testing and application configuration:
 ## Known Limitations
 
 1. **Performance Insights**: CloudWatch Logs are enabled, but Performance Insights requires instance-level configuration not currently implemented. To add:
+
    ```go
    PerformanceInsightRetention: awsrds.PerformanceInsightRetention_DAYS_7,
    EnablePerformanceInsights: jsii.Bool(true),
    ```
 
 2. **Storage Monitoring**: Current alarm uses `MetricFreeableMemory()` as a proxy for resource pressure. For true storage monitoring, consider:
+
    ```go
    Metric: cluster.MetricFreeLocalStorage(&awscloudwatch.MetricOptions{...})
    ```
@@ -353,6 +386,7 @@ Exports for integration testing and application configuration:
 ## Production Enhancements (Optional)
 
 For production deployment beyond synthetic training:
+
 1. Enable enhanced monitoring at instance level
 2. Add SNS topic for CloudWatch alarm notifications
 3. Implement full Performance Insights configuration
@@ -365,6 +399,7 @@ For production deployment beyond synthetic training:
 ## Testing Coverage
 
 Integration tests should verify:
+
 - Cluster endpoints are accessible
 - Writer endpoint accepts write operations
 - Reader endpoints accept read operations

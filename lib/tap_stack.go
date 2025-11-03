@@ -25,7 +25,7 @@ type TapStack struct {
 
 func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *TapStack {
 	var sprops awscdk.StackProps
-	if props != nil {
+	if props != nil && props.StackProps != nil {
 		sprops = *props.StackProps
 	}
 	stack := awscdk.NewStack(scope, id, &sprops)
@@ -34,8 +34,12 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	var environmentSuffix string
 	if props != nil && props.EnvironmentSuffix != nil {
 		environmentSuffix = *props.EnvironmentSuffix
-	} else if suffix := stack.Node().TryGetContext(jsii.String("environmentSuffix")); suffix != nil {
-		environmentSuffix = *suffix.(*string)
+	} else if val := stack.Node().TryGetContext(jsii.String("environmentSuffix")); val != nil {
+		if suffix, ok := val.(string); ok {
+			environmentSuffix = suffix
+		} else {
+			environmentSuffix = "dev"
+		}
 	} else {
 		environmentSuffix = "dev"
 	}
@@ -67,7 +71,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	})
 
 	// Create database credentials secret
-	dbSecret := awssecretsmanager.NewSecret(stack, jsii.String("AuroraSecret"), &awssecretsmanager.SecretProps{
+	dbSecret := awssecretsmanager.NewSecret(stack, jsii.String("DBSecret"), &awssecretsmanager.SecretProps{
 		SecretName:  jsii.String(fmt.Sprintf("payment-db-credentials-%s", environmentSuffix)),
 		Description: jsii.String("Master credentials for Aurora PostgreSQL cluster"),
 		GenerateSecretString: &awssecretsmanager.SecretStringGenerator{
@@ -86,8 +90,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		}),
 		Description: jsii.String(fmt.Sprintf("Parameter group for payment processing - %s", environmentSuffix)),
 		Parameters: &map[string]*string{
-			"rds.force_ssl":  jsii.String("1"),
-			"shared_buffers": jsii.String("{DBInstanceClassMemory/10240}"),
+			"rds.force_ssl": jsii.String("1"),
 		},
 	})
 
@@ -144,6 +147,12 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		jsii.String("postgresql"),
 	})
 
+	if cfn, ok := cluster.Node().DefaultChild().(awsrds.CfnDBCluster); ok {
+		cfn.SetEnableCloudwatchLogsExports(&[]*string{
+			jsii.String("postgresql"),
+		})
+	}
+
 	// Create CloudWatch alarms for CPU
 	awscloudwatch.NewAlarm(stack, jsii.String("ClusterCPUAlarm"), &awscloudwatch.AlarmProps{
 		AlarmName:        jsii.String(fmt.Sprintf("payment-db-cpu-alarm-%s", environmentSuffix)),
@@ -171,7 +180,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	// Create rotation schedule for secrets
 	// Use environmentSuffix in the construct ID so nested/hosted rotation stacks and their
 	// generated resources are unique per deployment (avoids resource name collisions).
-	rotationId := fmt.Sprintf("RotationSchedule-%s", environmentSuffix)
+	rotationId := fmt.Sprintf("R-%s", environmentSuffix)
 	dbSecret.AddRotationSchedule(jsii.String(rotationId), &awssecretsmanager.RotationScheduleOptions{
 		AutomaticallyAfter: awscdk.Duration_Days(jsii.Number(30)),
 		HostedRotation:     awssecretsmanager.HostedRotation_PostgreSqlSingleUser(nil),
