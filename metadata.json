@@ -1,6 +1,6 @@
 {
   "platform": "pulumi",
-  "language": "python",
+  "language": "py",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "349145",
