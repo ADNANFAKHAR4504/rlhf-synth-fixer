@@ -19,6 +19,14 @@
     "CloudTrail",
     "CloudWatch Logs",
     "Security Groups",
-    "EC2"
-  ]
+    "EC2",
+    "KMS"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Chandan-devs-tech",
+  "dockerS3Location": ""
 }
