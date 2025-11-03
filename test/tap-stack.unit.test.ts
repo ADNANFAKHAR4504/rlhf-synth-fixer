@@ -2,16 +2,14 @@ import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
 describe('TapStack Unit Tests', () => {
   let app: cdk.App;
   let stack: TapStack;
   let template: Template;
+  const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
   beforeEach(() => {
-    process.env.AWS_REGION = 'ap-northeast-1';
-    process.env.ENVIRONMENT_SUFFIX = 'dev';
+    process.env.AWS_REGION = process.env.AWS_REGION || 'ap-northeast-1';
     app = new cdk.App();
     stack = new TapStack(app, 'TestTapStack', { environmentSuffix });
     template = Template.fromStack(stack);
@@ -29,7 +27,7 @@ describe('TapStack Unit Tests', () => {
     test('should create KMS key aliases', () => {
       template.resourceCountIs('AWS::KMS::Alias', 3);
       template.hasResourceProperties('AWS::KMS::Alias', {
-        AliasName: Match.stringLikeRegexp('alias/tap-dev/'),
+        AliasName: Match.stringLikeRegexp(`alias/tap-${environmentSuffix}/`),
       });
     });
 
@@ -56,34 +54,34 @@ describe('TapStack Unit Tests', () => {
   describe('IAM Roles', () => {
     test('should create admin role with MFA enforcement', () => {
       template.hasResourceProperties('AWS::IAM::Role', {
-        RoleName: 'tap-dev-AdminRole',
+        RoleName: `tap-${environmentSuffix}-AdminRole`,
         MaxSessionDuration: 3600,
       });
     });
 
     test('should create developer role', () => {
       template.hasResourceProperties('AWS::IAM::Role', {
-        RoleName: 'tap-dev-DeveloperRole',
+        RoleName: `tap-${environmentSuffix}-DeveloperRole`,
         MaxSessionDuration: 14400,
       });
     });
 
     test('should create audit role', () => {
       template.hasResourceProperties('AWS::IAM::Role', {
-        RoleName: 'tap-dev-AuditRole',
+        RoleName: `tap-${environmentSuffix}-AuditRole`,
         MaxSessionDuration: 43200,
       });
     });
 
     test('should create service account role', () => {
       template.hasResourceProperties('AWS::IAM::Role', {
-        RoleName: 'tap-dev-ServiceAccountRole',
+        RoleName: `tap-${environmentSuffix}-ServiceAccountRole`,
       });
     });
 
     test('should create cross-account role', () => {
       template.hasResourceProperties('AWS::IAM::Role', {
-        RoleName: 'tap-dev-CrossAccountRole',
+        RoleName: `tap-${environmentSuffix}-CrossAccountRole`,
         MaxSessionDuration: 3600,
       });
     });
@@ -92,7 +90,7 @@ describe('TapStack Unit Tests', () => {
   describe('IAM Policies', () => {
     test('should create permission boundary', () => {
       template.hasResourceProperties('AWS::IAM::ManagedPolicy', {
-        ManagedPolicyName: 'tap-dev-PermissionBoundary',
+        ManagedPolicyName: `tap-${environmentSuffix}-PermissionBoundary`,
       });
     });
 
@@ -181,7 +179,7 @@ describe('TapStack Unit Tests', () => {
 
     test('should create database credentials with rotation', () => {
       template.hasResourceProperties('AWS::SecretsManager::Secret', {
-        Name: 'tap-dev/DatabaseCredentials',
+        Name: `tap-${environmentSuffix}/DatabaseCredentials`,
         GenerateSecretString: {
           GenerateStringKey: 'password',
           PasswordLength: 32,
@@ -191,13 +189,13 @@ describe('TapStack Unit Tests', () => {
 
     test('should create API keys secret', () => {
       template.hasResourceProperties('AWS::SecretsManager::Secret', {
-        Name: 'tap-dev/ApiKeys',
+        Name: `tap-${environmentSuffix}/ApiKeys`,
       });
     });
 
     test('should create service tokens secret', () => {
       template.hasResourceProperties('AWS::SecretsManager::Secret', {
-        Name: 'tap-dev/ServiceTokens',
+        Name: `tap-${environmentSuffix}/ServiceTokens`,
       });
     });
 
@@ -275,7 +273,7 @@ describe('TapStack Unit Tests', () => {
     test('should create IAM Access Analyzer', () => {
       template.hasResourceProperties('AWS::AccessAnalyzer::Analyzer', {
         Type: 'ACCOUNT',
-        AnalyzerName: 'tap-dev-Analyzer',
+        AnalyzerName: `tap-${environmentSuffix}-Analyzer`,
       });
     });
   });
