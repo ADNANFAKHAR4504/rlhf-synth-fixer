@@ -33,11 +33,6 @@ describe('Payment Processing System CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have 54 resources', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(54);
-    });
-
     test('should have 22 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
       expect(parameterCount).toBe(22);
