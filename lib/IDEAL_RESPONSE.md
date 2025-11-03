@@ -60,14 +60,6 @@ Parameters:
     MaxLength: 16
     AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
 
-  DBPassword:
-    Type: String
-    Description: Master password for RDS MySQL database
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '^[a-zA-Z0-9!@#$%^&*()_+-=]*$'
-
   DBInstanceClass:
     Type: String
     Description: RDS instance class for MySQL database
@@ -117,11 +109,6 @@ Parameters:
     Description: Username for on-premises MySQL database
     Default: migrationuser
 
-  OnPremisesDBPassword:
-    Type: String
-    Description: Password for on-premises MySQL database
-    NoEcho: true
-
   EC2InstanceType:
     Type: String
     Description: EC2 instance type for application servers
@@ -164,6 +151,36 @@ Parameters:
     Default: finance-ops
 
 Resources:
+  # ==================== Secrets Management ====================
+
+  DBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: !Sub payment-processing-db-password-${EnvironmentSuffix}
+      Description: RDS MySQL master password
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\\;:?"{}[](),=$%#^*+|<>~`'
+        RequireEachIncludedType: true
+
+  OnPremisesDBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: !Sub payment-processing-onprem-db-password-${EnvironmentSuffix}
+      Description: On-premises MySQL database password
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "migrationuser"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: "\"@/\\;"
+        RequireEachIncludedType: true
+
   # ==================== VPC and Networking ====================
 
   VPC:
@@ -690,29 +707,12 @@ Resources:
 
   # ==================== Secrets Manager for Database Credentials ====================
 
-  DBSecret:
-    Type: AWS::SecretsManager::Secret
+  DBSecretAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
     Properties:
-      Name: !Sub payment-processing-db-secret-${EnvironmentSuffix}
-      Description: Database credentials for RDS MySQL instance
-      SecretString: !Sub |
-        {
-          "username": "${DBUsername}",
-          "password": "${DBPassword}",
-          "engine": "mysql",
-          "host": "${RDSInstance.Endpoint.Address}",
-          "port": 3306,
-          "dbname": "paymentdb"
-        }
-      Tags:
-        - Key: Name
-          Value: !Sub payment-processing-db-secret-${EnvironmentSuffix}
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref Project
-        - Key: CostCenter
-          Value: !Ref CostCenter
+      SecretId: !Ref DBPasswordSecret
+      TargetId: !Ref RDSInstance
+      TargetType: AWS::RDS::DBInstance
 
   # ==================== RDS MySQL Multi-AZ ====================
 
@@ -742,9 +742,9 @@ Resources:
       DBInstanceIdentifier: !Sub payment-processing-db-${EnvironmentSuffix}
       DBInstanceClass: !Ref DBInstanceClass
       Engine: mysql
-      EngineVersion: 8.0.35
+      EngineVersion: 8.0.43
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
       AllocatedStorage: !Ref DBAllocatedStorage
       StorageType: gp3
       StorageEncrypted: true
@@ -806,7 +806,7 @@ Resources:
       ReplicationSubnetGroupIdentifier: !Ref DMSReplicationSubnetGroup
       PubliclyAccessible: false
       MultiAZ: false
-      EngineVersion: 3.5.2
+      EngineVersion: 3.5.3
       Tags:
         - Key: Name
           Value: !Sub payment-processing-dms-${EnvironmentSuffix}
@@ -827,7 +827,7 @@ Resources:
       Port: !Ref OnPremisesDBPort
       DatabaseName: !Ref OnPremisesDBName
       Username: !Ref OnPremisesDBUsername
-      Password: !Ref OnPremisesDBPassword
+      Password: !Sub '{{resolve:secretsmanager:${OnPremisesDBPasswordSecret}:SecretString:password}}'
       Tags:
         - Key: Name
           Value: !Sub payment-processing-source-endpoint-${EnvironmentSuffix}
@@ -840,8 +840,6 @@ Resources:
 
   DMSTargetEndpoint:
     Type: AWS::DMS::Endpoint
-    DependsOn:
-      - RDSInstance
     Properties:
       EndpointIdentifier: !Sub payment-processing-target-endpoint-${EnvironmentSuffix}
       EndpointType: target
@@ -850,7 +848,7 @@ Resources:
       Port: 3306
       DatabaseName: paymentdb
       Username: !Ref DBUsername
-      Password: !Ref DBPassword
+      Password: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
       Tags:
         - Key: Name
           Value: !Sub payment-processing-target-endpoint-${EnvironmentSuffix}
@@ -886,7 +884,7 @@ Resources:
                 Action:
                   - secretsmanager:GetSecretValue
                   - secretsmanager:DescribeSecret
-                Resource: !Ref DBSecret
+                Resource: !Ref DBPasswordSecret
       Tags:
         - Key: Name
           Value: !Sub payment-processing-ec2-role-${EnvironmentSuffix}
@@ -903,6 +901,29 @@ Resources:
       InstanceProfileName: !Sub payment-processing-ec2-profile-${EnvironmentSuffix}
       Roles:
         - !Ref EC2InstanceRole
+
+  DMSVPCRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: dms-vpc-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: dms.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonDMSVPCManagementRole
+      Tags:
+        - Key: Name
+          Value: dms-vpc-role
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref Project
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   # ==================== Application Load Balancer ====================
 
@@ -980,7 +1001,7 @@ Resources:
         SecurityGroupIds:
           - !Ref AppServerSecurityGroup
         UserData:
-          Fn::Base64: !Sub |
+          Fn::Base64: |
             #!/bin/bash
             yum update -y
             yum install -y amazon-cloudwatch-agent
@@ -1155,8 +1176,8 @@ Outputs:
       Name: !Sub ${AWS::StackName}-RDSPort
 
   DBSecretArn:
-    Description: ARN of Secrets Manager secret containing database credentials
-    Value: !Ref DBSecret
+    Description: ARN of Secrets Manager secret containing database password
+    Value: !Ref DBPasswordSecret
     Export:
       Name: !Sub ${AWS::StackName}-DBSecretArn
 
@@ -1220,3 +1241,5 @@ Outputs:
     Export:
       Name: !Sub ${AWS::StackName}-KMSKeyId
 ```
+
+l
