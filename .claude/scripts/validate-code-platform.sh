@@ -46,7 +46,7 @@ if [ "$EXPECTED_PLATFORM" = "analysis" ]; then
         print_success "Analysis script found in lib/"
 
         # Only validate language (should be python or bash)
-        if [ "$EXPECTED_LANGUAGE" = "python" ] || [ "$EXPECTED_LANGUAGE" = "py" ]; then
+        if [ "$EXPECTED_LANGUAGE" = "py" ] || [ "$EXPECTED_LANGUAGE" = "py" ]; then
             if grep -qE '```python|```py|^import |^def |\.py' lib/IDEAL_RESPONSE.md; then
                 print_success "Language matches: Python script detected"
                 exit 0
@@ -112,7 +112,7 @@ elif grep -qE 'terraform\{|provider "aws"|resource "aws_' lib/IDEAL_RESPONSE.md;
     DETECTED_PLATFORM="tf"
 # Check for CloudFormation
 elif grep -qE 'AWSTemplateFormatVersion|Resources:|AWS::CloudFormation' lib/IDEAL_RESPONSE.md; then
-    DETECTED_PLATFORM="cloudformation"
+    DETECTED_PLATFORM="cfn"
 # Check for Pulumi
 elif grep -qE 'import pulumi|from pulumi import|pulumi\.' lib/IDEAL_RESPONSE.md; then
     DETECTED_PLATFORM="pulumi"
@@ -130,14 +130,14 @@ if grep -qE '```java|package app|package com|import java\.|public class |\.java'
     DETECTED_LANGUAGE="java"
 # Check for TypeScript
 elif grep -qE '```typescript|```ts|import.*from|interface |\.ts' lib/IDEAL_RESPONSE.md; then
-    DETECTED_LANGUAGE="typescript"
+    DETECTED_LANGUAGE="ts"
 # Check for HCL (Terraform configuration language) - MUST check before Python
 # Because Terraform files may reference .py files (e.g., lambda.py) which would match Python pattern
 elif grep -qE '```hcl|```terraform|resource "aws_|provider "aws"|\.tf' lib/IDEAL_RESPONSE.md; then
     DETECTED_LANGUAGE="hcl"
 # Check for Python
 elif grep -qE '```python|```py|^import |^def |\.py' lib/IDEAL_RESPONSE.md; then
-    DETECTED_LANGUAGE="python"
+    DETECTED_LANGUAGE="py"
 # Check for Go
 elif grep -qE '```go|package main|import \(|func |\.go' lib/IDEAL_RESPONSE.md; then
     DETECTED_LANGUAGE="go"
