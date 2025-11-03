@@ -271,7 +271,7 @@ describe('Terraform Infrastructure Tests', () => {
 
   describe('IAM Resources', () => {
     it('creates IAM role for EC2 instances', () => {
-      expect(has(/resource\s+"aws_iam_role"\s+"web"[\s\S]*?name\s*=\s*"\$\{local\.name_prefix\}-web-role-ts"/)).toBe(true);
+      expect(has(/resource\s+"aws_iam_role"\s+"web"[\s\S]*?name\s*=\s*"\$\{local\.name_prefix\}-web-role-ts-123"/)).toBe(true);
       expect(has(/assume_role_policy[\s\S]*?Service\s*=\s*"ec2\.amazonaws\.com"/)).toBe(true);
     });
 

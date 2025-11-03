@@ -510,7 +510,7 @@ resource "aws_lb" "main" {
 }
 
 resource "aws_lb_target_group" "web" {
-  name     = "${local.name_prefix}-web"
+  name     = "${local.name_prefix}-web-ts"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -744,7 +744,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low" {
 
 
 resource "aws_iam_role" "web" {
-  name = "${local.name_prefix}-web-role-ts"
+  name = "${local.name_prefix}-web-role-ts-123"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -791,7 +791,7 @@ resource "aws_iam_instance_profile" "web" {
 
 # IAM policy for Secrets Manager
 resource "aws_iam_policy" "secrets_manager_read" {
-  name        = "${local.name_prefix}-secrets-manager-read-ts"
+  name        = "${local.name_prefix}-secrets-manager-read-ts-123"
   description = "Allow reading RDS credentials from Secrets Manager"
 
   policy = jsonencode({
@@ -868,7 +868,7 @@ resource "aws_secretsmanager_secret_version" "db_credentials" {
 # RDS Database
 
 resource "aws_db_subnet_group" "main" {
-  name       = "${local.name_prefix}-db-subnet-group-ts"
+  name       = "${local.name_prefix}-db-subnet-group-ts-123"
   subnet_ids = aws_subnet.database[*].id
 
   tags = merge(
@@ -880,7 +880,7 @@ resource "aws_db_subnet_group" "main" {
 }
 
 resource "aws_db_parameter_group" "mysql" {
-  name   = "${local.name_prefix}-mysql-params-ts"
+  name   = "${local.name_prefix}-mysql-params-ts-123"
   family = "mysql8.0"
 
   parameter {
