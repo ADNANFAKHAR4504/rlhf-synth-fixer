@@ -26,6 +26,11 @@
     "Service Linked Role"
   ],
   "training_quality": 9,
-  "background": "Provision identity and access management resources in a new AWS environment using CloudFormation. The stack includes KMS key creation, IAM roles, policies, groups, users, and instance profiles with appropriate attachments and associations. It also configures CloudWatch Logs, SSM parameters, and SNS topics with subscriptions. The goal is to establish secure, scalable, and auditable infrastructure components with consistent tagging and naming conventions."
+  "background": "Provision identity and access management resources in a new AWS environment using CloudFormation. The stack includes KMS key creation, IAM roles, policies, groups, users, and instance profiles with appropriate attachments and associations. It also configures CloudWatch Logs, SSM parameters, and SNS topics with subscriptions. The goal is to establish secure, scalable, and auditable infrastructure components with consistent tagging and naming conventions.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
 }
-
