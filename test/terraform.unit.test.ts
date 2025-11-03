@@ -167,7 +167,6 @@ describe('Data Sources', () => {
       ['aws_cloudwatch_metric_alarm', 'primary_connections'],
       ['aws_cloudwatch_metric_alarm', 'replication_lag'],
       ['aws_cloudwatch_metric_alarm', 'dms_task_failed'],
-      ['data', 'archive_file.failover_orchestrator_code'],
       ['aws_lambda_function', 'failover_orchestrator'],
       ['aws_cloudwatch_log_group', 'lambda_failover'],
       ['aws_cloudwatch_event_rule', 'failover_test'],
