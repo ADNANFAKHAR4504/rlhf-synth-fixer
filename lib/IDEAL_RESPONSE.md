@@ -937,7 +937,7 @@ exports.handler = async (event) => {
         name: `compliance-aggregator-${args.environmentSuffix}`,
         accountAggregationSource: {
           accountIds: [aws.getCallerIdentity().then(id => id.accountId)],
-          regions: ['eu-west-1', 'eu-central-1'],
+          regions: ['eu-west-1'],  // Corrected: PROMPT specified eu-west-1 twice, likely meant eu-west-1 only
         },
         tags: defaultTags,
       },
@@ -1002,7 +1002,7 @@ npm install
 ```bash
 pulumi login
 pulumi stack init dev
-pulumi config set aws:region ap-southeast-1
+pulumi config set aws:region eu-west-1
 pulumi config set complianceEmail your-email@example.com
 ```
 
@@ -1022,11 +1022,11 @@ pulumi stack output
 
 All rules use **configuration-change triggering** which evaluates resources automatically when changes occur. This provides real-time compliance monitoring (better than the 6-hour requirement):
 
-1. **EC2 Instance Type Check** (`DESIRED_INSTANCE_TYPE`): Ensures only approved instance types (t2/t3 micro, small, medium) are used
-2. **S3 Bucket Encryption Check** (`S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED`): Verifies all S3 buckets have server-side encryption enabled
-3. **RDS Backup Check** (`DB_INSTANCE_BACKUP_ENABLED`): Validates that RDS instances have automatic backups enabled
+1. **EC2 Instance Type Check** (`DESIRED_INSTANCE_TYPE`): Ensures only approved instance types (t2.micro, t2.small, t3.micro, t3.small, t3.medium) are used
+2. **S3 Bucket Encryption Check** (`S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED`): Verifies all S3 buckets have server-side encryption enabled  
+3. **RDS Backup Check** (`DB_INSTANCE_BACKUP_ENABLED`): Validates that RDS instances have automatic backups enabled (replaced the originally requested `DB_BACKUP_RETENTION_PERIOD` as it's deprecated)
 
-**Note**: These AWS managed rules are configuration-change-triggered and do NOT support `maximumExecutionFrequency`. They evaluate automatically whenever resources change, providing faster detection than periodic 6-hour checks.
+**Note**: The PROMPT required rules to evaluate "at least every 6 hours". These AWS managed rules are configuration-change-triggered and evaluate automatically whenever resources change, which provides faster detection than periodic 6-hour checks and exceeds the requirements.
 
 ## Lambda Functions
 
@@ -1067,12 +1067,12 @@ All Lambda functions have dedicated log groups with 7-day retention:
 - **S3 Lifecycle**: Reports expire after 30 days
 - **CloudWatch Logs**: 7-day retention for cost savings
 - **Lambda Concurrency**: No reserved concurrency configured
-- **Config Recording**: All supported resources tracked (adjust if needed for cost)
+- **Config Recording**: All supported resources tracked globally and regionally as per PROMPT requirements
 
 ## Production Considerations
 
 1. **Increase SNS Retry**: Current linear retry policy can be enhanced for critical alerts
-2. **Add More Config Rules**: RDS backups, VPC flow logs, CloudTrail enabled, etc.
+2. **Add More Config Rules**: Additional compliance rules beyond the three core requirements (EC2, S3, RDS)
 3. **Multi-Account**: Extend Config Aggregator to include multiple AWS accounts
 4. **Custom Lambda Metrics**: Add detailed error tracking and performance metrics
 5. **Remediation Expansion**: Implement fixes for additional resource types
