@@ -37,6 +37,42 @@ echo "  Platform: $EXPECTED_PLATFORM"
 echo "  Language: $EXPECTED_LANGUAGE"
 echo ""
 
+# Special handling for analysis platform
+if [ "$EXPECTED_PLATFORM" = "analysis" ]; then
+    print_success "Analysis platform detected - skipping IaC platform validation"
+
+    # For analysis tasks, verify that analysis script exists
+    if [ -f "lib/analyse.py" ] || [ -f "lib/analyze.py" ] || [ -f "lib/analyse.sh" ]; then
+        print_success "Analysis script found in lib/"
+
+        # Only validate language (should be python or bash)
+        if [ "$EXPECTED_LANGUAGE" = "python" ] || [ "$EXPECTED_LANGUAGE" = "py" ]; then
+            if grep -qE '```python|```py|^import |^def |\.py' lib/IDEAL_RESPONSE.md; then
+                print_success "Language matches: Python script detected"
+                exit 0
+            else
+                print_error "Expected Python code in IDEAL_RESPONSE.md for analysis task"
+                exit 1
+            fi
+        elif [ "$EXPECTED_LANGUAGE" = "bash" ] || [ "$EXPECTED_LANGUAGE" = "sh" ]; then
+            if grep -qE '```bash|```sh|#!/bin/bash|#!/bin/sh' lib/IDEAL_RESPONSE.md; then
+                print_success "Language matches: Bash script detected"
+                exit 0
+            else
+                print_error "Expected Bash code in IDEAL_RESPONSE.md for analysis task"
+                exit 1
+            fi
+        else
+            print_warning "Unexpected language '$EXPECTED_LANGUAGE' for analysis task"
+            print_success "Proceeding with validation (analysis tasks are flexible)"
+            exit 0
+        fi
+    else
+        print_error "No analysis script found (expected lib/analyse.py, lib/analyze.py, or lib/analyse.sh)"
+        exit 1
+    fi
+fi
+
 # Detect actual platform by searching IDEAL_RESPONSE.md directly
 DETECTED_PLATFORM="unknown"
 
