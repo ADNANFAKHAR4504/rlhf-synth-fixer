@@ -2,7 +2,7 @@
 import * as AWS from 'aws-sdk';
 import fs from 'fs';
 // Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr1';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const region = process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || 'us-east-1';
 
 // Load CloudFormation outputs
