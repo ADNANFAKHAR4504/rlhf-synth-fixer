@@ -23,5 +23,6 @@
     "Internet Gateway"
   ],
   "region": "eu-central-1",
-  "training_quality": 8
+  "training_quality": 8,
+  "author": "rajendra-s-aws"
 }
