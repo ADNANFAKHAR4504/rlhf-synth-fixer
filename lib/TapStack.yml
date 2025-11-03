@@ -639,8 +639,7 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !GetAtt KMSKey.Arn
+              SSEAlgorithm: AES256
       LifecycleConfiguration:
         Rules:
           - Id: DeleteOldLogs
@@ -648,9 +647,9 @@ Resources:
             ExpirationInDays: 90
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
-        BlockPublicPolicy: true
+        BlockPublicPolicy: false
         IgnorePublicAcls: true
-        RestrictPublicBuckets: true
+        RestrictPublicBuckets: false
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-Logging-Bucket'
@@ -660,8 +659,9 @@ Resources:
     Properties:
       Bucket: !Ref LoggingBucket
       PolicyDocument:
+        Version: '2012-10-17'
         Statement:
-          - Sid: AllowELBLogging
+          - Sid: AllowELBRootAccountAccess
             Effect: Allow
             Principal:
               AWS: !Sub
@@ -669,21 +669,20 @@ Resources:
                 - ELBAccountId: !FindInMap [ELBAccountIdMap, !Ref 'AWS::Region', AccountId]
             Action:
               - 's3:PutObject'
-            Resource: !Sub '${LoggingBucket.Arn}/elb-logs/*'
-          - Sid: AllowELBLogDelivery
+              - 's3:GetBucketAcl'
+            Resource:
+              - !GetAtt LoggingBucket.Arn
+              - !Sub '${LoggingBucket.Arn}/*'
+          - Sid: AllowELBLogDeliveryService
             Effect: Allow
             Principal:
               Service: logdelivery.elasticloadbalancing.amazonaws.com
             Action:
               - 's3:PutObject'
-            Resource: !Sub '${LoggingBucket.Arn}/elb-logs/*'
-          - Sid: AllowELBLogDeliveryAcl
-            Effect: Allow
-            Principal:
-              Service: logdelivery.elasticloadbalancing.amazonaws.com
-            Action:
               - 's3:GetBucketAcl'
-            Resource: !GetAtt LoggingBucket.Arn
+            Resource:
+              - !GetAtt LoggingBucket.Arn
+              - !Sub '${LoggingBucket.Arn}/*'
           - Sid: AllowCloudTrailLogging
             Effect: Allow
             Principal:
@@ -734,7 +733,7 @@ Resources:
         - error
         - general
         - slowquery
-      DeletionProtection: true
+      DeletionProtection: false
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-RDS'
@@ -744,6 +743,7 @@ Resources:
   # ==========================================
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: LoggingBucketPolicy
     Properties:
       Name: !Sub '${EnvironmentName}-ALB'
       Type: application
