@@ -54,6 +54,36 @@ echo "=== Bootstrap Phase ==="
 echo "=== Deploy Phase ==="
 if [ "$PLATFORM" = "cdk" ]; then
   echo "✅ CDK project detected, running CDK deploy..."
+
+  # Check if stack is in failed state and needs cleanup
+  STACK_NAME="TapStack${ENVIRONMENT_SUFFIX}"
+  STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "NOT_FOUND")
+
+  if [[ "$STACK_STATUS" =~ ^(ROLLBACK_COMPLETE|UPDATE_ROLLBACK_COMPLETE|CREATE_FAILED|DELETE_FAILED)$ ]]; then
+    echo "⚠️ Stack is in $STACK_STATUS state. Attempting to delete..."
+
+    # Try CDK destroy first
+    npm run cdk:destroy -- --force || true
+
+    # If stack still exists and in DELETE_FAILED, force delete with AWS CLI
+    STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "NOT_FOUND")
+
+    if [[ "$STACK_STATUS" == "DELETE_FAILED" ]]; then
+      echo "⚠️ Stack still in DELETE_FAILED state. Force deleting with AWS CLI..."
+      # Get stuck resources and continue-update-rollback to unstick
+      aws cloudformation continue-update-rollback --stack-name "$STACK_NAME" \
+        --resources-to-skip "TapVpcRestrictDefaultSecurityGroupCustomResource2332DAD5" 2>/dev/null || true
+      sleep 5
+      # Now try delete again
+      aws cloudformation delete-stack --stack-name "$STACK_NAME"
+      echo "⏳ Waiting for stack deletion..."
+      aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" || true
+    fi
+
+    echo "✅ Stack cleanup completed"
+    sleep 10
+  fi
+
   npm run cdk:deploy
 
 elif [ "$PLATFORM" = "cdktf" ]; then
@@ -86,10 +116,42 @@ elif [ "$PLATFORM" = "cdktf" ]; then
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
   echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
+
+  # Check stack status and delete if in ROLLBACK_COMPLETE state
+  STACK_NAME="TapStack${ENVIRONMENT_SUFFIX:-dev}"
+  STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+
+  if [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ]; then
+    echo "⚠️ Stack is in ROLLBACK_COMPLETE state. Deleting stack before redeployment..."
+    aws cloudformation delete-stack --stack-name "$STACK_NAME"
+    echo "⏳ Waiting for stack deletion to complete..."
+    aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" || {
+      echo "❌ Stack deletion failed or timed out"
+      exit 1
+    }
+    echo "✅ Stack deleted successfully"
+  fi
+
   npm run cfn:deploy-yaml
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
   echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
+
+  # Check stack status and delete if in ROLLBACK_COMPLETE state
+  STACK_NAME="TapStack${ENVIRONMENT_SUFFIX:-dev}"
+  STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+
+  if [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ]; then
+    echo "⚠️ Stack is in ROLLBACK_COMPLETE state. Deleting stack before redeployment..."
+    aws cloudformation delete-stack --stack-name "$STACK_NAME"
+    echo "⏳ Waiting for stack deletion to complete..."
+    aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" || {
+      echo "❌ Stack deletion failed or timed out"
+      exit 1
+    }
+    echo "✅ Stack deleted successfully"
+  fi
+
   npm run cfn:deploy-json
 
 elif [ "$PLATFORM" = "tf" ]; then
@@ -105,6 +167,15 @@ elif [ "$PLATFORM" = "tf" ]; then
   
   cd lib
   
+  # Determine var-file to use based on metadata.json
+  VAR_FILE=""
+  if [ "$(jq -r '.subtask // ""' ../metadata.json)" = "IaC-Multi-Environment-Management" ]; then
+    DEPLOY_ENV_FILE=$(jq -r '.task_config.deploy_env // ""' ../metadata.json)
+    if [ -n "$DEPLOY_ENV_FILE" ]; then
+      VAR_FILE="-var-file=${DEPLOY_ENV_FILE}"
+      echo "Using var-file from metadata: ${DEPLOY_ENV_FILE}"
+    fi
+  fi
 
   # Always remove any stale Terraform plan to avoid cross-run reuse
   rm -f tfplan
@@ -113,29 +184,29 @@ elif [ "$PLATFORM" = "tf" ]; then
   if [ -f "tfplan" ]; then
     echo "✅ Terraform plan file found, proceeding with deployment..."
     # Try to deploy with the plan file
-    if ! npm run tf:deploy; then
+    if ! terraform apply -auto-approve -lock=true -lock-timeout=300s -input=false $VAR_FILE tfplan; then
       echo "⚠️ Deployment with plan file failed, checking for state lock issues..."
       
       # Extract lock ID from error output if present
-      LOCK_ID=$(terraform apply -auto-approve -lock=true -lock-timeout=10s -input=false tfplan 2>&1 | grep -oE 'ID:\s+[0-9a-f-]{36}' | cut -d' ' -f2 || echo "")
+      LOCK_ID=$(terraform apply -auto-approve -lock=true -lock-timeout=10s -input=false $VAR_FILE tfplan 2>&1 | grep -oE 'ID:\s+[0-9a-f-]{36}' | cut -d' ' -f2 || echo "")
       
       if [ -n "$LOCK_ID" ]; then
         echo "🔓 Detected stuck lock ID: $LOCK_ID. Attempting to force unlock..."
         terraform force-unlock -force "$LOCK_ID" || echo "Force unlock failed"
         echo "🔄 Retrying deployment after unlock..."
-        npm run tf:deploy || echo "Deployment still failed after unlock attempt"
+        terraform apply -auto-approve -lock=true -lock-timeout=300s -input=false $VAR_FILE tfplan || echo "Deployment still failed after unlock attempt"
       else
         echo "❌ Deployment failed but no lock ID detected. Manual intervention may be required."
       fi
     fi
   else
     echo "⚠️ Terraform plan file not found, creating new plan and deploying..."
-    terraform plan -lock-timeout=120s -lock=false -input=false -out=tfplan || echo "Plan creation failed, attempting direct apply..."
+    terraform plan -lock-timeout=120s -lock=false -input=false $VAR_FILE -out=tfplan || echo "Plan creation failed, attempting direct apply..."
     
     # Try direct apply with lock timeout, and handle lock issues
-    if ! terraform apply -auto-approve -lock=true -lock-timeout=300s -input=false tfplan; then
+    if ! terraform apply -auto-approve -lock=true -lock-timeout=300s -input=false $VAR_FILE tfplan; then
       echo "⚠️ Direct apply with plan failed, trying without plan..."
-      if ! terraform apply -auto-approve -lock=true -lock-timeout=300s -input=false; then
+      if ! terraform apply -auto-approve -lock=true -lock-timeout=300s -input=false $VAR_FILE; then
         echo "❌ All deployment attempts failed. Check for state lock issues."
         # List any potential locks
         terraform show -json 2>&1 | grep -i lock || echo "No lock information available"
@@ -162,15 +233,42 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     cd lib
     echo "Selecting or creating Pulumi stack..."
     pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
+    
+    # Clear any existing locks before deployment
+    echo "🔓 Clearing any stuck locks..."
+    pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes 2>/dev/null || echo "No locks to clear or cancel failed"
+    
     echo "Deploying infrastructure ..."
-    pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"
+    if ! pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"; then
+      echo "⚠️ Deployment failed, attempting lock recovery..."
+      pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes || echo "Lock cancellation failed"
+      echo "🔄 Retrying deployment after lock cancellation..."
+      pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" || {
+        echo "❌ Deployment failed after retry"
+        cd ..
+        exit 1
+      }
+    fi
     cd ..
   else
     echo "🔧 Python Pulumi project detected"
     export PYTHONPATH=.:bin
     pipenv run pulumi-create-stack
+    
+    # Clear any existing locks before deployment
+    echo "🔓 Clearing any stuck locks..."
+    pulumi cancel --yes 2>/dev/null || echo "No locks to clear or cancel failed"
+    
     echo "Deploying infrastructure ..."
-    pipenv run pulumi-deploy
+    if ! pipenv run pulumi-deploy; then
+      echo "⚠️ Deployment failed, attempting lock recovery..."
+      pulumi cancel --yes || echo "Lock cancellation failed"
+      echo "🔄 Retrying deployment after lock cancellation..."
+      pipenv run pulumi-deploy || {
+        echo "❌ Deployment failed after retry"
+        exit 1
+      }
+    fi
   fi
 
 else

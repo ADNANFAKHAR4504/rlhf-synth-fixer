@@ -1,0 +1,20 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "772654",
+  "team": "1",
+  "startedAt": "2025-10-06T13:14:13.009Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": "vpc, transit gateway, global accelerator, alb, route53, ecs fargate, aurora global database",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "okorie-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-28T01:44:50+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Cloud Environment Setup",
+    "Security Configuration as Code"
+  ],
+  "po_id": "9053332379",
+  "region": "eu-central-2",
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2 (Subnets, Internet Gateway, Route Tables, Security Groups)",
+    "ECS (Elastic Container Service)",
+    "ECS Fargate",
+    "RDS (Aurora Serverless MySQL)",
+    "IAM (Roles and Policies)",
+    "Secrets Manager",
+    "KMS (Key Management Service)",
+    "CloudWatch (Logs and Alarms)",
+    "Application Auto Scaling",
+    "VPC Flow Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

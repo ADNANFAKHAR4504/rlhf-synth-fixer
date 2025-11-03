@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350151",
+  "team": "4",
+  "startedAt": "2025-10-21T12:38:05.466Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "training_quality": 8,
+  "background": "Understanding of AWS VPC, subnets, Internet and NAT Gateways, IAM roles, RDS, and DynamoDB services is essential for solving this task.",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnets",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Route Tables",
+    "Security Groups",
+    "IAM Roles",
+    "Instance Profiles",
+    "S3",
+    "RDS (MySQL/Postgres)",
+    "Secrets Manager",
+    "DynamoDB"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
+}

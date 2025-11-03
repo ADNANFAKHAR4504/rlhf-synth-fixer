@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349137",
+  "team": "4",
+  "startedAt": "2025-10-20T06:53:19.497Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "background": "Implementation of secure AWS infrastructure using CDK with comprehensive security controls, monitoring, and compliance features",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "SNS",
+    "API Gateway",
+    "Security Groups"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "jpoola-turing",
+  "dockerS3Location": ""
+}

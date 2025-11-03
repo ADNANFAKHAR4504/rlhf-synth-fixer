@@ -1,0 +1,24 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "5015",
+  "team": "stf",
+  "startedAt": "2025-10-24T08:59:57.643Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": "DynamoDB, DynamoDB Streams, Lambda, SNS, SQS, ElastiCache (Redis), EventBridge, Step Functions, CloudWatch Logs Insights, OpenSearch",
+  "task_config": {
+    "deploy_env": "prod.tfvars"
+  },
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulladumor",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,36 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349104",
+  "team": "6",
+  "startedAt": "2025-10-21T09:10:33.401Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "In the given task, you are expected to use Pulumi with Python to define and provision AWS cloud infrastructure using familiar programming constructs. The challenge ensures a practical grasp of real-world AWS service integration needed for scalable, secure, and well-monitored cloud environments.",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling Group",
+    "Lambda",
+    "CloudWatch",
+    "EventBridge",
+    "IAM",
+    "SSM",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Route Tables",
+    "Security Groups",
+    "Launch Template"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}

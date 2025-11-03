@@ -81,7 +81,17 @@ elif [ "$PLATFORM" = "tf" ]; then
         -backend-config=use_lockfile=true"
     terraform init -reconfigure -upgrade $TF_INIT_OPTS || echo "Terraform init failed"
 
-    npm run tf:destroy || echo "No resources to destroy or destruction failed"
+    # Determine var-file to use based on metadata.json
+    VAR_FILE=""
+    if [ "$(jq -r '.subtask // ""' ../metadata.json)" = "IaC-Multi-Environment-Management" ]; then
+      DEPLOY_ENV_FILE=$(jq -r '.task_config.deploy_env // ""' ../metadata.json)
+      if [ -n "$DEPLOY_ENV_FILE" ]; then
+        VAR_FILE="-var-file=${DEPLOY_ENV_FILE}"
+        echo "Using var-file from metadata: ${DEPLOY_ENV_FILE}"
+      fi
+    fi
+
+    terraform destroy -auto-approve $VAR_FILE || echo "No resources to destroy or destruction failed"
     cd ..
     
     echo "Cleaning up PR-specific state file..."
