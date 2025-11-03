@@ -1,12 +1,21 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
-const config = new pulumi.Config();
-const environmentSuffix = config.require('environmentSuffix');
+const readEnv = (name: string): string | undefined => {
+  const value = process.env[name];
+  if (!value) {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const environmentSuffix = readEnv('ENVIRONMENT_SUFFIX') ?? 'dev';
+const awsRegion = readEnv('AWS_REGION') ?? aws.config.region ?? 'us-east-1';
 const inputBucketName =
-  config.get('inputBucketName') || `image-input-${environmentSuffix}`;
+  readEnv('INPUT_BUCKET_NAME') ?? `image-input-${environmentSuffix}`;
 const outputBucketName =
-  config.get('outputBucketName') || `image-output-${environmentSuffix}`;
+  readEnv('OUTPUT_BUCKET_NAME') ?? `image-output-${environmentSuffix}`;
 
 // Create KMS key for Lambda environment variable encryption
 const kmsKey = new aws.kms.Key(`lambda-encryption-key-${environmentSuffix}`, {
@@ -399,3 +408,5 @@ export const watermarkUrl = watermarkFunctionUrl.functionUrl;
 export const metadataUrl = metadataFunctionUrl.functionUrl;
 export const kmsKeyId = kmsKey.keyId;
 export const sharedLayerArn = sharedLayer.arn;
+export const region = awsRegion;
+export const environment = environmentSuffix;
