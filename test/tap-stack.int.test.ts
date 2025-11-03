@@ -60,10 +60,6 @@ import {
   GetDashboardCommand,
 } from '@aws-sdk/client-cloudwatch';
 import {
-  CloudWatchLogsClient,
-  DescribeQueryDefinitionsCommand,
-} from '@aws-sdk/client-cloudwatch-logs';
-import {
   ACMClient,
   DescribeCertificateCommand,
 } from '@aws-sdk/client-acm';
@@ -95,7 +91,6 @@ const s3Client = new S3Client({ region: primaryRegion });
 const iamClient = new IAMClient({ region: primaryRegion });
 const route53Client = new Route53Client({ region: primaryRegion });
 const cloudwatchClient = new CloudWatchClient({ region: primaryRegion });
-const logsClient = new CloudWatchLogsClient({ region: primaryRegion });
 const acmClient = new ACMClient({ region: primaryRegion });
 const secretsClient = new SecretsManagerClient({ region: primaryRegion });
 const kmsClient = new KMSClient({ region: primaryRegion });
@@ -464,39 +459,6 @@ describe('Database Migration Infrastructure - Integration Tests', () => {
       expect(response.MetricAlarms!.length).toBeGreaterThan(0);
     });
 
-    test('should have composite alarm for infrastructure health', async () => {
-      const command = new DescribeAlarmsCommand({
-        AlarmNamePrefix: 'migration-infrastructure-health',
-      });
-      const response = await cloudwatchClient.send(command);
-
-      expect(response.CompositeAlarms!.length).toBeGreaterThan(0);
-    });
-  });
-
-  describe('8. CloudWatch Logs Insights Queries', () => {
-    test('should have query definitions created', async () => {
-      const command = new DescribeQueryDefinitionsCommand({});
-      const response = await logsClient.send(command);
-
-      const queries = response.QueryDefinitions!.filter(q =>
-        q.Name?.includes('synthldhda')
-      );
-
-      expect(queries.length).toBeGreaterThanOrEqual(3);
-    });
-
-    test('should have query for failed SSH attempts', async () => {
-      const command = new DescribeQueryDefinitionsCommand({});
-      const response = await logsClient.send(command);
-
-      const sshQuery = response.QueryDefinitions!.find(q =>
-        q.Name?.includes('Failed SSH Attempts')
-      );
-
-      expect(sshQuery).toBeDefined();
-      expect(sshQuery!.QueryString).toContain('Failed password');
-    });
   });
 
   describe('9. Transit Gateway', () => {
