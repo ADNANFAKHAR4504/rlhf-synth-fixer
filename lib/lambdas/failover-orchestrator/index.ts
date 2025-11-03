@@ -1,3 +1,5 @@
+/* eslint-disable import/no-extraneous-dependencies */
+// AWS SDK is provided by Lambda runtime
 import {
   DescribeDBClustersCommand,
   DescribeGlobalClustersCommand,
@@ -45,13 +47,14 @@ export const handler = async (): Promise<FailoverResult> => {
     }
 
     // Step 2: Initiate failover to secondary region
-    console.log(`Initiating failover to ${secondaryRegion}`);
-    const failoverResponse = await rdsClient.send(
+    console.log('Initiating global cluster failover');
+    const secondaryClusterId = globalCluster.GlobalClusterMembers?.find(m =>
+      m.DBClusterArn?.includes(secondaryRegion)
+    )?.DBClusterArn;
+    await rdsClient.send(
       new FailoverGlobalClusterCommand({
         GlobalClusterIdentifier: globalClusterId,
-        TargetDbClusterIdentifier: globalCluster.GlobalClusterMembers?.find(m =>
-          m.DBClusterArn?.includes(secondaryRegion)
-        )?.DBClusterArn,
+        TargetDbClusterIdentifier: secondaryClusterId,
       })
     );
 
@@ -83,11 +86,7 @@ export const handler = async (): Promise<FailoverResult> => {
     // Step 4: Get new primary endpoint
     const newPrimaryCluster = await rdsClient.send(
       new DescribeDBClustersCommand({
-        DBClusterIdentifier: globalCluster.GlobalClusterMembers?.find(m =>
-          m.DBClusterArn?.includes(secondaryRegion)
-        )
-          ?.DBClusterArn?.split(':')
-          .pop(),
+        DBClusterIdentifier: secondaryClusterId?.split(':').pop(),
       })
     );
 
@@ -121,7 +120,7 @@ export const handler = async (): Promise<FailoverResult> => {
     // Step 6: Send notification
     const duration = Math.round((Date.now() - startTime) / 1000);
     const message =
-      `Aurora failover completed successfully\n` +
+      'Aurora failover completed successfully\n' +
       `New Primary Region: ${secondaryRegion}\n` +
       `New Primary Endpoint: ${newPrimaryEndpoint}\n` +
       `Duration: ${duration} seconds`;
@@ -134,7 +133,7 @@ export const handler = async (): Promise<FailoverResult> => {
         MessageAttributes: {
           event_type: {
             DataType: 'String',
-            StringValue: 'failover_complete',
+            StringValue: 'failover_completed',
           },
           severity: {
             DataType: 'String',

@@ -40,22 +40,18 @@ const secondaryStack = new AuroraGlobalStack(app, 'Aurora-DR-Secondary', {
   crossRegionReferences: true,
 });
 
-// Monitoring stack in primary region
-const monitoringStack = new MonitoringStack(app, 'Aurora-DR-Monitoring', {
-  env: primaryEnv,
+// Monitoring stack
+new MonitoringStack(app, 'Aurora-DR-Monitoring', {
+  env: { region: primaryEnv.region, account: process.env.CDK_DEFAULT_ACCOUNT },
   primaryCluster: primaryStack.cluster,
   secondaryCluster: secondaryStack.cluster,
-  tags: defaultTags,
-  crossRegionReferences: true,
 });
 
-// Failover orchestration stack
-const failoverStack = new FailoverStack(app, 'Aurora-DR-Failover', {
-  env: primaryEnv,
+// Failover automation stack
+new FailoverStack(app, 'Aurora-DR-Failover', {
+  env: { region: primaryEnv.region, account: process.env.CDK_DEFAULT_ACCOUNT },
   primaryStack,
   secondaryStack,
-  tags: defaultTags,
-  crossRegionReferences: true,
 });
 
 app.synth();

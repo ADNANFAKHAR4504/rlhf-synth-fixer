@@ -1,12 +1,12 @@
-import { RDSClient } from '@aws-sdk/client-rds';
+/* eslint-disable import/no-extraneous-dependencies */
+// AWS SDK and pg are provided by Lambda runtime layer
 import {
   GetSecretValueCommand,
   SecretsManagerClient,
 } from '@aws-sdk/client-secrets-manager';
 import { Client } from 'pg';
 
-const secretsManager = new SecretsManagerClient({});
-const rdsClient = new RDSClient({});
+const secretsClient = new SecretsManagerClient({});
 
 interface HealthCheckResult {
   healthy: boolean;
@@ -21,7 +21,7 @@ export const handler = async (): Promise<HealthCheckResult> => {
 
   try {
     // Get database credentials
-    const secretResponse = await secretsManager.send(
+    const secretResponse = await secretsClient.send(
       new GetSecretValueCommand({ SecretId: secretArn })
     );
     const secret = JSON.parse(secretResponse.SecretString!);

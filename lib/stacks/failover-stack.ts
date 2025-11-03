@@ -270,5 +270,16 @@ export class FailoverStack extends cdk.Stack {
         route53.Continent.NORTH_AMERICA
       ),
     });
+
+    // Outputs for integration tests
+    new cdk.CfnOutput(this, 'FailoverStateMachine', {
+      value: failoverStateMachine.stateMachineArn,
+      exportName: `${this.stackName}-StateMachineArn`,
+    });
+
+    new cdk.CfnOutput(this, 'AlertTopicArn', {
+      value: alertTopic.topicArn,
+      exportName: `${this.stackName}-AlertTopicArn`,
+    });
   }
 }

@@ -1,113 +1,86 @@
-// Configuration - These are coming from cfn-outputs after cdk deploy
+/* eslint-disable import/no-extraneous-dependencies */
+/**
+ * Integration Tests for Aurora DR Infrastructure
+ *
+ * These tests validate DEPLOYED AWS resources.
+ * They will FAIL if infrastructure is not deployed.
+ *
+ * To deploy infrastructure:
+ *   cdk deploy --all --region us-east-1
+ *
+ * Outputs are expected in: cfn-outputs/flat-outputs.json
+ */
 import fs from 'fs';
-import {
-  RDSClient,
-  DescribeDBClustersCommand,
-} from '@aws-sdk/client-rds';
 
-// Helper function to skip tests if stacks aren't deployed
-async function isStackDeployed(): Promise<boolean> {
+interface StackOutputs {
+  ClusterEndpoint?: string;
+  ProxyEndpoint?: string;
+  GlobalClusterIdentifier?: string;
+  FailoverStateMachine?: string;
+  AlertTopicArn?: string;
+}
+
+// Helper function to load stack outputs
+function loadStackOutputs(): StackOutputs | null {
   try {
-    // Check if CDK outputs file exists
     if (!fs.existsSync('cfn-outputs/flat-outputs.json')) {
-      console.warn('⚠️  CDK outputs not found - skipping integration tests');
-      return false;
+      console.warn(
+        '\n⚠️  Integration tests require deployed infrastructure.\n' +
+          '   Deploy first: cdk deploy --all\n' +
+          '   Then run: npm run test:integration\n'
+      );
+      return null;
     }
-    
+
     const outputs = JSON.parse(
       fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
     );
-    
-    // Check if Aurora cluster exists
-    if (!outputs.ClusterEndpoint) {
-      console.warn('⚠️  Aurora cluster not deployed - skipping integration tests');
-      return false;
-    }
-    
-    return true;
+
+    return outputs as StackOutputs;
   } catch (error) {
-    console.warn('⚠️  Stack not deployed - skipping integration tests');
-    return false;
+    console.error('Error loading stack outputs:', error);
+    return null;
   }
 }
 
 describe('Aurora DR Integration Tests', () => {
-  let stackDeployed: boolean;
+  let outputs: StackOutputs | null;
 
-  beforeAll(async () => {
-    stackDeployed = await isStackDeployed();
+  beforeAll(() => {
+    outputs = loadStackOutputs();
   });
 
   describe('Aurora Global Database', () => {
-    test('should have primary cluster running', async () => {
-      if (!stackDeployed) {
-        console.log('Skipping - stack not deployed');
-        return;
-      }
-
-      const outputs = JSON.parse(
-        fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-      );
-      
-      expect(outputs.ClusterEndpoint).toBeDefined();
-      expect(outputs.ClusterEndpoint).toContain('.rds.amazonaws.com');
+    test('should have primary cluster endpoint', () => {
+      expect(outputs).not.toBeNull();
+      expect(outputs?.ClusterEndpoint).toBeDefined();
+      expect(outputs?.ClusterEndpoint).toMatch(/\.rds\.amazonaws\.com$/);
     });
 
-    test('should have RDS Proxy endpoint', async () => {
-      if (!stackDeployed) {
-        console.log('Skipping - stack not deployed');
-        return;
-      }
-
-      const outputs = JSON.parse(
-        fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-      );
-      
-      expect(outputs.ProxyEndpoint).toBeDefined();
-      expect(outputs.ProxyEndpoint).toContain('.rds.amazonaws.com');
+    test('should have RDS Proxy endpoint', () => {
+      expect(outputs).not.toBeNull();
+      expect(outputs?.ProxyEndpoint).toBeDefined();
+      expect(outputs?.ProxyEndpoint).toMatch(/\.rds\.amazonaws\.com$/);
     });
 
-    test('should have global cluster identifier', async () => {
-      if (!stackDeployed) {
-        console.log('Skipping - stack not deployed');
-        return;
-      }
-
-      const outputs = JSON.parse(
-        fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-      );
-      
-      expect(outputs.GlobalClusterIdentifier).toBeDefined();
-      expect(outputs.GlobalClusterIdentifier).toContain('aurora-dr-global');
+    test('should have global cluster identifier', () => {
+      expect(outputs).not.toBeNull();
+      expect(outputs?.GlobalClusterIdentifier).toBeDefined();
+      expect(outputs?.GlobalClusterIdentifier).toContain('aurora-dr-global');
     });
   });
 
   describe('Failover Automation', () => {
-    test('should have Step Functions state machine', async () => {
-      if (!stackDeployed) {
-        console.log('Skipping - stack not deployed');
-        return;
-      }
-
-      const outputs = JSON.parse(
-        fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-      );
-      
-      expect(outputs.FailoverStateMachine).toBeDefined();
+    test('should have Step Functions state machine ARN', () => {
+      expect(outputs).not.toBeNull();
+      expect(outputs?.FailoverStateMachine).toBeDefined();
+      expect(outputs?.FailoverStateMachine).toMatch(/^arn:aws:states:/);
     });
 
-    test('should have SNS topic for alerts', async () => {
-      if (!stackDeployed) {
-        console.log('Skipping - stack not deployed');
-        return;
-      }
-
-      const outputs = JSON.parse(
-        fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-      );
-      
-      expect(outputs.AlertTopicArn).toBeDefined();
-      expect(outputs.AlertTopicArn).toContain('arn:aws:sns:');
+    test('should have SNS topic ARN for alerts', () => {
+      expect(outputs).not.toBeNull();
+      expect(outputs?.AlertTopicArn).toBeDefined();
+      expect(outputs?.AlertTopicArn).toMatch(/^arn:aws:sns:/);
     });
   });
 });

@@ -1,3 +1,5 @@
+/* eslint-disable import/no-extraneous-dependencies */
+// AWS SDK is provided by Lambda runtime
 import {
   CloudWatchClient,
   PutMetricDataCommand,
@@ -79,13 +81,16 @@ export const handler = async (): Promise<void> => {
         TopicArn: snsTopicArn,
         Subject: 'Aurora DR Test Completed',
         Message:
-          `DR test completed successfully\n` +
-          `Duration: ${testDuration} seconds\n` +
-          `Execution ARN: ${executionResponse.executionArn}`,
+          'DR test completed successfully\n' +
+          'Duration: ' +
+          testDuration +
+          ' seconds\n' +
+          'Execution ARN: ' +
+          executionResponse.executionArn,
         MessageAttributes: {
           event_type: {
             DataType: 'String',
-            StringValue: 'dr_test_complete',
+            StringValue: 'dr_test_completed',
           },
           severity: {
             DataType: 'String',
