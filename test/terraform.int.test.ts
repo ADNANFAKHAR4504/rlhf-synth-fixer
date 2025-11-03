@@ -26,7 +26,31 @@ describe('Terraform VPC Infrastructure Integration Tests', () => {
     if (!fs.existsSync(outputsPath)) {
       throw new Error(`Outputs file not found: ${outputsPath}`);
     }
-    outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+    const rawOutputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+    
+    // Normalize outputs: convert snake_case to camelCase and parse JSON strings
+    outputs = {
+      VpcId: rawOutputs.vpc_id,
+      PublicSubnetId1: JSON.parse(rawOutputs.public_subnet_ids)[0],
+      PublicSubnetId2: JSON.parse(rawOutputs.public_subnet_ids)[1],
+      PublicSubnetId3: JSON.parse(rawOutputs.public_subnet_ids)[2],
+      PrivateSubnetId1: JSON.parse(rawOutputs.private_subnet_ids)[0],
+      PrivateSubnetId2: JSON.parse(rawOutputs.private_subnet_ids)[1],
+      PrivateSubnetId3: JSON.parse(rawOutputs.private_subnet_ids)[2],
+      InternetGatewayId: rawOutputs.internet_gateway_id,
+      NatGatewayId1: JSON.parse(rawOutputs.nat_gateway_ids)[0],
+      NatGatewayId2: JSON.parse(rawOutputs.nat_gateway_ids)[1],
+      NatGatewayId3: JSON.parse(rawOutputs.nat_gateway_ids)[2],
+      NatGatewayEip1: JSON.parse(rawOutputs.nat_gateway_eips)[0],
+      NatGatewayEip2: JSON.parse(rawOutputs.nat_gateway_eips)[1],
+      NatGatewayEip3: JSON.parse(rawOutputs.nat_gateway_eips)[2],
+      PublicRouteTableId: rawOutputs.public_route_table_id,
+      PrivateRouteTableId1: JSON.parse(rawOutputs.private_route_table_ids)[0],
+      PrivateRouteTableId2: JSON.parse(rawOutputs.private_route_table_ids)[1],
+      PrivateRouteTableId3: JSON.parse(rawOutputs.private_route_table_ids)[2],
+      WebTierSecurityGroupId: rawOutputs.web_tier_security_group_id,
+      AppTierSecurityGroupId: rawOutputs.app_tier_security_group_id,
+    };
   });
 
   describe('VPC Configuration', () => {
