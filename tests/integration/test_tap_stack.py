@@ -14,12 +14,11 @@ All tests perform ACTIONS and verify results - NO configuration-only tests.
 Requirements:
 - AWS credentials configured
 - Infrastructure deployed via `pulumi up`
-- Stack outputs available via `pulumi stack output --json`
+- Output file generated at cfn-outputs/flat-outputs.json
 """
 
 import json
 import os
-import subprocess
 import time
 import unittest
 import uuid
@@ -31,31 +30,42 @@ import requests
 from botocore.exceptions import ClientError, NoCredentialsError
 
 
-def get_stack_outputs() -> Dict[str, Any]:
+# Load deployment flat outputs
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FLAT_OUTPUTS_PATH = os.path.join(BASE_DIR, '..', '..', 'cfn-outputs', 'flat-outputs.json')
+
+
+def load_outputs() -> Dict[str, Any]:
     """
-    Get Pulumi stack outputs dynamically.
+    Load and return flat deployment outputs from cfn-outputs/flat-outputs.json.
+    
+    This file is generated after Pulumi deployment and contains all stack outputs
+    in a flattened JSON structure for easy consumption by integration tests.
     
     Returns:
         Dictionary of stack outputs
     """
-    try:
-        result = subprocess.run(
-            ['pulumi', 'stack', 'output', '--json'],
-            capture_output=True,
-            text=True,
-            check=True,
-            cwd=os.path.join(os.path.dirname(__file__), '..', '..')
-        )
-        outputs = json.loads(result.stdout)
-        print(f"[INFO] Successfully loaded {len(outputs)} outputs from Pulumi stack")
-        return outputs
-    except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError) as e:
-        print(f"[ERROR] Could not load Pulumi stack outputs: {e}")
+    if os.path.exists(FLAT_OUTPUTS_PATH):
+        try:
+            with open(FLAT_OUTPUTS_PATH, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if not content:
+                    print(f"[WARNING] Outputs file is empty at {FLAT_OUTPUTS_PATH}")
+                    return {}
+                outputs = json.loads(content)
+                print(f"[INFO] Successfully loaded {len(outputs)} outputs from {FLAT_OUTPUTS_PATH}")
+                return outputs
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"[WARNING] Could not parse outputs file: {e}")
+            return {}
+    else:
+        print(f"[WARNING] Outputs file not found at {FLAT_OUTPUTS_PATH}")
+        print(f"[WARNING] Please run Pulumi deployment and ensure outputs are exported to this file")
         return {}
 
 
-# Load Pulumi stack outputs - NO HARDCODING
-OUTPUTS = get_stack_outputs()
+# Load Pulumi stack outputs from flat-outputs.json - NO HARDCODING
+OUTPUTS = load_outputs()
 
 # Get region from outputs - NO HARDCODING
 PRIMARY_REGION = OUTPUTS.get('region', os.getenv('AWS_REGION', 'us-east-1'))
