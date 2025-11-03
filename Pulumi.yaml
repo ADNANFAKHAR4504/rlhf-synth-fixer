@@ -1,4 +1,4 @@
-name: ec2-cost-optimizer
+name: TapStack
 runtime:
   name: nodejs
   options:
