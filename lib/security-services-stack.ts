@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import * as pulumi from '@pulumi/pulumi';
 // import * as aws from "..." - not needed in stub
 import { InspectorStack } from './inspector-stack';
