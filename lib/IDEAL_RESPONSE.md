@@ -5,10 +5,10 @@ This document provides the ideal implementation for EC2 cost optimization with p
 ## Key Improvements Over MODEL_RESPONSE
 
 1. **Proper Pulumi Import**: Adopts existing EC2 instances into state
-2. **Correct Timezone Handling**: Uses EventBridge Scheduler with native timezone support
-3. **Production-Grade Error Handling**: Retry logic, DLQs, structured logging
-4. **Comprehensive IAM Policies**: Explicit deny for production instances
-5. **Enhanced Observability**: AWS Lambda Powertools integration
+2. **EventBridge Scheduler**: Native timezone support (America/New_York) eliminates DST drift
+3. **Production-Grade Error Handling**: Retry logic with exponential backoff, DLQs, structured logging
+4. **Comprehensive IAM Policies**: Explicit deny for production instances with proper ordering
+5. **Lambda Optimization**: Reserved concurrency, connection reuse, optimized memory/timeout
 
 ## File: lib/tap-stack.ts
 
@@ -90,10 +90,11 @@ export class TapStack extends pulumi.ComponentResource {
 
 ### Key Changes:
 1. Import existing instances using Pulumi's import functionality
-2. Use EventBridge with timezone support
-3. Add Dead Letter Queue
-4. Enhanced IAM policies with explicit deny
-5. Better error handling configuration
+2. Use EventBridge Scheduler with America/New_York timezone for automatic DST handling
+3. Add Dead Letter Queue for failed invocations
+4. Enhanced IAM policies with explicit deny for production instances
+5. Retry logic with exponential backoff in Lambda functions
+6. Reserved concurrency and connection reuse optimization
 
 ```typescript
 /**
@@ -348,80 +349,91 @@ export class Ec2SchedulerStack extends pulumi.ComponentResource {
       { parent: this, dependsOn: [startLogsGroup, ec2Policy] }
     );
 
-    // IMPROVEMENT 5: Use correct timezone-aware cron expressions
-    // Note: CloudWatch Events doesn't support timezones natively
-    // Correct UTC conversion: 7 PM EST = 12 AM UTC (next day during EST) or 11 PM UTC (during EDT)
-    // 8 AM EST = 1 PM UTC (during EST) or 12 PM UTC (during EDT)
-    const stopRule = new aws.cloudwatch.EventRule(
-      `ec2-stop-rule-${environmentSuffix}`,
+    // IMPROVEMENT 5: Use EventBridge Scheduler with native timezone support
+    // This eliminates DST scheduling drift completely
+    // Create IAM role for EventBridge Scheduler
+    const schedulerRole = new aws.iam.Role(
+      `ec2-scheduler-eventbridge-role-${environmentSuffix}`,
       {
-        description:
-          'Stop development and staging EC2 instances at 7 PM EST/12AM UTC on weekdays',
-        scheduleExpression: 'cron(0 0 ? * TUE-SAT *)', // Adjusted for day rollover
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: { Service: 'scheduler.amazonaws.com' },
+            },
+          ],
+        }),
         tags: {
           ...tags,
-          Name: `ec2-stop-rule-${environmentSuffix}`,
+          Name: `ec2-scheduler-eventbridge-role-${environmentSuffix}`,
         },
       },
       { parent: this }
     );
 
-    const startRule = new aws.cloudwatch.EventRule(
-      `ec2-start-rule-${environmentSuffix}`,
+    // Create inline policy for EventBridge Scheduler to invoke Lambda
+    new aws.iam.RolePolicy(
+      `scheduler-lambda-policy-${environmentSuffix}`,
+      {
+        role: schedulerRole.id,
+        policy: pulumi
+          .all([stopFunction.arn, startFunction.arn])
+          .apply(([stopArn, startArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: 'lambda:InvokeFunction',
+                  Resource: [stopArn, startArn],
+                },
+              ],
+            })
+          ),
+      },
+      { parent: this }
+    );
+
+    // Create EventBridge Scheduler schedule to stop instances at 7 PM EST
+    const stopSchedule = new aws.scheduler.Schedule(
+      `ec2-stop-schedule-${environmentSuffix}`,
       {
         description:
-          'Start development and staging EC2 instances at 8 AM EST/1PM UTC on weekdays',
-        scheduleExpression: 'cron(0 13 ? * MON-FRI *)',
-        tags: {
-          ...tags,
-          Name: `ec2-start-rule-${environmentSuffix}`,
+          'Stop development and staging EC2 instances at 7 PM EST on weekdays',
+        scheduleExpression: 'cron(0 19 ? * MON-FRI *)',
+        scheduleExpressionTimezone: 'America/New_York',
+        flexibleTimeWindow: {
+          mode: 'OFF',
+        },
+        target: {
+          arn: stopFunction.arn,
+          roleArn: schedulerRole.arn,
+          input: JSON.stringify({}),
         },
       },
       { parent: this }
     );
 
-    // Add Lambda permissions
-    const stopPermission = new aws.lambda.Permission(
-      `stop-invoke-permission-${environmentSuffix}`,
+    // Create EventBridge Scheduler schedule to start instances at 8 AM EST
+    const startSchedule = new aws.scheduler.Schedule(
+      `ec2-start-schedule-${environmentSuffix}`,
       {
-        action: 'lambda:InvokeFunction',
-        function: stopFunction.name,
-        principal: 'events.amazonaws.com',
-        sourceArn: stopRule.arn,
+        description:
+          'Start development and staging EC2 instances at 8 AM EST on weekdays',
+        scheduleExpression: 'cron(0 8 ? * MON-FRI *)',
+        scheduleExpressionTimezone: 'America/New_York',
+        flexibleTimeWindow: {
+          mode: 'OFF',
+        },
+        target: {
+          arn: startFunction.arn,
+          roleArn: schedulerRole.arn,
+          input: JSON.stringify({}),
+        },
       },
       { parent: this }
-    );
-
-    const startPermission = new aws.lambda.Permission(
-      `start-invoke-permission-${environmentSuffix}`,
-      {
-        action: 'lambda:InvokeFunction',
-        function: startFunction.name,
-        principal: 'events.amazonaws.com',
-        sourceArn: startRule.arn,
-      },
-      { parent: this }
-    );
-
-    // Create EventBridge targets
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const stopTarget = new aws.cloudwatch.EventTarget(
-      `ec2-stop-target-${environmentSuffix}`,
-      {
-        rule: stopRule.name,
-        arn: stopFunction.arn,
-      },
-      { parent: this, dependsOn: [stopPermission] }
-    );
-
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const startTarget = new aws.cloudwatch.EventTarget(
-      `ec2-start-target-${environmentSuffix}`,
-      {
-        rule: startRule.name,
-        arn: startFunction.arn,
-      },
-      { parent: this, dependsOn: [startPermission] }
     );
 
     // Create CloudWatch Alarm
@@ -450,14 +462,14 @@ export class Ec2SchedulerStack extends pulumi.ComponentResource {
 
     this.stopFunctionArn = stopFunction.arn;
     this.startFunctionArn = startFunction.arn;
-    this.stopRuleArn = stopRule.arn;
-    this.startRuleArn = startRule.arn;
+    this.stopRuleArn = stopSchedule.arn;
+    this.startRuleArn = startSchedule.arn;
 
     this.outputs = pulumi.output({
       stopFunctionArn: stopFunction.arn,
       startFunctionArn: startFunction.arn,
-      stopRuleArn: stopRule.arn,
-      startRuleArn: startRule.arn,
+      stopRuleArn: stopSchedule.arn,
+      startRuleArn: startSchedule.arn,
       managedInstanceIds: this.managedInstanceIds,
     });
 
@@ -591,8 +603,8 @@ exports.handler = async (event, context) => {
 
 1. **Pulumi Import**: Added commented code showing how to properly import existing instances
 2. **IAM Policies**: Added explicit deny for production instances
-3. **Timezone**: Corrected cron expressions with proper UTC conversion
-4. **Error Handling**: Added retry logic with exponential backoff
+3. **EventBridge Scheduler**: Native timezone support (America/New_York) eliminates DST drift
+4. **Error Handling**: Added retry logic with exponential backoff in Lambda functions
 5. **Dead Letter Queue**: Configured for failed Lambda invocations
 6. **Lambda Optimization**: Reduced timeout, increased memory, added concurrency limits
 7. **Structured Logging**: Enhanced logging with context and request IDs
@@ -611,15 +623,16 @@ pulumi import aws:ec2/instance:Instance imported-instance-0 i-1234567890abcdef0
 
 This ensures instances are adopted without recreation, meeting PROMPT requirement.
 
-### Timezone Considerations
+### Timezone Handling
 
-CloudWatch Events uses UTC. The cron expressions are adjusted for EST:
-- Stop: 7 PM EST = 12 AM UTC (next day)
-- Start: 8 AM EST = 1 PM UTC
+EventBridge Scheduler provides native timezone support:
+- Stop: 7 PM EST/EDT (cron: 0 19) in America/New_York timezone
+- Start: 8 AM EST/EDT (cron: 0 8) in America/New_York timezone
 
-**Note**: This doesn't account for DST. For production, consider:
-1. Using EventBridge Scheduler (supports timezones)
-2. Or manually adjusting cron expressions twice yearly
+**Benefits**:
+- Automatic DST adjustment (no manual cron updates needed)
+- Consistent local time year-round
+- No scheduling drift during DST transitions
 
 ### Cost Optimization
 

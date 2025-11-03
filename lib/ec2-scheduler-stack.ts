@@ -259,18 +259,20 @@ export class Ec2SchedulerStack extends pulumi.ComponentResource {
       `scheduler-lambda-policy-${environmentSuffix}`,
       {
         role: schedulerRole.id,
-        policy: pulumi.all([stopFunction.arn, startFunction.arn]).apply(([stopArn, startArn]) =>
-          JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Action: 'lambda:InvokeFunction',
-                Resource: [stopArn, startArn],
-              },
-            ],
-          })
-        ),
+        policy: pulumi
+          .all([stopFunction.arn, startFunction.arn])
+          .apply(([stopArn, startArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: 'lambda:InvokeFunction',
+                  Resource: [stopArn, startArn],
+                },
+              ],
+            })
+          ),
       },
       { parent: this }
     );
@@ -280,7 +282,8 @@ export class Ec2SchedulerStack extends pulumi.ComponentResource {
     const stopSchedule = new aws.scheduler.Schedule(
       `ec2-stop-schedule-${environmentSuffix}`,
       {
-        description: 'Stop development and staging EC2 instances at 7 PM EST on weekdays',
+        description:
+          'Stop development and staging EC2 instances at 7 PM EST on weekdays',
         scheduleExpression: 'cron(0 19 ? * MON-FRI *)',
         scheduleExpressionTimezone: 'America/New_York',
         flexibleTimeWindow: {
@@ -300,7 +303,8 @@ export class Ec2SchedulerStack extends pulumi.ComponentResource {
     const startSchedule = new aws.scheduler.Schedule(
       `ec2-start-schedule-${environmentSuffix}`,
       {
-        description: 'Start development and staging EC2 instances at 8 AM EST on weekdays',
+        description:
+          'Start development and staging EC2 instances at 8 AM EST on weekdays',
         scheduleExpression: 'cron(0 8 ? * MON-FRI *)',
         scheduleExpressionTimezone: 'America/New_York',
         flexibleTimeWindow: {
