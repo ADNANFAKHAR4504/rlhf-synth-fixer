@@ -10,6 +10,7 @@ import { NetworkingConstruct } from '../constructs/networking';
 export interface AuroraGlobalStackProps extends cdk.StackProps {
   isPrimary: boolean;
   globalClusterIdentifier?: string;
+  environmentSuffix: string;
 }
 
 export class AuroraGlobalStack extends cdk.Stack {
@@ -23,23 +24,27 @@ export class AuroraGlobalStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: AuroraGlobalStackProps) {
     super(scope, id, props);
 
+    const suffix = props.environmentSuffix;
+
     // Create networking infrastructure
     const networking = new NetworkingConstruct(this, 'Networking', {
       isPrimary: props.isPrimary,
       maxAzs: 3,
+      environmentSuffix: suffix,
     });
     this.vpc = networking.vpc;
 
     // Create KMS key for encryption
     const encryptionKey = new kms.Key(this, 'AuroraEncryptionKey', {
       enableKeyRotation: true,
-      description: 'Encryption key for Aurora cluster',
-      alias: `aurora-dr-${props.isPrimary ? 'primary' : 'secondary'}`,
+      description: `Encryption key for Aurora cluster (${suffix})`,
+      alias: `aurora-dr-${props.isPrimary ? 'primary' : 'secondary'}-${suffix}`,
     });
 
     // Create database credentials secret
     this.secret = new secretsmanager.Secret(this, 'DBSecret', {
-      description: 'Aurora PostgreSQL admin credentials',
+      description: `Aurora PostgreSQL admin credentials (${suffix})`,
+      secretName: `aurora-dr-${props.isPrimary ? 'primary' : 'secondary'}-secret-${suffix}`,
       generateSecretString: {
         secretStringTemplate: JSON.stringify({
           username: 'postgres_admin',
@@ -58,6 +63,7 @@ export class AuroraGlobalStack extends cdk.Stack {
       globalClusterIdentifier: props.globalClusterIdentifier,
       secret: this.secret,
       encryptionKey,
+      environmentSuffix: suffix,
     });
 
     this.cluster = auroraCluster.cluster;

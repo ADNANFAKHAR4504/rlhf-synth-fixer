@@ -11,6 +11,7 @@ export interface AuroraClusterProps {
   globalClusterIdentifier?: string;
   secret: secretsmanager.ISecret;
   encryptionKey: kms.IKey;
+  environmentSuffix: string;
 }
 
 export class AuroraClusterConstruct extends Construct {
@@ -19,6 +20,8 @@ export class AuroraClusterConstruct extends Construct {
 
   constructor(scope: Construct, id: string, props: AuroraClusterProps) {
     super(scope, id);
+
+    const suffix = props.environmentSuffix;
 
     // Create subnet group
     const subnetGroup = new rds.SubnetGroup(this, 'SubnetGroup', {
@@ -72,7 +75,7 @@ export class AuroraClusterConstruct extends Construct {
     if (props.isPrimary && !props.globalClusterIdentifier) {
       // Create global cluster if this is the primary
       const globalCluster = new rds.CfnGlobalCluster(this, 'GlobalCluster', {
-        globalClusterIdentifier: `aurora-dr-global-${Date.now()}`,
+        globalClusterIdentifier: `aurora-dr-global-${suffix}-${Date.now()}`,
         sourceDbClusterIdentifier: undefined,
         engine: 'aurora-postgresql',
         engineVersion: '15.12',

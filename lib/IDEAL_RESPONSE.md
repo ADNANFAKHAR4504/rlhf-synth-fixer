@@ -1,10 +1,139 @@
 # Aurora Multi-Region Disaster Recovery - Infrastructure Code
 
+## Main Orchestration
+
+### lib/tap-stack.ts
+
+```ts
+import { Construct } from 'constructs';
+import { AuroraGlobalStack } from './stacks/aurora-global-stack';
+import { MonitoringStack } from './stacks/monitoring-stack';
+// import { FailoverStack } from './stacks/failover-stack';
+
+interface TapStackProps {
+  environmentSuffix?: string;
+}
+
+export class TapStack extends Construct {
+  public readonly primaryStack: AuroraGlobalStack;
+  public readonly secondaryStack: AuroraGlobalStack;
+  public readonly monitoringStack: MonitoringStack;
+  // public readonly failoverStack: FailoverStack;
+
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
+    super(scope, id);
+
+    // Get environment suffix from props, context, or use 'dev' as default
+    const environmentSuffix =
+      props?.environmentSuffix ||
+      this.node.tryGetContext('environmentSuffix') ||
+      'dev';
+
+    // Environment configurations
+    const primaryEnv = {
+      account: process.env.CDK_DEFAULT_ACCOUNT,
+      region: 'us-east-1',
+    };
+    const secondaryEnv = {
+      account: process.env.CDK_DEFAULT_ACCOUNT,
+      region: 'us-west-2',
+    };
+
+    // Default tags for all resources
+    const defaultTags = {
+      CostCenter: 'Platform',
+      Environment: 'Production',
+      'DR-Role': 'Active',
+    };
+
+    // Deploy primary stack in us-east-1
+    this.primaryStack = new AuroraGlobalStack(
+      scope,
+      `Aurora-DR-Primary-${environmentSuffix}`,
+      {
+        env: primaryEnv,
+        isPrimary: true,
+        environmentSuffix,
+        tags: defaultTags,
+        crossRegionReferences: true,
+      }
+    );
+
+    // Deploy secondary stack in us-west-2
+    this.secondaryStack = new AuroraGlobalStack(
+      scope,
+      `Aurora-DR-Secondary-${environmentSuffix}`,
+      {
+        env: secondaryEnv,
+        isPrimary: false,
+        environmentSuffix,
+        globalClusterIdentifier: this.primaryStack.globalClusterIdentifier,
+        tags: { ...defaultTags, 'DR-Role': 'Standby' },
+        crossRegionReferences: true,
+      }
+    );
+
+    // Deploy monitoring stack
+    this.monitoringStack = new MonitoringStack(
+      scope,
+      `Aurora-DR-Monitoring-${environmentSuffix}`,
+      {
+        env: {
+          region: primaryEnv.region,
+          account: process.env.CDK_DEFAULT_ACCOUNT,
+        },
+        environmentSuffix,
+        primaryCluster: this.primaryStack.cluster,
+        secondaryCluster: this.secondaryStack.cluster,
+        crossRegionReferences: true,
+      }
+    );
+
+    // Failover automation stack (commented out due to complex dependencies)
+    // this.failoverStack = new FailoverStack(
+    //   scope,
+    //   `Aurora-DR-Failover-${environmentSuffix}`,
+    //   {
+    //     env: {
+    //       region: primaryEnv.region,
+    //       account: process.env.CDK_DEFAULT_ACCOUNT,
+    //     },
+    //     environmentSuffix,
+    //     primaryStack: this.primaryStack,
+    //     secondaryStack: this.secondaryStack,
+    //     crossRegionReferences: true,
+    //   },
+    // );
+  }
+}
+```
+
+### bin/tap.ts
+
+```ts
+#!/usr/bin/env node
+import * as cdk from 'aws-cdk-lib';
+import 'source-map-support/register';
+import { TapStack } from '../lib/tap-stack';
+
+const app = new cdk.App();
+
+// Get environment suffix from context or use default
+const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
+
+// Instantiate TapStack which will create all Aurora DR stacks
+new TapStack(app, 'TapStack', {
+  environmentSuffix,
+});
+
+app.synth();
+```
+
 ## Stacks
 
 ### lib/stacks/aurora-global-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -17,6 +146,7 @@ import { NetworkingConstruct } from '../constructs/networking';
 export interface AuroraGlobalStackProps extends cdk.StackProps {
   isPrimary: boolean;
   globalClusterIdentifier?: string;
+  environmentSuffix: string;
 }
 
 export class AuroraGlobalStack extends cdk.Stack {
@@ -30,23 +160,27 @@ export class AuroraGlobalStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: AuroraGlobalStackProps) {
     super(scope, id, props);
 
+    const suffix = props.environmentSuffix;
+
     // Create networking infrastructure
     const networking = new NetworkingConstruct(this, 'Networking', {
       isPrimary: props.isPrimary,
       maxAzs: 3,
+      environmentSuffix: suffix,
     });
     this.vpc = networking.vpc;
 
     // Create KMS key for encryption
     const encryptionKey = new kms.Key(this, 'AuroraEncryptionKey', {
       enableKeyRotation: true,
-      description: 'Encryption key for Aurora cluster',
-      alias: `aurora-dr-${props.isPrimary ? 'primary' : 'secondary'}`,
+      description: `Encryption key for Aurora cluster (${suffix})`,
+      alias: `aurora-dr-${props.isPrimary ? 'primary' : 'secondary'}-${suffix}`,
     });
 
     // Create database credentials secret
     this.secret = new secretsmanager.Secret(this, 'DBSecret', {
-      description: 'Aurora PostgreSQL admin credentials',
+      description: `Aurora PostgreSQL admin credentials (${suffix})`,
+      secretName: `aurora-dr-${props.isPrimary ? 'primary' : 'secondary'}-secret-${suffix}`,
       generateSecretString: {
         secretStringTemplate: JSON.stringify({
           username: 'postgres_admin',
@@ -65,6 +199,7 @@ export class AuroraGlobalStack extends cdk.Stack {
       globalClusterIdentifier: props.globalClusterIdentifier,
       secret: this.secret,
       encryptionKey,
+      environmentSuffix: suffix,
     });
 
     this.cluster = auroraCluster.cluster;
@@ -108,7 +243,7 @@ export class AuroraGlobalStack extends cdk.Stack {
 
 ### lib/stacks/monitoring-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -117,15 +252,18 @@ import { Construct } from 'constructs';
 export interface MonitoringStackProps extends cdk.StackProps {
   primaryCluster: rds.DatabaseCluster;
   secondaryCluster: rds.DatabaseCluster;
+  environmentSuffix: string;
 }
 
 export class MonitoringStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: MonitoringStackProps) {
     super(scope, id, props);
 
+    const suffix = props.environmentSuffix;
+
     // Create CloudWatch Dashboard
     const dashboard = new cloudwatch.Dashboard(this, 'AuroraDRDashboard', {
-      dashboardName: 'aurora-dr-monitoring',
+      dashboardName: `aurora-dr-monitoring-${suffix}`,
       defaultInterval: cdk.Duration.minutes(5),
     });
 
@@ -308,7 +446,7 @@ export class MonitoringStack extends cdk.Stack {
 
 ### lib/stacks/failover-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
@@ -596,7 +734,7 @@ export class FailoverStack extends cdk.Stack {
 
 ### lib/constructs/aurora-cluster.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -610,6 +748,7 @@ export interface AuroraClusterProps {
   globalClusterIdentifier?: string;
   secret: secretsmanager.ISecret;
   encryptionKey: kms.IKey;
+  environmentSuffix: string;
 }
 
 export class AuroraClusterConstruct extends Construct {
@@ -618,6 +757,8 @@ export class AuroraClusterConstruct extends Construct {
 
   constructor(scope: Construct, id: string, props: AuroraClusterProps) {
     super(scope, id);
+
+    const suffix = props.environmentSuffix;
 
     // Create subnet group
     const subnetGroup = new rds.SubnetGroup(this, 'SubnetGroup', {
@@ -671,7 +812,7 @@ export class AuroraClusterConstruct extends Construct {
     if (props.isPrimary && !props.globalClusterIdentifier) {
       // Create global cluster if this is the primary
       const globalCluster = new rds.CfnGlobalCluster(this, 'GlobalCluster', {
-        globalClusterIdentifier: `aurora-dr-global-${Date.now()}`,
+        globalClusterIdentifier: `aurora-dr-global-${suffix}-${Date.now()}`,
         sourceDbClusterIdentifier: undefined,
         engine: 'aurora-postgresql',
         engineVersion: '15.12',
@@ -743,13 +884,14 @@ export class AuroraClusterConstruct extends Construct {
 
 ### lib/constructs/networking.ts
 
-```typescript
+```ts
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
 
 export interface NetworkingProps {
   isPrimary: boolean;
   maxAzs: number;
+  environmentSuffix: string;
 }
 
 export class NetworkingConstruct extends Construct {
@@ -759,8 +901,12 @@ export class NetworkingConstruct extends Construct {
   constructor(scope: Construct, id: string, props: NetworkingProps) {
     super(scope, id);
 
+    const suffix = props.environmentSuffix;
+    const regionType = props.isPrimary ? 'primary' : 'secondary';
+
     // Create VPC with private subnets across 3 AZs
     this.vpc = new ec2.Vpc(this, 'VPC', {
+      vpcName: `aurora-dr-${regionType}-vpc-${suffix}`,
       maxAzs: props.maxAzs,
       ipAddresses: ec2.IpAddresses.cidr(
         props.isPrimary ? '10.0.0.0/16' : '10.1.0.0/16'
@@ -811,7 +957,7 @@ export class NetworkingConstruct extends Construct {
 
 ### lib/lambdas/health-check/index.ts
 
-```typescript
+```ts
 /* eslint-disable import/no-extraneous-dependencies */
 // AWS SDK and pg are provided by Lambda runtime layer
 import {
@@ -902,7 +1048,7 @@ export const handler = async (): Promise<HealthCheckResult> => {
 
 ### lib/lambdas/failover-orchestrator/index.ts
 
-```typescript
+```ts
 /* eslint-disable import/no-extraneous-dependencies */
 // AWS SDK is provided by Lambda runtime
 import {
@@ -1086,7 +1232,7 @@ export const handler = async (): Promise<FailoverResult> => {
 
 ### lib/lambdas/dr-testing/index.ts
 
-```typescript
+```ts
 /* eslint-disable import/no-extraneous-dependencies */
 // AWS SDK is provided by Lambda runtime
 import {

@@ -1,26 +1,101 @@
-import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
+import { AuroraGlobalStack } from './stacks/aurora-global-stack';
+import { MonitoringStack } from './stacks/monitoring-stack';
+// import { FailoverStack } from './stacks/failover-stack';
 
-// ? Import your stacks here
-// import { MyStack } from './my-stack';
-
-interface TapStackProps extends cdk.StackProps {
+interface TapStackProps {
   environmentSuffix?: string;
 }
 
-export class TapStack extends cdk.Stack {
+export class TapStack extends Construct {
+  public readonly primaryStack: AuroraGlobalStack;
+  public readonly secondaryStack: AuroraGlobalStack;
+  public readonly monitoringStack: MonitoringStack;
+  // public readonly failoverStack: FailoverStack;
+
   constructor(scope: Construct, id: string, props?: TapStackProps) {
-    super(scope, id, props);
+    super(scope, id);
 
     // Get environment suffix from props, context, or use 'dev' as default
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const environmentSuffix =
       props?.environmentSuffix ||
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    // ? Add your stack instantiations here
-    // ! Do NOT create resources directly in this stack.
-    // ! Instead, create separate stacks for each resource type.
+    // Environment configurations
+    const primaryEnv = {
+      account: process.env.CDK_DEFAULT_ACCOUNT,
+      region: 'us-east-1',
+    };
+    const secondaryEnv = {
+      account: process.env.CDK_DEFAULT_ACCOUNT,
+      region: 'us-west-2',
+    };
+
+    // Default tags for all resources
+    const defaultTags = {
+      CostCenter: 'Platform',
+      Environment: 'Production',
+      'DR-Role': 'Active',
+    };
+
+    // Deploy primary stack in us-east-1
+    this.primaryStack = new AuroraGlobalStack(
+      scope,
+      `Aurora-DR-Primary-${environmentSuffix}`,
+      {
+        env: primaryEnv,
+        isPrimary: true,
+        environmentSuffix,
+        tags: defaultTags,
+        crossRegionReferences: true,
+      }
+    );
+
+    // Deploy secondary stack in us-west-2
+    this.secondaryStack = new AuroraGlobalStack(
+      scope,
+      `Aurora-DR-Secondary-${environmentSuffix}`,
+      {
+        env: secondaryEnv,
+        isPrimary: false,
+        environmentSuffix,
+        globalClusterIdentifier: this.primaryStack.globalClusterIdentifier,
+        tags: { ...defaultTags, 'DR-Role': 'Standby' },
+        crossRegionReferences: true,
+      }
+    );
+
+    // Deploy monitoring stack
+    this.monitoringStack = new MonitoringStack(
+      scope,
+      `Aurora-DR-Monitoring-${environmentSuffix}`,
+      {
+        env: {
+          region: primaryEnv.region,
+          account: process.env.CDK_DEFAULT_ACCOUNT,
+        },
+        environmentSuffix,
+        primaryCluster: this.primaryStack.cluster,
+        secondaryCluster: this.secondaryStack.cluster,
+        crossRegionReferences: true,
+      }
+    );
+
+    // Failover automation stack (commented out due to complex dependencies)
+    // this.failoverStack = new FailoverStack(
+    //   scope,
+    //   `Aurora-DR-Failover-${environmentSuffix}`,
+    //   {
+    //     env: {
+    //       region: primaryEnv.region,
+    //       account: process.env.CDK_DEFAULT_ACCOUNT,
+    //     },
+    //     environmentSuffix,
+    //     primaryStack: this.primaryStack,
+    //     secondaryStack: this.secondaryStack,
+    //     crossRegionReferences: true,
+    //   },
+    // );
   }
 }

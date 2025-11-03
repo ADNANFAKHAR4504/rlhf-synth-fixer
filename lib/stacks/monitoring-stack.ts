@@ -6,15 +6,18 @@ import { Construct } from 'constructs';
 export interface MonitoringStackProps extends cdk.StackProps {
   primaryCluster: rds.DatabaseCluster;
   secondaryCluster: rds.DatabaseCluster;
+  environmentSuffix: string;
 }
 
 export class MonitoringStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: MonitoringStackProps) {
     super(scope, id, props);
 
+    const suffix = props.environmentSuffix;
+
     // Create CloudWatch Dashboard
     const dashboard = new cloudwatch.Dashboard(this, 'AuroraDRDashboard', {
-      dashboardName: 'aurora-dr-monitoring',
+      dashboardName: `aurora-dr-monitoring-${suffix}`,
       defaultInterval: cdk.Duration.minutes(5),
     });
 

@@ -4,6 +4,7 @@ import { Construct } from 'constructs';
 export interface NetworkingProps {
   isPrimary: boolean;
   maxAzs: number;
+  environmentSuffix: string;
 }
 
 export class NetworkingConstruct extends Construct {
@@ -13,8 +14,12 @@ export class NetworkingConstruct extends Construct {
   constructor(scope: Construct, id: string, props: NetworkingProps) {
     super(scope, id);
 
+    const suffix = props.environmentSuffix;
+    const regionType = props.isPrimary ? 'primary' : 'secondary';
+
     // Create VPC with private subnets across 3 AZs
     this.vpc = new ec2.Vpc(this, 'VPC', {
+      vpcName: `aurora-dr-${regionType}-vpc-${suffix}`,
       maxAzs: props.maxAzs,
       ipAddresses: ec2.IpAddresses.cidr(
         props.isPrimary ? '10.0.0.0/16' : '10.1.0.0/16'
