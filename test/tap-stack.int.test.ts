@@ -22,8 +22,12 @@ import {
   LambdaClient,
 } from '@aws-sdk/client-lambda';
 import {
+  GetBucketEncryptionCommand,
   GetBucketReplicationCommand,
+  GetBucketTaggingCommand,
+  GetBucketVersioningCommand,
   GetObjectCommand,
+  GetPublicAccessBlockCommand,
   HeadBucketCommand,
   PutObjectCommand,
   S3Client
@@ -88,18 +92,14 @@ describe('Multi-Account Replication Framework Integration Tests', () => {
     });
 
     test('S3 bucket should have versioning enabled', async () => {
-      const { S3Client: S3, GetBucketVersioningCommand } = await import('@aws-sdk/client-s3');
-      const client = new S3({ region });
       const command = new GetBucketVersioningCommand({ Bucket: bucketName });
-      const response = await client.send(command);
+      const response = await s3Client.send(command);
       expect(response.Status).toBe('Enabled');
     });
 
     test('S3 bucket should have encryption configured', async () => {
-      const { S3Client: S3, GetBucketEncryptionCommand } = await import('@aws-sdk/client-s3');
-      const client = new S3({ region });
       const command = new GetBucketEncryptionCommand({ Bucket: bucketName });
-      const response = await client.send(command);
+      const response = await s3Client.send(command);
       expect(response.ServerSideEncryptionConfiguration).toBeDefined();
       expect(response.ServerSideEncryptionConfiguration?.Rules).toHaveLength(1);
     });
@@ -125,10 +125,8 @@ describe('Multi-Account Replication Framework Integration Tests', () => {
     });
 
     test('S3 bucket should have public access blocked', async () => {
-      const { S3Client: S3, GetPublicAccessBlockCommand } = await import('@aws-sdk/client-s3');
-      const client = new S3({ region });
       const command = new GetPublicAccessBlockCommand({ Bucket: bucketName });
-      const response = await client.send(command);
+      const response = await s3Client.send(command);
 
       expect(response.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
       expect(response.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
@@ -541,14 +539,12 @@ describe('Multi-Account Replication Framework Integration Tests', () => {
 
   describe('Resource Tagging Verification', () => {
     test('S3 bucket should have correct tags', async () => {
-      const { S3Client: S3, GetBucketTaggingCommand } = await import('@aws-sdk/client-s3');
-      const client = new S3({ region });
       const command = new GetBucketTaggingCommand({
         Bucket: outputs.S3BucketName,
       });
 
       try {
-        const response = await client.send(command);
+        const response = await s3Client.send(command);
         const tags = response.TagSet || [];
 
         const iacTag = tags.find(tag => tag.Key === 'iac-rlhf-amazon');
