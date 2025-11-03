@@ -880,10 +880,12 @@ exports.handler = async (event) => {
           {
             name: 'test-rds-failover',
             actionId: 'aws:rds:reboot-db-instances',
-            targets: {},
-            parameters: {
-              forceFailover: 'true',
-            },
+            parameters: [
+              {
+                key: 'forceFailover',
+                value: 'true',
+              },
+            ],
           },
         ],
         tags: defaultTags,
