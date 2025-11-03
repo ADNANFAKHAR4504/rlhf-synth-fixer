@@ -1028,7 +1028,6 @@
     "DMSVPCRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": "dms-vpc-role",
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
