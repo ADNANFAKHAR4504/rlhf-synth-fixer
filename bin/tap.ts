@@ -15,7 +15,7 @@ import { TapStack } from '../lib/tap-stack';
 const config = new pulumi.Config();
 
 // Get the environment suffix from the CI, Pulumi config, defaulting to 'dev'.
-const environmentSuffix =
+const requestedEnvironmentSuffix =
   process.env.ENVIRONMENT_SUFFIX || config.get('env') || 'dev';
 
 // Get metadata from environment variables for tagging purposes.
@@ -28,17 +28,30 @@ const commitAuthor = config.get('commitAuthor') || 'unknown';
 // this is the standard place to define them. They would typically be passed
 // into the TapStack or configured on the AWS provider.
 const defaultTags = {
-  Environment: environmentSuffix,
+  Environment: requestedEnvironmentSuffix,
   Repository: repository,
   Author: commitAuthor,
 };
 
 // Instantiate the main stack component for the infrastructure.
 // This encapsulates all the resources for the platform.
-new TapStack('pulumi-infra', {
+const tapStack = new TapStack('pulumi-infra', {
   tags: defaultTags,
+  environmentSuffix: requestedEnvironmentSuffix,
 });
 
-// To use the stack outputs, you can export them.
-// For example, if TapStack had an output `bucketName`:
-// export const bucketName = stack.bucketName;
+// Export the stack outputs so they are available for CI tooling and live tests
+export const apiEndpoint = tapStack.apiEndpoint;
+export const apiUrl = tapStack.apiUrl;
+export const dynamoTableName = tapStack.dynamoTableName;
+export const lambdaFunctionName = tapStack.lambdaFunctionName;
+export const lambdaRoleArn = tapStack.lambdaRoleArn;
+export const snsTopicArn = tapStack.snsTopicArn;
+export const dlqUrl = tapStack.dlqUrl;
+export const usagePlanId = tapStack.usagePlanId;
+export const lambdaLogGroupName = tapStack.lambdaLogGroupName;
+export const lambdaErrorAlarmName = tapStack.lambdaErrorAlarmName;
+export const environmentSuffix = tapStack.environmentSuffix;
+export const region = tapStack.region;
+export const stateBucket = tapStack.stateBucket;
+export const stateBucketRegion = tapStack.stateBucketRegion;

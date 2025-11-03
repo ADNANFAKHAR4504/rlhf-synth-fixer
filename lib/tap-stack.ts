@@ -32,6 +32,10 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly usagePlanId: pulumi.Output<string>;
   public readonly lambdaLogGroupName: pulumi.Output<string>;
   public readonly lambdaErrorAlarmName: pulumi.Output<string>;
+  public readonly environmentSuffix: pulumi.Output<string>;
+  public readonly region: pulumi.Output<string>;
+  public readonly stateBucket: pulumi.Output<string | null>;
+  public readonly stateBucketRegion: pulumi.Output<string | null>;
 
   constructor(name: string, args: TapStackArgs = {}, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
@@ -46,6 +50,13 @@ export class TapStack extends pulumi.ComponentResource {
       config.get('region') ??
       process.env.AWS_REGION ??
       'eu-west-1';
+
+    const stateBucket = pulumi.output(
+      args.stateBucket ?? config.get('stateBucket') ?? null
+    );
+    const stateBucketRegion = pulumi.output(
+      args.stateBucketRegion ?? config.get('stateBucketRegion') ?? null
+    );
 
     const mergedTags: { [key: string]: string } = {
       Environment: environmentSuffix,
@@ -549,6 +560,10 @@ export class TapStack extends pulumi.ComponentResource {
     this.usagePlanId = usagePlan.id;
     this.lambdaLogGroupName = lambdaLogGroup.name;
     this.lambdaErrorAlarmName = errorAlarm.name;
+    this.environmentSuffix = pulumi.output(environmentSuffix);
+    this.region = pulumi.output(region);
+    this.stateBucket = stateBucket;
+    this.stateBucketRegion = stateBucketRegion;
 
     super.registerOutputs({
       apiUrl: this.apiUrl,
@@ -561,12 +576,11 @@ export class TapStack extends pulumi.ComponentResource {
       usagePlanId: this.usagePlanId,
       lambdaLogGroupName: this.lambdaLogGroupName,
       lambdaErrorAlarmName: this.lambdaErrorAlarmName,
-      environmentSuffix,
-      region,
-      region_output: region,
-      stateBucket: args.stateBucket ?? config.get('stateBucket') ?? null,
-      stateBucketRegion:
-        args.stateBucketRegion ?? config.get('stateBucketRegion') ?? null,
+      environmentSuffix: this.environmentSuffix,
+      region: this.region,
+      region_output: this.region,
+      stateBucket: this.stateBucket,
+      stateBucketRegion: this.stateBucketRegion,
     });
   }
 }

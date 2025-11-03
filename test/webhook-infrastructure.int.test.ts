@@ -24,6 +24,7 @@ import {
 } from '@aws-sdk/client-cloudwatch-logs';
 import { SNSClient, ListSubscriptionsByTopicCommand } from '@aws-sdk/client-sns';
 import { SQSClient, GetQueueAttributesCommand } from '@aws-sdk/client-sqs';
+import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -33,7 +34,8 @@ import * as path from 'path';
  */
 describe('Webhook Infrastructure Integration Tests', () => {
   let outputs: any;
-  const region = 'eu-west-1';
+  let region = process.env.AWS_REGION ?? 'us-east-1';
+  let environmentSuffix = 'dev';
 
   beforeAll(() => {
     // Load deployment outputs
@@ -43,7 +45,36 @@ describe('Webhook Infrastructure Integration Tests', () => {
     }
     outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
     console.log('Loaded deployment outputs:', Object.keys(outputs));
+
+    if (typeof outputs.region === 'string' && outputs.region.trim().length > 0) {
+      region = outputs.region;
+    } else if (
+      typeof outputs.region_output === 'string' &&
+      outputs.region_output.trim().length > 0
+    ) {
+      region = outputs.region_output;
+    }
+
+    if (
+      typeof outputs.environmentSuffix === 'string' &&
+      outputs.environmentSuffix.trim().length > 0
+    ) {
+      environmentSuffix = outputs.environmentSuffix;
+    }
   });
+
+  const extractApiIdFromUrl = (url: string): string => {
+    const match = url.match(
+      /^https:\/\/([^.]+)\.execute-api\.[^.]+\.amazonaws\.com\/[a-zA-Z0-9_-]+/
+    );
+    if (!match) {
+      throw new Error(`Unable to extract API ID from URL: ${url}`);
+    }
+    return match[1];
+  };
+
+  const escapeForRegex = (value: string): string =>
+    value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
   describe('DynamoDB Table Integration', () => {
     let dynamoClient: DynamoDBClient;
@@ -217,8 +248,7 @@ describe('Webhook Infrastructure Integration Tests', () => {
       const apiUrl = outputs.apiUrl;
       expect(apiUrl).toBeDefined();
 
-      // Extract API ID from URL
-      const apiId = apiUrl.split('.')[0];
+      const apiId = extractApiIdFromUrl(apiUrl);
 
       const command = new GetRestApiCommand({
         restApiId: apiId,
@@ -231,7 +261,7 @@ describe('Webhook Infrastructure Integration Tests', () => {
 
     it('should verify API Gateway stage configuration', async () => {
       const apiUrl = outputs.apiUrl;
-      const apiId = apiUrl.split('.')[0];
+      const apiId = extractApiIdFromUrl(apiUrl);
 
       const command = new GetStageCommand({
         restApiId: apiId,
@@ -444,6 +474,38 @@ describe('Webhook Infrastructure Integration Tests', () => {
     }, 45000);
   });
 
+  describe('API Gateway Live Endpoint', () => {
+    it(
+      'should accept webhook payloads via HTTPS endpoint',
+      async () => {
+        const apiEndpoint = outputs.apiEndpoint;
+        expect(apiEndpoint).toBeDefined();
+
+        const source = `http-e2e-${Date.now()}`;
+        const response = await axios.post(
+          apiEndpoint,
+          {
+            source,
+            data: {
+              action: 'live-int-test',
+              at: new Date().toISOString(),
+            },
+          },
+          {
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 20000,
+          }
+        );
+
+        expect(response.status).toBe(200);
+        expect(response.data).toBeDefined();
+        expect(response.data.success).toBe(true);
+        expect(response.data.eventId).toContain(source);
+      },
+      30000
+    );
+  });
+
   describe('Deployment Outputs Validation', () => {
     it('should have all required outputs', () => {
       expect(outputs.apiEndpoint).toBeDefined();
@@ -453,24 +515,36 @@ describe('Webhook Infrastructure Integration Tests', () => {
       expect(outputs.dlqUrl).toBeDefined();
       expect(outputs.snsTopicArn).toBeDefined();
       expect(outputs.lambdaRoleArn).toBeDefined();
-      expect(outputs.region_output).toBe('eu-west-1');
+      expect(outputs.region_output).toBe(region);
     });
 
     it('should have correct resource naming with environmentSuffix', () => {
-      // All resources should contain environment suffix
-      expect(outputs.dynamoTableName).toMatch(/synthie6ds5/);
-      expect(outputs.lambdaFunctionName).toMatch(/synthie6ds5/);
-      expect(outputs.dlqUrl).toMatch(/synthie6ds5/);
-      expect(outputs.snsTopicArn).toMatch(/synthie6ds5/);
+      expect(environmentSuffix).toBeDefined();
+      const suffixPattern = new RegExp(escapeForRegex(environmentSuffix));
+
+      expect(outputs.dynamoTableName).toMatch(suffixPattern);
+      expect(outputs.lambdaFunctionName).toMatch(suffixPattern);
+      expect(outputs.dlqUrl).toMatch(suffixPattern);
+      expect(outputs.snsTopicArn).toMatch(suffixPattern);
     });
 
     it('should have correct API endpoint format', () => {
-      expect(outputs.apiEndpoint).toMatch(/^https:\/\/[a-z0-9]+\.execute-api\.eu-west-1\.amazonaws\.com\/prod\/webhook$/);
+      const endpointPattern = new RegExp(
+        `^https://[a-z0-9]+\\.execute-api\\.${escapeForRegex(region)}\\.amazonaws\\.com/[^/]+/webhook$`
+      );
+      expect(outputs.apiEndpoint).toMatch(endpointPattern);
     });
 
     it('should have correct ARN formats', () => {
-      expect(outputs.snsTopicArn).toMatch(/^arn:aws:sns:eu-west-1:\d+:webhook-failures-synthie6ds5$/);
-      expect(outputs.lambdaRoleArn).toMatch(/^arn:aws:iam::\d+:role\/webhook-lambda-role-synthie6ds5$/);
+      const snsPattern = new RegExp(
+        `^arn:aws:sns:${escapeForRegex(region)}:\\d+:webhook-failures-${escapeForRegex(environmentSuffix)}$`
+      );
+      const lambdaRolePattern = new RegExp(
+        `^arn:aws:iam::\\d+:role/webhook-lambda-role-${escapeForRegex(environmentSuffix)}$`
+      );
+
+      expect(outputs.snsTopicArn).toMatch(snsPattern);
+      expect(outputs.lambdaRoleArn).toMatch(lambdaRolePattern);
     });
   });
 });
