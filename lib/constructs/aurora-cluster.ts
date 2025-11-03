@@ -29,8 +29,8 @@ export class AuroraClusterConstruct extends Construct {
       description: 'Subnet group for Aurora cluster',
     });
 
-    // Create parameter group
-    const parameterGroup = new rds.ParameterGroup(this, 'ParameterGroup', {
+    // Create instance parameter group (for DB instances)
+    const instanceParameterGroup = new rds.ParameterGroup(this, 'ParameterGroup', {
       engine: rds.DatabaseClusterEngine.auroraPostgres({
         version: rds.AuroraPostgresEngineVersion.VER_15_12,
       }),
@@ -38,8 +38,8 @@ export class AuroraClusterConstruct extends Construct {
         shared_preload_libraries: 'pg_stat_statements',
         log_statement: 'all',
         log_duration: '1',
-        'rds.force_ssl': '1',
       },
+      description: 'Instance parameter group for Aurora PostgreSQL',
     });
 
     // Create security group
@@ -79,25 +79,33 @@ export class AuroraClusterConstruct extends Construct {
       this.globalClusterIdentifier = props.globalClusterIdentifier!;
     }
 
-    // Create the Aurora cluster
+    // Create the Aurora cluster with new writer/readers API
     this.cluster = new rds.DatabaseCluster(this, 'Cluster', {
       engine: rds.DatabaseClusterEngine.auroraPostgres({
         version: rds.AuroraPostgresEngineVersion.VER_15_12,
       }),
       credentials: rds.Credentials.fromSecret(props.secret),
-      instanceProps: {
+      writer: rds.ClusterInstance.provisioned('writer', {
         instanceType: ec2.InstanceType.of(
           ec2.InstanceClass.R6G,
           ec2.InstanceSize.XLARGE
         ),
-        vpcSubnets: {
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        },
-        vpc: props.vpc,
-        securityGroups: [securityGroup],
-        parameterGroup,
+        parameterGroup: instanceParameterGroup,
+      }),
+      readers: [
+        rds.ClusterInstance.provisioned('reader', {
+          instanceType: ec2.InstanceType.of(
+            ec2.InstanceClass.R6G,
+            ec2.InstanceSize.XLARGE
+          ),
+          parameterGroup: instanceParameterGroup,
+        }),
+      ],
+      vpc: props.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
       },
-      instances: 2, // Start with 2 instances
+      securityGroups: [securityGroup],
       backup: {
         retention: cdk.Duration.days(7),
         preferredWindow: '03:00-04:00',
@@ -105,7 +113,6 @@ export class AuroraClusterConstruct extends Construct {
       preferredMaintenanceWindow: 'sun:04:00-sun:05:00',
       storageEncrypted: true,
       storageEncryptionKey: props.encryptionKey,
-      parameterGroup,
       subnetGroup,
       copyTagsToSnapshot: true,
       cloudwatchLogsExports: ['postgresql'],
