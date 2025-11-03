@@ -642,7 +642,7 @@ HTML
 }
 
 resource "aws_autoscaling_group" "web" {
-  name = "${local.name_prefix}-web-asg"
+  name = "${local.name_prefix}-web-asg-123"
   
   min_size         = var.min_size
   max_size         = var.max_size
@@ -985,7 +985,7 @@ resource "aws_db_instance" "read_replica" {
 # CloudWatch Log Groups
 
 resource "aws_cloudwatch_log_group" "rds_error" {
-  name              = "/aws/rds/instance/${aws_db_instance.main.identifier}/errortf"
+  name              = "/aws/rds/instance/${aws_db_instance.main.identifier}/errorts"
   retention_in_days = 7
 
   tags = merge(
@@ -997,7 +997,7 @@ resource "aws_cloudwatch_log_group" "rds_error" {
 }
 
 resource "aws_cloudwatch_log_group" "rds_general" {
-  name              = "/aws/rds/instance/${aws_db_instance.main.identifier}/general"
+  name              = "/aws/rds/instance/${aws_db_instance.main.identifier}/generalts"
   retention_in_days = 7
 
   tags = merge(
@@ -1009,7 +1009,7 @@ resource "aws_cloudwatch_log_group" "rds_general" {
 }
 
 resource "aws_cloudwatch_log_group" "rds_slowquery" {
-  name              = "/aws/rds/instance/${aws_db_instance.main.identifier}/slowquery"
+  name              = "/aws/rds/instance/${aws_db_instance.main.identifier}/slowqueryts"
   retention_in_days = 7
 
   tags = merge(

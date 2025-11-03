@@ -340,11 +340,11 @@ describe('Terraform Infrastructure Tests', () => {
 
   describe('CloudWatch Log Groups', () => {
      it('creates RDS general log group', () => {
-      expect(has(/resource\s+"aws_cloudwatch_log_group"\s+"rds_general"[\s\S]*?name\s*=\s*"\/aws\/rds\/instance\/\$\{aws_db_instance\.main\.identifier\}\/general"/)).toBe(true);
+      expect(has(/resource\s+"aws_cloudwatch_log_group"\s+"rds_general"[\s\S]*?name\s*=\s*"\/aws\/rds\/instance\/\$\{aws_db_instance\.main\.identifier\}\/generalts"/)).toBe(true);
     });
 
     it('creates RDS slow query log group', () => {
-      expect(has(/resource\s+"aws_cloudwatch_log_group"\s+"rds_slowquery"[\s\S]*?name\s*=\s*"\/aws\/rds\/instance\/\$\{aws_db_instance\.main\.identifier\}\/slowquery"/)).toBe(true);
+      expect(has(/resource\s+"aws_cloudwatch_log_group"\s+"rds_slowquery"[\s\S]*?name\s*=\s*"\/aws\/rds\/instance\/\$\{aws_db_instance\.main\.identifier\}\/slowqueryts"/)).toBe(true);
     });
   });
 
