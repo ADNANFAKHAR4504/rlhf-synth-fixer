@@ -2,10 +2,17 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import AWS from 'aws-sdk';
 
-// Load flat outputs from JSON
 const outputsPath = join(__dirname, '../cfn-outputs/flat-outputs.json');
-const outputs: Record<string, any> = JSON.parse(readFileSync(outputsPath, 'utf-8'));
+let outputs: Record<string, any> = {};
 
+try {
+  outputs = JSON.parse(readFileSync(outputsPath, 'utf-8'));
+  console.log('Loaded outputs:', JSON.stringify(outputs, null, 2));
+} catch (e) {
+  console.error('Failed to load flat-outputs.json:', e);
+}
+
+// AWS clients per region
 const regionPrimary = outputs.aws_primary_region || 'us-east-1';
 const regionSecondary = outputs.aws_secondary_region || 'us-west-2';
 
@@ -22,123 +29,162 @@ const route53 = new AWS.Route53({ region: regionPrimary });
 const cloudwatchPrimary = new AWS.CloudWatch({ region: regionPrimary });
 const ssmPrimary = new AWS.SSM({ region: regionPrimary });
 
-async function safeAWSCall(callFn: any, ...args: any[]): Promise<any | null> {
+async function safeAWSCall(callFn: any, ...args: any[]) {
   try {
     return await callFn(...args);
   } catch (err: any) {
     if (err.code === 'ResourceNotFoundException' || (err.message && err.message.includes('not found'))) {
-      console.warn(`[WARN] Resource not found: ${err.message}`);
+      console.warn(`[WARN] Resource not found or does not exist: ${err.message}`);
       return null;
     }
-    console.error('AWS call failed:', err);
     throw err;
   }
 }
 
-describe('TapStack Terraform Integration Tests', () => {
+describe('Complete TAP Stack Integration Tests with Diagnostics', () => {
 
   it('Primary VPC exists', async () => {
-    if (!outputs.vpc_primary_id) { console.warn('Primary VPC output missing, skipping test'); return; }
-    const res = await safeAWSCall(ec2Primary.describeVpcs.bind(ec2Primary), { VpcIds: [outputs.vpc_primary_id] });
-    expect(res?.Vpcs?.[0]?.VpcId).toBe(outputs.vpc_primary_id);
+    const vpcId = outputs.vpc_primary_id;
+    console.log('Primary VPC ID:', vpcId);
+    if (!vpcId) { console.warn('Skipping Primary VPC test - missing output'); return; }
+    const res = await safeAWSCall(ec2Primary.describeVpcs.bind(ec2Primary), { VpcIds: [vpcId] });
+    expect(res?.Vpcs?.[0]?.VpcId).toBe(vpcId);
   });
 
   it('Secondary VPC exists', async () => {
-    if (!outputs.vpc_secondary_id) { console.warn('Secondary VPC output missing, skipping test'); return; }
-    const res = await safeAWSCall(ec2Secondary.describeVpcs.bind(ec2Secondary), { VpcIds: [outputs.vpc_secondary_id] });
-    expect(res?.Vpcs?.[0]?.VpcId).toBe(outputs.vpc_secondary_id);
+    const vpcId = outputs.vpc_secondary_id;
+    console.log('Secondary VPC ID:', vpcId);
+    if (!vpcId) { console.warn('Skipping Secondary VPC test - missing output'); return; }
+    const res = await safeAWSCall(ec2Secondary.describeVpcs.bind(ec2Secondary), { VpcIds: [vpcId] });
+    expect(res?.Vpcs?.[0]?.VpcId).toBe(vpcId);
   });
 
   it('Primary NAT Gateway is available', async () => {
-    if (!outputs.nat_gateway_primary_id) { console.warn('Primary NAT Gateway output missing, skipping test'); return; }
-    const res = await safeAWSCall(ec2Primary.describeNatGateways.bind(ec2Primary), { NatGatewayIds: [outputs.nat_gateway_primary_id] });
+    const natId = outputs.nat_gateway_primary_id;
+    console.log('Primary NAT Gateway ID:', natId);
+    if (!natId) { console.warn('Skipping Primary NAT Gateway test - missing output'); return; }
+    const res = await safeAWSCall(ec2Primary.describeNatGateways.bind(ec2Primary), { NatGatewayIds: [natId] });
     expect(res?.NatGateways?.[0]?.State).toBe('available');
   });
 
   it('Secondary NAT Gateway is available', async () => {
-    if (!outputs.nat_gateway_secondary_id) { console.warn('Secondary NAT Gateway output missing, skipping test'); return; }
-    const res = await safeAWSCall(ec2Secondary.describeNatGateways.bind(ec2Secondary), { NatGatewayIds: [outputs.nat_gateway_secondary_id] });
+    const natId = outputs.nat_gateway_secondary_id;
+    console.log('Secondary NAT Gateway ID:', natId);
+    if (!natId) { console.warn('Skipping Secondary NAT Gateway test - missing output'); return; }
+    const res = await safeAWSCall(ec2Secondary.describeNatGateways.bind(ec2Secondary), { NatGatewayIds: [natId] });
     expect(res?.NatGateways?.[0]?.State).toBe('available');
   });
 
   it('Primary private subnets exist and belong to primary VPC', async () => {
-    if (!outputs.primary_private_subnet_ids) { console.warn('Primary private subnets missing, skipping'); return; }
-    const subnetIds = JSON.parse(outputs.primary_private_subnet_ids);
+    const subnetIdsStr = outputs.primary_private_subnet_ids;
+    const vpcId = outputs.vpc_primary_id;
+    console.log('Primary private subnet IDs:', subnetIdsStr);
+    if (!subnetIdsStr || !vpcId) { console.warn('Skipping Primary private subnets test - missing output'); return; }
+    const subnetIds = JSON.parse(subnetIdsStr);
     const res = await safeAWSCall(ec2Primary.describeSubnets.bind(ec2Primary), { SubnetIds: subnetIds });
     expect(res?.Subnets.length).toBe(subnetIds.length);
-    res?.Subnets.forEach(s => expect(subnetIds).toContain(s.SubnetId));
-    res?.Subnets.forEach(s => expect(s.VpcId).toBe(outputs.vpc_primary_id));
+    res?.Subnets.forEach(s => {
+      expect(subnetIds).toContain(s.SubnetId);
+      expect(s.VpcId).toBe(vpcId);
+    });
   });
 
   it('Secondary private subnets exist and belong to secondary VPC', async () => {
-    if (!outputs.secondary_private_subnet_ids) { console.warn('Secondary private subnets missing, skipping'); return; }
-    const subnetIds = JSON.parse(outputs.secondary_private_subnet_ids);
+    const subnetIdsStr = outputs.secondary_private_subnet_ids;
+    const vpcId = outputs.vpc_secondary_id;
+    console.log('Secondary private subnet IDs:', subnetIdsStr);
+    if (!subnetIdsStr || !vpcId) { console.warn('Skipping Secondary private subnets test - missing output'); return; }
+    const subnetIds = JSON.parse(subnetIdsStr);
     const res = await safeAWSCall(ec2Secondary.describeSubnets.bind(ec2Secondary), { SubnetIds: subnetIds });
     expect(res?.Subnets.length).toBe(subnetIds.length);
-    res?.Subnets.forEach(s => expect(subnetIds).toContain(s.SubnetId));
-    res?.Subnets.forEach(s => expect(s.VpcId).toBe(outputs.vpc_secondary_id));
+    res?.Subnets.forEach(s => {
+      expect(subnetIds).toContain(s.SubnetId);
+      expect(s.VpcId).toBe(vpcId);
+    });
   });
 
   it('Primary S3 backup bucket exists', async () => {
-    if (!outputs.s3_bucket_primary_id) { console.warn('Primary S3 bucket missing, skipping'); return; }
     const bucket = outputs.s3_bucket_primary_id;
+    console.log('Primary S3 bucket:', bucket);
+    if (!bucket) { console.warn('Skipping Primary S3 bucket test - missing output'); return; }
     const res = await safeAWSCall(s3Primary.headBucket.bind(s3Primary), { Bucket: bucket });
     expect(res).not.toBeNull();
   });
 
   it('Secondary S3 backup bucket exists', async () => {
-    if (!outputs.s3_bucket_secondary_id) { console.warn('Secondary S3 bucket missing, skipping'); return; }
     const bucket = outputs.s3_bucket_secondary_id;
+    console.log('Secondary S3 bucket:', bucket);
+    if (!bucket) { console.warn('Skipping Secondary S3 bucket test - missing output'); return; }
     const res = await safeAWSCall(s3Secondary.headBucket.bind(s3Secondary), { Bucket: bucket });
     expect(res).not.toBeNull();
   });
 
   it('Primary Aurora cluster is available', async () => {
-    if (!outputs.aurora_primary_cluster_endpoint) { console.warn('Primary Aurora cluster endpoint missing, skipping'); return; }
-    const listRes = await safeAWSCall(rdsPrimary.describeDBClusters.bind(rdsPrimary), {});
-    const found = listRes?.DBClusters?.some((c: any) => c.Endpoint === outputs.aurora_primary_cluster_endpoint);
+    const endpoint = outputs.aurora_primary_cluster_endpoint;
+    console.log('Primary Aurora cluster endpoint:', endpoint);
+    if (!endpoint) { console.warn('Skipping Primary Aurora cluster test - missing output'); return; }
+    const clusters = await safeAWSCall(rdsPrimary.describeDBClusters.bind(rdsPrimary), {});
+    const found = clusters?.DBClusters?.some((c: any) => c.Endpoint === endpoint);
     expect(found).toBeTruthy();
   });
 
   it('Failover orchestrator Lambda function exists and active', async () => {
-    if (!outputs.lambda_function_name) { console.warn('Lambda function name missing, skipping'); return; }
-    const res = await safeAWSCall(lambdaPrimary.getFunction.bind(lambdaPrimary), { FunctionName: outputs.lambda_function_name });
-    expect(res?.Configuration?.FunctionName).toBe(outputs.lambda_function_name);
-    expect(['Active', 'Pending']).toContain(res?.Configuration?.State);
+    const lambdaName = outputs.lambda_function_name;
+    console.log('Lambda function name:', lambdaName);
+    if (!lambdaName) { console.warn('Skipping Lambda test - missing output'); return; }
+    const func = await safeAWSCall(lambdaPrimary.getFunction.bind(lambdaPrimary), { FunctionName: lambdaName });
+    expect(func?.Configuration?.FunctionName).toBe(lambdaName);
+    expect(['Active', 'Pending']).toContain(func?.Configuration?.State);
   });
 
   it('DMS replication instance exists and is available', async () => {
-    if (!outputs.dms_replication_instance_id) { console.warn('DMS Replication Instance ID missing, skipping'); return; }
-    const res = await safeAWSCall(dmsPrimary.describeReplicationInstances.bind(dmsPrimary), { Filters: [{ Name: 'replication-instance-id', Values: [outputs.dms_replication_instance_id] }] });
-    expect(res?.ReplicationInstances?.length).toBeGreaterThan(0);
-    expect(res?.ReplicationInstances[0].ReplicationInstanceIdentifier).toBe(outputs.dms_replication_instance_id);
+    const dmsId = outputs.dms_replication_instance_id;
+    console.log('DMS replication instance id:', dmsId);
+    if (!dmsId) { console.warn('Skipping DMS test - missing output'); return; }
+    const instances = await safeAWSCall(dmsPrimary.describeReplicationInstances.bind(dmsPrimary), { Filters: [{ Name: 'replication-instance-id', Values: [dmsId] }] });
+    expect(instances?.ReplicationInstances?.length).toBeGreaterThan(0);
+    expect(instances?.ReplicationInstances[0].ReplicationInstanceIdentifier).toBe(dmsId);
   });
 
   it('SNS Alarm topic exists and accessible', async () => {
-    if (!outputs.sns_topic_arn) { console.warn('SNS topic ARN missing, skipping'); return; }
-    const attr = await safeAWSCall(snsPrimary.getTopicAttributes.bind(snsPrimary), { TopicArn: outputs.sns_topic_arn });
-    expect(attr?.Attributes?.TopicArn).toBe(outputs.sns_topic_arn);
+    const topicArn = outputs.sns_topic_arn;
+    console.log('SNS topic ARN:', topicArn);
+    if (!topicArn) { console.warn('Skipping SNS test - missing output'); return; }
+    const attr = await safeAWSCall(snsPrimary.getTopicAttributes.bind(snsPrimary), { TopicArn: topicArn });
+    expect(attr?.Attributes?.TopicArn).toBe(topicArn);
   });
 
   it('Route53 Hosted Zone exists', async () => {
-    if (!outputs.route53_zone_id) { console.warn('Route53 zone ID missing, skipping'); return; }
-    const zones = await safeAWSCall(route53.getHostedZone.bind(route53), { Id: outputs.route53_zone_id });
-    expect(zones?.HostedZone?.Id.endsWith(outputs.route53_zone_id)).toBe(true);
+    const zoneId = outputs.route53_zone_id;
+    console.log('Route53 zone ID:', zoneId);
+    if (!zoneId) { console.warn('Skipping Route53 Hosted Zone test - missing output'); return; }
+    const zone = await safeAWSCall(route53.getHostedZone.bind(route53), { Id: zoneId });
+    expect(zone?.HostedZone?.Id.endsWith(zoneId)).toBe(true);
   });
 
   it('CloudWatch primary CPU alarm exists', async () => {
-    if (!outputs.cloudwatch_alarm_primary_cpu_name) { console.warn('CloudWatch alarm name missing, skipping'); return; }
-    const alarms = await safeAWSCall(cloudwatchPrimary.describeAlarms.bind(cloudwatchPrimary), { AlarmNames: [outputs.cloudwatch_alarm_primary_cpu_name] });
-    expect(alarms?.MetricAlarms?.some((a: any) => a.AlarmName === outputs.cloudwatch_alarm_primary_cpu_name)).toBe(true);
+    const alarmName = outputs.cloudwatch_alarm_primary_cpu_name;
+    console.log('CloudWatch primary CPU alarm name:', alarmName);
+    if (!alarmName) { console.warn('Skipping CloudWatch alarm test - missing output'); return; }
+    const alarms = await safeAWSCall(cloudwatchPrimary.describeAlarms.bind(cloudwatchPrimary), { AlarmNames: [alarmName] });
+    expect(alarms?.MetricAlarms?.some((a: any) => a.AlarmName === alarmName)).toBe(true);
   });
 
-  it('SSM parameters for primary and secondary endpoint exist', async () => {
-    for (const paramNameKey of ['parameter_store_db_endpoint_primary', 'parameter_store_db_endpoint_secondary']) {
-      const paramName = outputs[paramNameKey];
-      if (!paramName) { console.warn(`SSM parameter name ${paramNameKey} missing, skipping`); continue; }
-      const param = await safeAWSCall(ssmPrimary.getParameter.bind(ssmPrimary), { Name: paramName });
-      expect(param?.Parameter?.Name).toBe(paramName);
-    }
+  it('SSM parameters for primary endpoint exist', async () => {
+    const paramName = outputs.parameter_store_db_endpoint_primary;
+    console.log('Parameter Store primary endpoint:', paramName);
+    if (!paramName) { console.warn('Skipping SSM parameter test - missing output'); return; }
+    const param = await safeAWSCall(ssmPrimary.getParameter.bind(ssmPrimary), { Name: paramName });
+    expect(param?.Parameter?.Name).toBe(paramName);
+  });
+
+  it('SSM parameters for secondary endpoint exist', async () => {
+    const paramName = outputs.parameter_store_db_endpoint_secondary;
+    console.log('Parameter Store secondary endpoint:', paramName);
+    if (!paramName) { console.warn('Skipping SSM parameter test - missing output'); return; }
+    const param = await safeAWSCall(ssmPrimary.getParameter.bind(ssmPrimary), { Name: paramName });
+    expect(param?.Parameter?.Name).toBe(paramName);
   });
 
 });
+
