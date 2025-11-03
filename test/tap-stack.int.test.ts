@@ -89,12 +89,12 @@ describe('TapStack Integration Tests', () => {
       );
     });
 
-    testRunner('should have valid EventBridge Rule ARN format', () => {
+    testRunner('should have valid EventBridge Scheduler ARN format', () => {
       expect(outputs.stopRuleArn).toMatch(
-        /^arn:aws:events:[\w-]+:\d{12}:rule\/[\w-]+$/
+        /^arn:aws:scheduler:[\w-]+:\d{12}:schedule\/[\w-\/]+$/
       );
       expect(outputs.startRuleArn).toMatch(
-        /^arn:aws:events:[\w-]+:\d{12}:rule\/[\w-]+$/
+        /^arn:aws:scheduler:[\w-]+:\d{12}:schedule\/[\w-\/]+$/
       );
     });
 
