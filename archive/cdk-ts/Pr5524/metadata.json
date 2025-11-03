@@ -10,5 +10,21 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+  "aws_services": [
+    "KMS",
+    "S3",
+    "Lambda",
+    "IAM",
+    "CloudWatch",
+    "EventBridge",
+    "SNS",
+    "CloudTrail"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-creator",
+  "dockerS3Location": ""
 }
