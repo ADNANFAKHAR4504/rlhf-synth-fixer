@@ -15,6 +15,7 @@ import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
 import { Construct } from 'constructs';
+import { Bastion } from './bastion-construct';
 
 export interface CloudSetupStackProps {
   domainName: string;
@@ -24,6 +25,10 @@ export interface CloudSetupStackProps {
   cloudFrontCertificateArn?: string; // should be in us-east-1 when used
   // When true, create a public Route53 hosted zone for `domainName`. Default: false.
   createHostedZone?: boolean;
+  /** When true, create a small SSM-enabled bastion instance in the VPC for integration testing */
+  createBastion?: boolean;
+  /** If provided, reuse an existing VPC instead of creating a new one */
+  existingVpcId?: string;
 }
 
 export class CloudSetupStack extends Construct {
@@ -35,6 +40,8 @@ export class CloudSetupStack extends Construct {
   public readonly lambdaFunctionName?: string;
   public readonly lambdaLogGroupName?: string;
   public readonly rdsSecurityGroupId?: string;
+  public readonly bastionInstanceId?: string;
+  public readonly bastionSecurityGroupId?: string;
 
   private readonly suffix: string;
 
@@ -55,24 +62,31 @@ export class CloudSetupStack extends Construct {
     });
     key.addAlias(`alias/iac-rlhf-${this.suffix}`);
 
-    // VPC
-    const vpc = new ec2.Vpc(this, `vpc-${this.suffix}`, {
-      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
-      maxAzs: 2,
-      natGateways: 1,
-      subnetConfiguration: [
-        {
-          name: `public-${this.suffix}`,
-          subnetType: ec2.SubnetType.PUBLIC,
-          cidrMask: 24,
-        },
-        {
-          name: `private-${this.suffix}`,
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-          cidrMask: 24,
-        },
-      ],
-    });
+    // VPC: reuse existing VPC if provided via props.existingVpcId, otherwise create new
+    let vpc: ec2.IVpc;
+    if (props.existingVpcId) {
+      vpc = ec2.Vpc.fromLookup(this, `existing-vpc-${this.suffix}`, {
+        vpcId: props.existingVpcId,
+      });
+    } else {
+      vpc = new ec2.Vpc(this, `vpc-${this.suffix}`, {
+        ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
+        maxAzs: 2,
+        natGateways: 1,
+        subnetConfiguration: [
+          {
+            name: `public-${this.suffix}`,
+            subnetType: ec2.SubnetType.PUBLIC,
+            cidrMask: 24,
+          },
+          {
+            name: `private-${this.suffix}`,
+            subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+            cidrMask: 24,
+          },
+        ],
+      });
+    }
     this.vpcId = vpc.vpcId;
 
     // Security group for ALB ingress (allow HTTPS and HTTP for flexibility)
@@ -346,5 +360,15 @@ EOF`,
 
     // Outputs (expose via public properties so TapStack can re-export)
     // Removed CfnOutputs to avoid cross-stack export conflicts
+
+    // Optional bastion for integration testing
+    if (props.createBastion) {
+      const bastion = new Bastion(this, `bastion-${this.suffix}`, {
+        vpc,
+        rdsSecurityGroupId: this.rdsSecurityGroupId,
+      });
+      this.bastionInstanceId = bastion.instanceId;
+      this.bastionSecurityGroupId = bastion.securityGroupId;
+    }
   }
 }

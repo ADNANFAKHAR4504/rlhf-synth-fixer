@@ -4,6 +4,7 @@ import { CloudSetupStack } from './cloud-setup-stack';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
+  existingVpcId?: string;
 }
 
 export class TapStack extends cdk.Stack {
@@ -23,6 +24,8 @@ export class TapStack extends cdk.Stack {
         domainName: `cloudsetup-${environmentSuffix}.example.com`,
         environmentSuffix,
         createHostedZone: false,
+        createBastion: true,
+        existingVpcId: props?.existingVpcId,
       }
     );
 
@@ -56,6 +59,14 @@ export class TapStack extends cdk.Stack {
     });
     new cdk.CfnOutput(this, 'UsEast_RdsSecurityGroupId', {
       value: usEast.rdsSecurityGroupId ?? '',
+    });
+
+    // Bastion outputs (if present)
+    new cdk.CfnOutput(this, 'UsEast_BastionInstanceId', {
+      value: usEast.bastionInstanceId ?? '',
+    });
+    new cdk.CfnOutput(this, 'UsEast_BastionSecurityGroupId', {
+      value: usEast.bastionSecurityGroupId ?? '',
     });
 
     /*
