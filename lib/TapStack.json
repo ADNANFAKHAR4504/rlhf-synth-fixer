@@ -215,17 +215,40 @@
               "Sid": "AllowCrossAccountRead",
               "Effect": "Allow",
               "Principal": {
-                "AWS": [
-                  {
-                    "Fn::Sub": "arn:aws:iam::${AccountIdDev}:root"
-                  },
-                  {
-                    "Fn::Sub": "arn:aws:iam::${AccountIdStaging}:root"
-                  },
-                  {
-                    "Fn::Sub": "arn:aws:iam::${AccountIdProd}:root"
-                  }
-                ]
+                "AWS": {
+                  "Fn::If": [
+                    "IsDevEnvironment",
+                    [
+                      {
+                        "Fn::Sub": "arn:aws:iam::${AccountIdStaging}:root"
+                      },
+                      {
+                        "Fn::Sub": "arn:aws:iam::${AccountIdProd}:root"
+                      }
+                    ],
+                    {
+                      "Fn::If": [
+                        "IsStagingEnvironment",
+                        [
+                          {
+                            "Fn::Sub": "arn:aws:iam::${AccountIdDev}:root"
+                          },
+                          {
+                            "Fn::Sub": "arn:aws:iam::${AccountIdProd}:root"
+                          }
+                        ],
+                        [
+                          {
+                            "Fn::Sub": "arn:aws:iam::${AccountIdDev}:root"
+                          },
+                          {
+                            "Fn::Sub": "arn:aws:iam::${AccountIdStaging}:root"
+                          }
+                        ]
+                      ]
+                    }
+                  ]
+                }
               },
               "Action": [
                 "s3:GetObject",
@@ -581,10 +604,7 @@
         "MemorySize": 256,
         "Timeout": 60,
         "Role": {
-          "Fn::GetAtt": [
-            "LambdaExecutionRole",
-            "Arn"
-          ]
+          "Fn::GetAtt": "LambdaExecutionRole.Arn"
         },
         "Environment": {
           "Variables": {
@@ -643,10 +663,7 @@
         "MemorySize": 256,
         "Timeout": 300,
         "Role": {
-          "Fn::GetAtt": [
-            "LambdaExecutionRole",
-            "Arn"
-          ]
+          "Fn::GetAtt": "LambdaExecutionRole.Arn"
         },
         "Environment": {
           "Variables": {
@@ -707,10 +724,7 @@
         "MemorySize": 256,
         "Timeout": 60,
         "Role": {
-          "Fn::GetAtt": [
-            "LambdaExecutionRole",
-            "Arn"
-          ]
+          "Fn::GetAtt": "LambdaExecutionRole.Arn"
         },
         "Environment": {
           "Variables": {
@@ -758,16 +772,10 @@
       "Type": "AWS::Lambda::EventSourceMapping",
       "Properties": {
         "EventSourceArn": {
-          "Fn::GetAtt": [
-            "MetadataTable",
-            "StreamArn"
-          ]
+          "Fn::GetAtt": "MetadataTable.StreamArn"
         },
         "FunctionName": {
-          "Fn::GetAtt": [
-            "StreamProcessorLambda",
-            "Arn"
-          ]
+          "Fn::GetAtt": "StreamProcessorLambda.Arn"
         },
         "StartingPosition": "LATEST",
         "MaximumBatchingWindowInSeconds": 5
@@ -800,10 +808,7 @@
         "Targets": [
           {
             "Arn": {
-              "Fn::GetAtt": [
-                "ConfigValidatorLambda",
-                "Arn"
-              ]
+              "Fn::GetAtt": "ConfigValidatorLambda.Arn"
             },
             "Id": "1"
           }
@@ -829,10 +834,7 @@
         "Targets": [
           {
             "Arn": {
-              "Fn::GetAtt": [
-                "ReplicationMonitorLambda",
-                "Arn"
-              ]
+              "Fn::GetAtt": "ReplicationMonitorLambda.Arn"
             },
             "Id": "1"
           }
@@ -848,10 +850,7 @@
         "Action": "lambda:InvokeFunction",
         "Principal": "events.amazonaws.com",
         "SourceArn": {
-          "Fn::GetAtt": [
-            "StackUpdateEventRule",
-            "Arn"
-          ]
+          "Fn::GetAtt": "StackUpdateEventRule.Arn"
         }
       }
     },
@@ -864,10 +863,7 @@
         "Action": "lambda:InvokeFunction",
         "Principal": "events.amazonaws.com",
         "SourceArn": {
-          "Fn::GetAtt": [
-            "ConfigChangeEventRule",
-            "Arn"
-          ]
+          "Fn::GetAtt": "ConfigChangeEventRule.Arn"
         }
       }
     },
@@ -975,10 +971,7 @@
     "DynamoDBTableArn": {
       "Description": "DynamoDB global table ARN",
       "Value": {
-        "Fn::GetAtt": [
-          "MetadataTable",
-          "Arn"
-        ]
+        "Fn::GetAtt": "MetadataTable.Arn"
       },
       "Export": {
         "Name": {
@@ -1003,10 +996,7 @@
         "Fn::If": [
           "EnableReplication",
           {
-            "Fn::GetAtt": [
-              "S3ReplicationRole",
-              "Arn"
-            ]
+            "Fn::GetAtt": "S3ReplicationRole.Arn"
           },
           "N/A - No replication enabled for this environment"
         ]
@@ -1021,10 +1011,7 @@
     "LambdaMonitorArn": {
       "Description": "Replication Monitor Lambda ARN",
       "Value": {
-        "Fn::GetAtt": [
-          "ReplicationMonitorLambda",
-          "Arn"
-        ]
+        "Fn::GetAtt": "ReplicationMonitorLambda.Arn"
       },
       "Export": {
         "Name": {
@@ -1035,10 +1022,7 @@
     "LambdaValidatorArn": {
       "Description": "Config Validator Lambda ARN",
       "Value": {
-        "Fn::GetAtt": [
-          "ConfigValidatorLambda",
-          "Arn"
-        ]
+        "Fn::GetAtt": "ConfigValidatorLambda.Arn"
       },
       "Export": {
         "Name": {
@@ -1049,10 +1033,7 @@
     "LambdaStreamProcessorArn": {
       "Description": "Stream Processor Lambda ARN",
       "Value": {
-        "Fn::GetAtt": [
-          "StreamProcessorLambda",
-          "Arn"
-        ]
+        "Fn::GetAtt": "StreamProcessorLambda.Arn"
       },
       "Export": {
         "Name": {

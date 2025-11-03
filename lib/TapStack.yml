@@ -139,10 +139,16 @@ Resources:
           - Sid: AllowCrossAccountRead
             Effect: Allow
             Principal:
-              AWS:
-                - !Sub "arn:aws:iam::${AccountIdDev}:root"
-                - !Sub "arn:aws:iam::${AccountIdStaging}:root"
-                - !Sub "arn:aws:iam::${AccountIdProd}:root"
+              AWS: !If
+                - IsDevEnvironment
+                - - !Sub "arn:aws:iam::${AccountIdStaging}:root"
+                  - !Sub "arn:aws:iam::${AccountIdProd}:root"
+                - !If
+                  - IsStagingEnvironment
+                  - - !Sub "arn:aws:iam::${AccountIdDev}:root"
+                    - !Sub "arn:aws:iam::${AccountIdProd}:root"
+                  - - !Sub "arn:aws:iam::${AccountIdDev}:root"
+                    - !Sub "arn:aws:iam::${AccountIdStaging}:root"
             Action:
               - "s3:GetObject"
               - "s3:ListBucket"
