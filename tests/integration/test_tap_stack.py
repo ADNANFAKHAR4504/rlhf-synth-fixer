@@ -68,7 +68,7 @@ class TestTapStackIntegration:
 
         # Initialize AWS clients - use AWS_REGION environment variable or default
         # Determine AWS region from environment or outputs
-        cls.region_name = os.getenv('AWS_REGION', 'ap-northeast-1')
+        self.region_name = os.getenv('AWS_REGION', 'ap-northeast-1')
         
         try:
             self.ec2_client = boto3.client("ec2", region_name=self.region_name)

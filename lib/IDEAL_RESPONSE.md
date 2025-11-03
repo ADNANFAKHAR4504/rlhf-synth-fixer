@@ -801,7 +801,7 @@ class TestTapStackIntegration:
             cls.outputs = json.load(f)
             
         # Determine AWS region from environment or outputs
-        cls.region_name = os.getenv('AWS_REGION', 'ap-northeast-1')
+        self.region_name = os.getenv('AWS_REGION', 'ap-northeast-1')
         
         # Extract resource IDs from outputs
         cls.vpc_id = cls.outputs.get('vpc_id')
