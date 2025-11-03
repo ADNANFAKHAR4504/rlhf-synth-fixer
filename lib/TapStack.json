@@ -15,16 +15,19 @@
       "MaxLength": 20
     },
     "VpcId": {
-      "Type": "AWS::EC2::VPC::Id",
-      "Description": "Existing VPC ID for the environment"
+      "Type": "String",
+      "Description": "Existing VPC ID for the environment (required for NetworkingStack)",
+      "Default": "vpc-required"
     },
     "PrivateSubnetIds": {
-      "Type": "List<AWS::EC2::Subnet::Id>",
-      "Description": "List of private subnet IDs for ECS tasks and RDS"
+      "Type": "CommaDelimitedList",
+      "Description": "Comma-separated list of private subnet IDs for ECS tasks and RDS (required for DatabaseStack and ComputeStack)",
+      "Default": "subnet-required"
     },
     "PublicSubnetIds": {
-      "Type": "List<AWS::EC2::Subnet::Id>",
-      "Description": "List of public subnet IDs for Application Load Balancer"
+      "Type": "CommaDelimitedList",
+      "Description": "Comma-separated list of public subnet IDs for Application Load Balancer (required for NetworkingStack)",
+      "Default": "subnet-required"
     },
     "ProjectName": {
       "Type": "String",
@@ -38,16 +41,27 @@
     },
     "HostedZoneId": {
       "Type": "String",
-      "Description": "Route53 hosted zone ID for DNS records"
+      "Description": "Route53 hosted zone ID for DNS records (optional, monitoring stack will be skipped if not provided)",
+      "Default": ""
     },
     "DomainName": {
       "Type": "String",
-      "Description": "Domain name for the application (e.g., example.com)"
+      "Description": "Domain name for the application (optional, monitoring stack will be skipped if not provided)",
+      "Default": ""
     },
     "NestedStacksBucketName": {
       "Type": "String",
-      "Description": "S3 bucket name where nested stack templates are stored"
+      "Description": "S3 bucket name where nested stack templates are stored",
+      "Default": "iac-rlhf-cfn-templates-required"
     }
+  },
+  "Conditions": {
+    "HasHostedZoneId": {"Fn::Not": [{"Fn::Equals": [{"Ref": "HostedZoneId"}, ""]}]},
+    "HasDomainName": {"Fn::Not": [{"Fn::Equals": [{"Ref": "DomainName"}, ""]}]},
+    "HasMonitoring": {"Fn::And": [
+      {"Condition": "HasHostedZoneId"},
+      {"Condition": "HasDomainName"}
+    ]}
   },
   "Mappings": {
     "EnvironmentConfig": {
@@ -217,6 +231,7 @@
     },
     "MonitoringStack": {
       "Type": "AWS::CloudFormation::Stack",
+      "Condition": "HasMonitoring",
       "Properties": {
         "TemplateURL": {
           "Fn::Sub": "https://${NestedStacksBucketName}.s3.amazonaws.com/monitoring-stack.json"
@@ -256,6 +271,7 @@
     },
     "ApplicationURL": {
       "Description": "Application URL",
+      "Condition": "HasMonitoring",
       "Value": {
         "Fn::Sub": [
           "http://${SubDomain}.${Domain}",
