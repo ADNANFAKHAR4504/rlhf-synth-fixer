@@ -1,0 +1,40 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350044",
+  "team": "2",
+  "startedAt": "2025-10-17T12:04:29.324Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "KMS",
+    "S3",
+    "IAM",
+    "VPC",
+    "EC2",
+    "RDS",
+    "CloudTrail",
+    "CloudWatch",
+    "VPC Flow Logs",
+    "SNS",
+    "Secrets Manager",
+    "Security Groups",
+    "EventBridge",
+    "WAF",
+    "CloudFront",
+    "Load Balancer",
+    "Route Tables",
+    "KMS"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mikiaszerihun",
+  "dockerS3Location": ""
+}
