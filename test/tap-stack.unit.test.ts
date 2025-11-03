@@ -259,8 +259,8 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(s3Endpoint).toBeDefined();
       expect(s3Endpoint.Type).toBe('AWS::EC2::VPCEndpoint');
       expect(s3Endpoint.Properties.ServiceName).toEqual({ 'Fn::Sub': 'com.amazonaws.${AWS::Region}.s3' });
-      expect(s3Endpoint.Properties.RouteTableIds).toContain({ Ref: 'PrivateRouteTable1' });
-      expect(s3Endpoint.Properties.RouteTableIds).toContain({ Ref: 'PrivateRouteTable2' });
+      expect(s3Endpoint.Properties.RouteTableIds).toContainEqual({ Ref: 'PrivateRouteTable1' });
+      expect(s3Endpoint.Properties.RouteTableIds).toContainEqual({ Ref: 'PrivateRouteTable2' });
     });
   });
 
@@ -289,7 +289,7 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       const profile = template.Resources.EC2InstanceProfile;
       expect(profile).toBeDefined();
       expect(profile.Type).toBe('AWS::IAM::InstanceProfile');
-      expect(profile.Properties.Roles).toContain({ Ref: 'EC2Role' });
+      expect(profile.Properties.Roles).toContainEqual({ Ref: 'EC2Role' });
     });
 
     test('should have Lambda Role with VPC execution permissions', () => {
@@ -335,7 +335,7 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       const genConfig = secret.Properties.GenerateSecretString;
       expect(genConfig.PasswordLength).toBe(32);
       expect(genConfig.GenerateStringKey).toBe('password');
-      expect(genConfig.ExcludeCharacters).toBe('"@/\'');
+      expect(genConfig.ExcludeCharacters).toBe('"@/\\');
     });
 
     test('should have Secret RDS Attachment', () => {
@@ -489,8 +489,8 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       const subnetGroup = template.Resources.DBSubnetGroup;
       expect(subnetGroup).toBeDefined();
       expect(subnetGroup.Type).toBe('AWS::RDS::DBSubnetGroup');
-      expect(subnetGroup.Properties.SubnetIds).toContain({ Ref: 'PrivateSubnet1' });
-      expect(subnetGroup.Properties.SubnetIds).toContain({ Ref: 'PrivateSubnet2' });
+      expect(subnetGroup.Properties.SubnetIds).toContainEqual({ Ref: 'PrivateSubnet1' });
+      expect(subnetGroup.Properties.SubnetIds).toContainEqual({ Ref: 'PrivateSubnet2' });
     });
 
     test('should have RDS Instance with encryption and proper configuration', () => {
@@ -508,7 +508,7 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(props.StorageType).toBe('gp3');
       expect(props.BackupRetentionPeriod).toBe(7);
       expect(props.DeletionProtection).toBe(false);
-      expect(props.VPCSecurityGroups).toContain({ Ref: 'RDSSecurityGroup' });
+      expect(props.VPCSecurityGroups).toContainEqual({ Ref: 'RDSSecurityGroup' });
     });
 
     test('should have RDS Instance with CloudWatch Logs exports', () => {
@@ -533,16 +533,16 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       const props = alb.Properties;
       expect(props.Type).toBe('application');
       expect(props.Scheme).toBe('internet-facing');
-      expect(props.Subnets).toContain({ Ref: 'PublicSubnet1' });
-      expect(props.Subnets).toContain({ Ref: 'PublicSubnet2' });
-      expect(props.SecurityGroups).toContain({ Ref: 'ALBSecurityGroup' });
+      expect(props.Subnets).toContainEqual({ Ref: 'PublicSubnet1' });
+      expect(props.Subnets).toContainEqual({ Ref: 'PublicSubnet2' });
+      expect(props.SecurityGroups).toContainEqual({ Ref: 'ALBSecurityGroup' });
 
       const attrs = props.LoadBalancerAttributes;
       const logsEnabled = attrs.find((a: any) => a.Key === 'access_logs.s3.enabled');
-      expect(logsEnabled.Value).toBe('true');
+      expect(logsEnabled.Value).toBe(true);
 
       const deletionProtection = attrs.find((a: any) => a.Key === 'deletion_protection.enabled');
-      expect(deletionProtection.Value).toBe('true');
+      expect(deletionProtection.Value).toBe(true);
     });
 
     test('should have Target Group with health check configuration', () => {
@@ -573,7 +573,7 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       const action = props.DefaultActions[0];
       expect(action.Type).toBe('redirect');
       expect(action.RedirectConfig.Protocol).toBe('HTTPS');
-      expect(action.RedirectConfig.Port).toBe('443');
+      expect(action.RedirectConfig.Port).toBe(443);
       expect(action.RedirectConfig.StatusCode).toBe('HTTP_301');
     });
   });
@@ -591,7 +591,7 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(data.ImageId).toEqual({ Ref: 'LatestAmiId' });
       expect(data.InstanceType).toEqual({ Ref: 'InstanceType' });
       expect(data.IamInstanceProfile.Arn).toEqual({ 'Fn::GetAtt': ['EC2InstanceProfile', 'Arn'] });
-      expect(data.SecurityGroupIds).toContain({ Ref: 'EC2SecurityGroup' });
+      expect(data.SecurityGroupIds).toContainEqual({ Ref: 'EC2SecurityGroup' });
       expect(data.Monitoring.Enabled).toBe(true);
 
       const blockDevice = data.BlockDeviceMappings[0];
@@ -611,15 +611,15 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(asg.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
 
       const props = asg.Properties;
-      expect(props.VPCZoneIdentifier).toContain({ Ref: 'PrivateSubnet1' });
-      expect(props.VPCZoneIdentifier).toContain({ Ref: 'PrivateSubnet2' });
+      expect(props.VPCZoneIdentifier).toContainEqual({ Ref: 'PrivateSubnet1' });
+      expect(props.VPCZoneIdentifier).toContainEqual({ Ref: 'PrivateSubnet2' });
       expect(props.LaunchTemplate.LaunchTemplateId).toEqual({ Ref: 'LaunchTemplate' });
       expect(props.MinSize).toEqual({ Ref: 'MinSize' });
       expect(props.MaxSize).toEqual({ Ref: 'MaxSize' });
       expect(props.DesiredCapacity).toEqual({ Ref: 'DesiredCapacity' });
       expect(props.HealthCheckType).toBe('ELB');
       expect(props.HealthCheckGracePeriod).toBe(300);
-      expect(props.TargetGroupARNs).toContain({ Ref: 'ALBTargetGroup' });
+      expect(props.TargetGroupARNs).toContainEqual({ Ref: 'ALBTargetGroup' });
     });
 
     test('should have Scaling Policy with target tracking', () => {
@@ -650,9 +650,9 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(props.ReservedConcurrentExecutions).toBe(10);
 
       const vpcConfig = props.VpcConfig;
-      expect(vpcConfig.SecurityGroupIds).toContain({ Ref: 'LambdaSecurityGroup' });
-      expect(vpcConfig.SubnetIds).toContain({ Ref: 'PrivateSubnet1' });
-      expect(vpcConfig.SubnetIds).toContain({ Ref: 'PrivateSubnet2' });
+      expect(vpcConfig.SecurityGroupIds).toContainEqual({ Ref: 'LambdaSecurityGroup' });
+      expect(vpcConfig.SubnetIds).toContainEqual({ Ref: 'PrivateSubnet1' });
+      expect(vpcConfig.SubnetIds).toContainEqual({ Ref: 'PrivateSubnet2' });
 
       const env = props.Environment.Variables;
       expect(env.DB_SECRET_ARN).toEqual({ Ref: 'DBPasswordSecret' });
@@ -1028,12 +1028,12 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
 
     test('should use private subnets for compute and database resources', () => {
       const asg = template.Resources.AutoScalingGroup;
-      expect(asg.Properties.VPCZoneIdentifier).toContain({ Ref: 'PrivateSubnet1' });
-      expect(asg.Properties.VPCZoneIdentifier).toContain({ Ref: 'PrivateSubnet2' });
+      expect(asg.Properties.VPCZoneIdentifier).toContainEqual({ Ref: 'PrivateSubnet1' });
+      expect(asg.Properties.VPCZoneIdentifier).toContainEqual({ Ref: 'PrivateSubnet2' });
 
       const dbSubnetGroup = template.Resources.DBSubnetGroup;
-      expect(dbSubnetGroup.Properties.SubnetIds).toContain({ Ref: 'PrivateSubnet1' });
-      expect(dbSubnetGroup.Properties.SubnetIds).toContain({ Ref: 'PrivateSubnet2' });
+      expect(dbSubnetGroup.Properties.SubnetIds).toContainEqual({ Ref: 'PrivateSubnet1' });
+      expect(dbSubnetGroup.Properties.SubnetIds).toContainEqual({ Ref: 'PrivateSubnet2' });
     });
 
     test('should enable multi-region trail for CloudTrail', () => {
