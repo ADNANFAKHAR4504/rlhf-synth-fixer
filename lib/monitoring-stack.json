@@ -37,10 +37,6 @@
     "ProjectName": {
       "Type": "String",
       "Description": "Project name for tagging"
-    },
-    "CostCenter": {
-      "Type": "String",
-      "Description": "Cost center for billing"
     }
   },
   "Resources": {

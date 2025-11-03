@@ -128,7 +128,6 @@
     },
     "DatabaseStack": {
       "Type": "AWS::CloudFormation::Stack",
-      "DependsOn": ["NetworkingStack", "SecretsStack"],
       "Properties": {
         "TemplateURL": {
           "Fn::Sub": "https://${NestedStacksBucketName}.s3.amazonaws.com/database-stack.json"
@@ -136,7 +135,6 @@
         "Parameters": {
           "EnvironmentSuffix": {"Ref": "EnvironmentSuffix"},
           "EnvironmentName": {"Ref": "EnvironmentName"},
-          "VpcId": {"Ref": "VpcId"},
           "PrivateSubnetIds": {
             "Fn::Join": [",", {"Ref": "PrivateSubnetIds"}]
           },
@@ -168,7 +166,6 @@
     },
     "ComputeStack": {
       "Type": "AWS::CloudFormation::Stack",
-      "DependsOn": ["NetworkingStack", "DatabaseStack", "SecretsStack"],
       "Properties": {
         "TemplateURL": {
           "Fn::Sub": "https://${NestedStacksBucketName}.s3.amazonaws.com/compute-stack.json"
@@ -176,7 +173,6 @@
         "Parameters": {
           "EnvironmentSuffix": {"Ref": "EnvironmentSuffix"},
           "EnvironmentName": {"Ref": "EnvironmentName"},
-          "VpcId": {"Ref": "VpcId"},
           "PrivateSubnetIds": {
             "Fn::Join": [",", {"Ref": "PrivateSubnetIds"}]
           },
@@ -220,7 +216,6 @@
     },
     "MonitoringStack": {
       "Type": "AWS::CloudFormation::Stack",
-      "DependsOn": ["NetworkingStack", "ComputeStack"],
       "Properties": {
         "TemplateURL": {
           "Fn::Sub": "https://${NestedStacksBucketName}.s3.amazonaws.com/monitoring-stack.json"
@@ -242,8 +237,7 @@
           "ECSServiceName": {
             "Fn::GetAtt": ["ComputeStack", "Outputs.ECSServiceName"]
           },
-          "ProjectName": {"Ref": "ProjectName"},
-          "CostCenter": {"Ref": "CostCenter"}
+          "ProjectName": {"Ref": "ProjectName"}
         },
         "Tags": [
           {"Key": "Environment", "Value": {"Ref": "EnvironmentName"}},

@@ -10,10 +10,6 @@
       "Type": "String",
       "Description": "Environment name (dev, staging, prod)"
     },
-    "VpcId": {
-      "Type": "AWS::EC2::VPC::Id",
-      "Description": "VPC ID"
-    },
     "PrivateSubnetIds": {
       "Type": "CommaDelimitedList",
       "Description": "List of private subnet IDs for ECS tasks"
@@ -330,7 +326,6 @@
     },
     "ECSService": {
       "Type": "AWS::ECS::Service",
-      "DependsOn": ["ECSTaskDefinition"],
       "Properties": {
         "ServiceName": {
           "Fn::Sub": "app-service-${EnvironmentSuffix}"
