@@ -667,8 +667,23 @@ Resources:
               AWS: !Sub
                 - 'arn:aws:iam::${ELBAccountId}:root'
                 - ELBAccountId: !FindInMap [ELBAccountIdMap, !Ref 'AWS::Region', AccountId]
-            Action: 's3:PutObject'
+            Action:
+              - 's3:PutObject'
             Resource: !Sub '${LoggingBucket.Arn}/elb-logs/*'
+          - Sid: AllowELBLogDelivery
+            Effect: Allow
+            Principal:
+              Service: logdelivery.elasticloadbalancing.amazonaws.com
+            Action:
+              - 's3:PutObject'
+            Resource: !Sub '${LoggingBucket.Arn}/elb-logs/*'
+          - Sid: AllowELBLogDeliveryAcl
+            Effect: Allow
+            Principal:
+              Service: logdelivery.elasticloadbalancing.amazonaws.com
+            Action:
+              - 's3:GetBucketAcl'
+            Resource: !GetAtt LoggingBucket.Arn
           - Sid: AllowCloudTrailLogging
             Effect: Allow
             Principal:
