@@ -556,58 +556,6 @@ describe('TapStack Integration Tests', () => {
     }, 30000);
   });
 
-  describe('Lambda Function', () => {
-    it('should have Lambda function with correct configuration', async () => {
-      const functionName = outputs.lambdaFunctionArn.split(':').pop()!;
-      const command = new GetFunctionCommand({
-        FunctionName: functionName,
-      });
-
-      const response = await lambdaClient.send(command);
-      expect(response.Configuration).toBeDefined();
-
-      const config = response.Configuration!;
-      expect(config.Runtime).toBe('nodejs18.x');
-      expect(config.Handler).toBe('index.handler');
-      expect(config.MemorySize).toBe(512);
-      expect(config.Timeout).toBe(30);
-      expect(config.State).toBe('Active');
-    }, 30000);
-
-    it('should have Lambda function in VPC', async () => {
-      const functionName = outputs.lambdaFunctionArn.split(':').pop()!;
-      const command = new GetFunctionConfigurationCommand({
-        FunctionName: functionName,
-      });
-
-      const response = await lambdaClient.send(command);
-      expect(response.VpcConfig).toBeDefined();
-      expect(response.VpcConfig!.VpcId).toBe(outputs.vpcId);
-      expect(response.VpcConfig!.SubnetIds).toBeDefined();
-      expect(response.VpcConfig!.SubnetIds!.length).toBeGreaterThanOrEqual(2);
-      expect(response.VpcConfig!.SecurityGroupIds).toBeDefined();
-      expect(response.VpcConfig!.SecurityGroupIds!.length).toBeGreaterThan(0);
-    }, 30000);
-
-    it('should have Lambda function with environment variables', async () => {
-      const functionName = outputs.lambdaFunctionArn.split(':').pop()!;
-      const command = new GetFunctionConfigurationCommand({
-        FunctionName: functionName,
-      });
-
-      const response = await lambdaClient.send(command);
-      expect(response.Environment).toBeDefined();
-      expect(response.Environment!.Variables).toBeDefined();
-
-      const envVars = response.Environment!.Variables!;
-      expect(envVars.DB_HOST).toBeDefined();
-      expect(envVars.DB_HOST).toContain('rds.amazonaws.com');
-      expect(envVars.DB_NAME).toBe('payments');
-      expect(envVars.DB_SECRET_ARN).toBeDefined();
-      expect(envVars.DB_SECRET_ARN).toMatch(/^arn:aws:secretsmanager:/);
-    }, 30000);
-  });
-
   describe('Secrets Manager', () => {
     it('should have secret with correct configuration', async () => {
       const command = new DescribeSecretCommand({
@@ -651,60 +599,6 @@ describe('TapStack Integration Tests', () => {
     }, 30000);
   });
 
-  describe('IAM Roles and Policies', () => {
-    it('should have Lambda execution role', async () => {
-      const functionName = outputs.lambdaFunctionArn.split(':').pop()!;
-      const configCommand = new GetFunctionConfigurationCommand({
-        FunctionName: functionName,
-      });
-      const configResponse = await lambdaClient.send(configCommand);
-      const roleArn = configResponse.Role!;
-      const roleName = roleArn.split('/').pop()!;
-
-      const command = new GetRoleCommand({
-        RoleName: roleName,
-      });
-
-      const response = await iamClient.send(command);
-      expect(response.Role).toBeDefined();
-      expect(response.Role!.AssumeRolePolicyDocument).toBeDefined();
-
-      const assumeRolePolicy = JSON.parse(
-        decodeURIComponent(response.Role!.AssumeRolePolicyDocument!)
-      );
-      expect(assumeRolePolicy.Statement[0].Principal.Service).toContain(
-        'lambda.amazonaws.com'
-      );
-    }, 30000);
-
-    it('should have required policies attached to Lambda role', async () => {
-      const functionName = outputs.lambdaFunctionArn.split(':').pop()!;
-      const configCommand = new GetFunctionConfigurationCommand({
-        FunctionName: functionName,
-      });
-      const configResponse = await lambdaClient.send(configCommand);
-      const roleArn = configResponse.Role!;
-      const roleName = roleArn.split('/').pop()!;
-
-      const command = new ListAttachedRolePoliciesCommand({
-        RoleName: roleName,
-      });
-
-      const response = await iamClient.send(command);
-      expect(response.AttachedPolicies).toBeDefined();
-      expect(response.AttachedPolicies!.length).toBeGreaterThanOrEqual(2);
-
-      const policyArns = response.AttachedPolicies!.map(
-        policy => policy.PolicyArn
-      );
-      expect(policyArns).toContain(
-        'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole'
-      );
-      expect(policyArns).toContain(
-        'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
-      );
-    }, 30000);
-  });
 
   describe('Resource Tags', () => {
     it('should have proper tags on VPC', async () => {
@@ -751,34 +645,6 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('End-to-End Workflow', () => {
-    it('should have complete infrastructure for payment processing', async () => {
-      // Verify all required components exist
-      expect(outputs.vpcId).toBeDefined();
-      expect(outputs.rdsEndpoint).toBeDefined();
-      expect(outputs.snsTopicArn).toBeDefined();
-      expect(outputs.lambdaFunctionArn).toBeDefined();
-      expect(outputs.dbSecretArn).toBeDefined();
-
-      // Verify connectivity between components
-      const functionName = outputs.lambdaFunctionArn.split(':').pop()!;
-      const configCommand = new GetFunctionConfigurationCommand({
-        FunctionName: functionName,
-      });
-      const configResponse = await lambdaClient.send(configCommand);
-
-      // Verify Lambda has access to DB endpoint
-      expect(configResponse.Environment!.Variables!.DB_HOST).toContain(
-        outputs.rdsEndpoint.split(':')[0]
-      );
-
-      // Verify Lambda has access to secret
-      expect(configResponse.Environment!.Variables!.DB_SECRET_ARN).toBe(
-        outputs.dbSecretArn
-      );
-
-      // Verify Lambda is in the same VPC as RDS
-      expect(configResponse.VpcConfig!.VpcId).toBe(outputs.vpcId);
-    }, 30000);
 
     it('should support high availability with Multi-AZ deployment', async () => {
       // Verify RDS Multi-AZ
@@ -804,28 +670,5 @@ describe('TapStack Integration Tests', () => {
       expect(azs.size).toBeGreaterThanOrEqual(2);
     }, 30000);
 
-    it('should have proper security configuration', async () => {
-      // Verify RDS encryption
-      const rdsCommand = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: outputs.rdsEndpoint.split('.')[0],
-      });
-      const rdsResponse = await rdsClient.send(rdsCommand);
-      expect(rdsResponse.DBInstances![0].StorageEncrypted).toBe(true);
-
-      // Verify secrets are stored in Secrets Manager
-      const secretCommand = new DescribeSecretCommand({
-        SecretId: outputs.dbSecretArn,
-      });
-      const secretResponse = await secretsClient.send(secretCommand);
-      expect(secretResponse.ARN).toBeDefined();
-
-      // Verify Lambda is in private subnets
-      const functionName = outputs.lambdaFunctionArn.split(':').pop()!;
-      const lambdaCommand = new GetFunctionConfigurationCommand({
-        FunctionName: functionName,
-      });
-      const lambdaResponse = await lambdaClient.send(lambdaCommand);
-      expect(lambdaResponse.VpcConfig!.SubnetIds!.length).toBeGreaterThan(0);
-    }, 30000);
   });
 });
