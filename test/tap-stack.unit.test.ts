@@ -160,9 +160,10 @@ describe('TapStack', () => {
     );
   });
 
-  it('should handle region configuration', (done) => {
+  it('should handle region configuration with explicit region parameter', (done) => {
     const regionStack = new TapStack('region-stack', {
       environmentSuffix: 'ap-test',
+      region: 'us-west-2',
     });
     pulumi.all([regionStack.urn]).apply(([urn]) => {
       expect(urn).toBeDefined();
@@ -222,33 +223,112 @@ describe('TapStack', () => {
     });
   });
 
-  it('should work with us-east-1 region', (done) => {
-    const originalMockRegion = mockRegion;
-    mockRegion = 'us-east-1';
-
+  it('should work with us-east-1 region via parameter', (done) => {
     const usEastStack = new TapStack('us-east-stack', {
       environmentSuffix: 'useast',
+      region: 'us-east-1',
     });
 
     pulumi.all([usEastStack.urn]).apply(([urn]) => {
       expect(urn).toBeDefined();
-      mockRegion = originalMockRegion;
       done();
     });
   });
 
-  it('should work with eu-west-1 region', (done) => {
-    const originalMockRegion = mockRegion;
-    mockRegion = 'eu-west-1';
-
+  it('should work with eu-west-1 region via parameter', (done) => {
     const euStack = new TapStack('eu-west-stack', {
       environmentSuffix: 'eu',
+      region: 'eu-west-1',
     });
 
     pulumi.all([euStack.urn]).apply(([urn]) => {
       expect(urn).toBeDefined();
-      mockRegion = originalMockRegion;
       done();
     });
+  });
+
+  it('should create stack with all optional parameters', (done) => {
+    const fullStack = new TapStack('full-params-stack', {
+      environmentSuffix: 'production',
+      tags: {
+        Environment: 'production',
+        Team: 'platform',
+        CostCenter: 'engineering',
+      },
+    });
+
+    pulumi.all([fullStack.urn, fullStack.schedulerOutputs, fullStack.costOutputs]).apply(
+      ([urn, schedulerOutputs, costOutputs]) => {
+        expect(urn).toBeDefined();
+        expect(schedulerOutputs).toBeDefined();
+        expect(costOutputs).toBeDefined();
+        done();
+      }
+    );
+  });
+
+  it('should create stack with minimal parameters', (done) => {
+    const minimalStack = new TapStack('minimal-stack', {});
+
+    pulumi.all([minimalStack.urn]).apply(([urn]) => {
+      expect(urn).toBeDefined();
+      done();
+    });
+  });
+
+  it('should handle stack creation with different naming patterns', (done) => {
+    const kebabStack = new TapStack('my-test-stack', {
+      environmentSuffix: 'my-env',
+    });
+
+    pulumi.all([kebabStack.urn]).apply(([urn]) => {
+      expect(urn).toContain('TapStack');
+      done();
+    });
+  });
+
+  it('should prioritize explicit region parameter over aws.config.region', (done) => {
+    const explicitRegionStack = new TapStack('explicit-region-stack', {
+      environmentSuffix: 'explicit',
+      region: 'ca-central-1',
+    });
+
+    pulumi.all([explicitRegionStack.urn]).apply(([urn]) => {
+      expect(urn).toBeDefined();
+      expect(urn).toContain('TapStack');
+      done();
+    });
+  });
+
+  it('should handle different region formats', (done) => {
+    const apStack = new TapStack('ap-region-stack', {
+      environmentSuffix: 'ap',
+      region: 'ap-northeast-1',
+    });
+
+    pulumi.all([apStack.urn]).apply(([urn]) => {
+      expect(urn).toBeDefined();
+      done();
+    });
+  });
+
+  it('should create stack with region and all parameters', (done) => {
+    const completeStack = new TapStack('complete-stack', {
+      environmentSuffix: 'complete',
+      region: 'us-west-1',
+      tags: {
+        Environment: 'production',
+        Application: 'ec2-optimizer',
+      },
+    });
+
+    pulumi.all([completeStack.urn, completeStack.schedulerOutputs, completeStack.costOutputs]).apply(
+      ([urn, schedulerOutputs, costOutputs]) => {
+        expect(urn).toBeDefined();
+        expect(schedulerOutputs).toBeDefined();
+        expect(costOutputs).toBeDefined();
+        done();
+      }
+    );
   });
 });

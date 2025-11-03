@@ -25,6 +25,11 @@ export interface TapStackArgs {
    * Optional default tags to apply to resources.
    */
   tags?: pulumi.Input<{ [key: string]: string }>;
+
+  /**
+   * Optional AWS region. If not provided, uses aws.config.region or defaults to 'ap-southeast-1'.
+   */
+  region?: string;
 }
 
 /**
@@ -50,7 +55,7 @@ export class TapStack extends pulumi.ComponentResource {
     const tags = args.tags || {};
 
     // Get the current AWS region
-    const region = aws.config.region || 'ap-southeast-1';
+    const region = args.region || aws.config.region || 'ap-southeast-1';
 
     // Instantiate EC2 Scheduler Stack
     const schedulerStack = new Ec2SchedulerStack(
