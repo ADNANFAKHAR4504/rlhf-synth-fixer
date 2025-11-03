@@ -1,0 +1,423 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Compute stack with ECS Fargate cluster, task definitions, and services",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource naming"
+    },
+    "EnvironmentName": {
+      "Type": "String",
+      "Description": "Environment name (dev, staging, prod)"
+    },
+    "VpcId": {
+      "Type": "AWS::EC2::VPC::Id",
+      "Description": "VPC ID"
+    },
+    "PrivateSubnetIds": {
+      "Type": "CommaDelimitedList",
+      "Description": "List of private subnet IDs for ECS tasks"
+    },
+    "ECSSecurityGroupId": {
+      "Type": "String",
+      "Description": "Security group ID for ECS tasks"
+    },
+    "ALBTargetGroupArn": {
+      "Type": "String",
+      "Description": "ARN of ALB target group"
+    },
+    "ECSTaskCPU": {
+      "Type": "String",
+      "Description": "CPU units for ECS task"
+    },
+    "ECSTaskMemory": {
+      "Type": "String",
+      "Description": "Memory for ECS task in MB"
+    },
+    "ECSDesiredCount": {
+      "Type": "String",
+      "Description": "Desired number of ECS tasks"
+    },
+    "LogRetentionDays": {
+      "Type": "String",
+      "Description": "CloudWatch log retention in days"
+    },
+    "DBEndpoint": {
+      "Type": "String",
+      "Description": "RDS database endpoint"
+    },
+    "DBMasterPasswordSecretArn": {
+      "Type": "String",
+      "Description": "ARN of database password secret"
+    },
+    "AppSecretsArn": {
+      "Type": "String",
+      "Description": "ARN of application secrets"
+    },
+    "ProjectName": {
+      "Type": "String",
+      "Description": "Project name for tagging"
+    },
+    "CostCenter": {
+      "Type": "String",
+      "Description": "Cost center for billing"
+    }
+  },
+  "Resources": {
+    "ECSCluster": {
+      "Type": "AWS::ECS::Cluster",
+      "Properties": {
+        "ClusterName": {
+          "Fn::Sub": "ecs-cluster-${EnvironmentSuffix}"
+        },
+        "CapacityProviders": ["FARGATE", "FARGATE_SPOT"],
+        "DefaultCapacityProviderStrategy": [
+          {
+            "CapacityProvider": "FARGATE",
+            "Weight": 1,
+            "Base": 1
+          }
+        ],
+        "ClusterSettings": [
+          {
+            "Name": "containerInsights",
+            "Value": "enabled"
+          }
+        ],
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "ecs-cluster-${EnvironmentSuffix}"}},
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentName"}},
+          {"Key": "Project", "Value": {"Ref": "ProjectName"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "ManagedBy", "Value": "CloudFormation"}
+        ]
+      }
+    },
+    "ECRRepository": {
+      "Type": "AWS::ECR::Repository",
+      "Properties": {
+        "RepositoryName": {
+          "Fn::Sub": "app-repo-${EnvironmentSuffix}"
+        },
+        "ImageScanningConfiguration": {
+          "ScanOnPush": true
+        },
+        "EncryptionConfiguration": {
+          "EncryptionType": "AES256"
+        },
+        "LifecyclePolicy": {
+          "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"description\":\"Keep last 10 images\",\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":10},\"action\":{\"type\":\"expire\"}},{\"rulePriority\":2,\"description\":\"Remove untagged images after 7 days\",\"selection\":{\"tagStatus\":\"untagged\",\"countType\":\"sinceImagePushed\",\"countUnit\":\"days\",\"countNumber\":7},\"action\":{\"type\":\"expire\"}}]}"
+        },
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "app-repo-${EnvironmentSuffix}"}},
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentName"}},
+          {"Key": "Project", "Value": {"Ref": "ProjectName"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "ManagedBy", "Value": "CloudFormation"}
+        ]
+      }
+    },
+    "ECSTaskExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "ecs-task-execution-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "SecretsManagerAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue"
+                  ],
+                  "Resource": [
+                    {"Ref": "DBMasterPasswordSecretArn"},
+                    {"Ref": "AppSecretsArn"}
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "ECRAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:GetAuthorizationToken",
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:BatchGetImage"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentName"}},
+          {"Key": "Project", "Value": {"Ref": "ProjectName"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "ManagedBy", "Value": "CloudFormation"}
+        ]
+      }
+    },
+    "ECSTaskRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "ecs-task-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ApplicationPermissions",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue"
+                  ],
+                  "Resource": [
+                    {"Ref": "AppSecretsArn"}
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentName"}},
+          {"Key": "Project", "Value": {"Ref": "ProjectName"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "ManagedBy", "Value": "CloudFormation"}
+        ]
+      }
+    },
+    "ECSLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/ecs/app-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": {"Ref": "LogRetentionDays"}
+      }
+    },
+    "ECSTaskDefinition": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "Family": {
+          "Fn::Sub": "app-task-${EnvironmentSuffix}"
+        },
+        "NetworkMode": "awsvpc",
+        "RequiresCompatibilities": ["FARGATE"],
+        "Cpu": {"Ref": "ECSTaskCPU"},
+        "Memory": {"Ref": "ECSTaskMemory"},
+        "ExecutionRoleArn": {"Fn::GetAtt": ["ECSTaskExecutionRole", "Arn"]},
+        "TaskRoleArn": {"Fn::GetAtt": ["ECSTaskRole", "Arn"]},
+        "ContainerDefinitions": [
+          {
+            "Name": "app-container",
+            "Image": {
+              "Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepository}:latest"
+            },
+            "Essential": true,
+            "PortMappings": [
+              {
+                "ContainerPort": 8080,
+                "Protocol": "tcp"
+              }
+            ],
+            "Environment": [
+              {
+                "Name": "ENVIRONMENT",
+                "Value": {"Ref": "EnvironmentName"}
+              },
+              {
+                "Name": "DB_HOST",
+                "Value": {"Ref": "DBEndpoint"}
+              },
+              {
+                "Name": "DB_PORT",
+                "Value": "5432"
+              },
+              {
+                "Name": "DB_NAME",
+                "Value": "appdb"
+              }
+            ],
+            "Secrets": [
+              {
+                "Name": "DB_USERNAME",
+                "ValueFrom": {
+                  "Fn::Sub": "${DBMasterPasswordSecretArn}:username::"
+                }
+              },
+              {
+                "Name": "DB_PASSWORD",
+                "ValueFrom": {
+                  "Fn::Sub": "${DBMasterPasswordSecretArn}:password::"
+                }
+              },
+              {
+                "Name": "API_KEY",
+                "ValueFrom": {
+                  "Fn::Sub": "${AppSecretsArn}:api_key::"
+                }
+              }
+            ],
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {"Ref": "ECSLogGroup"},
+                "awslogs-region": {"Ref": "AWS::Region"},
+                "awslogs-stream-prefix": "ecs"
+              }
+            }
+          }
+        ],
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentName"}},
+          {"Key": "Project", "Value": {"Ref": "ProjectName"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "ManagedBy", "Value": "CloudFormation"}
+        ]
+      }
+    },
+    "ECSService": {
+      "Type": "AWS::ECS::Service",
+      "DependsOn": ["ECSTaskDefinition"],
+      "Properties": {
+        "ServiceName": {
+          "Fn::Sub": "app-service-${EnvironmentSuffix}"
+        },
+        "Cluster": {"Ref": "ECSCluster"},
+        "TaskDefinition": {"Ref": "ECSTaskDefinition"},
+        "DesiredCount": {"Ref": "ECSDesiredCount"},
+        "LaunchType": "FARGATE",
+        "NetworkConfiguration": {
+          "AwsvpcConfiguration": {
+            "AssignPublicIp": "DISABLED",
+            "Subnets": {"Ref": "PrivateSubnetIds"},
+            "SecurityGroups": [{"Ref": "ECSSecurityGroupId"}]
+          }
+        },
+        "LoadBalancers": [
+          {
+            "ContainerName": "app-container",
+            "ContainerPort": 8080,
+            "TargetGroupArn": {"Ref": "ALBTargetGroupArn"}
+          }
+        ],
+        "HealthCheckGracePeriodSeconds": 60,
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentName"}},
+          {"Key": "Project", "Value": {"Ref": "ProjectName"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "ManagedBy", "Value": "CloudFormation"}
+        ]
+      }
+    },
+    "ServiceScalingTarget": {
+      "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
+      "Properties": {
+        "MaxCapacity": 10,
+        "MinCapacity": {"Ref": "ECSDesiredCount"},
+        "ResourceId": {
+          "Fn::Sub": "service/${ECSCluster}/${ECSService.Name}"
+        },
+        "RoleARN": {
+          "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService"
+        },
+        "ScalableDimension": "ecs:service:DesiredCount",
+        "ServiceNamespace": "ecs"
+      }
+    },
+    "ServiceScalingPolicy": {
+      "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
+      "Properties": {
+        "PolicyName": {
+          "Fn::Sub": "cpu-scaling-policy-${EnvironmentSuffix}"
+        },
+        "PolicyType": "TargetTrackingScaling",
+        "ScalingTargetId": {"Ref": "ServiceScalingTarget"},
+        "TargetTrackingScalingPolicyConfiguration": {
+          "PredefinedMetricSpecification": {
+            "PredefinedMetricType": "ECSServiceAverageCPUUtilization"
+          },
+          "TargetValue": 70.0,
+          "ScaleInCooldown": 300,
+          "ScaleOutCooldown": 60
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "ECSClusterName": {
+      "Description": "Name of the ECS cluster",
+      "Value": {"Ref": "ECSCluster"}
+    },
+    "ECSClusterArn": {
+      "Description": "ARN of the ECS cluster",
+      "Value": {"Fn::GetAtt": ["ECSCluster", "Arn"]}
+    },
+    "ECSServiceName": {
+      "Description": "Name of the ECS service",
+      "Value": {"Fn::GetAtt": ["ECSService", "Name"]}
+    },
+    "ECRRepositoryURI": {
+      "Description": "URI of the ECR repository",
+      "Value": {
+        "Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepository}"
+      }
+    },
+    "ECSLogGroupName": {
+      "Description": "CloudWatch log group for ECS tasks",
+      "Value": {"Ref": "ECSLogGroup"}
+    }
+  }
+}

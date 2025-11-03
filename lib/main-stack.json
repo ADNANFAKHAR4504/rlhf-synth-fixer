@@ -1,0 +1,295 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Main stack for multi-environment application infrastructure migration",
+  "Parameters": {
+    "EnvironmentName": {
+      "Type": "String",
+      "Description": "Environment name (dev, staging, prod)",
+      "AllowedValues": ["dev", "staging", "prod"]
+    },
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource naming to avoid conflicts",
+      "MinLength": 3,
+      "MaxLength": 20
+    },
+    "VpcId": {
+      "Type": "AWS::EC2::VPC::Id",
+      "Description": "Existing VPC ID for the environment"
+    },
+    "PrivateSubnetIds": {
+      "Type": "List<AWS::EC2::Subnet::Id>",
+      "Description": "List of private subnet IDs for ECS tasks and RDS"
+    },
+    "PublicSubnetIds": {
+      "Type": "List<AWS::EC2::Subnet::Id>",
+      "Description": "List of public subnet IDs for Application Load Balancer"
+    },
+    "ProjectName": {
+      "Type": "String",
+      "Default": "app-migration",
+      "Description": "Project name for tagging"
+    },
+    "CostCenter": {
+      "Type": "String",
+      "Default": "engineering",
+      "Description": "Cost center for billing"
+    },
+    "HostedZoneId": {
+      "Type": "String",
+      "Description": "Route53 hosted zone ID for DNS records"
+    },
+    "DomainName": {
+      "Type": "String",
+      "Description": "Domain name for the application (e.g., example.com)"
+    },
+    "NestedStacksBucketName": {
+      "Type": "String",
+      "Description": "S3 bucket name where nested stack templates are stored"
+    }
+  },
+  "Mappings": {
+    "EnvironmentConfig": {
+      "dev": {
+        "ECSTaskCPU": "512",
+        "ECSTaskMemory": "1024",
+        "ECSDesiredCount": "1",
+        "DBInstanceClass": "db.t3.micro",
+        "DBAllocatedStorage": "20",
+        "DBMultiAZ": "false",
+        "LogRetentionDays": "7",
+        "EnableTerminationProtection": "false"
+      },
+      "staging": {
+        "ECSTaskCPU": "1024",
+        "ECSTaskMemory": "2048",
+        "ECSDesiredCount": "2",
+        "DBInstanceClass": "db.t3.small",
+        "DBAllocatedStorage": "50",
+        "DBMultiAZ": "false",
+        "LogRetentionDays": "30",
+        "EnableTerminationProtection": "false"
+      },
+      "prod": {
+        "ECSTaskCPU": "2048",
+        "ECSTaskMemory": "4096",
+        "ECSDesiredCount": "3",
+        "DBInstanceClass": "db.r5.large",
+        "DBAllocatedStorage": "100",
+        "DBMultiAZ": "true",
+        "LogRetentionDays": "90",
+        "EnableTerminationProtection": "true"
+      }
+    }
+  },
+  "Resources": {
+    "SecretsStack": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": {
+          "Fn::Sub": "https://${NestedStacksBucketName}.s3.amazonaws.com/secrets-stack.json"
+        },
+        "Parameters": {
+          "EnvironmentSuffix": {"Ref": "EnvironmentSuffix"},
+          "EnvironmentName": {"Ref": "EnvironmentName"},
+          "ProjectName": {"Ref": "ProjectName"}
+        },
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentName"}},
+          {"Key": "Project", "Value": {"Ref": "ProjectName"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "ManagedBy", "Value": "CloudFormation"}
+        ]
+      }
+    },
+    "NetworkingStack": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": {
+          "Fn::Sub": "https://${NestedStacksBucketName}.s3.amazonaws.com/networking-stack.json"
+        },
+        "Parameters": {
+          "EnvironmentSuffix": {"Ref": "EnvironmentSuffix"},
+          "EnvironmentName": {"Ref": "EnvironmentName"},
+          "VpcId": {"Ref": "VpcId"},
+          "PublicSubnetIds": {
+            "Fn::Join": [",", {"Ref": "PublicSubnetIds"}]
+          },
+          "ProjectName": {"Ref": "ProjectName"},
+          "CostCenter": {"Ref": "CostCenter"}
+        },
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentName"}},
+          {"Key": "Project", "Value": {"Ref": "ProjectName"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "ManagedBy", "Value": "CloudFormation"}
+        ]
+      }
+    },
+    "DatabaseStack": {
+      "Type": "AWS::CloudFormation::Stack",
+      "DependsOn": ["NetworkingStack", "SecretsStack"],
+      "Properties": {
+        "TemplateURL": {
+          "Fn::Sub": "https://${NestedStacksBucketName}.s3.amazonaws.com/database-stack.json"
+        },
+        "Parameters": {
+          "EnvironmentSuffix": {"Ref": "EnvironmentSuffix"},
+          "EnvironmentName": {"Ref": "EnvironmentName"},
+          "VpcId": {"Ref": "VpcId"},
+          "PrivateSubnetIds": {
+            "Fn::Join": [",", {"Ref": "PrivateSubnetIds"}]
+          },
+          "DBSecurityGroupId": {
+            "Fn::GetAtt": ["NetworkingStack", "Outputs.DBSecurityGroupId"]
+          },
+          "DBInstanceClass": {
+            "Fn::FindInMap": ["EnvironmentConfig", {"Ref": "EnvironmentName"}, "DBInstanceClass"]
+          },
+          "DBAllocatedStorage": {
+            "Fn::FindInMap": ["EnvironmentConfig", {"Ref": "EnvironmentName"}, "DBAllocatedStorage"]
+          },
+          "DBMultiAZ": {
+            "Fn::FindInMap": ["EnvironmentConfig", {"Ref": "EnvironmentName"}, "DBMultiAZ"]
+          },
+          "DBMasterPasswordSecretArn": {
+            "Fn::GetAtt": ["SecretsStack", "Outputs.DBMasterPasswordSecretArn"]
+          },
+          "ProjectName": {"Ref": "ProjectName"},
+          "CostCenter": {"Ref": "CostCenter"}
+        },
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentName"}},
+          {"Key": "Project", "Value": {"Ref": "ProjectName"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "ManagedBy", "Value": "CloudFormation"}
+        ]
+      }
+    },
+    "ComputeStack": {
+      "Type": "AWS::CloudFormation::Stack",
+      "DependsOn": ["NetworkingStack", "DatabaseStack", "SecretsStack"],
+      "Properties": {
+        "TemplateURL": {
+          "Fn::Sub": "https://${NestedStacksBucketName}.s3.amazonaws.com/compute-stack.json"
+        },
+        "Parameters": {
+          "EnvironmentSuffix": {"Ref": "EnvironmentSuffix"},
+          "EnvironmentName": {"Ref": "EnvironmentName"},
+          "VpcId": {"Ref": "VpcId"},
+          "PrivateSubnetIds": {
+            "Fn::Join": [",", {"Ref": "PrivateSubnetIds"}]
+          },
+          "ECSSecurityGroupId": {
+            "Fn::GetAtt": ["NetworkingStack", "Outputs.ECSSecurityGroupId"]
+          },
+          "ALBTargetGroupArn": {
+            "Fn::GetAtt": ["NetworkingStack", "Outputs.ALBTargetGroupArn"]
+          },
+          "ECSTaskCPU": {
+            "Fn::FindInMap": ["EnvironmentConfig", {"Ref": "EnvironmentName"}, "ECSTaskCPU"]
+          },
+          "ECSTaskMemory": {
+            "Fn::FindInMap": ["EnvironmentConfig", {"Ref": "EnvironmentName"}, "ECSTaskMemory"]
+          },
+          "ECSDesiredCount": {
+            "Fn::FindInMap": ["EnvironmentConfig", {"Ref": "EnvironmentName"}, "ECSDesiredCount"]
+          },
+          "LogRetentionDays": {
+            "Fn::FindInMap": ["EnvironmentConfig", {"Ref": "EnvironmentName"}, "LogRetentionDays"]
+          },
+          "DBEndpoint": {
+            "Fn::GetAtt": ["DatabaseStack", "Outputs.DBEndpoint"]
+          },
+          "DBMasterPasswordSecretArn": {
+            "Fn::GetAtt": ["SecretsStack", "Outputs.DBMasterPasswordSecretArn"]
+          },
+          "AppSecretsArn": {
+            "Fn::GetAtt": ["SecretsStack", "Outputs.AppSecretsArn"]
+          },
+          "ProjectName": {"Ref": "ProjectName"},
+          "CostCenter": {"Ref": "CostCenter"}
+        },
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentName"}},
+          {"Key": "Project", "Value": {"Ref": "ProjectName"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "ManagedBy", "Value": "CloudFormation"}
+        ]
+      }
+    },
+    "MonitoringStack": {
+      "Type": "AWS::CloudFormation::Stack",
+      "DependsOn": ["NetworkingStack", "ComputeStack"],
+      "Properties": {
+        "TemplateURL": {
+          "Fn::Sub": "https://${NestedStacksBucketName}.s3.amazonaws.com/monitoring-stack.json"
+        },
+        "Parameters": {
+          "EnvironmentSuffix": {"Ref": "EnvironmentSuffix"},
+          "EnvironmentName": {"Ref": "EnvironmentName"},
+          "HostedZoneId": {"Ref": "HostedZoneId"},
+          "DomainName": {"Ref": "DomainName"},
+          "ALBDNSName": {
+            "Fn::GetAtt": ["NetworkingStack", "Outputs.ALBDNSName"]
+          },
+          "ALBHostedZoneId": {
+            "Fn::GetAtt": ["NetworkingStack", "Outputs.ALBHostedZoneId"]
+          },
+          "ECSClusterName": {
+            "Fn::GetAtt": ["ComputeStack", "Outputs.ECSClusterName"]
+          },
+          "ECSServiceName": {
+            "Fn::GetAtt": ["ComputeStack", "Outputs.ECSServiceName"]
+          },
+          "ProjectName": {"Ref": "ProjectName"},
+          "CostCenter": {"Ref": "CostCenter"}
+        },
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "EnvironmentName"}},
+          {"Key": "Project", "Value": {"Ref": "ProjectName"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "ManagedBy", "Value": "CloudFormation"}
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "StackName": {
+      "Description": "Name of the main CloudFormation stack",
+      "Value": {"Ref": "AWS::StackName"}
+    },
+    "ApplicationURL": {
+      "Description": "Application URL",
+      "Value": {
+        "Fn::Sub": [
+          "http://${SubDomain}.${Domain}",
+          {
+            "SubDomain": {"Fn::Sub": "app-${EnvironmentName}"},
+            "Domain": {"Ref": "DomainName"}
+          }
+        ]
+      }
+    },
+    "ALBDNSName": {
+      "Description": "Application Load Balancer DNS name",
+      "Value": {"Fn::GetAtt": ["NetworkingStack", "Outputs.ALBDNSName"]}
+    },
+    "ECSClusterName": {
+      "Description": "ECS cluster name",
+      "Value": {"Fn::GetAtt": ["ComputeStack", "Outputs.ECSClusterName"]}
+    },
+    "ECRRepositoryURI": {
+      "Description": "ECR repository URI for Docker images",
+      "Value": {"Fn::GetAtt": ["ComputeStack", "Outputs.ECRRepositoryURI"]}
+    },
+    "DBEndpoint": {
+      "Description": "RDS database endpoint",
+      "Value": {"Fn::GetAtt": ["DatabaseStack", "Outputs.DBEndpoint"]}
+    },
+    "DBName": {
+      "Description": "Database name",
+      "Value": {"Fn::GetAtt": ["DatabaseStack", "Outputs.DBName"]}
+    }
+  }
+}
