@@ -1,49 +1,59 @@
-# EC2 Cost Optimization Task
+# EC2 Cost Optimization
 
-IMPORTANT: Use Pulumi with TypeScript. Platform is pulumi, language is ts, region is ap-southeast-1. Don't change these.
+Hey, so we need to build this with Pulumi and TypeScript. Region is ap-southeast-1. Please don't change the platform or language - management already decided on Pulumi/TS.
 
-## What I need
+## The Problem
 
-I need help optimizing our AWS costs. Our dev team has been running EC2 instances 24/7 and it's killing our budget. We want to automatically shut down dev and staging instances during off-hours.
+Our AWS bill is getting out of control. The dev team keeps their EC2 instances running 24/7 even though nobody uses them at night or on weekends. We're burning money for no reason.
 
-Here's what needs to happen:
+We want to automatically shut down the dev and staging instances when people aren't working (like 7 PM to 8 AM on weekdays) and restart them in the morning.
 
-1. Import our existing EC2 instances (the ones tagged Environment=development or Environment=staging)
-2. Set up CloudWatch Events to stop them at 7 PM EST on weekdays
-3. Set up CloudWatch Events to start them at 8 AM EST on weekdays
-4. Create Lambda functions to actually do the stopping and starting
-5. Make sure the Lambda has the right IAM permissions
-6. Add some CloudWatch alarms if instances fail to start
-7. Don't mess with any of the existing instance configs or tags
-8. Show me how much money we'll save each month (assume 13 hours shutdown per day)
+## What needs to be done
 
-The output should show me the instance IDs that got imported, the Lambda function ARNs, the CloudWatch rule ARNs, and the estimated monthly savings.
+Import the existing EC2 instances that are tagged with Environment=development or Environment=staging. Don't recreate them, just import them using Pulumi's import feature.
 
-## Background
+Set up CloudWatch Events to stop these instances at 7 PM EST every weekday and start them back up at 8 AM EST. Make sure it handles daylight saving time properly.
 
-We're a startup and our dev team leaves their test environments running constantly. Management is upset about the AWS bills. We need to shut down non-production instances when nobody is using them but still be able to restart them quickly when needed.
+Create Lambda functions to do the actual stopping and starting. The Lambda should be able to handle multiple instances at once so we're not wasting money on a bunch of separate invocations.
 
-## Technical requirements
+Give the Lambda the IAM permissions it needs. Don't go overboard - just what's actually required.
 
-- Use Pulumi's import feature so we don't have to recreate existing instances
-- Lambda should handle multiple instances in one run to save on invocations
-- CloudWatch Events needs to handle EST timezone properly including daylight saving
-- Log all instance state changes to CloudWatch Logs for auditing
-- Use actual current EC2 on-demand pricing for the cost calculation
-- Don't touch any instances tagged Environment=production
+Add CloudWatch alarms so we know if instances fail to start up.
 
-## Environment details
+Don't change any of the instance settings or tags. Just leave everything as is.
 
-We're in ap-southeast-1. Using Pulumi TypeScript SDK 3.x, Node.js 18+, and AWS SDK v3. We have several t3.medium and t3.large instances spread across dev and staging. CloudWatch Events and Lambda will handle the scheduling. The instances stay in their current subnets, no VPC changes needed.
+Calculate how much money we're going to save and show that in the output. Assume we're shutting down for 13 hours each weekday.
 
-## Project conventions
+The output should show the instance IDs, Lambda ARNs, CloudWatch rule ARNs, and the monthly savings estimate.
 
-For resource names: use environmentSuffix variable to support multiple PR environments. Like myresource-${environmentSuffix} or tag with EnvironmentSuffix.
+## Context
 
-For tests: integration tests load outputs from cfn-outputs/flat-outputs.json and validate against real deployed resources.
+We're a small startup. Our developers spin up test environments and forget about them. The CFO is freaking out about the AWS costs. We need to cut costs but we can't make it hard for developers to do their jobs.
 
-For resource management: everything should be destroyable for CI/CD. Exception: don't create secrets, fetch them from existing Secrets Manager entries. Avoid DeletionPolicy Retain unless you really need it.
+The solution needs to only affect dev and staging. Production instances should be completely untouched.
 
-For security: encryption at rest and in transit, least privilege IAM, use Secrets Manager for creds, enable logging and monitoring.
+## Technical stuff
 
-Deploy everything to ap-southeast-1.
+We're using Pulumi TypeScript SDK 3.x with Node.js 18+ and AWS SDK v3.
+
+Current setup is in ap-southeast-1. We have a bunch of t3.medium and t3.large instances scattered across development and staging environments.
+
+When you're calculating costs, use the actual current EC2 on-demand pricing for those instance types.
+
+Make sure all state changes get logged to CloudWatch Logs because we need to be able to audit this.
+
+The instances will stay in their current VPCs and subnets. No network changes.
+
+## Project setup notes
+
+Use the environmentSuffix variable in resource names so we can have multiple PR environments running at the same time. Just do something like myresource-\${environmentSuffix} or add it as a tag.
+
+For the integration tests, they should load outputs from cfn-outputs/flat-outputs.json and validate against the actual deployed resources.
+
+Everything should be destroyable for our CI/CD pipeline. The only exception is secrets - those should be fetched from AWS Secrets Manager, not created by the stack.
+
+Don't use DeletionPolicy Retain unless you absolutely have to.
+
+For security, make sure we have encryption at rest and in transit, use least privilege for IAM roles, pull credentials from Secrets Manager, and enable logging and monitoring.
+
+Deploy to ap-southeast-1.
