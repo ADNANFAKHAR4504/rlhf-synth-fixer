@@ -1,6 +1,6 @@
 {
   "platform": "pulumi",
-  "language": "py",
+  "language": "python",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "349145",
@@ -24,5 +24,12 @@
     "SNS",
     "SQS",
     "CodeBuild"
-  ]
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
 }
