@@ -4,6 +4,8 @@
 
 This is a comprehensive request for creating a multi-region disaster recovery setup for Aurora PostgreSQL using AWS CDK. Let me break down the requirements and create a complete solution.
 
+**Deployment Fix Applied:** Initial deployment failed with "engine version does not support global functionality". Aurora PostgreSQL 13.7 doesn't support global databases. Updated to Aurora PostgreSQL 15.2 which fully supports Aurora Global Database with cross-region replication.
+
 Key Requirements:
 
 1. Aurora Global Database with primary in us-east-1 and secondary in us-west-2

@@ -142,6 +142,32 @@
 
 ---
 
+## Issue 12: Aurora Engine Version Does Not Support Global Databases
+
+**Problem**: Deployment failed with error: "The requested engine version was not found or does not support global functionality"
+```
+CREATE_FAILED | AWS::RDS::GlobalCluster | AuroraCluster/GlobalCluster
+Resource handler returned message: "The requested engine version was not found 
+or does not support global functionality (Service: Rds, Status Code: 400)"
+```
+
+**Root Cause**: Aurora PostgreSQL 13.7 does not support Aurora Global Database functionality. Global databases require specific engine versions with global replication capabilities.
+
+**Solution**: Updated Aurora PostgreSQL engine version from 13.7 to 15.2
+```typescript
+// Before (failed):
+version: rds.AuroraPostgresEngineVersion.VER_13_7,
+
+// After (working):
+version: rds.AuroraPostgresEngineVersion.VER_15_2,
+```
+
+**Result**: Stack can now create global cluster successfully. Aurora 15.2 fully supports global databases with cross-region replication.
+
+**Key Lesson**: Always verify engine version supports required features. Aurora Global Database requires PostgreSQL 11.9+, 12.4+, 13.3+, 14.3+, or 15.2+.
+
+---
+
 ## Production-Ready Features Implemented
 
 **Security**:

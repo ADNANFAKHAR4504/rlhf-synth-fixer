@@ -83,7 +83,7 @@ export class AuroraClusterConstruct extends Construct {
     // Create the Aurora cluster
     this.cluster = new rds.DatabaseCluster(this, 'Cluster', {
       engine: rds.DatabaseClusterEngine.auroraPostgres({
-        version: rds.AuroraPostgresEngineVersion.VER_13_7,
+        version: rds.AuroraPostgresEngineVersion.VER_15_2,
       }),
       credentials: rds.Credentials.fromSecret(props.secret),
       instanceProps: {

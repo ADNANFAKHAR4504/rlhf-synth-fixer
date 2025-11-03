@@ -317,7 +317,6 @@ import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as sns_subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
@@ -360,10 +359,12 @@ export class FailoverStack extends cdk.Stack {
     hostedZone.addVpc(props.secondaryStack.vpc);
 
     // Health check Lambda
-    const healthCheckLambda = new NodejsFunction(this, 'HealthCheckLambda', {
+    const healthCheckLambda = new lambda.Function(this, 'HealthCheckLambda', {
       runtime: lambda.Runtime.NODEJS_18_X,
-      entry: path.join(__dirname, '../lambdas/health-check/index.ts'),
-      handler: 'handler',
+      code: lambda.Code.fromAsset(
+        path.join(__dirname, '../lambdas/health-check')
+      ),
+      handler: 'index.handler',
       vpc: props.primaryStack.vpc,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
@@ -374,11 +375,6 @@ export class FailoverStack extends cdk.Stack {
         SECONDARY_CLUSTER_ENDPOINT: props.secondaryStack.clusterEndpoint,
         SECRET_ARN: props.primaryStack.secret.secretArn,
       },
-      bundling: {
-        minify: false,
-        externalModules: ['@aws-sdk/*'],
-        forceDockerBundling: false,
-      },
     });
 
     // Grant necessary permissions
@@ -386,23 +382,23 @@ export class FailoverStack extends cdk.Stack {
     props.primaryStack.cluster.grantDataApiAccess(healthCheckLambda);
 
     // Failover orchestrator Lambda
-    const failoverLambda = new NodejsFunction(this, 'FailoverOrchestrator', {
+    const failoverLambda = new lambda.Function(this, 'FailoverOrchestrator', {
       runtime: lambda.Runtime.NODEJS_18_X,
-      entry: path.join(__dirname, '../lambdas/failover-orchestrator/index.ts'),
-      handler: 'handler',
-      timeout: cdk.Duration.minutes(5),
-      memorySize: 1024,
+      code: lambda.Code.fromAsset(
+        path.join(__dirname, '../lambdas/failover-orchestrator')
+      ),
+      handler: 'index.handler',
+      vpc: props.primaryStack.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      timeout: cdk.Duration.minutes(15),
       environment: {
         PRIMARY_REGION: props.primaryStack.region!,
         SECONDARY_REGION: props.secondaryStack.region!,
         GLOBAL_CLUSTER_ID: props.primaryStack.globalClusterIdentifier,
         SNS_TOPIC_ARN: alertTopic.topicArn,
         HOSTED_ZONE_ID: hostedZone.hostedZoneId,
-      },
-      bundling: {
-        minify: false,
-        externalModules: ['@aws-sdk/*'],
-        forceDockerBundling: false,
       },
     });
 
@@ -534,19 +530,16 @@ export class FailoverStack extends cdk.Stack {
     );
 
     // Automated DR testing - runs every 30 days
-    const drTestLambda = new NodejsFunction(this, 'DRTestLambda', {
+    const drTestLambda = new lambda.Function(this, 'DRTestLambda', {
       runtime: lambda.Runtime.NODEJS_18_X,
-      entry: path.join(__dirname, '../lambdas/dr-testing/index.ts'),
-      handler: 'handler',
+      code: lambda.Code.fromAsset(
+        path.join(__dirname, '../lambdas/dr-testing')
+      ),
+      handler: 'index.handler',
       timeout: cdk.Duration.minutes(15),
       environment: {
         STATE_MACHINE_ARN: failoverStateMachine.stateMachineArn,
         SNS_TOPIC_ARN: alertTopic.topicArn,
-      },
-      bundling: {
-        minify: false,
-        externalModules: ['@aws-sdk/*'],
-        forceDockerBundling: false,
       },
     });
 
@@ -689,7 +682,7 @@ export class AuroraClusterConstruct extends Construct {
     // Create the Aurora cluster
     this.cluster = new rds.DatabaseCluster(this, 'Cluster', {
       engine: rds.DatabaseClusterEngine.auroraPostgres({
-        version: rds.AuroraPostgresEngineVersion.VER_13_7,
+        version: rds.AuroraPostgresEngineVersion.VER_15_2,
       }),
       credentials: rds.Credentials.fromSecret(props.secret),
       instanceProps: {
