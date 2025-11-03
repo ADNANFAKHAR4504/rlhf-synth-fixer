@@ -1,50 +1,49 @@
-# IaC Program Optimization
+# EC2 Cost Optimization Task
 
-> **CRITICAL REQUIREMENT: This task MUST be implemented using pulumi with ts**
-> 
-> Platform: **pulumi**  
-> Language: **ts**  
-> Region: **ap-southeast-1**
->
-> **Do not substitute or change the platform or language.** All infrastructure code must be written using the specified platform and language combination.
+IMPORTANT: Use Pulumi with TypeScript. Platform is pulumi, language is ts, region is ap-southeast-1. Don't change these.
 
----
+## What I need
 
-Create a Pulumi TypeScript program to optimize an existing EC2 infrastructure by implementing scheduled start/stop functionality. The configuration must: 1. Import existing EC2 instances tagged with Environment=development or Environment=staging. 2. Create CloudWatch Events rules to stop instances at 7 PM EST on weekdays. 3. Create CloudWatch Events rules to start instances at 8 AM EST on weekdays. 4. Implement Lambda functions to handle the start/stop operations. 5. Set up proper IAM roles and policies for Lambda execution. 6. Add CloudWatch alarms to notify if instances fail to start. 7. Preserve all existing instance configurations and tags. 8. Calculate and output estimated monthly cost savings. Expected output: The program should display the imported instance IDs, created Lambda function ARNs, CloudWatch rule ARNs, and estimated monthly savings based on 13 hours daily shutdown.
+I need help optimizing our AWS costs. Our dev team has been running EC2 instances 24/7 and it's killing our budget. We want to automatically shut down dev and staging instances during off-hours.
 
----
+Here's what needs to happen:
 
-## Additional Context
+1. Import our existing EC2 instances (the ones tagged Environment=development or Environment=staging)
+2. Set up CloudWatch Events to stop them at 7 PM EST on weekdays
+3. Set up CloudWatch Events to start them at 8 AM EST on weekdays
+4. Create Lambda functions to actually do the stopping and starting
+5. Make sure the Lambda has the right IAM permissions
+6. Add some CloudWatch alarms if instances fail to start
+7. Don't mess with any of the existing instance configs or tags
+8. Show me how much money we'll save each month (assume 13 hours shutdown per day)
 
-### Background
-A startup's development team has been running their test environments 24/7, resulting in unnecessarily high AWS bills. Management wants to optimize costs by automatically shutting down non-production EC2 instances during off-hours while maintaining the ability to quickly restart them when needed.
+The output should show me the instance IDs that got imported, the Lambda function ARNs, the CloudWatch rule ARNs, and the estimated monthly savings.
 
-### Constraints and Requirements
-- [Must use Pulumi's import functionality to adopt existing EC2 instances without recreation, Lambda functions must handle multiple instances in a single execution to minimize invocations, CloudWatch Events rules must account for EST timezone including daylight saving transitions, Instance state changes must be logged to CloudWatch Logs for audit purposes, Cost calculation must use current EC2 on-demand pricing for the specific instance types, Solution must not affect instances tagged with Environment=production]
+## Background
 
-### Environment Setup
-AWS eu-north-1 region with existing EC2 instances requiring cost optimization. Uses Pulumi TypeScript SDK 3.x, Node.js 18+, and AWS SDK v3. Existing infrastructure includes multiple t3.medium and t3.large instances across development and staging environments. CloudWatch Events and Lambda functions will orchestrate the automated scheduling. No VPC modifications required as instances remain in their current subnets.
+We're a startup and our dev team leaves their test environments running constantly. Management is upset about the AWS bills. We need to shut down non-production instances when nobody is using them but still be able to restart them quickly when needed.
 
-## Project-Specific Conventions
+## Technical requirements
 
-### Resource Naming
-- All resources must use the `environmentSuffix` variable in their names to support multiple PR environments
-- Example: `myresource-${environmentSuffix}` or tagging with EnvironmentSuffix
+- Use Pulumi's import feature so we don't have to recreate existing instances
+- Lambda should handle multiple instances in one run to save on invocations
+- CloudWatch Events needs to handle EST timezone properly including daylight saving
+- Log all instance state changes to CloudWatch Logs for auditing
+- Use actual current EC2 on-demand pricing for the cost calculation
+- Don't touch any instances tagged Environment=production
 
-### Testing Integration  
-- Integration tests should load stack outputs from `cfn-outputs/flat-outputs.json`
-- Tests should validate actual deployed resources
+## Environment details
 
-### Resource Management
-- Infrastructure should be fully destroyable for CI/CD workflows
-- **Exception**: Secrets should be fetched from existing AWS Secrets Manager entries, not created by the stack
-- Avoid using DeletionPolicy: Retain unless absolutely necessary
+We're in ap-southeast-1. Using Pulumi TypeScript SDK 3.x, Node.js 18+, and AWS SDK v3. We have several t3.medium and t3.large instances spread across dev and staging. CloudWatch Events and Lambda will handle the scheduling. The instances stay in their current subnets, no VPC changes needed.
 
-### Security Baseline
-- Implement encryption at rest and in transit
-- Follow principle of least privilege for IAM roles
-- Use AWS Secrets Manager for credential management where applicable
-- Enable appropriate logging and monitoring
+## Project conventions
 
-## Target Region
-All resources should be deployed to: **ap-southeast-1**
+For resource names: use environmentSuffix variable to support multiple PR environments. Like myresource-${environmentSuffix} or tag with EnvironmentSuffix.
+
+For tests: integration tests load outputs from cfn-outputs/flat-outputs.json and validate against real deployed resources.
+
+For resource management: everything should be destroyable for CI/CD. Exception: don't create secrets, fetch them from existing Secrets Manager entries. Avoid DeletionPolicy Retain unless you really need it.
+
+For security: encryption at rest and in transit, least privilege IAM, use Secrets Manager for creds, enable logging and monitoring.
+
+Deploy everything to ap-southeast-1.
