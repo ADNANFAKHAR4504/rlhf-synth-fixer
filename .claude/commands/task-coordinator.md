@@ -127,7 +127,23 @@ Emphasize: "Platform and language are MANDATORY constraints from metadata.json"
 
 **Pre-flight Checks**:
 
-**Validation**: Run Checkpoint K: PR Prerequisites
+**Validation**: Run Checkpoint K: File Location Compliance
+- See `.claude/docs/references/validation-checkpoints.md` for file location rules
+- See `.claude/docs/references/cicd-file-restrictions.md` for complete restrictions
+
+```bash
+# Check what files will be in the PR
+git diff --name-only origin/main...HEAD
+
+# Manually verify all files are in allowed locations:
+# - bin/, lib/, test/, tests/ folders
+# - metadata.json, cdk.json, cdktf.json, Pulumi.yaml, tap.py, tap.go, package.json, package-lock.json at root
+# NO files in .github/, scripts/, docs/, or other locations
+```
+
+**If violations found**: STOP, fix file locations, do NOT proceed
+
+**Validation**: Run Checkpoint L: PR Prerequisites
 - See `.claude/docs/references/validation-checkpoints.md` for prerequisite checks
 
 Script reference:
