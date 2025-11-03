@@ -138,12 +138,17 @@ describe('TapStack integration flow', () => {
     expect(routingTasks.length).toBeGreaterThan(0);
     
     const routingTask = routingTasks[0] as any;
-    const taskStr = JSON.stringify(routingTask);
-    const resourceStr = typeof routingTask.Resource === 'string' 
-      ? routingTask.Resource 
-      : JSON.stringify(routingTask.Resource || {});
+    expect(routingTask.Type).toBe('Task');
     
-    expect(taskStr.includes('lambda') || resourceStr.includes('lambda')).toBe(true);
+    const taskStr = JSON.stringify(routingTask);
+    const hasRoutingConfig = taskStr.includes('UPDATE_ROUTING') && taskStr.includes('targetWeight');
+    expect(hasRoutingConfig).toBe(true);
+    
+    const functions = template.findResources('AWS::Lambda::Function');
+    const processorFn = Object.values(functions).find((fn: any) =>
+      fn.Properties?.Code?.ZipFile?.includes('PROCESS')
+    );
+    expect(processorFn).toBeDefined();
   });
 
   test('notification flow: SNS topic receives migration updates', () => {
