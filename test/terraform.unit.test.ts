@@ -65,20 +65,25 @@ describe('TapStack Terraform Unit Tests - Exact Coverage', () => {
   // -------------------------
   // Data Sources
   // -------------------------
-  describe('Data Sources', () => {
-    [
-      'aws_availability_zones.primary',
-      'aws_availability_zones.secondary',
-      'aws_caller_identity.current',
-      'aws_region.primary',
-      'aws_region.secondary'
-    ].forEach(dataSource => {
-      const dsRegex = dataSource.replace(/\./g, '\\.');
-      test(`Data source "${dataSource}" is defined`, () => {
-        expect(tfContent).toMatch(new RegExp(`data\\s+"${dsRegex}"`));
-      });
+  // -------------------------
+// Data Sources
+// -------------------------
+describe('Data Sources', () => {
+  [
+    'aws_availability_zones.primary',
+    'aws_availability_zones.secondary',
+    'aws_caller_identity.current',
+    'aws_region.primary',
+    'aws_region.secondary'
+  ].forEach(dataSource => {
+    const dsParts = dataSource.split('.');
+    const dsType = dsParts[0];
+    const dsName = dsParts[1];
+    test(`Data source "${dsType}" named "${dsName}" is defined`, () => {
+      expect(tfContent).toMatch(new RegExp(`data\\s+"${dsType}"\\s+"${dsName}"`));
     });
   });
+});
 
   // -------------------------
   // Resources
