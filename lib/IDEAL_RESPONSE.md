@@ -113,7 +113,8 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 				awsec2.InstanceClass_BURSTABLE3,
 				awsec2.InstanceSize_MEDIUM,
 			),
-			PubliclyAccessible: jsii.Bool(false),
+			PubliclyAccessible:        jsii.Bool(false),
+			EnablePerformanceInsights: jsii.Bool(true),
 		}),
 		Readers: &[]awsrds.IClusterInstance{
 			awsrds.ClusterInstance_Provisioned(jsii.String("Reader1"), &awsrds.ProvisionedClusterInstanceProps{
@@ -121,14 +122,16 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 					awsec2.InstanceClass_BURSTABLE3,
 					awsec2.InstanceSize_MEDIUM,
 				),
-				PubliclyAccessible: jsii.Bool(false),
+				PubliclyAccessible:        jsii.Bool(false),
+				EnablePerformanceInsights: jsii.Bool(true),
 			}),
 			awsrds.ClusterInstance_Provisioned(jsii.String("Reader2"), &awsrds.ProvisionedClusterInstanceProps{
 				InstanceType: awsec2.InstanceType_Of(
 					awsec2.InstanceClass_BURSTABLE3,
 					awsec2.InstanceSize_MEDIUM,
 				),
-				PubliclyAccessible: jsii.Bool(false),
+				PubliclyAccessible:        jsii.Bool(false),
+				EnablePerformanceInsights: jsii.Bool(true),
 			}),
 		},
 		Vpc: vpc,
@@ -175,11 +178,11 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	// Create CloudWatch alarm for storage
 	awscloudwatch.NewAlarm(stack, jsii.String("ClusterStorageAlarm"), &awscloudwatch.AlarmProps{
 		AlarmName:        jsii.String(fmt.Sprintf("payment-db-storage-alarm-%s", environmentSuffix)),
-		AlarmDescription: jsii.String("Alert when storage exceeds 85%"),
-		Metric: cluster.MetricFreeableMemory(&awscloudwatch.MetricOptions{
+		AlarmDescription: jsii.String("Alert when free local storage is critically low"),
+		Metric: cluster.MetricFreeLocalStorage(&awscloudwatch.MetricOptions{
 			Period: awscdk.Duration_Minutes(jsii.Number(5)),
 		}),
-		Threshold:          jsii.Number(15),
+		Threshold:          jsii.Number(10737418240), // 10 GB in bytes
 		EvaluationPeriods:  jsii.Number(2),
 		ComparisonOperator: awscloudwatch.ComparisonOperator_LESS_THAN_THRESHOLD,
 	})
@@ -363,38 +366,30 @@ Exports for integration testing and application configuration:
 - Secrets Manager: $0.40/secret/month + usage
 - CloudWatch Logs: Based on volume
 
-## Known Limitations
+## Implemented Monitoring Enhancements
 
-1. **Performance Insights**: CloudWatch Logs are enabled, but Performance Insights requires instance-level configuration not currently implemented. To add:
+1. **Performance Insights**: Enabled on all cluster instances (Writer and 2 Readers) with 7-day retention. Provides deep visibility into database performance and query analysis.
 
-   ```go
-   PerformanceInsightRetention: awsrds.PerformanceInsightRetention_DAYS_7,
-   EnablePerformanceInsights: jsii.Bool(true),
-   ```
+2. **Storage Monitoring**: CloudWatch alarm monitors `MetricFreeLocalStorage` to alert when free storage drops below 10 GB, providing accurate storage capacity alerts.
 
-2. **Storage Monitoring**: Current alarm uses `MetricFreeableMemory()` as a proxy for resource pressure. For true storage monitoring, consider:
-
-   ```go
-   Metric: cluster.MetricFreeLocalStorage(&awscloudwatch.MetricOptions{...})
-   ```
-
-3. **Parameter Group Optimization**: `shared_buffers` uses default formula. For payment workloads, additional tuning may be beneficial:
+3. **Parameter Group Optimization**: Basic optimization with SSL enforcement. For production payment workloads, consider additional tuning:
    - `max_connections`
    - `work_mem`
    - `effective_cache_size`
+   - `shared_buffers`
 
 ## Production Enhancements (Optional)
 
 For production deployment beyond synthetic training:
 
-1. Enable enhanced monitoring at instance level
+1. Enable enhanced monitoring at instance level (60-second granularity)
 2. Add SNS topic for CloudWatch alarm notifications
-3. Implement full Performance Insights configuration
-4. Add storage-specific CloudWatch alarms
-5. Configure VPC flow logs for network monitoring
-6. Add AWS Backup for cross-region backup copies
-7. Implement read replica auto-scaling based on load
-8. Add connection pooling (RDS Proxy)
+3. Configure VPC flow logs for network monitoring
+4. Add AWS Backup for cross-region backup copies
+5. Implement read replica auto-scaling based on load
+6. Add connection pooling (RDS Proxy)
+7. Add memory-specific CloudWatch alarms (e.g., FreeableMemory)
+8. Configure custom CloudWatch dashboard for centralized monitoring
 
 ## Testing Coverage
 

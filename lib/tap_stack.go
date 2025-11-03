@@ -106,7 +106,8 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 				awsec2.InstanceClass_BURSTABLE3,
 				awsec2.InstanceSize_MEDIUM,
 			),
-			PubliclyAccessible: jsii.Bool(false),
+			PubliclyAccessible:        jsii.Bool(false),
+			EnablePerformanceInsights: jsii.Bool(true),
 		}),
 		Readers: &[]awsrds.IClusterInstance{
 			awsrds.ClusterInstance_Provisioned(jsii.String("Reader1"), &awsrds.ProvisionedClusterInstanceProps{
@@ -114,14 +115,16 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 					awsec2.InstanceClass_BURSTABLE3,
 					awsec2.InstanceSize_MEDIUM,
 				),
-				PubliclyAccessible: jsii.Bool(false),
+				PubliclyAccessible:        jsii.Bool(false),
+				EnablePerformanceInsights: jsii.Bool(true),
 			}),
 			awsrds.ClusterInstance_Provisioned(jsii.String("Reader2"), &awsrds.ProvisionedClusterInstanceProps{
 				InstanceType: awsec2.InstanceType_Of(
 					awsec2.InstanceClass_BURSTABLE3,
 					awsec2.InstanceSize_MEDIUM,
 				),
-				PubliclyAccessible: jsii.Bool(false),
+				PubliclyAccessible:        jsii.Bool(false),
+				EnablePerformanceInsights: jsii.Bool(true),
 			}),
 		},
 		Vpc: vpc,
@@ -168,11 +171,11 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	// Create CloudWatch alarm for storage
 	awscloudwatch.NewAlarm(stack, jsii.String("ClusterStorageAlarm"), &awscloudwatch.AlarmProps{
 		AlarmName:        jsii.String(fmt.Sprintf("payment-db-storage-alarm-%s", environmentSuffix)),
-		AlarmDescription: jsii.String("Alert when storage exceeds 85%"),
-		Metric: cluster.MetricFreeableMemory(&awscloudwatch.MetricOptions{
+		AlarmDescription: jsii.String("Alert when free local storage is critically low"),
+		Metric: cluster.MetricFreeLocalStorage(&awscloudwatch.MetricOptions{
 			Period: awscdk.Duration_Minutes(jsii.Number(5)),
 		}),
-		Threshold:          jsii.Number(15),
+		Threshold:          jsii.Number(10737418240), // 10 GB in bytes
 		EvaluationPeriods:  jsii.Number(2),
 		ComparisonOperator: awscloudwatch.ComparisonOperator_LESS_THAN_THRESHOLD,
 	})
