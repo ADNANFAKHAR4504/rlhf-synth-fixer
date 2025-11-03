@@ -38,7 +38,12 @@ import {
 } from '@aws-sdk/client-iam';
 
 // Load stack outputs
-const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+const outputsPath = path.join(
+  __dirname,
+  '..',
+  'cfn-outputs',
+  'flat-outputs.json'
+);
 const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
 
 const region = outputs.region || 'eu-west-2';
@@ -84,11 +89,13 @@ describe('TapStack Integration Tests', () => {
       expect(response.Subnets).toBeDefined();
       expect(response.Subnets!.length).toBeGreaterThanOrEqual(2);
 
-      const azs = new Set(response.Subnets!.map((subnet) => subnet.AvailabilityZone));
+      const azs = new Set(
+        response.Subnets!.map(subnet => subnet.AvailabilityZone)
+      );
       expect(azs.size).toBeGreaterThanOrEqual(2);
 
       // Verify CIDR blocks
-      const cidrBlocks = response.Subnets!.map((subnet) => subnet.CidrBlock);
+      const cidrBlocks = response.Subnets!.map(subnet => subnet.CidrBlock);
       expect(cidrBlocks).toContain('172.16.1.0/24');
       expect(cidrBlocks).toContain('172.16.2.0/24');
     }, 30000);
@@ -133,7 +140,9 @@ describe('TapStack Integration Tests', () => {
 
       // Verify ingress rules allow MySQL port 3306
       const ingressRules = rdsSecurityGroup.IpPermissions || [];
-      const mysqlRule = ingressRules.find((rule) => rule.FromPort === 3306 && rule.ToPort === 3306);
+      const mysqlRule = ingressRules.find(
+        rule => rule.FromPort === 3306 && rule.ToPort === 3306
+      );
       expect(mysqlRule).toBeDefined();
     }, 30000);
 
@@ -185,7 +194,9 @@ describe('TapStack Integration Tests', () => {
 
     it('should have RDS endpoint accessible', async () => {
       expect(outputs.rdsEndpoint).toBeDefined();
-      expect(outputs.rdsEndpoint).toMatch(/^rds-mysql-.*\..*\.rds\.amazonaws\.com:3306$/);
+      expect(outputs.rdsEndpoint).toMatch(
+        /^rds-mysql-.*\..*\.rds\.amazonaws\.com:3306$/
+      );
     }, 30000);
 
     it('should have DB subnet group in multiple AZs', async () => {
@@ -194,7 +205,8 @@ describe('TapStack Integration Tests', () => {
         DBInstanceIdentifier: dbInstanceId,
       });
       const dbResponse = await rdsClient.send(dbCommand);
-      const subnetGroupName = dbResponse.DBInstances![0].DBSubnetGroup!.DBSubnetGroupName;
+      const subnetGroupName =
+        dbResponse.DBInstances![0].DBSubnetGroup!.DBSubnetGroupName;
 
       const command = new DescribeDBSubnetGroupsCommand({
         DBSubnetGroupName: subnetGroupName,
@@ -209,7 +221,7 @@ describe('TapStack Integration Tests', () => {
       expect(subnetGroup.Subnets!.length).toBeGreaterThanOrEqual(2);
 
       const azs = new Set(
-        subnetGroup.Subnets!.map((subnet) => subnet.SubnetAvailabilityZone!.Name)
+        subnetGroup.Subnets!.map(subnet => subnet.SubnetAvailabilityZone!.Name)
       );
       expect(azs.size).toBeGreaterThanOrEqual(2);
     }, 30000);
@@ -229,7 +241,9 @@ describe('TapStack Integration Tests', () => {
 
     it('should have SNS topic accessible', async () => {
       expect(outputs.snsTopicArn).toBeDefined();
-      expect(outputs.snsTopicArn).toMatch(/^arn:aws:sns:.*:.*:alerts-topic-.*$/);
+      expect(outputs.snsTopicArn).toMatch(
+        /^arn:aws:sns:.*:.*:alerts-topic-.*$/
+      );
     }, 30000);
 
     it('should list subscriptions for SNS topic', async () => {
@@ -360,7 +374,9 @@ describe('TapStack Integration Tests', () => {
       const assumeRolePolicy = JSON.parse(
         decodeURIComponent(response.Role!.AssumeRolePolicyDocument!)
       );
-      expect(assumeRolePolicy.Statement[0].Principal.Service).toContain('lambda.amazonaws.com');
+      expect(assumeRolePolicy.Statement[0].Principal.Service).toContain(
+        'lambda.amazonaws.com'
+      );
     }, 30000);
 
     it('should have required policies attached to Lambda role', async () => {
@@ -380,7 +396,9 @@ describe('TapStack Integration Tests', () => {
       expect(response.AttachedPolicies).toBeDefined();
       expect(response.AttachedPolicies!.length).toBeGreaterThanOrEqual(2);
 
-      const policyArns = response.AttachedPolicies!.map((policy) => policy.PolicyArn);
+      const policyArns = response.AttachedPolicies!.map(
+        policy => policy.PolicyArn
+      );
       expect(policyArns).toContain(
         'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole'
       );
@@ -456,7 +474,9 @@ describe('TapStack Integration Tests', () => {
       );
 
       // Verify Lambda has access to secret
-      expect(configResponse.Environment!.Variables!.DB_SECRET_ARN).toBe(outputs.dbSecretArn);
+      expect(configResponse.Environment!.Variables!.DB_SECRET_ARN).toBe(
+        outputs.dbSecretArn
+      );
 
       // Verify Lambda is in the same VPC as RDS
       expect(configResponse.VpcConfig!.VpcId).toBe(outputs.vpcId);
@@ -480,7 +500,9 @@ describe('TapStack Integration Tests', () => {
         ],
       });
       const subnetResponse = await ec2Client.send(subnetCommand);
-      const azs = new Set(subnetResponse.Subnets!.map((subnet) => subnet.AvailabilityZone));
+      const azs = new Set(
+        subnetResponse.Subnets!.map(subnet => subnet.AvailabilityZone)
+      );
       expect(azs.size).toBeGreaterThanOrEqual(2);
     }, 30000);
 
