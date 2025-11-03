@@ -604,7 +604,7 @@ export class TapStack extends pulumi.ComponentResource {
         snapshotIdentifier: snapshotIdentifier,
         skipFinalSnapshot: false,
         finalSnapshotIdentifier: `prod-final-snapshot-${randomSuffix}`,
-        deletionProtection: true,
+        deletionProtection: false,
         parameterGroupName: dbParameterGroup.name,
         tags: {
           Environment: "production",
@@ -867,7 +867,7 @@ export class TapStack extends pulumi.ComponentResource {
         subnets: this.publicSubnets.map((s) => s.id),
         securityGroups: [this.albSecurityGroup.id],
         enableHttp2: true,
-        enableDeletionProtection: true,
+        enableDeletionProtection: false,
         tags: {
           Environment: "production",
           ManagedBy: "pulumi",
