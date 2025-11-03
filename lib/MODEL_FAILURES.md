@@ -187,6 +187,59 @@ version: rds.AuroraPostgresEngineVersion.VER_15_12,
 
 ---
 
+## Issue 13: Invalid DB Parameter - SSL Configuration
+
+**Problem**: Deployment failed with error: "Invalid / Unmodifiable / Unsupported DB Parameter: ssl"
+```
+CREATE_FAILED | AWS::RDS::DBParameterGroup | AuroraCluster/ParameterGroup/InstanceParameterGroup
+Resource handler returned message: "Invalid / Unmodifiable / Unsupported DB Parameter: ssl"
+```
+
+**Root Cause**: The parameter group was using invalid parameters for Aurora PostgreSQL:
+1. `ssl: '1'` - Not a valid parameter for Aurora PostgreSQL
+2. `ssl_min_protocol_version: 'TLSv1.2'` - Not a valid parameter for Aurora PostgreSQL
+3. Parameter group was still using version `VER_13_7` instead of `VER_15_12`
+
+These parameters are valid for standard RDS PostgreSQL but not for Aurora PostgreSQL.
+
+**Solution**: Updated parameter group configuration
+```typescript
+// Before (failed):
+engine: rds.DatabaseClusterEngine.auroraPostgres({
+  version: rds.AuroraPostgresEngineVersion.VER_13_7,
+}),
+parameters: {
+  shared_preload_libraries: 'pg_stat_statements',
+  log_statement: 'all',
+  log_duration: '1',
+  ssl: '1',  // ❌ Invalid
+  ssl_min_protocol_version: 'TLSv1.2',  // ❌ Invalid
+},
+
+// After (working):
+engine: rds.DatabaseClusterEngine.auroraPostgres({
+  version: rds.AuroraPostgresEngineVersion.VER_15_12,
+}),
+parameters: {
+  shared_preload_libraries: 'pg_stat_statements',
+  log_statement: 'all',
+  log_duration: '1',
+  'rds.force_ssl': '1',  // ✅ Correct parameter for Aurora
+},
+```
+
+**Result**: Parameter group now creates successfully with proper SSL enforcement using Aurora-specific parameter.
+
+**AWS Documentation Verification**: ✅ Confirmed via official AWS documentation at `docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/AuroraPostgreSQL.Security.html`
+- Parameter name: `rds.force_ssl` ✅ Correct
+- Value for SSL enforcement: `1` (on) ✅ Correct
+- Aurora PostgreSQL 15.12: Default is `0` (off), must explicitly set to `1` ✅ Set correctly
+- No domain or SSL certificate required ✅ AWS manages automatically
+
+**Key Lesson**: Aurora PostgreSQL uses different parameters than standard RDS PostgreSQL. Use `rds.force_ssl` instead of `ssl`, and SSL protocol version is managed at the connection level, not in parameter groups. Always verify parameters against Aurora-specific documentation.
+
+---
+
 ## Production-Ready Features Implemented
 
 **Security**:

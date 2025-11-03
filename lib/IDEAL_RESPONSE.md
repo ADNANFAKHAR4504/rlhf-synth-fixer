@@ -631,14 +631,13 @@ export class AuroraClusterConstruct extends Construct {
     // Create parameter group
     const parameterGroup = new rds.ParameterGroup(this, 'ParameterGroup', {
       engine: rds.DatabaseClusterEngine.auroraPostgres({
-        version: rds.AuroraPostgresEngineVersion.VER_13_7,
+        version: rds.AuroraPostgresEngineVersion.VER_15_12,
       }),
       parameters: {
         shared_preload_libraries: 'pg_stat_statements',
         log_statement: 'all',
         log_duration: '1',
-        ssl: '1',
-        ssl_min_protocol_version: 'TLSv1.2',
+        'rds.force_ssl': '1',
       },
     });
 
