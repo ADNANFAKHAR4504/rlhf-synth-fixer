@@ -18,8 +18,15 @@
     "SecretsManager",
     "SNS",
     "CloudWatch",
-    "IAM"
+    "IAM",
+    "KMS",
+    "NetworkFirewall",
+    "Transfer",
+    "Evidently",
+    "AppRunner",
+    "FIS",
+    "RAM"
   ],
-  "training_quality": 8,
+  "training_quality": 9,
   "author": "mayanksethi-turing"
 }
