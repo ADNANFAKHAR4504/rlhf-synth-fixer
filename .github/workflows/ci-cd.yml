@@ -755,22 +755,24 @@ jobs:
 
             ## Step 4: Update metadata.json with Training Quality
 
-            **IMPORTANT**: Update metadata.json with the training quality score:
+            **MANDATORY ACTION**: You MUST update metadata.json with the training quality score using the Bash tool.
+
+            After calculating your score, execute this command using the Bash tool (replace <score> with actual numeric value 0-10):
 
             ```bash
-            # For CI/CD Pipeline tasks: Only add training_quality (NO aws_services needed)
-            TRAINING_QUALITY=<your_calculated_score>  # Replace with actual score (0-10)
-
-            jq --arg tq "$TRAINING_QUALITY" \
-              '.training_quality = ($tq | tonumber)' \
-              metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json
-
-            # Verify the update
-            echo "✅ metadata.json updated with training_quality: $TRAINING_QUALITY/10"
-            jq '.training_quality' metadata.json
+            jq --argjson tq <score> '.training_quality = $tq' metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json && echo "Updated training_quality to <score>/10" && cat metadata.json
             ```
 
-            **Note**: CI/CD Pipeline tasks do NOT require aws_services field. Do NOT flag aws_services as missing.
+            Example if score is 10:
+            ```bash
+            jq --argjson tq 10 '.training_quality = $tq' metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json && echo "Updated training_quality to 10/10" && cat metadata.json
+            ```
+
+            **Verification**: After running the command, verify the output shows training_quality field was added to metadata.json.
+
+            **CRITICAL**: Do NOT skip this step. The metadata.json MUST be updated before posting the review comment.
+
+            **Note**: CI/CD Pipeline tasks do NOT require aws_services field. Do NOT flag aws_services as missing for CI/CD tasks.
 
             ## Step 5: Post Review Comment
 
