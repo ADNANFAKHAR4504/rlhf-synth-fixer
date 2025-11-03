@@ -1,6 +1,5 @@
 import { App, Testing } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
-import { DocumentManagementStack } from '../lib/document-management-stack';
 
 describe('DocumentManagementStack Unit Tests', () => {
   describe('Stack Instantiation', () => {
@@ -197,8 +196,11 @@ describe('DocumentManagementStack Unit Tests', () => {
       synthesized = Testing.synth(tapStack);
 
       expect(synthesized).toContain('PROVISIONED');
-      expect(synthesized).toContain('"read_capacity":10');
-      expect(synthesized).toContain('"write_capacity":10');
+      const synthesizedObj = JSON.parse(synthesized);
+      const dynamoResources = Object.values(synthesizedObj.resource.aws_dynamodb_table);
+      const table = dynamoResources[0] as any;
+      expect(table.read_capacity).toBe(10);
+      expect(table.write_capacity).toBe(10);
     });
 
     test('should use PROVISIONED billing for prod environment', () => {
@@ -210,8 +212,11 @@ describe('DocumentManagementStack Unit Tests', () => {
       synthesized = Testing.synth(tapStack);
 
       expect(synthesized).toContain('PROVISIONED');
-      expect(synthesized).toContain('"read_capacity":25');
-      expect(synthesized).toContain('"write_capacity":25');
+      const synthesizedObj = JSON.parse(synthesized);
+      const dynamoResources = Object.values(synthesizedObj.resource.aws_dynamodb_table);
+      const table = dynamoResources[0] as any;
+      expect(table.read_capacity).toBe(25);
+      expect(table.write_capacity).toBe(25);
     });
 
     test('should have documentId as hash key', () => {
@@ -295,7 +300,10 @@ describe('DocumentManagementStack Unit Tests', () => {
       });
       synthesized = Testing.synth(tapStack);
 
-      expect(synthesized).toContain('"timeout":30');
+      const synthesizedObj = JSON.parse(synthesized);
+      const lambdaResources = Object.values(synthesizedObj.resource.aws_lambda_function);
+      const lambda = lambdaResources[0] as any;
+      expect(lambda.timeout).toBe(30);
     });
 
     test('should have environment-specific timeout for staging (60s)', () => {
@@ -306,7 +314,10 @@ describe('DocumentManagementStack Unit Tests', () => {
       });
       synthesized = Testing.synth(tapStack);
 
-      expect(synthesized).toContain('"timeout":60');
+      const synthesizedObj = JSON.parse(synthesized);
+      const lambdaResources = Object.values(synthesizedObj.resource.aws_lambda_function);
+      const lambda = lambdaResources[0] as any;
+      expect(lambda.timeout).toBe(60);
     });
 
     test('should have environment-specific timeout for prod (120s)', () => {
@@ -317,7 +328,10 @@ describe('DocumentManagementStack Unit Tests', () => {
       });
       synthesized = Testing.synth(tapStack);
 
-      expect(synthesized).toContain('"timeout":120');
+      const synthesizedObj = JSON.parse(synthesized);
+      const lambdaResources = Object.values(synthesizedObj.resource.aws_lambda_function);
+      const lambda = lambdaResources[0] as any;
+      expect(lambda.timeout).toBe(120);
     });
 
     test('should have environment-specific memory for dev (256MB)', () => {
@@ -328,7 +342,10 @@ describe('DocumentManagementStack Unit Tests', () => {
       });
       synthesized = Testing.synth(tapStack);
 
-      expect(synthesized).toContain('"memory_size":256');
+      const synthesizedObj = JSON.parse(synthesized);
+      const lambdaResources = Object.values(synthesizedObj.resource.aws_lambda_function);
+      const lambda = lambdaResources[0] as any;
+      expect(lambda.memory_size).toBe(256);
     });
 
     test('should have environment-specific memory for staging (512MB)', () => {
@@ -339,7 +356,10 @@ describe('DocumentManagementStack Unit Tests', () => {
       });
       synthesized = Testing.synth(tapStack);
 
-      expect(synthesized).toContain('"memory_size":512');
+      const synthesizedObj = JSON.parse(synthesized);
+      const lambdaResources = Object.values(synthesizedObj.resource.aws_lambda_function);
+      const lambda = lambdaResources[0] as any;
+      expect(lambda.memory_size).toBe(512);
     });
 
     test('should have environment-specific memory for prod (1024MB)', () => {
@@ -350,7 +370,10 @@ describe('DocumentManagementStack Unit Tests', () => {
       });
       synthesized = Testing.synth(tapStack);
 
-      expect(synthesized).toContain('"memory_size":1024');
+      const synthesizedObj = JSON.parse(synthesized);
+      const lambdaResources = Object.values(synthesizedObj.resource.aws_lambda_function);
+      const lambda = lambdaResources[0] as any;
+      expect(lambda.memory_size).toBe(1024);
     });
 
     test('should have environment variables configured', () => {
@@ -445,7 +468,10 @@ describe('DocumentManagementStack Unit Tests', () => {
       });
       synthesized = Testing.synth(tapStack);
 
-      expect(synthesized).toContain('"threshold":5');
+      const synthesizedObj = JSON.parse(synthesized);
+      const alarmResources = Object.values(synthesizedObj.resource.aws_cloudwatch_metric_alarm);
+      const alarm = alarmResources[0] as any;
+      expect(alarm.threshold).toBe(5);
     });
 
     test('should have environment-specific thresholds for staging', () => {
@@ -456,7 +482,10 @@ describe('DocumentManagementStack Unit Tests', () => {
       });
       synthesized = Testing.synth(tapStack);
 
-      expect(synthesized).toContain('"threshold":10');
+      const synthesizedObj = JSON.parse(synthesized);
+      const alarmResources = Object.values(synthesizedObj.resource.aws_cloudwatch_metric_alarm);
+      const alarm = alarmResources[0] as any;
+      expect(alarm.threshold).toBe(10);
     });
 
     test('should have environment-specific thresholds for prod', () => {
@@ -467,7 +496,10 @@ describe('DocumentManagementStack Unit Tests', () => {
       });
       synthesized = Testing.synth(tapStack);
 
-      expect(synthesized).toContain('"threshold":20');
+      const synthesizedObj = JSON.parse(synthesized);
+      const alarmResources = Object.values(synthesizedObj.resource.aws_cloudwatch_metric_alarm);
+      const alarm = alarmResources[0] as any;
+      expect(alarm.threshold).toBe(20);
     });
 
     test('should configure alarms with correct evaluation periods', () => {
@@ -478,7 +510,10 @@ describe('DocumentManagementStack Unit Tests', () => {
       });
       synthesized = Testing.synth(tapStack);
 
-      expect(synthesized).toContain('"evaluation_periods":2');
+      const synthesizedObj = JSON.parse(synthesized);
+      const alarmResources = Object.values(synthesizedObj.resource.aws_cloudwatch_metric_alarm);
+      const alarm = alarmResources[0] as any;
+      expect(alarm.evaluation_periods).toBe(2);
     });
 
     test('should configure alarms with correct period', () => {
@@ -489,7 +524,10 @@ describe('DocumentManagementStack Unit Tests', () => {
       });
       synthesized = Testing.synth(tapStack);
 
-      expect(synthesized).toContain('"period":300');
+      const synthesizedObj = JSON.parse(synthesized);
+      const alarmResources = Object.values(synthesizedObj.resource.aws_cloudwatch_metric_alarm);
+      const alarm = alarmResources[0] as any;
+      expect(alarm.period).toBe(300);
     });
   });
 
@@ -510,7 +548,8 @@ describe('DocumentManagementStack Unit Tests', () => {
       });
       synthesized = Testing.synth(tapStack);
 
-      expect(synthesized).toContain('"provider":{"aws":[{"region":"ap-southeast-1"');
+      const synthesizedObj = JSON.parse(synthesized);
+      expect(synthesizedObj.provider.aws[0].region).toBe('ap-southeast-1');
     });
 
     test('should configure Archive provider', () => {
@@ -521,7 +560,8 @@ describe('DocumentManagementStack Unit Tests', () => {
       });
       synthesized = Testing.synth(tapStack);
 
-      expect(synthesized).toContain('"archive"');
+      const synthesizedObj = JSON.parse(synthesized);
+      expect(synthesizedObj.provider).toHaveProperty('archive');
     });
 
     test('should configure S3 backend', () => {
@@ -532,8 +572,9 @@ describe('DocumentManagementStack Unit Tests', () => {
       });
       synthesized = Testing.synth(tapStack);
 
-      expect(synthesized).toContain('"backend":{"s3"');
-      expect(synthesized).toContain('"encrypt":true');
+      const synthesizedObj = JSON.parse(synthesized);
+      expect(synthesizedObj.terraform.backend).toHaveProperty('s3');
+      expect(synthesizedObj.terraform.backend.s3.encrypt).toBe(true);
     });
 
     test('should use custom state bucket when provided', () => {
