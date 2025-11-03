@@ -1,0 +1,27 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349145",
+  "team": "6",
+  "startedAt": "2025-11-03T08:50:40.776Z",
+  "subtask": "CI/CD Pipeline",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "VPC",
+    "S3",
+    "KMS",
+    "IAM",
+    "CloudWatch Logs",
+    "CloudWatch Alarms",
+    "CloudWatch Dashboard",
+    "SNS",
+    "SQS",
+    "CodeBuild"
+  ]
+}
