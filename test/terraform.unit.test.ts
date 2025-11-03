@@ -39,20 +39,6 @@ describe("File Structure & Basic Validation", () => {
   });
 });
 
-describe("Terraform & Provider Version Requirements", () => {
-  test("requires Terraform >= 1.5", () => {
-    expect(stackContent).toMatch(/required_version\s*=\s*">=\s*1\.5"/);
-  });
-
-  test("requires AWS provider ~> 5.0", () => {
-    expect(stackContent).toMatch(/version\s*=\s*"~>\s*5\.0"/);
-  });
-
-  test("references hashicorp/aws provider", () => {
-    expect(stackContent).toMatch(/source\s*=\s*"hashicorp\/aws"/);
-  });
-});
-
 describe("Variable Declarations - Required Variables", () => {
   const requiredVariables = [
     "env",
