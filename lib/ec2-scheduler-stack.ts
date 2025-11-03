@@ -189,9 +189,11 @@ export class Ec2SchedulerStack extends pulumi.ComponentResource {
         handler: 'index.handler',
         runtime: aws.lambda.Runtime.NodeJS18dX,
         timeout: 60,
+        reservedConcurrentExecutions: 1,
         environment: {
           variables: {
             TARGET_ENVIRONMENTS: 'development,staging',
+            AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
           },
         },
         tags: {
@@ -213,9 +215,11 @@ export class Ec2SchedulerStack extends pulumi.ComponentResource {
         handler: 'index.handler',
         runtime: aws.lambda.Runtime.NodeJS18dX,
         timeout: 60,
+        reservedConcurrentExecutions: 1,
         environment: {
           variables: {
             TARGET_ENVIRONMENTS: 'development,staging',
+            AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
           },
         },
         tags: {

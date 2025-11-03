@@ -31,7 +31,8 @@ export class CostCalculationStack extends pulumi.ComponentResource {
     const { instanceIds } = args;
 
     // EC2 pricing per hour for ap-southeast-1 (Singapore)
-    // These are approximate on-demand prices
+    // These are approximate on-demand prices as of January 2025
+    // Prices may vary - verify current pricing at https://aws.amazon.com/ec2/pricing/on-demand/
     const pricingMap: { [key: string]: number } = {
       't3.micro': 0.0132,
       't3.small': 0.0264,
