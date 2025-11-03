@@ -1,6 +1,6 @@
-# CDKTF Infrastructure for Containerized Web Application - IDEAL RESPONSE
+# cdktf Infrastructure for Containerized Web Application - IDEAL RESPONSE
 
-This is the corrected and production-ready implementation of a complete ECS Fargate infrastructure with Application Load Balancer, auto-scaling, and Route53 DNS configuration using CDKTF with TypeScript.
+This is the corrected and production-ready implementation of a complete ECS Fargate infrastructure with Application Load Balancer, auto-scaling, and Route53 DNS configuration using cdktf with ts.
 
 ## Key Improvements Over MODEL_RESPONSE
 
@@ -10,7 +10,7 @@ This IDEAL_RESPONSE includes critical infrastructure fixes that were missing fro
 2. **Private Route Table Added**: Complete routing configuration for private subnets
 3. **S3 Bucket Policy Added**: ALB can now write access logs to S3 bucket
 4. **Deletion Protection Fixed**: Changed to false for destroyable test infrastructure
-5. **Certificate Validation API Fixed**: Corrected CDKTF API usage for domain validation options
+5. **Certificate Validation API Fixed**: Corrected cdktf API usage for domain validation options
 6. **Code Quality**: All lint, build, and synth checks pass successfully
 
 ## Infrastructure Components
@@ -331,7 +331,7 @@ export class TapStack extends TerraformStack {
             Sid: 'AWSLogDeliveryWrite',
             Effect: 'Allow',
             Principal: {
-              AWS: `arn:aws:iam::${elbServiceAccount.arn}:root`,
+              AWS: `arn:aws:iam::${elbServiceAccount.id}:root`,
             },
             Action: 's3:PutObject',
             Resource: `${albLogsBucket.arn}/*`,
@@ -340,7 +340,7 @@ export class TapStack extends TerraformStack {
             Sid: 'AWSLogDeliveryAclCheck',
             Effect: 'Allow',
             Principal: {
-              AWS: `arn:aws:iam::${elbServiceAccount.arn}:root`,
+              AWS: `arn:aws:iam::${elbServiceAccount.id}:root`,
             },
             Action: 's3:GetBucketAcl',
             Resource: albLogsBucket.arn,
@@ -500,7 +500,7 @@ export class TapStack extends TerraformStack {
 
     // Route53 Hosted Zone
     const hostedZone = new Route53Zone(this, 'hosted-zone', {
-      name: 'example.com',
+      name: `myapp-${props.environmentSuffix}.example.net`,
       tags: {
         Name: `example-zone-${props.environmentSuffix}`,
       },
@@ -508,7 +508,7 @@ export class TapStack extends TerraformStack {
 
     // ACM Certificate
     const certificate = new AcmCertificate(this, 'certificate', {
-      domainName: 'api.example.com',
+      domainName: `api.myapp-${props.environmentSuffix}.example.net`,
       validationMethod: 'DNS',
       tags: {
         Name: `api-cert-${props.environmentSuffix}`,
@@ -535,7 +535,7 @@ export class TapStack extends TerraformStack {
     );
 
     // HTTPS Listener
-    new LbListener(this, 'https-listener', {
+    const httpsListener = new LbListener(this, 'https-listener', {
       loadBalancerArn: alb.arn,
       port: 443,
       protocol: 'HTTPS',
@@ -552,7 +552,7 @@ export class TapStack extends TerraformStack {
     // Route53 A Record
     new Route53Record(this, 'api-record', {
       zoneId: hostedZone.zoneId,
-      name: 'api.example.com',
+      name: `api.myapp-${props.environmentSuffix}.example.net`,
       type: 'A',
       alias: {
         name: alb.dnsName,
@@ -587,7 +587,7 @@ export class TapStack extends TerraformStack {
       tags: {
         Name: `nodejs-api-service-${props.environmentSuffix}`,
       },
-      dependsOn: [targetGroup],
+      dependsOn: [targetGroup, httpsListener],
     });
 
     // Auto Scaling Target
@@ -623,7 +623,7 @@ export class TapStack extends TerraformStack {
     });
 
     new TerraformOutput(this, 'api-url', {
-      value: 'https://api.example.com',
+      value: `https://api.myapp-${props.environmentSuffix}.example.net`,
       description: 'API URL',
     });
 
@@ -645,8 +645,8 @@ export class TapStack extends TerraformStack {
 All quality checks pass successfully:
 
 - **Lint**: PASSED (ESLint with Prettier)
-- **Build**: PASSED (TypeScript compilation)
-- **Synth**: PASSED (CDKTF synthesis)
+- **Build**: PASSED (ts compilation)
+- **Synth**: PASSED (cdktf synthesis)
 
 ## Deployment Instructions
 
@@ -672,7 +672,7 @@ cdktf deploy '*' --auto-approve
 
 4. Verify deployment:
 ```bash
-curl https://api.example.com/health
+curl https://api.myapp-${ENVIRONMENT_SUFFIX}.example.net/health
 ```
 
 ## Key Technical Decisions
@@ -691,7 +691,7 @@ For production deployment:
 - Enable ALB deletion protection (`enableDeletionProtection: true`)
 - Add NAT Gateway in second AZ for high availability
 - Increase container resources based on load testing
-- Configure custom domain in Route53 (replace example.com)
+- Configure custom domain in Route53 (replace example.net with your domain)
 - Add WAF rules for security
 - Enable ECS Container Insights for monitoring
 - Configure backup and disaster recovery

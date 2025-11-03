@@ -278,7 +278,7 @@ export class TapStack extends TerraformStack {
             Sid: 'AWSLogDeliveryWrite',
             Effect: 'Allow',
             Principal: {
-              AWS: `arn:aws:iam::${elbServiceAccount.arn}:root`,
+              AWS: `arn:aws:iam::${elbServiceAccount.id}:root`,
             },
             Action: 's3:PutObject',
             Resource: `${albLogsBucket.arn}/*`,
@@ -287,7 +287,7 @@ export class TapStack extends TerraformStack {
             Sid: 'AWSLogDeliveryAclCheck',
             Effect: 'Allow',
             Principal: {
-              AWS: `arn:aws:iam::${elbServiceAccount.arn}:root`,
+              AWS: `arn:aws:iam::${elbServiceAccount.id}:root`,
             },
             Action: 's3:GetBucketAcl',
             Resource: albLogsBucket.arn,
@@ -447,7 +447,7 @@ export class TapStack extends TerraformStack {
 
     // Route53 Hosted Zone
     const hostedZone = new Route53Zone(this, 'hosted-zone', {
-      name: 'example.com',
+      name: `myapp-${props.environmentSuffix}.example.net`,
       tags: {
         Name: `example-zone-${props.environmentSuffix}`,
       },
@@ -455,7 +455,7 @@ export class TapStack extends TerraformStack {
 
     // ACM Certificate
     const certificate = new AcmCertificate(this, 'certificate', {
-      domainName: 'api.example.com',
+      domainName: `api.myapp-${props.environmentSuffix}.example.net`,
       validationMethod: 'DNS',
       tags: {
         Name: `api-cert-${props.environmentSuffix}`,
@@ -482,7 +482,7 @@ export class TapStack extends TerraformStack {
     );
 
     // HTTPS Listener
-    new LbListener(this, 'https-listener', {
+    const httpsListener = new LbListener(this, 'https-listener', {
       loadBalancerArn: alb.arn,
       port: 443,
       protocol: 'HTTPS',
@@ -499,7 +499,7 @@ export class TapStack extends TerraformStack {
     // Route53 A Record
     new Route53Record(this, 'api-record', {
       zoneId: hostedZone.zoneId,
-      name: 'api.example.com',
+      name: `api.myapp-${props.environmentSuffix}.example.net`,
       type: 'A',
       alias: {
         name: alb.dnsName,
@@ -534,7 +534,7 @@ export class TapStack extends TerraformStack {
       tags: {
         Name: `nodejs-api-service-${props.environmentSuffix}`,
       },
-      dependsOn: [targetGroup],
+      dependsOn: [targetGroup, httpsListener],
     });
 
     // Auto Scaling Target
@@ -570,7 +570,7 @@ export class TapStack extends TerraformStack {
     });
 
     new TerraformOutput(this, 'api-url', {
-      value: 'https://api.example.com',
+      value: `https://api.myapp-${props.environmentSuffix}.example.net`,
       description: 'API URL',
     });
 
