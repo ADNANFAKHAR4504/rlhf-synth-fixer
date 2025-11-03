@@ -6,9 +6,9 @@
   "po_id": "i03v6",
   "team": "synth",
   "startedAt": "2025-11-03T14:24:31.563628+05:30",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "IaC Program Optimization",
   "subject_labels": [
-    "Infrastructure Analysis/Monitoring"
+    "IaC Optimization"
   ],
   "aws_services": [
     "S3",
