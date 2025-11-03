@@ -6,7 +6,9 @@
   "team": "synth",
   "startedAt": "2025-11-03T19:28:58+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": ["Cloud Environment Setup"],
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
   "po_id": "wjnwn0",
   "aws_services": [
     "DynamoDB",
@@ -16,5 +18,11 @@
     "IAM"
   ],
   "region": "ap-southeast-1",
-  "training_quality": 10
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
