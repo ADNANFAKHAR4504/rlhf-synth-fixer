@@ -1,10 +1,11 @@
 # DynamoDB Infrastructure Optimization - Pulumi TypeScript Solution
 
-This solution refactors the existing DynamoDB infrastructure to use on-demand billing, adds comprehensive monitoring, security controls, and proper tagging across all resources.
+This solution refactors the existing DynamoDB infrastructure to use on-demand billing, adds comprehensive monitoring, security controls, and proper tagging across all resources
 
 ## Architecture Overview
 
 The solution creates three DynamoDB tables (events, sessions, users) with:
+
 - On-demand billing mode for cost optimization
 - CloudWatch alarms for error monitoring
 - IAM roles with least-privilege access
@@ -68,7 +69,12 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Define table configurations
     const tableConfigs = [
-      { name: 'events', hashKey: 'eventId', enableStreams: true, enableInsights: true },
+      {
+        name: 'events',
+        hashKey: 'eventId',
+        enableStreams: true,
+        enableInsights: true,
+      },
       { name: 'sessions', hashKey: 'sessionId', enableGSI: true },
       { name: 'users', hashKey: 'userId', enablePITR: true },
     ];
@@ -79,12 +85,12 @@ export class TapStack extends pulumi.ComponentResource {
     const streamArnsList: pulumi.Output<string | undefined>[] = [];
 
     // Create DynamoDB tables
-    const tables = tableConfigs.map((config) => {
+    const tables = tableConfigs.map(config => {
       const tableName = config.name;
       const resourceName = `${tableName}-${environmentSuffix}`;
 
       // Merge tags with table-specific environment suffix
-      const tableTags = pulumi.output(baseTags).apply((bt) => ({
+      const tableTags = pulumi.output(baseTags).apply(bt => ({
         ...bt,
         Environment: environmentSuffix,
         Team: bt.Team || 'data-analytics',
@@ -106,7 +112,9 @@ export class TapStack extends pulumi.ComponentResource {
               ]
             : [{ name: config.hashKey, type: 'S' }],
           streamEnabled: config.enableStreams || false,
-          streamViewType: config.enableStreams ? 'NEW_AND_OLD_IMAGES' : undefined,
+          streamViewType: config.enableStreams
+            ? 'NEW_AND_OLD_IMAGES'
+            : undefined,
           serverSideEncryption: {
             enabled: true,
           },
@@ -212,7 +220,7 @@ export class TapStack extends pulumi.ComponentResource {
         `dynamodb-${tableName}-read-policy-${environmentSuffix}`,
         {
           role: readRole.id,
-          policy: table.arn.apply((arn) =>
+          policy: table.arn.apply(arn =>
             JSON.stringify({
               Version: '2012-10-17',
               Statement: [
@@ -261,7 +269,7 @@ export class TapStack extends pulumi.ComponentResource {
         `dynamodb-${tableName}-write-policy-${environmentSuffix}`,
         {
           role: writeRole.id,
-          policy: table.arn.apply((arn) =>
+          policy: table.arn.apply(arn =>
             JSON.stringify({
               Version: '2012-10-17',
               Statement: [
@@ -288,9 +296,9 @@ export class TapStack extends pulumi.ComponentResource {
     // Set outputs
     this.tableNames = pulumi.output(tableNamesList);
     this.tableArns = pulumi.all(tableArnsList);
-    this.streamArns = pulumi.all(streamArnsList).apply((arns) =>
-      arns.filter((arn): arn is string => arn !== undefined)
-    );
+    this.streamArns = pulumi
+      .all(streamArnsList)
+      .apply(arns => arns.filter((arn): arn is string => arn !== undefined));
 
     // Register the outputs of this component
     this.registerOutputs({
