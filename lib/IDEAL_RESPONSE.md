@@ -50,7 +50,7 @@ This IDEAL_RESPONSE includes critical infrastructure fixes that were missing fro
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { TerraformStack, TerraformOutput } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
