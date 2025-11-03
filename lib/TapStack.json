@@ -209,106 +209,34 @@
           "Ref": "ConfigurationBucket"
         },
         "PolicyDocument": {
+          "Version": "2012-10-17",
           "Statement": [
             {
-              "Fn::If": [
-                "IsDevEnvironment",
-                {
-                  "Sid": "AllowCrossAccountReadFromStagingAndProd",
-                  "Effect": "Allow",
-                  "Principal": {
-                    "AWS": [
-                      {
-                        "Fn::Sub": "arn:aws:iam::${AccountIdStaging}:root"
-                      },
-                      {
-                        "Fn::Sub": "arn:aws:iam::${AccountIdProd}:root"
-                      }
-                    ]
+              "Sid": "AllowCrossAccountRead",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": [
+                  {
+                    "Fn::Sub": "arn:aws:iam::${AccountIdDev}:root"
                   },
-                  "Action": [
-                    "s3:GetObject",
-                    "s3:ListBucket"
-                  ],
-                  "Resource": [
-                    {
-                      "Fn::Sub": "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}"
-                    },
-                    {
-                      "Fn::Sub": "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}/*"
-                    }
-                  ]
+                  {
+                    "Fn::Sub": "arn:aws:iam::${AccountIdStaging}:root"
+                  },
+                  {
+                    "Fn::Sub": "arn:aws:iam::${AccountIdProd}:root"
+                  }
+                ]
+              },
+              "Action": [
+                "s3:GetObject",
+                "s3:ListBucket"
+              ],
+              "Resource": [
+                {
+                  "Fn::Sub": "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}"
                 },
                 {
-                  "Ref": "AWS::NoValue"
-                }
-              ]
-            },
-            {
-              "Fn::If": [
-                "IsStagingEnvironment",
-                {
-                  "Sid": "AllowCrossAccountReadFromDevAndProd",
-                  "Effect": "Allow",
-                  "Principal": {
-                    "AWS": [
-                      {
-                        "Fn::Sub": "arn:aws:iam::${AccountIdDev}:root"
-                      },
-                      {
-                        "Fn::Sub": "arn:aws:iam::${AccountIdProd}:root"
-                      }
-                    ]
-                  },
-                  "Action": [
-                    "s3:GetObject",
-                    "s3:ListBucket"
-                  ],
-                  "Resource": [
-                    {
-                      "Fn::Sub": "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}"
-                    },
-                    {
-                      "Fn::Sub": "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}/*"
-                    }
-                  ]
-                },
-                {
-                  "Ref": "AWS::NoValue"
-                }
-              ]
-            },
-            {
-              "Fn::If": [
-                "IsProdEnvironment",
-                {
-                  "Sid": "AllowCrossAccountReadFromDevAndStaging",
-                  "Effect": "Allow",
-                  "Principal": {
-                    "AWS": [
-                      {
-                        "Fn::Sub": "arn:aws:iam::${AccountIdDev}:root"
-                      },
-                      {
-                        "Fn::Sub": "arn:aws:iam::${AccountIdStaging}:root"
-                      }
-                    ]
-                  },
-                  "Action": [
-                    "s3:GetObject",
-                    "s3:ListBucket"
-                  ],
-                  "Resource": [
-                    {
-                      "Fn::Sub": "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}"
-                    },
-                    {
-                      "Fn::Sub": "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}/*"
-                    }
-                  ]
-                },
-                {
-                  "Ref": "AWS::NoValue"
+                  "Fn::Sub": "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}/*"
                 }
               ]
             }
