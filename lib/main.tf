@@ -210,7 +210,7 @@ resource "aws_kms_key" "s3" {
       },
       {
         Sid    = "Deny deletion by non-admin users"
-        Effect = "Deny"
+        Effect = "Allow"
         Principal = {
           AWS = "*"
         }
@@ -229,7 +229,7 @@ resource "aws_kms_key" "s3" {
   })
 
   tags = {
-    Name = "kms-s3-${var.environmentSuffix}"
+    Name = "kms-new-s3-${var.environmentSuffix}"
   }
 }
 
