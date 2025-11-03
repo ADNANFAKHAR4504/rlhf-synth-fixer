@@ -1,0 +1,21 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000244",
+  "team": "3",
+  "startedAt": "2025-10-29T19:13:54.438Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": "KMS, S3, Lambda, EventBridge, SNS, SQS, CloudWatch Logs, IAM",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "misra-s-turing",
+  "dockerS3Location": ""
+}
