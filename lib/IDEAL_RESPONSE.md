@@ -12,6 +12,246 @@ This implementation creates a production-ready CI/CD pipeline for automated Terr
 
 **Security**: Least-privilege IAM roles, encryption everywhere, public access blocked, manual approval for production.
 
+## Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                         TERRAFORM CI/CD PIPELINE ARCHITECTURE                        │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+
+                                 DEVELOPER WORKFLOW
+                                        │
+                                        ▼
+                            ┌─────────────────────┐
+                            │   CodeCommit Repo   │
+                            │  (Optional Source)  │
+                            │                     │
+                            │  Branches:          │
+                            │   - dev             │
+                            │   - staging         │
+                            │   - main (prod)     │
+                            └──────────┬──────────┘
+                                       │
+                                       │ Git Push Event
+                                       ▼
+                            ┌─────────────────────┐
+                            │   EventBridge Rule  │
+                            │  (Auto-trigger on   │
+                            │   commit to branch) │
+                            └──────────┬──────────┘
+                                       │
+       ┌───────────────────────────────┼───────────────────────────────┐
+       │                               │                               │
+       ▼                               ▼                               ▼
+┌─────────────┐              ┌─────────────┐              ┌─────────────┐
+│  Pipeline   │              │  Pipeline   │              │  Pipeline   │
+│     DEV     │              │   STAGING   │              │    PROD     │
+└──────┬──────┘              └──────┬──────┘              └──────┬──────┘
+       │                            │                            │
+       │                            │                            │
+       ▼                            ▼                            ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                         STAGE 1: SOURCE                              │
+│  - Pull code from CodeCommit (or external Git)                       │
+│  - Output: SourceOutput artifact                                     │
+└───────────────────────────┬──────────────────────────────────────────┘
+                            │
+                            ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                      STAGE 2: TERRAFORM PLAN                          │
+│                                                                       │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  CodeBuild Project: terraform-plan-{env}-{suffix}           │    │
+│  │                                                              │    │
+│  │  Container: Custom ECR Image (Terraform 1.5+)               │    │
+│  │                                                              │    │
+│  │  Steps:                                                      │    │
+│  │    1. terraform init                                         │    │
+│  │       - Backend: S3 bucket                                   │    │
+│  │       - State key: project/{env}/terraform.tfstate           │    │
+│  │       - Lock table: DynamoDB                                 │    │
+│  │                                                              │    │
+│  │    2. terraform validate                                     │    │
+│  │                                                              │    │
+│  │    3. terraform plan -var-file=environments/{env}.tfvars     │    │
+│  │       - Output: tfplan file                                  │    │
+│  │       - Output: plan-output.txt                              │    │
+│  │                                                              │    │
+│  │  IAM Role: Read-only permissions (cannot create resources)  │    │
+│  │                                                              │    │
+│  │  Output: PlanOutput artifact (tfplan + all source)          │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+└───────────────────────────┬──────────────────────────────────────────┘
+                            │
+                            ▼
+                  ┌─────────────────┐
+                  │  SNS Topic      │ ──── Email: "Plan completed for {env}"
+                  │  Notification   │
+                  └─────────────────┘
+                            │
+                            │
+        ┌───────────────────┼───────────────────┐
+        │                   │                   │
+        │ (Dev/Staging:     │                   │ (Prod Only)
+        │  Auto-approve)    │                   │
+        ▼                   │                   ▼
+   ┌─────────┐              │          ┌──────────────────┐
+   │  SKIP   │              │          │  STAGE 3: MANUAL │
+   │         │              │          │     APPROVAL     │
+   └────┬────┘              │          │                  │
+        │                   │          │  - Review plan   │
+        │                   │          │  - Link to S3    │
+        │                   │          │  - SNS alert     │
+        │                   │          │  - Human review  │
+        │                   │          └────────┬─────────┘
+        │                   │                   │
+        └───────────────────┼───────────────────┘
+                            │
+                            ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                     STAGE 4: TERRAFORM APPLY                          │
+│                                                                       │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  CodeBuild Project: terraform-apply-{env}-{suffix}          │    │
+│  │                                                              │    │
+│  │  Container: Custom ECR Image (Terraform 1.5+)               │    │
+│  │                                                              │    │
+│  │  Steps:                                                      │    │
+│  │    1. terraform init (same backend config)                   │    │
+│  │                                                              │    │
+│  │    2. terraform apply -auto-approve tfplan                   │    │
+│  │       - Uses plan from previous stage                        │    │
+│  │       - Locks state via DynamoDB                             │    │
+│  │       - Updates state in S3                                  │    │
+│  │                                                              │    │
+│  │  IAM Role: Full permissions to create/modify resources      │    │
+│  │            (scoped to aws_region only)                       │    │
+│  │                                                              │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+└───────────────────────────┬──────────────────────────────────────────┘
+                            │
+                            ▼
+                  ┌─────────────────┐
+                  │  SNS Topic      │ ──── Email: "Deployment succeeded/failed"
+                  │  Notification   │      Slack: Alert with details
+                  └─────────────────┘
+
+
+                        SUPPORTING INFRASTRUCTURE
+┌─────────────────────────────────────────────────────────────────────┐
+│                                                                      │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐         │
+│  │  S3 Bucket   │    │  DynamoDB    │    │     ECR      │         │
+│  │              │    │    Table     │    │  Repository  │         │
+│  │ State Files: │    │              │    │              │         │
+│  │  - dev/      │    │ Lock Table:  │    │ Docker Image:│         │
+│  │  - staging/  │    │  LockID      │    │  terraform-  │         │
+│  │  - prod/     │    │   (String)   │    │   runner:    │         │
+│  │              │    │              │    │   1.5        │         │
+│  │ Artifacts:   │    │ On-Demand    │    │              │         │
+│  │  - tfplan    │    │ Billing      │    │ Includes:    │         │
+│  │  - logs      │    │              │    │  - Terraform │         │
+│  │              │    │ Prevents     │    │  - AWS CLI   │         │
+│  │ Versioning:  │    │ concurrent   │    │  - Python    │         │
+│  │   Enabled    │    │ runs         │    │  - checkov   │         │
+│  │              │    │              │    │              │         │
+│  │ Encryption:  │    │ Encryption:  │    │ Scanning:    │         │
+│  │   KMS        │    │   Enabled    │    │   Enabled    │         │
+│  └──────────────┘    └──────────────┘    └──────────────┘         │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+
+                            SECURITY LAYERS
+┌─────────────────────────────────────────────────────────────────────┐
+│                                                                      │
+│  IAM Roles (Least Privilege):                                       │
+│  ┌────────────────────────────────────────────────────────────┐    │
+│  │  - CodePipeline Role: Start builds, access S3, publish SNS │    │
+│  │  - CodeBuild Plan Role: Read-only + S3/DynamoDB access     │    │
+│  │  - CodeBuild Apply Role: Full create/modify (region-locked)│    │
+│  │  - EventBridge Role: Trigger pipelines                     │    │
+│  └────────────────────────────────────────────────────────────┘    │
+│                                                                      │
+│  Encryption:                                                         │
+│  ┌────────────────────────────────────────────────────────────┐    │
+│  │  - KMS Key: Encrypts S3 state, DynamoDB, SNS, CloudWatch   │    │
+│  │  - Key Rotation: Enabled                                   │    │
+│  │  - Key Policy: Includes all service principals             │    │
+│  └────────────────────────────────────────────────────────────┘    │
+│                                                                      │
+│  Monitoring:                                                         │
+│  ┌────────────────────────────────────────────────────────────┐    │
+│  │  - CloudWatch Logs: All CodeBuild output                   │    │
+│  │  - CloudWatch Alarms: Pipeline failures, build duration    │    │
+│  │  - CloudTrail: All API calls logged                        │    │
+│  └────────────────────────────────────────────────────────────┘    │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+
+                    MULTI-ENVIRONMENT STRATEGY
+┌─────────────────────────────────────────────────────────────────────┐
+│                                                                      │
+│  Branch Strategy:                                                    │
+│                                                                      │
+│    dev branch ──────────────┐                                       │
+│                              │                                       │
+│                              ▼                                       │
+│                        [Dev Pipeline]                                │
+│                              │                                       │
+│                              │ (Test in dev)                         │
+│                              │                                       │
+│                              ▼                                       │
+│    staging branch ──────────┐                                       │
+│                              │                                       │
+│                              ▼                                       │
+│                      [Staging Pipeline]                              │
+│                              │                                       │
+│                              │ (Validate in staging)                 │
+│                              │                                       │
+│                              ▼                                       │
+│    main branch ────────────┐                                        │
+│                             │                                        │
+│                             ▼                                        │
+│                    [Production Pipeline]                             │
+│                             │                                        │
+│                             │ (Manual approval required)             │
+│                             │                                        │
+│                             ▼                                        │
+│                      [Production Infra]                              │
+│                                                                      │
+│  Environment-Specific Configs:                                       │
+│    - environments/dev.tfvars      (small instances, minimal cost)   │
+│    - environments/staging.tfvars  (medium instances, staging data)  │
+│    - environments/prod.tfvars     (large instances, HA, backups)    │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+
+                        KEY FEATURES
+┌─────────────────────────────────────────────────────────────────────┐
+│                                                                      │
+│  1. Fully Automated: Commit → Plan → (Approve) → Apply             │
+│                                                                      │
+│  2. Multi-Environment: Independent pipelines for dev/staging/prod   │
+│                                                                      │
+│  3. State Management: Centralized in S3, locked via DynamoDB        │
+│                                                                      │
+│  4. Security: Encryption everywhere, least privilege IAM            │
+│                                                                      │
+│  5. Safety Gates: Manual approval for production deployments        │
+│                                                                      │
+│  6. Notifications: SNS alerts at each pipeline stage                │
+│                                                                      │
+│  7. Auditable: CloudWatch logs, CloudTrail events                   │
+│                                                                      │
+│  8. Scalable: Easy to add new environments or projects              │
+│                                                                      │
+│  9. Cost-Optimized: On-demand billing, lifecycle policies           │
+│                                                                      │
+│  10. Flexible: CodeCommit optional, works with external Git         │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
 ## Complete Source Code
 
 All source code files from the lib/ directory are included below.
