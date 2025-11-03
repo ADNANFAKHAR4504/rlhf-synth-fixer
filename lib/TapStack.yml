@@ -41,7 +41,7 @@ Parameters:
   BucketPrefix:
     Description: Prefix for S3 bucket names (must be lowercase, 3-37 characters)
     Type: String
-    Default: secureinfra
+    Default: secureinfraiac
     AllowedPattern: '^[a-z0-9][a-z0-9-]*[a-z0-9]$'
     MinLength: 3
     MaxLength: 37
@@ -714,7 +714,7 @@ Resources:
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${EnvironmentName}-db'
+      DBInstanceIdentifier: !Sub '${EnvironmentName}-db-for-app'
       DBInstanceClass: !Ref DBInstanceClass
       Engine: mysql
       EngineVersion: '8.0.43'
