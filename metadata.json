@@ -1,0 +1,31 @@
+{
+  "task_id": "4z3mz",
+  "po_id": "4z3mz",
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "aws_services": [
+    "AWS Lambda",
+    "CloudWatch",
+    "IAM",
+    "X-Ray",
+    "KMS",
+    "S3",
+    "DynamoDB",
+    "SQS"
+  ],
+  "region": "eu-west-2",
+  "startedAt": "2025-11-03T07:04:32Z",
+  "completedAt": "2025-11-03T13:02:00Z",
+  "deploymentAttempts": 3,
+  "resourcesDeployed": 22,
+  "testsPassed": 103,
+  "testsFailed": 6,
+  "training_quality": 9
+}
