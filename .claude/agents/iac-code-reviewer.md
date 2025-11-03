@@ -100,7 +100,6 @@ If `IS_OPTIMIZATION_TASK=true`:
 - **SKIP Step 4** (Platform/Language Compliance on stack files)
 - **PRIMARY FOCUS**: Evaluate `lib/optimize.py` quality
 - **EXPECTED**: Stack files contain BASELINE (non-optimized) values
-- **REFERENCE**: See `.claude/docs/references/iac-optimization-guide.md`
 
 **What to Validate for Optimization Tasks**:
 1. ✅ `lib/optimize.py` exists and uses boto3/AWS SDK
@@ -113,12 +112,12 @@ If `IS_OPTIMIZATION_TASK=true`:
 **What NOT to Validate**:
 - ❌ Don't check if stack files have optimized values
 - ❌ Don't expect IDEAL_RESPONSE.md to show optimized infrastructure code
-- ❌ Don't penalize baseline (high) resource allocations
+- ❌ Don't penalize baseline (high) resource allocations in stack files
 
 **Training Quality Focus**:
-- Evaluate quality of `lib/optimize.py` script
+- Evaluate quality of `lib/optimize.py` script (boto3 usage, error handling, resource discovery)
 - Check fixes in MODEL_FAILURES.md related to optimization logic
-- See `.claude/docs/references/iac-optimization-guide.md` for detailed guidance
+- Stack files are intentionally non-optimized to establish baseline
 
 If optimization task detected, **SKIP to Step 5** (AWS Services Enhancement).
 
