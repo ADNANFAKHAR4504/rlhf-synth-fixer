@@ -1,36 +1,36 @@
-import { Construct } from 'constructs';
-import {
-  TerraformStack,
-  TerraformOutput,
-  Fn,
-  AssetType,
-  TerraformAsset,
-} from 'cdktf';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
+import { CloudwatchEventRule } from '@cdktf/provider-aws/lib/cloudwatch-event-rule';
+import { CloudwatchEventTarget } from '@cdktf/provider-aws/lib/cloudwatch-event-target';
+import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
+import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
+import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
 import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
+import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
+import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
+import { LaunchTemplate } from '@cdktf/provider-aws/lib/launch-template';
+import { Lb } from '@cdktf/provider-aws/lib/lb';
+import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
+import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
 import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { Lb } from '@cdktf/provider-aws/lib/lb';
-import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
-import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
-import { LaunchTemplate } from '@cdktf/provider-aws/lib/launch-template';
-import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
-import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
-import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
-import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
-import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
-import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
-import { CloudwatchEventRule } from '@cdktf/provider-aws/lib/cloudwatch-event-rule';
-import { CloudwatchEventTarget } from '@cdktf/provider-aws/lib/cloudwatch-event-target';
-import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
-import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import {
+  AssetType,
+  Fn,
+  TerraformAsset,
+  TerraformOutput,
+  TerraformStack,
+} from 'cdktf';
+import { Construct } from 'constructs';
 import * as path from 'path';
 
 export class TapStack extends TerraformStack {
