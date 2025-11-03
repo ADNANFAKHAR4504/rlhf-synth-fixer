@@ -71,12 +71,6 @@ describe('Multi-Account Replication Framework CloudFormation Template', () => {
   });
 
   describe('Conditions', () => {
-    test('should have environment conditions', () => {
-      expect(template.Conditions.IsDevEnvironment).toBeDefined();
-      expect(template.Conditions.IsStagingEnvironment).toBeDefined();
-      expect(template.Conditions.IsProdEnvironment).toBeDefined();
-    });
-
     test('should have replication conditions', () => {
       expect(template.Conditions.EnableReplicationToStaging).toBeDefined();
       expect(template.Conditions.EnableReplicationToProd).toBeDefined();

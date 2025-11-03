@@ -95,30 +95,6 @@
     }
   },
   "Conditions": {
-    "IsDevEnvironment": {
-      "Fn::Equals": [
-        {
-          "Ref": "Environment"
-        },
-        "dev"
-      ]
-    },
-    "IsStagingEnvironment": {
-      "Fn::Equals": [
-        {
-          "Ref": "Environment"
-        },
-        "staging"
-      ]
-    },
-    "IsProdEnvironment": {
-      "Fn::Equals": [
-        {
-          "Ref": "Environment"
-        },
-        "prod"
-      ]
-    },
     "EnableReplicationToStaging": {
       "Fn::Equals": [
         {
@@ -203,7 +179,6 @@
     },
     "ConfigurationBucketPolicy": {
       "Type": "AWS::S3::BucketPolicy",
-      "DependsOn": "ConfigurationBucket",
       "Properties": {
         "Bucket": {
           "Ref": "ConfigurationBucket"
@@ -480,7 +455,7 @@
                     "s3:ListBucket",
                     "s3:GetBucketLocation",
                     "s3:GetBucketVersioning",
-                    "s3:GetBucketReplication"
+                    "s3:GetReplicationConfiguration"
                   ],
                   "Resource": [
                     {
