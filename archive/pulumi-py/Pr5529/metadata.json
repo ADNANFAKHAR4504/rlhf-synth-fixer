@@ -1,6 +1,6 @@
 {
   "platform": "pulumi",
-  "language": "py",
+  "language": "python",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "101000309",
@@ -18,5 +18,12 @@
     "SQS",
     "CloudWatch",
     "IAM"
-  ]
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
 }
