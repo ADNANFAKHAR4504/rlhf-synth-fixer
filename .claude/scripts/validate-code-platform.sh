@@ -81,7 +81,7 @@ if grep -qE 'aws-cdk-lib|@aws-cdk|software\.amazon\.awscdk|from aws_cdk import' 
     DETECTED_PLATFORM="cdk"
 # Check for Terraform
 elif grep -qE 'terraform\{|provider "aws"|resource "aws_' lib/IDEAL_RESPONSE.md; then
-    DETECTED_PLATFORM="terraform"
+    DETECTED_PLATFORM="tf"
 # Check for CloudFormation
 elif grep -qE 'AWSTemplateFormatVersion|Resources:|AWS::CloudFormation' lib/IDEAL_RESPONSE.md; then
     DETECTED_PLATFORM="cloudformation"
@@ -103,6 +103,10 @@ if grep -qE '```java|package app|package com|import java\.|public class |\.java'
 # Check for TypeScript
 elif grep -qE '```typescript|```ts|import.*from|interface |\.ts' lib/IDEAL_RESPONSE.md; then
     DETECTED_LANGUAGE="typescript"
+# Check for HCL (Terraform configuration language) - MUST check before Python
+# Because Terraform files may reference .py files (e.g., lambda.py) which would match Python pattern
+elif grep -qE '```hcl|```terraform|resource "aws_|provider "aws"|\.tf' lib/IDEAL_RESPONSE.md; then
+    DETECTED_LANGUAGE="hcl"
 # Check for Python
 elif grep -qE '```python|```py|^import |^def |\.py' lib/IDEAL_RESPONSE.md; then
     DETECTED_LANGUAGE="python"
@@ -112,9 +116,6 @@ elif grep -qE '```go|package main|import \(|func |\.go' lib/IDEAL_RESPONSE.md; t
 # Check for C#
 elif grep -qE '```csharp|```cs|using System|namespace |\.cs' lib/IDEAL_RESPONSE.md; then
     DETECTED_LANGUAGE="csharp"
-# Check for HCL (Terraform configuration language)
-elif grep -qE '```hcl|```terraform|resource "aws_|provider "aws"|\.tf' lib/IDEAL_RESPONSE.md; then
-    DETECTED_LANGUAGE="hcl"
 # Check for YAML (CloudFormation, config files) - must have code blocks
 elif grep -qE '```yaml|```yml' lib/IDEAL_RESPONSE.md; then
     DETECTED_LANGUAGE="yaml"
