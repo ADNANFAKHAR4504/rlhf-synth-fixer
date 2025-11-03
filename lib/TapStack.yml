@@ -735,7 +735,7 @@ Resources:
       DBInstanceIdentifier: !Sub payment-processing-db-${EnvironmentSuffix}
       DBInstanceClass: !Ref DBInstanceClass
       Engine: mysql
-      EngineVersion: 8.0.35
+      EngineVersion: 8.0.43
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
       AllocatedStorage: !Ref DBAllocatedStorage
@@ -833,8 +833,6 @@ Resources:
 
   DMSTargetEndpoint:
     Type: AWS::DMS::Endpoint
-    DependsOn:
-      - RDSInstance
     Properties:
       EndpointIdentifier: !Sub payment-processing-target-endpoint-${EnvironmentSuffix}
       EndpointType: target
@@ -973,7 +971,7 @@ Resources:
         SecurityGroupIds:
           - !Ref AppServerSecurityGroup
         UserData:
-          Fn::Base64: !Sub |
+          Fn::Base64: |
             #!/bin/bash
             yum update -y
             yum install -y amazon-cloudwatch-agent
