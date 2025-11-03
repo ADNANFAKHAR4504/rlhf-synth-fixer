@@ -57,7 +57,7 @@ function loadOutputs() {
             try {
                 return JSON.parse(raw);
             } catch (err) {
-                // ignore parse error and continue
+                
             }
         }
     }
