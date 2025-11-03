@@ -1,7 +1,0 @@
-name: TapStack
-runtime:
-  name: nodejs
-  options:
-    typescript: true
-description: Pulumi infrastructure for containerized web application on ECS
-main: index.ts
