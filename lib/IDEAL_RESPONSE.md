@@ -1,6 +1,6 @@
 # AWS Compliance Monitoring System - Pulumi TypeScript Implementation
 
-This document contains the production-ready implementation of an automated compliance monitoring system for AWS infrastructure using Pulumi with TypeScript.
+This document contains the production-ready implementation of an automated compliance monitoring system for AWS infrastructure using Pulumi with ts.
 
 ## Overview
 
