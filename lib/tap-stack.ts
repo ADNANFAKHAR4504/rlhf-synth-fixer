@@ -178,7 +178,7 @@ export class TapStack extends pulumi.ComponentResource {
       const readRole = new aws.iam.Role(
         `dynamodb-${tableName}-read-role-${environmentSuffix}`,
         {
-          name: `dynamodb-${tableName}-read-role`,
+          name: `dynamodb-${tableName}-read-role-${environmentSuffix}`,
           assumeRolePolicy: JSON.stringify({
             Version: '2012-10-17',
             Statement: [
@@ -227,7 +227,7 @@ export class TapStack extends pulumi.ComponentResource {
       const writeRole = new aws.iam.Role(
         `dynamodb-${tableName}-write-role-${environmentSuffix}`,
         {
-          name: `dynamodb-${tableName}-write-role`,
+          name: `dynamodb-${tableName}-write-role-${environmentSuffix}`,
           assumeRolePolicy: JSON.stringify({
             Version: '2012-10-17',
             Statement: [
