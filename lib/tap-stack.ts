@@ -1,24 +1,24 @@
-import { TerraformStack, TerraformOutput, S3Backend } from 'cdktf';
-import { Construct } from 'constructs';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-import { RandomProvider } from '@cdktf/provider-random/lib/provider';
-import { Password } from '@cdktf/provider-random/lib/password';
-import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
-import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
-import { DbParameterGroup } from '@cdktf/provider-aws/lib/db-parameter-group';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
-import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
-import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
-import { SnsTopic } from '@cdktf/provider-aws/lib/sns-topic';
-import { SnsTopicSubscription } from '@cdktf/provider-aws/lib/sns-topic-subscription';
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { DataAwsSubnets } from '@cdktf/provider-aws/lib/data-aws-subnets';
 import { DataAwsVpc } from '@cdktf/provider-aws/lib/data-aws-vpc';
+import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
+import { DbParameterGroup } from '@cdktf/provider-aws/lib/db-parameter-group';
+import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
-import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
+import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
+import { SnsTopic } from '@cdktf/provider-aws/lib/sns-topic';
+import { SnsTopicSubscription } from '@cdktf/provider-aws/lib/sns-topic-subscription';
+import { Password } from '@cdktf/provider-random/lib/password';
+import { RandomProvider } from '@cdktf/provider-random/lib/provider';
+import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
+import { Construct } from 'constructs';
 
 interface TapStackConfig {
   environmentSuffix: string;
@@ -120,7 +120,7 @@ export class TapStack extends TerraformStack {
     });
 
     const dbSecret = new SecretsmanagerSecret(this, 'dbCredentials', {
-      name: `${resourcePrefix}-db-creds`,
+      name: `${resourcePrefix}-db-cred`,
       description: 'RDS PostgreSQL production database credentials',
       kmsKeyId: kmsKey.id,
       tags: {
