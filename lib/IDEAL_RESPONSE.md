@@ -1,7 +1,7 @@
 ### Reasoning Trace
 ---
 
-This is a comprehensive request for a production-ready AWS CloudFormation template. Let me break down the requirements:
+This is a comprehensive request for a production-ready AWS cfn template. Let me break down the requirements:
 
 1. **Networking**: VPC with 2+ subnets across AZs, IGW, Route Tables, parameterized CIDRs
 2. **Compute**: Launch Template, ASG with ALB, IAM roles, Security Groups (80/443 only)
@@ -15,13 +15,13 @@ This is a comprehensive request for a production-ready AWS CloudFormation templa
 10. **Naming**: Strict naming convention with StackName-Region-EnvironmentSuffix-ResourceType
 11. **Compliance**: Must pass validation, follow AWS best practices
 
-Let me create a comprehensive CloudFormation template that meets all these requirements.
+Let me create a comprehensive cfn template that meets all these requirements.
 ### Answer 
 ---
 
-# Production-Ready AWS CloudFormation Template
+# Production-Ready AWS cfn Template
 
-I'll create a comprehensive CloudFormation YAML template that meets all your requirements for a scalable, secure cloud environment with full parameterization and cross-account compatibility.
+I'll create a comprehensive cfn YAML template that meets all your requirements for a scalable, secure cloud environment with full parameterization and cross-account compatibility.
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
