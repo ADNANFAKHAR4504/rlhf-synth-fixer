@@ -765,8 +765,8 @@ export class TapStack extends pulumi.ComponentResource {
         parameterGroupName: dbParameterGroup.name,
         multiAz: true,
         username: 'admin',
-        password: dbMasterPasswordVersion.secretString.apply(
-          s => JSON.parse(s || '{}').password as string
+        password: dbMasterPasswordVersion.secretString.apply(s =>
+          JSON.parse(s as string).password as string
         ),
         backupRetentionPeriod: 7,
         backupWindow: '03:00-04:00',
@@ -815,14 +815,13 @@ export class TapStack extends pulumi.ComponentResource {
             rdsInstance.address,
             dbMasterPasswordVersion.secretString,
           ])
-          .apply(([endpoint, host, oldSecret]) => {
-            const secret = JSON.parse(oldSecret || '{}');
-            return JSON.stringify({
-              ...secret,
+          .apply(([endpoint, host, oldSecret]) =>
+            JSON.stringify({
+              ...JSON.parse(oldSecret as string),
               host: host,
               endpoint: endpoint,
-            });
-          }),
+            })
+          ),
       },
       { parent: this, dependsOn: [rdsInstance, dbMasterPasswordVersion] }
     );
@@ -1069,10 +1068,10 @@ echo "Bastion host initialized successfully"
     );
 
     // Note: ACM certificate validation for private domains (*.migration.internal)
-    // requires manual validation or is auto-validated for private CAs
-    // DNS validation records are not created here as the private hosted zone
-    // cannot be used for public ACM validation
-    // In production, consider using AWS Private CA for internal certificates
+    // cannot complete through standard DNS validation as the domain is not publicly resolvable.
+    // For production use with internal domains, consider using AWS Private Certificate Authority (PCA)
+    // which is designed for internal PKI and does not require DNS validation.
+    // If this domain will be made public, add the DNS validation records manually in Route53.
 
     // =====================================================
     // CloudWatch Log Groups and Insights Queries (Requirement 18)

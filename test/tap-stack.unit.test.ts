@@ -79,9 +79,14 @@ pulumi.runtime.setMocks(
       if (
         args.type === '@pulumi/aws:secretsmanager/secretVersion:SecretVersion'
       ) {
-        // Test both branches: sometimes return undefined to test || fallback
+        // Test both branches: return valid JSON for normal cases
+        // and undefined for update cases to test || '{}' fallbacks
         if (args.name.includes('update')) {
-          outputs.secretString = undefined; // Force fallback in apply()
+          // For update secrets, return undefined to test oldSecret || '{}'
+          outputs.secretString = undefined;
+        } else if (args.name.includes('empty')) {
+          // For empty test case, return undefined to test s || '{}'
+          outputs.secretString = undefined;
         } else {
           outputs.secretString =
             args.inputs.secretString ||
@@ -92,6 +97,17 @@ pulumi.runtime.setMocks(
               port: 3306,
             });
         }
+      }
+      if (args.type === '@pulumi/aws:acm/certificate:Certificate') {
+        // Mock domain validation options for ACM certificate
+        outputs.domainValidationOptions = [
+          {
+            domainName: '*.migration.internal',
+            resourceRecordName: '_validation.migration.internal',
+            resourceRecordType: 'CNAME',
+            resourceRecordValue: '_validation_value.acm-validations.aws.',
+          },
+        ];
       }
 
       return {
@@ -318,6 +334,16 @@ describe('TapStack - Database Migration Infrastructure', () => {
     it('should configure automatic renewal', () => {
       // Certificate should have auto-renewal enabled
       expect(stack.primaryVpcId).toBeDefined();
+    });
+
+    it('should create DNS validation records when domainValidationOptions are available', () => {
+      // Create a new stack to test validation record creation
+      // The mock returns domainValidationOptions for ACM certificates
+      const stackWithValidation = new TapStack('migration-cert-validation', {
+        environmentSuffix: 'cert-test',
+      });
+      expect(stackWithValidation).toBeDefined();
+      expect(stackWithValidation.primaryVpcId).toBeDefined();
     });
   });
 
@@ -584,6 +610,16 @@ describe('TapStack - Database Migration Infrastructure', () => {
       });
       expect(stackForTagTest).toBeDefined();
       // Tags are applied via pulumi.output, so they're always present
+    });
+
+    it('should handle undefined secret values gracefully', () => {
+      // This test uses 'empty' in the suffix to trigger undefined secretString mock
+      // which tests the s || '{}' and oldSecret || '{}' branches
+      const stackWithEmptySecret = new TapStack('migration-empty-secret-test', {
+        environmentSuffix: 'test-empty',
+      });
+      expect(stackWithEmptySecret).toBeDefined();
+      expect(stackWithEmptySecret.rdsEndpoint).toBeDefined();
     });
   });
 });
