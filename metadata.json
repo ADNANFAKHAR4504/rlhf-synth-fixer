@@ -6,7 +6,7 @@
   "team": "synth",
   "startedAt": "2025-11-03T19:28:58+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": [],
+  "subject_labels": ["Cloud Environment Setup"],
   "po_id": "wjnwn0",
   "aws_services": [
     "DynamoDB",
@@ -15,28 +15,5 @@
     "CloudWatch",
     "IAM"
   ],
-  "region": "ap-southeast-1",
-  "qa_completed": true,
-  "deployment_status": "success",
-  "deployment_attempts": 3,
-  "unit_test_coverage": 97.05,
-  "unit_tests_passed": 30,
-  "unit_tests_total": 30,
-  "integration_tests_passed": 16,
-  "integration_tests_total": 22,
-  "training_quality": 10,
-  "critical_failures": 2,
-  "high_failures": 0,
-  "medium_failures": 1,
-  "low_failures": 2,
-  "resources_deployed": 15,
-  "checkpoints_passed": [
-    "E",
-    "F",
-    "G",
-    "H",
-    "I",
-    "J",
-    "K"
-  ]
+  "region": "ap-southeast-1"
 }
