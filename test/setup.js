@@ -1,8 +1,44 @@
 // CDKTF Test Setup
+const matchesValue = (actual, expected) => {
+  if (
+    expected &&
+    typeof expected === 'object' &&
+    typeof expected.asymmetricMatch === 'function'
+  ) {
+    return expected.asymmetricMatch(actual);
+  }
+
+  if (
+    expected &&
+    typeof expected === 'object' &&
+    !Array.isArray(expected) &&
+    expected !== null
+  ) {
+    try {
+      expect(actual).toMatchObject(expected);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  if (Array.isArray(expected)) {
+    try {
+      expect(actual).toEqual(expect.arrayContaining(expected));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  return JSON.stringify(actual) === JSON.stringify(expected);
+};
+
 expect.extend({
   toHaveResource(synthesized, resourceType) {
     const resources = JSON.parse(synthesized);
-    const pass = resources.resource && resources.resource[resourceType];
+    const resourceEntries = resources.resource?.[resourceType] || null;
+    const pass = !!resourceEntries;
 
     return {
       pass,
@@ -22,30 +58,9 @@ expect.extend({
       const resourcesOfType = Object.values(resources.resource[resourceType]);
 
       for (const resource of resourcesOfType) {
-        const matches = Object.entries(properties).every(([key, value]) => {
-          if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-            // For nested objects, do a partial match using expect.objectContaining
-            try {
-              expect(resource[key]).toMatchObject(value);
-              return true;
-            } catch {
-              return false;
-            }
-          } else if (typeof value === 'object' && Array.isArray(value)) {
-            // For arrays, check if all expected items are present
-            try {
-              expect(resource[key]).toEqual(expect.arrayContaining(value));
-              return true;
-            } catch {
-              return false;
-            }
-          } else if (typeof value === 'string' && value.includes('expect.stringContaining')) {
-            // Handle expect.stringContaining
-            return typeof resource[key] === 'string';
-          } else {
-            return JSON.stringify(resource[key]) === JSON.stringify(value);
-          }
-        });
+        const matches = Object.entries(properties).every(([key, value]) =>
+          matchesValue(resource[key], value)
+        );
 
         if (matches) {
           pass = true;
@@ -70,7 +85,8 @@ expect.extend({
 
   toHaveOutput(synthesized, outputName) {
     const resources = JSON.parse(synthesized);
-    const pass = resources.output && resources.output[outputName];
+    const outputValue = resources.output?.[outputName] || null;
+    const pass = !!outputValue;
 
     return {
       pass,

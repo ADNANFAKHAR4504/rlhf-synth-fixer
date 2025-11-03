@@ -452,8 +452,8 @@ export class TapStack extends TerraformStack {
         timeout: 30,
         environment: {
           variables: {
-            TABLE_NAME: locationTable.name,
-            REGION: region,
+            TABLE_NAME: `driver-locations-${environmentSuffix}`,
+            AWS_REGION: region,
           },
         },
         deadLetterConfig: {
@@ -488,8 +488,8 @@ export class TapStack extends TerraformStack {
         timeout: 10,
         environment: {
           variables: {
-            TABLE_NAME: locationTable.name,
-            REGION: region,
+            TABLE_NAME: `driver-locations-${environmentSuffix}`,
+            AWS_REGION: region,
           },
         },
         deadLetterConfig: {
@@ -521,8 +521,8 @@ export class TapStack extends TerraformStack {
       timeout: 10,
       environment: {
         variables: {
-          TABLE_NAME: locationTable.name,
-          REGION: region,
+          TABLE_NAME: `driver-locations-${environmentSuffix}`,
+          AWS_REGION: region,
         },
       },
       deadLetterConfig: {
