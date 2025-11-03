@@ -135,40 +135,51 @@ Resources:
       Bucket: !Ref ConfigurationBucket
       PolicyDocument:
         Statement:
-          - Sid: AllowCrossAccountRead
-            Effect: Allow
-            Principal:
-              AWS:
-                - !If
-                  - IsDevEnvironment
+          - !If
+            - IsDevEnvironment
+            - Sid: AllowCrossAccountReadFromStagingAndProd
+              Effect: Allow
+              Principal:
+                AWS:
                   - !Sub "arn:aws:iam::${AccountIdStaging}:root"
-                  - !Ref AWS::NoValue
-                - !If
-                  - IsDevEnvironment
                   - !Sub "arn:aws:iam::${AccountIdProd}:root"
-                  - !Ref AWS::NoValue
-                - !If
-                  - IsStagingEnvironment
+              Action:
+                - "s3:GetObject"
+                - "s3:ListBucket"
+              Resource:
+                - !Sub "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}"
+                - !Sub "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}/*"
+            - !Ref AWS::NoValue
+          - !If
+            - IsStagingEnvironment
+            - Sid: AllowCrossAccountReadFromDevAndProd
+              Effect: Allow
+              Principal:
+                AWS:
                   - !Sub "arn:aws:iam::${AccountIdDev}:root"
-                  - !Ref AWS::NoValue
-                - !If
-                  - IsStagingEnvironment
                   - !Sub "arn:aws:iam::${AccountIdProd}:root"
-                  - !Ref AWS::NoValue
-                - !If
-                  - IsProdEnvironment
+              Action:
+                - "s3:GetObject"
+                - "s3:ListBucket"
+              Resource:
+                - !Sub "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}"
+                - !Sub "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}/*"
+            - !Ref AWS::NoValue
+          - !If
+            - IsProdEnvironment
+            - Sid: AllowCrossAccountReadFromDevAndStaging
+              Effect: Allow
+              Principal:
+                AWS:
                   - !Sub "arn:aws:iam::${AccountIdDev}:root"
-                  - !Ref AWS::NoValue
-                - !If
-                  - IsProdEnvironment
                   - !Sub "arn:aws:iam::${AccountIdStaging}:root"
-                  - !Ref AWS::NoValue
-            Action:
-              - "s3:GetObject"
-              - "s3:ListBucket"
-            Resource:
-              - !Sub "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}"
-              - !Sub "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}/*"
+              Action:
+                - "s3:GetObject"
+                - "s3:ListBucket"
+              Resource:
+                - !Sub "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}"
+                - !Sub "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}/*"
+            - !Ref AWS::NoValue
 
   # ===========================
   # IAM Role for S3 Replication

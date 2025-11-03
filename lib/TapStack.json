@@ -211,88 +211,104 @@
         "PolicyDocument": {
           "Statement": [
             {
-              "Sid": "AllowCrossAccountRead",
-              "Effect": "Allow",
-              "Principal": {
-                "AWS": [
-                  {
-                    "Fn::If": [
-                      "IsDevEnvironment",
-                      {
-                        "Fn::Sub": "arn:aws:iam::${AccountIdStaging}:root"
-                      },
-                      {
-                        "Ref": "AWS::NoValue"
-                      }
-                    ]
-                  },
-                  {
-                    "Fn::If": [
-                      "IsDevEnvironment",
-                      {
-                        "Fn::Sub": "arn:aws:iam::${AccountIdProd}:root"
-                      },
-                      {
-                        "Ref": "AWS::NoValue"
-                      }
-                    ]
-                  },
-                  {
-                    "Fn::If": [
-                      "IsStagingEnvironment",
-                      {
-                        "Fn::Sub": "arn:aws:iam::${AccountIdDev}:root"
-                      },
-                      {
-                        "Ref": "AWS::NoValue"
-                      }
-                    ]
-                  },
-                  {
-                    "Fn::If": [
-                      "IsStagingEnvironment",
-                      {
-                        "Fn::Sub": "arn:aws:iam::${AccountIdProd}:root"
-                      },
-                      {
-                        "Ref": "AWS::NoValue"
-                      }
-                    ]
-                  },
-                  {
-                    "Fn::If": [
-                      "IsProdEnvironment",
-                      {
-                        "Fn::Sub": "arn:aws:iam::${AccountIdDev}:root"
-                      },
-                      {
-                        "Ref": "AWS::NoValue"
-                      }
-                    ]
-                  },
-                  {
-                    "Fn::If": [
-                      "IsProdEnvironment",
-                      {
-                        "Fn::Sub": "arn:aws:iam::${AccountIdStaging}:root"
-                      },
-                      {
-                        "Ref": "AWS::NoValue"
-                      }
-                    ]
-                  }
-                ]
-              },
-              "Action": [
-                "s3:GetObject",
-                "s3:ListBucket"
-              ],
-              "Resource": [
+              "Fn::If": [
+                "IsDevEnvironment",
                 {
-                  "Fn::Sub": "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}"
+                  "Sid": "AllowCrossAccountReadFromStagingAndProd",
+                  "Effect": "Allow",
+                  "Principal": {
+                    "AWS": [
+                      {
+                        "Fn::Sub": "arn:aws:iam::${AccountIdStaging}:root"
+                      },
+                      {
+                        "Fn::Sub": "arn:aws:iam::${AccountIdProd}:root"
+                      }
+                    ]
+                  },
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:ListBucket"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}"
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}/*"
+                    }
+                  ]
                 },
                 {
-                  "Fn::Sub": "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}/*"
+                  "Ref": "AWS::NoValue"
+                }
+              ]
+            },
+            {
+              "Fn::If": [
+                "IsStagingEnvironment",
+                {
+                  "Sid": "AllowCrossAccountReadFromDevAndProd",
+                  "Effect": "Allow",
+                  "Principal": {
+                    "AWS": [
+                      {
+                        "Fn::Sub": "arn:aws:iam::${AccountIdDev}:root"
+                      },
+                      {
+                        "Fn::Sub": "arn:aws:iam::${AccountIdProd}:root"
+                      }
+                    ]
+                  },
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:ListBucket"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}"
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}/*"
+                    }
+                  ]
+                },
+                {
+                  "Ref": "AWS::NoValue"
+                }
+              ]
+            },
+            {
+              "Fn::If": [
+                "IsProdEnvironment",
+                {
+                  "Sid": "AllowCrossAccountReadFromDevAndStaging",
+                  "Effect": "Allow",
+                  "Principal": {
+                    "AWS": [
+                      {
+                        "Fn::Sub": "arn:aws:iam::${AccountIdDev}:root"
+                      },
+                      {
+                        "Fn::Sub": "arn:aws:iam::${AccountIdStaging}:root"
+                      }
+                    ]
+                  },
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:ListBucket"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}"
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}/*"
+                    }
+                  ]
+                },
+                {
+                  "Ref": "AWS::NoValue"
                 }
               ]
             }
