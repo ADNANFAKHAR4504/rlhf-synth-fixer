@@ -52,17 +52,16 @@ runs:
       run: echo "ARTIFACTS_FOUND=${{ steps.download-artifacts.outcome == 'success' && 'true' || 'false' }}" >> $GITHUB_ENV
 
     - name: Setup Node.js
-      if: ${{ inputs.platform == 'cdk' || inputs.platform == 'cdktf' || inputs.language == 'ts' || inputs.language == 'js' }}
       uses: actions/setup-node@v4
       with:
         node-version: ${{ inputs.node-version }}
         cache: 'npm'
 
-    - name: Setup Python
-      if: ${{ inputs.language == 'py' || (inputs.platform == 'pulumi' && inputs.language == 'py') }}
+    - name: Setup Python 3.12.11
       uses: actions/setup-python@v5
       with:
-        python-version: "3.12.11"
+        python-version: '3.12.11'
+        check-latest: true
 
     - name: Install analysis dependencies
       if: inputs.is-analysis == 'true'
@@ -75,11 +74,12 @@ runs:
         sudo apt-get update && sudo apt-get install -y jq
         echo "✅ Analysis dependencies installed"
 
-    - name: Setup Go
-      if: ${{ (inputs.platform == 'cdktf' || inputs.platform == 'cdk') && inputs.language == 'go' }}
+    - name: Setup Go 1.23.x
+      if: ${{ (inputs.platform == 'cdktf' && inputs.language == 'go') || (inputs.platform == 'cdk' && inputs.language == 'go') }}
       uses: actions/setup-go@v5
       with:
-        go-version: "1.23.12"
+        go-version: '1.23.12'
+        cache: false # We'll handle caching manually for better control
 
     - name: Cache Go modules
       if: ${{ (inputs.platform == 'cdktf' && inputs.language == 'go') || (inputs.platform == 'cdk' && inputs.language == 'go') }}
@@ -104,12 +104,12 @@ runs:
         restore-keys: |
           ${{ runner.os }}-cdktf-gen-
 
-    - name: Setup Java
-      if: ${{ inputs.language == 'java' }}
+    - name: Setup Java 17
+      if: inputs.language == 'java' || inputs.platform == ''
       uses: actions/setup-java@v4
       with:
-        distribution: "temurin"
-        java-version: "17"
+        distribution: 'temurin'
+        java-version: '17'
 
     - name: Cache Gradle Wrapper
       if: inputs.language == 'java' || inputs.platform == ''
@@ -126,13 +126,13 @@ runs:
         gradle-home-cache-cleanup: true
 
     - name: Setup Terraform
-      if: ${{ inputs.platform == 'cdktf' || inputs.platform == 'tf' }}
+      if: ${{ inputs.platform == 'cdktf' || inputs.platform == 'tf' || inputs.platform == '' }}
       uses: hashicorp/setup-terraform@v3
       with:
         terraform_version: ${{ inputs.terraform-version }}
 
-    - name: Setup Pulumi
-      if: ${{ inputs.platform == 'pulumi' }}
+    - name: Install Pulumi CLI
+      if: ${{ inputs.platform == 'pulumi' || inputs.platform == '' }}
       uses: pulumi/actions@v5
       with:
         pulumi-version: ${{ inputs.pulumi-version }}
