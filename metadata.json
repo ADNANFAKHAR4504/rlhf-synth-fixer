@@ -6,11 +6,11 @@
   "turn_type": "single",
   "po_id": "101000781",
   "startedAt": "2025-10-31T07:06:00+00:00",
-  "subtask": "Environment Migration",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "iac",
-    "cdk",
-    "go"
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
   ],
   "aws_services": [
     "VPC",
