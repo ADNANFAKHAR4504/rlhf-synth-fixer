@@ -58,9 +58,18 @@ export interface TapStackArgs {
  */
 export class TapStack extends pulumi.ComponentResource {
   public readonly complianceBucketName: pulumi.Output<string>;
+  public readonly complianceBucketArn: pulumi.Output<string>;
   public readonly snsTopicArn: pulumi.Output<string>;
   public readonly complianceLambdaArn: pulumi.Output<string>;
+  public readonly replicaBucketName: pulumi.Output<string>;
+  public readonly replicaBucketArn: pulumi.Output<string>;
+  public readonly replicaLambdaArn: pulumi.Output<string>;
   public readonly dashboardName: pulumi.Output<string>;
+  public readonly dashboardUrl: pulumi.Output<string>;
+  public readonly securityHubUrl: pulumi.Output<string>;
+  public readonly wellArchitectedWorkloadId: pulumi.Output<string>;
+  public readonly primaryRegion: pulumi.Output<string>;
+  public readonly secondaryRegion: pulumi.Output<string>;
 
   constructor(name: string, args: TapStackArgs = {}, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
@@ -1584,24 +1593,33 @@ exports.handler = async (event) => {
     // ========================================================================
 
     this.complianceBucketName = complianceBucket.bucket;
+    this.complianceBucketArn = complianceBucket.arn;
     this.snsTopicArn = complianceTopic.arn;
     this.complianceLambdaArn = lambdaFunction.arn;
     this.dashboardName = dashboard.dashboardName;
+    this.replicaBucketName = replicaBucket.bucket;
+    this.replicaBucketArn = replicaBucket.arn;
+    this.replicaLambdaArn = replicaLambdaFunction.arn;
+    this.dashboardUrl = pulumi.interpolate`https://console.aws.amazon.com/cloudwatch/home?region=${primaryRegion}#dashboards:name=${dashboard.dashboardName}`;
+    this.securityHubUrl = pulumi.interpolate`https://console.aws.amazon.com/securityhub/home?region=${primaryRegion}`;
+    this.wellArchitectedWorkloadId = pulumi.output(wellArchitectedWorkloadId);
+    this.primaryRegion = pulumi.output(primaryRegion);
+    this.secondaryRegion = pulumi.output(secondaryRegion);
 
     this.registerOutputs({
       complianceBucketName: this.complianceBucketName,
-      complianceBucketArn: complianceBucket.arn,
-      replicaBucketName: replicaBucket.bucket,
-      replicaBucketArn: replicaBucket.arn,
+      complianceBucketArn: this.complianceBucketArn,
+      replicaBucketName: this.replicaBucketName,
+      replicaBucketArn: this.replicaBucketArn,
       snsTopicArn: this.snsTopicArn,
       complianceLambdaArn: this.complianceLambdaArn,
-      replicaLambdaArn: replicaLambdaFunction.arn,
+      replicaLambdaArn: this.replicaLambdaArn,
       dashboardName: this.dashboardName,
-      dashboardUrl: pulumi.interpolate`https://console.aws.amazon.com/cloudwatch/home?region=${primaryRegion}#dashboards:name=${dashboard.dashboardName}`,
-      securityHubUrl: pulumi.interpolate`https://console.aws.amazon.com/securityhub/home?region=${primaryRegion}`,
-      wellArchitectedWorkloadId: wellArchitectedWorkloadId,
-      primaryRegion: primaryRegion,
-      secondaryRegion: secondaryRegion,
+      dashboardUrl: this.dashboardUrl,
+      securityHubUrl: this.securityHubUrl,
+      wellArchitectedWorkloadId: this.wellArchitectedWorkloadId,
+      primaryRegion: this.primaryRegion,
+      secondaryRegion: this.secondaryRegion,
     });
   }
 }
