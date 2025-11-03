@@ -1,40 +1,75 @@
 #!/bin/bash
 set -e
 
-echo "🔨 Running Build..."
+echo "🔧 Starting optimized environment setup..."
 
-if [ -f "metadata.json" ]; then
-  PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
-  LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
-else
-  echo "⚠️ metadata.json missing; skipping build."
-  exit 0
-fi
+NODE_VERSION=${NODE_VERSION:-22.17.0}
+TERRAFORM_VERSION=${TERRAFORM_VERSION:-1.12.2}
+PULUMI_VERSION=${PULUMI_VERSION:-3.109.0}
+PLATFORM=${PLATFORM:-""}
+LANGUAGE=${LANGUAGE:-""}
 
-echo "Project: platform=$PLATFORM, language=$LANGUAGE"
+echo "Platform: $PLATFORM"
+echo "Language: $LANGUAGE"
+echo "Node: $NODE_VERSION | Terraform: $TERRAFORM_VERSION | Pulumi: $PULUMI_VERSION"
 
-case "$PLATFORM-$LANGUAGE" in
-  cdk-ts|cdktf-ts|pulumi-ts)
-    echo "📦 Building TypeScript-based project..."
-    npm ci
-    npm run build
+# -------------------------------------------------------------------
+# Common sanity checks (without version matching or redundant installs)
+# -------------------------------------------------------------------
+echo "🔹 Checking available tools..."
+node --version 2>/dev/null || echo "Node not found"
+python --version 2>/dev/null || echo "Python not found"
+terraform --version 2>/dev/null || true
+pulumi version 2>/dev/null || true
+go version 2>/dev/null || true
+java -version 2>&1 | head -n 1 || true
+
+# -------------------------------------------------------------------
+# Conditional environment setup per platform/language
+# -------------------------------------------------------------------
+case "$PLATFORM" in
+  cdk)
+    echo "🪄 CDK project detected."
+    if [[ "$LANGUAGE" =~ ^(ts|js)$ ]]; then
+      echo "📦 Installing Node.js dependencies..."
+      [ -d "node_modules" ] && echo "node_modules exists — skipping npm ci" || npm ci
+    elif [ "$LANGUAGE" = "java" ]; then
+      echo "📦 Java CDK project — verifying Gradle..."
+      gradle --version || echo "Gradle wrapper will be used."
+    elif [ "$LANGUAGE" = "py" ]; then
+      echo "📦 Python CDK project — installing pipenv deps..."
+      pip install pipenv
+      pipenv install --dev
+    fi
     ;;
-  pulumi-py|cdk-py)
-    echo "🐍 Python project — skipping TS build."
+  cdktf)
+    echo "🪄 CDKTF project detected."
+    if [ "$LANGUAGE" = "go" ]; then
+      echo "📦 Go CDKTF project — skipping npm install."
+    elif [[ "$LANGUAGE" =~ ^(ts|js)$ ]]; then
+      echo "📦 Installing npm dependencies for CDKTF..."
+      [ -d "node_modules" ] && echo "node_modules exists — skipping npm ci" || npm ci
+    fi
     ;;
-  pulumi-go|cdktf-go)
-    echo "🐹 Go project — skipping TS build."
+  tf)
+    echo "🪄 Terraform project — no language runtime setup required."
     ;;
-  tf-hcl|cfn-yaml|cfn-json)
-    echo "🪶 Terraform/CloudFormation — no build required."
-    ;;
-  pulumi-java|cdk-java)
-    echo "☕ Building Java project with Gradle..."
-    chmod +x ./gradlew
-    ./gradlew assemble --no-daemon
+  pulumi)
+    echo "🪄 Pulumi project detected."
+    if [ "$LANGUAGE" = "py" ]; then
+      echo "📦 Installing Python deps for Pulumi..."
+      pip install pipenv
+      [ -d ".venv" ] && echo "venv exists — skipping install" || pipenv install --dev
+    elif [[ "$LANGUAGE" =~ ^(ts|js)$ ]]; then
+      echo "📦 Installing Node deps for Pulumi..."
+      [ -d "node_modules" ] && echo "node_modules exists — skipping npm ci" || npm ci
+    elif [ "$LANGUAGE" = "java" ]; then
+      echo "📦 Java Pulumi project — Gradle build expected."
+      gradle --version || echo "Gradle wrapper will handle it."
+    fi
     ;;
   *)
-    echo "ℹ️ Unknown combination ($PLATFORM-$LANGUAGE) — skipping build."
+    echo "⚠️ Unknown or empty platform — skipping tool-specific setup."
     ;;
 esac
 
