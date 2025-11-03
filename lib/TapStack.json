@@ -96,7 +96,7 @@
   },
   "Conditions": {
     "IsDevEnvironment": {
-      "Equals": [
+      "Fn::Equals": [
         {
           "Ref": "Environment"
         },
@@ -104,7 +104,7 @@
       ]
     },
     "IsStagingEnvironment": {
-      "Equals": [
+      "Fn::Equals": [
         {
           "Ref": "Environment"
         },
@@ -112,7 +112,7 @@
       ]
     },
     "IsProdEnvironment": {
-      "Equals": [
+      "Fn::Equals": [
         {
           "Ref": "Environment"
         },
@@ -120,7 +120,7 @@
       ]
     },
     "EnableReplicationToStaging": {
-      "Equals": [
+      "Fn::Equals": [
         {
           "Ref": "Environment"
         },
@@ -128,7 +128,7 @@
       ]
     },
     "EnableReplicationToProd": {
-      "Equals": [
+      "Fn::Equals": [
         {
           "Ref": "Environment"
         },
@@ -136,7 +136,7 @@
       ]
     },
     "EnableReplication": {
-      "Or": [
+      "Fn::Or": [
         {
           "Condition": "EnableReplicationToStaging"
         },
@@ -151,7 +151,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Sub": "${ReplicationBucketName}-${Environment}-${AWS::Region}"
+          "Fn::Sub": "${ReplicationBucketName}-${Environment}-${AWS::Region}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -171,80 +171,11 @@
           "IgnorePublicAcls": true,
           "RestrictPublicBuckets": true
         },
-        "ReplicationConfiguration": {
-          "If": [
-            "EnableReplicationToStaging",
-            {
-              "Role": {
-                "GetAtt": "S3ReplicationRole.Arn"
-              },
-              "Rules": [
-                {
-                  "Id": "ReplicateToStaging",
-                  "Status": "Enabled",
-                  "Priority": 1,
-                  "DeleteMarkerReplication": {
-                    "Status": "Disabled"
-                  },
-                  "Filter": {},
-                  "Destination": {
-                    "Bucket": {
-                      "Sub": "arn:aws:s3:::${ReplicationBucketName}-staging-${AWS::Region}"
-                    },
-                    "StorageClass": "STANDARD",
-                    "Account": {
-                      "Ref": "AccountIdStaging"
-                    },
-                    "AccessControlTranslation": {
-                      "Owner": "Destination"
-                    }
-                  }
-                }
-              ]
-            },
-            {
-              "If": [
-                "EnableReplicationToProd",
-                {
-                  "Role": {
-                    "GetAtt": "S3ReplicationRole.Arn"
-                  },
-                  "Rules": [
-                    {
-                      "Id": "ReplicateToProd",
-                      "Status": "Enabled",
-                      "Priority": 1,
-                      "DeleteMarkerReplication": {
-                        "Status": "Disabled"
-                      },
-                      "Filter": {},
-                      "Destination": {
-                        "Bucket": {
-                          "Sub": "arn:aws:s3:::${ReplicationBucketName}-prod-${AWS::Region}"
-                        },
-                        "StorageClass": "STANDARD",
-                        "Account": {
-                          "Ref": "AccountIdProd"
-                        },
-                        "AccessControlTranslation": {
-                          "Owner": "Destination"
-                        }
-                      }
-                    }
-                  ]
-                },
-                {
-                  "Ref": "AWS::NoValue"
-                }
-              ]
-            }
-          ]
-        },
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Sub": "${ApplicationName}-config-${Environment}"
+              "Fn::Sub": "${ApplicationName}-config-${Environment}"
             }
           },
           {
@@ -272,6 +203,7 @@
     },
     "ConfigurationBucketPolicy": {
       "Type": "AWS::S3::BucketPolicy",
+      "DependsOn": "ConfigurationBucket",
       "Properties": {
         "Bucket": {
           "Ref": "ConfigurationBucket"
@@ -284,10 +216,10 @@
               "Principal": {
                 "AWS": [
                   {
-                    "If": [
+                    "Fn::If": [
                       "IsDevEnvironment",
                       {
-                        "Sub": "arn:aws:iam::${AccountIdStaging}:root"
+                        "Fn::Sub": "arn:aws:iam::${AccountIdStaging}:root"
                       },
                       {
                         "Ref": "AWS::NoValue"
@@ -295,10 +227,10 @@
                     ]
                   },
                   {
-                    "If": [
+                    "Fn::If": [
                       "IsDevEnvironment",
                       {
-                        "Sub": "arn:aws:iam::${AccountIdProd}:root"
+                        "Fn::Sub": "arn:aws:iam::${AccountIdProd}:root"
                       },
                       {
                         "Ref": "AWS::NoValue"
@@ -306,10 +238,10 @@
                     ]
                   },
                   {
-                    "If": [
+                    "Fn::If": [
                       "IsStagingEnvironment",
                       {
-                        "Sub": "arn:aws:iam::${AccountIdDev}:root"
+                        "Fn::Sub": "arn:aws:iam::${AccountIdDev}:root"
                       },
                       {
                         "Ref": "AWS::NoValue"
@@ -317,10 +249,10 @@
                     ]
                   },
                   {
-                    "If": [
+                    "Fn::If": [
                       "IsStagingEnvironment",
                       {
-                        "Sub": "arn:aws:iam::${AccountIdProd}:root"
+                        "Fn::Sub": "arn:aws:iam::${AccountIdProd}:root"
                       },
                       {
                         "Ref": "AWS::NoValue"
@@ -328,10 +260,10 @@
                     ]
                   },
                   {
-                    "If": [
+                    "Fn::If": [
                       "IsProdEnvironment",
                       {
-                        "Sub": "arn:aws:iam::${AccountIdDev}:root"
+                        "Fn::Sub": "arn:aws:iam::${AccountIdDev}:root"
                       },
                       {
                         "Ref": "AWS::NoValue"
@@ -339,10 +271,10 @@
                     ]
                   },
                   {
-                    "If": [
+                    "Fn::If": [
                       "IsProdEnvironment",
                       {
-                        "Sub": "arn:aws:iam::${AccountIdStaging}:root"
+                        "Fn::Sub": "arn:aws:iam::${AccountIdStaging}:root"
                       },
                       {
                         "Ref": "AWS::NoValue"
@@ -357,10 +289,10 @@
               ],
               "Resource": [
                 {
-                  "GetAtt": "ConfigurationBucket.Arn"
+                  "Fn::Sub": "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}"
                 },
                 {
-                  "Sub": "${ConfigurationBucket.Arn}/*"
+                  "Fn::Sub": "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}/*"
                 }
               ]
             }
@@ -371,9 +303,10 @@
     "S3ReplicationRole": {
       "Type": "AWS::IAM::Role",
       "Condition": "EnableReplication",
+      "DependsOn": "ConfigurationBucket",
       "Properties": {
         "RoleName": {
-          "Sub": "${ReplicationRoleName}-s3-${Environment}"
+          "Fn::Sub": "${ReplicationRoleName}-s3-${Environment}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -400,7 +333,7 @@
                     "s3:ListBucket"
                   ],
                   "Resource": {
-                    "GetAtt": "ConfigurationBucket.Arn"
+                    "Fn::Sub": "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}"
                   }
                 },
                 {
@@ -411,7 +344,7 @@
                     "s3:GetObjectVersionTagging"
                   ],
                   "Resource": {
-                    "Sub": "${ConfigurationBucket.Arn}/*"
+                    "Fn::Sub": "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}/*"
                   }
                 },
                 {
@@ -423,10 +356,10 @@
                   ],
                   "Resource": [
                     {
-                      "If": [
+                      "Fn::If": [
                         "EnableReplicationToStaging",
                         {
-                          "Sub": "arn:aws:s3:::${ReplicationBucketName}-staging-${AWS::Region}/*"
+                          "Fn::Sub": "arn:aws:s3:::${ReplicationBucketName}-staging-${AWS::Region}/*"
                         },
                         {
                           "Ref": "AWS::NoValue"
@@ -434,10 +367,10 @@
                       ]
                     },
                     {
-                      "If": [
+                      "Fn::If": [
                         "EnableReplicationToProd",
                         {
-                          "Sub": "arn:aws:s3:::${ReplicationBucketName}-prod-${AWS::Region}/*"
+                          "Fn::Sub": "arn:aws:s3:::${ReplicationBucketName}-prod-${AWS::Region}/*"
                         },
                         {
                           "Ref": "AWS::NoValue"
@@ -454,7 +387,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Sub": "${ReplicationRoleName}-s3-${Environment}"
+              "Fn::Sub": "${ReplicationRoleName}-s3-${Environment}"
             }
           },
           {
@@ -480,7 +413,7 @@
       "Type": "AWS::DynamoDB::GlobalTable",
       "Properties": {
         "TableName": {
-          "Sub": "${DynamoDBTableName}-${Environment}"
+          "Fn::Sub": "${DynamoDBTableName}-${Environment}"
         },
         "BillingMode": "PAY_PER_REQUEST",
         "StreamSpecification": {
@@ -516,7 +449,7 @@
               {
                 "Key": "Name",
                 "Value": {
-                  "Sub": "${ApplicationName}-metadata-${Environment}"
+                  "Fn::Sub": "${ApplicationName}-metadata-${Environment}"
                 }
               },
               {
@@ -566,9 +499,13 @@
     },
     "LambdaExecutionRole": {
       "Type": "AWS::IAM::Role",
+      "DependsOn": [
+        "ConfigurationBucket",
+        "MetadataTable"
+      ],
       "Properties": {
         "RoleName": {
-          "Sub": "${ApplicationName}-lambda-role-${Environment}"
+          "Fn::Sub": "${ApplicationName}-lambda-role-${Environment}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -602,10 +539,10 @@
                   ],
                   "Resource": [
                     {
-                      "GetAtt": "ConfigurationBucket.Arn"
+                      "Fn::Sub": "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}"
                     },
                     {
-                      "Sub": "${ConfigurationBucket.Arn}/*"
+                      "Fn::Sub": "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}/*"
                     }
                   ]
                 },
@@ -625,13 +562,13 @@
                   ],
                   "Resource": [
                     {
-                      "GetAtt": "MetadataTable.Arn"
+                      "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}-${Environment}"
                     },
                     {
-                      "Sub": "${MetadataTable.Arn}/stream/*"
+                      "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}-${Environment}/stream/*"
                     },
                     {
-                      "Sub": "${MetadataTable.Arn}/index/*"
+                      "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}-${Environment}/index/*"
                     }
                   ]
                 },
@@ -644,7 +581,7 @@
                     "ssm:DescribeParameters"
                   ],
                   "Resource": {
-                    "Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SSMPathPrefix}/*"
+                    "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SSMPathPrefix}/*"
                   }
                 },
                 {
@@ -662,7 +599,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Sub": "${ApplicationName}-lambda-role-${Environment}"
+              "Fn::Sub": "${ApplicationName}-lambda-role-${Environment}"
             }
           },
           {
@@ -688,14 +625,17 @@
       "Type": "AWS::Lambda::Function",
       "Properties": {
         "FunctionName": {
-          "Sub": "${ApplicationName}-replication-monitor-${Environment}"
+          "Fn::Sub": "${ApplicationName}-replication-monitor-${Environment}"
         },
         "Runtime": "python3.11",
         "Handler": "index.handler",
         "MemorySize": 256,
         "Timeout": 60,
         "Role": {
-          "GetAtt": "LambdaExecutionRole.Arn"
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
         },
         "Environment": {
           "Variables": {
@@ -721,7 +661,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Sub": "${ApplicationName}-replication-monitor-${Environment}"
+              "Fn::Sub": "${ApplicationName}-replication-monitor-${Environment}"
             }
           },
           {
@@ -747,14 +687,17 @@
       "Type": "AWS::Lambda::Function",
       "Properties": {
         "FunctionName": {
-          "Sub": "${ApplicationName}-config-validator-${Environment}"
+          "Fn::Sub": "${ApplicationName}-config-validator-${Environment}"
         },
         "Runtime": "python3.11",
         "Handler": "index.handler",
         "MemorySize": 256,
         "Timeout": 300,
         "Role": {
-          "GetAtt": "LambdaExecutionRole.Arn"
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
         },
         "Environment": {
           "Variables": {
@@ -768,7 +711,7 @@
               "Ref": "SSMPathPrefix"
             },
             "ACCOUNT_IDS": {
-              "Sub": "${AccountIdDev},${AccountIdStaging},${AccountIdProd}"
+              "Fn::Sub": "${AccountIdDev},${AccountIdStaging},${AccountIdProd}"
             },
             "APPLICATION_NAME": {
               "Ref": "ApplicationName"
@@ -782,7 +725,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Sub": "${ApplicationName}-config-validator-${Environment}"
+              "Fn::Sub": "${ApplicationName}-config-validator-${Environment}"
             }
           },
           {
@@ -808,14 +751,17 @@
       "Type": "AWS::Lambda::Function",
       "Properties": {
         "FunctionName": {
-          "Sub": "${ApplicationName}-stream-processor-${Environment}"
+          "Fn::Sub": "${ApplicationName}-stream-processor-${Environment}"
         },
         "Runtime": "python3.11",
         "Handler": "index.handler",
         "MemorySize": 256,
         "Timeout": 60,
         "Role": {
-          "GetAtt": "LambdaExecutionRole.Arn"
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
         },
         "Environment": {
           "Variables": {
@@ -837,7 +783,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Sub": "${ApplicationName}-stream-processor-${Environment}"
+              "Fn::Sub": "${ApplicationName}-stream-processor-${Environment}"
             }
           },
           {
@@ -863,10 +809,16 @@
       "Type": "AWS::Lambda::EventSourceMapping",
       "Properties": {
         "EventSourceArn": {
-          "GetAtt": "MetadataTable.StreamArn"
+          "Fn::GetAtt": [
+            "MetadataTable",
+            "StreamArn"
+          ]
         },
         "FunctionName": {
-          "GetAtt": "StreamProcessorLambda.Arn"
+          "Fn::GetAtt": [
+            "StreamProcessorLambda",
+            "Arn"
+          ]
         },
         "StartingPosition": "LATEST",
         "MaximumBatchingWindowInSeconds": 5
@@ -876,7 +828,7 @@
       "Type": "AWS::Events::Rule",
       "Properties": {
         "Name": {
-          "Sub": "${ApplicationName}-stack-update-${Environment}"
+          "Fn::Sub": "${ApplicationName}-stack-update-${Environment}"
         },
         "Description": "Trigger replication on CloudFormation stack updates",
         "EventPattern": {
@@ -899,7 +851,10 @@
         "Targets": [
           {
             "Arn": {
-              "GetAtt": "ConfigValidatorLambda.Arn"
+              "Fn::GetAtt": [
+                "ConfigValidatorLambda",
+                "Arn"
+              ]
             },
             "Id": "1"
           }
@@ -910,7 +865,7 @@
       "Type": "AWS::Events::Rule",
       "Properties": {
         "Name": {
-          "Sub": "${ApplicationName}-config-change-${Environment}"
+          "Fn::Sub": "${ApplicationName}-config-change-${Environment}"
         },
         "Description": "Trigger replication on configuration changes",
         "EventPattern": {
@@ -925,7 +880,10 @@
         "Targets": [
           {
             "Arn": {
-              "GetAtt": "ReplicationMonitorLambda.Arn"
+              "Fn::GetAtt": [
+                "ReplicationMonitorLambda",
+                "Arn"
+              ]
             },
             "Id": "1"
           }
@@ -941,7 +899,10 @@
         "Action": "lambda:InvokeFunction",
         "Principal": "events.amazonaws.com",
         "SourceArn": {
-          "GetAtt": "StackUpdateEventRule.Arn"
+          "Fn::GetAtt": [
+            "StackUpdateEventRule",
+            "Arn"
+          ]
         }
       }
     },
@@ -954,7 +915,10 @@
         "Action": "lambda:InvokeFunction",
         "Principal": "events.amazonaws.com",
         "SourceArn": {
-          "GetAtt": "ConfigChangeEventRule.Arn"
+          "Fn::GetAtt": [
+            "ConfigChangeEventRule",
+            "Arn"
+          ]
         }
       }
     },
@@ -962,11 +926,11 @@
       "Type": "AWS::SSM::Parameter",
       "Properties": {
         "Name": {
-          "Sub": "${SSMPathPrefix}/${Environment}/config/application"
+          "Fn::Sub": "${SSMPathPrefix}/${Environment}/config/application"
         },
         "Type": "String",
         "Value": {
-          "Sub": "{\n  \"environment\": \"${Environment}\",\n  \"version\": \"1.0.0\",\n  \"features\": {\n    \"replication\": true,\n    \"monitoring\": true\n  },\n  \"application\": \"${ApplicationName}\"\n}\n"
+          "Fn::Sub": "{\n  \"environment\": \"${Environment}\",\n  \"version\": \"1.0.0\",\n  \"features\": {\n    \"replication\": true,\n    \"monitoring\": true\n  },\n  \"application\": \"${ApplicationName}\"\n}\n"
         },
         "Description": "Application configuration for multi-account sync",
         "Tags": {
@@ -985,11 +949,11 @@
       "Type": "AWS::SSM::Parameter",
       "Properties": {
         "Name": {
-          "Sub": "${SSMPathPrefix}/${Environment}/config/database"
+          "Fn::Sub": "${SSMPathPrefix}/${Environment}/config/database"
         },
         "Type": "String",
         "Value": {
-          "Sub": "{\n  \"table\": \"${MetadataTable}\",\n  \"region\": \"${AWS::Region}\",\n  \"replication\": \"GLOBAL\",\n  \"billingMode\": \"PAY_PER_REQUEST\"\n}\n"
+          "Fn::Sub": "{\n  \"table\": \"${MetadataTable}\",\n  \"region\": \"${AWS::Region}\",\n  \"replication\": \"GLOBAL\",\n  \"billingMode\": \"PAY_PER_REQUEST\"\n}\n"
         },
         "Description": "Database configuration for multi-account sync",
         "Tags": {
@@ -1008,7 +972,7 @@
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": {
-          "Sub": "${ApplicationName}-lambda-errors-${Environment}"
+          "Fn::Sub": "${ApplicationName}-lambda-errors-${Environment}"
         },
         "AlarmDescription": "Alert on Lambda function errors",
         "MetricName": "Errors",
@@ -1033,10 +997,10 @@
       "Type": "AWS::CloudWatch::Dashboard",
       "Properties": {
         "DashboardName": {
-          "Sub": "${ApplicationName}-replication-${Environment}"
+          "Fn::Sub": "${ApplicationName}-replication-${Environment}"
         },
         "DashboardBody": {
-          "Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 0,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"MultiAccountReplication\", \"ReplicationEvents\", { \"stat\": \"Sum\" } ],\n          [ \".\", \"ValidationSuccess\", { \"stat\": \"Sum\" } ],\n          [ \".\", \"SchemaChangesProcessed\", { \"stat\": \"Sum\" } ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Replication Metrics\",\n        \"yAxis\": {\n          \"left\": {\n            \"min\": 0\n          }\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 6,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/Lambda\", \"Errors\", \"FunctionName\", \"${ReplicationMonitorLambda}\", { \"stat\": \"Sum\" } ],\n          [ \".\", \"Duration\", \".\", \".\", { \"stat\": \"Average\" } ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Performance\"\n      }\n    }\n  ]\n}\n"
+          "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 0,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"MultiAccountReplication\", \"ReplicationEvents\", { \"stat\": \"Sum\" } ],\n          [ \".\", \"ValidationSuccess\", { \"stat\": \"Sum\" } ],\n          [ \".\", \"SchemaChangesProcessed\", { \"stat\": \"Sum\" } ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Replication Metrics\",\n        \"yAxis\": {\n          \"left\": {\n            \"min\": 0\n          }\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 6,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/Lambda\", \"Errors\", \"FunctionName\", \"${ReplicationMonitorLambda}\", { \"stat\": \"Sum\" } ],\n          [ \".\", \"Duration\", \".\", \".\", { \"stat\": \"Average\" } ]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Performance\"\n      }\n    }\n  ]\n}\n"
         }
       }
     }
@@ -1045,7 +1009,7 @@
     "ReplicationStatusEndpoint": {
       "Description": "Endpoint for checking replication status",
       "Value": {
-        "Sub": "https://console.aws.amazon.com/lambda/home?region=${AWS::Region}#/functions/${ReplicationMonitorLambda}"
+        "Fn::Sub": "https://console.aws.amazon.com/lambda/home?region=${AWS::Region}#/functions/${ReplicationMonitorLambda}"
       }
     },
     "S3BucketName": {
@@ -1055,18 +1019,21 @@
       },
       "Export": {
         "Name": {
-          "Sub": "${AWS::StackName}-bucket-name"
+          "Fn::Sub": "${AWS::StackName}-bucket-name"
         }
       }
     },
     "DynamoDBTableArn": {
       "Description": "DynamoDB global table ARN",
       "Value": {
-        "GetAtt": "MetadataTable.Arn"
+        "Fn::GetAtt": [
+          "MetadataTable",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
-          "Sub": "${AWS::StackName}-table-arn"
+          "Fn::Sub": "${AWS::StackName}-table-arn"
         }
       }
     },
@@ -1077,17 +1044,20 @@
       },
       "Export": {
         "Name": {
-          "Sub": "${AWS::StackName}-table-name"
+          "Fn::Sub": "${AWS::StackName}-table-name"
         }
       }
     },
     "ReplicationRoleArn": {
       "Description": "S3 replication role ARN",
       "Value": {
-        "If": [
+        "Fn::If": [
           "EnableReplication",
           {
-            "GetAtt": "S3ReplicationRole.Arn"
+            "Fn::GetAtt": [
+              "S3ReplicationRole",
+              "Arn"
+            ]
           },
           "N/A - No replication enabled for this environment"
         ]
@@ -1096,39 +1066,48 @@
     "CloudWatchDashboardUrl": {
       "Description": "CloudWatch Dashboard URL",
       "Value": {
-        "Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${ReplicationDashboard}"
+        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${ReplicationDashboard}"
       }
     },
     "LambdaMonitorArn": {
       "Description": "Replication Monitor Lambda ARN",
       "Value": {
-        "GetAtt": "ReplicationMonitorLambda.Arn"
+        "Fn::GetAtt": [
+          "ReplicationMonitorLambda",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
-          "Sub": "${AWS::StackName}-monitor-lambda-arn"
+          "Fn::Sub": "${AWS::StackName}-monitor-lambda-arn"
         }
       }
     },
     "LambdaValidatorArn": {
       "Description": "Config Validator Lambda ARN",
       "Value": {
-        "GetAtt": "ConfigValidatorLambda.Arn"
+        "Fn::GetAtt": [
+          "ConfigValidatorLambda",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
-          "Sub": "${AWS::StackName}-validator-lambda-arn"
+          "Fn::Sub": "${AWS::StackName}-validator-lambda-arn"
         }
       }
     },
     "LambdaStreamProcessorArn": {
       "Description": "Stream Processor Lambda ARN",
       "Value": {
-        "GetAtt": "StreamProcessorLambda.Arn"
+        "Fn::GetAtt": [
+          "StreamProcessorLambda",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
-          "Sub": "${AWS::StackName}-stream-processor-lambda-arn"
+          "Fn::Sub": "${AWS::StackName}-stream-processor-lambda-arn"
         }
       }
     },
@@ -1139,7 +1118,7 @@
       },
       "Export": {
         "Name": {
-          "Sub": "${AWS::StackName}-StackName"
+          "Fn::Sub": "${AWS::StackName}-StackName"
         }
       }
     },
@@ -1150,7 +1129,7 @@
       },
       "Export": {
         "Name": {
-          "Sub": "${AWS::StackName}-Environment"
+          "Fn::Sub": "${AWS::StackName}-Environment"
         }
       }
     }

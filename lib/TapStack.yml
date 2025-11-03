@@ -113,39 +113,6 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      ReplicationConfiguration: !If
-        - EnableReplicationToStaging
-        - Role: !GetAtt S3ReplicationRole.Arn
-          Rules:
-            - Id: ReplicateToStaging
-              Status: Enabled
-              Priority: 1
-              DeleteMarkerReplication:
-                Status: Disabled
-              Filter: {}
-              Destination:
-                Bucket: !Sub "arn:aws:s3:::${ReplicationBucketName}-staging-${AWS::Region}"
-                StorageClass: STANDARD
-                Account: !Ref AccountIdStaging
-                AccessControlTranslation:
-                  Owner: Destination
-        - !If
-          - EnableReplicationToProd
-          - Role: !GetAtt S3ReplicationRole.Arn
-            Rules:
-              - Id: ReplicateToProd
-                Status: Enabled
-                Priority: 1
-                DeleteMarkerReplication:
-                  Status: Disabled
-                Filter: {}
-                Destination:
-                  Bucket: !Sub "arn:aws:s3:::${ReplicationBucketName}-prod-${AWS::Region}"
-                  StorageClass: STANDARD
-                  Account: !Ref AccountIdProd
-                  AccessControlTranslation:
-                    Owner: Destination
-          - !Ref AWS::NoValue
       Tags:
         - Key: Name
           Value: !Sub "${ApplicationName}-config-${Environment}"
@@ -163,6 +130,7 @@ Resources:
   # ===========================
   ConfigurationBucketPolicy:
     Type: AWS::S3::BucketPolicy
+    DependsOn: ConfigurationBucket
     Properties:
       Bucket: !Ref ConfigurationBucket
       PolicyDocument:
@@ -199,8 +167,8 @@ Resources:
               - "s3:GetObject"
               - "s3:ListBucket"
             Resource:
-              - !GetAtt ConfigurationBucket.Arn
-              - !Sub "${ConfigurationBucket.Arn}/*"
+              - !Sub "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}"
+              - !Sub "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}/*"
 
   # ===========================
   # IAM Role for S3 Replication
@@ -208,6 +176,7 @@ Resources:
   S3ReplicationRole:
     Type: AWS::IAM::Role
     Condition: EnableReplication
+    DependsOn: ConfigurationBucket
     Properties:
       RoleName: !Sub "${ReplicationRoleName}-s3-${Environment}"
       AssumeRolePolicyDocument:
@@ -226,13 +195,13 @@ Resources:
                 Action:
                   - "s3:GetReplicationConfiguration"
                   - "s3:ListBucket"
-                Resource: !GetAtt ConfigurationBucket.Arn
+                Resource: !Sub "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}"
               - Effect: Allow
                 Action:
                   - "s3:GetObjectVersionForReplication"
                   - "s3:GetObjectVersionAcl"
                   - "s3:GetObjectVersionTagging"
-                Resource: !Sub "${ConfigurationBucket.Arn}/*"
+                Resource: !Sub "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}/*"
               - Effect: Allow
                 Action:
                   - "s3:ReplicateObject"
@@ -307,6 +276,9 @@ Resources:
   # ===========================
   LambdaExecutionRole:
     Type: AWS::IAM::Role
+    DependsOn:
+      - ConfigurationBucket
+      - MetadataTable
     Properties:
       RoleName: !Sub "${ApplicationName}-lambda-role-${Environment}"
       AssumeRolePolicyDocument:
@@ -331,8 +303,8 @@ Resources:
                   - "s3:GetBucketVersioning"
                   - "s3:GetBucketReplication"
                 Resource:
-                  - !GetAtt ConfigurationBucket.Arn
-                  - !Sub "${ConfigurationBucket.Arn}/*"
+                  - !Sub "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}"
+                  - !Sub "arn:aws:s3:::${ReplicationBucketName}-${Environment}-${AWS::Region}/*"
               - Effect: Allow
                 Action:
                   - "dynamodb:DescribeTable"
@@ -346,9 +318,9 @@ Resources:
                   - "dynamodb:GetShardIterator"
                   - "dynamodb:ListStreams"
                 Resource:
-                  - !GetAtt MetadataTable.Arn
-                  - !Sub "${MetadataTable.Arn}/stream/*"
-                  - !Sub "${MetadataTable.Arn}/index/*"
+                  - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}-${Environment}"
+                  - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}-${Environment}/stream/*"
+                  - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}-${Environment}/index/*"
               - Effect: Allow
                 Action:
                   - "ssm:GetParameter"
