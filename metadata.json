@@ -1,0 +1,25 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-03T18:51:55+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "po_id": "pkoic",
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "API Gateway",
+    "CloudWatch",
+    "SQS",
+    "X-Ray",
+    "VPC",
+    "IAM"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 9
+}
