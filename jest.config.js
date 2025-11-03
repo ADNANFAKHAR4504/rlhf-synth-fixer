@@ -23,7 +23,7 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
     global: {
-      branches: 75, // Adjusted from 90% due to Pulumi async output transformations being untestable in mocked unit tests
+      branches: 90, 
       functions: 90,
       lines: 90,
       statements: 90,
