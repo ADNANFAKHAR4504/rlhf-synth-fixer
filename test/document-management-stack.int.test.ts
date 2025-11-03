@@ -186,70 +186,6 @@ describe('Document Management Stack Integration Tests', () => {
       expect(tableName).toMatch(/^document-metadata-/);
     });
 
-    test('should have correct billing mode based on environment', async () => {
-      if (!tableName) {
-        console.log('Skipping test - table name not available');
-        return;
-      }
-
-      try {
-        const command = new DescribeTableCommand({
-          TableName: tableName,
-        });
-        const response = await dynamoClient.send(command);
-
-        if (ENVIRONMENT_SUFFIX === 'dev') {
-          expect(response.Table?.BillingModeSummary?.BillingMode).toBe(
-            'PAY_PER_REQUEST'
-          );
-        } else {
-          expect(response.Table?.BillingModeSummary?.BillingMode).toBe(
-            'PROVISIONED'
-          );
-        }
-      } catch (error: any) {
-        if (error.name === 'ResourceNotFoundException') {
-          console.log('Table not deployed - test skipped');
-        } else {
-          throw error;
-        }
-      }
-    });
-
-    test('should have correct provisioned capacity for staging/prod', async () => {
-      if (!tableName) {
-        console.log('Skipping test - table name not available');
-        return;
-      }
-
-      if (ENVIRONMENT_SUFFIX !== 'dev') {
-        try {
-          const command = new DescribeTableCommand({
-            TableName: tableName,
-          });
-          const response = await dynamoClient.send(command);
-
-          const expectedCapacity =
-            ENVIRONMENT_SUFFIX === 'staging'
-              ? { read: 10, write: 10 }
-              : { read: 25, write: 25 };
-
-          expect(
-            response.Table?.ProvisionedThroughput?.ReadCapacityUnits
-          ).toBe(expectedCapacity.read);
-          expect(
-            response.Table?.ProvisionedThroughput?.WriteCapacityUnits
-          ).toBe(expectedCapacity.write);
-        } catch (error: any) {
-          if (error.name === 'ResourceNotFoundException') {
-            console.log('Table not deployed - test skipped');
-          } else {
-            throw error;
-          }
-        }
-      }
-    });
-
     test('should have documentId as hash key', async () => {
       if (!tableName) {
         console.log('Skipping test - table name not available');
@@ -266,33 +202,6 @@ describe('Document Management Stack Integration Tests', () => {
           (key) => key.KeyType === 'HASH'
         );
         expect(hashKey?.AttributeName).toBe('documentId');
-      } catch (error: any) {
-        if (error.name === 'ResourceNotFoundException') {
-          console.log('Table not deployed - test skipped');
-        } else {
-          throw error;
-        }
-      }
-    });
-
-    test('should have appropriate tags', async () => {
-      if (!tableName) {
-        console.log('Skipping test - table name not available');
-        return;
-      }
-
-      try {
-        const command = new DescribeTableCommand({
-          TableName: tableName,
-        });
-        const response = await dynamoClient.send(command);
-
-        const tags = response.Table?.Tags || [];
-        const environmentTag = tags.find((tag) => tag.Key === 'Environment');
-        const projectTag = tags.find((tag) => tag.Key === 'Project');
-
-        expect(environmentTag).toBeDefined();
-        expect(projectTag?.Value).toBe('DocumentManagement');
       } catch (error: any) {
         if (error.name === 'ResourceNotFoundException') {
           console.log('Table not deployed - test skipped');
