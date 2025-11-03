@@ -73,43 +73,45 @@ export class TapStack extends pulumi.ComponentResource {
         enableKeyRotation: true,
         deletionWindowInDays: 10,
         tags: defaultTags,
-        policy: pulumi.all([currentIdentity.accountId, currentRegion.name]).apply(([accountId, region]) =>
-          JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Sid: 'Enable IAM User Permissions',
-                Effect: 'Allow',
-                Principal: {
-                  AWS: `arn:aws:iam::${accountId}:root`,
+        policy: pulumi
+          .all([currentIdentity.accountId, currentRegion.name])
+          .apply(([accountId, region]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Sid: 'Enable IAM User Permissions',
+                  Effect: 'Allow',
+                  Principal: {
+                    AWS: `arn:aws:iam::${accountId}:root`,
+                  },
+                  Action: 'kms:*',
+                  Resource: '*',
                 },
-                Action: 'kms:*',
-                Resource: '*',
-              },
-              {
-                Sid: 'Allow CloudWatch Logs',
-                Effect: 'Allow',
-                Principal: {
-                  Service: `logs.${region}.amazonaws.com`,
-                },
-                Action: [
-                  'kms:Encrypt',
-                  'kms:Decrypt',
-                  'kms:ReEncrypt*',
-                  'kms:GenerateDataKey*',
-                  'kms:CreateGrant',
-                  'kms:DescribeKey',
-                ],
-                Resource: '*',
-                Condition: {
-                  ArnLike: {
-                    'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${region}:${accountId}:log-group:*`,
+                {
+                  Sid: 'Allow CloudWatch Logs',
+                  Effect: 'Allow',
+                  Principal: {
+                    Service: `logs.${region}.amazonaws.com`,
+                  },
+                  Action: [
+                    'kms:Encrypt',
+                    'kms:Decrypt',
+                    'kms:ReEncrypt*',
+                    'kms:GenerateDataKey*',
+                    'kms:CreateGrant',
+                    'kms:DescribeKey',
+                  ],
+                  Resource: '*',
+                  Condition: {
+                    ArnLike: {
+                      'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${region}:${accountId}:log-group:*`,
+                    },
                   },
                 },
-              },
-            ],
-          })
-        ),
+              ],
+            })
+          ),
       },
       { parent: this }
     );
@@ -770,8 +772,8 @@ export class TapStack extends pulumi.ComponentResource {
         parameterGroupName: dbParameterGroup.name,
         multiAz: true,
         username: 'admin',
-        password: dbMasterPasswordVersion.secretString.apply(s =>
-          JSON.parse(s as string).password as string
+        password: dbMasterPasswordVersion.secretString.apply(
+          s => JSON.parse(s as string).password as string
         ),
         backupRetentionPeriod: 7,
         backupWindow: '03:00-04:00',
