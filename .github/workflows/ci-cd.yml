@@ -924,7 +924,7 @@ jobs:
           if-no-files-found: warn
     outputs:
       quality_score: ${{ steps.extract.outputs.quality_score }}
-      
+
   cleanup:
     name: Cleanup (Destroy Resources)
     runs-on: ubuntu-24.04
@@ -1019,7 +1019,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [detect-metadata, cleanup, claude-code-action]
     environment: stage
-    if: ${{ always() && !cancelled() && (needs.cleanup.result == 'success' || needs.cleanup.result == 'skipped') && needs.claude-code-action.result == 'success' && needs.detect-metadata.result == 'success' && ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch')) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    if: ${{ always() && !cancelled() && needs.cleanup.result == 'success' && needs.claude-code-action.result == 'success' && needs.detect-metadata.result == 'success' && ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch')) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     permissions:
       contents: write
 
