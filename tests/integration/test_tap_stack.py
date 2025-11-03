@@ -676,11 +676,11 @@ class TestCrossServiceInteractions(BaseIntegrationTest):
             self.assertGreater(len(logs), 0)
             print(f"[INFO] Retrieved {len(logs)} log messages")
             
-            # Verify Lambda was invoked by checking for the request ID in logs
-            request_id = result['requestId']
-            found_request = any(request_id in log for log in logs)
-            self.assertTrue(found_request, "Lambda did not process API Gateway request - request ID not found in logs")
-            print(f"[INFO] Successfully verified API Gateway to Lambda integration (found request ID: {request_id})")
+            # Verify Lambda was invoked by checking for the test_id in the event logs
+            test_id = test_data['test_id']
+            found_request = any(test_id in log for log in logs)
+            self.assertTrue(found_request, "Lambda did not process API Gateway request - test_id not found in logs")
+            print(f"[INFO] Successfully verified API Gateway to Lambda integration (found test_id: {test_id} in logs)")
             
         except requests.exceptions.RequestException as e:
             print(f"[ERROR] API Gateway request failed: {e}")
