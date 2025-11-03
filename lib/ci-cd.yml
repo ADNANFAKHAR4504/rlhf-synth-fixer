@@ -41,12 +41,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials
+      - name: Configure AWS Credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Build
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -65,11 +65,22 @@ jobs:
           npx cdk synth --app "npx ts-node --prefer-ts-exts bin/*.ts"
         continue-on-error: false
 
-      - name: Upload artifacts
+      - name: Encrypt artifacts with KMS
+        run: |
+          # Create tarball of artifacts
+          tar -czf cdk-outputs.tar.gz -C cdk.out .
+          # Encrypt with AWS KMS
+          aws kms encrypt \
+            --key-id alias/github-actions-artifacts \
+            --plaintext fileb://cdk-outputs.tar.gz \
+            --output text \
+            --query CiphertextBlob > cdk-outputs.tar.gz.encrypted
+
+      - name: Upload encrypted artifacts
         uses: actions/upload-artifact@v4
         with:
           name: cdk-outputs
-          path: cdk.out/
+          path: cdk-outputs.tar.gz.encrypted
 
   deploy-dev:
     name: Deploy to Dev
@@ -86,12 +97,12 @@ jobs:
           name: cdk-outputs
           path: cdk.out/
 
-      - name: Configure AWS Credentials for Dev
+      - name: Configure AWS Credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Dev
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -141,14 +152,13 @@ jobs:
           name: cdk-outputs
           path: cdk.out/
 
-      - name: Assume cross-account role for Staging
+      - name: Assume cross-account role for Staging via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
           role-to-assume: arn:aws:iam::${{ env.STAGING_ACCOUNT_ID }}:role/CrossAccountDeployRole
+          aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActions-Staging
+          role-chaining: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -193,14 +203,13 @@ jobs:
           name: cdk-outputs
           path: cdk.out/
 
-      - name: Assume cross-account role for Production
+      - name: Assume cross-account role for Production via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
           role-to-assume: arn:aws:iam::${{ env.PROD_ACCOUNT_ID }}:role/CrossAccountDeployRole
+          aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActions-Prod
+          role-chaining: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
