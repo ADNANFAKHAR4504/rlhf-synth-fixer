@@ -15,13 +15,17 @@
     "EC2",
     "RDS",
     "ECS",
-    "ELB",
+    "ALB",
     "Route53",
     "S3",
     "IAM",
     "SSM",
     "CloudWatch",
-    "Auto Scaling"
+    "Auto Scaling",
+    "EIP",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Groups"
   ],
   "task_config": {
     "deploy_env": "dev.tfvars"
