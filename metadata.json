@@ -1,0 +1,24 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000332",
+  "team": "1",
+  "startedAt": "2025-11-03T12:27:22.302Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "\"IAM",
+    "KMS",
+    "S3",
+    "RDS",
+    "EBS",
+    "AWS Config",
+    "Secrets Manager",
+    "CloudWatch",
+    "CloudFormation\""
+  ]
+}
