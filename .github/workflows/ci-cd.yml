@@ -88,11 +88,15 @@ jobs:
         with:
           fetch-depth: 0 # Required to fetch all history for commitlint
 
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
+      - name: Setup Node for Commitlint
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "false"
+
+      - name: Install Commitlint locally
+        run: |
+          npm install --no-save \
+            @commitlint/{cli,config-conventional}
 
       - name: Validate commit message
         run: npx commitlint --last
@@ -281,8 +285,10 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "false"
-          is-analysis: "true"
+          download-artifacts: 'false'
+          is-analysis: 'true'
+          platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Run analysis
         run: ./scripts/analysis.sh
@@ -578,6 +584,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: "true"
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Download Deployment Outputs
         uses: actions/download-artifact@v4

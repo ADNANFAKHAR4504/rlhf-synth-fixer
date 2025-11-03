@@ -63,8 +63,20 @@ elif [ "$PLATFORM" = "pulumi" ]; then
   echo "Pulumi backend URL: $PULUMI_BACKEND_URL"
   echo "Pulumi organization: $PULUMI_ORG"
   
-  # Login to Pulumi S3 backend
-  pipenv run pulumi-login
+  # Login to Pulumi backend depending on language/runtime
+  if [ "$LANGUAGE" = "py" ]; then
+    if command -v pipenv >/dev/null 2>&1; then
+      echo "📦 Using pipenv to login Pulumi..."
+      pipenv run pulumi login --cloud-url "$PULUMI_BACKEND_URL"
+    else
+      echo "⚠️ pipenv not found, falling back to direct Pulumi login (Python project)"
+      pulumi login --cloud-url "$PULUMI_BACKEND_URL"
+    fi
+  else
+    echo "📦 Using direct Pulumi CLI login..."
+    pulumi login --cloud-url "$PULUMI_BACKEND_URL"
+  fi
+
   echo "✅ Pulumi bootstrap completed"
 
 elif [ "$PLATFORM" = "tf" ]; then
