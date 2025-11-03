@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable quotes */
 /* eslint-disable @typescript-eslint/quotes */
 /* eslint-disable prettier/prettier */
@@ -100,14 +101,6 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    const kmsAlias = new aws.kms.Alias(
-      `prod-kms-alias-${args.environmentSuffix}`,
-      {
-        name: `alias/prod-encryption-${args.environmentSuffix}`,
-        targetKeyId: this.kmsKey.keyId,
-      },
-      defaultOpts
-    );
 
     // =========================================================================
     // 2. VPC Configuration with 3 AZs
@@ -194,7 +187,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     const eips: aws.ec2.Eip[] = [];
 
-    this.availabilityZones.forEach((az, index) => {
+    this.availabilityZones.forEach((az, _index) => {
       const eip = new aws.ec2.Eip(
         `prod-eip-${az}-${args.environmentSuffix}`,
         {
@@ -1085,16 +1078,6 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
       defaultOpts
     );
 
-    const scaleDownPolicy = new aws.autoscaling.Policy(
-      `prod-scale-down-${args.environmentSuffix}`,
-      {
-        scalingAdjustment: -1,
-        adjustmentType: "ChangeInCapacity",
-        cooldown: 300,
-        autoscalingGroupName: this.prodAutoScalingGroup.name,
-      },
-      defaultOpts
-    );
 
     if (migrationPhase !== "complete") {
       const launchTemplateBlue = new aws.ec2.LaunchTemplate(
@@ -1450,7 +1433,7 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
     return role;
   }
 
-  private writeOutputsToFile(args: TapStackArgs): void {
+  private writeOutputsToFile(_args: TapStackArgs): void {
     pulumi.all(this.outputs).apply((outputs) => {
       const outputDir = path.join(process.cwd(), "cfn-outputs");
       const outputFile = path.join(outputDir, "flat-outputs.json");
