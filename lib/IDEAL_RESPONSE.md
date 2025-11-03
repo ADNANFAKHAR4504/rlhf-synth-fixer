@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document contains the ideal implementation of the multi-environment infrastructure replication system using AWS CDK TypeScript. The solution provides state tracking, drift validation, and monitoring capabilities for managing infrastructure consistency across environments.
+This document contains the ideal implementation of the multi-environment infrastructure replication system using AWS CDK ts. The solution provides state tracking, drift validation, and monitoring capabilities for managing infrastructure consistency across environments.
 
 ## bin/tap.ts
 
