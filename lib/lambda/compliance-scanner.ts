@@ -10,6 +10,7 @@ export interface ComplianceScannerLambdaArgs {
   vpcSecurityGroupIds: pulumi.Input<string>[];
   metricsNamespace: string;
   tags: pulumi.Input<{ [key: string]: string }>;
+  deadLetterQueueArn?: pulumi.Input<string>;
 }
 
 export class ComplianceScannerLambda extends pulumi.ComponentResource {
@@ -53,103 +54,124 @@ export class ComplianceScannerLambda extends pulumi.ComponentResource {
       {
         role: lambdaRole.id,
         policy: pulumi
-          .all([args.bucketName, args.snsTopicArn])
-          .apply(([bucketName, topicArn]) =>
-            JSON.stringify({
+          .all([args.bucketName, args.snsTopicArn, args.deadLetterQueueArn || ''])
+          .apply(([bucketName, topicArn, dlqArn]) => {
+            const statements: any[] = [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'ec2:DescribeInstances',
+                  'ec2:DescribeSecurityGroups',
+                  'ec2:DescribeTags',
+                ],
+                Resource: '*',
+              },
+              {
+                Effect: 'Allow',
+                Action: [
+                  's3:ListAllMyBuckets',
+                  's3:GetBucketEncryption',
+                  's3:GetBucketTagging',
+                ],
+                Resource: '*',
+              },
+              {
+                Effect: 'Allow',
+                Action: ['s3:PutObject', 's3:GetObject'],
+                Resource: `arn:aws:s3:::${bucketName}/*`,
+              },
+              {
+                Effect: 'Allow',
+                Action: ['lambda:ListFunctions', 'lambda:ListTags'],
+                Resource: '*',
+              },
+              {
+                Effect: 'Allow',
+                Action: ['sns:Publish'],
+                Resource: topicArn,
+              },
+              {
+                Effect: 'Allow',
+                Action: ['cloudwatch:PutMetricData'],
+                Resource: '*',
+              },
+              {
+                Effect: 'Allow',
+                Action: [
+                  'logs:CreateLogGroup',
+                  'logs:CreateLogStream',
+                  'logs:PutLogEvents',
+                ],
+                Resource: 'arn:aws:logs:*:*:*',
+              },
+              {
+                Effect: 'Allow',
+                Action: [
+                  'ec2:CreateNetworkInterface',
+                  'ec2:DescribeNetworkInterfaces',
+                  'ec2:DeleteNetworkInterface',
+                ],
+                Resource: '*',
+              },
+            ];
+
+            // Add SQS permissions if DLQ is provided
+            if (dlqArn) {
+              statements.push({
+                Effect: 'Allow',
+                Action: ['sqs:SendMessage'],
+                Resource: dlqArn,
+              });
+            }
+
+            return JSON.stringify({
               Version: '2012-10-17',
-              Statement: [
-                {
-                  Effect: 'Allow',
-                  Action: [
-                    'ec2:DescribeInstances',
-                    'ec2:DescribeSecurityGroups',
-                    'ec2:DescribeTags',
-                  ],
-                  Resource: '*',
-                },
-                {
-                  Effect: 'Allow',
-                  Action: [
-                    's3:ListAllMyBuckets',
-                    's3:GetBucketEncryption',
-                    's3:GetBucketTagging',
-                  ],
-                  Resource: '*',
-                },
-                {
-                  Effect: 'Allow',
-                  Action: ['s3:PutObject', 's3:GetObject'],
-                  Resource: `arn:aws:s3:::${bucketName}/*`,
-                },
-                {
-                  Effect: 'Allow',
-                  Action: ['lambda:ListFunctions', 'lambda:ListTags'],
-                  Resource: '*',
-                },
-                {
-                  Effect: 'Allow',
-                  Action: ['sns:Publish'],
-                  Resource: topicArn,
-                },
-                {
-                  Effect: 'Allow',
-                  Action: ['cloudwatch:PutMetricData'],
-                  Resource: '*',
-                },
-                {
-                  Effect: 'Allow',
-                  Action: [
-                    'logs:CreateLogGroup',
-                    'logs:CreateLogStream',
-                    'logs:PutLogEvents',
-                  ],
-                  Resource: 'arn:aws:logs:*:*:*',
-                },
-                {
-                  Effect: 'Allow',
-                  Action: [
-                    'ec2:CreateNetworkInterface',
-                    'ec2:DescribeNetworkInterfaces',
-                    'ec2:DeleteNetworkInterface',
-                  ],
-                  Resource: '*',
-                },
-              ],
-            })
-          ),
+              Statement: statements,
+            });
+          }),
       },
       { parent: this }
     );
 
+    // Lambda function configuration
+    const lambdaConfig: aws.lambda.FunctionArgs = {
+      name: `compliance-scanner-${suffix}`,
+      runtime: 'nodejs18.x',
+      handler: 'index.handler',
+      role: lambdaRole.arn,
+      timeout: 300,
+      memorySize: 512,
+      environment: {
+        variables: {
+          COMPLIANCE_BUCKET: args.bucketName,
+          SNS_TOPIC_ARN: args.snsTopicArn,
+          METRICS_NAMESPACE: args.metricsNamespace,
+          REQUIRED_TAGS: 'Environment,Owner,CostCenter',
+        },
+      },
+      vpcConfig: {
+        subnetIds: args.vpcSubnetIds,
+        securityGroupIds: args.vpcSecurityGroupIds,
+      },
+      code: new pulumi.asset.AssetArchive({
+        '.': new pulumi.asset.FileArchive(
+          path.join(__dirname, 'functions/compliance-scanner')
+        ),
+      }),
+      tags: tags,
+    };
+
+    // Add dead letter config if provided
+    if (args.deadLetterQueueArn) {
+      lambdaConfig.deadLetterConfig = {
+        targetArn: args.deadLetterQueueArn,
+      };
+    }
+
     // Lambda function
     const lambda = new aws.lambda.Function(
       `compliance-scanner-${suffix}`,
-      {
-        name: `compliance-scanner-${suffix}`,
-        runtime: 'nodejs18.x',
-        handler: 'index.handler',
-        role: lambdaRole.arn,
-        timeout: 300,
-        memorySize: 512,
-        environment: {
-          variables: {
-            COMPLIANCE_BUCKET: args.bucketName,
-            SNS_TOPIC_ARN: args.snsTopicArn,
-            METRICS_NAMESPACE: args.metricsNamespace,
-            REQUIRED_TAGS: 'Environment,Owner,CostCenter',
-          },
-        },
-        vpcConfig: {
-          subnetIds: args.vpcSubnetIds,
-          securityGroupIds: args.vpcSecurityGroupIds,
-        },
-        code: new pulumi.asset.AssetArchive({
-          '.': new pulumi.asset.FileArchive(
-            path.join(__dirname, 'functions/compliance-scanner')
-          ),
-        }),
-        tags: tags,
-      },
+      lambdaConfig,
       { parent: this, dependsOn: [lambdaPolicy] }
     );
 

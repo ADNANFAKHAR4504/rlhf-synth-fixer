@@ -10,6 +10,7 @@ import { RemediationLambda } from './lambda/remediation-lambda';
 export interface ComplianceMonitoringStackArgs {
   environmentSuffix: string;
   tags: pulumi.Input<{ [key: string]: string }>;
+  complianceEmailEndpoint?: string;
 }
 
 export class ComplianceMonitoringStack extends pulumi.ComponentResource {
@@ -26,6 +27,7 @@ export class ComplianceMonitoringStack extends pulumi.ComponentResource {
 
     const suffix = args.environmentSuffix;
     const tags = args.tags;
+    const complianceEmail = args.complianceEmailEndpoint || 'compliance-team@example.com';
 
     // Get the current AWS region
     const currentRegion = aws.getRegionOutput();
@@ -94,7 +96,7 @@ export class ComplianceMonitoringStack extends pulumi.ComponentResource {
       {
         topic: snsTopic.arn,
         protocol: 'email',
-        endpoint: 'compliance-team@example.com',
+        endpoint: complianceEmail,
       },
       { parent: this }
     );
@@ -113,6 +115,17 @@ export class ComplianceMonitoringStack extends pulumi.ComponentResource {
     // CloudWatch custom metrics namespace
     const metricsNamespace = 'ComplianceMonitoring';
 
+    // SQS Dead Letter Queue for Lambda functions
+    const dlq = new aws.sqs.Queue(
+      `lambda-dlq-${suffix}`,
+      {
+        name: `lambda-dlq-${suffix}`,
+        messageRetentionSeconds: 1209600, // 14 days
+        tags: tags,
+      },
+      { parent: this }
+    );
+
     // Lambda function for compliance scanning
     const complianceScanner = new ComplianceScannerLambda(
       `compliance-scanner-${suffix}`,
@@ -123,6 +136,7 @@ export class ComplianceMonitoringStack extends pulumi.ComponentResource {
         vpcSubnetIds: vpcStack.privateSubnetIds,
         vpcSecurityGroupIds: [vpcStack.lambdaSecurityGroupId],
         metricsNamespace: metricsNamespace,
+        deadLetterQueueArn: dlq.arn,
         tags: tags,
       },
       { parent: this }
@@ -410,6 +424,7 @@ export class ComplianceMonitoringStack extends pulumi.ComponentResource {
         snsTopicArn: snsTopic.arn,
         vpcSubnetIds: vpcStack.privateSubnetIds,
         vpcSecurityGroupIds: [vpcStack.lambdaSecurityGroupId],
+        deadLetterQueueArn: dlq.arn,
         tags: tags,
       },
       { parent: this }

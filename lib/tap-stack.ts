@@ -6,6 +6,7 @@ import { ComplianceMonitoringStack } from './compliance-monitoring-stack';
 export interface TapStackArgs {
   environmentSuffix?: string;
   tags?: pulumi.Input<{ [key: string]: string }>;
+  complianceEmailEndpoint?: string;
 }
 
 export class TapStack extends pulumi.ComponentResource {
@@ -25,6 +26,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         environmentSuffix: environmentSuffix,
         tags: tags,
+        complianceEmailEndpoint: args.complianceEmailEndpoint,
       },
       { parent: this }
     );

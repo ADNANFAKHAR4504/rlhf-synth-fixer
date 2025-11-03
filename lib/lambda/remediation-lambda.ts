@@ -8,6 +8,7 @@ export interface RemediationLambdaArgs {
   vpcSubnetIds: pulumi.Input<string>[];
   vpcSecurityGroupIds: pulumi.Input<string>[];
   tags: pulumi.Input<{ [key: string]: string }>;
+  deadLetterQueueArn?: pulumi.Input<string>;
 }
 
 export class RemediationLambda extends pulumi.ComponentResource {
@@ -50,76 +51,97 @@ export class RemediationLambda extends pulumi.ComponentResource {
       `remediation-lambda-policy-${suffix}`,
       {
         role: lambdaRole.id,
-        policy: pulumi.all([args.snsTopicArn]).apply(([topicArn]) =>
-          JSON.stringify({
+        policy: pulumi.all([args.snsTopicArn, args.deadLetterQueueArn || '']).apply(([topicArn, dlqArn]) => {
+          const statements: any[] = [
+            {
+              Effect: 'Allow',
+              Action: ['s3:PutBucketEncryption', 's3:PutBucketTagging'],
+              Resource: '*',
+            },
+            {
+              Effect: 'Allow',
+              Action: ['ec2:CreateTags', 'ec2:ModifyInstanceAttribute'],
+              Resource: '*',
+            },
+            {
+              Effect: 'Allow',
+              Action: ['sns:Publish'],
+              Resource: topicArn,
+            },
+            {
+              Effect: 'Allow',
+              Action: [
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+              ],
+              Resource: 'arn:aws:logs:*:*:*',
+            },
+            {
+              Effect: 'Allow',
+              Action: [
+                'ec2:CreateNetworkInterface',
+                'ec2:DescribeNetworkInterfaces',
+                'ec2:DeleteNetworkInterface',
+              ],
+              Resource: '*',
+            },
+          ];
+
+          // Add SQS permissions if DLQ is provided
+          if (dlqArn) {
+            statements.push({
+              Effect: 'Allow',
+              Action: ['sqs:SendMessage'],
+              Resource: dlqArn,
+            });
+          }
+
+          return JSON.stringify({
             Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Action: ['s3:PutBucketEncryption', 's3:PutBucketTagging'],
-                Resource: '*',
-              },
-              {
-                Effect: 'Allow',
-                Action: ['ec2:CreateTags', 'ec2:ModifyInstanceAttribute'],
-                Resource: '*',
-              },
-              {
-                Effect: 'Allow',
-                Action: ['sns:Publish'],
-                Resource: topicArn,
-              },
-              {
-                Effect: 'Allow',
-                Action: [
-                  'logs:CreateLogGroup',
-                  'logs:CreateLogStream',
-                  'logs:PutLogEvents',
-                ],
-                Resource: 'arn:aws:logs:*:*:*',
-              },
-              {
-                Effect: 'Allow',
-                Action: [
-                  'ec2:CreateNetworkInterface',
-                  'ec2:DescribeNetworkInterfaces',
-                  'ec2:DeleteNetworkInterface',
-                ],
-                Resource: '*',
-              },
-            ],
-          })
-        ),
+            Statement: statements,
+          });
+        }),
       },
       { parent: this }
     );
 
+    // Lambda function configuration
+    const lambdaConfig: aws.lambda.FunctionArgs = {
+      name: `remediation-lambda-${suffix}`,
+      runtime: 'nodejs18.x',
+      handler: 'index.handler',
+      role: lambdaRole.arn,
+      timeout: 300,
+      memorySize: 256,
+      environment: {
+        variables: {
+          SNS_TOPIC_ARN: args.snsTopicArn,
+        },
+      },
+      vpcConfig: {
+        subnetIds: args.vpcSubnetIds,
+        securityGroupIds: args.vpcSecurityGroupIds,
+      },
+      code: new pulumi.asset.AssetArchive({
+        '.': new pulumi.asset.FileArchive(
+          path.join(__dirname, 'functions/remediation')
+        ),
+      }),
+      tags: tags,
+    };
+
+    // Add dead letter config if provided
+    if (args.deadLetterQueueArn) {
+      lambdaConfig.deadLetterConfig = {
+        targetArn: args.deadLetterQueueArn,
+      };
+    }
+
     // Lambda function
     const lambda = new aws.lambda.Function(
       `remediation-lambda-${suffix}`,
-      {
-        name: `remediation-lambda-${suffix}`,
-        runtime: 'nodejs18.x',
-        handler: 'index.handler',
-        role: lambdaRole.arn,
-        timeout: 300,
-        memorySize: 256,
-        environment: {
-          variables: {
-            SNS_TOPIC_ARN: args.snsTopicArn,
-          },
-        },
-        vpcConfig: {
-          subnetIds: args.vpcSubnetIds,
-          securityGroupIds: args.vpcSecurityGroupIds,
-        },
-        code: new pulumi.asset.AssetArchive({
-          '.': new pulumi.asset.FileArchive(
-            path.join(__dirname, 'functions/remediation')
-          ),
-        }),
-        tags: tags,
-      },
+      lambdaConfig,
       { parent: this, dependsOn: [lambdaPolicy] }
     );
 
