@@ -30,17 +30,21 @@ export class AuroraClusterConstruct extends Construct {
     });
 
     // Create instance parameter group (for DB instances)
-    const instanceParameterGroup = new rds.ParameterGroup(this, 'ParameterGroup', {
-      engine: rds.DatabaseClusterEngine.auroraPostgres({
-        version: rds.AuroraPostgresEngineVersion.VER_15_12,
-      }),
-      parameters: {
-        shared_preload_libraries: 'pg_stat_statements',
-        log_statement: 'all',
-        log_duration: '1',
-      },
-      description: 'Instance parameter group for Aurora PostgreSQL',
-    });
+    const instanceParameterGroup = new rds.ParameterGroup(
+      this,
+      'ParameterGroup',
+      {
+        engine: rds.DatabaseClusterEngine.auroraPostgres({
+          version: rds.AuroraPostgresEngineVersion.VER_15_12,
+        }),
+        parameters: {
+          shared_preload_libraries: 'pg_stat_statements',
+          log_statement: 'all',
+          log_duration: '1',
+        },
+        description: 'Instance parameter group for Aurora PostgreSQL',
+      }
+    );
 
     // Create security group
     const securityGroup = new ec2.SecurityGroup(this, 'SecurityGroup', {
