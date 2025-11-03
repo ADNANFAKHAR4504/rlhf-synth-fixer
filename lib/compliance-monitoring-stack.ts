@@ -26,6 +26,10 @@ export class ComplianceMonitoringStack extends pulumi.ComponentResource {
     const suffix = args.environmentSuffix;
     const tags = args.tags;
 
+    // Get the current AWS region
+    const currentRegion = aws.getRegionOutput();
+    const region = currentRegion.name;
+
     // VPC with private subnets and VPC endpoints
     const vpcStack = new VpcStack(
       `vpc-${suffix}`,
@@ -353,7 +357,7 @@ export class ComplianceMonitoringStack extends pulumi.ComponentResource {
               ],
               "period": 60,
               "stat": "Maximum",
-              "region": "ap-southeast-1",
+              "region": "${region}",
               "title": "Compliance Violations",
               "yAxis": {
                 "left": {
@@ -372,7 +376,7 @@ export class ComplianceMonitoringStack extends pulumi.ComponentResource {
               ],
               "period": 300,
               "stat": "Average",
-              "region": "ap-southeast-1",
+              "region": "${region}",
               "title": "Lambda Performance"
             }
           }

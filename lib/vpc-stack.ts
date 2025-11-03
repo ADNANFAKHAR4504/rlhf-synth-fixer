@@ -21,6 +21,15 @@ export class VpcStack extends pulumi.ComponentResource {
     const suffix = args.environmentSuffix;
     const tags = args.tags;
 
+    // Get the current AWS region
+    const currentRegion = aws.getRegionOutput();
+    const region = currentRegion.name;
+
+    // Get availability zones for the current region
+    const availableAzs = aws.getAvailabilityZonesOutput({
+      state: 'available',
+    });
+
     // Create VPC
     const vpc = new aws.ec2.Vpc(
       `compliance-vpc-${suffix}`,
@@ -39,7 +48,7 @@ export class VpcStack extends pulumi.ComponentResource {
       {
         vpcId: vpc.id,
         cidrBlock: '10.0.1.0/24',
-        availabilityZone: 'ap-southeast-1a',
+        availabilityZone: availableAzs.names[0],
         tags: { ...tags, Name: `private-subnet-1-${suffix}` },
       },
       { parent: this }
@@ -50,7 +59,7 @@ export class VpcStack extends pulumi.ComponentResource {
       {
         vpcId: vpc.id,
         cidrBlock: '10.0.2.0/24',
-        availabilityZone: 'ap-southeast-1b',
+        availabilityZone: availableAzs.names[1],
         tags: { ...tags, Name: `private-subnet-2-${suffix}` },
       },
       { parent: this }
@@ -75,12 +84,12 @@ export class VpcStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // VPC Endpoints
+    // VPC Endpoints - use dynamic region
     const _s3Endpoint = new aws.ec2.VpcEndpoint(
       `s3-endpoint-${suffix}`,
       {
         vpcId: vpc.id,
-        serviceName: 'com.amazonaws.ap-southeast-1.s3',
+        serviceName: pulumi.interpolate`com.amazonaws.${region}.s3`,
         vpcEndpointType: 'Gateway',
         tags: { ...tags, Name: `s3-endpoint-${suffix}` },
       },
@@ -91,7 +100,7 @@ export class VpcStack extends pulumi.ComponentResource {
       `dynamodb-endpoint-${suffix}`,
       {
         vpcId: vpc.id,
-        serviceName: 'com.amazonaws.ap-southeast-1.dynamodb',
+        serviceName: pulumi.interpolate`com.amazonaws.${region}.dynamodb`,
         vpcEndpointType: 'Gateway',
         tags: { ...tags, Name: `dynamodb-endpoint-${suffix}` },
       },
@@ -102,7 +111,7 @@ export class VpcStack extends pulumi.ComponentResource {
       `logs-endpoint-${suffix}`,
       {
         vpcId: vpc.id,
-        serviceName: 'com.amazonaws.ap-southeast-1.logs',
+        serviceName: pulumi.interpolate`com.amazonaws.${region}.logs`,
         vpcEndpointType: 'Interface',
         subnetIds: [privateSubnet1.id, privateSubnet2.id],
         securityGroupIds: [lambdaSecurityGroup.id],

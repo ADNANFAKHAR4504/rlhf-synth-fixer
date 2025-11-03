@@ -17,6 +17,10 @@ export class SecurityHubStack extends pulumi.ComponentResource {
     const suffix = args.environmentSuffix;
     const tags = args.tags;
 
+    // Get the current AWS region
+    const currentRegion = aws.getRegionOutput();
+    const region = currentRegion.name;
+
     // Enable Security Hub
     const securityHub = new aws.securityhub.Account(
       `security-hub-${suffix}`,
@@ -28,8 +32,7 @@ export class SecurityHubStack extends pulumi.ComponentResource {
     const cisStandard = new aws.securityhub.StandardsSubscription(
       `cis-standard-${suffix}`,
       {
-        standardsArn:
-          'arn:aws:securityhub:ap-southeast-1::standards/cis-aws-foundations-benchmark/v/1.2.0',
+        standardsArn: pulumi.interpolate`arn:aws:securityhub:${region}::standards/cis-aws-foundations-benchmark/v/1.2.0`,
       },
       { parent: this, dependsOn: [securityHub] }
     );
@@ -38,8 +41,7 @@ export class SecurityHubStack extends pulumi.ComponentResource {
     const foundationalStandard = new aws.securityhub.StandardsSubscription(
       `foundational-standard-${suffix}`,
       {
-        standardsArn:
-          'arn:aws:securityhub:ap-southeast-1::standards/aws-foundational-security-best-practices/v/1.0.0',
+        standardsArn: pulumi.interpolate`arn:aws:securityhub:${region}::standards/aws-foundational-security-best-practices/v/1.0.0`,
       },
       { parent: this, dependsOn: [securityHub] }
     );
