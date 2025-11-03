@@ -1,0 +1,5 @@
+config:
+  lambda-image-processing-optimization:environmentSuffix: "synthoiqaql"
+  lambda-image-processing-optimization:inputBucketName: "image-input-synthoiqaql"
+  lambda-image-processing-optimization:outputBucketName: "image-output-synthoiqaql"
+encryptionsalt: v1:3QdmiQD4WoI=:v1:RGmY5LJhNTP3UvNc:Nz71ElwHlfgcx8z/LXfip8L+5XNIZA==

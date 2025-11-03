@@ -1,0 +1,4 @@
+name: lambda-image-processing-optimization
+runtime: nodejs
+description: Optimized Lambda-based image processing infrastructure with ARM64, SnapStart, and cost optimizations
+main: lib/
