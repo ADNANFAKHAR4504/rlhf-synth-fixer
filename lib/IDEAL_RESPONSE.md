@@ -21,7 +21,7 @@ The solution provisions:
 - Enhanced monitoring with 60-second granularity
 - Security groups with CIDR-based access control
 - Parameter group with pg_stat_statements enabled
-- KMS encryption for storage and Performance Insights
+- KMS encryption for storage and Performance Insight
 
 ## File Structure
 
