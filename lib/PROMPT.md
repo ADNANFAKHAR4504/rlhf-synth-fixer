@@ -25,7 +25,7 @@ Create a serverless webhook processing system using **Pulumi with Python** that 
 3. **Data Storage**
    - DynamoDB table with partition key 'transaction_id' and sort key 'timestamp'
    - On-demand billing mode with point-in-time recovery
-   - Enable DynamoDB Streams for change data capture
+   - Enable DynamoDB Streams for change data capture.
 
 4. **Analytics Pipeline**
    - Lambda function triggered by DynamoDB Streams
