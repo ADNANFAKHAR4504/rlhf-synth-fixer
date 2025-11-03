@@ -112,6 +112,13 @@ bash ./.claude/scripts/validate-code-platform.sh
 
 **NOTE**: MODEL_RESPONSE.md may contain errors - that's expected! MODEL_FAILURES.md documents what was fixed. Only IDEAL_RESPONSE.md matters for this validation.
 
+**Special Case - Analysis Platform**:
+When `metadata.json` has `"platform": "analysis"`:
+- Script skips IaC platform detection (CDK/Terraform/Pulumi/CloudFormation)
+- Validates that analysis script exists: `lib/analyse.py`, `lib/analyze.py`, or `lib/analyse.sh`
+- Only validates language matches (should be "python" or "bash")
+- IDEAL_RESPONSE.md should contain Python or Bash code blocks, not IaC templates
+
 ---
 
 ## Checkpoint F: environmentSuffix Usage
