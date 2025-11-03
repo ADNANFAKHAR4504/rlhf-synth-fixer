@@ -761,7 +761,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         identifier: `migration-db-${environmentSuffix}`,
         engine: 'mysql',
-        engineVersion: '5.7.44',
+        engineVersion: '5.7',
         instanceClass: 'db.t3.medium',
         allocatedStorage: 100,
         storageType: 'gp3',
