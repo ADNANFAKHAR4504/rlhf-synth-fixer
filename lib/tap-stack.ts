@@ -719,7 +719,6 @@ exports.handler = async (event) => {
         inputParameters: JSON.stringify({
           instanceType: 't2.micro,t2.small,t3.micro,t3.small,t3.medium',
         }),
-        maximumExecutionFrequency: 'Six_Hours',
         tags: defaultTags,
       },
       { parent: this, dependsOn: [configRecorderStatus] }
@@ -735,7 +734,6 @@ exports.handler = async (event) => {
           owner: 'AWS',
           sourceIdentifier: 'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED',
         },
-        maximumExecutionFrequency: 'Six_Hours',
         tags: defaultTags,
       },
       { parent: this, dependsOn: [configRecorderStatus] }
@@ -751,7 +749,6 @@ exports.handler = async (event) => {
           owner: 'AWS',
           sourceIdentifier: 'DB_INSTANCE_BACKUP_ENABLED',
         },
-        maximumExecutionFrequency: 'Six_Hours',
         tags: defaultTags,
       },
       { parent: this, dependsOn: [configRecorderStatus] }
