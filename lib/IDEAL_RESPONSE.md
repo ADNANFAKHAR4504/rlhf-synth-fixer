@@ -11,7 +11,7 @@ This IDEAL_RESPONSE includes critical infrastructure fixes that were missing fro
 3. **S3 Bucket Policy Added**: ALB can now write access logs to S3 bucket
 4. **Deletion Protection Fixed**: Changed to false for destroyable test infrastructure
 5. **Certificate Validation API Fixed**: Corrected CDKTF API usage - using `.get()` method to access domain validation options directly
-6. **Certificate Validation Timeout Fixed**: Removed blocking AcmCertificateValidation resource - validation happens asynchronously without blocking CI/CD deployment (fixes 5-minute timeout issue)
+6. **Certificate Validation Timeout Fixed**: Added `wait_for_validation=false` override to prevent 5-minute timeout - certificate is created immediately and validation happens asynchronously in background (fixes deployment blocking issue)
 7. **Code Quality**: All lint, build, and synth checks pass successfully
 
 ## Infrastructure Components
@@ -507,13 +507,20 @@ export class TapStack extends TerraformStack {
     });
 
     // ACM Certificate
+    // Note: Certificate validation happens in background, deployment doesn't wait
     const certificate = new AcmCertificate(this, 'certificate', {
       domainName: `api.myapp-${props.environmentSuffix}.example.net`,
       validationMethod: 'DNS',
       tags: {
         Name: `api-cert-${props.environmentSuffix}`,
       },
+      lifecycle: {
+        createBeforeDestroy: true,
+      },
     });
+
+    // Override to disable validation waiting (prevents 5-minute timeout)
+    certificate.addOverride('wait_for_validation', false);
 
     // DNS Validation Records
     new Route53Record(this, 'cert-validation-record', {
