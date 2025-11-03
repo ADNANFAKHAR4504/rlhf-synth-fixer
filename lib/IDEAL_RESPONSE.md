@@ -14,6 +14,7 @@ This implementation creates a complete, deployable CDKTF project for provisionin
 ## Architecture Overview
 
 The solution provisions:
+
 - RDS PostgreSQL 14.15 instance with Multi-AZ deployment in default VPC subnets
 - AWS Secrets Manager for credential management (rotation documented as future enhancement)
 - CloudWatch alarms for CPU, storage, and connection monitoring with SNS notifications
@@ -47,7 +48,7 @@ The solution provisions:
 
 Entry point that initializes the CDKTF App and instantiates the TapStack with environment-specific configuration:
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import { App } from 'cdktf';
@@ -57,7 +58,8 @@ const app = new App();
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const awsRegion = process.env.AWS_REGION || 'eu-west-2';
-const stateBucket = process.env.STATE_BUCKET || `iac-rlhf-cdktf-states-${awsRegion}`;
+const stateBucket =
+  process.env.STATE_BUCKET || `iac-rlhf-cdktf-states-${awsRegion}`;
 
 new TapStack(app, `TapStack${environmentSuffix}`, {
   environmentSuffix,
@@ -88,10 +90,7 @@ CDKTF project configuration:
   "app": "npx ts-node bin/tap.ts",
   "projectId": "tap-rds-migration",
   "sendCrashReports": "false",
-  "terraformProviders": [
-    "hashicorp/aws@~> 5.0",
-    "hashicorp/random@~> 3.0"
-  ],
+  "terraformProviders": ["hashicorp/aws@~> 5.0", "hashicorp/random@~> 3.0"],
   "terraformModules": [],
   "context": {
     "excludeStackIdFromLogicalIds": "true",
@@ -103,6 +102,7 @@ CDKTF project configuration:
 ### lib/tap-stack.ts - Key Sections
 
 **Configuration Interface**:
+
 ```typescript
 interface TapStackConfig {
   environmentSuffix: string;
@@ -114,6 +114,7 @@ interface TapStackConfig {
 ```
 
 **Backend and Providers**:
+
 ```typescript
 new S3Backend(this, {
   bucket: config.stateBucket,
@@ -129,6 +130,7 @@ new AwsProvider(this, 'aws', {
 ```
 
 **Dynamic VPC Discovery**:
+
 ```typescript
 const vpc = new DataAwsVpc(this, 'prodVpc', {
   default: true, // Discovers default VPC in the region
@@ -140,6 +142,7 @@ const privateSubnets = new DataAwsSubnets(this, 'privateSubnets', {
 ```
 
 **RDS Instance Configuration**:
+
 ```typescript
 const dbInstance = new DbInstance(this, 'rdsInstance', {
   identifier: `${resourcePrefix}-postgres`,
@@ -172,6 +175,7 @@ const dbInstance = new DbInstance(this, 'rdsInstance', {
 ```
 
 **CloudWatch Alarms** (3 alarms as per requirements):
+
 - CPU Utilization: >80% threshold
 - Free Storage Space: <10GB threshold
 - Database Connections: >121 connections (90% of max)
@@ -181,12 +185,14 @@ All alarms send notifications to SNS topic subscribed by ops@company.com.
 ### Testing Implementation
 
 **Unit Tests** (test/tap-stack.unit.test.ts):
+
 - 33 test cases covering all resources
 - 100% code coverage (statements, branches, functions, lines)
 - Tests synthesized Terraform JSON without AWS API calls
 - Validates resource configuration, tagging, and outputs
 
 **Integration Tests** (test/tap-stack.int.test.ts):
+
 - Live AWS resource validation using AWS SDK v3
 - Loads outputs from cfn-outputs/flat-outputs.json
 - Tests actual deployed RDS instance, security groups, secrets, alarms
