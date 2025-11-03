@@ -120,7 +120,7 @@ export class TapStack extends TerraformStack {
     });
 
     const dbSecret = new SecretsmanagerSecret(this, 'dbCredentials', {
-      name: `${resourcePrefix}-db-credentials`,
+      name: `${resourcePrefix}-db-creds`,
       description: 'RDS PostgreSQL production database credentials',
       kmsKeyId: kmsKey.id,
       tags: {
