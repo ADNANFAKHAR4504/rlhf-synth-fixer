@@ -8,25 +8,25 @@ The MODEL_RESPONSE generated correct infrastructure code that successfully deplo
 
 ## Critical Failures
 
-### 1. Unused Variable in Production Code
+### 1. Incorrect Array Method Usage
 
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**:
-The code contained an unused variable `tables` on line 69 of tap-stack.ts:
+The code used `map()` method on line 82 of tap-stack.ts when the return value wasn't needed:
 ```typescript
 const tables = tableConfigs.map((config) => {
 ```
 
-This variable was assigned but never referenced, causing ESLint errors and failing the lint quality gate.
+The `map()` method is intended for transforming arrays and returning new values, but here it was only used for side effects (creating resources). This created an unused variable `tables` that was never referenced, causing ESLint errors.
 
 **IDEAL_RESPONSE Fix**:
-Removed the variable assignment:
+Changed to `forEach()` which is the appropriate method for iteration without transformation:
 ```typescript
-tableConfigs.map(config => {
+tableConfigs.forEach(config => {
 ```
 
-**Root Cause**: The model generated code that captured the return value of map() but never used it. The map() function was being used for its side effects (creating resources) rather than for transformation, making the assignment unnecessary.
+**Root Cause**: The model selected the wrong array method. When iterating purely for side effects without needing the returned array, `forEach()` is the correct choice. Using `map()` suggests a misunderstanding of functional programming patterns.
 
 **Cost/Security/Performance Impact**:
 - Lint failures block CI/CD pipelines
