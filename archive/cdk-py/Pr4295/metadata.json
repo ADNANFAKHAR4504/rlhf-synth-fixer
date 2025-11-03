@@ -1,6 +1,6 @@
 {
   "platform": "cdk",
-  "language": "python",
+  "language": "py",
   "complexity": "medium",
   "turn_type": "multi",
   "po_id": "1184609787",

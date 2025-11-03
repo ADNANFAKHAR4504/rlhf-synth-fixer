@@ -1,6 +1,6 @@
 {
   "platform": "cdk",
-  "language": "python",
+  "language": "py",
   "complexity": "moderate",
   "team": "synth",
   "startedAt": "2025-10-14T03:32:50+05:30",
