@@ -10,12 +10,23 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
+  "training_quality": 9,
   "aws_services": [
-    "S3 Bucket",
-    "CloudFormation",
     "Lambda",
-    "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
+    "DynamoDB",
+    "S3",
+    "SQS",
+    "SNS",
+    "API Gateway",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "CloudWatch Alarms",
+    "CloudWatch Dashboards",
+    "IAM",
+    "VPC",
+    "VPC Endpoints",
+    "EC2",
+    "Budgets",
+    "CloudFormation"
   ]
 }

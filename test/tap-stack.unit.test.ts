@@ -125,6 +125,26 @@ describe('TapStack Unit Tests', () => {
       });
     });
 
+    test('DynamoDB VPC endpoint has privateDnsEnabled set to false', () => {
+      const endpoints = template.findResources('AWS::EC2::VPCEndpoint');
+      const dynamoDbEndpoint = Object.values(endpoints).find(
+        (endpoint: any) => {
+          const serviceName = endpoint.Properties?.ServiceName;
+          const serviceNameStr =
+            typeof serviceName === 'string'
+              ? serviceName
+              : JSON.stringify(serviceName || '');
+          return (
+            serviceNameStr.includes('dynamodb') &&
+            endpoint.Properties?.VpcEndpointType === 'Interface'
+          );
+        }
+      );
+      expect(dynamoDbEndpoint).toBeDefined();
+      // DynamoDB endpoint does not support private DNS
+      expect(dynamoDbEndpoint?.Properties?.PrivateDnsEnabled).toBe(false);
+    });
+
     test('VPC has S3 gateway endpoint', () => {
       const endpoints = template.findResources('AWS::EC2::VPCEndpoint');
       const hasS3Gateway = Object.values(endpoints).some((endpoint: any) => {
@@ -506,6 +526,25 @@ describe('TapStack Unit Tests', () => {
         BatchSize: 25,
         MaximumBatchingWindowInSeconds: 5,
       });
+    });
+
+    test('SQS event source has batch window configured correctly', () => {
+      const eventSourceMappings = template.findResources(
+        'AWS::Lambda::EventSourceMapping'
+      );
+      const batchMapping = Object.values(eventSourceMappings).find(
+        (mapping: any) => {
+          const functionRef = mapping.Properties?.FunctionName?.Ref;
+          return (
+            functionRef &&
+            typeof functionRef === 'string' &&
+            functionRef.includes('BatchProcessor')
+          );
+        }
+      );
+      expect(batchMapping).toBeDefined();
+      expect(batchMapping?.Properties?.MaximumBatchingWindowInSeconds).toBe(5);
+      expect(batchMapping?.Properties?.BatchSize).toBe(25);
     });
   });
 

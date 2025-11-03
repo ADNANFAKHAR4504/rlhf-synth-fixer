@@ -3,6 +3,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as sns from 'aws-cdk-lib/aws-sns';
@@ -55,6 +56,7 @@ export class TapStack extends cdk.Stack {
     // VPC endpoints to reduce data transfer costs
     vpc.addInterfaceEndpoint('DynamoDbEndpoint', {
       service: ec2.InterfaceVpcEndpointAwsService.DYNAMODB,
+      privateDnsEnabled: false, // DynamoDB endpoint does not support private DNS
     });
 
     vpc.addGatewayEndpoint('S3Endpoint', {
@@ -318,6 +320,21 @@ export class TapStack extends cdk.Stack {
     batchQueue.grantSendMessages(realtimeLambda);
     batchQueue.grantConsumeMessages(batchLambda);
     transactionLogsBucket.grantWrite(batchLambda);
+
+    // 🔹 CloudWatch Logs role for API Gateway (required for logging)
+    const apiGatewayCloudWatchRole = new iam.Role(this, 'ApiGatewayCloudWatchRole', {
+      assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AmazonAPIGatewayPushToCloudWatchLogs'
+        ),
+      ],
+    });
+
+    // Set the CloudWatch role for API Gateway account settings
+    new apigateway.CfnAccount(this, 'ApiGatewayAccount', {
+      cloudWatchRoleArn: apiGatewayCloudWatchRole.roleArn,
+    });
 
     // 🔹 API Gateway
     const api = new apigateway.RestApi(this, 'TransactionAPI', {
