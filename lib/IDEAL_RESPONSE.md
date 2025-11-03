@@ -10,7 +10,7 @@ This IDEAL_RESPONSE includes critical infrastructure fixes that were missing fro
 2. **Private Route Table Added**: Complete routing configuration for private subnets
 3. **S3 Bucket Policy Added**: ALB can now write access logs to S3 bucket
 4. **Deletion Protection Fixed**: Changed to false for destroyable test infrastructure
-5. **Certificate Validation API Fixed**: Corrected CDKTF API usage - using Fn.element, Fn.tolist, and Fn.lookup for domain validation options
+5. **Certificate Validation API Fixed**: Corrected CDKTF API usage - using `.get()` method to access domain validation options directly
 6. **Code Quality**: All lint, build, and synth checks pass successfully
 
 ## Infrastructure Components
@@ -52,7 +52,7 @@ This IDEAL_RESPONSE includes critical infrastructure fixes that were missing fro
 
 ```ts
 import { Construct } from 'constructs';
-import { TerraformStack, TerraformOutput, Fn } from 'cdktf';
+import { TerraformStack, TerraformOutput } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { S3Backend } from 'cdktf';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
@@ -516,15 +516,11 @@ export class TapStack extends TerraformStack {
     });
 
     // DNS Validation Records
-    const domainValidationOption = Fn.element(
-      Fn.tolist(certificate.domainValidationOptions),
-      0
-    );
     const validationRecord = new Route53Record(this, 'cert-validation-record', {
       zoneId: hostedZone.zoneId,
-      name: Fn.lookup(domainValidationOption, 'resource_record_name', ''),
-      type: Fn.lookup(domainValidationOption, 'resource_record_type', ''),
-      records: [Fn.lookup(domainValidationOption, 'resource_record_value', '')],
+      name: certificate.domainValidationOptions.get(0).resourceRecordName,
+      type: certificate.domainValidationOptions.get(0).resourceRecordType,
+      records: [certificate.domainValidationOptions.get(0).resourceRecordValue],
       ttl: 60,
     });
 
