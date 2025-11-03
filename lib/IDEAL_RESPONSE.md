@@ -1,6 +1,6 @@
-# Document Management Infrastructure - CDKTF TypeScript Implementation
+# Document Management Infrastructure - CDKTF ts Implementation
 
-This implementation provides a multi-environment document management system using CDKTF with TypeScript. The infrastructure includes S3 for storage, DynamoDB for metadata, Lambda for processing, and CloudWatch for monitoring.
+This implementation provides a multi-environment document management system using CDKTF with ts. The infrastructure includes S3 for storage, DynamoDB for metadata, Lambda for processing, and CloudWatch for monitoring.
 
 ## Overview
 
@@ -511,7 +511,7 @@ npm install
 npm run cdktf:get
 ```
 
-3. Build TypeScript:
+3. Build ts:
 ```bash
 npm run build
 ```
