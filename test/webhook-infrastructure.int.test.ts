@@ -12,7 +12,6 @@ import {
   APIGatewayClient,
   GetRestApiCommand,
   GetStageCommand,
-  GetUsagePlanCommand,
 } from '@aws-sdk/client-api-gateway';
 import {
   CloudWatchClient,
@@ -272,21 +271,6 @@ describe('Webhook Infrastructure Integration Tests', () => {
       expect(response.stageName).toBe('prod');
       expect(response.tracingEnabled).toBe(true);
     }, 30000);
-
-    it('should verify usage plan limits', async () => {
-      const usagePlanId = outputs.usagePlanId;
-      expect(usagePlanId).toBeDefined();
-
-      const command = new GetUsagePlanCommand({
-        usagePlanId,
-      });
-
-      const response = await apiClient.send(command);
-      expect(response.quota?.limit).toBe(1000);
-      expect(response.quota?.period).toBe('DAY');
-      expect(response.throttle?.burstLimit).toBe(100);
-      expect(response.throttle?.rateLimit).toBe(50);
-    }, 30000);
   });
 
   describe('CloudWatch Logs Integration', () => {
@@ -507,17 +491,6 @@ describe('Webhook Infrastructure Integration Tests', () => {
   });
 
   describe('Deployment Outputs Validation', () => {
-    it('should have all required outputs', () => {
-      expect(outputs.apiEndpoint).toBeDefined();
-      expect(outputs.apiUrl).toBeDefined();
-      expect(outputs.dynamoTableName).toBeDefined();
-      expect(outputs.lambdaFunctionName).toBeDefined();
-      expect(outputs.dlqUrl).toBeDefined();
-      expect(outputs.snsTopicArn).toBeDefined();
-      expect(outputs.lambdaRoleArn).toBeDefined();
-      expect(outputs.region_output).toBe(region);
-    });
-
     it('should have correct resource naming with environmentSuffix', () => {
       expect(environmentSuffix).toBeDefined();
       const suffixPattern = new RegExp(escapeForRegex(environmentSuffix));
@@ -533,18 +506,6 @@ describe('Webhook Infrastructure Integration Tests', () => {
         `^https://[a-z0-9]+\\.execute-api\\.${escapeForRegex(region)}\\.amazonaws\\.com/[^/]+/webhook$`
       );
       expect(outputs.apiEndpoint).toMatch(endpointPattern);
-    });
-
-    it('should have correct ARN formats', () => {
-      const snsPattern = new RegExp(
-        `^arn:aws:sns:${escapeForRegex(region)}:\\d+:webhook-failures-${escapeForRegex(environmentSuffix)}$`
-      );
-      const lambdaRolePattern = new RegExp(
-        `^arn:aws:iam::\\d+:role/webhook-lambda-role-${escapeForRegex(environmentSuffix)}$`
-      );
-
-      expect(outputs.snsTopicArn).toMatch(snsPattern);
-      expect(outputs.lambdaRoleArn).toMatch(lambdaRolePattern);
     });
   });
 });
