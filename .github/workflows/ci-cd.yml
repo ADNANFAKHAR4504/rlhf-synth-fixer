@@ -837,6 +837,7 @@ jobs:
           ref: ${{ github.head_ref }}
 
       - name: Download coverage reports
+        if: ${{ !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) }}
         uses: actions/download-artifact@v4
         with:
           name: coverage-reports
