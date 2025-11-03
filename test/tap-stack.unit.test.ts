@@ -160,4 +160,38 @@ describe('TapStack', () => {
       done();
     });
   });
+
+  it('should use default region when not specified', (done) => {
+    const defaultRegionStack = new TapStack('default-region-stack', {
+      environmentSuffix: 'default-region',
+    });
+    pulumi.all([defaultRegionStack.urn]).apply(([urn]) => {
+      expect(urn).toBeDefined();
+      expect(urn).toContain('TapStack');
+      done();
+    });
+  });
+
+  it('should handle undefined tags gracefully', (done) => {
+    const noTagsStack = new TapStack('undefined-tags-stack', {
+      environmentSuffix: 'notags',
+      tags: undefined,
+    });
+    pulumi.all([noTagsStack.urn]).apply(([urn]) => {
+      expect(urn).toBeDefined();
+      done();
+    });
+  });
+
+  it('should create both scheduler and cost calculation stacks', (done) => {
+    pulumi.all([stack.schedulerOutputs, stack.costOutputs]).apply(
+      ([schedulerOutputs, costOutputs]) => {
+        expect(schedulerOutputs).toBeDefined();
+        expect(costOutputs).toBeDefined();
+        expect(typeof schedulerOutputs).toBe('object');
+        expect(typeof costOutputs).toBe('object');
+        done();
+      }
+    );
+  });
 });

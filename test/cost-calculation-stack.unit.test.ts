@@ -253,4 +253,42 @@ describe('CostCalculationStack', () => {
       done();
     });
   });
+
+  it('should handle multiple instance types in pricing calculation', (done) => {
+    const stack = new CostCalculationStack('multi-type-cost', {
+      environmentSuffix: 'test',
+      instanceIds: pulumi.output(['i-t3micro', 'i-t3small', 'i-t3large']),
+    });
+
+    pulumi.all([stack.estimatedMonthlySavings]).apply(([savings]) => {
+      expect(savings).toBeGreaterThan(0);
+      expect(typeof savings).toBe('number');
+      done();
+    });
+  });
+
+  it('should calculate savings with empty instance list', (done) => {
+    const stack = new CostCalculationStack('empty-list-cost', {
+      environmentSuffix: 'test',
+      instanceIds: pulumi.output([]),
+    });
+
+    pulumi.all([stack.estimatedMonthlySavings]).apply(([savings]) => {
+      expect(savings).toBe(0);
+      done();
+    });
+  });
+
+  it('should handle mixed valid and invalid instances', (done) => {
+    const stack = new CostCalculationStack('mixed-cost', {
+      environmentSuffix: 'test',
+      instanceIds: pulumi.output(['i-valid', 'i-invalid', 'i-another']),
+    });
+
+    pulumi.all([stack.estimatedMonthlySavings]).apply(([savings]) => {
+      expect(savings).toBeGreaterThanOrEqual(0);
+      expect(Number.isFinite(savings)).toBe(true);
+      done();
+    });
+  });
 });

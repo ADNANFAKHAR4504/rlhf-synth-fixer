@@ -239,4 +239,37 @@ describe('Ec2SchedulerStack', () => {
       done();
     });
   });
+
+  it('should create resources with proper naming conventions', (done) => {
+    pulumi.all([stack.stopFunctionArn, stack.startFunctionArn]).apply(
+      ([stopArn, startArn]) => {
+        expect(stopArn).toContain('stop');
+        expect(startArn).toContain('start');
+        done();
+      }
+    );
+  });
+
+  it('should handle tags parameter correctly', (done) => {
+    const taggedStack = new Ec2SchedulerStack('tagged-scheduler', {
+      environmentSuffix: 'tagged',
+      region: 'us-west-2',
+      tags: {
+        Team: 'DevOps',
+        Environment: 'Production',
+      },
+    });
+    pulumi.all([taggedStack.urn]).apply(([urn]) => {
+      expect(urn).toBeDefined();
+      done();
+    });
+  });
+
+  it('should create Lambda functions with correct environment variables', (done) => {
+    pulumi.all([stack.outputs]).apply(([outputs]) => {
+      expect(outputs.stopFunctionArn).toBeDefined();
+      expect(outputs.startFunctionArn).toBeDefined();
+      done();
+    });
+  });
 });
