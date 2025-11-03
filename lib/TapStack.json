@@ -1028,6 +1028,7 @@
     "DMSVPCRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
+        "RoleName": {"Fn::Sub": "${AWS::StackName}-dms-vpc-role"},
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -1043,7 +1044,30 @@
         "ManagedPolicyArns": [
           "arn:aws:iam::aws:policy/service-role/AmazonDMSVPCManagementRole"
         ],
-        "Path": "/"
+        "Policies": [
+          {
+            "PolicyName": "DMSVPCManagementPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ec2:CreateNetworkInterface",
+                    "ec2:DescribeNetworkInterfaces",
+                    "ec2:DeleteNetworkInterface",
+                    "ec2:ModifyNetworkInterfaceAttribute",
+                    "ec2:DescribeSubnets",
+                    "ec2:DescribeVpcs",
+                    "ec2:DescribeSecurityGroups"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Path": "/service-role/"
       }
     },
     
