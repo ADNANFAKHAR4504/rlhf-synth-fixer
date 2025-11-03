@@ -534,6 +534,7 @@ exports.handler = async (event) => {
     // ========================================================================
 
     // Enable Security Hub
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const securityHub = new aws.securityhub.Account(
       `security-hub-${environmentSuffix}`,
       {},
