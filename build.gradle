@@ -48,10 +48,10 @@ ext {
             minimumTestCoverage = 1.0
             break
         case "cdk":
-            minimumTestCoverage = 50.0
+            minimumTestCoverage = 90.0
             break
         case "cdktf":
-            minimumTestCoverage = 50.0
+            minimumTestCoverage = 90.0
             break
         default:
             minimumTestCoverage = 20.0
