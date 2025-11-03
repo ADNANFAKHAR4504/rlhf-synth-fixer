@@ -62,6 +62,10 @@ export class TapStack extends pulumi.ComponentResource {
     // KMS Keys with Automatic Rotation (Requirement 15)
     // =====================================================
 
+    // Get current AWS account and region for KMS policy
+    const currentRegion = aws.getRegionOutput();
+    const currentIdentity = aws.getCallerIdentityOutput();
+
     const primaryKmsKey = new aws.kms.Key(
       `migration-kms-${environmentSuffix}`,
       {
@@ -69,6 +73,43 @@ export class TapStack extends pulumi.ComponentResource {
         enableKeyRotation: true,
         deletionWindowInDays: 10,
         tags: defaultTags,
+        policy: pulumi.all([currentIdentity.accountId, currentRegion.name]).apply(([accountId, region]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Sid: 'Enable IAM User Permissions',
+                Effect: 'Allow',
+                Principal: {
+                  AWS: `arn:aws:iam::${accountId}:root`,
+                },
+                Action: 'kms:*',
+                Resource: '*',
+              },
+              {
+                Sid: 'Allow CloudWatch Logs',
+                Effect: 'Allow',
+                Principal: {
+                  Service: `logs.${region}.amazonaws.com`,
+                },
+                Action: [
+                  'kms:Encrypt',
+                  'kms:Decrypt',
+                  'kms:ReEncrypt*',
+                  'kms:GenerateDataKey*',
+                  'kms:CreateGrant',
+                  'kms:DescribeKey',
+                ],
+                Resource: '*',
+                Condition: {
+                  ArnLike: {
+                    'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${region}:${accountId}:log-group:*`,
+                  },
+                },
+              },
+            ],
+          })
+        ),
       },
       { parent: this }
     );
@@ -1027,22 +1068,11 @@ echo "Bastion host initialized successfully"
       { parent: this }
     );
 
-    // DNS validation records - commented out as they require manual setup or automation
-    // In production, use ACM DNS validation with Route53 records
-    // certificate.domainValidationOptions.apply(options => {
-    //   if (options && Array.isArray(options)) {
-    //     return options.map((option, index) =>
-    //       new aws.route53.Record(`cert-validation-${environmentSuffix}-${index}`, {
-    //         zoneId: privateZone.zoneId,
-    //         name: option.resourceRecordName,
-    //         type: option.resourceRecordType,
-    //         records: [option.resourceRecordValue],
-    //         ttl: 60,
-    //       }, { parent: this })
-    //     );
-    //   }
-    //   return [];
-    // });
+    // Note: ACM certificate validation for private domains (*.migration.internal)
+    // requires manual validation or is auto-validated for private CAs
+    // DNS validation records are not created here as the private hosted zone
+    // cannot be used for public ACM validation
+    // In production, consider using AWS Private CA for internal certificates
 
     // =====================================================
     // CloudWatch Log Groups and Insights Queries (Requirement 18)
