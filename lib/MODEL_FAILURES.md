@@ -151,20 +151,39 @@ Resource handler returned message: "The requested engine version was not found
 or does not support global functionality (Service: Rds, Status Code: 400)"
 ```
 
-**Root Cause**: Aurora PostgreSQL 13.7 does not support Aurora Global Database functionality. Global databases require specific engine versions with global replication capabilities.
+**Root Cause**: Aurora PostgreSQL 13.7 does not support Aurora Global Database functionality. The engine version was specified in TWO places:
+1. `DatabaseCluster` engine configuration
+2. `CfnGlobalCluster` engineVersion property (hardcoded string)
 
-**Solution**: Updated Aurora PostgreSQL engine version from 13.7 to 15.2
+Both needed to be updated to a version that supports global databases.
+
+**Solution Evolution**:
+1. **Initial attempt**: Updated to 15.2 - but discovered this version is **deprecated** per AWS documentation
+2. **Web search verification**: Confirmed PostgreSQL 15.2 is deprecated, latest is 15.13
+3. **CDK limitation**: VER_15_13 not yet available in aws-cdk-lib
+4. **Final solution**: Updated to **15.12** (latest non-deprecated version available in CDK)
+
 ```typescript
+// In CfnGlobalCluster:
+// Before (failed):
+engineVersion: '13.7',
+// After (production-ready):
+engineVersion: '15.12',
+
+// In DatabaseCluster:
 // Before (failed):
 version: rds.AuroraPostgresEngineVersion.VER_13_7,
-
-// After (working):
-version: rds.AuroraPostgresEngineVersion.VER_15_2,
+// After (production-ready):
+version: rds.AuroraPostgresEngineVersion.VER_15_12,
 ```
 
-**Result**: Stack can now create global cluster successfully. Aurora 15.2 fully supports global databases with cross-region replication.
+**Result**: Stack uses Aurora PostgreSQL 15.12 which:
+- ✅ Supports Aurora Global Database with cross-region replication
+- ✅ Is NOT deprecated (unlike 15.2)
+- ✅ Is production-ready and actively maintained
+- ✅ Available in all AWS regions including us-east-1 and us-west-2
 
-**Key Lesson**: Always verify engine version supports required features. Aurora Global Database requires PostgreSQL 11.9+, 12.4+, 13.3+, 14.3+, or 15.2+.
+**Key Lesson**: Always verify BOTH that the engine version supports required features AND that it's not deprecated. Check AWS documentation, not just CDK library availability. Aurora Global Database requires PostgreSQL 11.9+, 12.4+, 13.3+, 14.3+, or 15.2+ (but use latest non-deprecated).
 
 ---
 

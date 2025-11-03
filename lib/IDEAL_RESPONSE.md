@@ -671,7 +671,7 @@ export class AuroraClusterConstruct extends Construct {
         globalClusterIdentifier: `aurora-dr-global-${Date.now()}`,
         sourceDbClusterIdentifier: undefined,
         engine: 'aurora-postgresql',
-        engineVersion: '13.7',
+        engineVersion: '15.12',
         storageEncrypted: true,
       });
       this.globalClusterIdentifier = globalCluster.ref;
@@ -682,7 +682,7 @@ export class AuroraClusterConstruct extends Construct {
     // Create the Aurora cluster
     this.cluster = new rds.DatabaseCluster(this, 'Cluster', {
       engine: rds.DatabaseClusterEngine.auroraPostgres({
-        version: rds.AuroraPostgresEngineVersion.VER_15_2,
+        version: rds.AuroraPostgresEngineVersion.VER_15_12,
       }),
       credentials: rds.Credentials.fromSecret(props.secret),
       instanceProps: {
