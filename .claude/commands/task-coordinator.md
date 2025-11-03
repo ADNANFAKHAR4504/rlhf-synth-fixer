@@ -4,7 +4,7 @@ Orchestrates the complete Infrastructure as Code development lifecycle by coordi
 
 ## ⚠️ CRITICAL: CSV Data Integrity
 
-**BEFORE modifying tasks.csv:**
+**BEFORE modifying .claude/tasks.csv:**
 1. READ "CSV File Corruption Prevention" in `.claude/lessons_learnt.md`
 2. READ complete guide in `.claude/docs/policies/csv_safety_guide.md`
 3. RUN safety check: `./.claude/scripts/check-csv-safety.sh`
@@ -15,7 +15,7 @@ ALL CSV operations MUST:
 3. Validate row counts before and after
 4. Restore from backup if ANY validation fails
 
-**Failure to follow these rules will corrupt tasks.csv and lose all task data!**
+**Failure to follow these rules will corrupt .claude/tasks.csv and lose all task data!**
 
 ## ⚠️ CRITICAL: Commit Message Requirements
 
@@ -127,7 +127,23 @@ Emphasize: "Platform and language are MANDATORY constraints from metadata.json"
 
 **Pre-flight Checks**:
 
-**Validation**: Run Checkpoint K: PR Prerequisites
+**Validation**: Run Checkpoint K: File Location Compliance
+- See `.claude/docs/references/validation-checkpoints.md` for file location rules
+- See `.claude/docs/references/cicd-file-restrictions.md` for complete restrictions
+
+```bash
+# Check what files will be in the PR
+git diff --name-only origin/main...HEAD
+
+# Manually verify all files are in allowed locations:
+# - bin/, lib/, test/, tests/ folders
+# - metadata.json, cdk.json, cdktf.json, Pulumi.yaml, tap.py, tap.go, package.json, package-lock.json at root
+# NO files in .github/, scripts/, docs/, or other locations
+```
+
+**If violations found**: STOP, fix file locations, do NOT proceed
+
+**Validation**: Run Checkpoint L: PR Prerequisites
 - See `.claude/docs/references/validation-checkpoints.md` for prerequisite checks
 
 Script reference:
@@ -207,6 +223,7 @@ Task ID: ${TASK_ID}"
 6. **Create PR**:
    ```bash
    AWS_SERVICES_COUNT=$(jq -r '.aws_services | length' metadata.json)
+   SYNTH_GROUP=$(jq -r '.synth_group // "Synth-1"' ../../.claude/settings.local.json)
 
    gh pr create \
      --title "synth-${TASK_ID} {SUBTASK}" \
@@ -237,9 +254,7 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
 - [x] Code in ideal response and tapstack are the same" \
      --base main \
      --head ${BRANCH_NAME} \
-     --label "synth" \
-     --label "automated" \
-     --label "complexity-${COMPLEXITY}"
+     --label "${SYNTH_GROUP}"
    ```
 
 7. **Capture PR number**:
@@ -260,8 +275,8 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    ```bash
    cd ../..  # Return to main repo
 
-   if [ ! -f "tasks.csv" ]; then
-     echo "❌ ERROR: tasks.csv not found at $(pwd)"
+   if [ ! -f ".claude/tasks.csv" ]; then
+     echo "❌ ERROR: .claude/tasks.csv not found at $(pwd)"
      exit 1
    fi
 
@@ -269,7 +284,7 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    ./.claude/scripts/task-manager.sh mark-done "${TASK_ID}" "${PR_NUMBER}"
 
    if [ $? -ne 0 ]; then
-     echo "❌ Failed to update tasks.csv"
+     echo "❌ Failed to update .claude/tasks.csv"
      exit 1
    fi
    ```
@@ -310,14 +325,26 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    - ❌ WRONG: `worktree-synth-{task_id}`, `worktrees/`, `IAC-synth-{task_id}`
    - ✅ CORRECT: `worktree/synth-{task_id}`
 
-2. **Immediately change directory**:
+2. **Immediately change directory and verify**:
    ```bash
    cd worktree/synth-{task_id}
+
+   # MANDATORY: Run automated verification
+   bash .claude/scripts/verify-worktree.sh || exit 1
    ```
 
    **From this point forward, ALL commands run from this directory unless explicitly stated.**
 
-3. **Validate worktree setup**:
+3. **Validate worktree setup** (AUTOMATED):
+
+   The `verify-worktree.sh` script automatically checks:
+   - ✅ Location matches pattern: `*/worktree/synth-{task_id}`
+   - ✅ Branch matches directory name
+   - ✅ metadata.json exists
+   - ✅ Not on main/master branch
+   - ✅ Exports environment variables ($WORKTREE_DIR, $TASK_ID, $TASK_BRANCH)
+
+   **Manual verification (only if automated script fails)**:
    ```bash
    # Verify location
    pwd  # Must end with: /worktree/synth-{task_id}
@@ -371,7 +398,7 @@ If `metadata.json` not present:
 - Set `team` = "synth" (REQUIRED)
 - Set `turn_type` = "single" (REQUIRED)
 - Set `startedAt` = current timestamp: `date -Iseconds` (REQUIRED)
-- **Extract from tasks.csv** (REQUIRED):
+- **Extract from .claude/tasks.csv** (REQUIRED):
   - `subtask` from subtask column
   - `subject_labels` from subject_labels column (parse as JSON array)
 - Do not add more fields than shown in example
@@ -391,9 +418,12 @@ Example metadata.json:
   "team": "synth",
   "startedAt": "2025-08-12T13:19:10-05:00",
   "subtask": "Application Deployment",
-  "subject_labels": ["CI/CD Pipeline", "Security Configuration"]
+  "subject_labels": ["CI/CD Pipeline", "Security Configuration"],
+  "aws_services": [],
 }
 ```
+
+**CRITICAL**: `aws_services` must be initialized as an empty array `[]`. It will be populated by iac-code-reviewer based on implemented services.
 
 **Validate immediately**:
 ```bash

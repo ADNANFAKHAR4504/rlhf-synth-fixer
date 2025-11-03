@@ -11,13 +11,29 @@ QA expert that ensures IaC meets quality standards and requirements.
 
 ## Working Directory
 
-Inside worktree at `worktree/synth-{task_id}/` (verify with `pwd`)
+Inside worktree at `worktree/synth-{task_id}/` (verify with automated script)
 
 **After review completion, hand off to task-coordinator for Phase 5 (PR creation).**
 
 ## Review Process
 
-**Before Starting**: Review `.claude/lessons_learnt.md` for common issues and quality patterns.
+**⚠️ MANDATORY FIRST STEP**: Verify worktree location
+```bash
+# REQUIRED: Run automated verification before ANY operations
+bash .claude/scripts/verify-worktree.sh || exit 1
+
+# Verifies:
+# - In worktree (not main repo)
+# - Branch matches directory
+# - metadata.json exists
+# - Not on main/master
+```
+
+**If verification fails**: STOP immediately, report BLOCKED.
+
+**Before Starting**:
+- Review `.claude/lessons_learnt.md` for common issues and quality patterns
+- Review `.claude/docs/references/cicd-file-restrictions.md` for CRITICAL file location requirements that fail CI/CD
 
 ### Phase 1: Prerequisites Check
 
@@ -58,20 +74,48 @@ If FAIL:
 
 **CRITICAL** - Catches major training data quality issues.
 
+**IMPORTANT FILE CONTEXT**:
+- `lib/MODEL_RESPONSE.md` = Initial model output (MAY contain errors - that's the point!)
+- `lib/IDEAL_RESPONSE.md` = Final corrected code (THIS is what you validate!)
+- `lib/MODEL_FAILURES.md` = List of what WAS FIXED (past tense documentation)
+
 **Validation**: Run Checkpoint E: Platform Code Compliance
-- See `docs/references/validation-checkpoints.md` for platform detection patterns
-- See `docs/references/shared-validations.md` for detailed platform requirements
+```bash
+# Run the validation script
+bash ./.claude/scripts/validate-code-platform.sh
+
+# This script checks lib/IDEAL_RESPONSE.md against metadata.json
+# Exit code 0 = pass, exit code 1 = fail
+```
+
+**What the script validates**:
+1. Platform in IDEAL_RESPONSE.md matches metadata.json platform (cdk/pulumi/terraform/etc)
+2. Language in IDEAL_RESPONSE.md matches metadata.json language (java/python/typescript/etc)
+3. Build system matches project structure (build.gradle = Gradle, pom.xml = Maven)
 
 **Mismatch Detection**:
 ```
-If platform OR language mismatch:
+If script exits with code 1 (validation failed):
 - CRITICAL QUALITY FAILURE
-- Report: "❌ CRITICAL: Platform/Language Mismatch
+- Read the script output to see what mismatched
+- Report: "❌ CRITICAL: Platform/Language Mismatch in IDEAL_RESPONSE.md
   Expected: {platform}-{language} from metadata.json
   Found: {actual_platform}-{actual_language} in IDEAL_RESPONSE.md"
 - Training quality penalty: -5 (minimum)
 - If score < 8 after penalty: Report BLOCKED, recommend regeneration
+
+If script exits with code 0 (validation passed):
+- ✅ IDEAL_RESPONSE.md matches requirements
+- If MODEL_FAILURES.md shows build system or architecture fixes:
+  * This is GOOD - model made mistakes that were corrected
+  * Training quality bonus: +1 to +2 (significant learning value)
+  * Document in MODEL_FAILURES analysis
 ```
+
+**COMMON MISTAKE TO AVOID**:
+- DO NOT read MODEL_RESPONSE.md and think those errors exist in IDEAL_RESPONSE.md
+- MODEL_FAILURES.md describes "what was fixed" (past), not "what is wrong" (present)
+- Only validate IDEAL_RESPONSE.md for current compliance
 
 #### Step 5: AWS Services Completeness
 
@@ -145,16 +189,61 @@ If < 80% resources have suffix:
 
 #### Step 8: Add Enhanced Fields to metadata.json
 
+**Extract AWS Services from IDEAL_RESPONSE.md**:
+
+Scan IDEAL_RESPONSE.md and create a JSON array of unique AWS services mentioned. Examples:
+- RDS → "RDS"
+- Amazon S3 → "S3"
+- AWS Lambda → "Lambda"
+- DynamoDB → "DynamoDB"
+
 ```bash
+# Create AWS services array from IDEAL_RESPONSE.md
+# Extract unique AWS service names and format as JSON array
+# Example: AWS_SERVICES_ARRAY='["S3", "Lambda", "DynamoDB", "IAM"]'
+
+# CRITICAL: Must be a valid JSON array (not a string)
+AWS_SERVICES_ARRAY='["service1", "service2", "service3"]'  # Replace with actual extracted services
+
 # Update metadata.json with training quality and AWS services
 jq --arg tq "$TRAINING_QUALITY" --argjson services "$AWS_SERVICES_ARRAY" \
   '.training_quality = ($tq | tonumber) | .aws_services = $services' \
   metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json
 ```
 
+**Validation**: Verify `aws_services` is an array:
+```bash
+jq -e '.aws_services | type == "array"' metadata.json || echo "❌ ERROR: aws_services must be an array"
+```
+
 Report: "✅ metadata.json enhanced with training_quality: {SCORE}/10"
 
-#### Step 9: Final Quality Gate
+#### Step 9: File Location Validation
+
+**CRITICAL CI/CD CHECK**: Verify all files are in allowed locations
+
+```bash
+# Check changed files against allowed locations
+git diff --name-only origin/main...HEAD
+
+# Verify no violations exist
+# See .claude/docs/references/cicd-file-restrictions.md for rules
+```
+
+**Common Violations**:
+- ❌ `README.md` at root → Must be `lib/README.md`
+- ❌ `PROMPT.md` at root → Must be `lib/PROMPT.md`
+- ❌ `IDEAL_RESPONSE.md` at root → Must be `lib/IDEAL_RESPONSE.md`
+- ❌ `MODEL_FAILURES.md` at root → Must be `lib/MODEL_FAILURES.md`
+- ❌ Files in `.github/`, `scripts/`, `docs/`, etc. → Not allowed
+
+**If violations found**:
+- Training quality penalty: -3 points (Critical issue)
+- Report: "❌ BLOCKED: Files in wrong locations will FAIL CI/CD"
+- List violating files and correct locations
+- Do NOT proceed to PR creation
+
+#### Step 10: Final Quality Gate
 
 **Before reporting "Ready" status**:
 
@@ -169,6 +258,7 @@ FINAL CHECKLIST:
 ☐ AWS services implemented
 ☐ No Retain policies
 ☐ Tests exist and pass
+☐ All files in allowed locations (Step 9)
 
 If ALL checked:
 - Report: "✅ READY for PR creation"
@@ -229,9 +319,12 @@ If ANY unchecked:
   - **Skip detailed comparison if files are identical** (check hashes first: `md5sum`)
   - Only report actual differences
 - Calculate compliance percentage
-- Compare lib/IDEAL_RESPONSE.md and latest MODEL_RESPONSE file
-  - **Focus on infrastructure differences**: resources, configuration, security
+- **FOR SCORING ONLY**: Compare lib/IDEAL_RESPONSE.md and latest MODEL_RESPONSE file
+  - **PURPOSE**: Understand what the model got wrong and what was fixed (for training quality score)
+  - **NOT FOR**: Finding current errors (those are already fixed in IDEAL_RESPONSE.md!)
+  - **Focus on infrastructure differences**: resources, configuration, security, architecture
   - Avoid listing trivial formatting/comment differences
+  - Document significant fixes for MODEL_FAILURES analysis and training quality bonus
 
 ### Phase 3: Test Coverage
 

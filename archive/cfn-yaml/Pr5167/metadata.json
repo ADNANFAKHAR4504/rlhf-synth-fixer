@@ -1,0 +1,35 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-10-28T03:44:00+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "application",
+    "deployment"
+  ],
+  "po_id": "6226190395",
+  "aws_services": [
+    "vpc",
+    "ec2",
+    "rds",
+    "efs",
+    "elasticache",
+    "apigateway",
+    "codepipeline",
+    "codebuild",
+    "s3",
+    "iam",
+    "cloudwatch",
+    "secretsmanager"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
