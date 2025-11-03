@@ -19,7 +19,7 @@ This implementation creates a comprehensive compliance monitoring solution that:
 1. **AWS Config Infrastructure**
    - Config Recorder with global resource tracking
    - S3 Delivery Channel for configuration snapshots
-   - Config Rules for compliance checks (EC2 instance types, S3 encryption)
+   - Config Rules for compliance checks (EC2 instance types, S3 encryption, RDS backups)
    - Multi-region Config Aggregator
 
 2. **Data Storage & Security**
@@ -768,6 +768,7 @@ exports.handler = async (event) => {
         inputParameters: JSON.stringify({
           instanceType: 't2.micro,t2.small,t3.micro,t3.small,t3.medium',
         }),
+        maximumExecutionFrequency: 'Six_Hours',
         tags: defaultTags,
       },
       { parent: this, dependsOn: [configRecorderStatus] }
@@ -783,6 +784,23 @@ exports.handler = async (event) => {
           owner: 'AWS',
           sourceIdentifier: 'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED',
         },
+        maximumExecutionFrequency: 'Six_Hours',
+        tags: defaultTags,
+      },
+      { parent: this, dependsOn: [configRecorderStatus] }
+    );
+
+    // RDS Backup Retention Rule
+    const _rdsBackupRule = new aws.cfg.Rule(
+      `rds-backup-rule-${args.environmentSuffix}`,
+      {
+        name: `rds-backup-retention-check-${args.environmentSuffix}`,
+        description: 'Checks that RDS instances have backups enabled',
+        source: {
+          owner: 'AWS',
+          sourceIdentifier: 'DB_INSTANCE_BACKUP_ENABLED',
+        },
+        maximumExecutionFrequency: 'Six_Hours',
         tags: defaultTags,
       },
       { parent: this, dependsOn: [configRecorderStatus] }
@@ -922,7 +940,7 @@ exports.handler = async (event) => {
         name: `compliance-aggregator-${args.environmentSuffix}`,
         accountAggregationSource: {
           accountIds: [aws.getCallerIdentity().then(id => id.accountId)],
-          regions: ['eu-west-1'],
+          regions: ['eu-west-1', 'eu-central-1'],
         },
         tags: defaultTags,
       },
@@ -1005,8 +1023,11 @@ pulumi stack output
 
 ## Compliance Rules Configured
 
+All rules are configured to evaluate resources every 6 hours using `maximumExecutionFrequency: 'Six_Hours'`:
+
 1. **EC2 Instance Type Check**: Ensures only approved instance types (t2/t3 micro, small, medium) are used
 2. **S3 Bucket Encryption Check**: Verifies all S3 buckets have server-side encryption enabled
+3. **RDS Backup Check**: Validates that RDS instances have automatic backups enabled
 
 ## Lambda Functions
 

@@ -719,6 +719,7 @@ exports.handler = async (event) => {
         inputParameters: JSON.stringify({
           instanceType: 't2.micro,t2.small,t3.micro,t3.small,t3.medium',
         }),
+        maximumExecutionFrequency: 'Six_Hours',
         tags: defaultTags,
       },
       { parent: this, dependsOn: [configRecorderStatus] }
@@ -734,26 +735,27 @@ exports.handler = async (event) => {
           owner: 'AWS',
           sourceIdentifier: 'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED',
         },
+        maximumExecutionFrequency: 'Six_Hours',
         tags: defaultTags,
       },
       { parent: this, dependsOn: [configRecorderStatus] }
     );
 
-    // RDS Backup Retention Rule - Commented out due to AWS Config managed rule availability issues
-    // Note: The correct managed rule identifier for RDS backup compliance may vary by region
-    // const _rdsBackupRule = new aws.cfg.Rule(
-    //   `rds-backup-rule-${args.environmentSuffix}`,
-    //   {
-    //     name: `rds-backup-retention-check-${args.environmentSuffix}`,
-    //     description: 'Checks that RDS instances have backups enabled',
-    //     source: {
-    //       owner: 'AWS',
-    //       sourceIdentifier: 'RDS_DB_INSTANCE_BACKUP_ENABLED',
-    //     },
-    //     tags: defaultTags,
-    //   },
-    //   { parent: this, dependsOn: [configRecorderStatus] }
-    // );
+    // RDS Backup Retention Rule
+    const _rdsBackupRule = new aws.cfg.Rule(
+      `rds-backup-rule-${args.environmentSuffix}`,
+      {
+        name: `rds-backup-retention-check-${args.environmentSuffix}`,
+        description: 'Checks that RDS instances have backups enabled',
+        source: {
+          owner: 'AWS',
+          sourceIdentifier: 'DB_INSTANCE_BACKUP_ENABLED',
+        },
+        maximumExecutionFrequency: 'Six_Hours',
+        tags: defaultTags,
+      },
+      { parent: this, dependsOn: [configRecorderStatus] }
+    );
 
     // CloudWatch Event Rules for scheduling
 
@@ -889,7 +891,7 @@ exports.handler = async (event) => {
         name: `compliance-aggregator-${args.environmentSuffix}`,
         accountAggregationSource: {
           accountIds: [aws.getCallerIdentity().then(id => id.accountId)],
-          regions: ['eu-west-1'],
+          regions: ['eu-west-1', 'eu-central-1'],
         },
         tags: defaultTags,
       },
