@@ -12,9 +12,13 @@ const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
 // Get service name, email, and domain name from context or environment variables
-const serviceName = app.node.tryGetContext('serviceName') || process.env.SERVICE_NAME || 'transaction-migration';
+const serviceName =
+  app.node.tryGetContext('serviceName') ||
+  process.env.SERVICE_NAME ||
+  'transaction-migration';
 const email = app.node.tryGetContext('email') || process.env.SNS_EMAIL;
-const domainName = app.node.tryGetContext('domainName') || process.env.DOMAIN_NAME;
+const domainName =
+  app.node.tryGetContext('domainName') || process.env.DOMAIN_NAME;
 
 // Apply tags to all stacks in this app (optional - you can do this at stack level instead)
 Tags.of(app).add('Environment', environmentSuffix);

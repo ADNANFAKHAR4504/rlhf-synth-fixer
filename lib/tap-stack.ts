@@ -59,7 +59,10 @@ export class TapStack extends cdk.Stack {
     // ========================================
     const transactionTable = new dynamodb.TableV2(this, 'TransactionTable', {
       tableName: `${serviceName}-transactions-${region}-${environmentSuffix}`,
-      partitionKey: { name: 'transactionId', type: dynamodb.AttributeType.STRING },
+      partitionKey: {
+        name: 'transactionId',
+        type: dynamodb.AttributeType.STRING,
+      },
       sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
       billing: dynamodb.Billing.onDemand(),
       replicas: [
@@ -160,23 +163,34 @@ export class TapStack extends cdk.Stack {
     // ========================================
     // 3. Lambda Functions for Transaction Processing
     // ========================================
-    const transactionProcessorRole = new iam.Role(this, 'TransactionProcessorRole', {
-      roleName: `${serviceName}-lambda-processor-${region}-${environmentSuffix}`,
-      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'),
-      ],
-    });
+    const transactionProcessorRole = new iam.Role(
+      this,
+      'TransactionProcessorRole',
+      {
+        roleName: `${serviceName}-lambda-processor-${region}-${environmentSuffix}`,
+        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'service-role/AWSLambdaBasicExecutionRole'
+          ),
+          iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'AWSXRayDaemonWriteAccess'
+          ),
+        ],
+      }
+    );
 
     transactionTable.grantReadWriteData(transactionProcessorRole);
     primaryBucket.grantReadWrite(transactionProcessorRole);
 
-    const transactionProcessor = new lambda.Function(this, 'TransactionProcessor', {
-      functionName: `${serviceName}-processor-${region}-${environmentSuffix}`,
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'index.handler',
-      code: lambda.Code.fromInline(`
+    const transactionProcessor = new lambda.Function(
+      this,
+      'TransactionProcessor',
+      {
+        functionName: `${serviceName}-processor-${region}-${environmentSuffix}`,
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: 'index.handler',
+        code: lambda.Code.fromInline(`
         const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');
         const { S3Client, PutObjectCommand, HeadBucketCommand } = require('@aws-sdk/client-s3');
         
@@ -267,18 +281,19 @@ export class TapStack extends cdk.Stack {
           };
         };
       `),
-      environment: {
-        TABLE_NAME: transactionTable.tableName,
-        BUCKET_NAME: primaryBucket.bucketName,
-        ENVIRONMENT: environmentSuffix,
-        SERVICE: serviceName,
-      },
-      role: transactionProcessorRole,
-      timeout: cdk.Duration.seconds(30),
-      memorySize: 512,
-      tracing: lambda.Tracing.ACTIVE,
-      logRetention: logs.RetentionDays.ONE_WEEK,
-    });
+        environment: {
+          TABLE_NAME: transactionTable.tableName,
+          BUCKET_NAME: primaryBucket.bucketName,
+          ENVIRONMENT: environmentSuffix,
+          SERVICE: serviceName,
+        },
+        role: transactionProcessorRole,
+        timeout: cdk.Duration.seconds(30),
+        memorySize: 512,
+        tracing: lambda.Tracing.ACTIVE,
+        logRetention: logs.RetentionDays.ONE_WEEK,
+      }
+    );
 
     // Lambda Alias for weighted routing
     const liveAlias = new lambda.Alias(this, 'ProcessorLiveAlias', {
@@ -295,7 +310,9 @@ export class TapStack extends cdk.Stack {
     });
 
     if (props.email) {
-      alertTopic.addSubscription(new subscriptions.EmailSubscription(props.email));
+      alertTopic.addSubscription(
+        new subscriptions.EmailSubscription(props.email)
+      );
     }
 
     // ========================================
@@ -369,25 +386,32 @@ export class TapStack extends cdk.Stack {
     );
 
     // Replication lag alarm
-    const replicationLagAlarm = new cloudwatch.Alarm(this, 'ReplicationLagAlarm', {
-      alarmName: `${serviceName}-replication-lag-${region}-${environmentSuffix}`,
-      metric: new cloudwatch.Metric({
-        namespace: 'AWS/DynamoDB',
-        metricName: 'ReplicationLatency',
-        dimensionsMap: {
-          TableName: transactionTable.tableName,
-          ReceivingRegion: replicaRegion,
-        },
-        statistic: 'Average',
-        period: cdk.Duration.minutes(5),
-      }),
-      threshold: 60000, // 60 seconds in milliseconds
-      evaluationPeriods: 2,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
+    const replicationLagAlarm = new cloudwatch.Alarm(
+      this,
+      'ReplicationLagAlarm',
+      {
+        alarmName: `${serviceName}-replication-lag-${region}-${environmentSuffix}`,
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/DynamoDB',
+          metricName: 'ReplicationLatency',
+          dimensionsMap: {
+            TableName: transactionTable.tableName,
+            ReceivingRegion: replicaRegion,
+          },
+          statistic: 'Average',
+          period: cdk.Duration.minutes(5),
+        }),
+        threshold: 60000, // 60 seconds in milliseconds
+        evaluationPeriods: 2,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }
+    );
 
-    replicationLagAlarm.addAlarmAction(new cdk.aws_cloudwatch_actions.SnsAction(alertTopic));
+    replicationLagAlarm.addAlarmAction(
+      new cdk.aws_cloudwatch_actions.SnsAction(alertTopic)
+    );
 
     // Lambda error alarm
     const lambdaErrorAlarm = new cloudwatch.Alarm(this, 'LambdaErrorAlarm', {
@@ -398,7 +422,9 @@ export class TapStack extends cdk.Stack {
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
-    lambdaErrorAlarm.addAlarmAction(new cdk.aws_cloudwatch_actions.SnsAction(alertTopic));
+    lambdaErrorAlarm.addAlarmAction(
+      new cdk.aws_cloudwatch_actions.SnsAction(alertTopic)
+    );
 
     // ========================================
     // 7. SSM Parameters for Migration State
@@ -430,10 +456,14 @@ export class TapStack extends cdk.Stack {
     // ========================================
     // 8. Step Functions for Migration Orchestration
     // ========================================
-    const snsPublishTask = new tasks.SnsPublish(this, 'SendApprovalNotification', {
-      topic: alertTopic,
-      message: sfn.TaskInput.fromJsonPathAt('$.message'),
-    });
+    const snsPublishTask = new tasks.SnsPublish(
+      this,
+      'SendApprovalNotification',
+      {
+        topic: alertTopic,
+        message: sfn.TaskInput.fromJsonPathAt('$.message'),
+      }
+    );
 
     const manualApprovalTask = new sfn.Wait(this, 'WaitForManualApproval', {
       time: sfn.WaitTime.duration(cdk.Duration.minutes(5)),
@@ -472,55 +502,71 @@ export class TapStack extends cdk.Stack {
       .next(validateHealthTask)
       .next(
         new sfn.Choice(this, 'HealthCheckPassed')
-          .when(sfn.Condition.numberGreaterThan('$.healthCheckResult.Payload.statusCode', 199), updateTrafficTask.next(successState))
+          .when(
+            sfn.Condition.numberGreaterThan(
+              '$.healthCheckResult.Payload.statusCode',
+              199
+            ),
+            updateTrafficTask.next(successState)
+          )
           .otherwise(rollbackTask.next(failState))
       );
 
-    const migrationStateMachine = new sfn.StateMachine(this, 'MigrationStateMachine', {
-      stateMachineName: `${serviceName}-migration-orchestration-${region}-${environmentSuffix}`,
-      definitionBody: sfn.DefinitionBody.fromChainable(definition),
-      timeout: cdk.Duration.hours(2),
-      tracingEnabled: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
+    const migrationStateMachine = new sfn.StateMachine(
+      this,
+      'MigrationStateMachine',
+      {
+        stateMachineName: `${serviceName}-migration-orchestration-${region}-${environmentSuffix}`,
+        definitionBody: sfn.DefinitionBody.fromChainable(definition),
+        timeout: cdk.Duration.hours(2),
+        tracingEnabled: true,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
 
     // ========================================
     // 9. CloudFront Distribution
     // ========================================
-    const cloudfrontDistribution = new cloudfront.Distribution(this, 'TransactionDistribution', {
-      comment: `${serviceName} Transaction API Distribution - ${environmentSuffix}`,
-      defaultBehavior: {
-        origin: new origins.S3Origin(primaryBucket),
-        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
-        originRequestPolicy: cloudfront.OriginRequestPolicy.CORS_S3_ORIGIN,
-      },
-      additionalBehaviors: {
-        '/api/*': {
+    const cloudfrontDistribution = new cloudfront.Distribution(
+      this,
+      'TransactionDistribution',
+      {
+        comment: `${serviceName} Transaction API Distribution - ${environmentSuffix}`,
+        defaultBehavior: {
           origin: new origins.S3Origin(primaryBucket),
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED, // Bypass cache for transaction APIs
-          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
+          viewerProtocolPolicy:
+            cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.CORS_S3_ORIGIN,
         },
-      },
-      priceClass: cloudfront.PriceClass.PRICE_CLASS_ALL,
-      enableLogging: true,
-      logBucket: new s3.Bucket(this, 'CloudFrontLogBucket', {
-        bucketName: `${serviceName}-cf-logs-${accountId}-${region}-${environmentSuffix}`,
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-        autoDeleteObjects: true,
-        encryption: s3.BucketEncryption.S3_MANAGED,
-        objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_PREFERRED,
-        publicReadAccess: false,
-        blockPublicAccess: new s3.BlockPublicAccess({
-          blockPublicAcls: false,
-          blockPublicPolicy: true,
-          ignorePublicAcls: false,
-          restrictPublicBuckets: true,
+        additionalBehaviors: {
+          '/api/*': {
+            origin: new origins.S3Origin(primaryBucket),
+            viewerProtocolPolicy:
+              cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+            cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED, // Bypass cache for transaction APIs
+            originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
+          },
+        },
+        priceClass: cloudfront.PriceClass.PRICE_CLASS_ALL,
+        enableLogging: true,
+        logBucket: new s3.Bucket(this, 'CloudFrontLogBucket', {
+          bucketName: `${serviceName}-cf-logs-${accountId}-${region}-${environmentSuffix}`,
+          removalPolicy: cdk.RemovalPolicy.DESTROY,
+          autoDeleteObjects: true,
+          encryption: s3.BucketEncryption.S3_MANAGED,
+          objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_PREFERRED,
+          publicReadAccess: false,
+          blockPublicAccess: new s3.BlockPublicAccess({
+            blockPublicAcls: false,
+            blockPublicPolicy: true,
+            ignorePublicAcls: false,
+            restrictPublicBuckets: true,
+          }),
         }),
-      }),
-      logFilePrefix: 'cloudfront-logs/',
-    });
+        logFilePrefix: 'cloudfront-logs/',
+      }
+    );
 
     // ========================================
     // 10. Route53 Health Checks and Failover (Optional)
@@ -532,46 +578,55 @@ export class TapStack extends cdk.Stack {
       });
 
       // Health check for primary CloudFront distribution
-      const primaryHealthCheck = new route53.CfnHealthCheck(this, 'PrimaryHealthCheck', {
-        healthCheckConfig: {
-          type: 'HTTPS',
-          resourcePath: '/health',
-          fullyQualifiedDomainName: cloudfrontDistribution.distributionDomainName,
-          port: 443,
-          requestInterval: 30,
-          failureThreshold: 3,
-          measureLatency: true,
-        },
-        healthCheckTags: [
-          {
-            key: 'Name',
-            value: `${serviceName}-primary-health-${region}-${environmentSuffix}`,
+      const primaryHealthCheck = new route53.CfnHealthCheck(
+        this,
+        'PrimaryHealthCheck',
+        {
+          healthCheckConfig: {
+            type: 'HTTPS',
+            resourcePath: '/health',
+            fullyQualifiedDomainName:
+              cloudfrontDistribution.distributionDomainName,
+            port: 443,
+            requestInterval: 30,
+            failureThreshold: 3,
+            measureLatency: true,
           },
-          {
-            key: 'Service',
-            value: serviceName,
-          },
-          {
-            key: 'Environment',
-            value: environmentSuffix,
-          },
-        ],
-      });
+          healthCheckTags: [
+            {
+              key: 'Name',
+              value: `${serviceName}-primary-health-${region}-${environmentSuffix}`,
+            },
+            {
+              key: 'Service',
+              value: serviceName,
+            },
+            {
+              key: 'Environment',
+              value: environmentSuffix,
+            },
+          ],
+        }
+      );
 
       // Health check for API Gateway endpoint (via Lambda)
-      const apiHealthCheck = new route53.CfnHealthCheck(this, 'ApiHealthCheck', {
-        healthCheckConfig: {
-          type: 'CALCULATED',
-          childHealthChecks: [primaryHealthCheck.attrHealthCheckId],
-          healthThreshold: 1,
-        },
-        healthCheckTags: [
-          {
-            key: 'Name',
-            value: `${serviceName}-api-health-${region}-${environmentSuffix}`,
+      const apiHealthCheck = new route53.CfnHealthCheck(
+        this,
+        'ApiHealthCheck',
+        {
+          healthCheckConfig: {
+            type: 'CALCULATED',
+            childHealthChecks: [primaryHealthCheck.attrHealthCheckId],
+            healthThreshold: 1,
           },
-        ],
-      });
+          healthCheckTags: [
+            {
+              key: 'Name',
+              value: `${serviceName}-api-health-${region}-${environmentSuffix}`,
+            },
+          ],
+        }
+      );
 
       // CloudWatch alarm for data consistency (replication lag)
       const consistencyMetric = new cloudwatch.Metric({
@@ -586,14 +641,18 @@ export class TapStack extends cdk.Stack {
       });
 
       // Create health check based on CloudWatch alarm for data consistency
-      const dataConsistencyAlarm = new cloudwatch.Alarm(this, 'DataConsistencyAlarm', {
-        alarmName: `${serviceName}-data-consistency-${region}-${environmentSuffix}`,
-        metric: consistencyMetric,
-        threshold: 30000, // 30 seconds in milliseconds
-        evaluationPeriods: 2,
-        comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
-        treatMissingData: cloudwatch.TreatMissingData.BREACHING,
-      });
+      const dataConsistencyAlarm = new cloudwatch.Alarm(
+        this,
+        'DataConsistencyAlarm',
+        {
+          alarmName: `${serviceName}-data-consistency-${region}-${environmentSuffix}`,
+          metric: consistencyMetric,
+          threshold: 30000, // 30 seconds in milliseconds
+          evaluationPeriods: 2,
+          comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+          treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+        }
+      );
 
       const dataConsistencyHealthCheck = new route53.CfnHealthCheck(
         this,
@@ -617,22 +676,26 @@ export class TapStack extends cdk.Stack {
       );
 
       // Composite health check combining API availability and data consistency
-      const compositeHealthCheck = new route53.CfnHealthCheck(this, 'CompositeHealthCheck', {
-        healthCheckConfig: {
-          type: 'CALCULATED',
-          childHealthChecks: [
-            apiHealthCheck.attrHealthCheckId,
-            dataConsistencyHealthCheck.attrHealthCheckId,
-          ],
-          healthThreshold: 2, // Both must be healthy
-        },
-        healthCheckTags: [
-          {
-            key: 'Name',
-            value: `${serviceName}-composite-health-${region}-${environmentSuffix}`,
+      const compositeHealthCheck = new route53.CfnHealthCheck(
+        this,
+        'CompositeHealthCheck',
+        {
+          healthCheckConfig: {
+            type: 'CALCULATED',
+            childHealthChecks: [
+              apiHealthCheck.attrHealthCheckId,
+              dataConsistencyHealthCheck.attrHealthCheckId,
+            ],
+            healthThreshold: 2, // Both must be healthy
           },
-        ],
-      });
+          healthCheckTags: [
+            {
+              key: 'Name',
+              value: `${serviceName}-composite-health-${region}-${environmentSuffix}`,
+            },
+          ],
+        }
+      );
 
       // Create subdomain for API (e.g., api.yourdomain.com)
       const apiSubdomain = `api-${environmentSuffix}`;
@@ -649,7 +712,8 @@ export class TapStack extends cdk.Stack {
       });
 
       // Configure failover routing using L1 construct
-      const cfnPrimaryRecord = primaryRecord.node.defaultChild as route53.CfnRecordSet;
+      const cfnPrimaryRecord = primaryRecord.node
+        .defaultChild as route53.CfnRecordSet;
       cfnPrimaryRecord.failover = 'PRIMARY';
       cfnPrimaryRecord.healthCheckId = compositeHealthCheck.attrHealthCheckId;
       cfnPrimaryRecord.setIdentifier = `${serviceName}-primary-${region}-${environmentSuffix}`;
@@ -675,7 +739,9 @@ export class TapStack extends cdk.Stack {
         treatMissingData: cloudwatch.TreatMissingData.BREACHING,
       });
 
-      healthCheckAlarm.addAlarmAction(new cdk.aws_cloudwatch_actions.SnsAction(alertTopic));
+      healthCheckAlarm.addAlarmAction(
+        new cdk.aws_cloudwatch_actions.SnsAction(alertTopic)
+      );
 
       // Output Route53 information
       new cdk.CfnOutput(this, 'ApiDomain', {

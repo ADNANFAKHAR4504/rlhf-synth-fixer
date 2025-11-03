@@ -1,20 +1,13 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
-import { CloudWatchClient, GetDashboardCommand } from '@aws-sdk/client-cloudwatch';
-import { DeleteItemCommand, DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-dynamodb';
-import { DescribeRuleCommand, EventBridgeClient } from '@aws-sdk/client-eventbridge';
-import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
-import { GetObjectCommand, HeadBucketCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { DescribeStateMachineCommand, SFNClient, StartExecutionCommand } from '@aws-sdk/client-sfn';
-import { GetTopicAttributesCommand, SNSClient } from '@aws-sdk/client-sns';
-import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
+import * as AWS from 'aws-sdk';
 import fs from 'fs';
-
 // Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr1';
 const region = process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || 'us-east-1';
 
 // Load CloudFormation outputs
 let outputs: any = {};
+
 try {
   outputs = JSON.parse(
     fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
@@ -22,16 +15,15 @@ try {
 } catch (error) {
   console.warn('Warning: cfn-outputs/flat-outputs.json not found. Integration tests will be skipped.');
 }
-
-// Initialize AWS SDK clients
-const dynamoClient = new DynamoDBClient({ region });
-const lambdaClient = new LambdaClient({ region });
-const s3Client = new S3Client({ region });
-const snsClient = new SNSClient({ region });
-const eventBridgeClient = new EventBridgeClient({ region });
-const cloudWatchClient = new CloudWatchClient({ region });
-const ssmClient = new SSMClient({ region });
-const sfnClient = new SFNClient({ region });
+// Initialize AWS SDK v2 clients
+const dynamoClient = new AWS.DynamoDB({ region });
+const lambdaClient = new AWS.Lambda({ region });
+const s3Client = new AWS.S3({ region });
+const snsClient = new AWS.SNS({ region });
+const eventBridgeClient = new AWS.EventBridge({ region });
+const cloudWatchClient = new AWS.CloudWatch({ region });
+const ssmClient = new AWS.SSM({ region });
+const sfnClient = new AWS.StepFunctions({ region });
 
 describe('Transaction Migration Stack Integration Tests', () => {
   // Skip all tests if outputs file doesn't exist
@@ -50,7 +42,7 @@ describe('Transaction Migration Stack Integration Tests', () => {
       const tableName = outputs.TransactionTableName;
       expect(tableName).toBeDefined();
 
-      const command = new PutItemCommand({
+      const params = {
         TableName: tableName,
         Item: {
           transactionId: { S: testTransactionId },
@@ -58,10 +50,10 @@ describe('Transaction Migration Stack Integration Tests', () => {
           data: { S: JSON.stringify({ test: 'integration-test' }) },
           region: { S: region },
         },
-      });
+      };
 
-      const response = await dynamoClient.send(command);
-      expect(response.$metadata.httpStatusCode).toBe(200);
+      const response = await dynamoClient.putItem(params).promise();
+      expect(response).toBeDefined();
     });
 
     test('should read item from DynamoDB table', async () => {
@@ -72,15 +64,15 @@ describe('Transaction Migration Stack Integration Tests', () => {
 
       const tableName = outputs.TransactionTableName;
 
-      const command = new GetItemCommand({
+      const params = {
         TableName: tableName,
         Key: {
           transactionId: { S: testTransactionId },
           timestamp: { N: testTimestamp.toString() },
         },
-      });
+      };
 
-      const response = await dynamoClient.send(command);
+      const response = await dynamoClient.getItem(params).promise();
       expect(response.Item).toBeDefined();
       expect(response.Item?.transactionId.S).toBe(testTransactionId);
     });
@@ -93,16 +85,16 @@ describe('Transaction Migration Stack Integration Tests', () => {
 
       const tableName = outputs.TransactionTableName;
 
-      const command = new DeleteItemCommand({
+      const params = {
         TableName: tableName,
         Key: {
           transactionId: { S: testTransactionId },
           timestamp: { N: testTimestamp.toString() },
         },
-      });
+      };
 
-      const response = await dynamoClient.send(command);
-      expect(response.$metadata.httpStatusCode).toBe(200);
+      const response = await dynamoClient.deleteItem(params).promise();
+      expect(response).toBeDefined();
     });
   });
 
@@ -116,16 +108,16 @@ describe('Transaction Migration Stack Integration Tests', () => {
       const functionArn = outputs.TransactionProcessorArn;
       expect(functionArn).toBeDefined();
 
-      const command = new InvokeCommand({
+      const params = {
         FunctionName: functionArn,
         Payload: JSON.stringify({
           transactionId: `integration-test-${Date.now()}`,
           amount: 100,
           currency: 'USD',
         }),
-      });
+      };
 
-      const response = await lambdaClient.send(command);
+      const response = await lambdaClient.invoke(params).promise();
       expect(response.StatusCode).toBe(200);
       expect(response.FunctionError).toBeUndefined();
     });
@@ -138,18 +130,18 @@ describe('Transaction Migration Stack Integration Tests', () => {
 
       const functionArn = outputs.TransactionProcessorArn;
 
-      const command = new InvokeCommand({
+      const params = {
         FunctionName: functionArn,
         Payload: JSON.stringify({
           action: 'healthCheck',
         }),
-      });
+      };
 
-      const response = await lambdaClient.send(command);
+      const response = await lambdaClient.invoke(params).promise();
       expect(response.StatusCode).toBe(200);
 
       if (response.Payload) {
-        const payload = JSON.parse(new TextDecoder().decode(response.Payload));
+        const payload = JSON.parse(response.Payload.toString());
         expect(payload.statusCode).toBe(200);
         const body = JSON.parse(payload.body);
         expect(body.status).toBe('healthy');
@@ -169,12 +161,12 @@ describe('Transaction Migration Stack Integration Tests', () => {
       const bucketName = outputs.PrimaryBucketName;
       expect(bucketName).toBeDefined();
 
-      const command = new HeadBucketCommand({
+      const params = {
         Bucket: bucketName,
-      });
+      };
 
-      const response = await s3Client.send(command);
-      expect(response.$metadata.httpStatusCode).toBe(200);
+      const response = await s3Client.headBucket(params).promise();
+      expect(response).toBeDefined();
     });
 
     test('should write object to primary S3 bucket', async () => {
@@ -185,15 +177,15 @@ describe('Transaction Migration Stack Integration Tests', () => {
 
       const bucketName = outputs.PrimaryBucketName;
 
-      const command = new PutObjectCommand({
+      const params = {
         Bucket: bucketName,
         Key: `transactions/${testKey}`,
         Body: JSON.stringify({ test: 'integration', timestamp: Date.now() }),
         ContentType: 'application/json',
-      });
+      };
 
-      const response = await s3Client.send(command);
-      expect(response.$metadata.httpStatusCode).toBe(200);
+      const response = await s3Client.putObject(params).promise();
+      expect(response).toBeDefined();
     });
 
     test('should read object from primary S3 bucket', async () => {
@@ -204,13 +196,13 @@ describe('Transaction Migration Stack Integration Tests', () => {
 
       const bucketName = outputs.PrimaryBucketName;
 
-      const command = new GetObjectCommand({
+      const params = {
         Bucket: bucketName,
         Key: `transactions/${testKey}`,
-      });
+      };
 
-      const response = await s3Client.send(command);
-      expect(response.$metadata.httpStatusCode).toBe(200);
+      const response = await s3Client.getObject(params).promise();
+      expect(response).toBeDefined();
       expect(response.Body).toBeDefined();
     });
   });
@@ -225,11 +217,11 @@ describe('Transaction Migration Stack Integration Tests', () => {
       const topicArn = outputs.AlertTopicArn;
       expect(topicArn).toBeDefined();
 
-      const command = new GetTopicAttributesCommand({
+      const params = {
         TopicArn: topicArn,
-      });
+      };
 
-      const response = await snsClient.send(command);
+      const response = await snsClient.getTopicAttributes(params).promise();
       expect(response.Attributes).toBeDefined();
       expect(response.Attributes?.TopicArn).toBe(topicArn);
     });
@@ -247,12 +239,12 @@ describe('Transaction Migration Stack Integration Tests', () => {
       const ruleName = `${serviceName}-transaction-events-${region}-${environmentSuffix}`;
       const eventBusName = `${serviceName}-migration-${region}-${environmentSuffix}`;
 
-      const command = new DescribeRuleCommand({
+      const params = {
         Name: ruleName,
         EventBusName: eventBusName,
-      });
+      };
 
-      const response = await eventBridgeClient.send(command);
+      const response = await eventBridgeClient.describeRule(params).promise();
       expect(response.Name).toBe(ruleName);
       expect(response.State).toBe('ENABLED');
     });
@@ -268,11 +260,11 @@ describe('Transaction Migration Stack Integration Tests', () => {
       const dashboardName = outputs.DashboardName;
       expect(dashboardName).toBeDefined();
 
-      const command = new GetDashboardCommand({
+      const params = {
         DashboardName: dashboardName,
-      });
+      };
 
-      const response = await cloudWatchClient.send(command);
+      const response = await cloudWatchClient.getDashboard(params).promise();
       expect(response.DashboardName).toBe(dashboardName);
       expect(response.DashboardBody).toBeDefined();
     });
@@ -288,11 +280,11 @@ describe('Transaction Migration Stack Integration Tests', () => {
       const serviceName = process.env.SERVICE_NAME || 'transaction-migration';
       const parameterName = `/${serviceName}/migration/state/${environmentSuffix}`;
 
-      const command = new GetParameterCommand({
+      const params = {
         Name: parameterName,
-      });
+      };
 
-      const response = await ssmClient.send(command);
+      const response = await ssmClient.getParameter(params).promise();
       expect(response.Parameter).toBeDefined();
       expect(response.Parameter?.Name).toBe(parameterName);
 
@@ -310,11 +302,11 @@ describe('Transaction Migration Stack Integration Tests', () => {
       const serviceName = process.env.SERVICE_NAME || 'transaction-migration';
       const parameterName = `/${serviceName}/migration/config/${environmentSuffix}`;
 
-      const command = new GetParameterCommand({
+      const params = {
         Name: parameterName,
-      });
+      };
 
-      const response = await ssmClient.send(command);
+      const response = await ssmClient.getParameter(params).promise();
       expect(response.Parameter).toBeDefined();
 
       const value = JSON.parse(response.Parameter?.Value || '{}');
@@ -333,11 +325,11 @@ describe('Transaction Migration Stack Integration Tests', () => {
       const stateMachineArn = outputs.StateMachineArn;
       expect(stateMachineArn).toBeDefined();
 
-      const command = new DescribeStateMachineCommand({
+      const params = {
         stateMachineArn: stateMachineArn,
-      });
+      };
 
-      const response = await sfnClient.send(command);
+      const response = await sfnClient.describeStateMachine(params).promise();
       expect(response.stateMachineArn).toBe(stateMachineArn);
       expect(response.status).toBe('ACTIVE');
     });
@@ -350,7 +342,7 @@ describe('Transaction Migration Stack Integration Tests', () => {
 
       const stateMachineArn = outputs.StateMachineArn;
 
-      const command = new StartExecutionCommand({
+      const params = {
         stateMachineArn: stateMachineArn,
         input: JSON.stringify({
           phase: 'test-phase',
@@ -358,9 +350,9 @@ describe('Transaction Migration Stack Integration Tests', () => {
           message: 'Integration test execution',
         }),
         name: `integration-test-${Date.now()}`,
-      });
+      };
 
-      const response = await sfnClient.send(command);
+      const response = await sfnClient.startExecution(params).promise();
       expect(response.executionArn).toBeDefined();
       expect(response.startDate).toBeDefined();
     });
@@ -438,7 +430,7 @@ describe('Transaction Migration Stack Integration Tests', () => {
       const tableName = outputs.TransactionTableName;
 
       // Step 1: Invoke Lambda to create transaction
-      const invokeCommand = new InvokeCommand({
+      const invokeParams = {
         FunctionName: functionArn,
         Payload: JSON.stringify({
           transactionId: transactionId,
@@ -446,27 +438,27 @@ describe('Transaction Migration Stack Integration Tests', () => {
           currency: 'USD',
           description: 'End-to-end integration test',
         }),
-      });
+      };
 
-      const invokeResponse = await lambdaClient.send(invokeCommand);
+      const invokeResponse = await lambdaClient.invoke(invokeParams).promise();
       expect(invokeResponse.StatusCode).toBe(200);
 
       // Step 2: Wait a bit for processing
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Step 3: Verify transaction was written to DynamoDB
-      const getCommand = new GetItemCommand({
+      const getParams = {
         TableName: tableName,
         Key: {
           transactionId: { S: transactionId },
           timestamp: { N: '*' }, // We don't know exact timestamp
         },
-      });
+      };
 
       // Note: This might not find the item due to timestamp mismatch
       // In a real scenario, you'd query by partition key only
       try {
-        const getResponse = await dynamoClient.send(getCommand);
+        const getResponse = await dynamoClient.getItem(getParams).promise();
         if (getResponse.Item) {
           expect(getResponse.Item.transactionId.S).toBe(transactionId);
         }
