@@ -19,7 +19,7 @@ The corrected stack implementation (see actual file for complete code) includes:
 
 ### Environment-Specific Configurations
 
-```typescript
+```ts
 // Environment detection
 const isDev = environment === 'dev';
 
@@ -42,7 +42,7 @@ rateLimit: isDev ? 100 : 1000,
 ### Critical Fix #1: DynamoDB Encryption
 
 **Corrected Configuration**:
-```typescript
+```ts
 serverSideEncryption: {
   enabled: true,
 },
@@ -53,7 +53,7 @@ This fix resolved TypeScript compilation errors and ensured proper encryption at
 ### Critical Fix #2: API Gateway Throttling
 
 **Removed Invalid Code**:
-```typescript
+```ts
 // This was REMOVED - causes Terraform error
 // new ApiGatewayMethod(this, 'api_method_settings', {
 //   restApiId: api.id,
@@ -64,7 +64,7 @@ This fix resolved TypeScript compilation errors and ensured proper encryption at
 ```
 
 **Correct Implementation** (via Usage Plan):
-```typescript
+```ts
 const usagePlan = new ApiGatewayUsagePlan(this, 'usage_plan', {
   name: `usage-plan-${environmentSuffix}`,
   apiStages: [{
@@ -88,7 +88,7 @@ const usagePlan = new ApiGatewayUsagePlan(this, 'usage_plan', {
 
 Entry point configuration (see actual file):
 
-```typescript
+```ts
 import { App } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
 
