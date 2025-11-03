@@ -778,35 +778,35 @@ echo "Bastion host initialized successfully"
     // ACM Certificate with Auto-Renewal (Requirement 13)
     // =====================================================
 
-    const certificate = new aws.acm.Certificate(`migration-cert-${environmentSuffix}`, {
-      domainName: `*.migration.internal`,
-      validationMethod: 'DNS',
-      subjectAlternativeNames: ['migration.internal'],
-      tags: defaultTags,
-      options: {
-        certificateTransparencyLoggingPreference: 'ENABLED',
-      },
-    }, { parent: this });
-
-    // DNS validation records
-    const certValidationRecords = certificate.domainValidationOptions.apply(options =>
-      options.map((option, index) =>
-        new aws.route53.Record(`cert-validation-${environmentSuffix}-${index}`, {
-          zoneId: privateZone.zoneId,
-          name: option.resourceRecordName,
-          type: option.resourceRecordType,
-          records: [option.resourceRecordValue],
-          ttl: 60,
-        }, { parent: this })
-      )
-    );
-
-    const certValidation = new aws.acm.CertificateValidation(`migration-cert-validation-${environmentSuffix}`, {
-      certificateArn: certificate.arn,
-      validationRecordFqdns: certificate.domainValidationOptions.apply(options =>
-        options.map(option => option.resourceRecordName)
-      ),
-    }, { parent: this, dependsOn: [certValidationRecords] });
+    // NOTE: ACM certificates cannot be validated for private domains (*.migration.internal)
+    // as they are not publicly resolvable. This certificate resource is commented out
+    // to prevent deployment timeouts.
+    //
+    // For production use with internal domains, use AWS Private Certificate Authority (PCA)
+    // which is designed for internal PKI and does not require DNS validation.
+    //
+    // If you need a certificate for a PUBLIC domain:
+    // 1. Change the domainName to your public domain
+    // 2. Uncomment the certificate code below
+    // 3. The validation will complete automatically via DNS records in Route53
+    //
+    // Example for public domain:
+    // const certificate = new aws.acm.Certificate(
+    //   `migration-cert-${environmentSuffix}`,
+    //   {
+    //     domainName: 'migration.example.com',  // Use your public domain
+    //     validationMethod: 'DNS',
+    //     tags: defaultTags,
+    //     options: {
+    //       certificateTransparencyLoggingPreference: 'ENABLED',
+    //     },
+    //   },
+    //   { parent: this }
+    // );
+    //
+    // For pre-provisioned certificates (recommended for CI/CD):
+    // Pass the certificate ARN as a stack input instead of creating it here.
+    // This avoids validation delays on every deployment.
 
     // =====================================================
     // CloudWatch Log Groups and Insights Queries (Requirement 18)
@@ -1136,7 +1136,7 @@ echo "Bastion host initialized successfully"
       transitGatewayId: this.transitGatewayId,
       privateZoneId: privateZone.zoneId,
       dbSecretArn: dbMasterPassword.arn,
-      certificateArn: certificate.arn,
+      // certificateArn removed - certificate creation commented out due to private domain validation issue
       dashboardUrl: this.dashboardUrl,
       dashboardName: dashboard.dashboardName,
       alarmTopicArn: alarmTopic.arn,
