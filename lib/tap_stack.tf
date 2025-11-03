@@ -729,7 +729,7 @@ resource "aws_lambda_function" "rotate_secret" {
 
   environment {
     variables = {
-      SECRETS_MANAGER_ENDPOINT = "https://secretsmanager.${data.aws_region.current.name}.amazonaws.com"
+      SECRETS_MANAGER_ENDPOINT = "https://secretsmanager.${var.aws_region}.amazonaws.com"
     }
   }
 
@@ -826,7 +826,7 @@ resource "aws_ecs_task_definition" "app" {
         logDriver = "awslogs"
         options = {
           awslogs-group         = aws_cloudwatch_log_group.ecs.name
-          awslogs-region        = data.aws_region.current.name
+          awslogs-region        = var.aws_region
           awslogs-stream-prefix = "xray"
         }
       }
@@ -848,7 +848,7 @@ resource "aws_ecs_task_definition" "app" {
         logDriver = "awslogs"
         options = {
           awslogs-group         = aws_cloudwatch_log_group.ecs.name
-          awslogs-region        = data.aws_region.current.name
+          awslogs-region        = var.aws_region
           awslogs-stream-prefix = "app"
         }
       }
@@ -1029,10 +1029,11 @@ resource "aws_ecs_service" "main" {
   deployment_configuration {
     maximum_percent         = 200
     minimum_healthy_percent = 50
-    deployment_circuit_breaker {
-      enable   = true
-      rollback = true
-    }
+  }
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
   }
 
   health_check_grace_period_seconds = 60
