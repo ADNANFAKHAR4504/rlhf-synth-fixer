@@ -2,7 +2,7 @@
 
 We need to set up a new PostgreSQL database for our production environment. I've been working on this migration for a while and wanted to document the requirements.
 
-This needs to be implemented using cdktf with TypeScript in the eu-west-2 region. Please don't change the platform or language - we're standardized on this stack.
+This needs to be implemented using cdktf with TypeScript in the eu-west-2 region. Please don't change the platform or language - we're standardized on this stack across all our teams.
 
 Here's what I need to get done:
 
@@ -20,11 +20,11 @@ Here's what I need to get done:
 9. Tag everything: Environment='production', Team='platform', CostCenter='engineering'
 10. Create a parameter group for PostgreSQL 14 with shared_preload_libraries='pg_stat_statements'
 
-The goal is a production-ready RDS instance with all security, monitoring, and compliance configs in place, ready for data migration from dev.
+The goal is a production-ready RDS instance with all security, monitoring, and compliance configs in place, ready for data migration from our dev environment.
 
 ## Additional Context
 
-We're a financial services company migrating our PostgreSQL database from dev to production. Data integrity is critical, and we need production-grade security and monitoring.
+We're a financial services company migrating our PostgreSQL database from dev to production. Data integrity is absolutely critical for us, and we need proper security and monitoring in place before we can go live.
 
 Some constraints I need to keep in mind:
 - Deploy the RDS instance in private subnets only (no public access)
@@ -35,7 +35,7 @@ Some constraints I need to keep in mind:
 
 We're running in eu-west-2 with an existing production VPC (vpc-prod-123456). The VPC has private subnets for RDS across 2 availability zones.
 
-Tech requirements: CDK 2.x with TypeScript, Node.js 16+, and AWS CLI configured with production credentials. This stack will integrate with our existing CloudWatch dashboards and SNS topics.
+Tech-wise, we're running CDK 2.x with TypeScript, Node.js 16+, and AWS CLI configured with production credentials. This stack needs to integrate with our existing CloudWatch dashboards and SNS topics.
 
 ## Project-Specific Conventions
 
@@ -43,7 +43,7 @@ For resource naming, I need to make sure all resources use the `environmentSuffi
 
 For testing, integration tests should load stack outputs from `cfn-outputs/flat-outputs.json` and validate actual deployed resources.
 
-One thing to keep in mind - infrastructure should be fully destroyable for CI/CD workflows, with one exception - secrets should be fetched from existing AWS Secrets Manager entries rather than created by the stack. Try to avoid using DeletionPolicy: Retain unless absolutely necessary.
+One thing to keep in mind - infrastructure should be fully destroyable for CI/CD workflows. The only exception is secrets - those should be fetched from existing AWS Secrets Manager entries rather than created by the stack. Try to avoid using DeletionPolicy: Retain unless it's absolutely necessary.
 
 Security wise, I need to implement encryption at rest and in transit, follow principle of least privilege for IAM roles, use AWS Secrets Manager for credential management where applicable, and enable appropriate logging and monitoring.
 
