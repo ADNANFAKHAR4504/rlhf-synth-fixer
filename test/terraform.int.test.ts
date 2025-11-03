@@ -910,9 +910,8 @@ describe('Comprehensive Web Application Infrastructure Integration Tests', () =>
           }
 
         } catch (error: any) {
-          console.warn('');
         }
-      }, 600000); // 10 minutes timeout for full resilience test
+      }, 600000); 
     });
 
     describe('[E2E] Application Load Balancer End-to-End Flow', () => {
