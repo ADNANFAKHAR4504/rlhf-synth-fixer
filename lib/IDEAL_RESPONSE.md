@@ -1,6 +1,6 @@
 ## File: tap.py
 
-```py
+```python
 #!/usr/bin/env python3
 """
 Pulumi application entry point for the CI/CD pipeline infrastructure.
@@ -47,13 +47,13 @@ stack = TapStack(
 
 ## File: lib\*\*init\*\*.py
 
-```py
+```python
 # empty
 ```
 
 ## File: lib\tap_stack.py
 
-```py
+```python
 """
 tap_stack.py
 
@@ -219,7 +219,7 @@ class TapStack(pulumi.ComponentResource):
 
 ## File: lib\infrastructure\_\_init\_\_.py
 
-```py
+```python
 """
 Infrastructure module for CI/CD pipeline.
 
@@ -251,7 +251,7 @@ __all__ = [
 
 ## File: lib\infrastructure\lambda_code\handler.py
 
-```py
+```python
 """
 Lambda handler for the CI/CD pipeline.
 
@@ -439,7 +439,7 @@ def handle_direct_invocation(event: Dict[str, Any], context: Any) -> Dict[str, A
 
 ## File: lib\infrastructure\api_gateway.py
 
-```py
+```python
 """
 API Gateway module with usage plan and rate limiting.
 
@@ -703,7 +703,7 @@ class APIGatewayStack:
 
 ## File: lib\infrastructure\aws_provider.py
 
-```py
+```python
 """
 AWS Provider module for consistent provider usage.
 
@@ -766,7 +766,7 @@ class AWSProviderManager:
 
 ## File: lib\infrastructure\cicd.py
 
-```py
+```python
 """
 CI/CD module with CodeBuild and S3-based artifact management.
 
@@ -960,7 +960,7 @@ artifacts:
 
 ## File: lib\infrastructure\config.py
 
-```py
+```python
 """
 Configuration module for the CI/CD pipeline infrastructure.
 
@@ -1106,7 +1106,7 @@ class CICDPipelineConfig:
 
 ## File: lib\infrastructure\iam.py
 
-```py
+```python
 """
 IAM module for least-privilege roles.
 
@@ -1389,7 +1389,7 @@ class IAMStack:
 
 ## File: lib\infrastructure\lambda_functions.py
 
-```py
+```python
 """
 Lambda Functions module for the CI/CD pipeline.
 
@@ -1578,7 +1578,7 @@ class LambdaStack:
 
 ## File: lib\infrastructure\monitoring.py
 
-```py
+```python
 """
 Monitoring module for CloudWatch logs, alarms, and dashboards.
 
@@ -1829,7 +1829,7 @@ class MonitoringStack:
 
 ## File: lib\infrastructure\storage.py
 
-```py
+```python
 """
 Storage module for S3 buckets.
 
@@ -2066,7 +2066,7 @@ class StorageStack:
 
 ## File: lib\infrastructure\vpc.py
 
-```py
+```python
 """
 VPC module for Lambda functions.
 
