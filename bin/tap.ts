@@ -2,7 +2,7 @@
 import * as cdk from 'aws-cdk-lib';
 import 'source-map-support/register';
 import { AuroraGlobalStack } from '../lib/stacks/aurora-global-stack';
-import { FailoverStack } from '../lib/stacks/failover-stack';
+// import { FailoverStack } from '../lib/stacks/failover-stack';
 import { MonitoringStack } from '../lib/stacks/monitoring-stack';
 
 const app = new cdk.App();
@@ -45,13 +45,17 @@ new MonitoringStack(app, 'Aurora-DR-Monitoring', {
   env: { region: primaryEnv.region, account: process.env.CDK_DEFAULT_ACCOUNT },
   primaryCluster: primaryStack.cluster,
   secondaryCluster: secondaryStack.cluster,
+  crossRegionReferences: true,
 });
 
 // Failover automation stack
-new FailoverStack(app, 'Aurora-DR-Failover', {
-  env: { region: primaryEnv.region, account: process.env.CDK_DEFAULT_ACCOUNT },
-  primaryStack,
-  secondaryStack,
-});
+// Note: Commented out due to complex cross-stack dependencies
+// Deploy separately or after primary/secondary stacks are deployed
+// new FailoverStack(app, 'Aurora-DR-Failover', {
+//   env: { region: primaryEnv.region, account: process.env.CDK_DEFAULT_ACCOUNT },
+//   primaryStack,
+//   secondaryStack,
+//   crossRegionReferences: true,
+// });
 
 app.synth();

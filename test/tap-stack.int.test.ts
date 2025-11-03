@@ -16,8 +16,8 @@ interface StackOutputs {
   ClusterEndpoint?: string;
   ProxyEndpoint?: string;
   GlobalClusterIdentifier?: string;
-  FailoverStateMachine?: string;
-  AlertTopicArn?: string;
+  StateMachineArnOutput?: string;
+  AlertTopicArnOutput?: string;
 }
 
 // Helper function to load stack outputs
@@ -73,14 +73,14 @@ describe('Aurora DR Integration Tests', () => {
   describe('Failover Automation', () => {
     test('should have Step Functions state machine ARN', () => {
       expect(outputs).not.toBeNull();
-      expect(outputs?.FailoverStateMachine).toBeDefined();
-      expect(outputs?.FailoverStateMachine).toMatch(/^arn:aws:states:/);
+      expect(outputs?.StateMachineArnOutput).toBeDefined();
+      expect(outputs?.StateMachineArnOutput).toMatch(/^arn:aws:states:/);
     });
 
     test('should have SNS topic ARN for alerts', () => {
       expect(outputs).not.toBeNull();
-      expect(outputs?.AlertTopicArn).toBeDefined();
-      expect(outputs?.AlertTopicArn).toMatch(/^arn:aws:sns:/);
+      expect(outputs?.AlertTopicArnOutput).toBeDefined();
+      expect(outputs?.AlertTopicArnOutput).toMatch(/^arn:aws:sns:/);
     });
   });
 });

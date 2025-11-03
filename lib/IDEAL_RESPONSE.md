@@ -581,6 +581,20 @@ export class FailoverStack extends cdk.Stack {
         route53.Continent.NORTH_AMERICA
       ),
     });
+
+    // Outputs for integration tests
+    new cdk.CfnOutput(this, 'StateMachineArnOutput', {
+      value: failoverStateMachine.stateMachineArn,
+      exportName: `${this.stackName}-StateMachineArn`,
+      description:
+        'Step Functions state machine ARN for failover orchestration',
+    });
+
+    new cdk.CfnOutput(this, 'AlertTopicArnOutput', {
+      value: alertTopic.topicArn,
+      exportName: `${this.stackName}-AlertTopicArn`,
+      description: 'SNS topic ARN for DR alerts',
+    });
   }
 }
 ```
@@ -795,15 +809,15 @@ export class NetworkingConstruct extends Construct {
 ### lib/lambdas/health-check/index.ts
 
 ```typescript
-import { RDSClient } from '@aws-sdk/client-rds';
+/* eslint-disable import/no-extraneous-dependencies */
+// AWS SDK and pg are provided by Lambda runtime layer
 import {
   GetSecretValueCommand,
   SecretsManagerClient,
 } from '@aws-sdk/client-secrets-manager';
 import { Client } from 'pg';
 
-const secretsManager = new SecretsManagerClient({});
-const rdsClient = new RDSClient({});
+const secretsClient = new SecretsManagerClient({});
 
 interface HealthCheckResult {
   healthy: boolean;
@@ -818,7 +832,7 @@ export const handler = async (): Promise<HealthCheckResult> => {
 
   try {
     // Get database credentials
-    const secretResponse = await secretsManager.send(
+    const secretResponse = await secretsClient.send(
       new GetSecretValueCommand({ SecretId: secretArn })
     );
     const secret = JSON.parse(secretResponse.SecretString!);
@@ -886,6 +900,8 @@ export const handler = async (): Promise<HealthCheckResult> => {
 ### lib/lambdas/failover-orchestrator/index.ts
 
 ```typescript
+/* eslint-disable import/no-extraneous-dependencies */
+// AWS SDK is provided by Lambda runtime
 import {
   DescribeDBClustersCommand,
   DescribeGlobalClustersCommand,
@@ -933,13 +949,14 @@ export const handler = async (): Promise<FailoverResult> => {
     }
 
     // Step 2: Initiate failover to secondary region
-    console.log(`Initiating failover to ${secondaryRegion}`);
-    const failoverResponse = await rdsClient.send(
+    console.log('Initiating global cluster failover');
+    const secondaryClusterId = globalCluster.GlobalClusterMembers?.find(m =>
+      m.DBClusterArn?.includes(secondaryRegion)
+    )?.DBClusterArn;
+    await rdsClient.send(
       new FailoverGlobalClusterCommand({
         GlobalClusterIdentifier: globalClusterId,
-        TargetDbClusterIdentifier: globalCluster.GlobalClusterMembers?.find(m =>
-          m.DBClusterArn?.includes(secondaryRegion)
-        )?.DBClusterArn,
+        TargetDbClusterIdentifier: secondaryClusterId,
       })
     );
 
@@ -971,11 +988,7 @@ export const handler = async (): Promise<FailoverResult> => {
     // Step 4: Get new primary endpoint
     const newPrimaryCluster = await rdsClient.send(
       new DescribeDBClustersCommand({
-        DBClusterIdentifier: globalCluster.GlobalClusterMembers?.find(m =>
-          m.DBClusterArn?.includes(secondaryRegion)
-        )
-          ?.DBClusterArn?.split(':')
-          .pop(),
+        DBClusterIdentifier: secondaryClusterId?.split(':').pop(),
       })
     );
 
@@ -1009,7 +1022,7 @@ export const handler = async (): Promise<FailoverResult> => {
     // Step 6: Send notification
     const duration = Math.round((Date.now() - startTime) / 1000);
     const message =
-      `Aurora failover completed successfully\n` +
+      'Aurora failover completed successfully\n' +
       `New Primary Region: ${secondaryRegion}\n` +
       `New Primary Endpoint: ${newPrimaryEndpoint}\n` +
       `Duration: ${duration} seconds`;
@@ -1022,7 +1035,7 @@ export const handler = async (): Promise<FailoverResult> => {
         MessageAttributes: {
           event_type: {
             DataType: 'String',
-            StringValue: 'failover_complete',
+            StringValue: 'failover_completed',
           },
           severity: {
             DataType: 'String',
@@ -1071,6 +1084,8 @@ export const handler = async (): Promise<FailoverResult> => {
 ### lib/lambdas/dr-testing/index.ts
 
 ```typescript
+/* eslint-disable import/no-extraneous-dependencies */
+// AWS SDK is provided by Lambda runtime
 import {
   CloudWatchClient,
   PutMetricDataCommand,
@@ -1152,13 +1167,16 @@ export const handler = async (): Promise<void> => {
         TopicArn: snsTopicArn,
         Subject: 'Aurora DR Test Completed',
         Message:
-          `DR test completed successfully\n` +
-          `Duration: ${testDuration} seconds\n` +
-          `Execution ARN: ${executionResponse.executionArn}`,
+          'DR test completed successfully\n' +
+          'Duration: ' +
+          testDuration +
+          ' seconds\n' +
+          'Execution ARN: ' +
+          executionResponse.executionArn,
         MessageAttributes: {
           event_type: {
             DataType: 'String',
-            StringValue: 'dr_test_complete',
+            StringValue: 'dr_test_completed',
           },
           severity: {
             DataType: 'String',

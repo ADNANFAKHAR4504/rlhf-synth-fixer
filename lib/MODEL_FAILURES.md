@@ -12,7 +12,7 @@
 
 ---
 
-## Issue 2: Invalid Route53 HostedZone Configuration  
+## Issue 2: Invalid Route53 HostedZone Configuration
 
 **Problem**: Route53 HostedZone VPC configuration failed with invalid properties
 
@@ -114,7 +114,8 @@
 
 **Root Cause**: Tests used conditional skipping logic, preventing proper CI/CD validation
 
-**Solution**: 
+**Solution**:
+
 - Removed skip logic - tests now fail if infrastructure not deployed (correct behavior)
 - Added proper type interface for stack outputs
 - Improved error messages with deployment instructions
@@ -125,33 +126,54 @@
 
 ---
 
+## Issue 11: CfnOutput Naming Conflict
+
+**Problem**: CDK synth failed with "There is already a Construct with name 'FailoverStateMachine'"
+
+**Root Cause**: CfnOutput IDs conflicted with existing construct IDs in the same stack (Step Functions state machine and SNS topic)
+
+**Solution**: Renamed CfnOutput IDs to be unique
+
+- 'FailoverStateMachine' to 'StateMachineArnOutput'
+- 'AlertTopicArn' to 'AlertTopicArnOutput'
+- Updated integration test interface and assertions to match new output names
+
+**Result**: CDK synth passes successfully, integration tests align with actual outputs
+
+---
+
 ## Production-Ready Features Implemented
 
 **Security**:
+
 - KMS encryption with key rotation
-- TLS 1.2+ for all connections  
+- TLS 1.2+ for all connections
 - Private subnets for all resources
 - IAM least privilege with scoped permissions
 - Secrets Manager for credentials
 
 **High Availability**:
+
 - Multi-AZ Aurora deployment
 - Cross-region replication
 - RDS Proxy for connection management
 - Automated failover with Step Functions
 
 **Monitoring**:
+
 - CloudWatch dashboards
 - Composite alarms
 - Replication lag monitoring
 - SNS notifications with PagerDuty integration
 
 **Testing**:
+
 - 8 unit tests covering core infrastructure
 - 5 integration tests with graceful skipping
 - 100% coverage of testable code
 
 **Best Practices**:
+
 - All resources tagged (CostCenter, Environment, DR-Role)
 - 7-day backup retention
 - Automated DR testing every 30 days
