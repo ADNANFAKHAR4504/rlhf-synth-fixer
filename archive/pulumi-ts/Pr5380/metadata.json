@@ -1,6 +1,6 @@
 {
   "platform": "pulumi",
-  "language": "ts",
+  "language": "typescript",
   "complexity": "medium",
   "team": "synth",
   "turn_type": "single",
@@ -17,5 +17,11 @@
     "IAM"
   ],
   "po_id": "10n9ys",
-  "training_quality": 8
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
