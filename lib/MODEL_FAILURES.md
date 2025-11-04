@@ -1,8 +1,5 @@
 # Infrastructure Deployment Issues and Fixes
 
-## Overview
-During the deployment of the StreamFlix content delivery API infrastructure, several critical issues were discovered that prevented successful deployment.
-
 ## Issues Found and Fixed
 
 ### 1. ECS Container Port Configuration Mismatch
