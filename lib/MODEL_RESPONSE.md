@@ -4,7 +4,7 @@ Production-ready VPC infrastructure with 3-tier network segmentation, high avail
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -21,16 +21,15 @@ interface TapStackProps {
   defaultTags?: AwsProviderDefaultTags[];
 }
 
-const AWS_REGION_OVERRIDE = 'ca-central-1';
+const AWS_REGION_OVERRIDE = 'us-east-1';
 
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE
-      ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
+    // AWS_REGION_OVERRIDE takes precedence over props.awsRegion
+    const awsRegion = AWS_REGION_OVERRIDE;
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags || [];
@@ -58,7 +57,7 @@ export class TapStack extends TerraformStack {
 
 ## File: lib/vpc-infrastructure.ts
 
-```typescript
+```ts
 import { Fn, TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';

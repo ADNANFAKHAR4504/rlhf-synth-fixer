@@ -25,7 +25,7 @@ All task requirements have been met:
 - Security group rules use SG references: COMPLIANT
 - No hardcoded AZ names: COMPLIANT
 - CDKTF with TypeScript platform: COMPLIANT
-- Region ca-central-1: COMPLIANT
+- Region us-east-1: COMPLIANT
 - Resources include environmentSuffix: COMPLIANT
 - All resources destroyable: COMPLIANT
 

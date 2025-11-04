@@ -10,7 +10,7 @@ The architecture team has specified exact CIDR blocks and wants everything deplo
 
 ## What we need to build
 
-Create a multi-tier VPC network infrastructure using **CDKTF with TypeScript** for a production payment processing environment in the ca-central-1 region.
+Create a multi-tier VPC network infrastructure using **CDKTF with TypeScript** for a production payment processing environment in the us-east-1 region.
 
 ### Core Requirements
 
@@ -64,7 +64,7 @@ Create a multi-tier VPC network infrastructure using **CDKTF with TypeScript** f
 - Use **Systems Manager Parameter Store** for storing subnet IDs
 - Resource names must include **environmentSuffix** for uniqueness
 - Follow naming convention: `resource-type-environment-suffix`
-- Deploy to **ca-central-1** region
+- Deploy to **us-east-1** region
 - Read region from lib/AWS_REGION file or environment variable
 
 ### Constraints
