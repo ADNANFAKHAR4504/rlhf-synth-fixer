@@ -121,9 +121,34 @@ Emphasize: "Platform and language are MANDATORY constraints from metadata.json"
 
 **Prerequisites**:
 - Phase 4 (code-reviewer) reports "Ready"
+- **ALL pre-submission requirements met** (see below)
 - GitHub CLI (`gh`) installed and authenticated
 - Git remote origin accessible
 - User has write permissions
+
+**MANDATORY Pre-Submission Requirements**:
+
+Run the pre-submission validation script:
+```bash
+bash .claude/scripts/pre-submission-check.sh
+```
+
+This validates **ALL** critical requirements:
+1. ✅ Build successful (lint + build + synth)
+2. ✅ No lint issues
+3. ✅ No synth issues  
+4. ✅ Deployment successful
+5. ✅ **Test coverage: 100%** (statements, functions, lines)
+6. ✅ Integration tests passing
+7. ✅ All files in allowed directories
+8. ✅ All documentation present
+9. ✅ Training quality ≥ 8
+
+**If ANY requirement fails**:
+- **BLOCK PR creation immediately**
+- Report specific failures
+- Do NOT proceed until all pass
+- Reference: `.claude/docs/references/pre-submission-checklist.md`
 
 **Pre-flight Checks**:
 

@@ -32,8 +32,20 @@ bash .claude/scripts/verify-worktree.sh || exit 1
 **If verification fails**: STOP immediately, report BLOCKED.
 
 **Before Starting**:
+- Review `.claude/docs/references/pre-submission-checklist.md` for **MANDATORY** requirements before PR
 - Review `.claude/lessons_learnt.md` for common issues and quality patterns
 - Review `.claude/docs/references/cicd-file-restrictions.md` for CRITICAL file location requirements that fail CI/CD
+
+**PRE-SUBMISSION REQUIREMENTS** (All must pass):
+1. ✅ Build successful
+2. ✅ No lint issues  
+3. ✅ No synth issues
+4. ✅ Deployment successful
+5. ✅ **Test coverage: 100%** (statements, functions, lines)
+6. ✅ No files outside allowed directories
+7. ✅ Training quality ≥ 8
+
+**Reference**: `.claude/docs/references/pre-submission-checklist.md`
 
 ### Phase 1: Prerequisites Check
 
@@ -353,13 +365,45 @@ If ANY unchecked:
 
 ### Phase 3: Test Coverage
 
-**Cost Optimization**: Focus on gaps rather than comprehensive listings.
+**CRITICAL REQUIREMENT: 100% Coverage**
 
+**Unit Test Coverage Validation**:
+```bash
+# Extract coverage metrics
+STMT_COV=$(jq -r '.total.statements.pct' coverage/coverage-summary.json)
+FUNC_COV=$(jq -r '.total.functions.pct' coverage/coverage-summary.json)
+LINE_COV=$(jq -r '.total.lines.pct' coverage/coverage-summary.json)
+
+# Validate 100% requirement
+if [ "$STMT_COV" != "100" ] || [ "$FUNC_COV" != "100" ] || [ "$LINE_COV" != "100" ]; then
+  echo "❌ Coverage below 100%"
+  echo "Statements: ${STMT_COV}%"
+  echo "Functions: ${FUNC_COV}%"  
+  echo "Lines: ${LINE_COV}%"
+  exit 1
+fi
+```
+
+**Pass Criteria**:
+- Statement coverage: **100%** (not 99%, not 99.9%, exactly 100%)
+- Function coverage: **100%**
+- Line coverage: **100%**
+- All unit tests passing
+
+**If coverage < 100%**:
+- BLOCK PR creation
+- Report specific coverage gaps
+- Training quality penalty: -3 points
+- Cannot proceed to Phase 4
+
+**Integration Test Coverage**:
 - Analyze integration test coverage (must use cfn-outputs, no mocks)
 - Generate coverage report focusing on gaps: Requirement | Covered? | Test | Notes
   - **Prioritize uncovered resources** - list missing first
   - Briefly summarize what's covered
 - Provide Ready/Pending recommendation
+
+**Reference**: `.claude/docs/references/pre-submission-checklist.md` Section 5
 
 ### Phase 4: Final Training Quality Gate
 
@@ -392,8 +436,19 @@ If training_quality < 8:
 - All phases passed
 - Training quality ≥ 8
 - All metadata fields validated
-- Tests passing
+- **Unit test coverage = 100%** (statements, functions, lines)
+- Integration tests passing
+- All files in allowed directories
 - Requirements met
+
+**Pre-Submission Validation**:
+Before reporting "Ready", run final validation:
+```bash
+# Recommended: Run pre-submission check script
+bash .claude/scripts/pre-submission-check.sh
+```
+
+This validates all 6 critical requirements. If any fail, report BLOCKED and list specific issues.
 
 ## Focus Areas
 
