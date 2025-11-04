@@ -465,9 +465,6 @@ export class TapStack extends TerraformStack {
       },
     });
 
-    // Override to disable validation waiting (prevents 5-minute timeout)
-    certificate.addOverride('wait_for_validation', false);
-
     // DNS Validation Records
     new Route53Record(this, 'cert-validation-record', {
       zoneId: hostedZone.zoneId,
