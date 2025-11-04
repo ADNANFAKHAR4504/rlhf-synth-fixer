@@ -1,6 +1,6 @@
 {
   "platform": "pulumi",
-  "language": "typescript",
+  "language": "ts",
   "complexity": "hard",
   "turn_type": "single",
   "team": "synth",
