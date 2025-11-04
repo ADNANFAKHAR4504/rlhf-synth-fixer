@@ -189,7 +189,32 @@ If < 80% resources have suffix:
 
 #### Step 8: Add Enhanced Fields to metadata.json
 
-**Extract AWS Services from IDEAL_RESPONSE.md**:
+**Determine Task Type**:
+
+```bash
+# Check if this is a CI/CD Pipeline task
+PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
+SUBJECT_LABELS=$(jq -r '.subject_labels[]? // ""' metadata.json)
+
+if [ "$PLATFORM" = "cicd" ] || echo "$SUBJECT_LABELS" | grep -q "CI/CD Pipeline"; then
+  IS_CICD_TASK=true
+else
+  IS_CICD_TASK=false
+fi
+```
+
+**For CI/CD Pipeline Tasks (platform: "cicd" OR subject_label: "CI/CD Pipeline")**:
+
+```bash
+# CI/CD Pipeline tasks only need training_quality (no aws_services required)
+jq --arg tq "$TRAINING_QUALITY" \
+  '.training_quality = ($tq | tonumber)' \
+  metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json
+```
+
+Report: "✅ metadata.json enhanced with training_quality: {SCORE}/10 (CI/CD Pipeline task - aws_services not required)"
+
+**For Standard IaC Tasks**:
 
 Scan IDEAL_RESPONSE.md and create a JSON array of unique AWS services mentioned. Examples:
 - RDS → "RDS"
@@ -216,7 +241,7 @@ jq --arg tq "$TRAINING_QUALITY" --argjson services "$AWS_SERVICES_ARRAY" \
 jq -e '.aws_services | type == "array"' metadata.json || echo "❌ ERROR: aws_services must be an array"
 ```
 
-Report: "✅ metadata.json enhanced with training_quality: {SCORE}/10"
+Report: "✅ metadata.json enhanced with training_quality: {SCORE}/10 and aws_services array"
 
 #### Step 9: File Location Validation
 
