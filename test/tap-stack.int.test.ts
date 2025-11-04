@@ -3,7 +3,7 @@ import axios from 'axios';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 
-// Debug logging helper function
+
 const debugLog = (category: string, message: string, data?: any) => {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] [${category}] ${message}`);
