@@ -1,0 +1,15 @@
+{
+  "language": "typescript",
+  "app": "npx ts-node main.ts",
+  "projectId": "location-tracking-api",
+  "sendCrashReports": "false",
+  "terraformProviders": [
+    "hashicorp/aws@~> 5.0",
+    "hashicorp/archive@~> 2.0"
+  ],
+  "terraformModules": [],
+  "context": {
+    "excludeStackIdFromLogicalIds": "true",
+    "allowSepCharsInLogicalIds": "true"
+  }
+}
