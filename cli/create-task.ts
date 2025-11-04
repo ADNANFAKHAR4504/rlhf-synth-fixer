@@ -215,8 +215,8 @@ async function main(): Promise<void> {
       const analysisChoice = await select({
         message: 'Select analysis template type:',
         choices: [
-          { name: 'Shell', value: 'shell' },
-          { name: 'Python', value: 'python' },
+          { name: 'Shell', value: 'sh' },
+          { name: 'Python', value: 'py' },
         ],
       });
       language = analysisChoice;
