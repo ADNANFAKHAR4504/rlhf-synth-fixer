@@ -680,7 +680,7 @@ resource "aws_cloudwatch_log_group" "secondary_flow_logs" {
 resource "aws_flow_log" "primary" {
   provider             = aws.us_east_1
   iam_role_arn         = aws_iam_role.flow_logs.arn
-  log_destination_arn  = aws_cloudwatch_log_group.primary_flow_logs.arn
+  log_destination      = aws_cloudwatch_log_group.primary_flow_logs.arn
   traffic_type         = "ALL"
   vpc_id               = aws_vpc.primary.id
   
@@ -696,7 +696,7 @@ resource "aws_flow_log" "primary" {
 resource "aws_flow_log" "secondary" {
   provider             = aws.us_west_2
   iam_role_arn         = aws_iam_role.flow_logs.arn
-  log_destination_arn  = aws_cloudwatch_log_group.secondary_flow_logs.arn
+  log_destination      = aws_cloudwatch_log_group.secondary_flow_logs.arn
   traffic_type         = "ALL"
   vpc_id               = aws_vpc.secondary.id
   
@@ -715,7 +715,7 @@ resource "aws_flow_log" "secondary" {
 # Security Group for Primary ALB
 resource "aws_security_group" "primary_alb" {
   provider    = aws.us_east_1
-  name        = "sg-alb-primary-${local.resource_suffix}"
+  name        = "alb-primary-${local.resource_suffix}"
   description = "Security group for primary Application Load Balancer"
   vpc_id      = aws_vpc.primary.id
   
@@ -746,7 +746,7 @@ resource "aws_security_group" "primary_alb" {
   tags = merge(
     local.common_tags,
     {
-      Name = "sg-alb-primary-${local.resource_suffix}"
+      Name = "alb-primary-${local.resource_suffix}"
     }
   )
 }
@@ -754,7 +754,7 @@ resource "aws_security_group" "primary_alb" {
 # Security Group for Secondary ALB
 resource "aws_security_group" "secondary_alb" {
   provider    = aws.us_west_2
-  name        = "sg-alb-secondary-${local.resource_suffix}"
+  name        = "alb-secondary-${local.resource_suffix}"
   description = "Security group for secondary Application Load Balancer"
   vpc_id      = aws_vpc.secondary.id
   
@@ -785,7 +785,7 @@ resource "aws_security_group" "secondary_alb" {
   tags = merge(
     local.common_tags,
     {
-      Name = "sg-alb-secondary-${local.resource_suffix}"
+      Name = "alb-secondary-${local.resource_suffix}"
     }
   )
 }
@@ -793,7 +793,7 @@ resource "aws_security_group" "secondary_alb" {
 # Security Group for Primary RDS
 resource "aws_security_group" "primary_rds" {
   provider    = aws.us_east_1
-  name        = "sg-rds-primary-${local.resource_suffix}"
+  name        = "rds-primary-${local.resource_suffix}"
   description = "Security group for primary RDS PostgreSQL instance"
   vpc_id      = aws_vpc.primary.id
   
@@ -824,7 +824,7 @@ resource "aws_security_group" "primary_rds" {
   tags = merge(
     local.common_tags,
     {
-      Name = "sg-rds-primary-${local.resource_suffix}"
+      Name = "rds-primary-${local.resource_suffix}"
     }
   )
 }
@@ -832,7 +832,7 @@ resource "aws_security_group" "primary_rds" {
 # Security Group for Secondary RDS
 resource "aws_security_group" "secondary_rds" {
   provider    = aws.us_west_2
-  name        = "sg-rds-secondary-${local.resource_suffix}"
+  name        = "rds-secondary-${local.resource_suffix}"
   description = "Security group for secondary RDS PostgreSQL read replica"
   vpc_id      = aws_vpc.secondary.id
   
@@ -863,7 +863,7 @@ resource "aws_security_group" "secondary_rds" {
   tags = merge(
     local.common_tags,
     {
-      Name = "sg-rds-secondary-${local.resource_suffix}"
+      Name = "rds-secondary-${local.resource_suffix}"
     }
   )
 }
