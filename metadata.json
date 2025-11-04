@@ -1,22 +1,13 @@
 {
-  "task_id": "2z03xy",
   "platform": "cdktf",
   "language": "ts",
   "complexity": "medium",
   "team": "synth",
   "turn_type": "single",
   "startedAt": "2025-11-04T17:54:22+05:30",
-  "subtask": "Cloud Environment Setup",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Must use CDK v2 constructs only - no v1 compatibility imports",
-    "NAT Gateways must be deployed one per AZ for redundancy",
-    "All subnets must be /24 CIDR blocks as specified",
-    "VPC Flow Logs must capture ALL traffic (accepted and rejected)",
-    "Security group rules must use CDK Peer objects, not raw CIDR strings",
-    "Parameter Store paths must follow /vpc/production/{resource-type}/{az} naming convention",
-    "Stack must be deployable in any AWS region without hardcoded values",
-    "Use L2 constructs where available, avoid CfnResource unless necessary",
-    "All resources must have removal policies set to DESTROY for easy cleanup"
+    "Cloud Environment Setup"
   ],
   "po_id": "2z03xy",
   "aws_services": [
