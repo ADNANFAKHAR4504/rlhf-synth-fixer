@@ -209,7 +209,7 @@
     "@aws-sdk/client-cognito-identity-provider": "^3.865.0",
     "@aws-sdk/client-datasync": "^3.901.0",
     "@aws-sdk/client-dynamodb": "^3.883.0",
-    "@aws-sdk/client-eks": "^3.921.0",
+    "@aws-sdk/client-eks": "^3.922.0",
     "@aws-sdk/client-iot-data-plane": "^3.914.0",
     "@aws-sdk/client-opensearch": "^3.906.0",
     "@aws-sdk/client-s3": "^3.884.0",
