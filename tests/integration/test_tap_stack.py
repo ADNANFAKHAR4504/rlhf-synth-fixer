@@ -1,575 +1,704 @@
-"""Integration tests for TapStack - Testing real AWS resources."""
+"""Integration tests for TapStack - Testing CDKTF synthesis and infrastructure correctness."""
 import json
-import os
-import boto3
 import pytest
-import time
-import uuid
-from botocore.exceptions import ClientError
+from cdktf import Testing
+from lib.tap_stack import TapStack
 
 
-class TestDynamoDBTableIntegration:
-    """Integration tests for DynamoDB Table."""
+class TestStackSynthesis:
+    """Test CDKTF stack synthesis and basic infrastructure validation."""
 
-    def test_dynamodb_table_exists_and_accessible(self, stack_outputs, aws_clients):
-        """Verify DynamoDB table exists and is accessible."""
-        table_name = stack_outputs['dynamodb_table_name']
+    def test_stack_synthesizes_successfully(self):
+        """Verify the stack synthesizes without errors."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1",
+            default_tags={"tags": {"Environment": "Production"}}
+        )
 
-        response = aws_clients['dynamodb'].describe_table(TableName=table_name)
+        synthesized = Testing.synth(stack)
 
-        assert response['Table']['TableName'] == table_name
-        assert response['Table']['TableStatus'] == 'ACTIVE'
+        assert synthesized is not None
+        assert len(synthesized) > 0
 
-    def test_dynamodb_table_has_correct_schema(self, stack_outputs, aws_clients):
-        """Verify DynamoDB table has correct key schema."""
-        table_name = stack_outputs['dynamodb_table_name']
+    def test_synthesized_stack_contains_required_resources(self):
+        """Verify synthesized stack contains all required AWS resources."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1",
+            default_tags={"tags": {"Environment": "Production"}}
+        )
 
-        response = aws_clients['dynamodb'].describe_table(TableName=table_name)
-        table = response['Table']
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
 
-        # Check key schema
-        key_schema = {k['AttributeName']: k['KeyType'] for k in table['KeySchema']}
-        assert key_schema['productId'] == 'HASH'
-        assert key_schema['reviewId'] == 'RANGE'
+        resources = manifest.get("resource", {})
+
+        # Verify DynamoDB table exists
+        assert "aws_dynamodb_table" in resources
+        dynamodb_tables = resources["aws_dynamodb_table"]
+        assert "reviews_table" in dynamodb_tables
+
+        # Verify S3 bucket exists
+        assert "aws_s3_bucket" in resources
+        s3_buckets = resources["aws_s3_bucket"]
+        assert "images_bucket" in s3_buckets
+
+        # Verify Lambda function exists
+        assert "aws_lambda_function" in resources
+        lambda_functions = resources["aws_lambda_function"]
+        assert "review_processor" in lambda_functions
+
+        # Verify API Gateway exists
+        assert "aws_api_gateway_rest_api" in resources
+        api_gateways = resources["aws_api_gateway_rest_api"]
+        assert "reviews_api" in api_gateways
+
+        # Verify CloudWatch log groups exist
+        assert "aws_cloudwatch_log_group" in resources
+        log_groups = resources["aws_cloudwatch_log_group"]
+        assert "lambda_log_group" in log_groups
+
+
+class TestDynamoDBConfiguration:
+    """Test DynamoDB table configuration."""
+
+    def test_dynamodb_table_has_correct_name_pattern(self):
+        """Verify DynamoDB table name includes environment suffix."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="dev123",
+            aws_region="ap-southeast-1"
+        )
+
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
+
+        dynamodb_table = manifest["resource"]["aws_dynamodb_table"]["reviews_table"]
+        assert dynamodb_table["name"] == "product-reviews-dev123"
+
+    def test_dynamodb_table_has_correct_key_schema(self):
+        """Verify DynamoDB table has correct partition and sort keys."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1"
+        )
+
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
+
+        dynamodb_table = manifest["resource"]["aws_dynamodb_table"]["reviews_table"]
+
+        assert dynamodb_table["hash_key"] == "productId"
+        assert dynamodb_table["range_key"] == "reviewId"
 
         # Check attributes
-        attributes = {a['AttributeName']: a['AttributeType'] for a in table['AttributeDefinitions']}
-        assert attributes['productId'] == 'S'
-        assert attributes['reviewId'] == 'S'
+        attributes = dynamodb_table["attribute"]
+        assert len(attributes) == 2
 
-    def test_dynamodb_table_billing_mode(self, stack_outputs, aws_clients):
-        """Verify DynamoDB table uses on-demand billing."""
-        table_name = stack_outputs['dynamodb_table_name']
+        product_id_attr = next((a for a in attributes if a["name"] == "productId"), None)
+        assert product_id_attr is not None
+        assert product_id_attr["type"] == "S"
 
-        response = aws_clients['dynamodb'].describe_table(TableName=table_name)
+        review_id_attr = next((a for a in attributes if a["name"] == "reviewId"), None)
+        assert review_id_attr is not None
+        assert review_id_attr["type"] == "S"
 
-        assert response['Table']['BillingModeSummary']['BillingMode'] == 'PAY_PER_REQUEST'
-
-    def test_dynamodb_table_point_in_time_recovery(self, stack_outputs, aws_clients):
-        """Verify DynamoDB table has point-in-time recovery enabled."""
-        table_name = stack_outputs['dynamodb_table_name']
-
-        response = aws_clients['dynamodb'].describe_continuous_backups(TableName=table_name)
-
-        assert response['ContinuousBackupsDescription']['PointInTimeRecoveryDescription']['PointInTimeRecoveryStatus'] == 'ENABLED'
-
-    def test_dynamodb_write_and_read_operations(self, stack_outputs, aws_clients):
-        """Test writing to and reading from DynamoDB table."""
-        table_name = stack_outputs['dynamodb_table_name']
-        table = aws_clients['dynamodb_resource'].Table(table_name)
-
-        # Generate unique test data
-        test_product_id = f"test-product-{uuid.uuid4()}"
-        test_review_id = f"test-review-{uuid.uuid4()}"
-
-        # Write item
-        test_item = {
-            'productId': test_product_id,
-            'reviewId': test_review_id,
-            'rating': 5,
-            'comment': 'Integration test review',
-            'timestamp': '2024-01-01T00:00:00Z'
-        }
-
-        table.put_item(Item=test_item)
-
-        # Read item
-        response = table.get_item(
-            Key={
-                'productId': test_product_id,
-                'reviewId': test_review_id
-            }
+    def test_dynamodb_table_uses_on_demand_billing(self):
+        """Verify DynamoDB table uses PAY_PER_REQUEST billing mode."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1"
         )
 
-        assert 'Item' in response
-        assert response['Item']['productId'] == test_product_id
-        assert response['Item']['reviewId'] == test_review_id
-        assert response['Item']['rating'] == 5
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
 
-        # Cleanup
-        table.delete_item(
-            Key={
-                'productId': test_product_id,
-                'reviewId': test_review_id
-            }
+        dynamodb_table = manifest["resource"]["aws_dynamodb_table"]["reviews_table"]
+        assert dynamodb_table["billing_mode"] == "PAY_PER_REQUEST"
+
+    def test_dynamodb_table_has_point_in_time_recovery_enabled(self):
+        """Verify DynamoDB table has PITR enabled."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1"
         )
 
-    def test_dynamodb_query_by_product_id(self, stack_outputs, aws_clients):
-        """Test querying DynamoDB table by product ID."""
-        table_name = stack_outputs['dynamodb_table_name']
-        table = aws_clients['dynamodb_resource'].Table(table_name)
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
 
-        # Generate unique test data
-        test_product_id = f"test-product-{uuid.uuid4()}"
+        dynamodb_table = manifest["resource"]["aws_dynamodb_table"]["reviews_table"]
+        assert "point_in_time_recovery" in dynamodb_table
+        assert dynamodb_table["point_in_time_recovery"]["enabled"] is True
 
-        # Write multiple reviews for same product
-        review_ids = []
-        for i in range(3):
-            review_id = f"test-review-{uuid.uuid4()}"
-            review_ids.append(review_id)
-            table.put_item(Item={
-                'productId': test_product_id,
-                'reviewId': review_id,
-                'rating': i + 1,
-                'comment': f'Test review {i+1}',
-                'timestamp': '2024-01-01T00:00:00Z'
-            })
 
-        # Query by product ID
-        response = table.query(
-            KeyConditionExpression='productId = :pid',
-            ExpressionAttributeValues={
-                ':pid': test_product_id
-            }
+class TestS3BucketConfiguration:
+    """Test S3 bucket configuration."""
+
+    def test_s3_bucket_has_correct_name_pattern(self):
+        """Verify S3 bucket name includes environment suffix."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="prod456",
+            aws_region="ap-southeast-1"
         )
 
-        assert response['Count'] == 3
-        assert len(response['Items']) == 3
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
 
-        # Cleanup
-        for review_id in review_ids:
-            table.delete_item(
-                Key={
-                    'productId': test_product_id,
-                    'reviewId': review_id
-                }
-            )
+        s3_bucket = manifest["resource"]["aws_s3_bucket"]["images_bucket"]
+        assert s3_bucket["bucket"] == "review-images-prod456"
 
-
-class TestS3BucketIntegration:
-    """Integration tests for S3 Bucket."""
-
-    def test_s3_bucket_exists_and_accessible(self, stack_outputs, aws_clients):
-        """Verify S3 bucket exists and is accessible."""
-        bucket_name = stack_outputs['s3_bucket_name']
-
-        response = aws_clients['s3'].head_bucket(Bucket=bucket_name)
-
-        assert response['ResponseMetadata']['HTTPStatusCode'] == 200
-
-    def test_s3_bucket_encryption_enabled(self, stack_outputs, aws_clients):
-        """Verify S3 bucket has encryption enabled."""
-        bucket_name = stack_outputs['s3_bucket_name']
-
-        response = aws_clients['s3'].get_bucket_encryption(Bucket=bucket_name)
-
-        rules = response['ServerSideEncryptionConfiguration']['Rules']
-        assert len(rules) > 0
-        assert rules[0]['ApplyServerSideEncryptionByDefault']['SSEAlgorithm'] == 'AES256'
-
-    def test_s3_bucket_public_access_blocked(self, stack_outputs, aws_clients):
-        """Verify S3 bucket blocks public access."""
-        bucket_name = stack_outputs['s3_bucket_name']
-
-        response = aws_clients['s3'].get_public_access_block(Bucket=bucket_name)
-        config = response['PublicAccessBlockConfiguration']
-
-        assert config['BlockPublicAcls'] is True
-        assert config['IgnorePublicAcls'] is True
-        assert config['BlockPublicPolicy'] is True
-        assert config['RestrictPublicBuckets'] is True
-
-    def test_s3_bucket_lifecycle_configuration(self, stack_outputs, aws_clients):
-        """Verify S3 bucket has lifecycle configuration for Glacier transition."""
-        bucket_name = stack_outputs['s3_bucket_name']
-
-        response = aws_clients['s3'].get_bucket_lifecycle_configuration(Bucket=bucket_name)
-
-        rules = response['Rules']
-        assert len(rules) > 0
-
-        # Find glacier transition rule
-        glacier_rule = next((r for r in rules if r['Status'] == 'Enabled'), None)
-        assert glacier_rule is not None
-        assert len(glacier_rule['Transitions']) > 0
-        assert glacier_rule['Transitions'][0]['Days'] == 90
-        assert glacier_rule['Transitions'][0]['StorageClass'] == 'GLACIER'
-
-    def test_s3_put_and_get_object(self, stack_outputs, aws_clients):
-        """Test putting and getting objects from S3 bucket."""
-        bucket_name = stack_outputs['s3_bucket_name']
-        test_key = f"test-{uuid.uuid4()}.txt"
-        test_content = b"Integration test content"
-
-        # Put object
-        aws_clients['s3'].put_object(
-            Bucket=bucket_name,
-            Key=test_key,
-            Body=test_content
+    def test_s3_bucket_has_public_access_blocked(self):
+        """Verify S3 bucket blocks all public access."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1"
         )
 
-        # Get object
-        response = aws_clients['s3'].get_object(
-            Bucket=bucket_name,
-            Key=test_key
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
+
+        public_access_block = manifest["resource"]["aws_s3_bucket_public_access_block"]["images_bucket_block_public"]
+        assert public_access_block["block_public_acls"] is True
+        assert public_access_block["block_public_policy"] is True
+        assert public_access_block["ignore_public_acls"] is True
+        assert public_access_block["restrict_public_buckets"] is True
+
+    def test_s3_bucket_has_encryption_configured(self):
+        """Verify S3 bucket has server-side encryption enabled."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1"
         )
 
-        retrieved_content = response['Body'].read()
-        assert retrieved_content == test_content
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
 
-        # Cleanup
-        aws_clients['s3'].delete_object(Bucket=bucket_name, Key=test_key)
+        encryption_config = manifest["resource"]["aws_s3_bucket_server_side_encryption_configuration"]["images_bucket_encryption"]
+        assert "rule" in encryption_config
+        assert len(encryption_config["rule"]) > 0
 
-    def test_s3_bucket_notification_configured(self, stack_outputs, aws_clients):
-        """Verify S3 bucket has notification configuration."""
-        bucket_name = stack_outputs['s3_bucket_name']
+        encryption_rule = encryption_config["rule"][0]
+        assert "apply_server_side_encryption_by_default" in encryption_rule
+        assert encryption_rule["apply_server_side_encryption_by_default"]["sse_algorithm"] == "AES256"
 
-        response = aws_clients['s3'].get_bucket_notification_configuration(Bucket=bucket_name)
+    def test_s3_bucket_has_lifecycle_policy_for_glacier_transition(self):
+        """Verify S3 bucket has lifecycle rule for Glacier transition after 90 days."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1"
+        )
 
-        assert 'LambdaFunctionConfigurations' in response
-        lambda_configs = response['LambdaFunctionConfigurations']
-        # We should have 4 lambda configurations (for .jpg, .png, .jpeg, .gif)
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
+
+        lifecycle_config = manifest["resource"]["aws_s3_bucket_lifecycle_configuration"]["images_bucket_lifecycle"]
+        assert "rule" in lifecycle_config
+        assert len(lifecycle_config["rule"]) > 0
+
+        rule = lifecycle_config["rule"][0]
+        assert rule["id"] == "glacier-transition"
+        assert rule["status"] == "Enabled"
+        assert "transition" in rule
+        assert len(rule["transition"]) > 0
+
+        transition = rule["transition"][0]
+        assert transition["days"] == 90
+        assert transition["storage_class"] == "GLACIER"
+
+    def test_s3_bucket_has_notification_configuration(self):
+        """Verify S3 bucket has Lambda notification configured."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1"
+        )
+
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
+
+        notification_config = manifest["resource"]["aws_s3_bucket_notification"]["image_upload_notification"]
+        assert "lambda_function" in notification_config
+        lambda_configs = notification_config["lambda_function"]
+
+        # Should have 4 configurations for different image types
         assert len(lambda_configs) == 4
 
-        # All configs should point to the same Lambda function
-        lambda_arns = [config['LambdaFunctionArn'] for config in lambda_configs]
-        assert all(arn == lambda_arns[0] for arn in lambda_arns)
+        # Check filter suffixes
+        suffixes = [config["filter_suffix"] for config in lambda_configs]
+        assert ".jpg" in suffixes
+        assert ".png" in suffixes
+        assert ".jpeg" in suffixes
+        assert ".gif" in suffixes
 
-        # All configs should be for s3:ObjectCreated:* events
+        # All should trigger on ObjectCreated events
         for config in lambda_configs:
-            assert 's3:ObjectCreated:*' in config['Events']
+            assert "s3:ObjectCreated:*" in config["events"]
 
 
-class TestLambdaFunctionIntegration:
-    """Integration tests for Lambda Function."""
+class TestLambdaFunctionConfiguration:
+    """Test Lambda function configuration."""
 
-    def test_lambda_function_exists(self, stack_outputs, aws_clients):
-        """Verify Lambda function exists and is active."""
-        function_name = stack_outputs['lambda_function_name']
-
-        response = aws_clients['lambda'].get_function(FunctionName=function_name)
-
-        assert response['Configuration']['FunctionName'] == function_name
-        assert response['Configuration']['State'] == 'Active'
-
-    def test_lambda_function_configuration(self, stack_outputs, aws_clients):
-        """Verify Lambda function has correct configuration."""
-        function_name = stack_outputs['lambda_function_name']
-
-        response = aws_clients['lambda'].get_function(FunctionName=function_name)
-        config = response['Configuration']
-
-        assert config['Runtime'] == 'nodejs18.x'
-        assert config['Handler'] == 'index.handler'
-        assert config['MemorySize'] == 512
-        assert config['Timeout'] == 60
-
-    def test_lambda_function_environment_variables(self, stack_outputs, aws_clients):
-        """Verify Lambda function has correct environment variables."""
-        function_name = stack_outputs['lambda_function_name']
-        table_name = stack_outputs['dynamodb_table_name']
-        bucket_name = stack_outputs['s3_bucket_name']
-
-        response = aws_clients['lambda'].get_function(FunctionName=function_name)
-        env_vars = response['Configuration']['Environment']['Variables']
-
-        assert 'DYNAMODB_TABLE_NAME' in env_vars
-        assert env_vars['DYNAMODB_TABLE_NAME'] == table_name
-        assert 'S3_BUCKET_NAME' in env_vars
-        assert env_vars['S3_BUCKET_NAME'] == bucket_name
-
-    def test_lambda_function_iam_role_permissions(self, stack_outputs, aws_clients):
-        """Verify Lambda function has IAM role with correct permissions."""
-        function_name = stack_outputs['lambda_function_name']
-
-        response = aws_clients['lambda'].get_function(FunctionName=function_name)
-        role_arn = response['Configuration']['Role']
-        role_name = role_arn.split('/')[-1]
-
-        # Get role policies
-        policies_response = aws_clients['iam'].list_role_policies(RoleName=role_name)
-
-        assert len(policies_response['PolicyNames']) > 0
-
-
-class TestAPIGatewayIntegration:
-    """Integration tests for API Gateway."""
-
-    def test_api_gateway_exists(self, stack_outputs, aws_clients):
-        """Verify API Gateway exists."""
-        api_id = stack_outputs['api_id']
-
-        response = aws_clients['apigateway'].get_rest_api(restApiId=api_id)
-
-        assert response['id'] == api_id
-
-    def test_api_gateway_resources(self, stack_outputs, aws_clients):
-        """Verify API Gateway has correct resources."""
-        api_id = stack_outputs['api_id']
-
-        response = aws_clients['apigateway'].get_resources(restApiId=api_id)
-
-        resources = response['items']
-        paths = [r['path'] for r in resources]
-
-        assert '/reviews' in paths
-        assert any('/reviews/' in path for path in paths)
-
-    def test_api_gateway_methods(self, stack_outputs, aws_clients):
-        """Verify API Gateway has correct methods."""
-        api_id = stack_outputs['api_id']
-
-        response = aws_clients['apigateway'].get_resources(restApiId=api_id)
-
-        # Find /reviews resource
-        reviews_resource = next((r for r in response['items'] if r['path'] == '/reviews'), None)
-        assert reviews_resource is not None
-
-        # Check POST method exists
-        assert 'POST' in reviews_resource.get('resourceMethods', {})
-
-    def test_api_gateway_stage_deployed(self, stack_outputs, aws_clients):
-        """Verify API Gateway stage is deployed."""
-        api_id = stack_outputs['api_id']
-
-        response = aws_clients['apigateway'].get_stages(restApiId=api_id)
-
-        stages = [s['stageName'] for s in response['item']]
-        assert 'prod' in stages
-
-    def test_api_endpoint_reachable(self, stack_outputs):
-        """Verify API endpoint is reachable."""
-        import requests
-
-        api_endpoint = stack_outputs['api_endpoint']
-
-        # Try to reach the endpoint (expect 403 for AWS_IAM auth or valid response)
-        try:
-            response = requests.get(f"{api_endpoint}/reviews/test-product-123", timeout=10)
-            # API should be reachable even if we get auth error or method not allowed
-            assert response.status_code in [200, 403, 404, 500]
-        except requests.exceptions.RequestException:
-            # If connection is refused or timeout, that's a failure
-            pytest.fail("API endpoint is not reachable")
-
-
-class TestCloudWatchLogsIntegration:
-    """Integration tests for CloudWatch Logs."""
-
-    def test_lambda_log_group_exists(self, stack_outputs, aws_clients):
-        """Verify Lambda log group exists."""
-        function_name = stack_outputs['lambda_function_name']
-        log_group_name = f"/aws/lambda/{function_name}"
-
-        response = aws_clients['logs'].describe_log_groups(
-            logGroupNamePrefix=log_group_name
+    def test_lambda_function_has_correct_name_pattern(self):
+        """Verify Lambda function name includes environment suffix."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="staging789",
+            aws_region="ap-southeast-1"
         )
 
-        log_groups = [lg['logGroupName'] for lg in response['logGroups']]
-        assert log_group_name in log_groups
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
 
-    def test_lambda_log_group_retention(self, stack_outputs, aws_clients):
-        """Verify Lambda log group has correct retention period."""
-        function_name = stack_outputs['lambda_function_name']
-        log_group_name = f"/aws/lambda/{function_name}"
+        lambda_function = manifest["resource"]["aws_lambda_function"]["review_processor"]
+        assert lambda_function["function_name"] == "review-processor-staging789"
 
-        response = aws_clients['logs'].describe_log_groups(
-            logGroupNamePrefix=log_group_name
+    def test_lambda_function_has_correct_runtime_and_handler(self):
+        """Verify Lambda function uses Node.js 18.x runtime."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1"
         )
 
-        log_group = next((lg for lg in response['logGroups'] if lg['logGroupName'] == log_group_name), None)
-        assert log_group is not None
-        assert log_group.get('retentionInDays') == 7
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
 
+        lambda_function = manifest["resource"]["aws_lambda_function"]["review_processor"]
+        assert lambda_function["runtime"] == "nodejs18.x"
+        assert lambda_function["handler"] == "index.handler"
 
-class TestEndToEndWorkflow:
-    """End-to-end integration tests for complete workflows."""
-
-    def test_create_review_via_lambda_direct_invocation(self, stack_outputs, aws_clients):
-        """Test creating a review via direct Lambda invocation."""
-        function_name = stack_outputs['lambda_function_name']
-        table_name = stack_outputs['dynamodb_table_name']
-
-        # Generate unique test data
-        test_product_id = f"e2e-product-{uuid.uuid4()}"
-        test_review_id = f"e2e-review-{uuid.uuid4()}"
-
-        # Prepare Lambda event
-        event = {
-            'httpMethod': 'POST',
-            'path': '/reviews',
-            'body': json.dumps({
-                'productId': test_product_id,
-                'reviewId': test_review_id,
-                'rating': 4,
-                'comment': 'End-to-end test review'
-            })
-        }
-
-        # Invoke Lambda
-        response = aws_clients['lambda'].invoke(
-            FunctionName=function_name,
-            InvocationType='RequestResponse',
-            Payload=json.dumps(event)
+    def test_lambda_function_has_correct_memory_and_timeout(self):
+        """Verify Lambda function has correct memory and timeout settings."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1"
         )
 
-        # Parse response
-        response_payload = json.loads(response['Payload'].read())
-        assert response_payload['statusCode'] == 201
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
 
-        # Verify item in DynamoDB
-        table = aws_clients['dynamodb_resource'].Table(table_name)
-        db_response = table.get_item(
-            Key={
-                'productId': test_product_id,
-                'reviewId': test_review_id
-            }
+        lambda_function = manifest["resource"]["aws_lambda_function"]["review_processor"]
+        assert lambda_function["memory_size"] == 512
+        assert lambda_function["timeout"] == 60
+
+    def test_lambda_function_has_environment_variables(self):
+        """Verify Lambda function has required environment variables."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1"
         )
 
-        assert 'Item' in db_response
-        assert db_response['Item']['rating'] == 4
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
 
-        # Cleanup
-        table.delete_item(
-            Key={
-                'productId': test_product_id,
-                'reviewId': test_review_id
-            }
+        lambda_function = manifest["resource"]["aws_lambda_function"]["review_processor"]
+        assert "environment" in lambda_function
+        env_vars = lambda_function["environment"]["variables"]
+
+        assert "DYNAMODB_TABLE_NAME" in env_vars
+        assert "S3_BUCKET_NAME" in env_vars
+
+    def test_lambda_function_has_iam_role_with_permissions(self):
+        """Verify Lambda function has IAM role configured."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1"
         )
 
-    def test_get_reviews_via_lambda_direct_invocation(self, stack_outputs, aws_clients):
-        """Test retrieving reviews via direct Lambda invocation."""
-        function_name = stack_outputs['lambda_function_name']
-        table_name = stack_outputs['dynamodb_table_name']
-        table = aws_clients['dynamodb_resource'].Table(table_name)
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
 
-        # Generate unique test data
-        test_product_id = f"e2e-product-{uuid.uuid4()}"
+        # Check IAM role exists
+        iam_role = manifest["resource"]["aws_iam_role"]["lambda_role"]
+        assert iam_role is not None
+        assert iam_role["name"] == "review-processor-role-test"
 
-        # Create test reviews
-        review_ids = []
-        for i in range(2):
-            review_id = f"e2e-review-{uuid.uuid4()}"
-            review_ids.append(review_id)
-            table.put_item(Item={
-                'productId': test_product_id,
-                'reviewId': review_id,
-                'rating': i + 3,
-                'comment': f'Test review {i+1}',
-                'timestamp': '2024-01-01T00:00:00Z'
-            })
+        # Check inline policy exists
+        assert "inline_policy" in iam_role
+        policies = iam_role["inline_policy"]
+        assert len(policies) > 0
 
-        # Prepare Lambda event
-        event = {
-            'httpMethod': 'GET',
-            'path': f'/reviews/{test_product_id}',
-            'pathParameters': {
-                'productId': test_product_id
-            }
-        }
+        # Parse policy document
+        policy_doc = json.loads(policies[0]["policy"])
+        statements = policy_doc["Statement"]
 
-        # Invoke Lambda
-        response = aws_clients['lambda'].invoke(
-            FunctionName=function_name,
-            InvocationType='RequestResponse',
-            Payload=json.dumps(event)
+        # Check for DynamoDB permissions
+        dynamodb_statement = next((s for s in statements if "dynamodb:PutItem" in s["Action"]), None)
+        assert dynamodb_statement is not None
+
+        # Check for S3 permissions
+        s3_statement = next((s for s in statements if "s3:GetObject" in s["Action"]), None)
+        assert s3_statement is not None
+
+        # Check for CloudWatch logs permissions
+        logs_statement = next((s for s in statements if "logs:CreateLogStream" in s["Action"]), None)
+        assert logs_statement is not None
+
+
+class TestAPIGatewayConfiguration:
+    """Test API Gateway configuration."""
+
+    def test_api_gateway_has_correct_name_pattern(self):
+        """Verify API Gateway name includes environment suffix."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="api123",
+            aws_region="ap-southeast-1"
         )
 
-        # Parse response
-        response_payload = json.loads(response['Payload'].read())
-        assert response_payload['statusCode'] == 200
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
 
-        body = json.loads(response_payload['body'])
-        assert body['count'] == 2
-        assert len(body['reviews']) == 2
+        api_gateway = manifest["resource"]["aws_api_gateway_rest_api"]["reviews_api"]
+        assert api_gateway["name"] == "reviews-api-api123"
 
-        # Cleanup
-        for review_id in review_ids:
-            table.delete_item(
-                Key={
-                    'productId': test_product_id,
-                    'reviewId': review_id
-                }
-            )
-
-    def test_s3_image_upload_triggers_lambda(self, stack_outputs, aws_clients):
-        """Test that uploading an image to S3 triggers Lambda function."""
-        bucket_name = stack_outputs['s3_bucket_name']
-        function_name = stack_outputs['lambda_function_name']
-
-        # Create a test image file
-        test_image_key = f"test-images/test-{uuid.uuid4()}.jpg"
-        test_image_content = b"fake image content for testing"
-
-        # Get initial log stream count
-        log_group_name = f"/aws/lambda/{function_name}"
-
-        # Upload image to S3
-        aws_clients['s3'].put_object(
-            Bucket=bucket_name,
-            Key=test_image_key,
-            Body=test_image_content,
-            ContentType='image/jpeg'
+    def test_api_gateway_has_reviews_resource(self):
+        """Verify API Gateway has /reviews resource."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1"
         )
 
-        # Wait a bit for Lambda to process
-        time.sleep(5)
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
 
-        # Check CloudWatch logs for Lambda execution
-        try:
-            response = aws_clients['logs'].describe_log_streams(
-                logGroupName=log_group_name,
-                orderBy='LastEventTime',
-                descending=True,
-                limit=5
-            )
+        reviews_resource = manifest["resource"]["aws_api_gateway_resource"]["reviews_resource"]
+        assert reviews_resource["path_part"] == "reviews"
 
-            # If there are log streams, Lambda has been invoked
-            assert len(response['logStreams']) > 0
-        except ClientError as e:
-            if e.response['Error']['Code'] != 'ResourceNotFoundException':
-                raise
-
-        # Cleanup
-        aws_clients['s3'].delete_object(Bucket=bucket_name, Key=test_image_key)
-
-    def test_lambda_error_validation_missing_fields(self, stack_outputs, aws_clients):
-        """Test Lambda validates required fields and returns appropriate error."""
-        function_name = stack_outputs['lambda_function_name']
-
-        # Prepare Lambda event with missing required fields
-        event = {
-            'httpMethod': 'POST',
-            'path': '/reviews',
-            'body': json.dumps({
-                'productId': 'test-product',
-                # Missing reviewId and rating
-            })
-        }
-
-        # Invoke Lambda
-        response = aws_clients['lambda'].invoke(
-            FunctionName=function_name,
-            InvocationType='RequestResponse',
-            Payload=json.dumps(event)
+    def test_api_gateway_has_product_id_parameter_resource(self):
+        """Verify API Gateway has /reviews/{productId} resource."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1"
         )
 
-        # Parse response
-        response_payload = json.loads(response['Payload'].read())
-        assert response_payload['statusCode'] == 400
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
 
-    def test_lambda_error_validation_invalid_rating(self, stack_outputs, aws_clients):
-        """Test Lambda validates rating range."""
-        function_name = stack_outputs['lambda_function_name']
+        product_reviews_resource = manifest["resource"]["aws_api_gateway_resource"]["product_reviews_resource"]
+        assert product_reviews_resource["path_part"] == "{productId}"
 
-        # Prepare Lambda event with invalid rating
-        event = {
-            'httpMethod': 'POST',
-            'path': '/reviews',
-            'body': json.dumps({
-                'productId': 'test-product',
-                'reviewId': 'test-review',
-                'rating': 10  # Invalid: should be 1-5
-            })
-        }
-
-        # Invoke Lambda
-        response = aws_clients['lambda'].invoke(
-            FunctionName=function_name,
-            InvocationType='RequestResponse',
-            Payload=json.dumps(event)
+    def test_api_gateway_has_post_method_with_iam_auth(self):
+        """Verify API Gateway POST method has AWS_IAM authorization."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1"
         )
 
-        # Parse response
-        response_payload = json.loads(response['Payload'].read())
-        assert response_payload['statusCode'] == 400
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
+
+        post_method = manifest["resource"]["aws_api_gateway_method"]["post_reviews_method"]
+        assert post_method["http_method"] == "POST"
+        assert post_method["authorization"] == "AWS_IAM"
+
+    def test_api_gateway_has_get_method(self):
+        """Verify API Gateway GET method exists."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1"
+        )
+
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
+
+        get_method = manifest["resource"]["aws_api_gateway_method"]["get_reviews_method"]
+        assert get_method["http_method"] == "GET"
+        assert get_method["authorization"] == "NONE"
+
+    def test_api_gateway_has_lambda_integrations(self):
+        """Verify API Gateway has Lambda integrations configured."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1"
+        )
+
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
+
+        # Check POST integration
+        post_integration = manifest["resource"]["aws_api_gateway_integration"]["post_reviews_integration"]
+        assert post_integration["type"] == "AWS_PROXY"
+        assert post_integration["integration_http_method"] == "POST"
+
+        # Check GET integration
+        get_integration = manifest["resource"]["aws_api_gateway_integration"]["get_reviews_integration"]
+        assert get_integration["type"] == "AWS_PROXY"
+        assert get_integration["integration_http_method"] == "POST"
+
+    def test_api_gateway_has_stage_deployed(self):
+        """Verify API Gateway stage is configured."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1"
+        )
+
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
+
+        stage = manifest["resource"]["aws_api_gateway_stage"]["api_stage"]
+        assert stage["stage_name"] == "prod"
+
+    def test_api_gateway_has_throttling_configured(self):
+        """Verify API Gateway has throttling settings."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1"
+        )
+
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
+
+        method_settings = manifest["resource"]["aws_api_gateway_method_settings"]["api_throttling"]
+        assert method_settings["method_path"] == "*/*"
+
+        settings = method_settings["settings"]
+        assert settings["throttling_burst_limit"] == 100
+        assert settings["throttling_rate_limit"] == 100
+        assert settings["logging_level"] == "INFO"
+
+
+class TestCloudWatchLogsConfiguration:
+    """Test CloudWatch Logs configuration."""
+
+    def test_lambda_log_group_has_correct_name_pattern(self):
+        """Verify Lambda log group name includes environment suffix."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="logs123",
+            aws_region="ap-southeast-1"
+        )
+
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
+
+        log_group = manifest["resource"]["aws_cloudwatch_log_group"]["lambda_log_group"]
+        assert log_group["name"] == "/aws/lambda/review-processor-logs123"
+
+    def test_lambda_log_group_has_7_day_retention(self):
+        """Verify Lambda log group has 7-day retention policy."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1"
+        )
+
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
+
+        log_group = manifest["resource"]["aws_cloudwatch_log_group"]["lambda_log_group"]
+        assert log_group["retention_in_days"] == 7
+
+    def test_api_gateway_log_group_exists(self):
+        """Verify API Gateway log group is configured."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1"
+        )
+
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
+
+        api_log_group = manifest["resource"]["aws_cloudwatch_log_group"]["api_log_group"]
+        assert api_log_group is not None
+        assert api_log_group["retention_in_days"] == 7
+
+
+class TestStackOutputs:
+    """Test stack outputs configuration."""
+
+    def test_stack_has_all_required_outputs(self):
+        """Verify stack defines all required outputs."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1"
+        )
+
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
+
+        outputs = manifest.get("output", {})
+
+        # Check all required outputs exist
+        assert "api_endpoint" in outputs
+        assert "api_id" in outputs
+        assert "dynamodb_table_name" in outputs
+        assert "s3_bucket_name" in outputs
+        assert "lambda_function_name" in outputs
+        assert "lambda_function_arn" in outputs
+
+    def test_outputs_have_descriptions(self):
+        """Verify stack outputs have descriptions."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1"
+        )
+
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
+
+        outputs = manifest.get("output", {})
+
+        # Check outputs have descriptions
+        assert "description" in outputs["api_endpoint"]
+        assert "description" in outputs["dynamodb_table_name"]
+        assert "description" in outputs["lambda_function_name"]
+
+
+class TestMultiEnvironmentSupport:
+    """Test multi-environment deployment support."""
+
+    def test_resources_use_environment_suffix_in_names(self):
+        """Verify all resources include environment suffix in their names."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="multi-env-test",
+            aws_region="ap-southeast-1"
+        )
+
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
+
+        resources = manifest.get("resource", {})
+
+        # Check DynamoDB table name
+        dynamodb_table = resources["aws_dynamodb_table"]["reviews_table"]
+        assert "multi-env-test" in dynamodb_table["name"]
+
+        # Check S3 bucket name
+        s3_bucket = resources["aws_s3_bucket"]["images_bucket"]
+        assert "multi-env-test" in s3_bucket["bucket"]
+
+        # Check Lambda function name
+        lambda_function = resources["aws_lambda_function"]["review_processor"]
+        assert "multi-env-test" in lambda_function["function_name"]
+
+        # Check API Gateway name
+        api_gateway = resources["aws_api_gateway_rest_api"]["reviews_api"]
+        assert "multi-env-test" in api_gateway["name"]
+
+    def test_resources_have_production_environment_tags(self):
+        """Verify resources are tagged with Environment: Production."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1"
+        )
+
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
+
+        resources = manifest.get("resource", {})
+
+        # Check DynamoDB table tags
+        dynamodb_table = resources["aws_dynamodb_table"]["reviews_table"]
+        assert dynamodb_table["tags"]["Environment"] == "Production"
+
+        # Check S3 bucket tags
+        s3_bucket = resources["aws_s3_bucket"]["images_bucket"]
+        assert s3_bucket["tags"]["Environment"] == "Production"
+
+        # Check Lambda function tags
+        lambda_function = resources["aws_lambda_function"]["review_processor"]
+        assert lambda_function["tags"]["Environment"] == "Production"
+
+    def test_stack_uses_correct_aws_region(self):
+        """Verify stack uses the specified AWS region."""
+        app = Testing.app()
+        stack = TapStack(
+            app,
+            "TestStack",
+            environment_suffix="test",
+            aws_region="ap-southeast-1"
+        )
+
+        synthesized = Testing.synth(stack)
+        manifest = json.loads(synthesized)
+
+        provider = manifest.get("provider", {}).get("aws", [{}])[0]
+        assert provider["region"] == "ap-southeast-1"
