@@ -1,6 +1,6 @@
 {
   "platform": "cdktf",
-  "language": "ts",
+  "language": "typescript",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "101000332",
@@ -11,14 +11,19 @@
     "Cloud Environment Setup"
   ],
   "aws_services": [
-    "\"IAM",
+    "IAM",
     "KMS",
     "S3",
-    "RDS",
-    "EBS",
-    "AWS Config",
-    "Secrets Manager",
     "CloudWatch",
-    "CloudFormation\""
-  ]
+    "CloudTrail",
+    "Config",
+    "SecretsManager"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
 }
