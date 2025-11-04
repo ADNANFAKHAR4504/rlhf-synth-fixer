@@ -230,7 +230,6 @@ export class EksClusterConstruct extends Construct {
       tags: config.tags,
     });
 
-    // Attach required policies to cluster role
     new aws.iamRolePolicyAttachment.IamRolePolicyAttachment(
       this,
       'cluster-policy',
