@@ -20,7 +20,7 @@ from cdktf_cdktf_provider_aws.vpc_endpoint import VpcEndpoint
 class TapStack(TerraformStack):
     """CDKTF Python stack for VPC infrastructure."""
 
-    def __init__(
+    def __init__(  # pylint: disable=too-many-locals
         self,
         scope: Construct,
         construct_id: str,

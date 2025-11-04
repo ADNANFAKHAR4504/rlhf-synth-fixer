@@ -1,17 +1,19 @@
 """Unit tests for TAP Stack VPC infrastructure."""
 
-import pytest
 import json
 import os
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from cdktf import Testing
-from lib.tap_stack import TapStack
+import pytest  # pylint: disable=wrong-import-position
+
+from cdktf import Testing  # pylint: disable=wrong-import-position
+from tests.test_constants import REQUIRED_OUTPUTS  # pylint: disable=wrong-import-position
+from lib.tap_stack import TapStack  # pylint: disable=wrong-import-position
 
 
-class TestTapStack:
+class TestTapStack:  # pylint: disable=too-many-public-methods
     """Test suite for TapStack infrastructure."""
 
     @pytest.fixture
@@ -39,9 +41,10 @@ class TestTapStack:
         )
 
     @pytest.fixture
-    def synth(self, app, stack):
+    def synth(self, app, stack):  # pylint: disable=unused-argument
         """Synthesize the stack to JSON."""
-        return Testing.synth(stack)
+        synthesized = Testing.synth(stack)
+        return json.loads(synthesized)
 
     def test_stack_creation(self, stack):
         """Test that stack is created successfully."""
@@ -141,11 +144,17 @@ class TestTapStack:
                 if rt_config["tags"]["Type"] == "Public":
                     public_rt_found = True
                     # Public route table should have IGW route
-                    assert any(route.get("cidr_block") == "0.0.0.0/0" for route in rt_config.get("route", []))
+                    assert any(
+                        route.get("cidr_block") == "0.0.0.0/0"
+                        for route in rt_config.get("route", [])
+                    )
                 elif rt_config["tags"]["Type"] == "Private":
                     private_rt_found = True
                     # Private route table should have NAT Gateway route
-                    assert any(route.get("cidr_block") == "0.0.0.0/0" for route in rt_config.get("route", []))
+                    assert any(
+                        route.get("cidr_block") == "0.0.0.0/0"
+                        for route in rt_config.get("route", [])
+                    )
 
         assert public_rt_found
         assert private_rt_found
@@ -189,7 +198,8 @@ class TestTapStack:
 
         # Check assume role policy
         assume_policy = json.loads(role_config["assume_role_policy"])
-        assert assume_policy["Statement"][0]["Principal"]["Service"] == "vpc-flow-logs.amazonaws.com"
+        expected_service = "vpc-flow-logs.amazonaws.com"
+        assert assume_policy["Statement"][0]["Principal"]["Service"] == expected_service
 
     def test_iam_role_policy_for_flow_logs(self, synth):
         """Test that IAM role policy for Flow Logs is created."""
@@ -270,19 +280,7 @@ class TestTapStack:
         """Test that all required outputs are defined."""
         outputs = synth.get("output", {})
 
-        required_outputs = [
-            "vpc_id",
-            "vpc_cidr",
-            "public_subnet_1_id",
-            "public_subnet_2_id",
-            "private_subnet_1_id",
-            "private_subnet_2_id",
-            "nat_gateway_id",
-            "internet_gateway_id",
-            "s3_endpoint_id",
-            "dynamodb_endpoint_id",
-            "flow_log_id"
-        ]
+        required_outputs = REQUIRED_OUTPUTS
 
         for output_name in required_outputs:
             assert output_name in outputs, f"Missing output: {output_name}"
@@ -303,7 +301,7 @@ class TestTapStack:
 
         for subnet_config in subnets.values():
             if "Type" in subnet_config["tags"] and subnet_config["tags"]["Type"] == "Private":
-                assert subnet_config.get("map_public_ip_on_launch") != True
+                assert not subnet_config.get("map_public_ip_on_launch")
 
     def test_backend_configuration(self, synth):
         """Test that S3 backend is configured correctly."""

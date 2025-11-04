@@ -1,10 +1,13 @@
 """Integration tests for TAP Stack VPC infrastructure."""
 
-import pytest
 import json
 import os
+
 import boto3
+import pytest
 from botocore.exceptions import ClientError
+
+from tests.test_constants import REQUIRED_OUTPUTS
 
 
 class TestTapStackIntegration:
@@ -18,7 +21,7 @@ class TestTapStackIntegration:
         if not os.path.exists(outputs_path):
             pytest.skip("Stack outputs not found. Stack may not be deployed.")
 
-        with open(outputs_path, "r") as f:
+        with open(outputs_path, "r", encoding="utf-8") as f:
             return json.load(f)
 
     @pytest.fixture
@@ -71,7 +74,7 @@ class TestTapStackIntegration:
         ]
 
         for subnet_id in subnet_ids:
-            assert subnet_id is not None, f"Subnet ID not found in outputs"
+            assert subnet_id is not None, "Subnet ID not found in outputs"
 
         response = ec2_client.describe_subnets(SubnetIds=subnet_ids)
         assert len(response["Subnets"]) == 4
@@ -162,12 +165,14 @@ class TestTapStackIntegration:
 
             # Check for IGW route (public)
             for route in routes:
-                if route.get("GatewayId") == igw_id and route.get("DestinationCidrBlock") == "0.0.0.0/0":
+                if (route.get("GatewayId") == igw_id and
+                        route.get("DestinationCidrBlock") == "0.0.0.0/0"):
                     public_rt_found = True
 
             # Check for NAT Gateway route (private)
             for route in routes:
-                if route.get("NatGatewayId") == nat_gateway_id and route.get("DestinationCidrBlock") == "0.0.0.0/0":
+                if (route.get("NatGatewayId") == nat_gateway_id and
+                        route.get("DestinationCidrBlock") == "0.0.0.0/0"):
                     private_rt_found = True
 
         assert public_rt_found, "Public route table with IGW route not found"
@@ -251,7 +256,7 @@ class TestTapStackIntegration:
 
     def test_network_connectivity_setup(self, outputs, ec2_client):
         """Test that network connectivity is properly configured."""
-        vpc_id = outputs.get("vpc_id")
+        # vpc_id = outputs.get("vpc_id")  # Not used in this test
         public_subnet_1_id = outputs.get("public_subnet_1_id")
         private_subnet_1_id = outputs.get("private_subnet_1_id")
 
@@ -294,19 +299,7 @@ class TestTapStackIntegration:
 
     def test_all_required_outputs_present(self, outputs):
         """Test that all required outputs are present."""
-        required_outputs = [
-            "vpc_id",
-            "vpc_cidr",
-            "public_subnet_1_id",
-            "public_subnet_2_id",
-            "private_subnet_1_id",
-            "private_subnet_2_id",
-            "nat_gateway_id",
-            "internet_gateway_id",
-            "s3_endpoint_id",
-            "dynamodb_endpoint_id",
-            "flow_log_id"
-        ]
+        required_outputs = REQUIRED_OUTPUTS
 
         for output in required_outputs:
             assert output in outputs, f"Required output '{output}' not found"
