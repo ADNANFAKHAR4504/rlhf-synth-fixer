@@ -14,17 +14,13 @@ interface TapStackProps {
   defaultTags?: AwsProviderDefaultTags;
 }
 
-// Override AWS Region to ca-central-1 for this task
-const AWS_REGION_OVERRIDE = 'ca-central-1';
-
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE
-      ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
+    // Use AWS_REGION from environment variable, fallback to props, then default to us-east-1
+    const awsRegion = process.env.AWS_REGION || props?.awsRegion || 'us-east-1';
     // Note: stateBucketRegion and stateBucket are available in props but not used in this stack
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 

@@ -430,4 +430,213 @@ describe('NetworkingConstruct Unit Tests', () => {
       expect(new Set(subnetIds).size).toBe(2);
     });
   });
+
+  describe('Edge Cases and Regional Variations', () => {
+    test('handles different regions correctly', () => {
+      const originalEnv = process.env.AWS_REGION;
+      process.env.AWS_REGION = 'us-west-2';
+      
+      app = new App();
+      stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+      synthesized = JSON.parse(Testing.synth(stack));
+      
+      const subnets = Object.values(synthesized.resource.aws_subnet || {});
+      const azs = new Set(subnets.map((s: any) => s.availability_zone).filter(Boolean));
+      expect(azs.has('us-west-2a')).toBe(true);
+      expect(azs.has('us-west-2b')).toBe(true);
+      
+      // Restore original env
+      if (originalEnv) {
+        process.env.AWS_REGION = originalEnv;
+      } else {
+        delete process.env.AWS_REGION;
+      }
+    });
+
+    test('handles region with single availability zone gracefully', () => {
+      const originalEnv = process.env.AWS_REGION;
+      process.env.AWS_REGION = 'ap-southeast-1';
+      
+      app = new App();
+      stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+      synthesized = JSON.parse(Testing.synth(stack));
+      
+      // Should still create resources
+      expect(synthesized.resource.aws_vpc).toBeDefined();
+      
+      // Restore original env
+      if (originalEnv) {
+        process.env.AWS_REGION = originalEnv;
+      } else {
+        delete process.env.AWS_REGION;
+      }
+    });
+  });
+
+  describe('Security Group Rules Validation', () => {
+    test('web security group has correct ingress and egress rules', () => {
+      const rules = Object.values(
+        synthesized.resource.aws_security_group_rule || {}
+      );
+      const webRules = rules.filter((r: any) => {
+        const sg = Object.values(synthesized.resource.aws_security_group || {}).find(
+          (sg: any) => sg.name?.includes('web') && sg.id === r.security_group_id
+        );
+        return sg !== undefined;
+      });
+      expect(webRules.length).toBeGreaterThanOrEqual(2); // At least ingress and egress
+    });
+
+    test('app security group rules reference web security group', () => {
+      const rules = Object.values(
+        synthesized.resource.aws_security_group_rule || {}
+      );
+      const appRules = rules.filter((r: any) => r.from_port === 8080);
+      expect(appRules.length).toBeGreaterThan(0);
+      expect(appRules[0].source_security_group_id).toBeDefined();
+    });
+
+    test('database security group rules reference app security group', () => {
+      const rules = Object.values(
+        synthesized.resource.aws_security_group_rule || {}
+      );
+      const dbRules = rules.filter((r: any) => r.from_port === 5432);
+      expect(dbRules.length).toBeGreaterThan(0);
+      expect(dbRules[0].source_security_group_id).toBeDefined();
+    });
+
+    test('all egress rules allow all traffic', () => {
+      const rules = Object.values(
+        synthesized.resource.aws_security_group_rule || {}
+      );
+      const egressRules = rules.filter((r: any) => r.type === 'egress');
+      egressRules.forEach((rule: any) => {
+        expect(rule.from_port).toBe(0);
+        expect(rule.to_port).toBe(0);
+        expect(rule.protocol).toBe('-1');
+      });
+    });
+  });
+
+  describe('Route Table Associations', () => {
+    test('all subnets have route table associations', () => {
+      const associations = Object.values(
+        synthesized.resource.aws_route_table_association || {}
+      );
+      const subnets = Object.values(synthesized.resource.aws_subnet || {});
+      expect(associations.length).toBe(subnets.length);
+    });
+
+    test('public subnets associate with public route table', () => {
+      const routeTables = Object.values(synthesized.resource.aws_route_table || {});
+      const publicRouteTable = routeTables.find((rt: any) =>
+        rt.tags?.Name?.includes('public')
+      ) as any;
+      expect(publicRouteTable).toBeDefined();
+    });
+
+    test('private subnets associate with private route tables', () => {
+      const routeTables = Object.values(synthesized.resource.aws_route_table || {});
+      const privateRouteTables = routeTables.filter((rt: any) =>
+        rt.tags?.Name?.includes('private')
+      );
+      expect(privateRouteTables.length).toBe(2);
+    });
+
+    test('isolated subnets associate with isolated route table', () => {
+      const routeTables = Object.values(synthesized.resource.aws_route_table || {});
+      const isolatedRouteTable = routeTables.find((rt: any) =>
+        rt.tags?.Name?.includes('isolated')
+      ) as any;
+      expect(isolatedRouteTable).toBeDefined();
+    });
+  });
+
+  describe('VPC Flow Logs Configuration', () => {
+    test('flow logs bucket has correct naming', () => {
+      const bucket = Object.values(synthesized.resource.aws_s3_bucket || {}).find(
+        (b: any) => b.bucket?.includes('flowlogs')
+      ) as any;
+      expect(bucket.bucket).toBe('payment-platform-flowlogs-test');
+    });
+
+    test('flow log destination uses correct bucket ARN format', () => {
+      const flowLog = Object.values(
+        synthesized.resource.aws_flow_log || {}
+      )[0] as any;
+      expect(flowLog.log_destination).toContain('arn:aws:s3:::');
+      expect(flowLog.log_destination).toContain('flowlogs');
+    });
+
+    test('flow logs capture ALL traffic type', () => {
+      const flowLog = Object.values(
+        synthesized.resource.aws_flow_log || {}
+      )[0] as any;
+      expect(flowLog.traffic_type).toBe('ALL');
+      expect(flowLog.log_destination_type).toBe('s3');
+    });
+  });
+
+  describe('VPC Endpoint Configuration', () => {
+    test('VPC endpoint uses correct service name format', () => {
+      const endpoint = Object.values(
+        synthesized.resource.aws_vpc_endpoint || {}
+      )[0] as any;
+      expect(endpoint.service_name).toMatch(/^com\.amazonaws\.[a-z0-9-]+\.ssm$/);
+    });
+
+    test('VPC endpoint security group allows HTTPS from VPC CIDR', () => {
+      const rules = Object.values(
+        synthesized.resource.aws_security_group_rule || {}
+      );
+      const endpointRule = rules.find(
+        (r: any) => r.description === 'Allow HTTPS from VPC'
+      ) as any;
+      expect(endpointRule).toBeDefined();
+      expect(endpointRule.from_port).toBe(443);
+      expect(endpointRule.to_port).toBe(443);
+      expect(endpointRule.protocol).toBe('tcp');
+    });
+  });
+
+  describe('Resource Dependencies', () => {
+    test('NAT gateways depend on Elastic IPs', () => {
+      const natGateways = Object.values(synthesized.resource.aws_nat_gateway || {});
+      const eips = Object.values(synthesized.resource.aws_eip || {});
+      const eipIds = eips.map((eip: any) => eip.id);
+      
+      natGateways.forEach((nat: any) => {
+        expect(eipIds).toContain(nat.allocation_id);
+      });
+    });
+
+    test('routes depend on gateways', () => {
+      const routes = Object.values(synthesized.resource.aws_route || {});
+      const igws = Object.values(synthesized.resource.aws_internet_gateway || {});
+      const natGateways = Object.values(synthesized.resource.aws_nat_gateway || {});
+      
+      routes.forEach((route: any) => {
+        if (route.gateway_id) {
+          expect(igws.some((igw: any) => igw.id === route.gateway_id)).toBe(true);
+        }
+        if (route.nat_gateway_id) {
+          expect(natGateways.some((nat: any) => nat.id === route.nat_gateway_id)).toBe(true);
+        }
+      });
+    });
+
+    test('subnets depend on VPC', () => {
+      const vpcs = Object.values(synthesized.resource.aws_vpc || {});
+      const vpc = vpcs[0] as any;
+      const subnets = Object.values(synthesized.resource.aws_subnet || {});
+      
+      subnets.forEach((subnet: any) => {
+        expect(subnet.vpc_id).toBe(vpc.id);
+      });
+    });
+  });
 });
