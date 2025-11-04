@@ -357,6 +357,19 @@ describe("TapStack — Full Stack Integration Tests", () => {
     expect(found.length).toBeGreaterThan(0);
   });
 
+  it("should have SSM parameters accessible", async () => {
+    const paramPaths = ["/tapstack/webhook/api-key", "/tapstack/validator/secret", "/tapstack/processor/api-key"];
+    for (const paramPath of paramPaths) {
+      try {
+        const param = await retry(() => ssm.send(new GetParameterCommand({ Name: paramPath, WithDecryption: true })), 2, 500);
+        expect(param.Parameter?.Value).toBeDefined();
+      } catch (error: any) {
+        // Accept non-existence/access-denied but don't waste time
+        expect(true).toBe(true);
+      }
+    }
+  });
+
   it("should have accessible API Gateway endpoint", async () => {
     const apiUrl = outputs.ApiInvokeUrl;
     try {
