@@ -1,0 +1,25 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "101000825",
+  "team": "synth",
+  "startedAt": "2025-11-04T13:42:13+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "Database Migration",
+    "RDS",
+    "Security"
+  ],
+  "aws_services": [
+    "RDS",
+    "VPC",
+    "Secrets Manager",
+    "KMS",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 9
+}
