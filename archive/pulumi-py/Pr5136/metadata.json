@@ -1,0 +1,30 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "team": "synth",
+  "startedAt": "2025-10-27T21:52:33+05:30",
+  "subtask": "Infrastructure Analysis/Monitoring",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "po_id": "9564420345",
+  "aws_services": [
+    "Kinesis",
+    "ElastiCache",
+    "RDS",
+    "KMS",
+    "Secrets Manager",
+    "CloudWatch"
+  ],
+  "region": "ap-northeast-1",
+  "turn_type": "single",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,38 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350038",
+  "team": "2",
+  "startedAt": "2025-10-17T05:03:37.455Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "background": "CloudFormation template for secure Clinical Trial Data Platform with KMS encryption, private VPC, IMDSv2, API Gateway logging, CloudFront distribution, AWS Config compliance monitoring, MFA enforcement, and budget alerts",
+  "training_quality": 8,
+  "aws_services": [
+    "S3",
+    "IAM",
+    "API Gateway",
+    "RDS",
+    "Config",
+    "EC2",
+    "Security Groups",
+    "CloudFront",
+    "Budgets",
+    "VPC",
+    "Secrets Manager",
+    "WAF",
+    "SNS",
+    "KMS",
+    "CloudWatch Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mikiaszerihun",
+  "dockerS3Location": ""
+}

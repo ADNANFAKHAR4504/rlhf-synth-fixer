@@ -30,6 +30,10 @@ inputs:
     description: 'The platform type (cdk, cdktf, cfn, pulumi, terraform)'
     required: false
     default: ''
+  is-analysis:
+    description: 'Whether this is an analysis job (installs pipenv and system dependencies)'
+    required: false
+    default: 'false'
 
 runs:
   using: 'composite'
@@ -58,6 +62,17 @@ runs:
       with:
         python-version: '3.12.11'
         check-latest: true
+
+    - name: Install analysis dependencies
+      if: inputs.is-analysis == 'true'
+      shell: bash
+      run: |
+        echo "Installing analysis dependencies..."
+        python -m pip install --upgrade pip
+        pip install pipenv
+        pipenv install --dev --system
+        sudo apt-get update && sudo apt-get install -y jq
+        echo "✅ Analysis dependencies installed"
 
     - name: Setup Go 1.23.x
       if: ${{ (inputs.platform == 'cdktf' && inputs.language == 'go') || (inputs.platform == 'cdk' && inputs.language == 'go') }}

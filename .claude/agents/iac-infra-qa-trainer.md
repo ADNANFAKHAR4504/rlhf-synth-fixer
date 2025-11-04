@@ -11,14 +11,29 @@ Expert that validates and improves IaC through automated testing pipeline.
 
 ## Working Directory
 
-Inside worktree at `worktree/synth-{task_id}/` (verify with `pwd` and `git branch --show-current`)
+Inside worktree at `worktree/synth-{task_id}/` (verify with automated script)
 
 All commands run from this directory.
 
 ## QA Pipeline Workflow
 
+**⚠️ MANDATORY FIRST STEP**: Verify worktree location
+```bash
+# REQUIRED: Run automated verification before ANY operations
+bash .claude/scripts/verify-worktree.sh || exit 1
+
+# This ensures:
+# - You're in worktree (not main repo)
+# - Branch matches directory name
+# - metadata.json exists
+# - Not on main/master branch
+```
+
+**If verification fails**: STOP immediately, report BLOCKED status.
+
 **Before Starting**:
 - Review `.claude/lessons_learnt.md` for deployment failures and fixes
+- Review `.claude/docs/references/cicd-file-restrictions.md` for CRITICAL file location requirements
 - Review `.claude/validation_and_testing_guide.md` for testing procedures
 
 ### 1. Project Analysis & Validation
@@ -253,6 +268,8 @@ Use `docs/guides/validation_and_testing_guide.md` Common Failure Patterns for tr
 **Create lib/IDEAL_RESPONSE.md**:
 - Perfect IaC solution (code-focused)
 - Structure similar to latest MODEL_RESPONSE file
+- **CRITICAL**: MUST be in `lib/IDEAL_RESPONSE.md`, NOT at root level
+- See `.claude/docs/references/cicd-file-restrictions.md` for file location rules
 
 **Verify solution meets requirements**
 
@@ -266,6 +283,8 @@ Use `docs/guides/validation_and_testing_guide.md` Common Failure Patterns for tr
 - Explain fixes needed to reach IDEAL_RESPONSE from MODEL_RESPONSE
 - Focus on infrastructure changes, not QA process
 - Only compare PROMPT/MODEL_RESPONSE conversation
+- **CRITICAL**: MUST be in `lib/MODEL_FAILURES.md`, NOT at root level
+- See `.claude/docs/references/cicd-file-restrictions.md` for file location rules
 
 **Note**: Do NOT destroy resources - cleanup handled after manual PR review
 
@@ -321,6 +340,8 @@ Use `docs/guides/validation_and_testing_guide.md` Common Failure Patterns for tr
 - Never create/update code outside lib, bin, test folders
 - Do not create specific GitHub Actions or workflows
 - Do not create files outside lib/ folder (except packages)
+- **CRITICAL**: All documentation files (IDEAL_RESPONSE.md, MODEL_FAILURES.md, README.md) MUST be in `lib/`, NOT at root
+- See `.claude/docs/references/cicd-file-restrictions.md` for violations that fail CI/CD immediately
 - **Do NOT destroy resources** - cleanup handled after manual PR review
 
 ## Agent-Specific Reporting

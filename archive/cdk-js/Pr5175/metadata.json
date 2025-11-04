@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "js",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "CDK_JS_MED_CLOUDWATCH_ALARMS_6p7q8r_9m1n2o3pQR",
+  "team": "5",
+  "startedAt": "2025-10-28T05:05:01.324Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "CloudWatch",
+    "SNS",
+    "S3",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 8,
+  "background": "Complete EC2 monitoring infrastructure with proactive alerting, log management, and comprehensive observability for 10-instance startup environment",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
+}

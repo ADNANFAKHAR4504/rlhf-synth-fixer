@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "386845",
+  "team": "2",
+  "startedAt": "2025-10-21T15:21:17.713Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "Lambda",
+    "StepFunctions",
+    "SecretsManager",
+    "SSM",
+    "CloudWatch",
+    "IAM"
+  ],
+  "background": "Carbon Credit Trading Platform implementation with serverless architecture",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "matkadturing",
+  "dockerS3Location": ""
+}

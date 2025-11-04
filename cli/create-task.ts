@@ -14,7 +14,7 @@ interface TaskMetadata {
   startedAt: string;
   subtask: string;
   subject_labels?: string[];
-  aws_services?: string;
+  aws_services?: string[];
   task_config?: {
     deploy_env: string;
   };
@@ -29,6 +29,23 @@ async function generateMetadataFile(metadata: TaskMetadata): Promise<void> {
     console.log('✓ Generated metadata.json');
   } catch (err: unknown) {
     console.error('Error generating metadata.json:', err);
+  }
+}
+
+async function createTfvarsFiles(): Promise<void> {
+  const libDir = path.join(__dirname, '..', 'lib');
+  const tfvarsFiles = ['dev.tfvars', 'staging.tfvars', 'prod.tfvars'];
+
+  try {
+    await fs.ensureDir(libDir);
+
+    for (const filename of tfvarsFiles) {
+      const filePath = path.join(libDir, filename);
+      await fs.writeFile(filePath, '', 'utf8');
+      console.log(`✓ Created ${filename}`);
+    }
+  } catch (err: unknown) {
+    console.error('Error creating tfvars files:', err);
   }
 }
 
@@ -146,8 +163,7 @@ const SUBTASK_CHOICES = [
 const subjectLabelsBySubtask: Record<string, string> = {
   'Environment Migration': 'Provisioning of Infrastructure Environments',
   'Cloud Environment Setup': 'Provisioning of Infrastructure Environments',
-  'Multi-Environment Consistency':
-    'Provisioning of Infrastructure Environments',
+  'Multi-Environment Consistency': 'IaC-Multi-Environment-Management',
   'Web Application Deployment': 'Provisioning of Infrastructure Environments',
 
   'Serverless Infrastructure (Functions as Code)': 'Application Deployment',
@@ -199,8 +215,8 @@ async function main(): Promise<void> {
       const analysisChoice = await select({
         message: 'Select analysis template type:',
         choices: [
-          { name: 'Shell', value: 'shell' },
-          { name: 'Python', value: 'python' },
+          { name: 'Shell', value: 'sh' },
+          { name: 'Python', value: 'py' },
         ],
       });
       language = analysisChoice;
@@ -259,6 +275,7 @@ async function main(): Promise<void> {
         { name: '5', value: '5' },
         { name: '6', value: '6' },
         { name: 'synth', value: 'synth' },
+        { name: 'stf', value: 'stf' },
       ],
     });
 
@@ -294,16 +311,13 @@ async function main(): Promise<void> {
       taskSubCategory === 'Multi-Environment Consistency' &&
       platform === 'tf'
     ) {
-      deployEnv = await input({
-        message:
-          'Enter the deployment environment tfvars (e.g., dev.tfvars, staging.tfvars, prod.tfvars):',
-        validate: value => {
-          if (!value || !value.trim()) {
-            return 'Deployment environment is required';
-          }
-          return true;
-        },
-        default: 'dev.tfvars',
+      deployEnv = await select({
+        message: 'Select the deployment environment tfvars:',
+        choices: [
+          { name: 'dev.tfvars', value: 'dev.tfvars' },
+          { name: 'staging.tfvars', value: 'staging.tfvars' },
+          { name: 'prod.tfvars', value: 'prod.tfvars' },
+        ],
       });
     }
 
@@ -318,7 +332,12 @@ async function main(): Promise<void> {
       subtask: label ? label : taskSubCategory,
       ...(taskSubCategory ? { subject_labels: [taskSubCategory] } : {}),
       ...(resourcesText && resourcesText.trim().length > 0
-        ? { aws_services: resourcesText.trim() }
+        ? {
+            aws_services: resourcesText
+              .split(',')
+              .map(s => s.trim())
+              .filter(s => s.length > 0),
+          }
         : {}),
       ...(deployEnv
         ? {
@@ -355,6 +374,15 @@ async function main(): Promise<void> {
     if (confirmApply) {
       await copyTemplate(templateName);
       await generateMetadataFile(metadata);
+
+      // Create tfvars files for Multi-Environment Consistency with Terraform
+      if (
+        taskSubCategory === 'Multi-Environment Consistency' &&
+        platform === 'tf'
+      ) {
+        await createTfvarsFiles();
+      }
+
       console.log('\n🎉 RLHF task created successfully!');
     } else {
       console.log('Operation cancelled');

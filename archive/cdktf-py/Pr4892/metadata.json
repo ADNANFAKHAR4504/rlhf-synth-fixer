@@ -1,0 +1,17 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "6174408141",
+  "team": "synth",
+  "startedAt": "2025-10-21T11:55:18.318874",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "VPC, Subnet, InternetGateway, RouteTable, NatGateway, EIP, SecurityGroup, ECS, Fargate, ElastiCache Serverless, SecretsManager, ALB, TargetGroup, IAM, CloudWatch Logs"
+  ],
+  "training_quality": 8
+}

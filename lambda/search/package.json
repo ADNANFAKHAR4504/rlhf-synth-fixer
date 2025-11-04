@@ -1,9 +1,0 @@
-{
-  "name": "search-lambda",
-  "version": "1.0.0",
-  "description": "Knowledge base search Lambda function",
-  "main": "index.js",
-  "dependencies": {
-    "@aws-sdk/client-kendra": "^3.0.0"
-  }
-}

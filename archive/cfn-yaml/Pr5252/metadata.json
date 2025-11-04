@@ -1,0 +1,40 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000249",
+  "team": "3",
+  "startedAt": "2025-10-28T16:40:51.281Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Internet Gateway",
+    "VPC Gateway Attachment",
+    "Public Subnets",
+    "Private Subnets",
+    "Database Subnets",
+    "Elastic IP",
+    "NAT Gateway",
+    "Route Table",
+    "Route",
+    "Subnet Route Table Associations",
+    "Network ACL",
+    "VPC Endpoint (S3)",
+    "VPC Endpoint (DynamoDB)",
+    "CloudWatch Logs Log Group",
+    "IAM Role",
+    "VPC Flow Logs"
+  ],
+  "training_quality": 9,
+  "background": "Deploy a brand-new, self-contained multi-AZ VPC in us-east-1 via a single TapStack.yml. Build three subnet tiers (public for ALBs/NAT, private for app workloads, database with no internet routing) across three AZs; attach an Internet Gateway; create per-AZ NAT Gateways using dedicated Elastic IPs; define explicit route tables and associations per tier; harden database subnets with NACL rules that explicitly deny SSH from public CIDRs; add gateway VPC endpoints for S3 and DynamoDB on private and database route tables; enable VPC Flow Logs to a CloudWatch Logs group (1-minute aggregation) using an IAM role; and apply consistent Environment/Team/CostCenter tagging and environment-suffix naming for safe multi-environment deployments.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
+}

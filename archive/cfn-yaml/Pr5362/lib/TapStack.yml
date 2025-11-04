@@ -1,0 +1,1017 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Automated Infrastructure Analysis and Compliance Validation System for Financial Services"
+
+Parameters:
+  NotificationEmail:
+    Type: String
+    Default: ""
+    Description: "Email address for compliance violation notifications (optional)"
+    AllowedPattern: '(^$)|(^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$)'
+
+  RequiredTags:
+    Type: CommaDelimitedList
+    Description: "Comma-separated list of required tags for compliance"
+    Default: "Owner,CostCenter,Environment,DataClassification,ComplianceLevel"
+
+  PublicEndpointAllowlist:
+    Type: CommaDelimitedList
+    Description: "Comma-separated list of ARNs allowed to have public access"
+    Default: ""
+
+  ComplianceReportsBucketName:
+    Type: String
+    Description: "Name for compliance reports bucket (leave empty for auto-generated)"
+    Default: ""
+
+  AnalysisResultsBucketName:
+    Type: String
+    Description: "Name for analysis results bucket (leave empty for auto-generated)"
+    Default: ""
+
+  KMSKeyAlias:
+    Type: String
+    Description: "Alias for the KMS key"
+    Default: "compliance-validation-key"
+    AllowedPattern: "^[a-zA-Z0-9/_-]+$"
+
+  ScanScheduleRate:
+    Type: String
+    Description: "Schedule rate for periodic compliance scans"
+    Default: "rate(10 minutes)"
+    AllowedValues:
+      - "rate(5 minutes)"
+      - "rate(10 minutes)"
+      - "rate(15 minutes)"
+
+  AlertSeverityThreshold:
+    Type: String
+    Description: "Minimum severity level to trigger alerts"
+    Default: "MEDIUM"
+    AllowedValues:
+      - "LOW"
+      - "MEDIUM"
+      - "HIGH"
+      - "CRITICAL"
+
+Conditions:
+  CreateComplianceReportsBucket: !Equals [!Ref ComplianceReportsBucketName, ""]
+  CreateAnalysisResultsBucket: !Equals [!Ref AnalysisResultsBucketName, ""]
+  HasNotificationEmail: !Not [!Equals [!Ref NotificationEmail, ""]]
+
+Resources:
+  # ===========================
+  # KMS Customer Managed Key
+  # ===========================
+  ComplianceKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: "Customer managed key for compliance validation system encryption"
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Id: "compliance-key-policy"
+        Statement:
+          - Sid: EnableIAMUserPermissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: AllowCloudWatchLogsUse
+            Effect: Allow
+            Principal:
+              Service: logs.amazonaws.com
+            Action:
+              - "kms:Encrypt"
+              - "kms:Decrypt"
+              - "kms:ReEncrypt*"
+              - "kms:GenerateDataKey*"
+              - "kms:CreateGrant"
+              - "kms:DescribeKey"
+            Resource: "*"
+            Condition:
+              ArnLike:
+                "kms:EncryptionContext:aws:logs:arn": !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+          - Sid: AllowSNSUse
+            Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action:
+              - "kms:Decrypt"
+              - "kms:GenerateDataKey*"
+              - "kms:DescribeKey"
+              - "kms:CreateGrant"
+            Resource: "*"
+          - Sid: AllowSQSUse
+            Effect: Allow
+            Principal:
+              Service: sqs.amazonaws.com
+            Action:
+              - "kms:Encrypt"
+              - "kms:Decrypt"
+              - "kms:ReEncrypt*"
+              - "kms:GenerateDataKey*"
+              - "kms:DescribeKey"
+              - "kms:CreateGrant"
+            Resource: "*"
+          - Sid: AllowLambdaEnvDecrypt
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - "kms:Decrypt"
+              - "kms:DescribeKey"
+              - "kms:GenerateDataKey*"
+            Resource: "*"
+      Tags:
+        - Key: Purpose
+          Value: ComplianceValidation
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  ComplianceKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub "alias/${KMSKeyAlias}"
+      TargetKeyId: !Ref ComplianceKMSKey
+
+  # ===========================
+  # S3 Buckets (reports/results)
+  # ===========================
+  ComplianceReportsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !If
+        - CreateComplianceReportsBucket
+        - !Sub "compliance-reports-${AWS::AccountId}-${AWS::Region}"
+        - !Ref ComplianceReportsBucketName
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref ComplianceKMSKey
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToGlacier
+            Status: Enabled
+            Transitions:
+              - StorageClass: GLACIER
+                TransitionInDays: 90
+            NoncurrentVersionTransitions:
+              - StorageClass: GLACIER
+                TransitionInDays: 90
+      Tags:
+        - Key: Purpose
+          Value: ComplianceReports
+        - Key: DataRetention
+          Value: LongTerm
+
+  AnalysisResultsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !If
+        - CreateAnalysisResultsBucket
+        - !Sub "analysis-results-${AWS::AccountId}-${AWS::Region}"
+        - !Ref AnalysisResultsBucketName
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref ComplianceKMSKey
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToGlacier
+            Status: Enabled
+            Transitions:
+              - StorageClass: GLACIER
+                TransitionInDays: 90
+            NoncurrentVersionTransitions:
+              - StorageClass: GLACIER
+                TransitionInDays: 90
+      Tags:
+        - Key: Purpose
+          Value: AnalysisResults
+        - Key: DataRetention
+          Value: LongTerm
+
+  ComplianceReportsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ComplianceReportsBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt ComplianceReportsBucket.Arn
+              - !Sub "${ComplianceReportsBucket.Arn}/*"
+            Condition:
+              Bool:
+                "aws:SecureTransport": "false"
+          - Sid: EnforceKmsEncryption
+            Effect: Deny
+            Principal: "*"
+            Action:
+              - "s3:PutObject"
+            Resource: !Sub "${ComplianceReportsBucket.Arn}/*"
+            Condition:
+              StringNotEquals:
+                "s3:x-amz-server-side-encryption": "aws:kms"
+          - Sid: AllowAnalyzerListBucket
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt AnalyzerFunctionRole.Arn
+            Action:
+              - "s3:ListBucket"
+            Resource: !GetAtt ComplianceReportsBucket.Arn
+          - Sid: AllowAnalyzerReadWriteObjects
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt AnalyzerFunctionRole.Arn
+            Action:
+              - "s3:PutObject"
+              - "s3:GetObject"
+            Resource: !Sub "${ComplianceReportsBucket.Arn}/*"
+
+  AnalysisResultsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AnalysisResultsBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt AnalysisResultsBucket.Arn
+              - !Sub "${AnalysisResultsBucket.Arn}/*"
+            Condition:
+              Bool:
+                "aws:SecureTransport": "false"
+          - Sid: EnforceKmsEncryption
+            Effect: Deny
+            Principal: "*"
+            Action:
+              - "s3:PutObject"
+            Resource: !Sub "${AnalysisResultsBucket.Arn}/*"
+            Condition:
+              StringNotEquals:
+                "s3:x-amz-server-side-encryption": "aws:kms"
+          - Sid: AllowAnalyzerListBucket
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt AnalyzerFunctionRole.Arn
+            Action:
+              - "s3:ListBucket"
+            Resource: !GetAtt AnalysisResultsBucket.Arn
+          - Sid: AllowAnalyzerReadWriteObjects
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt AnalyzerFunctionRole.Arn
+            Action:
+              - "s3:PutObject"
+              - "s3:GetObject"
+            Resource: !Sub "${AnalysisResultsBucket.Arn}/*"
+
+  # ===========================
+  # SNS Topic (+ conditional subscription)
+  # ===========================
+  ComplianceViolationsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "compliance-violations-${AWS::StackName}"
+      DisplayName: "Compliance Violations Alert"
+      KmsMasterKeyId: !Ref ComplianceKMSKey
+      Tags:
+        - Key: Purpose
+          Value: ComplianceAlerts
+
+  ComplianceViolationsSubscription:
+    Condition: HasNotificationEmail
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref ComplianceViolationsTopic
+      Endpoint: !Ref NotificationEmail
+
+  # ===========================
+  # SQS Dead Letter Queues
+  # ===========================
+  AnalyzerDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "analyzer-dlq-${AWS::StackName}"
+      MessageRetentionPeriod: 1209600
+      KmsMasterKeyId: !Ref ComplianceKMSKey
+      Tags:
+        - Key: Purpose
+          Value: AnalyzerDLQ
+
+  PeriodicScanDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "periodic-scan-dlq-${AWS::StackName}"
+      MessageRetentionPeriod: 1209600
+      KmsMasterKeyId: !Ref ComplianceKMSKey
+      Tags:
+        - Key: Purpose
+          Value: PeriodicScanDLQ
+
+  # ===========================
+  # CloudWatch Log Groups (365d retention)
+  # ===========================
+  AnalyzerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/compliance-analyzer-${AWS::StackName}"
+      RetentionInDays: 365
+      KmsKeyId: !GetAtt ComplianceKMSKey.Arn
+
+  PeriodicScanLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/periodic-scan-${AWS::StackName}"
+      RetentionInDays: 365
+      KmsKeyId: !GetAtt ComplianceKMSKey.Arn
+
+  # ===========================
+  # IAM Roles
+  # ===========================
+  AnalyzerFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "compliance-analyzer-role-${AWS::StackName}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+      Policies:
+        - PolicyName: AnalyzerExecutionPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: LogsWrite
+                Effect: Allow
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/compliance-analyzer-${AWS::StackName}:*"
+              - Sid: LogsCreateGroupIfMissing
+                Effect: Allow
+                Action: "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Sid: CloudFormationRead
+                Effect: Allow
+                Action:
+                  - "cloudformation:DescribeStacks"
+                  - "cloudformation:GetTemplate"
+                  - "cloudformation:GetTemplateSummary"
+                  - "cloudformation:ListStacks"
+                  - "cloudformation:ListStackResources"
+                  - "cloudformation:ListExports"
+                Resource: "*"
+              - Sid: TaggingRead
+                Effect: Allow
+                Action:
+                  - "tag:GetResources"
+                  - "tag:GetTagKeys"
+                  - "tag:GetTagValues"
+                Resource: "*"
+              - Sid: S3ReadWriteReports
+                Effect: Allow
+                Action:
+                  - "s3:PutObject"
+                  - "s3:GetObject"
+                Resource:
+                  - !Sub "${ComplianceReportsBucket.Arn}/*"
+                  - !Sub "${AnalysisResultsBucket.Arn}/*"
+              - Sid: S3ListBuckets
+                Effect: Allow
+                Action:
+                  - "s3:ListBucket"
+                Resource:
+                  - !GetAtt ComplianceReportsBucket.Arn
+                  - !GetAtt AnalysisResultsBucket.Arn
+              - Sid: ReadTargetsForChecks
+                Effect: Allow
+                Action:
+                  - "s3:GetEncryptionConfiguration" # fixed name for cfn-lint W3037
+                  - "s3:GetBucketPublicAccessBlock"
+                  - "s3:GetBucketVersioning"
+                  - "s3:ListAllMyBuckets"
+                  - "ec2:DescribeInstances"
+                  - "ec2:DescribeVolumes"
+                  - "rds:DescribeDBInstances"
+                  - "elasticloadbalancing:DescribeLoadBalancers"
+                Resource: "*"
+              - Sid: KmsUse
+                Effect: Allow
+                Action:
+                  - "kms:Decrypt"
+                  - "kms:Encrypt"
+                  - "kms:GenerateDataKey*"
+                  - "kms:DescribeKey"
+                Resource: !GetAtt ComplianceKMSKey.Arn
+              - Sid: SnsPublish
+                Effect: Allow
+                Action: "sns:Publish"
+                Resource: !Ref ComplianceViolationsTopic
+              - Sid: SqsDlqBasic
+                Effect: Allow
+                Action:
+                  - "sqs:SendMessage"
+                  - "sqs:GetQueueAttributes"
+                Resource: !GetAtt AnalyzerDLQ.Arn
+              - Sid: ExplicitDenies
+                Effect: Deny
+                Action:
+                  - "kms:ScheduleKeyDeletion"
+                  - "kms:DisableKey"
+                  - "s3:DeleteBucket"
+                  - "s3:DeleteBucketPolicy"
+                  - "s3:PutBucketAcl"
+                  - "s3:PutObjectAcl"
+                  - "iam:PassRole"
+                Resource: "*"
+      Tags:
+        - Key: Purpose
+          Value: ComplianceAnalyzer
+
+  PeriodicScanFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "periodic-scan-role-${AWS::StackName}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: PeriodicScanExecutionPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: LogsWrite
+                Effect: Allow
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/periodic-scan-${AWS::StackName}:*"
+              - Sid: LogsCreateGroupIfMissing
+                Effect: Allow
+                Action: "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Sid: InvokeAnalyzer
+                Effect: Allow
+                Action: "lambda:InvokeFunction"
+                Resource: !GetAtt AnalyzerFunction.Arn
+              - Sid: CloudFormationList
+                Effect: Allow
+                Action: "cloudformation:ListStacks"
+                Resource: "*"
+              - Sid: KmsEnvDecrypt
+                Effect: Allow
+                Action: "kms:Decrypt"
+                Resource: !GetAtt ComplianceKMSKey.Arn
+              - Sid: SqsDlqBasic
+                Effect: Allow
+                Action:
+                  - "sqs:SendMessage"
+                  - "sqs:GetQueueAttributes"
+                Resource: !GetAtt PeriodicScanDLQ.Arn
+              - Sid: ExplicitDenies
+                Effect: Deny
+                Action:
+                  - "kms:ScheduleKeyDeletion"
+                  - "kms:DisableKey"
+                  - "iam:PassRole"
+                Resource: "*"
+      Tags:
+        - Key: Purpose
+          Value: PeriodicScan
+
+  # ===========================
+  # Lambda Functions (Python 3.12)
+  # ===========================
+  AnalyzerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "compliance-analyzer-${AWS::StackName}"
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt AnalyzerFunctionRole.Arn
+      Timeout: 300
+      MemorySize: 1024
+      DeadLetterConfig:
+        TargetArn: !GetAtt AnalyzerDLQ.Arn
+      Environment:
+        Variables:
+          COMPLIANCE_BUCKET: !Ref ComplianceReportsBucket
+          ANALYSIS_BUCKET: !Ref AnalysisResultsBucket
+          SNS_TOPIC_ARN: !Ref ComplianceViolationsTopic
+          REQUIRED_TAGS: !Join [",", !Ref RequiredTags]
+          PUBLIC_ALLOWLIST: !Join [",", !Ref PublicEndpointAllowlist]
+          SEVERITY_THRESHOLD: !Ref AlertSeverityThreshold
+          KMS_KEY_ID: !Ref ComplianceKMSKey
+      KmsKeyArn: !GetAtt ComplianceKMSKey.Arn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          import hashlib
+          import datetime
+          import uuid
+          import re
+          from typing import Dict, List, Any, Set
+
+          cfn = boto3.client('cloudformation')
+          s3 = boto3.client('s3')
+          sns = boto3.client('sns')
+
+          COMPLIANCE_BUCKET = os.environ['COMPLIANCE_BUCKET']
+          ANALYSIS_BUCKET = os.environ['ANALYSIS_BUCKET']
+          SNS_TOPIC_ARN = os.environ['SNS_TOPIC_ARN']
+          REQUIRED_TAGS = [t for t in os.environ.get('REQUIRED_TAGS','').split(',') if t]
+          PUBLIC_ALLOWLIST = set(a for a in os.environ.get('PUBLIC_ALLOWLIST','').split(',') if a)
+          SEVERITY_THRESHOLD = os.environ['SEVERITY_THRESHOLD']
+          KMS_KEY_ID = os.environ['KMS_KEY_ID']
+          SEVERITY_LEVELS = {'LOW': 1, 'MEDIUM': 2, 'HIGH': 3, 'CRITICAL': 4}
+
+          def handler(event, context):
+              print(f"Processing event: {json.dumps(event)}")
+              evaluation_id = str(uuid.uuid4())
+              ts = datetime.datetime.utcnow().isoformat()
+              account_id = context.invoked_function_arn.split(':')[4]
+              region = os.environ['AWS_REGION']
+              trigger_type = 'event-driven' if 'detail' in event else 'scheduled'
+
+              stacks = get_stacks(event)
+              all_findings: List[Dict[str, Any]] = []
+              violations: List[Dict[str, Any]] = []
+
+              for stack in stacks:
+                  findings = analyze_stack(stack, account_id, region)
+                  all_findings.extend(findings)
+                  for f in findings:
+                      if SEVERITY_LEVELS.get(f.get('severity','LOW'), 0) >= SEVERITY_LEVELS[SEVERITY_THRESHOLD]:
+                          violations.append(f)
+
+              summary = create_summary_report(evaluation_id, account_id, region, all_findings, ts, trigger_type, event)
+              detailed = create_detailed_report(evaluation_id, account_id, region, all_findings, ts, trigger_type, event)
+
+              report_key = f"{account_id}/{region}/{datetime.datetime.utcnow().strftime('%Y/%m/%d')}/{evaluation_id}"
+
+              s3.put_object(
+                  Bucket=COMPLIANCE_BUCKET,
+                  Key=f"{report_key}/summary.json",
+                  Body=json.dumps(summary),
+                  ServerSideEncryption='aws:kms',
+                  SSEKMSKeyId=KMS_KEY_ID,
+                  ContentType='application/json'
+              )
+              s3.put_object(
+                  Bucket=ANALYSIS_BUCKET,
+                  Key=f"{report_key}/detailed.json",
+                  Body=json.dumps(detailed),
+                  ServerSideEncryption='aws:kms',
+                  SSEKMSKeyId=KMS_KEY_ID,
+                  ContentType='application/json'
+              )
+
+              if violations:
+                  send_violation_notification(violations, evaluation_id, report_key)
+
+              return {'statusCode': 200, 'body': json.dumps({'evaluationId': evaluation_id, 'findingsCount': len(all_findings), 'violationsCount': len(violations)})}
+
+          def get_stacks(event) -> List[Dict[str, Any]]:
+              stacks: List[Dict[str, Any]] = []
+              detail = event.get('detail') or {}
+              stack_name = detail.get('stack-name')
+              try:
+                  if stack_name:
+                      resp = cfn.describe_stacks(StackName=stack_name)
+                      stacks.extend(resp.get('Stacks', []))
+                  else:
+                      paginator = cfn.get_paginator('list_stacks')
+                      for page in paginator.paginate(StackStatusFilter=['CREATE_COMPLETE','UPDATE_COMPLETE','UPDATE_ROLLBACK_COMPLETE']):
+                          for ssum in page.get('StackSummaries', []):
+                              try:
+                                  d = cfn.describe_stacks(StackName=ssum['StackName'])
+                                  stacks.extend(d.get('Stacks', []))
+                              except Exception as e:
+                                  print(f"DescribeStacks error: {e}")
+              except Exception as e:
+                  print(f"get_stacks error: {e}")
+              return stacks
+
+          def analyze_stack(stack: Dict[str, Any], account_id: str, region: str) -> List[Dict[str, Any]]:
+              findings: List[Dict[str, Any]] = []
+              stack_name = stack['StackName']
+              stack_id = stack['StackId']
+
+              template, template_hash, raw_template = get_template_safe(stack_name)
+
+              tags = {t['Key']: t['Value'] for t in stack.get('Tags', [])}
+              for req in REQUIRED_TAGS:
+                  if req not in tags:
+                      findings.append({
+                          'stackName': stack_name, 'stackId': stack_id, 'resourceArn': stack_id,
+                          'checkType': 'MISSING_TAG', 'severity': 'HIGH',
+                          'finding': f'Missing required tag: {req}',
+                          'remediation': f'Add tag {req} to the stack'
+                      })
+
+              try:
+                  res = cfn.list_stack_resources(StackName=stack_name)
+                  for r in res.get('StackResourceSummaries', []):
+                      findings.extend(check_resource_compliance(r, stack_name, stack_id))
+              except Exception as e:
+                  print(f"list_stack_resources error: {e}")
+
+              findings.extend(check_import_values(template, raw_template, stack_name, stack_id))
+
+              for f in findings:
+                  f['templateHash'] = template_hash
+              return findings
+
+          def get_template_safe(stack_name: str):
+              raw = ''
+              template: Dict[str, Any] = {}
+              t_hash = 'unknown'
+              try:
+                  t = cfn.get_template(StackName=stack_name, TemplateStage='Original')
+                  tb = t.get('TemplateBody', {})
+                  if isinstance(tb, dict):
+                      template = tb
+                      raw = json.dumps(tb, sort_keys=True)
+                  elif isinstance(tb, str):
+                      raw = tb
+                      try:
+                          template = json.loads(tb)
+                      except Exception:
+                          template = {}
+                  t_hash = hashlib.sha256(raw.encode('utf-8')).hexdigest() if raw else 'unknown'
+              except Exception as e:
+                  print(f"get_template error: {e}")
+              return template, t_hash, raw
+
+          def check_resource_compliance(resource: Dict[str, Any], stack_name: str, stack_id: str) -> List[Dict[str, Any]]:
+              findings: List[Dict[str, Any]] = []
+              rtype = resource.get('ResourceType')
+              lid = resource.get('LogicalResourceId')
+              pid = resource.get('PhysicalResourceId', '')
+
+              if rtype == 'AWS::S3::Bucket' and pid:
+                  findings.extend(check_s3_bucket(pid, stack_name, stack_id, lid))
+              elif rtype == 'AWS::RDS::DBInstance' and pid:
+                  findings.extend(check_rds(pid, stack_name, stack_id, lid))
+              return findings
+
+          def check_s3_bucket(bucket_name: str, stack_name: str, stack_id: str, lid: str) -> List[Dict[str, Any]]:
+              findings: List[Dict[str, Any]] = []
+              bucket_arn = f"arn:aws:s3:::{bucket_name}"
+              s3c = boto3.client('s3')
+              try:
+                  enc = s3c.get_bucket_encryption(Bucket=bucket_name)
+                  rules = enc.get('ServerSideEncryptionConfiguration', {}).get('Rules', [])
+                  if not any(rule.get('ApplyServerSideEncryptionByDefault', {}).get('SSEAlgorithm') == 'aws:kms' for rule in rules):
+                      findings.append(_finding(stack_name, stack_id, bucket_arn, lid, 'ENCRYPTION', 'CRITICAL', 'S3 bucket not using KMS encryption', 'Enable SSE-KMS encryption on the bucket'))
+              except s3c.exceptions.ServerSideEncryptionConfigurationNotFoundError:
+                  findings.append(_finding(stack_name, stack_id, bucket_arn, lid, 'ENCRYPTION', 'CRITICAL', 'S3 bucket has no encryption configured', 'Enable SSE-KMS encryption on the bucket'))
+              except Exception as e:
+                  print(f"s3 encryption check error: {e}")
+              try:
+                  pab = s3c.get_public_access_block(Bucket=bucket_name)
+                  cfg = pab['PublicAccessBlockConfiguration']
+                  if not all([cfg.get('BlockPublicAcls'), cfg.get('BlockPublicPolicy'), cfg.get('IgnorePublicAcls'), cfg.get('RestrictPublicBuckets')]):
+                      if bucket_arn not in PUBLIC_ALLOWLIST:
+                          findings.append(_finding(stack_name, stack_id, bucket_arn, lid, 'PUBLIC_ACCESS', 'CRITICAL', 'S3 bucket allows public access', 'Enable all public access block settings'))
+              except s3c.exceptions.NoSuchPublicAccessBlockConfiguration:
+                  if bucket_arn not in PUBLIC_ALLOWLIST:
+                      findings.append(_finding(stack_name, stack_id, bucket_arn, lid, 'PUBLIC_ACCESS', 'CRITICAL', 'S3 bucket has no public access block configuration', 'Enable public access block configuration'))
+              except Exception as e:
+                  print(f"s3 public access check error: {e}")
+              return findings
+
+          def check_rds(db_id: str, stack_name: str, stack_id: str, lid: str) -> List[Dict[str, Any]]:
+              findings: List[Dict[str, Any]] = []
+              rds = boto3.client('rds')
+              try:
+                  resp = rds.describe_db_instances(DBInstanceIdentifier=db_id)
+                  dbi = resp['DBInstances'][0]
+                  db_arn = dbi['DBInstanceArn']
+                  if not dbi.get('StorageEncrypted', False):
+                      findings.append(_finding(stack_name, stack_id, db_arn, lid, 'ENCRYPTION', 'CRITICAL', 'RDS instance storage is not encrypted', 'Enable storage encryption for the RDS instance'))
+                  if dbi.get('PubliclyAccessible', False) and db_arn not in PUBLIC_ALLOWLIST:
+                      findings.append(_finding(stack_name, stack_id, db_arn, lid, 'PUBLIC_ACCESS', 'HIGH', 'RDS instance is publicly accessible', 'Disable public accessibility for the RDS instance'))
+              except Exception as e:
+                  print(f"rds check error: {e}")
+              return findings
+
+          def check_import_values(template: Dict[str, Any], raw: str, stack_name: str, stack_id: str) -> List[Dict[str, Any]]:
+              findings: List[Dict[str, Any]] = []
+              exports = get_all_exports()
+              export_names: Set[str] = set(exports.keys())
+              imports: Set[str] = set()
+
+              imports |= find_import_values(template)
+              if raw:
+                  for m in re.finditer(r'Fn::ImportValue\s*:\s*[\'"]([^\'"]+)[\'"]', raw):
+                      imports.add(m.group(1))
+
+              for name in sorted(imports):
+                  if name not in export_names:
+                      findings.append({
+                          'stackName': stack_name, 'stackId': stack_id, 'resourceArn': stack_id,
+                          'checkType': 'CROSS_STACK_REFERENCE', 'severity': 'HIGH',
+                          'finding': f'ImportValue references non-existent export: {name}',
+                          'remediation': f'Ensure export {name} exists or update the reference'
+                      })
+              return findings
+
+          def get_all_exports() -> Dict[str, str]:
+              exports: Dict[str, str] = {}
+              try:
+                  paginator = cfn.get_paginator('list_exports')
+                  for page in paginator.paginate():
+                      for e in page.get('Exports', []):
+                          exports[e['Name']] = e.get('Value', '')
+              except Exception as e:
+                  print(f"list_exports error: {e}")
+              return exports
+
+          def find_import_values(obj, acc: Set[str] = None) -> Set[str]:
+              if acc is None:
+                  acc = set()
+              if isinstance(obj, dict):
+                  if 'Fn::ImportValue' in obj:
+                      v = obj['Fn::ImportValue']
+                      if isinstance(v, str):
+                          acc.add(v)
+                      elif isinstance(v, dict) and 'Fn::Sub' in v:
+                          pass
+                  for v in obj.values():
+                      find_import_values(v, acc)
+              elif isinstance(obj, list):
+                  for i in obj:
+                      find_import_values(i, acc)
+              return acc
+
+          def _finding(stack_name, stack_id, arn, lid, ctype, sev, msg, fix):
+              return {
+                  'stackName': stack_name, 'stackId': stack_id, 'resourceArn': arn,
+                  'logicalId': lid, 'checkType': ctype, 'severity': sev,
+                  'finding': msg, 'remediation': fix
+              }
+
+          def create_summary_report(evaluation_id, account_id, region, findings, timestamp, trigger_type, event):
+              sev_counts = {'LOW': 0, 'MEDIUM': 0, 'HIGH': 0, 'CRITICAL': 0}
+              type_counts: Dict[str, int] = {}
+              for f in findings:
+                  sev_counts[f['severity']] = sev_counts.get(f['severity'], 0) + 1
+                  t = f['checkType']
+                  type_counts[t] = type_counts.get(t, 0) + 1
+              return {
+                  'evaluationId': evaluation_id,
+                  'accountId': account_id,
+                  'region': region,
+                  'timestamp': timestamp,
+                  'triggerType': trigger_type,
+                  'eventSource': event.get('source', 'manual'),
+                  'summary': {
+                      'totalFindings': len(findings),
+                      'severityCounts': sev_counts,
+                      'checkTypeCounts': type_counts
+                  }
+              }
+
+          def create_detailed_report(evaluation_id, account_id, region, findings, timestamp, trigger_type, event):
+              return {
+                  'evaluationId': evaluation_id,
+                  'accountId': account_id,
+                  'region': region,
+                  'timestamp': timestamp,
+                  'triggerType': trigger_type,
+                  'eventSource': event.get('source', 'manual'),
+                  'eventDetails': event,
+                  'findings': findings
+              }
+
+          def send_violation_notification(violations, evaluation_id, report_key):
+              lines = [f"Compliance violations detected",
+                       f"Evaluation ID: {evaluation_id}",
+                       f"Total violations: {len(violations)}", ""]
+              by_sev: Dict[str, List[Dict[str, Any]]] = {}
+              for v in violations:
+                  by_sev.setdefault(v['severity'], []).append(v)
+              for sev in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']:
+                  if sev in by_sev:
+                      lines.append(f"{sev}: {len(by_sev[sev])} violations")
+                      for v in by_sev[sev][:3]:
+                          lines.append(f"  - {v['stackName']}: {v['finding']}")
+              lines.append("")
+              lines.append(f"Full report: s3://{COMPLIANCE_BUCKET}/{report_key}/summary.json")
+              sns.publish(TopicArn=SNS_TOPIC_ARN, Subject='Compliance Violation Alert', Message="\n".join(lines))
+
+  PeriodicScanFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "periodic-scan-${AWS::StackName}"
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt PeriodicScanFunctionRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      DeadLetterConfig:
+        TargetArn: !GetAtt PeriodicScanDLQ.Arn
+      Environment:
+        Variables:
+          ANALYZER_FUNCTION_ARN: !GetAtt AnalyzerFunction.Arn
+      KmsKeyArn: !GetAtt ComplianceKMSKey.Arn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+
+          lmb = boto3.client('lambda')
+
+          ANALYZER_FUNCTION_ARN = os.environ['ANALYZER_FUNCTION_ARN']
+
+          def handler(event, context):
+              print(f"Starting periodic scan: {json.dumps(event)}")
+              payload = {
+                  'source': 'periodic-scan',
+                  'triggerType': 'scheduled',
+                  'scanTime': datetime.utcnow().isoformat()
+              }
+              resp = lmb.invoke(FunctionName=ANALYZER_FUNCTION_ARN, InvocationType='Event', Payload=json.dumps(payload))
+              print(f"Analyzer invoked: {resp.get('StatusCode')}")
+              return {'statusCode': 200, 'body': json.dumps({'message': 'Periodic scan initiated'})}
+
+  # ===========================
+  # EventBridge Rules
+  # ===========================
+  StackChangeEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "Trigger compliance analysis on stack changes"
+      EventPattern:
+        source:
+          - aws.cloudformation
+        detail-type:
+          - CloudFormation Stack Status Change
+        detail:
+          status-details:
+            status:
+              - CREATE_COMPLETE
+              - UPDATE_COMPLETE
+              - UPDATE_ROLLBACK_COMPLETE
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt AnalyzerFunction.Arn
+          Id: AnalyzerTarget
+          Input: !Sub |
+            {
+              "source": "cloudformation-event",
+              "triggerType": "event-driven",
+              "account": "${AWS::AccountId}",
+              "region": "${AWS::Region}"
+            }
+
+  AnalyzerEventPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AnalyzerFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt StackChangeEventRule.Arn
+
+  PeriodicScanScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "Periodic compliance scan to ensure evaluations within 15 minutes"
+      ScheduleExpression: !Ref ScanScheduleRate
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt PeriodicScanFunction.Arn
+          Id: PeriodicScanTarget
+          Input: !Sub |
+            {
+              "source": "scheduled",
+              "triggerType": "scheduled",
+              "account": "${AWS::AccountId}",
+              "region": "${AWS::Region}"
+            }
+
+  PeriodicScanEventPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PeriodicScanFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt PeriodicScanScheduleRule.Arn
+
+# ===========================
+# Outputs
+# ===========================
+Outputs:
+  ComplianceReportsBucketArn:
+    Description: "ARN of the compliance reports S3 bucket"
+    Value: !GetAtt ComplianceReportsBucket.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ComplianceReportsBucketArn"
+
+  ComplianceReportsBucketName:
+    Description: "Name of the compliance reports S3 bucket"
+    Value: !Ref ComplianceReportsBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-ComplianceReportsBucketName"
+
+  AnalysisResultsBucketArn:
+    Description: "ARN of the analysis results S3 bucket"
+    Value: !GetAtt AnalysisResultsBucket.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-AnalysisResultsBucketArn"
+
+  AnalysisResultsBucketName:
+    Description: "Name of the analysis results S3 bucket"
+    Value: !Ref AnalysisResultsBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-AnalysisResultsBucketName"
+
+  ComplianceViolationsTopicArn:
+    Description: "ARN of the SNS topic for compliance violations"
+    Value: !Ref ComplianceViolationsTopic
+    Export:
+      Name: !Sub "${AWS::StackName}-ComplianceViolationsTopicArn"
+
+  AnalyzerFunctionArn:
+    Description: "ARN of the compliance analyzer Lambda function"
+    Value: !GetAtt AnalyzerFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-AnalyzerFunctionArn"
+
+  PeriodicScanFunctionArn:
+    Description: "ARN of the periodic scan Lambda function"
+    Value: !GetAtt PeriodicScanFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-PeriodicScanFunctionArn"
+
+  KMSKeyId:
+    Description: "ID of the KMS key used for encryption"
+    Value: !Ref ComplianceKMSKey
+    Export:
+      Name: !Sub "${AWS::StackName}-KMSKeyId"
+
+  KMSKeyAlias:
+    Description: "Alias of the KMS key"
+    Value: !Ref ComplianceKMSKeyAlias
+    Export:
+      Name: !Sub "${AWS::StackName}-KMSKeyAlias"
+
+  ReportsBaseURI:
+    Description: "Base S3 URI for compliance reports"
+    Value: !Sub "s3://${ComplianceReportsBucket}/"
+    Export:
+      Name: !Sub "${AWS::StackName}-ReportsBaseURI"
+
+  StackChangeEventRuleArn:
+    Description: "ARN of the EventBridge rule for stack changes"
+    Value: !GetAtt StackChangeEventRule.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-StackChangeEventRuleArn"
+
+  PeriodicScanScheduleRuleArn:
+    Description: "ARN of the EventBridge rule for periodic scans"
+    Value: !GetAtt PeriodicScanScheduleRule.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-PeriodicScanScheduleRuleArn"
