@@ -20,5 +20,6 @@
     "CloudWatch"
   ],
   "region": "us-east-1",
+  "author": "chriscrsov",
   "training_quality": 10
 }
