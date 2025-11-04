@@ -25,8 +25,7 @@ export class TapStack extends TerraformStack {
     const awsRegion = AWS_REGION_OVERRIDE
       ? AWS_REGION_OVERRIDE
       : props?.awsRegion || 'us-east-1';
-    const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
-    const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
+    // Note: stateBucketRegion and stateBucket are available in props but not used in this stack
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
     // Configure AWS Provider
