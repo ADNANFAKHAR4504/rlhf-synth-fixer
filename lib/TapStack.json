@@ -2445,17 +2445,6 @@
                 }
             }
         },
-        "RDSMasterUsername": {
-            "Description": "RDS Database Master Username",
-            "Value": {
-                "Ref": "DBMasterUsername"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${Environment}-${EnvironmentSuffix}-RDS-Master-Username"
-                }
-            }
-        },
         "EC2InstanceStatusAlarmName": {
             "Description": "EC2 Instance Status Alarm Name (non-production)",
             "Condition": "IsNotProduction",
