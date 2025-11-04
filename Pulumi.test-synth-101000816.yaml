@@ -1,0 +1,4 @@
+encryptionsalt: v1:CP26l2tO1HU=:v1:uqOaakHxa8iSHy3P:FcE88JtT39oK1VQXDKtJutEuXrQnWA==
+config:
+  vpc-peering:environment_suffix: synth-101000816
+  aws:region: us-east-1

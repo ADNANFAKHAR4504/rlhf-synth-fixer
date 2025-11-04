@@ -1,0 +1,15 @@
+name: vpc-peering
+runtime: python
+description: Cross-region VPC peering infrastructure with enhanced security and monitoring
+main: lib/
+
+config:
+  environment_suffix:
+    description: Environment suffix for resource naming (e.g., dev, staging, prod)
+    default: dev
+  owner:
+    description: Team or individual responsible for this infrastructure
+    default: platform-team
+  cost_center:
+    description: Cost center for billing and chargeback
+    default: engineering

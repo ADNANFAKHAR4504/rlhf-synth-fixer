@@ -1,0 +1,323 @@
+"""
+test_tap_stack_integration.py
+
+Integration tests for live deployed TapStack Pulumi infrastructure.
+Tests actual AWS resources created by the Pulumi stack.
+Uses stack outputs dynamically - no hardcoded values.
+"""
+
+import unittest
+import os
+import json
+import boto3
+from botocore.exceptions import ClientError
+
+
+class TestTapStackLiveIntegration(unittest.TestCase):
+    """Integration tests against live deployed Pulumi stack."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up integration test with live stack outputs."""
+        # Load stack outputs from cfn-outputs/flat-outputs.json
+        outputs_file = os.path.join(
+            os.path.dirname(__file__),
+            '../../cfn-outputs/flat-outputs.json'
+        )
+
+        if not os.path.exists(outputs_file):
+            raise FileNotFoundError(
+                f"Stack outputs not found at {outputs_file}. "
+                "Deploy the stack first with: pulumi up"
+            )
+
+        with open(outputs_file, 'r') as f:
+            cls.outputs = json.load(f)
+
+        # Extract values from outputs
+        cls.peering_connection_id = cls.outputs.get('peering_connection_id')
+        cls.payment_vpc_id = cls.outputs.get('payment_vpc_id')
+        cls.analytics_vpc_id = cls.outputs.get('analytics_vpc_id')
+        cls.payment_sg_id = cls.outputs.get('payment_security_group_id')
+        cls.analytics_sg_id = cls.outputs.get('analytics_security_group_id')
+
+        # Create AWS clients for both regions
+        cls.ec2_east = boto3.client('ec2', region_name='us-east-1')
+        cls.ec2_west = boto3.client('ec2', region_name='us-west-2')
+
+    def test_stack_outputs_present(self):
+        """Test that all required stack outputs are present."""
+        required_outputs = [
+            'peering_connection_id',
+            'payment_vpc_id',
+            'analytics_vpc_id',
+            'payment_security_group_id',
+            'analytics_security_group_id',
+            'dns_resolution_enabled'
+        ]
+
+        for output in required_outputs:
+            self.assertIn(
+                output,
+                self.outputs,
+                f"Required output '{output}' not found in stack outputs"
+            )
+            self.assertIsNotNone(
+                self.outputs[output],
+                f"Output '{output}' is None"
+            )
+
+    def test_vpc_peering_connection_exists(self):
+        """Test that VPC peering connection exists and is active."""
+        try:
+            response = self.ec2_east.describe_vpc_peering_connections(
+                VpcPeeringConnectionIds=[self.peering_connection_id]
+            )
+
+            self.assertEqual(len(response['VpcPeeringConnections']), 1)
+
+            peering = response['VpcPeeringConnections'][0]
+            self.assertEqual(
+                peering['Status']['Code'],
+                'active',
+                "VPC peering connection should be active"
+            )
+
+        except ClientError as e:
+            self.fail(f"Failed to describe VPC peering connection: {e}")
+
+    def test_vpc_peering_dns_resolution_enabled(self):
+        """Test that DNS resolution is enabled for VPC peering."""
+        try:
+            response = self.ec2_east.describe_vpc_peering_connections(
+                VpcPeeringConnectionIds=[self.peering_connection_id]
+            )
+
+            peering = response['VpcPeeringConnections'][0]
+
+            # Check requester DNS resolution
+            requester_options = peering.get('RequesterVpcInfo', {}).get(
+                'PeeringOptions', {}
+            )
+            self.assertTrue(
+                requester_options.get('AllowDnsResolutionFromRemoteVpc', False),
+                "DNS resolution should be enabled on requester side"
+            )
+
+            # Check accepter DNS resolution
+            accepter_options = peering.get('AccepterVpcInfo', {}).get(
+                'PeeringOptions', {}
+            )
+            self.assertTrue(
+                accepter_options.get('AllowDnsResolutionFromRemoteVpc', False),
+                "DNS resolution should be enabled on accepter side"
+            )
+
+        except ClientError as e:
+            self.fail(f"Failed to check DNS resolution: {e}")
+
+    def test_payment_vpc_routes_exist(self):
+        """Test that payment VPC has routes to analytics VPC."""
+        try:
+            # Get route tables for payment VPC
+            response = self.ec2_east.describe_route_tables(
+                Filters=[
+                    {'Name': 'vpc-id', 'Values': [self.payment_vpc_id]},
+                    {'Name': 'tag:Name', 'Values': ['*private*']}
+                ]
+            )
+
+            route_tables = response['RouteTables']
+            self.assertGreater(
+                len(route_tables),
+                0,
+                "Payment VPC should have private route tables"
+            )
+
+            # Check that at least one route table has a route to analytics VPC
+            found_peering_route = False
+            for rt in route_tables:
+                for route in rt['Routes']:
+                    if (route.get('VpcPeeringConnectionId') ==
+                            self.peering_connection_id):
+                        found_peering_route = True
+                        # Verify destination is analytics VPC CIDR
+                        self.assertEqual(
+                            route['DestinationCidrBlock'],
+                            '10.1.0.0/16',
+                            "Route should point to analytics VPC CIDR"
+                        )
+
+            self.assertTrue(
+                found_peering_route,
+                "Payment VPC route tables should have route to analytics VPC"
+            )
+
+        except ClientError as e:
+            self.fail(f"Failed to check payment VPC routes: {e}")
+
+    def test_analytics_vpc_routes_exist(self):
+        """Test that analytics VPC has routes to payment VPC."""
+        try:
+            # Get route tables for analytics VPC
+            response = self.ec2_west.describe_route_tables(
+                Filters=[
+                    {'Name': 'vpc-id', 'Values': [self.analytics_vpc_id]},
+                    {'Name': 'tag:Name', 'Values': ['*private*']}
+                ]
+            )
+
+            route_tables = response['RouteTables']
+            self.assertGreater(
+                len(route_tables),
+                0,
+                "Analytics VPC should have private route tables"
+            )
+
+            # Check that at least one route table has a route to payment VPC
+            found_peering_route = False
+            for rt in route_tables:
+                for route in rt['Routes']:
+                    if (route.get('VpcPeeringConnectionId') ==
+                            self.peering_connection_id):
+                        found_peering_route = True
+                        # Verify destination is payment VPC CIDR
+                        self.assertEqual(
+                            route['DestinationCidrBlock'],
+                            '10.0.0.0/16',
+                            "Route should point to payment VPC CIDR"
+                        )
+
+            self.assertTrue(
+                found_peering_route,
+                "Analytics VPC route tables should have route to payment VPC"
+            )
+
+        except ClientError as e:
+            self.fail(f"Failed to check analytics VPC routes: {e}")
+
+    def test_payment_security_group_exists(self):
+        """Test that payment security group exists with correct rules."""
+        try:
+            response = self.ec2_east.describe_security_groups(
+                GroupIds=[self.payment_sg_id]
+            )
+
+            self.assertEqual(len(response['SecurityGroups']), 1)
+
+            sg = response['SecurityGroups'][0]
+
+            # Check egress rules - should allow HTTPS to analytics subnet
+            egress_rules = sg['IpPermissionsEgress']
+            https_rule_found = False
+
+            for rule in egress_rules:
+                if (rule.get('FromPort') == 443 and
+                        rule.get('ToPort') == 443 and
+                        rule.get('IpProtocol') == 'tcp'):
+                    for cidr in rule.get('IpRanges', []):
+                        if cidr['CidrIp'] == '10.1.2.0/24':
+                            https_rule_found = True
+
+            self.assertTrue(
+                https_rule_found,
+                "Payment SG should allow HTTPS egress to analytics subnet"
+            )
+
+        except ClientError as e:
+            self.fail(f"Failed to check payment security group: {e}")
+
+    def test_analytics_security_group_exists(self):
+        """Test that analytics security group exists with correct rules."""
+        try:
+            response = self.ec2_west.describe_security_groups(
+                GroupIds=[self.analytics_sg_id]
+            )
+
+            self.assertEqual(len(response['SecurityGroups']), 1)
+
+            sg = response['SecurityGroups'][0]
+
+            # Check ingress rules - should allow HTTPS from payment subnet
+            ingress_rules = sg['IpPermissions']
+            https_rule_found = False
+
+            for rule in ingress_rules:
+                if (rule.get('FromPort') == 443 and
+                        rule.get('ToPort') == 443 and
+                        rule.get('IpProtocol') == 'tcp'):
+                    for cidr in rule.get('IpRanges', []):
+                        if cidr['CidrIp'] == '10.0.1.0/24':
+                            https_rule_found = True
+
+            self.assertTrue(
+                https_rule_found,
+                "Analytics SG should allow HTTPS ingress from payment subnet"
+            )
+
+        except ClientError as e:
+            self.fail(f"Failed to check analytics security group: {e}")
+
+    def test_cloudwatch_alarm_exists(self):
+        """Test that CloudWatch alarm exists for peering connection."""
+        try:
+            cloudwatch = boto3.client('cloudwatch', region_name='us-east-1')
+
+            # Look for alarm with peering connection ID in dimensions
+            response = cloudwatch.describe_alarms()
+
+            found_alarm = False
+            for alarm in response['MetricAlarms']:
+                for dimension in alarm.get('Dimensions', []):
+                    if (dimension['Name'] == 'VpcPeeringConnectionId' and
+                            dimension['Value'] == self.peering_connection_id):
+                        found_alarm = True
+                        # Verify alarm configuration
+                        self.assertEqual(
+                            alarm['ComparisonOperator'],
+                            'LessThanThreshold',
+                            "Alarm should use LessThanThreshold operator"
+                        )
+                        break
+
+            self.assertTrue(
+                found_alarm,
+                "CloudWatch alarm should exist for VPC peering connection"
+            )
+
+        except ClientError as e:
+            self.fail(f"Failed to check CloudWatch alarm: {e}")
+
+    def test_resource_tagging(self):
+        """Test that resources are properly tagged."""
+        try:
+            # Check peering connection tags
+            response = self.ec2_east.describe_vpc_peering_connections(
+                VpcPeeringConnectionIds=[self.peering_connection_id]
+            )
+
+            peering = response['VpcPeeringConnections'][0]
+            tags = {tag['Key']: tag['Value'] for tag in peering.get('Tags', [])}
+
+            # Verify required tags exist
+            required_tags = ['Environment', 'Owner', 'ManagedBy']
+            for tag_key in required_tags:
+                self.assertIn(
+                    tag_key,
+                    tags,
+                    f"Peering connection should have '{tag_key}' tag"
+                )
+
+            # Verify ManagedBy is set to Pulumi
+            self.assertEqual(
+                tags.get('ManagedBy'),
+                'Pulumi',
+                "ManagedBy tag should be 'Pulumi'"
+            )
+
+        except ClientError as e:
+            self.fail(f"Failed to check resource tags: {e}")
+
+
+if __name__ == '__main__':
+    unittest.main()
