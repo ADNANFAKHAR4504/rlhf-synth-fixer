@@ -670,9 +670,6 @@
         "TransactionArchivesBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "${Environment}-transaction-archives-${EnvironmentSuffix}-${AWS::AccountId}"
-                },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
                         {

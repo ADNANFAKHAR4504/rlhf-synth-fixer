@@ -666,9 +666,7 @@ Resources:
   TransactionArchivesBucket:
     Type: AWS::S3::Bucket
     Properties:
-      # IMPORTANT: AWS S3 bucket names must be lowercase. Ensure stack name and environment are lowercase.
-      BucketName:
-        Fn::Sub: "${Environment}-transaction-archives-${EnvironmentSuffix}-${AWS::AccountId}"
+      # Note: BucketName property removed to prevent creation conflicts - CloudFormation will auto-generate unique name
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
