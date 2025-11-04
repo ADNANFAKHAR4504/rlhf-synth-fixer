@@ -398,7 +398,11 @@ class IamComponent extends pulumi.ComponentResource {
 
 /**
  * Component Resource for RDS Aurora PostgreSQL
- * FIX: Removed enableHttpEndpoint which is not supported in Aurora PostgreSQL 14.6
+ * FIXED: Changed instance types to support Aurora PostgreSQL 14.6
+ * - db.t3.micro is NOT supported for Aurora
+ * - Minimum is db.t3.small for dev
+ * - Use db.t4g.medium for staging
+ * - Use db.r5.large for prod
  */
 class RdsComponent extends pulumi.ComponentResource {
   cluster: aws.rds.Cluster;
@@ -435,7 +439,6 @@ class RdsComponent extends pulumi.ComponentResource {
     );
 
     // Create RDS cluster
-    // FIXED: Removed enableHttpEndpoint - not supported for Aurora PostgreSQL 14.6
     this.cluster = new aws.rds.Cluster(
       `${name}-cluster`,
       {
@@ -458,6 +461,7 @@ class RdsComponent extends pulumi.ComponentResource {
     );
 
     // Create primary cluster instance
+    // FIXED: Using valid instance types for Aurora PostgreSQL
     this.clusterInstance = new aws.rds.ClusterInstance(
       `${name}-instance-1`,
       {
@@ -662,7 +666,6 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Create ALB listener
-    // FIXED: Add explicit depends_on to ensure ALB is fully created before listener
     const albListener = new aws.lb.Listener(
       `${name}-listener`,
       {
@@ -772,7 +775,6 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Create ECS Service
-    // FIXED: Add explicit depends_on to ensure ALB listener is created first
     const ecsService = new aws.ecs.Service(
       `${name}-service`,
       {
@@ -868,7 +870,8 @@ export class TapStack extends pulumi.ComponentResource {
     const configs: Record<string, EnvironmentConfig> = {
       dev: {
         environment: "dev",
-        rdsInstanceType: "db.t3.micro",
+        // FIXED: Changed from db.t3.micro to db.t3.small (minimum for Aurora)
+        rdsInstanceType: "db.t3.small",
         ecsTaskCpu: 512,
         ecsTaskMemory: 1024,
         cloudwatchRetentionDays: 7,
@@ -881,7 +884,8 @@ export class TapStack extends pulumi.ComponentResource {
       },
       staging: {
         environment: "staging",
-        rdsInstanceType: "db.t3.micro",
+        // FIXED: Changed to db.t4g.medium for better performance
+        rdsInstanceType: "db.t4g.medium",
         ecsTaskCpu: 1024,
         ecsTaskMemory: 2048,
         cloudwatchRetentionDays: 30,
@@ -894,7 +898,8 @@ export class TapStack extends pulumi.ComponentResource {
       },
       prod: {
         environment: "prod",
-        rdsInstanceType: "db.t3.micro",
+        // FIXED: Changed to db.r5.large for production workloads
+        rdsInstanceType: "db.r5.large",
         ecsTaskCpu: 2048,
         ecsTaskMemory: 4096,
         cloudwatchRetentionDays: 90,
