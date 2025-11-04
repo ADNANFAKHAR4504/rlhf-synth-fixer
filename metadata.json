@@ -23,5 +23,6 @@
     "Security Groups",
     "Elastic IP"
   ],
-  "training_quality": 8
+  "training_quality": 8,
+  "author": "iamarpit-turing"
 }

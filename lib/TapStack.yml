@@ -66,7 +66,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -83,7 +83,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: us-east-1b
+      AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -100,7 +100,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.3.0/24
-      AvailabilityZone: us-east-1c
+      AvailabilityZone: !Select [2, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -118,7 +118,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.11.0/24
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub 'private-subnet-1-${EnvironmentSuffix}'
@@ -134,7 +134,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.12.0/24
-      AvailabilityZone: us-east-1b
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub 'private-subnet-2-${EnvironmentSuffix}'
@@ -150,7 +150,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.13.0/24
-      AvailabilityZone: us-east-1c
+      AvailabilityZone: !Select [2, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub 'private-subnet-3-${EnvironmentSuffix}'
@@ -314,7 +314,6 @@ Resources:
 
   PrivateRoute1:
     Type: AWS::EC2::Route
-    DependsOn: NATGateway1
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
@@ -342,7 +341,6 @@ Resources:
 
   PrivateRoute2:
     Type: AWS::EC2::Route
-    DependsOn: NATGateway2
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
@@ -370,7 +368,6 @@ Resources:
 
   PrivateRoute3:
     Type: AWS::EC2::Route
-    DependsOn: NATGateway3
     Properties:
       RouteTableId: !Ref PrivateRouteTable3
       DestinationCidrBlock: 0.0.0.0/0

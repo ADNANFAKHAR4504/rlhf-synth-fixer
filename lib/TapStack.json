@@ -107,7 +107,14 @@
                     "Ref": "VPC"
                 },
                 "CidrBlock": "10.0.1.0/24",
-                "AvailabilityZone": "us-east-1a",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "MapPublicIpOnLaunch": true,
                 "Tags": [
                     {
@@ -144,7 +151,14 @@
                     "Ref": "VPC"
                 },
                 "CidrBlock": "10.0.2.0/24",
-                "AvailabilityZone": "us-east-1b",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "MapPublicIpOnLaunch": true,
                 "Tags": [
                     {
@@ -181,7 +195,14 @@
                     "Ref": "VPC"
                 },
                 "CidrBlock": "10.0.3.0/24",
-                "AvailabilityZone": "us-east-1c",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "MapPublicIpOnLaunch": true,
                 "Tags": [
                     {
@@ -218,7 +239,14 @@
                     "Ref": "VPC"
                 },
                 "CidrBlock": "10.0.11.0/24",
-                "AvailabilityZone": "us-east-1a",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "Tags": [
                     {
                         "Key": "Name",
@@ -254,7 +282,14 @@
                     "Ref": "VPC"
                 },
                 "CidrBlock": "10.0.12.0/24",
-                "AvailabilityZone": "us-east-1b",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "Tags": [
                     {
                         "Key": "Name",
@@ -290,7 +325,14 @@
                     "Ref": "VPC"
                 },
                 "CidrBlock": "10.0.13.0/24",
-                "AvailabilityZone": "us-east-1c",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "Tags": [
                     {
                         "Key": "Name",
@@ -657,7 +699,6 @@
         },
         "PrivateRoute1": {
             "Type": "AWS::EC2::Route",
-            "DependsOn": "NATGateway1",
             "Properties": {
                 "RouteTableId": {
                     "Ref": "PrivateRouteTable1"
@@ -715,7 +756,6 @@
         },
         "PrivateRoute2": {
             "Type": "AWS::EC2::Route",
-            "DependsOn": "NATGateway2",
             "Properties": {
                 "RouteTableId": {
                     "Ref": "PrivateRouteTable2"
@@ -773,7 +813,6 @@
         },
         "PrivateRoute3": {
             "Type": "AWS::EC2::Route",
-            "DependsOn": "NATGateway3",
             "Properties": {
                 "RouteTableId": {
                     "Ref": "PrivateRouteTable3"
