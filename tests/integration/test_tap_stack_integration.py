@@ -44,6 +44,9 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         # Create AWS clients for both regions
         cls.ec2_east = boto3.client('ec2', region_name='us-east-1')
         cls.ec2_west = boto3.client('ec2', region_name='us-west-2')
+        
+        # Get environment suffix from environment variable (CI/CD) or default
+        cls.environment_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'pr5709')
 
     def test_stack_outputs_present(self):
         """Test that all required stack outputs are present."""
@@ -241,26 +244,37 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         try:
             cloudwatch = boto3.client('cloudwatch', region_name='us-east-1')
 
-            # Look for alarm with peering connection ID in dimensions
+            # Look for any alarm that monitors our peering connection
             response = cloudwatch.describe_alarms()
 
             found_alarm = False
             for alarm in response['MetricAlarms']:
-                for dimension in alarm.get('Dimensions', []):
-                    if (dimension['Name'] == 'VpcPeeringConnectionId' and
-                            dimension['Value'] == self.peering_connection_id):
-                        found_alarm = True
-                        # Verify alarm configuration
-                        self.assertEqual(
-                            alarm['ComparisonOperator'],
-                            'LessThanThreshold',
-                            "Alarm should use LessThanThreshold operator"
-                        )
-                        break
+                # Check if this alarm monitors our peering connection
+                dimensions = {d['Name']: d['Value'] for d in alarm.get('Dimensions', [])}
+                
+                if (dimensions.get('VpcPeeringConnectionId') == self.peering_connection_id):
+                    found_alarm = True
+                    
+                    # Verify alarm configuration
+                    self.assertEqual(
+                        alarm['ComparisonOperator'],
+                        'LessThanThreshold',
+                        "Alarm should use LessThanThreshold operator"
+                    )
+                    
+                    # Verify alarm name contains expected pattern
+                    self.assertIn(
+                        'vpc-peering-status',
+                        alarm['AlarmName'],
+                        "Alarm name should contain 'vpc-peering-status'"
+                    )
+                    
+                    print(f"Found CloudWatch alarm: {alarm['AlarmName']}")
+                    break
 
             self.assertTrue(
                 found_alarm,
-                "CloudWatch alarm should exist for VPC peering connection"
+                f"CloudWatch alarm monitoring peering connection {self.peering_connection_id} should exist"
             )
 
         except ClientError as e:
