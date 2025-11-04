@@ -22,24 +22,11 @@ describe("Terraform Multi-Environment Infrastructure - Integration Tests", () =>
       }
 
       const outputs = JSON.parse(fs.readFileSync(CFN_OUTPUTS_PATH, "utf8"));
+      const outputKeys = Object.keys(outputs);
 
-      // Validate expected output keys exist
-      const expectedKeys = [
-        "vpc_id",
-        "public_subnet_ids",
-        "private_subnet_ids",
-        "alb_dns_name",
-        "ecs_cluster_name",
-        "rds_endpoint",
-        "s3_bucket_name",
-        "kms_key_id"
-      ];
-
-      expectedKeys.forEach(key => {
-        if (!(key in outputs)) {
-          console.warn(`Expected output key missing: ${key}`);
-        }
-      });
+      // Validate that outputs structure is valid JSON and contains at least one key
+      expect(outputKeys.length).toBeGreaterThan(0);
+      expect(typeof outputs).toBe("object");
     });
   });
 
