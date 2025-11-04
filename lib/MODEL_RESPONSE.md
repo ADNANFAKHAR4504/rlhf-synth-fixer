@@ -60,8 +60,6 @@ For a Lambda function, typical permissions might include:
 - Specific DynamoDB actions on specific tables
 - Specific S3 actions on specific buckets
 
-Let's now create the CloudFormation YAML template.
-
 ## Drafting the CloudFormation YAML Template
 
 ```yaml
