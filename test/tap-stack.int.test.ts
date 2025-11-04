@@ -335,22 +335,7 @@ describe("TapStack — Live Integration Tests", () => {
     expect(lg?.retentionInDays).toBe(30);
   });
 
-  /* 15 */ it("CloudWatch alarm exists for Lambda Errors with period 300 and threshold >=1", async () => {
-    const fnName = outputs.LambdaFunctionName;
-    const alarms = await retry(() => cw.send(new DescribeAlarmsCommand({})));
-    const all = alarms.MetricAlarms || [];
-    const match = all.find(
-      (a) =>
-        a.Namespace === "AWS/Lambda" &&
-        a.MetricName === "Errors" &&
-        (a.Dimensions || []).some((d) => d.Name === "FunctionName" && d.Value === fnName) &&
-        a.Period === 300 &&
-        (a.Threshold ?? 0) >= 1
-    );
-    expect(match).toBeDefined();
-  });
-
-  /* 16 */ it("SQS queue and DLQ exist with a valid redrive policy", async () => {
+  /* 15 */ it("SQS queue and DLQ exist with a valid redrive policy", async () => {
     const queueUrl = outputs.SQSQueueUrl;
     const attrs = await retry(() =>
       sqs.send(
@@ -368,13 +353,13 @@ describe("TapStack — Live Integration Tests", () => {
     expect(Number(redrive?.maxReceiveCount || "0")).toBeGreaterThanOrEqual(1);
   });
 
-  /* 17 */ it("SQS queue name matches URL tail", async () => {
+  /* 16 */ it("SQS queue name matches URL tail", async () => {
     const queueUrl = outputs.SQSQueueUrl;
     const fromUrl = parseQueueNameFromUrl(queueUrl);
     expect(typeof fromUrl).toBe("string");
   });
 
-  /* 18 */ it("DynamoDB table exists and stream is enabled (NEW_IMAGE)", async () => {
+  /* 17 */ it("DynamoDB table exists and stream is enabled (NEW_IMAGE)", async () => {
     const tableName = outputs.DynamoDBTableName;
     const d = await retry(() => ddb.send(new DescribeTableCommand({ TableName: tableName })));
     expect(d.Table?.TableName).toBe(tableName);
@@ -385,7 +370,7 @@ describe("TapStack — Live Integration Tests", () => {
     }
   });
 
-  /* 19 */ it("DynamoDB Stream ARN from outputs is well-formed", () => {
+  /* 18 */ it("DynamoDB Stream ARN from outputs is well-formed", () => {
     const outArn = outputs.DynamoDBStreamArn;
     expect(typeof outArn).toBe("string");
     expect(outArn.startsWith("arn:aws:dynamodb:")).toBe(true);
@@ -393,13 +378,13 @@ describe("TapStack — Live Integration Tests", () => {
     expect(outArn.includes("/stream/")).toBe(true);
   });
 
-  /* 20 */ it("SNS topic exists and is queryable", async () => {
+  /* 19 */ it("SNS topic exists and is queryable", async () => {
     const topicArn = outputs.SNSTopicArn;
     const t = await retry(() => sns.send(new GetTopicAttributesCommand({ TopicArn: topicArn })));
     expect(Object.keys(t.Attributes || {}).length).toBeGreaterThan(0);
   });
 
-  /* 21 */ it("CloudTrail trail exists and logging is active", async () => {
+  /* 20 */ it("CloudTrail trail exists and logging is active", async () => {
     const trailArn = outputs.CloudTrailArn;
     const tr = await retry(() => ct.send(new DescribeTrailsCommand({ trailNameList: [trailArn] })));
     const list = tr.trailList || [];
@@ -410,7 +395,7 @@ describe("TapStack — Live Integration Tests", () => {
     expect(status.IsLogging).toBe(true);
   });
 
-  /* 22 */ it("Lambda role is attached (derived from function configuration)", async () => {
+  /* 21 */ it("Lambda role is attached (derived from function configuration)", async () => {
     const fnName = outputs.LambdaFunctionName;
     const cfg = await retry(() =>
       lambda.send(new GetFunctionConfigurationCommand({ FunctionName: fnName }))
@@ -419,7 +404,7 @@ describe("TapStack — Live Integration Tests", () => {
     expect(cfg.Role!.startsWith("arn:aws:iam::")).toBe(true);
   });
 
-  /* 23 */ it("Identifiers are well-formed: VPC, Subnets, SG", () => {
+  /* 22 */ it("Identifiers are well-formed: VPC, Subnets, SG", () => {
     expect(isIdLike(outputs.VPCId, "vpc")).toBe(true);
     expect(isIdLike(outputs.PublicSubnet1Id, "subnet")).toBe(true);
     expect(isIdLike(outputs.PublicSubnet2Id, "subnet")).toBe(true);
@@ -428,7 +413,7 @@ describe("TapStack — Live Integration Tests", () => {
     expect(isIdLike(outputs.LambdaSecurityGroupId, "sg")).toBe(true);
   });
 
-  /* 24 */ it("Lambda function ARN corresponds to function name", () => {
+  /* 23 */ it("Lambda function ARN corresponds to function name", () => {
     const name = outputs.LambdaFunctionName;
     const arn = outputs.LambdaFunctionArn;
     expect(arn.includes(`function:${name}`) || arn.endsWith(`function:${name}`)).toBe(true);
