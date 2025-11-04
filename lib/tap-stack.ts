@@ -60,7 +60,7 @@ export class TapStack extends TerraformStack {
       {
         name: `dev${environmentSuffix ? `-${environmentSuffix}` : ''}`,
         cidrBlock: '10.0.0.0/16',
-        dbInstanceClass: 'db.t3.micro',
+        dbInstanceClass: 'db.r5.large',
         flowLogRetentionDays: 7,
         awsRegion: awsRegion,
         tags: {
