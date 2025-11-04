@@ -103,14 +103,22 @@ class TapStack(pulumi.ComponentResource):
 
         current_config = env_config[self.environment]
 
-        # Regional AMI mappings for Amazon Linux 2
-        ami_mappings = {
-            "us-east-1": "ami-0c02fb55b2d5c1c5e",
-            "us-west-2": "ami-0873b46c45c11058d",
-            "eu-west-1": "ami-0d71ea30463e0ff8d",
-        }
-
-        ami_id = ami_mappings.get(self.aws_region, ami_mappings["us-east-1"])
+        # Dynamically fetch the latest Amazon Linux 2 AMI for the current region
+        ami = aws.ec2.get_ami(
+            most_recent=True,
+            owners=["amazon"],
+            filters=[
+                aws.ec2.GetAmiFilterArgs(
+                    name="name",
+                    values=["amzn2-ami-hvm-*-x86_64-gp2"],
+                ),
+                aws.ec2.GetAmiFilterArgs(
+                    name="virtualization-type",
+                    values=["hvm"],
+                ),
+            ],
+        )
+        ami_id = ami.id
 
         # Common tags
         common_tags = {
