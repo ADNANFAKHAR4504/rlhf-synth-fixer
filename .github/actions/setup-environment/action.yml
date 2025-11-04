@@ -30,6 +30,15 @@ runs:
     - name: Checkout
       uses: actions/checkout@v4
     # ✅ Restore NPM Cache (only if JS/TS/CDK/CDKTF/Pulumi TS)
+    
+    - name: Cache pipenv virtualenv
+      if: ${{ inputs.platform == 'pulumi' && inputs.language == 'py' }}
+      uses: actions/cache@v4
+      with:
+        path: ~/.local/share/virtualenvs
+        key: venv-${{ runner.os }}-${{ hashFiles('Pipfile.lock') }}
+        restore-keys: |
+          venv-${{ runner.os }}-
     - name: Cache npm packages
       if: ${{ inputs.language == 'ts' || inputs.language == 'js' || inputs.platform == 'cdk' || inputs.platform == 'cdktf' || inputs.platform == 'pulumi' }}
       uses: actions/cache@v4
