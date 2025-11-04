@@ -101,7 +101,10 @@ export class TapStack extends TerraformStack {
         ), // e.g., 10.0.0.0/24, 10.0.2.0/24
         availabilityZone: az,
         mapPublicIpOnLaunch: true,
-        tags: { ...tags, Name: `public-${azSuffix}-${environmentSuffix}-${randomSuffix}` },
+        tags: {
+          ...tags,
+          Name: `public-${azSuffix}-${environmentSuffix}-${randomSuffix}`,
+        },
       });
       publicSubnets.push(publicSubnet);
 
@@ -115,20 +118,29 @@ export class TapStack extends TerraformStack {
           index * 2 + 1
         ), // e.g., 10.0.1.0/24, 10.0.3.0/24
         availabilityZone: az,
-        tags: { ...tags, Name: `private-${azSuffix}-${environmentSuffix}-${randomSuffix}` },
+        tags: {
+          ...tags,
+          Name: `private-${azSuffix}-${environmentSuffix}-${randomSuffix}`,
+        },
       });
       privateSubnets.push(privateSubnet);
 
       // NAT Gateway (one per AZ for HA)
       const eip = new Eip(this, `nat-eip-${azSuffix}`, {
         provider: provider,
-        tags: { ...tags, Name: `nat-eip-${azSuffix}-${environmentSuffix}-${randomSuffix}` },
+        tags: {
+          ...tags,
+          Name: `nat-eip-${azSuffix}-${environmentSuffix}-${randomSuffix}`,
+        },
       });
       const natGw = new NatGateway(this, `nat-gw-${azSuffix}`, {
         provider: provider,
         allocationId: eip.id,
         subnetId: publicSubnet.id,
-        tags: { ...tags, Name: `nat-gw-${azSuffix}-${environmentSuffix}-${randomSuffix}` },
+        tags: {
+          ...tags,
+          Name: `nat-gw-${azSuffix}-${environmentSuffix}-${randomSuffix}`,
+        },
         dependsOn: [igw],
       });
       natGateways.push(natGw);
@@ -138,7 +150,10 @@ export class TapStack extends TerraformStack {
         provider: provider,
         vpcId: vpc.id,
         route: [{ cidrBlock: '0.0.0.0/0', natGatewayId: natGw.id }],
-        tags: { ...tags, Name: `private-rt-${azSuffix}-${environmentSuffix}-${randomSuffix}` },
+        tags: {
+          ...tags,
+          Name: `private-rt-${azSuffix}-${environmentSuffix}-${randomSuffix}`,
+        },
       });
       new RouteTableAssociation(this, `private-rta-${azSuffix}`, {
         provider: provider,
@@ -261,7 +276,10 @@ echo 'OK' > /var/www/html/health
       tagSpecifications: [
         {
           resourceType: 'instance',
-          tags: { ...tags, Name: `app-instance-${environmentSuffix}-${randomSuffix}` },
+          tags: {
+            ...tags,
+            Name: `app-instance-${environmentSuffix}-${randomSuffix}`,
+          },
         },
       ],
       tags: { ...tags },
@@ -278,7 +296,11 @@ echo 'OK' > /var/www/html/health
       healthCheckType: 'ELB',
       healthCheckGracePeriod: config.app_config.recovery_timeout_seconds, // Use configured timeout
       tag: [
-        { key: 'Name', value: `asg-${environmentSuffix}-${randomSuffix}`, propagateAtLaunch: true },
+        {
+          key: 'Name',
+          value: `asg-${environmentSuffix}-${randomSuffix}`,
+          propagateAtLaunch: true,
+        },
         ...Object.entries(tags).map(([key, value]) => ({
           key,
           value,
