@@ -395,7 +395,7 @@ export class AlbConstruct extends Construct {
     super(scope, id);
 
     this.alb = new aws.lb.Lb(this, 'alb', {
-      name: `config.name-alb`,
+      name: `${config.name}-alb`,
       internal: false,
       loadBalancerType: 'application',
       securityGroups: [config.securityGroupId],
