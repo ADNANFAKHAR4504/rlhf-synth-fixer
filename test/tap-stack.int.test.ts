@@ -33,7 +33,7 @@ const outputs = JSON.parse(
 debugLog('SETUP', 'CloudFormation outputs loaded', outputs);
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const AWS_REGION = process.env.AWS_REGION || 'eu-west-1';
+const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
 
 debugLog('SETUP', 'Environment configuration', {
   environmentSuffix,
@@ -201,7 +201,7 @@ describe('Serverless Payment Workflow Integration Tests', () => {
       }).promise();
 
       expect(merchantQuery.Items && merchantQuery.Items.length > 0).toBe(true);
-      
+
       // Find the specific transaction by ID in the merchant's transactions
       const matchingTransaction = merchantQuery.Items?.find(item => item.transaction_id === transactionId);
       expect(matchingTransaction).toBeDefined();
@@ -289,30 +289,30 @@ describe('Serverless Payment Workflow Integration Tests', () => {
 
       expect(transactionRecord.Item).toBeDefined();
       if (!transactionRecord.Item) throw new Error('Transaction record not found');
-      
+
       debugLog('TEST_2', 'Transaction record structure', transactionRecord.Item);
-      
+
       expect(transactionRecord.Item.status).toBe('REJECTED');
       // Check fraud result structure - handle cases where structure might be nested differently
       const fraudResult = transactionRecord.Item.fraud_result || transactionRecord.Item.fraud_detection_result;
-      
+
       debugLog('TEST_2', 'Fraud result found', fraudResult);
-      
+
       // If fraudResult is still undefined, try to look for it in other possible locations
       if (!fraudResult) {
         debugLog('TEST_2', 'Fraud result not found, checking all keys in transaction record', Object.keys(transactionRecord.Item));
         // Look for any key that might contain fraud information
-        const possibleFraudKeys = Object.keys(transactionRecord.Item).filter(key => 
+        const possibleFraudKeys = Object.keys(transactionRecord.Item).filter(key =>
           key.toLowerCase().includes('fraud') || key.toLowerCase().includes('risk')
         );
         debugLog('TEST_2', 'Possible fraud-related keys', possibleFraudKeys);
-        
+
         // Check if fraud information is nested differently
         for (const key of possibleFraudKeys) {
           debugLog('TEST_2', `Content of ${key}`, transactionRecord.Item[key]);
         }
       }
-      
+
       // More flexible fraud result validation
       if (fraudResult) {
         expect(fraudResult.is_fraudulent || fraudResult.fraudulent).toBe(true);
@@ -328,11 +328,11 @@ describe('Serverless Payment Workflow Integration Tests', () => {
         debugLog('TEST_2', 'Complete fraud result missing - checking for any fraud-related data in transaction');
         const allKeys = Object.keys(transactionRecord.Item);
         debugLog('TEST_2', 'All transaction keys', allKeys);
-        
+
         // Try to fail gracefully with useful error message
         throw new Error(`Fraud result not found in transaction record. Available keys: ${allKeys.join(', ')}`);
       }
-      
+
       const settlementResult = transactionRecord.Item.settlement_result;
       expect(settlementResult).toBeDefined();
       expect(settlementResult.status).toBe('REJECTED');
@@ -471,7 +471,7 @@ describe('Serverless Payment Workflow Integration Tests', () => {
 
       // Look for retry-related events in Step Functions history
       const retryEvents = history.events.filter(e =>
-        e.type === 'TaskScheduled' || 
+        e.type === 'TaskScheduled' ||
         e.type === 'TaskRetryScheduled' ||
         e.type === 'TaskFailed' ||
         e.type === 'TaskTimedOut' ||
@@ -482,7 +482,7 @@ describe('Serverless Payment Workflow Integration Tests', () => {
       // If no natural retries occurred, at least verify the retry mechanism is configured
       // by checking if task states have retry configuration in the state machine definition
       expect(retryEvents.length).toBeGreaterThan(0);
-      
+
       // Alternative: Check if execution succeeded despite potential transient issues
       expect(execution.status).toBe('SUCCEEDED');
 
@@ -1013,23 +1013,23 @@ describe('Serverless Payment Workflow Integration Tests', () => {
 
       const serviceNames = traceDetails.Services ? traceDetails.Services.map(s => s.Name) : [];
       debugLog('TEST_10', 'X-Ray service names found', serviceNames);
-      
+
       // Check for actual Lambda function names or AWS Lambda service
-      const hasLambdaService = serviceNames.some(name => 
+      const hasLambdaService = serviceNames.some(name =>
         name.toLowerCase().includes('lambda') ||
-        name.includes('TapStack') || 
+        name.includes('TapStack') ||
         name.includes('validator') ||
         name.includes('fraud') ||
         name.includes('settlement') ||
         name.includes('notification')
       );
-      
-      const hasStatesService = serviceNames.some(name => 
+
+      const hasStatesService = serviceNames.some(name =>
         name.toLowerCase().includes('states') ||
         name.includes('workflow') ||
         name.includes('payment-workflow')
       );
-      
+
       expect(hasLambdaService).toBe(true);
       expect(hasStatesService).toBe(true);
 
@@ -1179,11 +1179,11 @@ describe('Serverless Payment Workflow Integration Tests', () => {
 
       const auditActions = (auditQuery.Items ?? []).map(item => item.action);
       debugLog('TEST_11', 'All audit actions found', auditActions);
-      
+
       expect(auditActions).toContain('VALIDATION_ATTEMPT');
       expect(auditActions).toContain('FRAUD_DETECTION_ATTEMPT');
       expect(auditActions).toContain('SETTLEMENT_ATTEMPT');
-      
+
       // Check if NOTIFICATION_ATTEMPT exists, if not, look for alternatives
       if (!auditActions.includes('NOTIFICATION_ATTEMPT')) {
         const notificationActions = auditActions.filter(action => action.includes('NOTIFICATION'));
@@ -1193,7 +1193,7 @@ describe('Serverless Payment Workflow Integration Tests', () => {
       } else {
         expect(auditActions).toContain('NOTIFICATION_ATTEMPT');
       }
-      
+
       debugLog('TEST_11', 'PITR test completed successfully');
     }, 60000);
   });

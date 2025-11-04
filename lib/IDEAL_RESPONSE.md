@@ -65,6 +65,7 @@ When a payment request arrives, API Gateway triggers a Step Functions workflow t
 3. **Notification**: Finally, notification Lambda sends transaction status updates
 
 Throughout processing, Lambda functions interact with DynamoDB tables:
+
 - **transactions table**: Stores payment details with GSI on merchant_id and PITR enabled
 - **audit_logs table**: Records all actions with 90-day TTL and PITR enabled
 
@@ -96,8 +97,8 @@ Completed transactions archive to S3 bucket with SSE-S3 encryption and Glacier l
 ## 5. CloudFormation YAML Template
 
 ```yaml
-AWSTemplateFormatVersion: "2010-09-09"
-Description: "Production-grade serverless payment workflow with API Gateway, Lambda, Step Functions, DynamoDB, S3, and monitoring"
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Production-grade serverless payment workflow with API Gateway, Lambda, Step Functions, DynamoDB, S3, and monitoring'
 
 Parameters:
   Environment:
@@ -141,7 +142,7 @@ Parameters:
 
   EnvironmentSuffix:
     Type: String
-    Default: ""
+    Default: ''
     Description: Unique suffix for resource naming (e.g., pr1234, synth123) for deployment isolation
 
 Resources:
@@ -150,7 +151,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
@@ -162,7 +163,7 @@ Resources:
       Policies:
         - PolicyName: !Sub ${AWS::StackName}-validator-lambda-policy
           PolicyDocument:
-            Version: "2012-10-17"
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
@@ -183,7 +184,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
@@ -195,7 +196,7 @@ Resources:
       Policies:
         - PolicyName: !Sub ${AWS::StackName}-fraud-detector-lambda-policy
           PolicyDocument:
-            Version: "2012-10-17"
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
@@ -216,7 +217,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
@@ -228,7 +229,7 @@ Resources:
       Policies:
         - PolicyName: !Sub ${AWS::StackName}-settlement-lambda-policy
           PolicyDocument:
-            Version: "2012-10-17"
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
@@ -242,7 +243,7 @@ Resources:
                 Action:
                   - s3:PutObject
                   - s3:PutObjectAcl
-                Resource: !Sub "${TransactionArchivesBucket.Arn}/*"
+                Resource: !Sub '${TransactionArchivesBucket.Arn}/*'
               - Effect: Allow
                 Action:
                   - ssm:GetParameter
@@ -253,7 +254,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
@@ -265,7 +266,7 @@ Resources:
       Policies:
         - PolicyName: !Sub ${AWS::StackName}-notification-lambda-policy
           PolicyDocument:
-            Version: "2012-10-17"
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
@@ -291,7 +292,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
@@ -300,7 +301,7 @@ Resources:
       Policies:
         - PolicyName: !Sub ${AWS::StackName}-step-function-policy
           PolicyDocument:
-            Version: "2012-10-17"
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
@@ -318,7 +319,7 @@ Resources:
                   - logs:DescribeLogStreams
                 Resource:
                   - !GetAtt StateMachineLogGroup.Arn
-                  - !Sub "${StateMachineLogGroup.Arn}:*"
+                  - !Sub '${StateMachineLogGroup.Arn}:*'
 
   # Lambda Functions
   ValidatorFunction:
@@ -1022,7 +1023,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
@@ -1031,7 +1032,7 @@ Resources:
       Policies:
         - PolicyName: !Sub ${AWS::StackName}-api-gateway-policy
           PolicyDocument:
-            Version: "2012-10-17"
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
@@ -1084,8 +1085,8 @@ Resources:
         BurstLimit: !Ref ApiThrottlingRateLimit
       TracingEnabled: true
       MethodSettings:
-        - ResourcePath: "/*"
-          HttpMethod: "*"
+        - ResourcePath: '/*'
+          HttpMethod: '*'
           LoggingLevel: INFO
           DataTraceEnabled: true
           MetricsEnabled: true
@@ -1241,8 +1242,9 @@ Outputs:
 ### AWS Region Configuration
 
 **File: `lib/AWS_REGION`**
+
 ```
-eu-west-1
+us-east-1
 ```
 
 ### CloudFormation JSON Template

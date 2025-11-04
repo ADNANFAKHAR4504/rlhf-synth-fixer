@@ -33,9 +33,9 @@ describe('CloudFormation Payment Workflow Unit Tests', () => {
       const role = template.Resources.ValidatorLambdaRole;
       expect(role.Type).toBe('AWS::IAM::Role');
       expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
-      
+
       const policies = role.Properties.Policies[0].PolicyDocument.Statement;
-      const dynamodbActions = policies.find((stmt: any) => 
+      const dynamodbActions = policies.find((stmt: any) =>
         Array.isArray(stmt.Action) ? stmt.Action.includes('dynamodb:PutItem') : stmt.Action === 'dynamodb:PutItem'
       );
       expect(dynamodbActions).toBeDefined();
@@ -48,7 +48,7 @@ describe('CloudFormation Payment Workflow Unit Tests', () => {
       const role = template.Resources.FraudDetectorLambdaRole;
       expect(role.Type).toBe('AWS::IAM::Role');
       expect(role.Properties.ManagedPolicyArns.length).toBeGreaterThan(0);
-      const xrayPolicy = role.Properties.ManagedPolicyArns.find((arn: any) => 
+      const xrayPolicy = role.Properties.ManagedPolicyArns.find((arn: any) =>
         (typeof arn === 'object' && arn['Fn::Sub'] && arn['Fn::Sub'].includes('AWSXrayWriteOnlyAccess')) ||
         (typeof arn === 'string' && arn.includes('AWSXrayWriteOnlyAccess'))
       );
@@ -58,14 +58,14 @@ describe('CloudFormation Payment Workflow Unit Tests', () => {
     test('should have SettlementLambdaRole with S3 and DynamoDB permissions', () => {
       const role = template.Resources.SettlementLambdaRole;
       const policies = role.Properties.Policies[0].PolicyDocument.Statement;
-      
-      const s3Actions = policies.find((stmt: any) => 
+
+      const s3Actions = policies.find((stmt: any) =>
         Array.isArray(stmt.Action) ? stmt.Action.includes('s3:PutObject') : stmt.Action === 's3:PutObject'
       );
-      const dynamoActions = policies.find((stmt: any) => 
+      const dynamoActions = policies.find((stmt: any) =>
         Array.isArray(stmt.Action) ? stmt.Action.includes('dynamodb:UpdateItem') : stmt.Action === 'dynamodb:UpdateItem'
       );
-      
+
       expect(s3Actions).toBeDefined();
       expect(dynamoActions).toBeDefined();
     });
@@ -73,8 +73,8 @@ describe('CloudFormation Payment Workflow Unit Tests', () => {
     test('should have NotificationLambdaRole with SNS permissions', () => {
       const role = template.Resources.NotificationLambdaRole;
       const policies = role.Properties.Policies[0].PolicyDocument.Statement;
-      
-      const snsActions = policies.find((stmt: any) => 
+
+      const snsActions = policies.find((stmt: any) =>
         Array.isArray(stmt.Action) ? stmt.Action.includes('sns:Publish') : stmt.Action === 'sns:Publish'
       );
       expect(snsActions).toBeDefined();
@@ -84,14 +84,14 @@ describe('CloudFormation Payment Workflow Unit Tests', () => {
     test('should have StateMachineRole with proper Lambda and logging permissions', () => {
       const role = template.Resources.StateMachineRole;
       const policies = role.Properties.Policies[0].PolicyDocument.Statement;
-      
-      const lambdaActions = policies.find((stmt: any) => 
+
+      const lambdaActions = policies.find((stmt: any) =>
         Array.isArray(stmt.Action) ? stmt.Action.includes('lambda:InvokeFunction') : stmt.Action === 'lambda:InvokeFunction'
       );
-      const logsActions = policies.find((stmt: any) => 
+      const logsActions = policies.find((stmt: any) =>
         Array.isArray(stmt.Action) ? stmt.Action.includes('logs:CreateLogStream') : stmt.Action === 'logs:CreateLogStream'
       );
-      
+
       expect(lambdaActions).toBeDefined();
       expect(Array.isArray(lambdaActions.Resource) && lambdaActions.Resource.length).toBe(4);
       expect(logsActions).toBeDefined();
@@ -106,7 +106,7 @@ describe('CloudFormation Payment Workflow Unit Tests', () => {
       expect(func.Properties.MemorySize).toBe(512);
       expect(func.Properties.Timeout).toBe(30);
       expect(func.Properties.TracingConfig.Mode).toBe('Active');
-      
+
       const envVars = func.Properties.Environment.Variables;
       expect(envVars).toHaveProperty('TRANSACTIONS_TABLE');
       expect(envVars).toHaveProperty('AUDIT_LOGS_TABLE');
@@ -151,7 +151,7 @@ describe('CloudFormation Payment Workflow Unit Tests', () => {
       expect(table.Properties.BillingMode).toBe('PAY_PER_REQUEST');
       expect(table.Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
       expect(table.Properties.SSESpecification.SSEEnabled).toBe(true);
-      
+
       const gsi = table.Properties.GlobalSecondaryIndexes[0];
       expect(gsi.IndexName).toBe('MerchantIndex');
       expect(gsi.KeySchema[0].AttributeName).toBe('merchant_id');
@@ -168,14 +168,14 @@ describe('CloudFormation Payment Workflow Unit Tests', () => {
     test('should have TransactionArchivesBucket with proper security configuration', () => {
       const bucket = template.Resources.TransactionArchivesBucket;
       expect(bucket.Type).toBe('AWS::S3::Bucket');
-      
+
       const encryption = bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0];
       expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
-      
+
       const lifecycle = bucket.Properties.LifecycleConfiguration.Rules[0];
       expect(lifecycle.Transitions[0].TransitionInDays).toBe(30);
       expect(lifecycle.Transitions[0].StorageClass).toBe('GLACIER');
-      
+
       const publicAccess = bucket.Properties.PublicAccessBlockConfiguration;
       expect(publicAccess.BlockPublicAcls).toBe(true);
       expect(publicAccess.BlockPublicPolicy).toBe(true);
@@ -186,7 +186,7 @@ describe('CloudFormation Payment Workflow Unit Tests', () => {
     test('should have bucket policy enforcing HTTPS', () => {
       const policy = template.Resources.TransactionArchivesBucketPolicy;
       expect(policy.Type).toBe('AWS::S3::BucketPolicy');
-      
+
       const statement = policy.Properties.PolicyDocument.Statement[0];
       expect(statement.Effect).toBe('Deny');
       expect(statement.Condition.Bool['aws:SecureTransport']).toBe(false);
@@ -203,7 +203,7 @@ describe('CloudFormation Payment Workflow Unit Tests', () => {
       const alertsSub = template.Resources.AlertsSubscription;
       expect(alertsSub.Properties.Protocol).toBe('email');
       expect(alertsSub.Properties.Endpoint).toEqual({ Ref: 'NotificationEmail' });
-      
+
       const failedSub = template.Resources.FailedTransactionsSubscription;
       expect(failedSub.Properties.Protocol).toBe('email');
     });
@@ -215,7 +215,7 @@ describe('CloudFormation Payment Workflow Unit Tests', () => {
       expect(stateMachine.Type).toBe('AWS::StepFunctions::StateMachine');
       expect(stateMachine.Properties.StateMachineType).toBe('STANDARD');
       expect(stateMachine.Properties.TracingConfiguration.Enabled).toBe(true);
-      
+
       const logging = stateMachine.Properties.LoggingConfiguration;
       expect(logging.Level).toBe('ALL');
       expect(logging.IncludeExecutionData).toBe(true);
@@ -225,25 +225,25 @@ describe('CloudFormation Payment Workflow Unit Tests', () => {
       const definition = template.Resources.PaymentWorkflow.Properties.Definition;
       expect(definition.StartAt).toBe('ValidationAndFraudDetection');
       expect(definition.TimeoutSeconds).toBe(60);
-      
+
       const parallelState = definition.States.ValidationAndFraudDetection;
       expect(parallelState.Type).toBe('Parallel');
       expect(parallelState.Branches).toHaveLength(2);
-      
+
       const validationBranch = parallelState.Branches[0];
       expect(validationBranch.StartAt).toBe('ValidateTransaction');
-      
+
       const fraudBranch = parallelState.Branches[1];
       expect(fraudBranch.StartAt).toBe('DetectFraud');
     });
 
     test('should have retry configuration for all tasks', () => {
       const definition = template.Resources.PaymentWorkflow.Properties.Definition;
-      
+
       const validateTask = definition.States.ValidationAndFraudDetection.Branches[0].States.ValidateTransaction;
       expect(validateTask.Retry[0].MaxAttempts).toBe(3);
       expect(validateTask.Retry[0].BackoffRate).toBe(2);
-      
+
       const settlementTask = definition.States.SettleTransaction;
       expect(settlementTask.Retry[0].MaxAttempts).toBe(3);
     });
@@ -270,7 +270,7 @@ describe('CloudFormation Payment Workflow Unit Tests', () => {
       expect(model.Properties.Schema.required).toContain('amount');
       expect(model.Properties.Schema.required).toContain('payment_method');
       expect(model.Properties.Schema.required).toContain('customer_id');
-      
+
       expect(model.Properties.Schema.properties.amount.minimum).toBe(0.01);
     });
 
@@ -279,7 +279,7 @@ describe('CloudFormation Payment Workflow Unit Tests', () => {
       expect(method.Properties.HttpMethod).toBe('POST');
       expect(method.Properties.ApiKeyRequired).toBe(true);
       expect(method.Properties.AuthorizationType).toBe('NONE');
-      
+
       const integration = method.Properties.Integration;
       expect(integration.Type).toBe('AWS');
       expect(integration.IntegrationHttpMethod).toBe('POST');
@@ -288,7 +288,7 @@ describe('CloudFormation Payment Workflow Unit Tests', () => {
     test('should have API stage with X-Ray tracing enabled', () => {
       const stage = template.Resources.ApiStage;
       expect(stage.Properties.TracingEnabled).toBe(true);
-      
+
       const methodSettings = stage.Properties.MethodSettings[0];
       expect(methodSettings.MetricsEnabled).toBe(true);
       expect(methodSettings.LoggingLevel).toBe('INFO');
@@ -314,7 +314,7 @@ describe('CloudFormation Payment Workflow Unit Tests', () => {
       const errorFilter = template.Resources.LambdaErrorRateMetricFilter;
       expect(errorFilter.Type).toBe('AWS::Logs::MetricFilter');
       expect(errorFilter.Properties.FilterPattern).toBe('{ $.errorMessage = "*" }');
-      
+
       const invocationFilter = template.Resources.LambdaInvocationMetricFilter;
       expect(invocationFilter.Properties.FilterPattern).toBe('');
     });
@@ -324,7 +324,7 @@ describe('CloudFormation Payment Workflow Unit Tests', () => {
       expect(errorAlarm.Type).toBe('AWS::CloudWatch::Alarm');
       expect(errorAlarm.Properties.Threshold).toBe(0.01);
       expect(errorAlarm.Properties.ComparisonOperator).toBe('GreaterThanThreshold');
-      
+
       const apiAlarm = template.Resources.API4xxErrorsAlarm;
       expect(apiAlarm.Properties.MetricName).toBe('4XXError');
       expect(apiAlarm.Properties.Namespace).toBe('AWS/ApiGateway');
@@ -336,13 +336,13 @@ describe('CloudFormation Payment Workflow Unit Tests', () => {
     test('should have all required outputs', () => {
       const requiredOutputs = [
         'ApiEndpoint',
-        'StateMachineArn', 
+        'StateMachineArn',
         'TransactionsTableArn',
         'AuditLogsTableArn',
         'TransactionArchivesBucketArn',
         'ApiKey'
       ];
-      
+
       requiredOutputs.forEach(output => {
         expect(template.Outputs).toHaveProperty(output);
         expect(template.Outputs[output]).toHaveProperty('Description');
@@ -357,11 +357,11 @@ describe('CloudFormation Payment Workflow Unit Tests', () => {
       const checkNaming = (resourceName: string, expectedPattern: RegExp) => {
         const resource = template.Resources[resourceName];
         if (resource && resource.Properties) {
-          const nameProperty = resource.Properties.FunctionName || 
-                               resource.Properties.TableName || 
-                               resource.Properties.TopicName ||
-                               resource.Properties.StateMachineName ||
-                               resource.Properties.Name;
+          const nameProperty = resource.Properties.FunctionName ||
+            resource.Properties.TableName ||
+            resource.Properties.TopicName ||
+            resource.Properties.StateMachineName ||
+            resource.Properties.Name;
           if (nameProperty) {
             if (typeof nameProperty === 'object' && nameProperty['Fn::Sub']) {
               expect(nameProperty['Fn::Sub']).toMatch(expectedPattern);
@@ -371,7 +371,7 @@ describe('CloudFormation Payment Workflow Unit Tests', () => {
           }
         }
       };
-      
+
       checkNaming('ValidatorFunction', /.*validator.*/);
       checkNaming('TransactionsTable', /.*transactions.*/);
       checkNaming('PaymentWorkflow', /.*payment.*workflow.*/);
@@ -398,8 +398,8 @@ describe('CloudFormation Payment Workflow Unit Tests', () => {
     test('should have least privilege IAM policies', () => {
       const validatorRole = template.Resources.ValidatorLambdaRole;
       const policies = validatorRole.Properties.Policies[0].PolicyDocument.Statement;
-      
-      const dynamoPolicy = policies.find((stmt: any) => 
+
+      const dynamoPolicy = policies.find((stmt: any) =>
         Array.isArray(stmt.Action) ? stmt.Action.includes('dynamodb:PutItem') : stmt.Action === 'dynamodb:PutItem'
       );
       expect(dynamoPolicy.Resource).toBeDefined();
@@ -420,7 +420,7 @@ describe('CloudFormation Payment Workflow Unit Tests', () => {
     test('should have reserved concurrency configuration', () => {
       const validator = template.Resources.ValidatorFunction;
       expect(validator.Properties.ReservedConcurrentExecutions).toEqual({ Ref: 'ValidatorConcurrency' });
-      
+
       const others = ['FraudDetectorFunction', 'SettlementFunction', 'NotificationFunction'];
       others.forEach(funcName => {
         const func = template.Resources[funcName];
@@ -444,10 +444,10 @@ describe('CloudFormation Payment Workflow Unit Tests', () => {
         const func = template.Resources[funcName];
         expect(func.Properties.TracingConfig.Mode).toBe('Active');
       });
-      
+
       const stateMachine = template.Resources.PaymentWorkflow;
       expect(stateMachine.Properties.TracingConfiguration.Enabled).toBe(true);
-      
+
       const apiStage = template.Resources.ApiStage;
       expect(apiStage.Properties.TracingEnabled).toBe(true);
     });
