@@ -4,7 +4,7 @@ This document describes the complete implementation of a serverless location tra
 
 ## Overview
 
-The solution implements a production-ready, scalable API that handles thousands of concurrent location updates per second while maintaining low latency and cost efficiency. The infrastructure is deployed to the **ap-southeast-1** region.
+The solution implements a production-ready, scalable API that handles thousands of concurrent location updates per second while maintaining low latency and cost efficiency. The infrastructure is deployed to the **us-east-1** region.
 
 ## Architecture
 

@@ -3,7 +3,7 @@ import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack', () => {
   const environmentSuffix = 'test-123';
-  const region = 'ap-southeast-1';
+  const region = 'us-east-1';
 
   let stack: TapStack;
   let synthesized: any;
