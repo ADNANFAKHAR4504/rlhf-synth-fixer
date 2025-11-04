@@ -28,6 +28,6 @@
     "IAM",
     "SNS"
   ],
-  "training_quality": 10,
+  "training_quality": 9,
   "author": "iamarpit-turing"
 }
