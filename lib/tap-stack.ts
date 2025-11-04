@@ -139,7 +139,7 @@ class VpcComponent extends pulumi.ComponentResource {
     const eip = new aws.ec2.Eip(
       `${name}-eip`,
       {
-        vpc: true,
+        domain: "vpc",
         tags: {
           Name: `${name}-eip`,
         },
@@ -441,7 +441,7 @@ class RdsComponent extends pulumi.ComponentResource {
         databaseName: "paymentdb",
         masterUsername: "postgres",
         masterPassword: dbPassword.result,
-        databaseSubnetGroupName: dbSubnetGroup.name,
+        dbSubnetGroupName: dbSubnetGroup.name,
         vpcSecurityGroupIds: [securityGroupId],
         backupRetentionPeriod: config.rdsBackupRetentionDays,
         preferredBackupWindow: "03:00-04:00",
@@ -504,6 +504,16 @@ export class TapStack extends pulumi.ComponentResource {
   cloudwatchComponent: CloudWatchComponent;
   iamComponent: IamComponent;
   rdsComponent: RdsComponent;
+  vpcId: pulumi.Output<string>;
+  ecrRepositoryUrl: pulumi.Output<string>;
+  cloudwatchLogGroupName: pulumi.Output<string>;
+  rdsClusterEndpoint: pulumi.Output<string | undefined>;
+  rdsReaderEndpoint: pulumi.Output<string | undefined>;
+  albDnsName: pulumi.Output<string>;
+  ecsClusterName: pulumi.Output<string>;
+  ecsServiceName: pulumi.Output<string>;
+  targetGroupArn: pulumi.Output<string>;
+  environment: string;
 
   constructor(
     name: string,
@@ -512,11 +522,11 @@ export class TapStack extends pulumi.ComponentResource {
   ) {
     super("custom:tap:TapStack", name, {}, opts);
 
-    const config = new pulumi.Config();
     const stack = pulumi.getStack();
 
     // Load environment-specific configuration
     const environmentConfig = this.loadEnvironmentConfig(stack);
+    this.environment = environmentConfig.environment;
 
     // Create VPC
     this.vpcComponent = new VpcComponent(`${name}-vpc`, {
@@ -693,8 +703,8 @@ export class TapStack extends pulumi.ComponentResource {
         executionRoleArn: this.iamComponent.ecsTaskExecutionRole.arn,
         taskRoleArn: this.iamComponent.ecsTaskRole.arn,
         containerDefinitions: pulumi
-          .all([this.ecrComponent.repository.repositoryUrl])
-          .apply(([repoUrl]) =>
+          .all([this.ecrComponent.repository.repositoryUrl, this.cloudwatchComponent.logGroup.name])
+          .apply(([repoUrl, logGroupName]) =>
             JSON.stringify([
               {
                 name: "payment-app",
@@ -709,8 +719,8 @@ export class TapStack extends pulumi.ComponentResource {
                 logConfiguration: {
                   logDriver: "awslogs",
                   options: {
-                    "awslogs-group": this.cloudwatchComponent.logGroup.name,
-                    "awslogs-region": aws.getRegion().then((r) => r.name),
+                    "awslogs-group": logGroupName,
+                    "awslogs-region": "us-east-1",
                     "awslogs-stream-prefix": "ecs",
                   },
                 },
@@ -793,30 +803,30 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // Store outputs as class properties
+    this.vpcId = this.vpcComponent.vpc.id;
+    this.ecrRepositoryUrl = this.ecrComponent.repository.repositoryUrl;
+    this.cloudwatchLogGroupName = this.cloudwatchComponent.logGroup.name;
+    this.rdsClusterEndpoint = this.rdsComponent.cluster.endpoint;
+    this.rdsReaderEndpoint = this.rdsComponent.cluster.readerEndpoint;
+    this.albDnsName = alb.dnsName;
+    this.ecsClusterName = ecsCluster.name;
+    this.ecsServiceName = ecsService.name;
+    this.targetGroupArn = targetGroup.arn;
+
     // Register outputs
     this.registerOutputs({
-      vpcId: this.vpcComponent.vpc.id,
-      ecrRepositoryUrl: this.ecrComponent.repository.repositoryUrl,
-      cloudwatchLogGroupName: this.cloudwatchComponent.logGroup.name,
-      rdsClusterEndpoint: this.rdsComponent.cluster.endpoint,
-      rdsReaderEndpoint: this.rdsComponent.cluster.readerEndpoint,
-      albDnsName: alb.dnsName,
-      ecsClusterName: ecsCluster.name,
-      ecsServiceName: ecsService.name,
-      targetGroupArn: targetGroup.arn,
+      vpcId: this.vpcId,
+      ecrRepositoryUrl: this.ecrRepositoryUrl,
+      cloudwatchLogGroupName: this.cloudwatchLogGroupName,
+      rdsClusterEndpoint: this.rdsClusterEndpoint,
+      rdsReaderEndpoint: this.rdsReaderEndpoint,
+      albDnsName: this.albDnsName,
+      ecsClusterName: this.ecsClusterName,
+      ecsServiceName: this.ecsServiceName,
+      targetGroupArn: this.targetGroupArn,
+      environment: environmentConfig.environment,
     });
-
-    // Export outputs for cross-stack references
-    pulumi.export("vpcId", this.vpcComponent.vpc.id);
-    pulumi.export("ecrRepositoryUrl", this.ecrComponent.repository.repositoryUrl);
-    pulumi.export("cloudwatchLogGroupName", this.cloudwatchComponent.logGroup.name);
-    pulumi.export("rdsClusterEndpoint", this.rdsComponent.cluster.endpoint);
-    pulumi.export("rdsReaderEndpoint", this.rdsComponent.cluster.readerEndpoint);
-    pulumi.export("albDnsName", alb.dnsName);
-    pulumi.export("ecsClusterName", ecsCluster.name);
-    pulumi.export("ecsServiceName", ecsService.name);
-    pulumi.export("targetGroupArn", targetGroup.arn);
-    pulumi.export("environment", environmentConfig.environment);
   }
 
   private loadEnvironmentConfig(stack: string): EnvironmentConfig {
