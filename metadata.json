@@ -1,0 +1,37 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350213",
+  "team": "4",
+  "startedAt": "2025-11-04T19:58:31.615Z",
+  "subtask": "IaC-Multi-Environment-Management",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Table",
+    "Security Group",
+    "EC2 Instance",
+    "Auto Scaling Group",
+    "Launch Template",
+    "IAM Role",
+    "IAM Instance Profile",
+    "Key Pair",
+    "S3 Bucket",
+    "S3 Bucket Policy",
+    "RDS Instance",
+    "RDS Subnet Group",
+    "Secrets Manager",
+    "SSM Parameter",
+    "SNS Topic",
+    "CloudWatch Alarm",
+    "CloudWatch Agent",
+    "Elastic IP"
+  ]
+}
