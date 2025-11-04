@@ -1,6 +1,6 @@
 {
   "platform": "pulumi",
-  "language": "py",
+  "language": "python",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "101000802",
@@ -26,6 +26,11 @@
     "eventbridge"
   ],
   "region": "us-east-2",
-  "author": "chriscrsov",
-  "training_quality": 9
+  "author": "iamarpit-turing",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
