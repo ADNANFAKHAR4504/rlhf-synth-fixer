@@ -1,18 +1,16 @@
 # tap_stack.py
 """
-This module defines the TapStack class (no nested stacks) for the TAP project.
-It deploys a complete serverless, event-driven transaction pipeline in one stack.
+Single-stack CDK (Python) serverless transaction pipeline for TAP.
 
-Includes:
-- 3 EventBridge buses (transaction/system/audit) + archive on transaction bus
-- 3 DynamoDB tables (PAY_PER_REQUEST) with composite keys
-- S3 bucket (SSE-S3, TLS-only, versioning, intelligent-tiering + 90-day archive)
-- API Gateway (REST) with API key + usage plan + request validation + tracing
-- Lambda functions (Node.js 18, ARM64) with tracing + reserved/provisioned concurrency
-- EventBridge rules (>=5 patterns), each with >=3 targets + target DLQ + retries
-- Lambda async destinations (success -> audit bus, failure -> SQS DLQ)
-- CloudWatch log groups (30 days) and alarm stubs
-- CloudFormation Outputs for key resources
+- 3 EventBridge buses + archive
+- 3 DynamoDB tables (on-demand, composite keys, PITR spec)
+- S3 bucket (SSE-S3, TLS-only, versioned, intelligent-tiering + 90-day archive)
+- API Gateway (REST) with API key, usage plan, request validation, tracing
+- Lambda (Node.js 18, ARM64) with tracing + reserved/provisioned concurrency
+- 5 EventBridge rules (>=3 targets each with DLQ + retries)
+- Lambda async destinations via aws_lambda.EventInvokeConfig
+- Log groups (30 days) + alarm stubs
+- CloudFormation Outputs
 """
 
 from typing import Optional, Dict, Any
@@ -37,21 +35,12 @@ from constructs import Construct
 
 
 class TapStackProps(cdk.StackProps):
-  """
-  Properties for TapStack.
-  environment_suffix: e.g., 'dev' or 'prod'
-  """
-
   def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
     super().__init__(**kwargs)
     self.environment_suffix = environment_suffix
 
 
 class TapStack(cdk.Stack):
-  """
-  Full pipeline in a single stack (no nested stacks).
-  """
-
   def __init__(
       self,
       scope: Construct,
@@ -61,41 +50,30 @@ class TapStack(cdk.Stack):
   ):
     super().__init__(scope, construct_id, **kwargs)
 
-    # Stage / environment suffix
     self.stage: str = (
-        props.environment_suffix if props and props.environment_suffix else
-        self.node.try_get_context("environmentSuffix") or "dev"
+        props.environment_suffix if props and props.environment_suffix
+        else self.node.try_get_context("environmentSuffix") or "dev"
     )
     self.config = self._get_stage_config(self.stage)
 
-    # -------------------------
     # EventBridge buses
-    # -------------------------
     self.transaction_bus = self._create_event_bus("transaction")
     self.system_bus = self._create_event_bus("system")
     self.audit_bus = self._create_event_bus("audit")
 
-    # -------------------------
     # DynamoDB tables
-    # -------------------------
     self.transactions_table = self._create_transactions_table()
     self.rules_table = self._create_rules_table()
     self.audit_logs_table = self._create_audit_logs_table()
 
-    # -------------------------
     # S3 processed data bucket
-    # -------------------------
     self.processed_data_bucket = self._create_s3_bucket()
 
-    # -------------------------
     # DLQs
-    # -------------------------
     self.lambda_dlq = self._create_dlq("lambda-failures")
     self.eventbridge_dlq = self._create_dlq("eventbridge-failures")
 
-    # -------------------------
-    # Lambda functions
-    # -------------------------
+    # Lambdas
     self.ingest_processor = self._create_lambda_function(
         "ingest_processor",
         reserved_concurrent=self.config["default_reserved_concurrency"],
@@ -113,20 +91,14 @@ class TapStack(cdk.Stack):
         reserved_concurrent=self.config["default_reserved_concurrency"],
     )
 
-    # -------------------------
     # Permissions & async destinations
-    # -------------------------
     self._grant_lambda_permissions()
     self._configure_lambda_destinations()
 
-    # -------------------------
     # API Gateway
-    # -------------------------
     self.api_gateway = self._create_api_gateway()
 
-    # -------------------------
-    # EventBridge archive (replay support on transaction bus)
-    # -------------------------
+    # EventBridge archive (replay)
     self.transaction_archive_name = f"tap-{self.stage}-transaction-archive"
     self.transaction_archive = events.CfnArchive(
         self,
@@ -136,24 +108,14 @@ class TapStack(cdk.Stack):
         retention_days=self.config["archive_retention_days"],
     )
 
-    # -------------------------
-    # EventBridge rules (>=5 patterns, each with >=3 targets)
-    # -------------------------
+    # Rules & alarms
     self._create_eventbridge_rules()
-
-    # -------------------------
-    # Alarms
-    # -------------------------
     self._create_cloudwatch_alarms()
 
-    # -------------------------
-    # CloudFormation Outputs
-    # -------------------------
+    # Outputs
     self._add_outputs()
 
-  # =========================================================================
-  # Helpers
-  # =========================================================================
+  # ------------------------- helpers -------------------------
   def _get_stage_config(self, stage: str) -> Dict[str, Any]:
     return {
         "dev": {
@@ -181,14 +143,12 @@ class TapStack(cdk.Stack):
         },
     )
 
-  # -------------------------
-  # Core resources
-  # -------------------------
-  def _create_event_bus(self, bus_name: str) -> events.EventBus:
+  # ------------------------- core resources -------------------------
+  def _create_event_bus(self, name: str) -> events.EventBus:
     return events.EventBus(
         self,
-        f"{bus_name}-bus",
-        event_bus_name=f"tap-{self.stage}-{bus_name}",
+        f"{name}-bus",
+        event_bus_name=f"tap-{self.stage}-{name}",
     )
 
   def _create_transactions_table(self) -> dynamodb.Table:
@@ -197,13 +157,14 @@ class TapStack(cdk.Stack):
         "TransactionsTable",
         table_name=f"tap-{self.stage}-transactions",
         partition_key=dynamodb.Attribute(
-            name="accountId", type=dynamodb.AttributeType.STRING
-        ),
+            name="accountId",
+            type=dynamodb.AttributeType.STRING),
         sort_key=dynamodb.Attribute(
-            name="ts", type=dynamodb.AttributeType.STRING  # yyyymmddhhmmss
-        ),
+            name="ts",
+            type=dynamodb.AttributeType.STRING),
         billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
-        point_in_time_recovery=True,
+        point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+            enabled=True),
         removal_policy=RemovalPolicy.DESTROY if self.stage == "dev" else RemovalPolicy.RETAIN,
     )
 
@@ -219,7 +180,8 @@ class TapStack(cdk.Stack):
             name="version",
             type=dynamodb.AttributeType.NUMBER),
         billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
-        point_in_time_recovery=True,
+        point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+            enabled=True),
         removal_policy=RemovalPolicy.DESTROY if self.stage == "dev" else RemovalPolicy.RETAIN,
     )
 
@@ -235,12 +197,12 @@ class TapStack(cdk.Stack):
             name="ts",
             type=dynamodb.AttributeType.STRING),
         billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
-        point_in_time_recovery=True,
+        point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+            enabled=True),
         removal_policy=RemovalPolicy.DESTROY if self.stage == "dev" else RemovalPolicy.RETAIN,
     )
 
   def _create_s3_bucket(self) -> s3.Bucket:
-    # Use account + region in name for uniqueness
     bucket = s3.Bucket(
         self,
         "ProcessedDataBucket",
@@ -249,7 +211,6 @@ class TapStack(cdk.Stack):
         encryption=s3.BucketEncryption.S3_MANAGED,
         enforce_ssl=True,
         versioned=True,
-        # Intelligent-tiering (immediate) then archive to Glacier at 90 days
         lifecycle_rules=[
             s3.LifecycleRule(
                 id="IntelligentTieringThenArchive",
@@ -269,8 +230,6 @@ class TapStack(cdk.Stack):
         removal_policy=RemovalPolicy.DESTROY if self.stage == "dev" else RemovalPolicy.RETAIN,
         auto_delete_objects=True if self.stage == "dev" else False,
     )
-
-    # Deny unencrypted object puts
     bucket.add_to_resource_policy(
         iam.PolicyStatement(
             sid="DenyUnencryptedObjectUploads",
@@ -283,7 +242,6 @@ class TapStack(cdk.Stack):
                 "StringNotEquals": {
                     "s3:x-amz-server-side-encryption": "AES256"}},
         ))
-    # Deny non-TLS access
     bucket.add_to_resource_policy(
         iam.PolicyStatement(
             sid="DenyInsecureConnections",
@@ -311,16 +269,14 @@ class TapStack(cdk.Stack):
       reserved_concurrent: int,
       provisioned_concurrent: Optional[int] = None,
   ) -> lambda_.Function:
-    # Pre-create log group for retention control
     logs.LogGroup(
         self,
         f"{function_name}-logs",
         log_group_name=f"/aws/lambda/tap-{self.stage}-{function_name}",
-        retention=logs.RetentionDays.THIRTY_DAYS,
+        retention=logs.RetentionDays.ONE_MONTH,
         removal_policy=RemovalPolicy.DESTROY if self.stage == "dev" else RemovalPolicy.RETAIN,
     )
 
-    # Broad baseline managed policies to avoid missing perms (logs + xray)
     role = iam.Role(
         self,
         f"{function_name}-role",
@@ -356,7 +312,6 @@ class TapStack(cdk.Stack):
         role=role,
     )
 
-    # Provisioned concurrency (prod critical paths)
     if provisioned_concurrent:
       lambda_.Alias(
           self,
@@ -369,7 +324,6 @@ class TapStack(cdk.Stack):
     return fn
 
   def _get_lambda_code(self, function_name: str) -> str:
-    # Inline handlers use built-in aws-sdk only (no extra deps)
     common = "const AWS = require('aws-sdk');\n"
     if function_name == "ingest_processor":
       return (
@@ -432,11 +386,8 @@ exports.handler = async (event) => {
 """
     )
 
-  # -------------------------
-  # Permissions & destinations
-  # -------------------------
+  # ------------------------- permissions & destinations -------------------
   def _grant_lambda_permissions(self) -> None:
-    # DynamoDB: R/W for main & fraud; read for notifier
     for table in [
             self.transactions_table,
             self.rules_table,
@@ -445,41 +396,45 @@ exports.handler = async (event) => {
       table.grant_read_write_data(self.fraud_detector)
       table.grant_read_data(self.notifier)
 
-    # S3: broad read/write for ingest; read for fraud
     self.processed_data_bucket.grant_read_write(self.ingest_processor)
     self.processed_data_bucket.grant_read(self.fraud_detector)
 
-    # EventBridge PutEvents to all buses for all Lambdas
     for bus in [self.transaction_bus, self.system_bus, self.audit_bus]:
       bus.grant_put_events_to(self.ingest_processor)
       bus.grant_put_events_to(self.fraud_detector)
       bus.grant_put_events_to(self.notifier)
 
-    # Configure async invoke (success->audit bus, failure->DLQ)
-    # Use the convenience method to avoid property name mismatches.
   def _configure_lambda_destinations(self) -> None:
-    self.ingest_processor.configure_async_invoke(
+    # Correct construct for success/failure destinations
+    lambda_.EventInvokeConfig(
+        self,
+        "IngestAsyncInvoke",
+        function=self.ingest_processor,
         on_success=destinations.EventBridgeDestination(self.audit_bus),
         on_failure=destinations.SqsDestination(self.lambda_dlq),
-        max_event_age=Duration.hours(1),
-        retry_attempts=2,
+        maximum_event_age=Duration.hours(1),
+        maximum_retry_attempts=2,
     )
-    self.fraud_detector.configure_async_invoke(
+    lambda_.EventInvokeConfig(
+        self,
+        "FraudAsyncInvoke",
+        function=self.fraud_detector,
         on_success=destinations.EventBridgeDestination(self.audit_bus),
         on_failure=destinations.SqsDestination(self.lambda_dlq),
-        max_event_age=Duration.hours(1),
-        retry_attempts=2,
+        maximum_event_age=Duration.hours(1),
+        maximum_retry_attempts=2,
     )
-    self.notifier.configure_async_invoke(
+    lambda_.EventInvokeConfig(
+        self,
+        "NotifierAsyncInvoke",
+        function=self.notifier,
         on_success=destinations.EventBridgeDestination(self.audit_bus),
         on_failure=destinations.SqsDestination(self.lambda_dlq),
-        max_event_age=Duration.hours(1),
-        retry_attempts=2,
+        maximum_event_age=Duration.hours(1),
+        maximum_retry_attempts=2,
     )
 
-  # -------------------------
-  # API Gateway
-  # -------------------------
+  # ------------------------- API Gateway -------------------------
   def _create_api_gateway(self) -> apigateway.RestApi:
     api = apigateway.RestApi(
         self,
@@ -497,7 +452,6 @@ exports.handler = async (event) => {
         cloud_watch_role=True,
     )
 
-    # Request validation model (JSON schema)
     request_schema = apigateway.JsonSchema(
         schema=apigateway.JsonSchemaVersion.DRAFT4,
         title="TransactionSchema",
@@ -536,7 +490,6 @@ exports.handler = async (event) => {
         schema=request_schema,
     )
 
-    # API key + usage plan
     api_key = apigateway.ApiKey(
         self, "ApiKey", api_key_name=f"tap-{self.stage}-api-key", enabled=True
     )
@@ -554,7 +507,6 @@ exports.handler = async (event) => {
     usage_plan.add_api_stage(stage=api.deployment_stage)
     usage_plan.add_api_key(api_key)
 
-    # /transactions -> ingest_processor (proxy integration)
     transactions = api.root.add_resource("transactions")
     transactions.add_method(
         "POST",
@@ -569,14 +521,10 @@ exports.handler = async (event) => {
             validate_request_parameters=True,
         ),
     )
-
     return api
 
-  # -------------------------
-  # EventBridge rules (>=5 patterns)
-  # -------------------------
+  # ------------------------- EventBridge rules -------------------------
   def _create_eventbridge_rules(self) -> None:
-    # Shared SQS buffer target
     buffer_queue = sqs.Queue(
         self,
         "BufferQueue",
@@ -584,51 +532,47 @@ exports.handler = async (event) => {
         visibility_timeout=Duration.seconds(300),
     )
 
-    # 1) High-value domestic
     self._add_rule_with_targets(
-        rule_id="HighValueDomesticRule",
-        rule_name=f"tap-{self.stage}-high-value-domestic",
-        detail={
+        "HighValueDomesticRule",
+        f"tap-{self.stage}-high-value-domestic",
+        {
             "amount": [{"numeric": [">=", 1000]}],
             "currency": ["USD"],
             "region": ["us-east-1", "us-west-2", "us-east-2", "us-west-1"],
         },
-        buffer_queue=buffer_queue,
+        buffer_queue,
     )
-
-    # 2) High-risk merchant categories
     self._add_rule_with_targets(
-        rule_id="HighRiskMccRule",
-        rule_name=f"tap-{self.stage}-high-risk-mcc",
-        detail={"merchantCategory": ["electronics", "luxury", "crypto"]},
-        buffer_queue=buffer_queue,
+        "HighRiskMccRule",
+        f"tap-{self.stage}-high-risk-mcc",
+        {"merchantCategory": ["electronics", "luxury", "crypto"]},
+        buffer_queue,
     )
-
-    # 3) Geo-anomaly
+    self._add_rule_with_targets("GeoAnomalyRule",
+                                f"tap-{self.stage}-geo-anomaly",
+                                {"cardNotPresent": [True],
+                                 "country": [{"anything-but": ["US",
+                                                               "NL",
+                                                               "DE",
+                                                               "FR",
+                                                               "UK",
+                                                               "CA",
+                                                               "AU",
+                                                               "JP"]}],
+                                 },
+                                buffer_queue,
+                                )
     self._add_rule_with_targets(
-        rule_id="GeoAnomalyRule",
-        rule_name=f"tap-{self.stage}-geo-anomaly",
-        detail={
-            "cardNotPresent": [True],
-            "country": [{"anything-but": ["US", "NL", "DE", "FR", "UK", "CA", "AU", "JP"]}],
-        },
-        buffer_queue=buffer_queue,
+        "VelocitySpikeRule",
+        f"tap-{self.stage}-velocity-spike",
+        {"recentTxnCount": [{"numeric": [">=", 10]}]},
+        buffer_queue,
     )
-
-    # 4) Velocity spike
     self._add_rule_with_targets(
-        rule_id="VelocitySpikeRule",
-        rule_name=f"tap-{self.stage}-velocity-spike",
-        detail={"recentTxnCount": [{"numeric": [">=", 10]}]},
-        buffer_queue=buffer_queue,
-    )
-
-    # 5) Night-time behavior
-    self._add_rule_with_targets(
-        rule_id="NightTimeBehaviorRule",
-        rule_name=f"tap-{self.stage}-night-time",
-        detail={"localHour": [0, 1, 2, 3, 4, 5]},
-        buffer_queue=buffer_queue,
+        "NightTimeBehaviorRule",
+        f"tap-{self.stage}-night-time",
+        {"localHour": [0, 1, 2, 3, 4, 5]},
+        buffer_queue,
     )
 
   def _add_rule_with_targets(
@@ -645,11 +589,8 @@ exports.handler = async (event) => {
         event_bus=self.transaction_bus,
         event_pattern=events.EventPattern(
             source=["tap.transactions"],
-            detail=detail,
-        ),
+            detail=detail),
     )
-
-    # A) Lambda (fraud detector)
     rule.add_target(
         targets.LambdaFunction(
             self.fraud_detector,
@@ -658,7 +599,6 @@ exports.handler = async (event) => {
             retry_attempts=3,
         )
     )
-    # B) SQS buffer
     rule.add_target(
         targets.SqsQueue(
             buffer_queue,
@@ -667,7 +607,6 @@ exports.handler = async (event) => {
             retry_attempts=3,
         )
     )
-    # C) Fan-out to audit bus
     rule.add_target(
         targets.EventBus(
             self.audit_bus,
@@ -677,11 +616,8 @@ exports.handler = async (event) => {
         )
     )
 
-  # -------------------------
-  # Alarms
-  # -------------------------
+  # ------------------------- alarms -------------------------
   def _create_cloudwatch_alarms(self) -> None:
-    # DLQ depth
     cloudwatch.Alarm(
         self,
         "DLQMessagesAlarm",
@@ -692,12 +628,8 @@ exports.handler = async (event) => {
         datapoints_to_alarm=1,
         treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
     )
-    # Lambda errors & throttles
-    for name, fn in [
-        ("ingest", self.ingest_processor),
-        ("fraud", self.fraud_detector),
-        ("notifier", self.notifier),
-    ]:
+    for name, fn in [("ingest", self.ingest_processor),
+                     ("fraud", self.fraud_detector), ("notifier", self.notifier)]:
       cloudwatch.Alarm(
           self,
           f"{name}ErrorAlarm",
@@ -718,8 +650,6 @@ exports.handler = async (event) => {
           datapoints_to_alarm=1,
           treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
       )
-
-    # API 5XX & p99 latency
     cloudwatch.Alarm(
         self,
         "API5xxAlarm",
@@ -729,8 +659,7 @@ exports.handler = async (event) => {
             metric_name="5XXError",
             dimensions_map={
                 "ApiName": self.api_gateway.rest_api_name,
-                "Stage": self.stage,
-            },
+                "Stage": self.stage},
         ),
         threshold=10,
         evaluation_periods=2,
@@ -746,8 +675,7 @@ exports.handler = async (event) => {
             metric_name="Latency",
             dimensions_map={
                 "ApiName": self.api_gateway.rest_api_name,
-                "Stage": self.stage,
-            },
+                "Stage": self.stage},
             statistic="p99",
         ),
         threshold=1000,
@@ -756,36 +684,26 @@ exports.handler = async (event) => {
         treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
     )
 
-  # -------------------------
-  # Outputs
-  # -------------------------
+  # ------------------------- outputs -------------------------
   def _add_outputs(self) -> None:
     cdk.CfnOutput(self, "Stage", value=self.stage)
-
-    # API
     cdk.CfnOutput(self, "ApiBaseUrl", value=self.api_gateway.url)
     cdk.CfnOutput(
         self,
         "TransactionsEndpoint",
         value=f"{self.api_gateway.url}transactions")
-
-    # Event buses
     cdk.CfnOutput(
         self,
         "TransactionBusArn",
         value=self.transaction_bus.event_bus_arn)
     cdk.CfnOutput(self, "AuditBusArn", value=self.audit_bus.event_bus_arn)
     cdk.CfnOutput(self, "SystemBusArn", value=self.system_bus.event_bus_arn)
-
-    # Archive
     cdk.CfnOutput(self, "TransactionArchiveName",
                   value=self.transaction_archive_name)
     cdk.CfnOutput(
         self,
         "TransactionArchiveArn",
         value=self.transaction_archive.attr_arn)
-
-    # DynamoDB
     cdk.CfnOutput(
         self,
         "TransactionsTableName",
@@ -795,21 +713,15 @@ exports.handler = async (event) => {
         self,
         "AuditLogsTableName",
         value=self.audit_logs_table.table_name)
-
-    # S3
     cdk.CfnOutput(
         self,
         "ProcessedBucketName",
         value=self.processed_data_bucket.bucket_name)
-
-    # Queues
     cdk.CfnOutput(self, "LambdaDLQUrl", value=self.lambda_dlq.queue_url)
     cdk.CfnOutput(
         self,
         "EventBridgeDLQUrl",
         value=self.eventbridge_dlq.queue_url)
-
-    # Lambdas
     cdk.CfnOutput(
         self,
         "IngestFnName",
