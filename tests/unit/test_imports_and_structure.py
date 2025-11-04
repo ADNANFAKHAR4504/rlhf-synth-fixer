@@ -122,7 +122,7 @@ class TestMainModule(unittest.TestCase):
             content = f.read()
 
         self.assertIn('import pulumi', content)
-        self.assertIn('from tap_stack import', content)
+        self.assertIn('from lib.tap_stack import', content)
 
     def test_main_has_config_logic(self):
         """Test that __main__.py has config logic."""
@@ -183,7 +183,7 @@ class TestCodeStructure(unittest.TestCase):
 
         self.assertIn('VpcPeeringConnection', source)
         self.assertIn('VpcPeeringConnectionAccepter', source)
-        self.assertIn('VpcPeeringConnectionOptions', source)
+        self.assertIn('PeeringConnectionOptions', source)
 
     def test_tap_stack_has_security_groups(self):
         """Test that tap_stack.py creates security groups."""
