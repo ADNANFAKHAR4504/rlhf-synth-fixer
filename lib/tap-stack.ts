@@ -381,7 +381,7 @@ export class TapStack extends TerraformStack {
     const dbInstance = new DbInstance(this, 'rds-instance', {
       identifier: `client-dashboard-db-${config.environmentSuffix}`,
       engine: 'postgres',
-      engineVersion: '15.3',
+      engineVersion: '15.4',
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
       dbName: 'clientdashboard',
