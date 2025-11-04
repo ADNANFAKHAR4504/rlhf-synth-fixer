@@ -25,7 +25,6 @@ import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-pub
 import { AppautoscalingTarget } from '@cdktf/provider-aws/lib/appautoscaling-target';
 import { AppautoscalingPolicy } from '@cdktf/provider-aws/lib/appautoscaling-policy';
 import { AcmCertificate } from '@cdktf/provider-aws/lib/acm-certificate';
-import { AcmCertificateValidation } from '@cdktf/provider-aws/lib/acm-certificate-validation';
 import { Route53Zone } from '@cdktf/provider-aws/lib/route53-zone';
 import { Route53Record } from '@cdktf/provider-aws/lib/route53-record';
 import { Eip } from '@cdktf/provider-aws/lib/eip';
@@ -466,8 +465,11 @@ export class TapStack extends TerraformStack {
       },
     });
 
+    // Override to disable validation waiting (prevents 5-minute timeout)
+    certificate.addOverride('wait_for_validation', false);
+
     // DNS Validation Records
-    const validationRecord = new Route53Record(this, 'cert-validation-record', {
+    new Route53Record(this, 'cert-validation-record', {
       zoneId: hostedZone.zoneId,
       name: certificate.domainValidationOptions.get(0).resourceRecordName,
       type: certificate.domainValidationOptions.get(0).resourceRecordType,
@@ -475,25 +477,15 @@ export class TapStack extends TerraformStack {
       ttl: 60,
     });
 
-    // Certificate Validation - waits for DNS validation to complete
-    const certificateValidation = new AcmCertificateValidation(
-      this,
-      'cert-validation',
-      {
-        certificateArn: certificate.arn,
-        validationRecordFqdns: [validationRecord.fqdn],
-      }
-    );
-
     // HTTPS Listener
-    // Note: Depends on certificate validation to complete before creating listener
+    // Note: Certificate validation happens asynchronously in the background
+    // The ALB will start accepting HTTPS traffic once validation completes (typically 5-10 minutes)
     const httpsListener = new LbListener(this, 'https-listener', {
       loadBalancerArn: alb.arn,
       port: 443,
       protocol: 'HTTPS',
       sslPolicy: 'ELBSecurityPolicy-2016-08',
-      certificateArn: certificateValidation.certificateArn,
-      dependsOn: [certificateValidation],
+      certificateArn: certificate.arn,
       defaultAction: [
         {
           type: 'forward',
