@@ -1,5 +1,5 @@
 {
-  "platform": "cfn",
+  "platform": "cloudformation",
   "language": "yaml",
   "complexity": "hard",
   "turn_type": "single",
@@ -31,5 +31,12 @@
     "CloudWatch Alarm",
     "CloudWatch Log Group",
     "CloudFormation"
-  ]
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
 }
