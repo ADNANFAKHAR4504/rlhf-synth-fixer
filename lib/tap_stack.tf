@@ -113,7 +113,7 @@ resource "aws_kms_key" "main" {
         Sid    = "Allow CloudWatch Logs"
         Effect = "Allow"
         Principal = {
-          Service = "logs.${data.aws_region.current.name}.amazonaws.com"
+          Service = "logs.${data.aws_region.current.id}.amazonaws.com"
         }
         Action = [
           "kms:Encrypt",
@@ -125,7 +125,7 @@ resource "aws_kms_key" "main" {
         Resource = "*"
         Condition = {
           ArnEquals = {
-            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/${local.name_prefix}"
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/${local.name_prefix}"
           }
         }
       }
@@ -448,7 +448,7 @@ resource "aws_rds_cluster" "main" {
   cluster_identifier              = "${local.name_prefix}-aurora-cluster"
   engine                          = "aurora-mysql"
   engine_version                  = "8.0.mysql_aurora.3.04.1"
-  availability_zones              = data.aws_availability_zones.available.names
+  availability_zones              = slice(data.aws_availability_zones.available.names, 0, 3)
   database_name                   = "appdb"
   master_username                 = jsondecode(aws_secretsmanager_secret_version.db_credentials.secret_string)["username"]
   master_password                 = jsondecode(aws_secretsmanager_secret_version.db_credentials.secret_string)["password"]

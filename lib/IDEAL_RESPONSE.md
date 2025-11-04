@@ -356,7 +356,7 @@ resource "aws_kms_key" "main" {
         Sid    = "Allow CloudWatch Logs"
         Effect = "Allow"
         Principal = {
-          Service = "logs.${data.aws_region.current.name}.amazonaws.com"
+          Service = "logs.${data.aws_region.current.id}.amazonaws.com"
         }
         Action = [
           "kms:Encrypt",
@@ -368,7 +368,7 @@ resource "aws_kms_key" "main" {
         Resource = "*"
         Condition = {
           ArnEquals = {
-            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/${local.name_prefix}"
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/${local.name_prefix}"
           }
         }
       }
@@ -691,7 +691,7 @@ resource "aws_rds_cluster" "main" {
   cluster_identifier              = "${local.name_prefix}-aurora-cluster"
   engine                          = "aurora-mysql"
   engine_version                  = "8.0.mysql_aurora.3.04.1"
-  availability_zones              = data.aws_availability_zones.available.names
+  availability_zones              = slice(data.aws_availability_zones.available.names, 0, 3)
   database_name                   = "appdb"
   master_username                 = jsondecode(aws_secretsmanager_secret_version.db_credentials.secret_string)["username"]
   master_password                 = jsondecode(aws_secretsmanager_secret_version.db_credentials.secret_string)["password"]
@@ -1709,7 +1709,7 @@ output "memory_autoscaling_policy_arn" {
 output "deployment_instructions" {
   description = "Instructions for deploying and updating the application"
   value = {
-    ecr_login_command = "aws ecr get-login-password --region ${data.aws_region.current.name} | docker login --username AWS --password-stdin ${aws_ecr_repository.main.repository_url}"
+    ecr_login_command = "aws ecr get-login-password --region ${data.aws_region.current.id} | docker login --username AWS --password-stdin ${aws_ecr_repository.main.repository_url}"
     
     build_and_push = [
       "docker build -t ${aws_ecr_repository.main.name} .",
@@ -1726,9 +1726,9 @@ output "deployment_instructions" {
     }
     
     monitoring_dashboards = {
-      ecs_cluster_url = "https://${data.aws_region.current.name}.console.aws.amazon.com/ecs/home?region=${data.aws_region.current.name}#/clusters/${aws_ecs_cluster.main.name}"
-      rds_cluster_url = "https://${data.aws_region.current.name}.console.aws.amazon.com/rds/home?region=${data.aws_region.current.name}#database:id=${aws_rds_cluster.main.cluster_identifier}"
-      cloudwatch_url  = "https://${data.aws_region.current.name}.console.aws.amazon.com/cloudwatch/home?region=${data.aws_region.current.name}"
+      ecs_cluster_url = "https://${data.aws_region.current.id}.console.aws.amazon.com/ecs/home?region=${data.aws_region.current.id}#/clusters/${aws_ecs_cluster.main.name}"
+      rds_cluster_url = "https://${data.aws_region.current.id}.console.aws.amazon.com/rds/home?region=${data.aws_region.current.id}#database:id=${aws_rds_cluster.main.cluster_identifier}"
+      cloudwatch_url  = "https://${data.aws_region.current.id}.console.aws.amazon.com/cloudwatch/home?region=${data.aws_region.current.id}"
     }
   }
 }
@@ -1742,7 +1742,7 @@ output "infrastructure_summary" {
   value = {
     environment        = var.environment
     project_name      = var.project_name
-    region            = data.aws_region.current.name
+    region            = data.aws_region.current.id
     vpc_cidr          = aws_vpc.main.cidr_block
     availability_zones = data.aws_availability_zones.available.names
     
