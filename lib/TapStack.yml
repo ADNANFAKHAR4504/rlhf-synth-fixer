@@ -1053,19 +1053,22 @@ Resources:
     Properties:
       Name: !Sub "${SSMPathPrefix}/${Environment}/config/infrastructure"
       Type: String
-      Value: !Sub |
-        {
-          "s3Bucket": "${ConfigurationBucket}",
-          "s3BucketRegion": "${AWS::Region}",
-          "kmsKeyId": "alias/aws/s3",
-          "lambdaFunctions": {
-            "monitor": "${ReplicationMonitorLambda.Arn}",
-            "validator": "${ConfigValidatorLambda.Arn}",
-            "processor": "${StreamProcessorLambda.Arn}"
-          },
-          "iamRole": "${S3ReplicationRole.Arn}",
-          "cloudwatchDashboard": "${ReplicationDashboard}"
-        }
+      Value: !Sub
+        - |
+          {
+            "s3Bucket": "${ConfigurationBucket}",
+            "s3BucketRegion": "${AWS::Region}",
+            "kmsKeyId": "alias/aws/s3",
+            "lambdaFunctions": {
+              "monitor": "${ReplicationMonitorLambda.Arn}",
+              "validator": "${ConfigValidatorLambda.Arn}",
+              "processor": "${StreamProcessorLambda.Arn}"
+            },
+            "iamRole": "${ReplicationRoleArn}",
+            "cloudwatchDashboard": "${ReplicationDashboard}"
+          }
+        - ReplicationRoleArn:
+            !If [EnableReplication, !GetAtt S3ReplicationRole.Arn, "N/A"]
       Description: Infrastructure resource identifiers
       Tags:
         Environment: !Ref Environment
@@ -1108,19 +1111,22 @@ Resources:
     Properties:
       Name: !Sub "${SSMPathPrefix}/${Environment}/config/security"
       Type: String
-      Value: !Sub |
-        {
-          "encryptionInTransit": true,
-          "encryptionAtRest": true,
-          "iamPrinciples": {
-            "replicationRole": "${S3ReplicationRole.Arn}",
-            "lambdaExecutionRole": "${LambdaExecutionRole.Arn}"
-          },
-          "accessControl": {
-            "crossAccountAccess": true,
-            "allowedActions": ["s3:GetObject", "s3:PutObject", "dynamodb:Query", "ssm:GetParameter"]
+      Value: !Sub
+        - |
+          {
+            "encryptionInTransit": true,
+            "encryptionAtRest": true,
+            "iamPrinciples": {
+              "replicationRole": "${ReplicationRoleArn}",
+              "lambdaExecutionRole": "${LambdaExecutionRole.Arn}"
+            },
+            "accessControl": {
+              "crossAccountAccess": true,
+              "allowedActions": ["s3:GetObject", "s3:PutObject", "dynamodb:Query", "ssm:GetParameter"]
+            }
           }
-        }
+        - ReplicationRoleArn:
+            !If [EnableReplication, !GetAtt S3ReplicationRole.Arn, "N/A"]
       Description: Security and access control configuration (encrypted)
       Tags:
         Environment: !Ref Environment
