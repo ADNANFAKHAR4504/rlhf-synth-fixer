@@ -53,3 +53,35 @@ Fix- remvove the sg- from prefix in security groups.
 ╵
 
 ```
+
+3. Critical Failures -
+
+aws_route53_record.primary_failover and secondary_failover saying "ttl": all of records,ttl must be specified occur because you are defining ttl = 60 but missing the records argument, which is mandatory for Route53 records of type non-alias with TTL.
+
+However, in your use case, you are using alias records (to ALBs) with failover routing policy, where:
+
+Alias records do not support TTL. The TTL must be omitted because AWS manages it automatically (fixed 60 seconds internally).
+
+You must use the alias block with required parameters: name, zone_id, and optionally evaluate_target_health.
+
+You should remove ttl and records attributes entirely for alias records.
+
+```
+╷
+│ Error: Missing required argument
+│ 
+│   with aws_route53_record.primary_failover,
+│   on tap_stack.tf line 1425, in resource "aws_route53_record" "primary_failover":
+│ 1425:   ttl      = 60
+│ 
+│ "ttl": all of `records,ttl` must be specified
+╵
+╷
+│ Error: Missing required argument
+│ 
+│   with aws_route53_record.secondary_failover,
+│   on tap_stack.tf line 1448, in resource "aws_route53_record" "secondary_failover":
+│ 1448:   ttl      = 60
+│ 
+│ "ttl": all of `records,ttl` must be specified
+```

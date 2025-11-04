@@ -1422,7 +1422,6 @@ resource "aws_route53_record" "primary_failover" {
   zone_id  = aws_route53_zone.main.zone_id
   name     = "app.${var.domain_name}"
   type     = "A"
-  ttl      = 60
   
   set_identifier = "primary"
   
@@ -1445,7 +1444,6 @@ resource "aws_route53_record" "secondary_failover" {
   zone_id  = aws_route53_zone.main.zone_id
   name     = "app.${var.domain_name}"
   type     = "A"
-  ttl      = 60
   
   set_identifier = "secondary"
   
