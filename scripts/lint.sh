@@ -41,7 +41,7 @@ elif [ "$LANGUAGE" = "go" ]; then
         exit 1
     fi
 
-    PKGS=$(go list ./... | grep -v '/node_modules/' | grep -v '/\\.gen/' | grep -E '/(lib|tests)($|/)' || true)
+    PKGS=$(go list ./... | grep -v '/node_modules/' | grep -v '/\.gen/' | grep -E '/(lib|tests)($|/)' || true)
     if [ "$PLATFORM" = "cdk" ]; then
       PKGS=$(go list ./lib/... ./tests/... 2>/dev/null || true)
     fi
@@ -52,17 +52,23 @@ elif [ "$LANGUAGE" = "go" ]; then
         echo "ℹ️ No Go packages found to vet."
     fi
 
-elif [ "$LANGUAGE" = "py" ]; then
+elif [[ "$LANGUAGE" = "py" || "$LANGUAGE" = "python" ]]; then
     echo "✅ Python project detected, running pylint..."
-    LINT_OUTPUT=$(pipenv run lint 2>&1 || true)
-    LINT_EXIT_CODE=$?
+
+    if command -v pipenv &>/dev/null && [ -f "Pipfile" ]; then
+        LINT_OUTPUT=$(pipenv run lint 2>&1 || true)
+    else
+        echo "⚠️ pipenv not found — falling back to raw pylint"
+        pip install --quiet pylint >/dev/null 2>&1 || true
+        LINT_OUTPUT=$(pylint lib tests 2>&1 || true)
+    fi
 
     echo "--- START PYLINT OUTPUT (Raw) ---"
     echo "$LINT_OUTPUT"
     echo "--- END PYLINT OUTPUT (Raw) ---"
 
     SCORE=$(echo "$LINT_OUTPUT" | sed -n 's/.*rated at \([0-9.]*\)\/10.*/\1/p')
-    if [[ -z "$SCORE" || ! "$SCORE" =~ ^[0-9.]+$ ]]; then
+    if [[ -z "$SCORE" ]]; then
         echo "❌ ERROR: Could not extract linting score."
         exit 1
     fi
@@ -91,11 +97,9 @@ elif [ "$PLATFORM" = "cfn" ]; then
         pip install cfn-lint >/dev/null 2>&1
     fi
 
-    if [ "$LANGUAGE" = "json" ]; then
-        cfn-lint -i W -f json lib/*.json
-    elif [ "$LANGUAGE" = "yaml" ]; then
-        cfn-lint -i W -f yaml lib/*.yaml
-    fi
+    echo "🔍 Linting templates under lib/ ..."
+    find lib -type f \( -name "*.yaml" -o -name "*.yml" -o -name "*.json" \) \
+        -print0 | xargs -0 -r cfn-lint -t
 
 else
     echo "ℹ️ Unknown platform/language combination: $PLATFORM/$LANGUAGE"

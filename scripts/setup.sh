@@ -21,12 +21,11 @@ if ! command -v jq &>/dev/null; then
   sudo apt-get update -y && sudo apt-get install -y jq
 fi
 
-# Fix npm global path to avoid permission issues in CI runners
 export NPM_CONFIG_PREFIX="$HOME/.npm-global"
 export PATH="$PATH:$HOME/.npm-global/bin"
 
 # -------------------------------------------------------------------
-# Common sanity checks (without version matching or redundant installs)
+# Common sanity checks
 # -------------------------------------------------------------------
 echo "🔹 Checking available tools..."
 node --version 2>/dev/null || echo "⚠️ Node not found"
@@ -43,23 +42,13 @@ case "$PLATFORM" in
   cdk)
     echo "🪄 CDK project detected."
     if [[ "$LANGUAGE" =~ ^(ts|js)$ ]]; then
-      echo "📦 Installing Node.js dependencies..."
-      if [ -d "node_modules" ]; then
-        echo "node_modules exists — skipping npm ci"
-      elif [ -f "package-lock.json" ]; then
-        npm ci
-      else
-        echo "⚠️ No package-lock.json found — running npm install instead."
-        npm install
-      fi
+      if [ -d "node_modules" ]; then echo "node_modules exists — skipping npm ci";
+      elif [ -f "package-lock.json" ]; then npm ci;
+      else npm install; fi
     elif [ "$LANGUAGE" = "java" ]; then
-      echo "📦 Java CDK project — verifying Gradle..."
       gradle --version || echo "Gradle wrapper will be used."
     elif [ "$LANGUAGE" = "py" ]; then
-      echo "📦 Python CDK project — installing pipenv deps..."
-      if ! command -v pipenv &>/dev/null; then
-        pip install pipenv
-      fi
+      if ! command -v pipenv &>/dev/null; then pip install pipenv; fi
       pipenv install --dev
     fi
     ;;
@@ -68,129 +57,102 @@ case "$PLATFORM" in
     echo "🪄 CDKTF project detected."
     if [ "$LANGUAGE" = "go" ]; then
       echo "📦 Go CDKTF project — skipping npm install."
+
     elif [[ "$LANGUAGE" =~ ^(ts|js)$ ]]; then
-      echo "📦 Installing npm dependencies for CDKTF..."
-      if [ -d "node_modules" ]; then
-        echo "node_modules exists — skipping npm ci"
-      elif [ -f "package-lock.json" ]; then
-        npm ci
-      else
-        npm install
+      if [ -d "node_modules" ]; then echo "node_modules exists — skipping npm ci";
+      elif [ -f "package-lock.json" ]; then npm ci;
+      else npm install; fi
+
+    elif [ "$LANGUAGE" = "py" ]; then
+      echo "🐍 CDKTF + Python detected — preparing environment..."
+
+      # ✅ Guarantee pipenv available
+      if ! command -v pipenv &>/dev/null; then
+        echo "📦 Installing pipenv..."
+        pip install pipenv
       fi
-    elif [ "$LANGUAGE" = "java" ]; then
-      gradle --version || echo "Gradle wrapper will handle it."
+
+      # ✅ Create venv if missing
+      if [ ! -d ".venv" ]; then
+        echo "📦 Installing Python dependencies..."
+        pipenv install --dev
+      else
+        echo "✅ .venv exists — skipping pipenv install"
+      fi
+
+      # ✅ Ensure CDKTF CLI installed (required for cdktf synth / get)
+      if ! command -v cdktf &>/dev/null; then
+        echo "📦 Installing CDKTF CLI globally..."
+        npm install -g cdktf-cli@latest >/dev/null 2>&1
+      else
+        echo "✅ CDKTF CLI already available"
+      fi
+
+      # ✅ Ensure .gen exists (critical for synth + lint + integration tests)
+      if [ ! -d ".gen/aws" ]; then
+        echo "📦 Generating provider bindings (.gen)..."
+        npx --yes cdktf get
+      else
+        echo "✅ .gen/aws exists — skipping cdktf get"
+      fi
     fi
     ;;
 
   tf)
-    echo "🪄 Terraform project — minimal setup required."
-    # Ensure Jest + ts-jest exists locally (no global pollution)
+    echo "🪄 Terraform project — minimal setup."
     if [ ! -d "node_modules" ]; then
-      echo "📦 Installing minimal Jest environment for Terraform test support..."
       npm init -y >/dev/null 2>&1 || true
       npm install --no-save jest ts-jest typescript @types/jest >/dev/null 2>&1
-    else
-      echo "✅ node_modules present — Jest assumed available"
     fi
     ;;
 
   pulumi)
     echo "🪄 Pulumi project detected."
     if [ "$LANGUAGE" = "py" ]; then
-      echo "📦 Installing Python deps for Pulumi..."
-      if ! command -v pipenv &>/dev/null; then
-        pip install pipenv
-      fi
-      [ -d ".venv" ] && echo "venv exists — skipping install" || pipenv install --dev
+      if ! command -v pipenv &>/dev/null; then pip install pipenv; fi
+      [ -d ".venv" ] && echo "✅ venv exists" || pipenv install --dev
     elif [[ "$LANGUAGE" =~ ^(ts|js)$ ]]; then
-      echo "📦 Installing Node deps for Pulumi..."
-      if [ -d "node_modules" ]; then
-        echo "node_modules exists — skipping npm ci"
-      elif [ -f "package-lock.json" ]; then
-        npm ci
-      else
-        npm install
-      fi
+      if [ -d "node_modules" ]; then echo "node_modules exists — skipping npm ci";
+      elif [ -f "package-lock.json" ]; then npm ci;
+      else npm install; fi
     elif [ "$LANGUAGE" = "java" ]; then
-      echo "📦 Java Pulumi project — Gradle build expected."
       gradle --version || echo "Gradle wrapper will handle it."
     fi
     ;;
 
   cfn)
-    echo "🪄 CloudFormation project detected — enabling Jest for template validation..."
+    echo "🪄 CloudFormation project detected — enabling Jest..."
     if ! command -v jest &>/dev/null; then
       npm install -g jest@28.1.3 ts-node typescript@5.4.5 @types/jest
     fi
     ;;
-
-  *)
-    echo "⚠️ Unknown or empty platform — skipping tool-specific setup."
-    ;;
 esac
 
 # -------------------------------------------------------------------
-# Universal Jest fallback setup (for all languages/platforms)
+# Universal Jest fallback
 # -------------------------------------------------------------------
 if ! command -v jest &>/dev/null; then
-  echo "📦 Installing Jest v28.1.3 globally for universal IaC test fallback..."
   npm install -g jest@28.1.3 ts-node typescript@5.4.5 @types/jest
-else
-  echo "✅ Jest already available globally — skipping fallback install."
 fi
 
 # -------------------------------------------------------------------
-# Go environment consistency
-# -------------------------------------------------------------------
-if [ "$LANGUAGE" = "go" ]; then
-  echo "🔧 Ensuring Go module mode and proxy settings..."
-  export GO111MODULE=on
-  go env -w GOPROXY=https://proxy.golang.org,direct || true
-fi
-
-# -------------------------------------------------------------------
-# Java wrapper safety (non-breaking)
+# Java wrapper fallback
 # -------------------------------------------------------------------
 if [ "$LANGUAGE" = "java" ] && [ ! -f "./gradlew" ]; then
-  echo "⚠️ gradlew missing — generating temporary wrapper"
-  gradle wrapper || echo "Gradle wrapper generation failed, continuing..."
+  gradle wrapper || echo "Gradle wrapper generation failed"
 fi
 
 # -------------------------------------------------------------------
-# Configure AWS if credentials are available
+# Configure AWS
 # -------------------------------------------------------------------
 if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
-  echo "🔧 Configuring AWS credentials..."
   ./scripts/configure-aws.sh
-else
-  echo "ℹ️ AWS credentials not set — skipping AWS config."
 fi
 
 # -------------------------------------------------------------------
-# PATH setup for local dependencies
+# PATH setup
 # -------------------------------------------------------------------
-if [ -d "node_modules/.bin" ]; then
-  echo "$(pwd)/node_modules/.bin" >> "$GITHUB_PATH"
-fi
-if [ -d ".venv/bin" ]; then
-  echo "$(pwd)/.venv/bin" >> "$GITHUB_PATH"
-fi
-
-# -------------------------------------------------------------------
-# Verification summary
-# -------------------------------------------------------------------
-echo "🔍 Verifying essential tools after setup..."
-for tool in node npm jq terraform pulumi go python java jest; do
-  command -v "$tool" >/dev/null 2>&1 && echo "✅ $tool available" || echo "⚠️ $tool missing (may not be needed)"
-done
-
-echo "🔧 Environment summary:"
-echo "Node: $(node --version 2>/dev/null || echo 'missing')"
-echo "Python: $(python --version 2>/dev/null || echo 'missing')"
-echo "Terraform: $(terraform version -json 2>/dev/null | jq -r '.terraform_version' || echo 'missing')"
-echo "Pulumi: $(pulumi version 2>/dev/null || echo 'missing')"
-echo "Go: $(go version 2>/dev/null || echo 'missing')"
-echo "Java: $(java -version 2>&1 | head -n 1 || echo 'missing')"
-echo "Jest: $(npx jest --version 2>/dev/null || echo 'missing')"
+[ -d "node_modules/.bin" ] && echo "$(pwd)/node_modules/.bin" >> "$GITHUB_PATH"
+[ -d ".venv/bin" ] && echo "$(pwd)/.venv/bin" >> "$GITHUB_PATH"
 
 echo "✅ Environment setup completed successfully"
