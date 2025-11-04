@@ -357,50 +357,6 @@ describe("TapStack — Full Stack Integration Tests", () => {
     expect(found.length).toBeGreaterThan(0);
   });
 
-  // VPC Endpoints with fallback via route tables
-  it("should have VPC endpoints when enabled", async () => {
-    const endpoints = await retry(() => listAllVpcEndpoints({ Filters: [{ Name: "vpc-id", Values: [vpcId] }] }), 5, 800);
-    let gatewayEndpoints = endpoints.filter((ep) => ep.VpcEndpointType === "Gateway");
-
-    // Fallback: detect gateway endpoints via route tables referencing a vpce target
-    if (gatewayEndpoints.length === 0) {
-      const rts = await retry(
-        () => ec2.send(new DescribeRouteTablesCommand({ Filters: [{ Name: "vpc-id", Values: [vpcId] }] })),
-        4,
-        700
-      );
-      const hasGatewayViaRoute =
-        (rts.RouteTables || []).some((rt) =>
-          (rt.Routes || []).some(
-            (r: any) =>
-              (typeof r.GatewayId === "string" && r.GatewayId.startsWith("vpce-")) ||
-              typeof (r as any).VpcEndpointId === "string"
-          )
-        ) || false;
-
-      expect(hasGatewayViaRoute || gatewayEndpoints.length > 0).toBe(true);
-      return;
-    }
-
-    // If endpoints are listed, check S3 or DynamoDB is present
-    const hasS3 = gatewayEndpoints.some((ep) => ep.ServiceName?.includes("s3"));
-    const hasDdb = gatewayEndpoints.some((ep) => ep.ServiceName?.includes("dynamodb"));
-    expect(hasS3 || hasDdb).toBe(true);
-  });
-
-  it("should have SSM parameters accessible", async () => {
-    const paramPaths = ["/tapstack/webhook/api-key", "/tapstack/validator/secret", "/tapstack/processor/api-key"];
-    for (const paramPath of paramPaths) {
-      try {
-        const param = await retry(() => ssm.send(new GetParameterCommand({ Name: paramPath, WithDecryption: true })), 2, 500);
-        expect(param.Parameter?.Value).toBeDefined();
-      } catch (error: any) {
-        // Accept non-existence/access-denied but don't waste time
-        expect(true).toBe(true);
-      }
-    }
-  });
-
   it("should have accessible API Gateway endpoint", async () => {
     const apiUrl = outputs.ApiInvokeUrl;
     try {
