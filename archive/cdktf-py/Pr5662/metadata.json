@@ -1,6 +1,6 @@
 {
   "platform": "cdktf",
-  "language": "py",
+  "language": "python",
   "complexity": "medium",
   "turn_type": "single",
   "team": "synth",
@@ -23,6 +23,11 @@
     "IAM"
   ],
   "region": "ap-northeast-1",
-  "author": "chriscrsov",
-  "training_quality": 8
+  "author": "mayanksethi-turing",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
