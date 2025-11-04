@@ -1,12 +1,14 @@
 {
-  "platform": "tf",
+  "platform": "terraform",
   "language": "hcl",
   "complexity": "medium",
   "turn_type": "single",
   "team": "synth",
   "startedAt": "2025-11-03T14:56:59+00:00",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": ["Cloud Environment Setup"],
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
   "po_id": "101000811",
   "aws_services": [
     "vpc",
@@ -20,5 +22,10 @@
   ],
   "region": "us-east-1",
   "training_quality": 9,
-  "author": "emmanuel-turing"
+  "author": "iamarpit-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
