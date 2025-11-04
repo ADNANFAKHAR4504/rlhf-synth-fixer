@@ -19,5 +19,6 @@
     "Lambda"
   ],
   "region": "ap-northeast-2",
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "rajendra-s-aws"
 }
