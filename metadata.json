@@ -1,0 +1,36 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000351",
+  "team": "4",
+  "startedAt": "2025-11-03T15:30:17.829Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "RDS",
+    "S3",
+    "CloudFront",
+    "IAM",
+    "KMS",
+    "Secrets Manager",
+    "CloudWatch",
+    "WAF",
+    "Application Load Balancer",
+    "Auto Scaling",
+    "ECR"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "jpoola-turing",
+  "dockerS3Location": ""
+}
