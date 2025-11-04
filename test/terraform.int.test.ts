@@ -33,7 +33,7 @@ const outputFile = path.resolve("cfn-outputs/flat-outputs.json");
 
 const isNonEmptyString = (v: any) => typeof v === "string" && v.trim().length > 0;
 const isValidArn = (v: string) =>
-  /^arn:aws:[^:]+:[^:]*:[^:]*:[^:]*[a-zA-Z0-9/_\-]+(-[a-zA-Z0-9]+)*$/.test(v.trim());
+  /^arn:aws:[^:]+:[^:]*:[^:]*:[^:]*[a-zA-Z0-9/_:\-]+(-[a-zA-Z0-9]+)*$/.test(v.trim());
 const isValidVpcId = (v: string) => v.startsWith("vpc-");
 const isValidSubnetId = (v: string) => v.startsWith("subnet-");
 const isValidSecurityGroupId = (v: string) => v.startsWith("sg-");
