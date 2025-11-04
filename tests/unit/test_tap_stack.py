@@ -15,7 +15,7 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
-from lib.lib.tap_stack import TapStack  # pylint: disable=wrong-import-position
+from lib.tap_stack import TapStack  # pylint: disable=wrong-import-position
 
 DEFAULT_STACK_KWARGS: Dict[str, object] = {
     "environment_suffix": "test",
