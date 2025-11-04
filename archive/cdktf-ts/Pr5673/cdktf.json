@@ -1,0 +1,15 @@
+{
+  "language": "typescript",
+  "app": "npx ts-node bin/main.ts",
+  "projectId": "fintech-api-cdktf",
+  "sendCrashReports": "false",
+  "terraformProviders": [
+    "aws@~> 5.0",
+    "archive@~> 2.0"
+  ],
+  "terraformModules": [],
+  "context": {
+    "excludeStackIdFromLogicalIds": "true",
+    "allowSepCharsInLogicalIds": "true"
+  }
+}
