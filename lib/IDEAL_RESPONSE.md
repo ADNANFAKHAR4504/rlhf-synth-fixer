@@ -4,7 +4,7 @@ This implementation provides a comprehensive database migration infrastructure w
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 /**
  * TapStack - Database Migration Infrastructure
  *

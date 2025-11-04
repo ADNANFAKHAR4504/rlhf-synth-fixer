@@ -24,7 +24,7 @@ The analysis focuses on infrastructure code quality, testing completeness, and a
 
 The model generated only a placeholder integration test file with no actual tests:
 
-```typescript
+```ts
 // File: test/tap-stack.int.test.ts (MODEL_RESPONSE)
 describe('Turn Around Prompt API Integration Tests', () => {
   describe('Write Integration TESTS', () => {
@@ -39,7 +39,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
 
 Comprehensive integration test suite with 43 tests across 15 categories, covering all infrastructure components:
 
-```typescript
+```ts
 // File: test/tap-stack.int.test.ts (IDEAL_RESPONSE)
 /**
  * Integration Tests for Database Migration Infrastructure
@@ -144,14 +144,14 @@ The model failed to understand and implement the PROMPT requirement: "Must imple
 
 The model embedded branching logic directly inside Pulumi `.apply()` transformations, making unit testing difficult:
 
-```typescript
+```ts
 // File: lib/tap-stack.ts (MODEL_RESPONSE - Lines 727-729)
 password: dbMasterPasswordVersion.secretString.apply(
   s => JSON.parse(s || '{}').password as string  // Branch inside async callback
 ),
 ```
 
-```typescript
+```ts
 // File: lib/tap-stack.ts (MODEL_RESPONSE - Lines 777-784)
 secretString: pulumi.all([...]).apply(([endpoint, host, oldSecret]) => {
   const secret = JSON.parse(oldSecret || '{}');  // Branch inside async callback
@@ -167,7 +167,7 @@ secretString: pulumi.all([...]).apply(([endpoint, host, oldSecret]) => {
 
 Extract transformation logic into separate, testable pure functions:
 
-```typescript
+```ts
 // File: lib/tap-stack.ts (IDEAL_RESPONSE)
 
 // Extractable pure function
@@ -293,7 +293,7 @@ Error Summary:
 
 Code generated with proper formatting and intentional unused variables marked with underscores or eslint-disable comments:
 
-```typescript
+```ts
 // Proper handling of infrastructure resources that need to exist but aren't referenced
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const _primaryKmsAlias = new aws.kms.Alias(...);
