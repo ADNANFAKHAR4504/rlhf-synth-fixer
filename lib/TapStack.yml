@@ -525,6 +525,12 @@ Resources:
                   - 's3:*'
                   - 'logs:*'
                   - 'cloudwatch:*'
+                  - 'kms:Decrypt'
+                  - 'kms:DescribeKey'
+                  - 'kms:CreateGrant'
+                  - 'kms:GenerateDataKey'
+                  - 'ec2:Describe*'
+                  - 'ssm:GetParameter*'
                 Resource: '*'
       Tags:
         - Key: Name
@@ -550,15 +556,21 @@ Resources:
       SubnetId: !Ref PrivateSubnet1
       SecurityGroupIds:
         - !Ref PrivateInstanceSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 8
+            VolumeType: gp3
+            DeleteOnTermination: true
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
           set -e
-          
+
           # Log output for debugging
           exec > >(tee /var/log/user-data.log)
           exec 2>&1
-          
+
           # Create a marker file
           echo "Private EC2 instance initialized at $(date)" > /home/ec2-user/instance-info.txt
           echo "Stack: ${AWS::StackName}" >> /home/ec2-user/instance-info.txt
@@ -586,15 +598,21 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       SecurityGroupIds:
         - !Ref BastionSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 8
+            VolumeType: gp3
+            DeleteOnTermination: true
       UserData:
         Fn::Base64: |
           #!/bin/bash
           set -e
-          
+
           # Log output for debugging
           exec > >(tee /var/log/user-data.log)
           exec 2>&1
-          
+
           # Harden SSH configuration
           sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
           sed -i 's/^#*MaxAuthTries.*/MaxAuthTries 3/' /etc/ssh/sshd_config
