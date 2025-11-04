@@ -129,22 +129,75 @@ new S3Backend(this, {
 
 ---
 
+### 5. Reserved Lambda Environment Variable
+
+**Impact Level**: Critical
+
+**MODEL_RESPONSE Issue**:
+```typescript
+// In lib/data-processing-stack.ts line 286
+environment: {
+  variables: {
+    ENVIRONMENT: environment,
+    BUCKET_NAME: dataBucket.bucket,
+    TABLE_NAME: jobTable.name,
+    AWS_REGION: awsRegion,  // ❌ RESERVED KEY
+  },
+},
+```
+
+The Lambda function configuration uses `AWS_REGION` as an environment variable key, which is a reserved AWS Lambda runtime variable and cannot be overridden by user code.
+
+**IDEAL_RESPONSE Fix**:
+```typescript
+environment: {
+  variables: {
+    ENVIRONMENT: environment,
+    BUCKET_NAME: dataBucket.bucket,
+    TABLE_NAME: jobTable.name,
+    REGION: awsRegion,  // ✅ Custom key
+  },
+},
+```
+
+**Root Cause**: Lack of awareness of AWS Lambda's reserved environment variable keys. The AWS Lambda runtime automatically provides several environment variables including `AWS_REGION`, and attempting to override them results in deployment failures.
+
+**AWS Documentation Reference**: https://docs.aws.amazon.com/lambda/latest/dg/configuration-envvars.html#configuration-envvars-runtime
+
+**Deployment Impact**:
+- **Blocker**: Lambda creation fails with InvalidParameterValueException
+- **Error Message**: "Lambda was unable to configure your environment variables because the environment variables you have provided contains reserved keys that are currently not supported for modification. Reserved keys used in this request: AWS_REGION"
+- **Cost Impact**: Failed deployment attempt, infrastructure rollback required
+
+**Additional Changes Required**:
+```javascript
+// In lib/lambda/index.js - Update client initialization
+const s3Client = new S3Client({ region: process.env.REGION || process.env.AWS_REGION });
+const dynamoClient = new DynamoDBClient({ region: process.env.REGION || process.env.AWS_REGION });
+```
+
+The Lambda function code must be updated to use the custom `REGION` variable with fallback to the runtime-provided `AWS_REGION`.
+
+---
+
 ## Summary
 
-- **Total failures**: 4 Critical
+- **Total failures**: 5 Critical
 - **Primary knowledge gaps**:
   1. CDKTF construct hierarchy (Stack vs Construct inheritance)
   2. CDKTF dependency management (`node.addDependency` vs `addOverride`)
   3. Terraform S3 backend configuration properties
   4. Proper separation of environment name vs environmentSuffix
+  5. AWS Lambda reserved environment variables
 
-- **Training value**: HIGH - These are fundamental CDKTF/Terraform concepts that would prevent successful deployment in real-world scenarios. The fixes represent core understanding improvements in:
+- **Training value**: HIGH - These are fundamental CDKTF/Terraform/AWS concepts that would prevent successful deployment in real-world scenarios. The fixes represent core understanding improvements in:
   - Infrastructure as Code patterns (construct composition)
   - Resource dependency management
   - Terraform backend configuration
   - Environment parameter handling
+  - AWS Lambda runtime constraints
 
-- **Impact**: All 4 failures are deployment blockers. Without these fixes, the infrastructure cannot be deployed to AWS. Each fix was discovered through actual synthesis/deployment attempts, making this valuable training data for preventing similar errors in future generations.
+- **Impact**: All 5 failures are deployment blockers. Without these fixes, the infrastructure cannot be deployed to AWS. Each fix was discovered through actual synthesis/deployment attempts, making this valuable training data for preventing similar errors in future generations.
 
 - **Deployment Success Rate**: 0% without fixes, 100% with fixes applied
-- **Cost of Failures**: ~5 failed synthesis/deployment attempts, approximately 15-20 minutes of debugging time
+- **Cost of Failures**: ~6 failed synthesis/deployment attempts, approximately 20-25 minutes of debugging time

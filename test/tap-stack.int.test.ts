@@ -231,7 +231,7 @@ describe('Multi-Environment Data Processing Pipeline Integration Tests', () => {
       expect(envVars?.ENVIRONMENT).toBe(outputs.Environment || 'dev');
       expect(envVars?.BUCKET_NAME).toBe(outputs.BucketName);
       expect(envVars?.TABLE_NAME).toBe(outputs.TableName);
-      expect(envVars?.AWS_REGION).toBe(region);
+      expect(envVars?.REGION).toBe(region);
     });
 
     test('Lambda function can be invoked successfully', async () => {

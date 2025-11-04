@@ -283,7 +283,7 @@ export class DataProcessingStack extends Construct {
           ENVIRONMENT: environment,
           BUCKET_NAME: dataBucket.bucket,
           TABLE_NAME: jobTable.name,
-          AWS_REGION: awsRegion,
+          REGION: awsRegion,
         },
       },
       tags: {

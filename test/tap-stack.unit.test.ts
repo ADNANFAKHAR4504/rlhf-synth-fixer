@@ -294,7 +294,7 @@ describe('DataProcessing Stack Resource Tests', () => {
     expect(synthesized).toContain('ENVIRONMENT');
     expect(synthesized).toContain('BUCKET_NAME');
     expect(synthesized).toContain('TABLE_NAME');
-    expect(synthesized).toContain('AWS_REGION');
+    expect(synthesized).toContain('REGION');
   });
 
   test('IAM role is created for Lambda', () => {
