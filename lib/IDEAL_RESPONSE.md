@@ -16,7 +16,7 @@ The infrastructure includes:
 
 ## File: lib/tap_stack.py
 
-```python
+```py
 """TAP Stack module for CDKTF Python infrastructure."""
 
 from cdktf import TerraformStack, S3Backend, TerraformOutput, Fn

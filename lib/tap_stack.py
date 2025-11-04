@@ -47,7 +47,7 @@ from cdktf_cdktf_provider_aws.cloudfront_distribution import (
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import (
     S3BucketLifecycleConfiguration, S3BucketLifecycleConfigurationRule,
-    S3BucketLifecycleConfigurationRuleExpiration
+    S3BucketLifecycleConfigurationRuleExpiration, S3BucketLifecycleConfigurationRuleFilter
 )
 from cdktf_cdktf_provider_aws.data_aws_availability_zones import DataAwsAvailabilityZones
 import json
@@ -219,6 +219,9 @@ class TapStack(TerraformStack):
                 S3BucketLifecycleConfigurationRule(
                     id="delete-old-logs",
                     status="Enabled",
+                    filter=[S3BucketLifecycleConfigurationRuleFilter(
+                        prefix=""
+                    )],
                     expiration=[S3BucketLifecycleConfigurationRuleExpiration(
                         days=30
                     )]
@@ -342,8 +345,9 @@ class TapStack(TerraformStack):
         db_secret = SecretsmanagerSecret(
             self,
             f"db-secret-{environment_suffix}",
-            name=f"catalog-api-db-password-{environment_suffix}",
+            name=f"catalog-api-db-password-{environment_suffix}-v2",
             description="Database password for catalog API",
+            recovery_window_in_days=0,
             tags={
                 "Name": f"catalog-api-db-password-{environment_suffix}"
             }
@@ -585,7 +589,6 @@ class TapStack(TerraformStack):
             cluster=ecs_cluster.id,
             task_definition=task_definition.arn,
             desired_count=2,
-            launch_type="FARGATE",
             network_configuration=EcsServiceNetworkConfiguration(
                 subnets=[private_subnet_1.id, private_subnet_2.id],
                 security_groups=[ecs_sg.id],
