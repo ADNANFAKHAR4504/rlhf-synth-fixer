@@ -6,7 +6,7 @@
   "team": "synth",
   "startedAt": "2025-11-04T18:37:30+05:30",
   "subtask": "Application Deployment",
-  "subject_labels": [],
+  "subject_labels": ["Serverless Infrastructure (Functions as Code)"],
   "po_id": "l7p9m7",
   "aws_services": [
     "DynamoDB",
