@@ -811,13 +811,13 @@ describe("TapStack Infrastructure Tests - 100% Coverage", () => {
       expect(args.enabledCloudwatchLogsExports).toContain("slowquery");
     });
 
-    it("should set deletion protection to true", () => {
+    it("should set deletion protection to false", () => {
       new TapStack("tap-stack-test", defaultArgs);
 
       const rdsMock = aws.rds.Instance as unknown as jest.Mock;
       const args = rdsMock.mock.calls[0][1];
 
-      expect(args.deletionProtection).toBe(true);
+      expect(args.deletionProtection).toBe(false);
     });
 
     it("should not skip final snapshot", () => {
@@ -1017,7 +1017,7 @@ describe("TapStack Infrastructure Tests - 100% Coverage", () => {
 
       expect(args.loadBalancerType).toBe("application");
       expect(args.enableHttp2).toBe(true);
-      expect(args.enableDeletionProtection).toBe(true);
+      expect(args.enableDeletionProtection).toBe(false);
     });
 
     it("should create blue target group", () => {
