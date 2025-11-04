@@ -27,6 +27,8 @@ class VpcComponent extends pulumi.ComponentResource {
   vpc: aws.ec2.Vpc;
   publicSubnets: aws.ec2.Subnet[];
   privateSubnets: aws.ec2.Subnet[];
+  publicRouteTable: aws.ec2.RouteTable;
+  privateRouteTable: aws.ec2.RouteTable;
 
   constructor(
     name: string,
@@ -106,7 +108,7 @@ class VpcComponent extends pulumi.ComponentResource {
     );
 
     // Create route table for public subnets
-    const publicRouteTable = new aws.ec2.RouteTable(
+    this.publicRouteTable = new aws.ec2.RouteTable(
       `${name}-public-rt`,
       {
         vpcId: this.vpc.id,
@@ -129,7 +131,7 @@ class VpcComponent extends pulumi.ComponentResource {
         `${name}-public-rta-${index + 1}`,
         {
           subnetId: subnet.id,
-          routeTableId: publicRouteTable.id,
+          routeTableId: this.publicRouteTable.id,
         },
         { parent: this }
       );
@@ -160,7 +162,7 @@ class VpcComponent extends pulumi.ComponentResource {
     );
 
     // Create route table for private subnets
-    const privateRouteTable = new aws.ec2.RouteTable(
+    this.privateRouteTable = new aws.ec2.RouteTable(
       `${name}-private-rt`,
       {
         vpcId: this.vpc.id,
@@ -183,7 +185,7 @@ class VpcComponent extends pulumi.ComponentResource {
         `${name}-private-rta-${index + 1}`,
         {
           subnetId: subnet.id,
-          routeTableId: privateRouteTable.id,
+          routeTableId: this.privateRouteTable.id,
         },
         { parent: this }
       );
@@ -396,6 +398,7 @@ class IamComponent extends pulumi.ComponentResource {
 
 /**
  * Component Resource for RDS Aurora PostgreSQL
+ * FIX: Removed enableHttpEndpoint which is not supported in Aurora PostgreSQL 14.6
  */
 class RdsComponent extends pulumi.ComponentResource {
   cluster: aws.rds.Cluster;
@@ -432,6 +435,7 @@ class RdsComponent extends pulumi.ComponentResource {
     );
 
     // Create RDS cluster
+    // FIXED: Removed enableHttpEndpoint - not supported for Aurora PostgreSQL 14.6
     this.cluster = new aws.rds.Cluster(
       `${name}-cluster`,
       {
@@ -447,7 +451,6 @@ class RdsComponent extends pulumi.ComponentResource {
         preferredBackupWindow: "03:00-04:00",
         preferredMaintenanceWindow: "mon:04:00-mon:05:00",
         skipFinalSnapshot: true,
-        enableHttpEndpoint: true,
         storageEncrypted: true,
         tags: tags,
       },
@@ -659,7 +662,8 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Create ALB listener
-    new aws.lb.Listener(
+    // FIXED: Add explicit depends_on to ensure ALB is fully created before listener
+    const albListener = new aws.lb.Listener(
       `${name}-listener`,
       {
         loadBalancerArn: alb.arn,
@@ -672,7 +676,7 @@ export class TapStack extends pulumi.ComponentResource {
           },
         ],
       },
-      { parent: this }
+      { parent: this, dependsOn: [alb, targetGroup] }
     );
 
     // Create ECS Cluster
@@ -703,7 +707,10 @@ export class TapStack extends pulumi.ComponentResource {
         executionRoleArn: this.iamComponent.ecsTaskExecutionRole.arn,
         taskRoleArn: this.iamComponent.ecsTaskRole.arn,
         containerDefinitions: pulumi
-          .all([this.ecrComponent.repository.repositoryUrl, this.cloudwatchComponent.logGroup.name])
+          .all([
+            this.ecrComponent.repository.repositoryUrl,
+            this.cloudwatchComponent.logGroup.name,
+          ])
           .apply(([repoUrl, logGroupName]) =>
             JSON.stringify([
               {
@@ -738,7 +745,34 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // Create security group for ECS tasks
+    const ecsSecurityGroup = new aws.ec2.SecurityGroup(
+      `${name}-ecs-sg`,
+      {
+        vpcId: this.vpcComponent.vpc.id,
+        ingress: [
+          {
+            protocol: "tcp",
+            fromPort: environmentConfig.containerPort,
+            toPort: environmentConfig.containerPort,
+            securityGroups: [albSecurityGroup.id],
+          },
+        ],
+        egress: [
+          {
+            protocol: "-1",
+            fromPort: 0,
+            toPort: 0,
+            cidrBlocks: ["0.0.0.0/0"],
+          },
+        ],
+        tags: args.tags,
+      },
+      { parent: this }
+    );
+
     // Create ECS Service
+    // FIXED: Add explicit depends_on to ensure ALB listener is created first
     const ecsService = new aws.ecs.Service(
       `${name}-service`,
       {
@@ -748,6 +782,7 @@ export class TapStack extends pulumi.ComponentResource {
         launchType: "FARGATE",
         networkConfiguration: {
           subnets: this.vpcComponent.privateSubnets.map((s) => s.id),
+          securityGroups: [ecsSecurityGroup.id],
           assignPublicIp: false,
         },
         loadBalancers: [
@@ -759,7 +794,7 @@ export class TapStack extends pulumi.ComponentResource {
         ],
         tags: args.tags,
       },
-      { parent: this }
+      { parent: this, dependsOn: [albListener] }
     );
 
     // Create CloudWatch Alarms
