@@ -91,16 +91,37 @@ elif [ "$LANGUAGE" = "java" ]; then
 elif [ "$PLATFORM" = "cfn" ]; then
     echo "✅ CloudFormation project detected, running cfn-lint..."
 
-    # Ensure cfn-lint is installed (idempotent & cached across runs)
-    if ! command -v cfn-lint &>/dev/null; then
-        echo "📦 Installing cfn-lint..."
-        pip install cfn-lint >/dev/null 2>&1
+    # If Pipfile exists → use pipenv environment
+    if [ -f "Pipfile" ]; then
+        echo "📦 Pipfile found — ensuring pipenv is available..."
+        if ! command -v pipenv &>/dev/null; then
+            echo "📦 Installing pipenv..."
+            pip install pipenv
+        fi
+
+        # Create virtualenv only if needed (cached after first run)
+        if [ ! -d ".venv" ]; then
+            echo "📦 Installing Python dependencies via pipenv..."
+            pipenv install --dev
+        else
+            echo "✅ .venv exists — skipping pipenv install"
+        fi
+
+        echo "🔍 Linting templates under lib/ using pipenv environment..."
+        find lib -type f \( -name "*.yaml" -o -name "*.yml" -o -name "*.json" \) \
+            -print0 | xargs -0 -r pipenv run cfn-lint -t
+
+    else
+        echo "ℹ️ No Pipfile found — using system Python environment"
+        if ! command -v cfn-lint &>/dev/null; then
+            echo "📦 Installing cfn-lint..."
+            pip install cfn-lint >/dev/null 2>&1
+        fi
+
+        echo "🔍 Linting templates under lib/ ..."
+        find lib -type f \( -name "*.yaml" -o -name "*.yml" -o -name "*.json" \) \
+            -print0 | xargs -0 -r cfn-lint -t
     fi
-
-    echo "🔍 Linting templates under lib/ ..."
-    find lib -type f \( -name "*.yaml" -o -name "*.yml" -o -name "*.json" \) \
-        -print0 | xargs -0 -r cfn-lint -t
-
 else
     echo "ℹ️ Unknown platform/language combination: $PLATFORM/$LANGUAGE"
     echo "💡 Running default ESLint fallback"

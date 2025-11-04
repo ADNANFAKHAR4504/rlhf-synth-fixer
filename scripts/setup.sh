@@ -121,7 +121,28 @@ case "$PLATFORM" in
     ;;
 
   cfn)
-    echo "🪄 CloudFormation project detected — enabling Jest..."
+    echo "🪄 CloudFormation project detected."
+
+    # CFN projects use pipenv in lint/unit tests, so ensure pipenv exists
+    if [ -f "Pipfile" ]; then
+      echo "📦 Pipfile found — installing pipenv environment..."
+      if ! command -v pipenv &>/dev/null; then
+        pip install pipenv
+      fi
+
+      # Create virtualenv only if not already present (fast on repeat runs)
+      if [ ! -d ".venv" ]; then
+        pipenv install --dev
+      else
+        echo "✅ .venv exists — skipping pipenv install"
+      fi
+    else
+      echo "ℹ️ No Pipfile present — using system python + pip"
+      pip install --user cfn-lint cfn-flip || pip install cfn-lint cfn-flip
+      export PATH="$PATH:$HOME/.local/bin"
+    fi
+
+    # Jest for template structure validation tests
     if ! command -v jest &>/dev/null; then
       npm install -g jest@28.1.3 ts-node typescript@5.4.5 @types/jest
     fi
