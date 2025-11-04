@@ -552,7 +552,6 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    let snapshotIdentifier: pulumi.Output<string | undefined> | undefined;
 
     if (
       args.devEnvironment?.rdsInstanceIdentifier &&
@@ -573,7 +572,6 @@ export class TapStack extends pulumi.ComponentResource {
         defaultOpts
       );
 
-      snapshotIdentifier = this.devRdsSnapshot.id;
     }
 
     this.prodRdsInstance = new aws.rds.Instance(
