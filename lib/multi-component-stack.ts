@@ -108,9 +108,9 @@ export class MultiComponentApplicationConstruct extends Construct {
         props?.baseEnvironmentSuffix as string | undefined,
         this.stringSuffix
       ) as string,
-      cidr: '10.0.0.0/16',
+      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'), // Updated from deprecated cidr property
       maxAzs: 2,
-      natGateways: 2,
+      natGateways: 1, // Reduced from 2 to 1 to avoid EIP quota issues
       enableDnsHostnames: true,
       enableDnsSupport: true,
       subnetConfiguration: [
@@ -629,7 +629,7 @@ export class MultiComponentApplicationConstruct extends Construct {
       },
       tracing: lambda.Tracing.ACTIVE,
       role: lambdaRole,
-      logRetention: logs.RetentionDays.ONE_WEEK,
+      // logRetention removed - using explicit logGroup instead (lambdaLogGroup created above)
       // Do not hard-code reserved concurrency here; account limits vary and
       // can cause deployment failures. Operators can set a reserved concurrency
       // value via context or overrides if needed.
