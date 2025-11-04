@@ -1,9 +1,0 @@
-{
-  "name": "tap-api-lambda",
-  "version": "1.0.0",
-  "description": "API Lambda asset for integration tests (includes aws-sdk v2)",
-  "private": true,
-  "dependencies": {
-    "aws-sdk": "^2.1350.0"
-  }
-}

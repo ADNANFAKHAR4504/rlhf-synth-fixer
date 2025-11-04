@@ -104,7 +104,7 @@ export class MultiComponentApplicationConstruct extends Construct {
       // Use a consistent, human-friendly VPC name across code and docs.
       // Use the canonicalResourceName helper to ensure deterministic names.
       vpcName: canonicalResourceName(
-        'prod-app-vpc',
+        'prod-vpc-app',
         props?.baseEnvironmentSuffix as string | undefined,
         this.stringSuffix
       ) as string,
@@ -609,21 +609,12 @@ export class MultiComponentApplicationConstruct extends Construct {
         props?.baseEnvironmentSuffix as string | undefined,
         safeSuffixForLambda as string
       ) as string,
-      runtime: lambda.Runtime.NODEJS_18_X, // Updated to supported version
+      runtime: lambda.Runtime.NODEJS_20_X, // Updated to Node.js 20.x for latest support
       handler: 'index.handler',
-      // Use a simple asset path. In CI/local we must ensure dependencies
-      // are present in `lib/lambda/api/node_modules`. To avoid requiring a
-      // manual `prepare.sh` step in CI, use Docker bundling so CDK will run
-      // `npm ci --production` inside a container at synth time and produce
-      // a bundled asset. This makes the deployment more robust across CI
-      // environments that support Docker.
-      code: lambda.Code.fromAsset(path.join(__dirname, 'lambda', 'api'), {
-        bundling: {
-          image: cdk.BundlingDockerImage.fromRegistry('node:18'),
-          // Install production deps and copy the result to /asset-output
-          command: ['bash', '-lc', 'npm ci --production && cp -r . /asset-output'],
-        },
-      }),
+      // Use simple asset packaging. The Lambda handler uses aws-sdk from the root
+      // node_modules which is included automatically by CDK. No separate package.json
+      // or bundling needed since dependencies are managed at the root level.
+      code: lambda.Code.fromAsset(path.join(__dirname, 'lambda', 'api')),
       vpc,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
