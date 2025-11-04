@@ -1,0 +1,7 @@
+config:
+  aws:region: us-east-1
+  payment-processing-staging:environmentSuffix: synth101000821
+  payment-processing-staging:awsRegion: us-east-1
+  payment-processing-staging:dbPassword:
+    secure: v1:NoHLkouiKPUd8BXZ:kjusWAuI3b8J2Ur0UlZAwr9oenExyZG5CBDRxojFNqc=
+encryptionsalt: v1:f7YORreRy3A=:v1:0Xzg7+qDbn8KY3or:HZuFrpKbSKAYJRPKqPshmzuKQKL/hQ==
