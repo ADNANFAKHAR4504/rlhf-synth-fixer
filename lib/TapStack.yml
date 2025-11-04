@@ -733,3 +733,112 @@ Outputs:
     Description: NAT Gateway Elastic IP (only available if EnableNATGateway is true)
     Condition: UseNATGateway
     Value: !Ref NATGatewayEIP
+
+  InternetGatewayId:
+    Description: Internet Gateway ID
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-IGW-ID'
+
+  BastionSecurityGroupId:
+    Description: Bastion Security Group ID
+    Value: !Ref BastionSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-Bastion-SG-ID'
+
+  PrivateInstanceSecurityGroupId:
+    Description: Private Instance Security Group ID
+    Value: !Ref PrivateInstanceSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-Private-SG-ID'
+
+  EC2InstanceRoleArn:
+    Description: EC2 Instance Role ARN
+    Value: !GetAtt EC2InstanceRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2-Role-ARN'
+
+  EC2InstanceProfileArn:
+    Description: EC2 Instance Profile ARN
+    Value: !GetAtt EC2InstanceProfile.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2-Profile-ARN'
+
+  CloudTrailArn:
+    Description: CloudTrail ARN
+    Value: !GetAtt CloudTrail.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrail-ARN'
+
+  VPCFlowLogId:
+    Description: VPC Flow Log ID
+    Value: !Ref VPCFlowLog
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-FlowLog-ID'
+
+  VPCFlowLogGroupName:
+    Description: VPC Flow Log Group Name
+    Value: !Ref VPCFlowLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-FlowLog-Group'
+
+  CloudTrailBucketArn:
+    Description: CloudTrail S3 Bucket ARN
+    Value: !GetAtt CloudTrailS3Bucket.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrail-Bucket-ARN'
+
+  AccessLogsBucketArn:
+    Description: Access Logs S3 Bucket ARN
+    Value: !GetAtt AccessLoggingBucket.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-AccessLogs-Bucket-ARN'
+
+  BastionHostId:
+    Description: Bastion Host Instance ID
+    Value: !Ref BastionHost
+    Export:
+      Name: !Sub '${AWS::StackName}-Bastion-ID'
+
+  PrivateInstancePrivateIP:
+    Description: Private EC2 Instance Private IP
+    Value: !GetAtt PrivateEC2Instance.PrivateIp
+    Export:
+      Name: !Sub '${AWS::StackName}-Private-Instance-IP'
+
+  PublicRouteTableId:
+    Description: Public Route Table ID
+    Value: !Ref PublicRouteTable
+    Export:
+      Name: !Sub '${AWS::StackName}-Public-RT-ID'
+
+  PrivateRouteTableId:
+    Description: Private Route Table ID
+    Value: !Ref PrivateRouteTable
+    Export:
+      Name: !Sub '${AWS::StackName}-Private-RT-ID'
+
+  NATGatewayId:
+    Description: NAT Gateway ID (only available if EnableNATGateway is true)
+    Condition: UseNATGateway
+    Value: !Ref NATGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-NAT-Gateway-ID'
+
+  EmptyS3BucketLambdaArn:
+    Description: Empty S3 Bucket Lambda Function ARN
+    Value: !GetAtt EmptyS3BucketLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-Empty-Lambda-ARN'
+
+  StackRegion:
+    Description: AWS Region where stack is deployed
+    Value: !Ref AWS::Region
+    Export:
+      Name: !Sub '${AWS::StackName}-Region'
+
+  StackId:
+    Description: CloudFormation Stack ID
+    Value: !Ref AWS::StackId
+    Export:
+      Name: !Sub '${AWS::StackName}-Stack-ID'
