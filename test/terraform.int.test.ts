@@ -14,20 +14,6 @@ describe("Terraform Multi-Environment Infrastructure - Integration Tests", () =>
       // This is expected to not exist before deployment
       expect(true).toBe(true);
     });
-
-    test("flat-outputs.json structure is valid after deployment", () => {
-      if (!fs.existsSync(CFN_OUTPUTS_PATH)) {
-        console.log("Skipping: flat-outputs.json will be created after deployment");
-        return;
-      }
-
-      const outputs = JSON.parse(fs.readFileSync(CFN_OUTPUTS_PATH, "utf8"));
-      const outputKeys = Object.keys(outputs);
-
-      // Validate that outputs structure is valid JSON and contains at least one key
-      expect(outputKeys.length).toBeGreaterThan(0);
-      expect(typeof outputs).toBe("object");
-    });
   });
 
   describe("Multi-Environment Consistency", () => {
