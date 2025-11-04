@@ -19,6 +19,7 @@ aws-cdk-lib = "*"
 constructs = "*"
 cfn-lint = "*"
 cfn-flip = "*"
+tabulate = "*"
 
 [dev-packages]
 boto3 = "*"
