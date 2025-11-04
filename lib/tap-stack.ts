@@ -537,6 +537,7 @@ export class TapStack extends pulumi.ComponentResource {
       `migration-backups-${environmentSuffix}`,
       {
         bucket: `migration-backups-${environmentSuffix}-${uniqueId}`,
+        forceDestroy: true,
         versioning: {
           enabled: true,
         },
@@ -605,6 +606,7 @@ export class TapStack extends pulumi.ComponentResource {
       `migration-backups-secondary-${environmentSuffix}`,
       {
         bucket: `migration-backups-secondary-${environmentSuffix}-${uniqueId}`,
+        forceDestroy: true,
         versioning: {
           enabled: true,
         },
