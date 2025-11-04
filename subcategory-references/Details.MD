@@ -22,11 +22,11 @@
 ---
 
 ## Multi-Environment Consistency and Replication
-> Reuse one module/template to deploy identical topologies across dev/stage/prod with param differences only.  
+> Reuse one module/template to deploy identical topologies across dev/stage/prod with param differences only.
 > Prove parity by diffing plans/stacks and enforcing environment-specific tags/limits.
 
-**PR Reference:**  
-- _(To be linked when available)_
+**PR Reference:**
+- [PR #5474](https://github.com/TuringGpt/iac-test-automations/pull/5474) - tf-hcl
 
 ---
 
@@ -67,11 +67,13 @@
 ---
 
 ## Infrastructure Analysis/Monitoring
-> Use Boto3/CLI scripts to inventory, detect waste/misconfig (unused EBS, open SGs, NAT/EIP, log sizes).  
+> Use Boto3/CLI scripts to inventory, detect waste/misconfig (unused EBS, open SGs, NAT/EIP, log sizes).
 > Emit JSON/CSV reports and wire to CI to continuously flag cost/security issues.
 
-**PR Reference:**  
-- _(To be linked when available)_
+**PR Reference:**
+- [PR #5304](https://github.com/TuringGpt/iac-test-automations/pull/5304) - analysis-py
+- [PR #5426](https://github.com/TuringGpt/iac-test-automations/pull/5426) - analysis-py
+- [PR #5548](https://github.com/TuringGpt/iac-test-automations/pull/5548) - analysis-py 
 
 ---
 
@@ -94,11 +96,11 @@
 ---
 
 ## IaC Diagnosis/Edits
-> Fix broken stacks/modules: permissions, dependencies, state imports, and template modularization.  
+> Fix broken stacks/modules: permissions, dependencies, state imports, and template modularization.
 > Preserve live resources, add tests/linting, and justify any necessary suppressions or refactors.
 
-**PR Reference:**  
-- _(To be linked when available)_
+**PR Reference:**
+- [PR #5234](https://github.com/TuringGpt/iac-test-automations/pull/5234) - cdk-java
 
 ---
 
