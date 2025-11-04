@@ -7,16 +7,7 @@
   "startedAt": "2025-11-03T19:29:48+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Must use CDK v2.x with TypeScript",
-    "VPC CIDR block must be exactly 10.0.0.0/16",
-    "Deploy in exactly 2 availability zones only",
-    "Use only one NAT Gateway to minimize costs",
-    "All resources must have the specified tags",
-    "VPC Flow Logs must use 5-minute capture intervals",
-    "Route tables must be explicitly created, not use defaults",
-    "VPC endpoints must be Gateway endpoints, not Interface endpoints",
-    "All CloudFormation outputs must use CfnOutput construct",
-    "Subnet CIDR blocks must follow the exact numbering scheme specified"
+  "Cloud Environment Setup"
   ],
   "po_id": "hsmik9",
   "aws_services": [
@@ -28,5 +19,6 @@
     "IAM"
   ],
   "region": "ca-central-1",
-  "training_quality": 8
+  "training_quality": 8,
+  "author": "rajendra-s-aws"
 }
