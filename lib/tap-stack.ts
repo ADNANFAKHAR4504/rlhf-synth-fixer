@@ -74,7 +74,7 @@ export class TapStack extends TerraformStack {
       {
         name: `staging${environmentSuffix ? `-${environmentSuffix}` : ''}`,
         cidrBlock: '10.1.0.0/16',
-        dbInstanceClass: 'db.t3.micro',
+        dbInstanceClass: 'db.r5.large',
         flowLogRetentionDays: 30,
         awsRegion: awsRegion,
         tags: {
@@ -88,7 +88,7 @@ export class TapStack extends TerraformStack {
       {
         name: `prod${environmentSuffix ? `-${environmentSuffix}` : ''}`,
         cidrBlock: '10.2.0.0/16',
-        dbInstanceClass: 'db.t3.micro',
+        dbInstanceClass: 'db.r5.large',
         flowLogRetentionDays: 90,
         awsRegion: awsRegion,
         tags: {
