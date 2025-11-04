@@ -10,8 +10,10 @@ Description: >
 Parameters:
   EnvironmentSuffix:
     Type: String
-    Description: Environment suffix to avoid cross-deployment name collisions.
-    AllowedValues: [dev, staging, prod]
+    Description: Environment suffix to avoid cross-deployment name collisions (e.g., dev, prod, pr5713).
+    AllowedPattern: '^[a-z0-9-]+$'
+    MinLength: 1
+    MaxLength: 30
     Default: dev
   SecurityAlertEmail:
     Type: String
