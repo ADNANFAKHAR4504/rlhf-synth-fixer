@@ -1,5 +1,5 @@
 {
-  "platform": "tf",
+  "platform": "terraform",
   "language": "hcl",
   "complexity": "hard",
   "turn_type": "single",
@@ -28,7 +28,7 @@
     "NAT Gateway",
     "Internet Gateway"
   ],
-  "training_quality": 8,
+  "training_quality": 9,
   "coverage": {
     "lines": 100,
     "branches": 100
