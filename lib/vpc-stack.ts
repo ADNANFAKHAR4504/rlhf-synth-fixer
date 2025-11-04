@@ -1,24 +1,25 @@
-import { Construct } from 'constructs';
-import { TerraformOutput } from 'cdktf';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { CloudwatchDashboard } from '@cdktf/provider-aws/lib/cloudwatch-dashboard';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { FlowLog } from '@cdktf/provider-aws/lib/flow-log';
+import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { Instance } from '@cdktf/provider-aws/lib/instance';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
 import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
-import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
 import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
-import { FlowLog } from '@cdktf/provider-aws/lib/flow-log';
-import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { VpcEndpoint } from '@cdktf/provider-aws/lib/vpc-endpoint';
-import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
-import { Instance } from '@cdktf/provider-aws/lib/instance';
-import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
-import { CloudwatchDashboard } from '@cdktf/provider-aws/lib/cloudwatch-dashboard';
+import { TerraformOutput } from 'cdktf';
+import { Construct } from 'constructs';
 
 interface VpcStackProps {
   environmentSuffix: string;
@@ -48,8 +49,6 @@ export class VpcStack extends Construct {
     // Define availability zones for ca-central-1
     const availabilityZones = [
       `${awsRegion}a`,
-      `${awsRegion}b`,
-      `${awsRegion}d`,
     ];
 
     // Create VPC with DNS support enabled
@@ -78,6 +77,7 @@ export class VpcStack extends Construct {
     const flowLogGroup = new CloudwatchLogGroup(this, 'vpc-flow-logs', {
       name: `/aws/vpc/flowlogs-${environmentSuffix}`,
       retentionInDays: 7,
+      skipDestroy: true,
       tags: {
         Name: `vpc-flow-logs-${environmentSuffix}`,
         ...commonTags,
@@ -85,8 +85,8 @@ export class VpcStack extends Construct {
     });
 
     // Create IAM Role for VPC Flow Logs
-    const flowLogRole = new IamRole(this, 'vpc-flow-log-role', {
-      name: `vpc-flow-log-role-${environmentSuffix}`,
+    const flowLogRole = new IamRole(this, 'abcvpc', {
+      name: `abcvpc-${environmentSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -100,7 +100,7 @@ export class VpcStack extends Construct {
         ],
       }),
       tags: {
-        Name: `vpc-flow-log-role-${environmentSuffix}`,
+        Name: `abcvpc-${environmentSuffix}`,
         ...commonTags,
       },
     });
@@ -343,7 +343,7 @@ export class VpcStack extends Construct {
       vpcEndpointType: 'Gateway',
       routeTableIds: [
         publicRouteTable.id,
-        ...privateRouteTables.map((rt) => rt.id),
+        ...privateRouteTables.map(rt => rt.id),
       ],
       tags: {
         Name: `payment-s3-endpoint-${environmentSuffix}`,
@@ -358,7 +358,7 @@ export class VpcStack extends Construct {
       vpcEndpointType: 'Gateway',
       routeTableIds: [
         publicRouteTable.id,
-        ...privateRouteTables.map((rt) => rt.id),
+        ...privateRouteTables.map(rt => rt.id),
       ],
       tags: {
         Name: `payment-dynamodb-endpoint-${environmentSuffix}`,
@@ -384,7 +384,7 @@ export class VpcStack extends Construct {
 
     // Create IAM Role for EC2 instances to use Session Manager
     const ec2Role = new IamRole(this, 'ec2-ssm-role', {
-      name: `payment-ec2-ssm-role-${environmentSuffix}`,
+      name: `abcssm-${environmentSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -397,13 +397,16 @@ export class VpcStack extends Construct {
           },
         ],
       }),
-      managedPolicyArns: [
-        'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
-      ],
       tags: {
-        Name: `payment-ec2-ssm-role-${environmentSuffix}`,
+        Name: `abcssm-${environmentSuffix}`,
         ...commonTags,
       },
+    });
+
+    // Attach the SSM managed policy to the EC2 role
+    new IamRolePolicyAttachment(this, 'ec2-ssm-policy-attachment', {
+      role: ec2Role.name,
+      policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
     });
 
     // Create IAM Instance Profile
