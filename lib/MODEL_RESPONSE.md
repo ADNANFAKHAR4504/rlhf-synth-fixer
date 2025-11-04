@@ -1301,7 +1301,7 @@ Outputs:
       Name: !Sub ${AWS::StackName}-ApiKey-${Environment}
 ```
 
-Now We have all the sections of my CloudFormation template defined. Let us put it all together into a single, coherent response with the requested format.
+Let us put it all together into a single, coherent response with the requested format.
 
 1. It includes an API Gateway with request validation, API key authentication, throttling, and X-Ray tracing.
 2. It defines four Lambda functions with the specified memory, concurrency, and logging configurations.
