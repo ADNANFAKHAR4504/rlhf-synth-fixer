@@ -122,7 +122,7 @@ class TestMainModule(unittest.TestCase):
             content = f.read()
 
         self.assertIn('import pulumi', content)
-        self.assertIn('from lib.tap_stack import', content)
+        self.assertIn('from tap_stack import', content)
 
     def test_main_has_config_logic(self):
         """Test that __main__.py has config logic."""

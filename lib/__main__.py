@@ -7,7 +7,13 @@ monitoring, and error handling.
 """
 
 import pulumi
-from lib.tap_stack import TapStack, TapStackArgs
+import sys
+import os
+
+# Add current directory to path for imports
+sys.path.insert(0, os.path.dirname(__file__))
+
+from tap_stack import TapStack, TapStackArgs
 
 # Get configuration with validation
 config = pulumi.Config()
