@@ -1025,55 +1025,8 @@
       }
     },
     
-    "DMSVPCRole": {
-      "Type": "AWS::IAM::Role",
-      "Properties": {
-        "RoleName": "dms-vpc-role",
-        "AssumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "dms.amazonaws.com"
-              },
-              "Action": "sts:AssumeRole"
-            }
-          ]
-        },
-        "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/service-role/AmazonDMSVPCManagementRole"
-        ],
-        "Policies": [
-          {
-            "PolicyName": "DMSVPCManagementPolicy",
-            "PolicyDocument": {
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "ec2:CreateNetworkInterface",
-                    "ec2:DescribeNetworkInterfaces",
-                    "ec2:DeleteNetworkInterface",
-                    "ec2:ModifyNetworkInterfaceAttribute",
-                    "ec2:DescribeSubnets",
-                    "ec2:DescribeVpcs",
-                    "ec2:DescribeSecurityGroups"
-                  ],
-                  "Resource": "*"
-                }
-              ]
-            }
-          }
-        ],
-        "Path": "/service-role/"
-      }
-    },
-    
     "DMSSubnetGroup": {
       "Type": "AWS::DMS::ReplicationSubnetGroup",
-      "DependsOn": "DMSVPCRole",
       "Properties": {
         "ReplicationSubnetGroupIdentifier": "profile-migration-subnet-group",
         "ReplicationSubnetGroupDescription": "Subnet group for DMS replication",
@@ -1156,6 +1109,7 @@
         "EngineName": "s3",
         "S3Settings": {
           "BucketName": {"Ref": "S3Bucket"},
+          "ServiceAccessRoleArn": {"Fn::GetAtt": ["DMSServiceRole", "Arn"]},
           "DataFormat": "parquet",
           "CompressionType": "gzip",
           "IncludeOpForFullLoad": true,
