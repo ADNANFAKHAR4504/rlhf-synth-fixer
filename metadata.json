@@ -19,5 +19,6 @@
     "SNS",
     "CloudWatch",
     "DynamoDB"
-  ]
+  ],
+  "training_quality": 10
 }
