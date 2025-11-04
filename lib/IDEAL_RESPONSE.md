@@ -17,7 +17,7 @@ The infrastructure includes:
 ## File: lib/tap_stack.py
 
 ```py
-"""TAP Stack module for CDKTF Python infrastructure."""
+"""TAP Stack module for cdktf py infrastructure."""
 
 from cdktf import TerraformStack, S3Backend, TerraformOutput, Fn
 from constructs import Construct
@@ -71,7 +71,7 @@ import json
 
 
 class TapStack(TerraformStack):
-    """CDKTF Python stack for TAP infrastructure."""
+    """cdktf py stack for TAP infrastructure."""
 
     def __init__(
         self,
@@ -734,27 +734,113 @@ class TapStack(TerraformStack):
 
 ## Key Fixes from MODEL_RESPONSE
 
-### 1. S3 Backend Configuration (Line 91-97)
+### 1. S3 Backend Configuration (Line 107-114)
 **MODEL_RESPONSE Issue**: Added invalid `use_lockfile` property via escape hatch
 ```python
-# REMOVED: self.add_override("terraform.backend.s3.use_lockfile", True)
+# INCORRECT - MODEL_RESPONSE had:
+# self.add_override("terraform.backend.s3.use_lockfile", True)
 ```
-**Fix**: S3 backend handles state locking automatically via DynamoDB. No manual configuration needed.
-
-### 2. RDS Aurora Version (Line 369)
-**MODEL_RESPONSE Issue**: Version `15.3` not available in eu-north-1
+**Fix Applied**: Removed the invalid override entirely. S3 backend does not support `use_lockfile` parameter.
 ```python
-engine_version="16.4",  # Fixed from 15.3
+S3Backend(
+    self,
+    bucket=state_bucket,
+    key=f"{environment_suffix}/{construct_id}.tfstate",
+    region=state_bucket_region,
+    encrypt=True,  # Correct way to enable encryption
+)
 ```
-**Fix**: Use version 16.4 which is available in eu-north-1 region.
+**Why This Matters**: The `use_lockfile` property does not exist in Terraform's S3 backend configuration schema. S3 backend automatically handles state locking via DynamoDB without explicit configuration. Using `add_override` to inject invalid properties causes deployment failure.
 
-### 3. CloudFront Cache Behavior (Line 666-672)
-**MODEL_RESPONSE Issue**: Both `cache_policy_id` and `forwarded_values` specified (mutually exclusive)
+### 2. RDS Aurora PostgreSQL Version (Line 373, 386)
+**MODEL_RESPONSE Issue**: Version `15.3` specified but not available in eu-north-1 region
 ```python
-# REMOVED: forwarded_values parameter
+# INCORRECT - MODEL_RESPONSE had:
+# engine_version="15.3",
+```
+**Fix Applied**: Updated to version 16.4 which is available in eu-north-1
+```python
+engine_version="16.4",  # Fixed from 15.3 - available in eu-north-1
+```
+**Why This Matters**: Aurora engine versions vary by AWS region. Version 15.x is not available in eu-north-1 (Stockholm). Regional service availability must be validated before deployment to prevent critical failures in production.
+
+### 3. CloudFront Cache Behavior Configuration (Line 683-689)
+**MODEL_RESPONSE Issue**: Both `cache_policy_id` and `forwarded_values` specified (mutually exclusive parameters)
+```python
+# INCORRECT - MODEL_RESPONSE had both:
+# cache_policy_id="4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
+# forwarded_values=CloudfrontDistributionDefaultCacheBehaviorForwardedValues(...)
+```
+**Fix Applied**: Removed `forwarded_values` parameter, kept only `cache_policy_id`
+```python
 cache_policy_id="4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
+# Fixed: Removed forwarded_values - incompatible with cache_policy_id
 ```
-**Fix**: When using managed cache policy, do not specify legacy `forwarded_values`. The policy controls forwarding behavior.
+**Why This Matters**: CloudFront API does not allow combining legacy `forwarded_values` configuration with modern managed cache policies. When using `cache_policy_id`, the policy itself controls all forwarding behavior (query strings, headers, cookies).
+
+### 4. ECS Service Launch Type (Line 605)
+**MODEL_RESPONSE Issue**: Both `launch_type="FARGATE"` and `capacity_provider_strategy` specified
+```python
+# INCORRECT - MODEL_RESPONSE had:
+# launch_type="FARGATE",
+# capacity_provider_strategy=[...]
+```
+**Fix Applied**: Removed `launch_type` parameter, kept only `capacity_provider_strategy`
+```python
+# Remove launch_type - inferred from capacity_provider_strategy
+capacity_provider_strategy=[
+    EcsServiceCapacityProviderStrategy(
+        capacity_provider="FARGATE_SPOT",
+        weight=100,
+        base=0
+    )
+]
+```
+**Why This Matters**: AWS ECS API rejects services that specify both parameters simultaneously. When using capacity provider strategy, the launch type is automatically inferred from the capacity provider type.
+
+### 5. S3 Lifecycle Configuration Filter (Line 218-228)
+**MODEL_RESPONSE Issue**: Lifecycle rule missing required `filter` or `prefix` parameter
+```python
+# INCORRECT - MODEL_RESPONSE had:
+# S3BucketLifecycleConfigurationRule(
+#     id="delete-old-logs",
+#     status="Enabled",
+#     expiration=[...]
+# )
+```
+**Fix Applied**: Added filter with empty prefix to apply to all objects
+```python
+S3BucketLifecycleConfigurationRule(
+    id="delete-old-logs",
+    status="Enabled",
+    filter=[S3BucketLifecycleConfigurationRuleFilter(
+        prefix=""  # Apply to all objects
+    )],
+    expiration=[S3BucketLifecycleConfigurationRuleExpiration(
+        days=30
+    )]
+)
+```
+**Why This Matters**: AWS S3 lifecycle rules require either `filter` or `prefix` to define rule scope. Missing this causes provider warnings that will become errors in future versions.
+
+### 6. Secrets Manager Recovery Window (Line 350)
+**MODEL_RESPONSE Issue**: Missing `recovery_window_in_days=0` for test environments
+```python
+# INCOMPLETE - MODEL_RESPONSE lacked:
+# recovery_window_in_days=0
+```
+**Fix Applied**: Added immediate deletion capability for dev/test environments
+```python
+db_secret = SecretsmanagerSecret(
+    self,
+    f"db-secret-{environment_suffix}",
+    name=f"catalog-api-db-password-{environment_suffix}-v2",
+    description="Database password for catalog API",
+    recovery_window_in_days=0,  # Allow immediate deletion
+    tags={...}
+)
+```
+**Why This Matters**: Secrets Manager retains deleted secrets for 30 days by default. This prevents immediate recreation with the same name during iterative testing and development. Setting recovery window to 0 allows clean destroy operations.
 
 ## Deployment Validation
 

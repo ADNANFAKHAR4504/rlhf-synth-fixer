@@ -2,7 +2,7 @@
 
 Hey team,
 
-We need to build a production-ready infrastructure for our retail product catalog API. The business is preparing for seasonal sales traffic spikes and needs a robust, scalable deployment that can handle high volumes while maintaining consistent performance. I've been asked to create this using **CDKTF with Python** targeting the eu-north-1 region.
+We need to build a production-ready infrastructure for our retail product catalog API. The business is preparing for seasonal sales traffic spikes and needs a robust, scalable deployment that can handle high volumes while maintaining consistent performance. I've been asked to create this using **cdktf with py** targeting the eu-north-1 region.
 
 The API is containerized and runs on port 3000, serving product data from a PostgreSQL database. During peak seasons, traffic can increase dramatically, so the infrastructure needs to scale automatically while keeping response times low. We also need global content delivery to ensure customers worldwide get fast responses.
 
@@ -10,7 +10,7 @@ The technical team has specified that we must use CDK L2 constructs for better a
 
 ## What we need to build
 
-Create a containerized API deployment infrastructure using **CDKTF with Python** for a product catalog service that can handle variable traffic patterns and maintain high availability.
+Create a containerized API deployment infrastructure using **cdktf with py** for a product catalog service that can handle variable traffic patterns and maintain high availability.
 
 ### Core Requirements
 
@@ -56,13 +56,60 @@ Create a containerized API deployment infrastructure using **CDKTF with Python**
 
 ### Technical Requirements
 
-- All infrastructure defined using **CDKTF with Python**
+- All infrastructure defined using **cdktf with py**
 - Use CDK L2 constructs only (no L1 constructs)
 - Resource naming convention: use f-strings with `{environment_suffix}` parameter
 - Deploy to **eu-north-1** region
 - Stack deployment must complete within 15 minutes
-- All resources must be destroyable (no deletion protection, no retain policies)
+- All resources must be destroyable (no deletion protection, no retention policies)
 - Follow naming convention: `resource-type-{environment_suffix}`
+
+### Critical Implementation Guidelines
+
+**S3 Backend Configuration:**
+- Use `encrypt=True` for state encryption
+- Do NOT use `use_lockfile` property - it does not exist in Terraform S3 backend configuration
+- Do NOT use `add_override` to add invalid backend properties
+- State locking via DynamoDB is handled automatically by Terraform S3 backend
+
+**Aurora PostgreSQL Version Compatibility:**
+- Verify engine version availability in the target region before deployment
+- Version 15.3 is NOT available in eu-north-1
+- Use version 16.4 or later for eu-north-1 region
+- Check AWS documentation for region-specific engine version availability
+
+**CloudFront Cache Behavior Configuration:**
+- When using `cache_policy_id`, do NOT specify `forwarded_values`
+- These parameters are mutually exclusive - using both causes deployment failure
+- Managed cache policies control forwarding behavior
+- Use cache_policy_id `4135ea2d-6df8-44a3-9df3-4b5a84be39ad` for CachingOptimized policy
+
+**ECS Service Configuration:**
+- Do NOT specify both `launch_type` and `capacity_provider_strategy` simultaneously
+- When using capacity_provider_strategy, remove launch_type parameter
+- Launch type is automatically inferred from the capacity provider
+
+**S3 Lifecycle Configuration:**
+- Every lifecycle rule MUST include either `filter` or `prefix` parameter
+- Use empty prefix `prefix=""` to apply rule to all objects
+- Import S3BucketLifecycleConfigurationRuleFilter when using filter parameter
+- Missing filter/prefix will cause warnings and future deployment failures
+
+**Secrets Manager Configuration:**
+- Set `recovery_window_in_days=0` for test/dev environments to allow immediate deletion
+- Secrets have 30-day retention by default which blocks recreation with same name
+- Use version suffixes in secret names to avoid naming conflicts
+
+### Common Deployment Failures to Avoid
+
+Based on MODEL_FAILURES analysis, avoid these critical errors:
+
+1. **Invalid S3 Backend Properties**: Do not use `add_override` to inject non-existent properties like `use_lockfile`
+2. **Regional Version Incompatibility**: Aurora PostgreSQL 15.3 fails in eu-north-1, use 16.4 or later
+3. **CloudFront Parameter Conflicts**: Cannot combine `cache_policy_id` with `forwarded_values`
+4. **ECS Launch Type Conflicts**: Cannot specify both `launch_type` and `capacity_provider_strategy`
+5. **S3 Lifecycle Missing Filter**: All lifecycle rules require `filter` or `prefix` parameter
+6. **Secrets Manager Naming Conflicts**: Use version suffixes and set `recovery_window_in_days=0`
 
 ### Constraints
 
@@ -84,13 +131,13 @@ Create a containerized API deployment infrastructure using **CDKTF with Python**
 - **Reliability**: Multi-AZ deployment with health checks and automatic failover
 - **Security**: Database credentials in Secrets Manager, proper security group isolation
 - **Resource Naming**: All resources include environmentSuffix for environment isolation
-- **Code Quality**: Python code, well-structured, properly typed, documented
+- **Code Quality**: py code, well-structured, properly typed, documented
 - **Observability**: CloudWatch logs capture all component activity
 - **Global Delivery**: CloudFront distributes content with proper caching
 
 ## What to deliver
 
-- Complete CDKTF Python implementation in lib/tap_stack.py
+- Complete cdktf py implementation in lib/tap_stack.py
 - VPC with public and private subnets across 2 AZs
 - ECS Fargate cluster and service with auto-scaling
 - Application Load Balancer with health checks

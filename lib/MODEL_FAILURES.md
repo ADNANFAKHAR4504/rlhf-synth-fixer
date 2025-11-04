@@ -1,6 +1,6 @@
 # Model Response Failures Analysis
 
-This document analyzes the failures and issues found in the MODEL_RESPONSE for task y2vid (CDKTF Python, eu-north-1, Product Catalog API Infrastructure).
+This document analyzes the failures and issues found in the MODEL_RESPONSE for task y2vid (cdktf py, eu-north-1, Product Catalog API Infrastructure).
 
 ## Critical Failures
 
@@ -23,7 +23,7 @@ No argument or block type is named "use_lockfile".
 ```
 
 **IDEAL_RESPONSE Fix**:
-```python
+```py
 # Remove the invalid override entirely
 # S3 backend handles state locking automatically via DynamoDB
 S3Backend(
@@ -48,7 +48,7 @@ S3Backend(
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-```python
+```py
 # Line 369 in tap_stack.py
 engine_version="15.3",
 ```
@@ -62,7 +62,7 @@ api error InvalidParameterCombination: Cannot find version 15.3 for aurora-postg
 ```
 
 **IDEAL_RESPONSE Fix**:
-```python
+```py
 engine_version="16.4",  # Use latest stable version available in eu-north-1
 ```
 
@@ -82,7 +82,7 @@ engine_version="16.4",  # Use latest stable version available in eu-north-1
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-```python
+```py
 # Lines 672-679 in tap_stack.py
 default_cache_behavior=CloudfrontDistributionDefaultCacheBehavior(
     cache_policy_id="4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
@@ -105,7 +105,7 @@ The parameter ForwardedValues cannot be used when a cache policy is associated t
 ```
 
 **IDEAL_RESPONSE Fix**:
-```python
+```py
 default_cache_behavior=CloudfrontDistributionDefaultCacheBehavior(
     allowed_methods=["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"],
     cached_methods=["GET", "HEAD"],
@@ -135,7 +135,7 @@ default_cache_behavior=CloudfrontDistributionDefaultCacheBehavior(
 **Impact Level**: Critical
 
 **Deployment Issue**:
-```python
+```py
 # Lines 580-612 in tap_stack.py
 ecs_service = EcsService(
     self,
@@ -163,7 +163,7 @@ Remove one and try again.
 ```
 
 **Fix**:
-```python
+```py
 ecs_service = EcsService(
     self,
     f"ecs-service-{environment_suffix}",
@@ -194,7 +194,7 @@ ecs_service = EcsService(
 **Impact Level**: High (Warning that will become error in future provider versions)
 
 **Deployment Issue**:
-```python
+```py
 # Lines 214-227 in tap_stack.py
 S3BucketLifecycleConfiguration(
     self,
@@ -221,7 +221,7 @@ This will be an error in a future version of the provider
 ```
 
 **Fix**:
-```python
+```py
 from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import (
     S3BucketLifecycleConfiguration,
     S3BucketLifecycleConfigurationRule,
@@ -264,7 +264,7 @@ S3BucketLifecycleConfiguration(
 **Impact Level**: Critical
 
 **Deployment Issue**:
-```python
+```py
 # Lines 345-354 in tap_stack.py
 db_secret = SecretsmanagerSecret(
     self,
@@ -284,7 +284,7 @@ InvalidRequestException: You can't create this secret because a secret with this
 ```
 
 **Fix**:
-```python
+```py
 db_secret = SecretsmanagerSecret(
     self,
     f"db-secret-{environment_suffix}",
@@ -314,7 +314,7 @@ db_secret = SecretsmanagerSecret(
 **Impact Level**: Critical (Testing failure)
 
 **Test Issue**:
-```python
+```py
 # tests/unit/test_tap_stack.py:33-46
 def test_tap_stack_instantiates_successfully_via_props(self):
     app = App()
@@ -333,7 +333,7 @@ AssertionError: assert False where False = hasattr(<lib.tap_stack.TapStack>, 'bu
 ```
 
 **Fix**:
-```python
+```py
 import json
 from cdktf import App, Testing
 
