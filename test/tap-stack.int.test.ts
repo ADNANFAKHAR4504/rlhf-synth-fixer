@@ -166,7 +166,7 @@ describe('VPC Infrastructure Integration Tests', () => {
 
   describe('VPC Flow Logs', () => {
     test('VPC Flow Logs should be enabled and active', () => {
-      const result = awsCommand(`ec2 describe-flow-logs --filters Name=resource-id,Values=${vpcId}`);
+      const result = awsCommand(`ec2 describe-flow-logs --filter "Name=resource-id,Values=${vpcId}"`);
       const flowLogs = result.FlowLogs || [];
 
       expect(flowLogs).toHaveLength(1);
@@ -179,7 +179,7 @@ describe('VPC Infrastructure Integration Tests', () => {
     });
 
     test('IAM role for Flow Logs should have correct permissions', () => {
-      const flowLogsResult = awsCommand(`ec2 describe-flow-logs --filters Name=resource-id,Values=${vpcId}`);
+      const flowLogsResult = awsCommand(`ec2 describe-flow-logs --filter "Name=resource-id,Values=${vpcId}"`);
       const flowLog = flowLogsResult.FlowLogs[0];
 
       // Extract role name from delivery role ARN
@@ -190,9 +190,7 @@ describe('VPC Infrastructure Integration Tests', () => {
       const roleResult = awsCommand(`iam get-role --role-name ${roleName}`);
       expect(roleResult.Role.RoleName).toBe(roleName);
     });
-  });
-
-  describe('Internet Gateway and Routing', () => {
+  }); describe('Internet Gateway and Routing', () => {
     test('VPC should have an Internet Gateway', () => {
       const result = awsCommand(`ec2 describe-internet-gateways --filters Name=attachment.vpc-id,Values=${vpcId}`);
       const igws = result.InternetGateways || [];
@@ -237,7 +235,7 @@ describe('VPC Infrastructure Integration Tests', () => {
       expect(endpoints).toHaveLength(1);
       const s3Endpoint = endpoints[0];
 
-      expect(s3Endpoint.State).toBe('Available');
+      expect(s3Endpoint.State.toLowerCase()).toBe('available');
       expect(s3Endpoint.VpcEndpointType).toBe('Gateway');
       expect(s3Endpoint.ServiceName).toBe(`com.amazonaws.${AWS_REGION}.s3`);
     });
