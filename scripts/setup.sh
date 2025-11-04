@@ -127,13 +127,8 @@ case "$PLATFORM" in
     # No pipenv, no Python environment setup — CFN uses npm-based tests.
     echo "✅ Skipping pipenv setup for CFN (tests will run via npm)."
 
-    # Ensure Jest exists (local preferred, fallback to global)
-    if ! command -v jest &>/dev/null; then
-      echo "📦 Installing Jest globally for CFN test support..."
-      npm install -g jest@28.1.3 ts-node typescript@5.4.5 @types/jest
-    else
-      echo "✅ Jest already available — skipping global install."
-    fi
+    echo "📦 Installing Node dependencies for CFN..."
+    npm ci --prefer-offline --no-audit --omit=optional
     ;;
 esac
 
