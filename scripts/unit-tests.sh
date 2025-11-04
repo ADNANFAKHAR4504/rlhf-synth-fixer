@@ -3,7 +3,9 @@
 # Exit on any error
 set -e
 
-# Read platform and language from metadata.json
+# -------------------------------------------------------------------
+# Metadata detection
+# -------------------------------------------------------------------
 if [ ! -f "metadata.json" ]; then
   echo "❌ metadata.json not found, exiting with failure"
   exit 1
@@ -14,24 +16,24 @@ LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
 
 echo "Project: platform=$PLATFORM, language=$LANGUAGE"
 
-# Convert YAML to JSON for CloudFormation projects
+# -------------------------------------------------------------------
+# CloudFormation special handling
+# -------------------------------------------------------------------
 if [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
   echo "✅ CloudFormation YAML project detected, converting YAML to JSON for unit tests..."
   pipenv run cfn-flip-to-json > lib/TapStack.json
 fi
 
-# Detect Jest version (for CLI flag compatibility)
-JEST_VERSION=$(npx jest --version 2>/dev/null || echo "0")
-if [[ "$JEST_VERSION" =~ ^[0-9]+ && "$JEST_VERSION" -ge 29 ]]; then
-  TEST_PATTERN_FLAG="--testPathPatterns"
-else
-  TEST_PATTERN_FLAG="--testPathPattern"
-fi
-echo "🧩 Using Jest flag: $TEST_PATTERN_FLAG (version $JEST_VERSION)"
+# -------------------------------------------------------------------
+# Jest static configuration (fixed to v28)
+# -------------------------------------------------------------------
+TEST_PATTERN_FLAG="--testPathPattern"
+JEST_VERSION=$(npx jest --version 2>/dev/null || echo "28.1.3")
+echo "🧩 Using Jest v${JEST_VERSION} with flag: ${TEST_PATTERN_FLAG}"
 
-# -------------------------
-# Run unit tests per type
-# -------------------------
+# -------------------------------------------------------------------
+# Run unit tests per platform/language
+# -------------------------------------------------------------------
 if [ "$LANGUAGE" = "java" ]; then
   case "$PLATFORM" in
     pulumi|cdk|cdktf)
@@ -50,7 +52,7 @@ if [ "$LANGUAGE" = "java" ]; then
   esac
 
 elif [ "$LANGUAGE" = "ts" ] && [ "$PLATFORM" = "cdktf" ]; then
-  echo "✅ Terraform TypeScript project detected, running unit tests..."
+  echo "✅ Terraform TypeScript (CDKTF) project detected, running unit tests..."
   npm run test:unit-cdktf || npx jest --coverage $TEST_PATTERN_FLAG ".*unit\\.test\\.ts$" --runInBand --ci --passWithNoTests
 
 elif [ "$LANGUAGE" = "ts" ]; then
@@ -60,7 +62,7 @@ elif [ "$LANGUAGE" = "ts" ]; then
 elif [ "$LANGUAGE" = "go" ]; then
   echo "✅ Go project detected, running go unit tests..."
   if [ "$PLATFORM" = "cdktf" ]; then
-    echo "🔧 Ensuring .gen exists for CDKTF Go tests"
+    echo "🔧 Ensuring .gen exists for CDKTF Go tests..."
     [ -f "terraform.tfstate" ] && rm -f terraform.tfstate
     if [ ! -d ".gen" ] || [ ! -d ".gen/aws" ]; then
       npm run cdktf:get || npx --yes cdktf get

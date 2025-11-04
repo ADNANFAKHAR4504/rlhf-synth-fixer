@@ -3,7 +3,9 @@
 # Exit on any error
 set -e
 
-# Read platform and language from metadata.json
+# -------------------------------------------------------------------
+# Read platform and language metadata
+# -------------------------------------------------------------------
 if [ ! -f "metadata.json" ]; then
   echo "❌ metadata.json not found, exiting with failure"
   exit 1
@@ -14,25 +16,25 @@ LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
 
 echo "Project: platform=$PLATFORM, language=$LANGUAGE"
 
-# Set default environment variables if not provided
+# -------------------------------------------------------------------
+# Default environment variables
+# -------------------------------------------------------------------
 export ENVIRONMENT_SUFFIX=${ENVIRONMENT_SUFFIX:-dev}
 export CI=${CI:-1}
 
 echo "Environment suffix: $ENVIRONMENT_SUFFIX"
 echo "CI mode: $CI"
 
-# Detect Jest version for CLI compatibility
-JEST_VERSION=$(npx jest --version 2>/dev/null || echo "0")
-if [[ "$JEST_VERSION" =~ ^[0-9]+ && "$JEST_VERSION" -ge 29 ]]; then
-  TEST_PATTERN_FLAG="--testPathPatterns"
-else
-  TEST_PATTERN_FLAG="--testPathPattern"
-fi
-echo "🧩 Using Jest flag: $TEST_PATTERN_FLAG (version $JEST_VERSION)"
+# -------------------------------------------------------------------
+# Jest configuration (stable pinned version)
+# -------------------------------------------------------------------
+TEST_PATTERN_FLAG="--testPathPattern"
+JEST_VERSION=$(npx jest --version 2>/dev/null || echo "28.1.3")
+echo "🧩 Using Jest v${JEST_VERSION} with flag: ${TEST_PATTERN_FLAG}"
 
-# -------------------------------
-# Run integration tests by type
-# -------------------------------
+# -------------------------------------------------------------------
+# Run integration tests per platform/language
+# -------------------------------------------------------------------
 
 if [ "$LANGUAGE" = "java" ]; then
   echo "✅ Java project detected, running integration tests..."
@@ -46,10 +48,10 @@ elif [ "$LANGUAGE" = "py" ] || [ "$LANGUAGE" = "python" ]; then
 elif [ "$LANGUAGE" = "go" ]; then
   echo "✅ Go project detected, running integration tests..."
   if [ "$PLATFORM" = "cdktf" ]; then
-    echo "🔧 Ensuring .gen exists for CDKTF Go integration tests"
+    echo "🔧 Ensuring .gen exists for CDKTF Go integration tests..."
     bash ./scripts/cdktf-go-prepare.sh
 
-    # Clean up old state if present
+    # Clean up legacy state
     [ -f "terraform.tfstate" ] && rm -f terraform.tfstate
 
     if [ ! -d ".gen" ] || [ ! -d ".gen/aws" ]; then
