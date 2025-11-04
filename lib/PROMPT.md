@@ -1,107 +1,107 @@
-## Mission Statement
+## Mission
 
-As an expert AWS DevOps engineer, generate a TypeScript script using AWS CDK to define a CloudFormation stack for a multi-region cloud infrastructure. **All provided requirements and constraints must remain intact and unchanged.** Ensure a **string suffix is appended to resource names where needed** for uniqueness and compliance.
-
----
-
-## Instructions
-
-1. **Requirements Analysis**
-   - Carefully review all problem statements, environments, and constraints. Do **not** modify, omit, or alter any provided data.
-
-2. **Architecture Implementation**
-   - Use AWS CDK in TypeScript to define all resources and configurations in accordance with CloudFormation best practices.
-
-3. **Service Specification**
-   - Explicitly configure each AWS service required: VPC, Subnets, RDS, Security Groups, IAM, Lambda, S3, Elastic Load Balancer, EC2, Route 53, CloudFront, CloudWatch, Logging Solution, KMS.
-
-4. **Resource Naming, Security, & Tagging**
-   - **Resource Naming:** All resources must use the company’s naming scheme and append a string suffix for uniqueness.
-   - **Security:** Use least privilege IAM roles, enable encryption with KMS, and restrict security group ingress to HTTPS only.
-   - **Tagging:** Tag all resources with `project=cloud-setup` for cost tracking purposes.
-
-5. **Output Format**
-   - **CloudFormation + TypeScript (AWS CDK)**
+You are the senior AWS DevOps engineer on this project. Deliver a production-ready TypeScript CDK app that stands up the entire CloudFormation stack exactly as described below. Every requirement and constraint is non‑negotiable, and any resource that needs to be globally unique must include a string suffix that follows the existing naming convention.
 
 ---
 
-## Task Requirements
+## How to Approach the Work
 
-Design and implement a deployable AWS CDK TypeScript stack for the infrastructure spanning any region and any regions.
+1. **Read First, Build Second**  
+   Review every requirement, environment note, and constraint. Nothing may be dropped, reworded, or reinterpreted.
 
-### Core Components & Constraints
+2. **Implement with CDK v2 in TypeScript**  
+   Model the entire architecture with AWS CDK, following CloudFormation best practices and keeping the code tidy and maintainable.
 
-1. **VPCs**
-    - Two VPCs: one in any region, one in any region
-    - Each VPC with at least two subnets: one public, one private
-    - Ensure address space does **not** overlap
+3. **Define Each Required Service**  
+   Explicitly configure the full set of services: VPC, Subnets, RDS, Security Groups, IAM, Lambda, S3, Elastic Load Balancer, EC2, Route 53, CloudFront, CloudWatch, a centralized logging solution, and KMS.
 
-2. **Amazon RDS (SQL)**
-    - Instance with encryption at rest (using AWS KMS)
+4. **Name, Secure, and Tag Responsibly**  
+   - **Naming:** Apply the company scheme and add the mandated string suffix wherever uniqueness is required.  
+   - **Security:** Stick to least-privilege IAM roles, enforce KMS encryption, and keep inbound security group rules locked to HTTPS (443).  
+   - **Tagging:** Every resource must carry `project=cloud-setup` for cost tracking.
 
-3. **Security Groups**
-    - Allow only HTTPS traffic (port 443)
-
-4. **IAM Role**
-    - For application servers with EC2 read-only permissions
-
-5. **Lambda Function**
-    - Triggered on S3 object upload
-
-6. **Elastic Load Balancer**
-    - Distributes traffic across EC2 instances
-
-7. **Route 53**
-    - Manages DNS entry for the application URL
-
-8. **CloudFront**
-    - CDN for content delivery optimization
-
-9. **CloudWatch Alarms**
-    - Monitor EC2 CPU usage and alert if usage exceeds 70%
-
-10. **Centralized Logging Solution**
-    - Collect and aggregate logs from EC2 instances into a central location
-
-11. **Tagging**
-    - All resources tagged with `project=cloud-setup`
-
-12. **AWS KMS**
-    - Used for managing all encryption keys
-
-13. **Resource Naming**
-    - Adhere to company naming scheme and append string suffix for uniqueness
+5. **Output Expectations**  
+   The deliverable is AWS CDK TypeScript code that synthesizes to CloudFormation.
 
 ---
 
-## Solution Requirements
+## What You Must Build
 
-- **Single, deployable TypeScript CDK application**
-- All configuration, resource definitions, IAM roles, tags, security, and outputs included
-- Output must confirm creation/configuration of each resource
-- Solution must pass CDK validation tests
+Create a deployable CDK stack that spans multiple regions. The design must cover everything listed below without exception.
+
+### Core Components and Constraints
+
+1. **VPCs**  
+   - Two VPCs: one in any region and one in any other region.  
+   - Each VPC needs at least one public subnet and one private subnet.  
+   - CIDR ranges may not overlap.
+
+2. **Amazon RDS (SQL)**  
+   - Provision an instance encrypted at rest with AWS KMS.
+
+3. **Security Groups**  
+   - Permit inbound HTTPS (port 443) traffic only.
+
+4. **IAM Role**  
+   - Provide application servers with read-only access to EC2.
+
+5. **Lambda Function**  
+   - Trigger the function when objects are uploaded to S3.
+
+6. **Elastic Load Balancer**  
+   - Balance traffic across the EC2 instances.
+
+7. **Route 53**  
+   - Host the DNS record for the application URL.
+
+8. **CloudFront**  
+   - Serve as the CDN in front of the application.
+
+9. **CloudWatch Alarms**  
+   - Raise an alarm if EC2 CPU utilization goes above 70%.
+
+10. **Centralized Logging Solution**  
+    - Collect and aggregate EC2 logs in one place.
+
+11. **Tagging**  
+    - Tag every resource with `project=cloud-setup`.
+
+12. **AWS KMS**  
+    - Use KMS for all encryption key management.
+
+13. **Resource Naming**  
+    - Follow the company naming scheme and always append the string suffix when uniqueness is required.
+
+---
+
+## Solution Expectations
+
+- Produce a single, deployable TypeScript CDK application.  
+- Include all configuration, resource definitions, IAM roles, security settings, tags, and stack outputs.  
+- Make sure the stack outputs clearly confirm each resource that is created or configured.  
+- The code must pass `cdk synth` and any CDK validation commands.
 
 ---
 
 ## Success Criteria
 
-- **Multi-region Deployment:** VPCs, subnets, and resources spanning ` ` & ` `
-- **Security:** IAM roles, HTTPS-only ingress, KMS encryption
-- **Tagging:** All resources tagged with `project=cloud-setup`
-- **High Availability & Optimization:** ELB, CloudFront, Lambda triggers, CloudWatch alarms
-- **Compliance:** All requirements/constraints implemented exactly as specified
-- **Resource Uniqueness:** All resource names include a string suffix per company scheme
-- **Operational Excellence:** Maintainable, well-documented TypeScript code
-- **Deployment:** TypeScript file compiles, deploys, and passes CDK validation tests
+- **Multi-region footprint:** VPCs, subnets, and resources span the two specified regions (noted as ` ` and ` ` in the original spec).  
+- **Security posture:** IAM roles follow least privilege, ingress is HTTPS-only, and all sensitive data uses KMS encryption.  
+- **Tagging discipline:** Every resource is tagged with `project=cloud-setup`.  
+- **Operational readiness:** ELB, CloudFront, Lambda triggers, and CloudWatch alarms are in place.  
+- **Compliance:** Every numbered requirement and constraint above is implemented exactly as written.  
+- **Uniqueness:** Resource names incorporate the required string suffix.  
+- **Quality:** The TypeScript code is maintainable, well documented, and production friendly.  
+- **Deployability:** The stack compiles, deploys, and passes CDK validation without errors.
 
 ---
 
-## Expected Deliverables
+## Deliverables Checklist
 
-- Complete AWS CDK TypeScript stack implementation
-- Resource definitions for VPCs, Subnets, RDS, Security Groups, IAM, Lambda, S3, ELB, EC2, Route 53, CloudFront, CloudWatch, Logging, KMS
-- Resource naming with string suffix for uniqueness
-- Outputs for key resource IDs, endpoints, and ARNs
-- Documentation for deployment, outputs, and operational runbooks
+- The full AWS CDK TypeScript implementation.  
+- Definitions for VPCs, Subnets, RDS, Security Groups, IAM, Lambda, S3, ELB, EC2, Route 53, CloudFront, CloudWatch, centralized logging, and KMS.  
+- Naming that adheres to the company pattern and applies the uniqueness suffix.  
+- Stack outputs covering key resource IDs, endpoints, and ARNs.  
+- Deployment notes and any operational runbook details needed to keep the stack healthy.
 
 ---
