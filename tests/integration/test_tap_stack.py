@@ -192,12 +192,14 @@ class TestServiceLevel(unittest.TestCase):
         
         Maps to prompt: S3 bucket for storing logs with KMS encryption.
         """
+        # ===== SETUP =====
         logs_bucket_name = OUTPUTS.get('logs_bucket_name')
         self.assertIsNotNone(logs_bucket_name, "[ERROR] logs_bucket_name not found in outputs")
         
         test_key = f"integration-tests/service-level-{int(time.time())}.txt"
         test_content = f"Service-level test at {datetime.utcnow().isoformat()}"
         
+        # ===== ACTION: Upload object to S3 =====
         print(f"[INFO] ACTION: Uploading test object to S3 bucket: {logs_bucket_name}")
         print(f"[INFO] Test key: {test_key}")
         
@@ -210,6 +212,7 @@ class TestServiceLevel(unittest.TestCase):
             )
             print(f"[INFO] Successfully uploaded object to S3")
             
+            # ===== VERIFICATION: Retrieve and validate object =====
             print(f"[INFO] VERIFICATION: Retrieving object from S3")
             response = s3_client.get_object(Bucket=logs_bucket_name, Key=test_key)
             retrieved_content = response['Body'].read().decode('utf-8')
@@ -217,11 +220,13 @@ class TestServiceLevel(unittest.TestCase):
             self.assertEqual(retrieved_content, test_content, "[ERROR] Retrieved content does not match uploaded content")
             print(f"[INFO] Successfully verified object content matches")
             
+            # ===== VERIFICATION: Check KMS encryption =====
             head_response = s3_client.head_object(Bucket=logs_bucket_name, Key=test_key)
             self.assertIn('ServerSideEncryption', head_response, "[ERROR] ServerSideEncryption not found in object metadata")
             self.assertEqual(head_response['ServerSideEncryption'], 'aws:kms', "[ERROR] Object not encrypted with KMS")
             print(f"[INFO] KMS encryption verified on object")
             
+            # ===== CLEANUP =====
             s3_client.delete_object(Bucket=logs_bucket_name, Key=test_key)
             print(f"[INFO] Cleanup: Deleted test object")
             
@@ -622,6 +627,7 @@ class TestCrossService(unittest.TestCase):
         Services: Lambda (trigger) -> CloudWatch Logs (verify)
         Maps to prompt: Lambda functions with CloudWatch logging.
         """
+        # ===== SETUP =====
         function_name = OUTPUTS.get('transaction_validator_function_name')
         self.assertIsNotNone(function_name, "[ERROR] transaction_validator_function_name not found in outputs")
         
@@ -634,11 +640,12 @@ class TestCrossService(unittest.TestCase):
         print(f"[INFO] Test marker: {test_marker}")
         
         try:
+            # ===== ACTION: Invoke Lambda (Service 1) =====
             print(f"[INFO] ACTION: Invoking Lambda with test marker")
             payload = {
                 'body': json.dumps({
                     'transaction_id': transaction_id,
-                    'merchant_id': test_marker,
+                    'merchant_id': test_marker,  # This will be logged by Lambda
                     'amount': 999,
                     'transaction_date': '2025-11-04'
                 })
@@ -653,9 +660,11 @@ class TestCrossService(unittest.TestCase):
             self.assertEqual(response['StatusCode'], 200, f"[ERROR] Lambda invocation failed with status {response['StatusCode']}")
             print(f"[INFO] Lambda invoked successfully")
             
+            # Wait for logs to propagate
             print(f"[INFO] Waiting 10 seconds for logs to propagate to CloudWatch...")
             time.sleep(10)
             
+            # ===== VERIFICATION: Check CloudWatch Logs (Service 2) =====
             print(f"[INFO] VERIFICATION: Checking CloudWatch Logs for test marker")
             logs = get_recent_lambda_logs(function_name, minutes=2)
             
@@ -684,6 +693,7 @@ class TestCrossService(unittest.TestCase):
         Services: SQS (trigger) -> Lambda (verify via logs)
         Maps to prompt: SQS event source mapping triggers Lambda processors.
         """
+        # ===== SETUP =====
         analytics_queue_url = OUTPUTS.get('analytics_queue_url')
         analytics_function_name = OUTPUTS.get('analytics_processor_function_name')
         
@@ -698,6 +708,7 @@ class TestCrossService(unittest.TestCase):
         print(f"[INFO] Test ID: {test_id}")
         
         try:
+            # ===== ACTION: Send message to SQS (Service 1 - TRIGGER) =====
             print(f"[INFO] ACTION: Sending message to SQS queue (will trigger Lambda automatically)")
             print(f"[INFO] Queue: {analytics_queue_url}")
             
@@ -714,9 +725,11 @@ class TestCrossService(unittest.TestCase):
             )
             print(f"[INFO] Message sent to SQS")
             
+            # Wait for Lambda to be triggered automatically by event source mapping
             print(f"[INFO] Waiting 15 seconds for Lambda to process message via event source mapping...")
             time.sleep(15)
             
+            # ===== VERIFICATION: Check Lambda was triggered (Service 2) =====
             print(f"[INFO] VERIFICATION: Checking CloudWatch Logs for Lambda execution")
             logs = get_recent_lambda_logs(analytics_function_name, minutes=2)
             
@@ -777,6 +790,7 @@ class TestEndToEnd(unittest.TestCase):
         
         Maps to prompt: Complete serverless transaction processing pipeline.
         """
+        # ===== SETUP =====
         function_name = OUTPUTS.get('transaction_validator_function_name')
         transactions_table_name = OUTPUTS.get('transactions_table_name')
         analytics_function_name = OUTPUTS.get('analytics_processor_function_name')
@@ -797,6 +811,7 @@ class TestEndToEnd(unittest.TestCase):
         print(f"[INFO] Transaction ID: {transaction_id}")
         
         try:
+            # ===== ACTION: Trigger ENTRY POINT only (Service 1) =====
             print(f"[INFO] ENTRY POINT: Invoking transaction-validator Lambda (ONLY manual action)")
             print(f"[INFO] All downstream processing will happen AUTOMATICALLY")
             
@@ -820,6 +835,7 @@ class TestEndToEnd(unittest.TestCase):
             self.assertEqual(result['statusCode'], 200, f"[ERROR] Lambda returned status {result['statusCode']}")
             print(f"[INFO] Transaction validator executed successfully")
             
+            # Wait for automatic pipeline execution
             print(f"[INFO] Waiting 20 seconds for automatic pipeline execution...")
             time.sleep(20)
             
@@ -827,6 +843,7 @@ class TestEndToEnd(unittest.TestCase):
             print(f"[INFO] VERIFICATION: Checking FINAL destinations (all automatic)")
             print(f"[INFO] ========================================")
             
+            # ===== VERIFICATION 1: DynamoDB (Service 2 - AUTOMATIC) =====
             print(f"[INFO] VERIFICATION 1/3: Checking DynamoDB (automatic write by validator)")
             item = wait_for_dynamodb_item(
                 transactions_table_name,
@@ -840,11 +857,13 @@ class TestEndToEnd(unittest.TestCase):
             self.assertEqual(item['status'], 'validated', "[ERROR] Status should be 'validated'")
             print(f"[SUCCESS] Transaction found in DynamoDB")
             
+            # ===== VERIFICATION 2: Analytics Lambda (Service 5 - AUTOMATIC via SQS) =====
             print(f"[INFO] VERIFICATION 2/3: Checking Analytics Lambda execution (automatic trigger from SQS)")
             analytics_logs = get_recent_lambda_logs(analytics_function_name, minutes=2)
             self.assertGreater(len(analytics_logs), 0, "[ERROR] No analytics processor execution found")
             print(f"[SUCCESS] Analytics processor executed automatically ({len(analytics_logs)} log entries)")
             
+            # ===== VERIFICATION 3: Reporting Lambda (Service 5 - AUTOMATIC via SQS) =====
             print(f"[INFO] VERIFICATION 3/3: Checking Reporting Lambda execution (automatic trigger from SQS)")
             reporting_logs = get_recent_lambda_logs(reporting_function_name, minutes=2)
             self.assertGreater(len(reporting_logs), 0, "[ERROR] No reporting processor execution found")

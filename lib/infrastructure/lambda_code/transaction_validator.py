@@ -37,7 +37,10 @@ def handler(event, context):
         merchant_id = body.get('merchant_id')
         amount = body.get('amount')
         
+        print(f"Processing transaction: transaction_id={transaction_id}, merchant_id={merchant_id}, amount={amount}")
+        
         if not all([transaction_id, merchant_id, amount]):
+            print(f"Validation failed: Missing required fields")
             return {
                 'statusCode': 400,
                 'body': json.dumps({'error': 'Missing required fields'})
@@ -54,6 +57,7 @@ def handler(event, context):
         }
         
         table.put_item(Item=item)
+        print(f"Successfully wrote transaction to DynamoDB: {transaction_id}")
         
         message_body = json.dumps({
             'transaction_id': transaction_id,
@@ -65,11 +69,13 @@ def handler(event, context):
             QueueUrl=analytics_queue_url,
             MessageBody=message_body
         )
+        print(f"Sent message to analytics queue for transaction: {transaction_id}")
         
         sqs.send_message(
             QueueUrl=reporting_queue_url,
             MessageBody=message_body
         )
+        print(f"Sent message to reporting queue for transaction: {transaction_id}")
         
         cloudwatch.put_metric_data(
             Namespace='TransactionProcessing',
@@ -82,6 +88,7 @@ def handler(event, context):
             ]
         )
         
+        print(f"Transaction validation completed successfully: {transaction_id}")
         return {
             'statusCode': 200,
             'body': json.dumps({
@@ -91,6 +98,7 @@ def handler(event, context):
         }
         
     except Exception as e:
+        print(f"Error processing transaction: {str(e)}")
         cloudwatch.put_metric_data(
             Namespace='TransactionProcessing',
             MetricData=[
