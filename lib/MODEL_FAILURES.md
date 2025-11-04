@@ -85,3 +85,54 @@ You should remove ttl and records attributes entirely for alias records.
 │ 
 │ "ttl": all of `records,ttl` must be specified
 ```
+
+4. Critical Failures - The error "InvalidSubnet: No default subnet detected in VPC" for the RDS read replica aws_db_instance.secondary_replica on line 979 is caused because the RDS instance creation expects default subnets in the VPC, but your VPC has only custom subnets without any default subnets.
+
+AWS RDS read replicas require a DB subnet group with subnet IDs of private subnets within the target VPC. It looks like your aws_db_instance.secondary_replica is missing correctly referencing a valid subnet group containing private subnets for the secondary VPC.
+
+How to Fix
+Ensure you have defined a aws_db_subnet_group resource for the secondary VPC containing private subnet IDs.
+
+Reference that aws_db_subnet_group.secondary.name in your aws_db_instance.secondary_replica resource's db_subnet_group_name argument.
+
+Make sure your subnets are private subnets (non-public) in the secondary VPC.
+
+```
+
+│ Error: creating RDS DB Instance (read replica) (rds-secondary-replica-dbha): operation error RDS: CreateDBInstanceReadReplica, https response error StatusCode: 400, RequestID: 845faf80-b65a-4a1a-a398-424e699fbc82, InvalidSubnet: No default subnet detected in VPC. Please contact AWS Support to recreate default Subnets.
+│ 
+│   with aws_db_instance.secondary_replica,
+│   on tap_stack.tf line 979, in resource "aws_db_instance" "secondary_replica":
+│  979: resource "aws_db_instance" "secondary_replica" {
+│ 
+╵
+
+```
+
+5. Medium Failure - The timeout issue while creating the ELBv2 Load Balancer (at line 1235) with the error "timeout while waiting for state to become 'active'" typically indicates that the Load Balancer is stuck in the 'provisioning' state and isn't reaching 'active' within the default 10-minute window.
+
+Common Causes:
+Resource dependencies: The Load Balancer may depend on resources such as subnets, security groups, or IAM roles, which are not yet fully available or configured properly.
+
+Subnet configuration issues: Subnets used must be properly configured and accessible.
+
+Security groups: Security groups should have the correct inbound and outbound rules.
+
+Subnet availability zones and IPs: Ensure the subnets are available in the specified AZs and have IP addresses available.
+
+Resource limits or quota issues: Account limits for resources like ENIs or IP addresses might be exceeded.
+
+Fix - depends_on Can Solve the Issue
+By explicitly specifying depends_on with the resources that must be created or fully initialized before the ALB creation, you make sure Terraform enforces the resource creation order.
+
+This can prevent the load balancer from being created prematurely when dependent resources are still in progress or unavailable.
+
+```
+
+│ Error: waiting for ELBv2 Load Balancer (arn:aws:elasticloadbalancing:us-east-1:***:loadbalancer/app/alb-primary-dbha/7079483ae4c16c64) create: timeout while waiting for state to become 'active' (last state: 'provisioning', timeout: 10m0s)
+│ 
+│   with aws_lb.primary,
+│   on tap_stack.tf line 1235, in resource "aws_lb" "primary":
+│ 1235: resource "aws_lb" "primary" {
+
+```

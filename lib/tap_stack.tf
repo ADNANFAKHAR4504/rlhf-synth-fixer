@@ -985,7 +985,7 @@ resource "aws_db_instance" "secondary_replica" {
   publicly_accessible          = false
   auto_minor_version_upgrade   = false
   skip_final_snapshot          = true
-  
+  db_subnet_group_name         = aws_db_subnet_group.secondary.name 
   tags = merge(
     local.common_tags,
     {
@@ -1253,6 +1253,11 @@ resource "aws_lb" "primary" {
       Name = "alb-primary-${local.resource_suffix}"
     }
   )
+  depends_on = [
+    aws_security_group.primary_alb,
+    aws_subnet.primary_public_1,
+    aws_subnet.primary_public_2
+  ]
 }
 
 # Secondary Application Load Balancer
