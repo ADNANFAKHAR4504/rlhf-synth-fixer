@@ -33,6 +33,7 @@ import {
   S3Client
 } from '@aws-sdk/client-s3';
 import {
+  DeleteParameterCommand,
   GetParameterCommand,
   PutParameterCommand,
   SSMClient,
@@ -495,18 +496,33 @@ describe('Multi-Account Replication Framework Integration Tests', () => {
         environment: environment
       });
 
-      const putCommand = new PutParameterCommand({
-        Name: paramName,
-        Value: paramValue,
-        Type: 'String',
-        Overwrite: true,
-        Tags: [
-          { Key: 'Environment', Value: environment },
-          { Key: 'TestParameter', Value: 'true' },
-          { Key: 'ManagedBy', Value: 'IntegrationTest' }
-        ]
-      });
-      await ssmClient.send(putCommand);
+      // First, try to create the parameter with tags (without overwrite)
+      try {
+        const putCommand = new PutParameterCommand({
+          Name: paramName,
+          Value: paramValue,
+          Type: 'String',
+          Tags: [
+            { Key: 'Environment', Value: environment },
+            { Key: 'TestParameter', Value: 'true' },
+            { Key: 'ManagedBy', Value: 'IntegrationTest' }
+          ]
+        });
+        await ssmClient.send(putCommand);
+      } catch (error: any) {
+        // If parameter already exists, update it without tags
+        if (error.name === 'ParameterAlreadyExists') {
+          const updateCommand = new PutParameterCommand({
+            Name: paramName,
+            Value: paramValue,
+            Type: 'String',
+            Overwrite: true
+          });
+          await ssmClient.send(updateCommand);
+        } else {
+          throw error;
+        }
+      }
 
       const getCommand = new GetParameterCommand({ Name: paramName });
       const response = await ssmClient.send(getCommand);
@@ -515,6 +531,15 @@ describe('Multi-Account Replication Framework Integration Tests', () => {
       const parsedValue = JSON.parse(response.Parameter?.Value || '{}');
       expect(parsedValue.environment).toBe(environment);
       expect(parsedValue.test).toBe('value');
+
+      // Cleanup: Delete the test parameter
+      try {
+        const deleteCommand = new DeleteParameterCommand({ Name: paramName });
+        await ssmClient.send(deleteCommand);
+      } catch (error) {
+        // Ignore cleanup errors
+        console.warn(`Failed to cleanup test parameter ${paramName}:`, error);
+      }
     });
 
     test('SSM parameter hierarchical structure should be consistent', async () => {
