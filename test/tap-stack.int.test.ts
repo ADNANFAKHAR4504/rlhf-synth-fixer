@@ -704,7 +704,7 @@ describe("TapStack - Live AWS End-to-End Integration Tests", () => {
       const secretValue = JSON.parse(valueResponse.SecretString || "{}");
       expect(secretValue.password).toBeDefined();
       expect(secretValue.username).toBeDefined();
-      expect(secretValue.username).toBe('dbadmin'); // Default master username from parameter
+      expect(secretValue.username).toBe('dbadmin'); // Default master_username from parameter
 
       console.log(`✓ Database master credentials are securely stored in Secrets Manager`);
     });
