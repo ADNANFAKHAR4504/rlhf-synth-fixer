@@ -1,3 +1,5 @@
-name: payment-processing-multi-env
-runtime: python
-description: Multi-environment payment processing infrastructure with Pulumi Python
+name: TapStack
+runtime:
+  name: python
+description: Pulumi infrastructure for TAP
+main: tap.py
