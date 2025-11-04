@@ -1,0 +1,3 @@
+name: payment-processing-multi-env
+runtime: python
+description: Multi-environment payment processing infrastructure with Pulumi Python
