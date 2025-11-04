@@ -64,8 +64,6 @@ Let's now create the CloudFormation YAML template.
 
 ## Drafting the CloudFormation YAML Template
 
-Let's start drafting the template:
-
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'CloudFormation template for least-privilege IAM roles with permission boundaries'
