@@ -179,7 +179,7 @@ export class TapStack extends pulumi.ComponentResource {
           username: 'admin',
           password: pulumi.output('').apply(() => {
             const chars =
-              'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+              'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%^&*-_+=';
             let password = '';
             for (let i = 0; i < 32; i++) {
               password += chars.charAt(
