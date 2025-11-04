@@ -276,3 +276,18 @@ export class TapStack extends cdk.Stack {
   }
 }
 ```
+
+## Implementation Notes
+
+- VPC created with 10.0.0.0/16 CIDR in ap-southeast-1 region
+- 3 public subnets with /24 CIDR blocks across 3 AZs
+- 3 private subnets with /23 CIDR blocks across 3 AZs
+- Internet Gateway for public subnet connectivity
+- 2 NAT Gateways deployed in first two public subnets
+- VPC Flow Logs enabled with 7-day retention in CloudWatch Logs
+- Custom Network ACLs allowing only HTTP (80), HTTPS (443), and SSH (22)
+- All resources tagged with Environment=production and Project=apac-expansion
+- Route tables named following {env}-{tier}-rt pattern
+- CloudFormation outputs for VPC ID, subnet IDs, and NAT Gateway information
+- All resources use DESTROY removal policy (no Retain policies)
+- environmentSuffix parameter ensures unique resource naming

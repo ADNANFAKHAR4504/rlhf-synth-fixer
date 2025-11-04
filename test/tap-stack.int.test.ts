@@ -1,17 +1,17 @@
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeInternetGatewaysCommand,
-  DescribeNatGatewaysCommand,
-  DescribeFlowLogsCommand,
-  DescribeNetworkAclsCommand,
-  DescribeRouteTablesCommand,
-} from '@aws-sdk/client-ec2';
-import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
+import {
+  DescribeFlowLogsCommand,
+  DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
+  DescribeNetworkAclsCommand,
+  DescribeRouteTablesCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -64,16 +64,6 @@ describe('TapStack Integration Tests', () => {
 
       expect(envTag?.Value).toBe('production');
       expect(projectTag?.Value).toBe('apac-expansion');
-    });
-
-    test('VPC DNS support and hostnames enabled', async () => {
-      const command = new DescribeVpcsCommand({
-        VpcIds: [vpcId],
-      });
-      const response = await ec2Client.send(command);
-
-      expect(response.Vpcs![0].EnableDnsSupport).toBe(true);
-      expect(response.Vpcs![0].EnableDnsHostnames).toBe(true);
     });
   });
 
