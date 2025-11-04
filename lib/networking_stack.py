@@ -15,11 +15,8 @@ from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import (
     S3BucketLifecycleConfigurationRule,
     S3BucketLifecycleConfigurationRuleExpiration,
 )
-from cdktf_cdktf_provider_aws.iam_role import IamRole
-from cdktf_cdktf_provider_aws.iam_role_policy import IamRolePolicy
 from cdktf_cdktf_provider_aws.data_aws_availability_zones import DataAwsAvailabilityZones
-from cdktf import TerraformOutput
-import json
+from cdktf import TerraformOutput, Fn
 
 
 class NetworkingStack(Construct):
@@ -116,12 +113,13 @@ class NetworkingStack(Construct):
         cidrs = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
 
         for idx, cidr in enumerate(cidrs):
+            az_name = Fn.element(self.azs.names, idx)
             subnet = Subnet(
                 self,
                 f"public_subnet_{idx}",
                 vpc_id=self.vpc.id,
                 cidr_block=cidr,
-                availability_zone=f"{self.aws_region}{'abc'[idx]}",
+                availability_zone=az_name,
                 map_public_ip_on_launch=True,
                 tags={
                     "Name": f"payment-public-subnet-{idx+1}-{self.environment_suffix}",
@@ -140,12 +138,13 @@ class NetworkingStack(Construct):
         cidrs = ["10.0.11.0/24", "10.0.12.0/24", "10.0.13.0/24"]
 
         for idx, cidr in enumerate(cidrs):
+            az_name = Fn.element(self.azs.names, idx)
             subnet = Subnet(
                 self,
                 f"private_subnet_{idx}",
                 vpc_id=self.vpc.id,
                 cidr_block=cidr,
-                availability_zone=f"{self.aws_region}{'abc'[idx]}",
+                availability_zone=az_name,
                 map_public_ip_on_launch=False,
                 tags={
                     "Name": f"payment-private-subnet-{idx+1}-{self.environment_suffix}",
@@ -164,12 +163,13 @@ class NetworkingStack(Construct):
         cidrs = ["10.0.21.0/24", "10.0.22.0/24", "10.0.23.0/24"]
 
         for idx, cidr in enumerate(cidrs):
+            az_name = Fn.element(self.azs.names, idx)
             subnet = Subnet(
                 self,
                 f"database_subnet_{idx}",
                 vpc_id=self.vpc.id,
                 cidr_block=cidr,
-                availability_zone=f"{self.aws_region}{'abc'[idx]}",
+                availability_zone=az_name,
                 map_public_ip_on_launch=False,
                 tags={
                     "Name": f"payment-database-subnet-{idx+1}-{self.environment_suffix}",
@@ -344,55 +344,6 @@ class NetworkingStack(Construct):
 
     def _create_flow_log(self) -> FlowLog:
         """Create VPC Flow Log to capture all traffic."""
-        # Create IAM role for Flow Logs
-        flow_log_role = IamRole(
-            self,
-            "flow_log_role",
-            name=f"payment-vpc-flow-log-role-{self.environment_suffix}",
-            assume_role_policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "vpc-flow-logs.amazonaws.com"
-                        },
-                        "Action": "sts:AssumeRole"
-                    }
-                ]
-            }),
-            tags={
-                "Name": f"payment-vpc-flow-log-role-{self.environment_suffix}",
-                "Environment": "Production",
-                "Project": "PaymentGateway",
-            },
-        )
-
-        # Create IAM role policy for S3 access
-        IamRolePolicy(
-            self,
-            "flow_log_policy",
-            name=f"payment-vpc-flow-log-policy-{self.environment_suffix}",
-            role=flow_log_role.id,
-            policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "logs:CreateLogGroup",
-                            "logs:CreateLogStream",
-                            "logs:PutLogEvents",
-                            "logs:DescribeLogGroups",
-                            "logs:DescribeLogStreams"
-                        ],
-                        "Resource": "*"
-                    }
-                ]
-            }),
-        )
-
-        # Create Flow Log
         return FlowLog(
             self,
             "vpc_flow_log",
