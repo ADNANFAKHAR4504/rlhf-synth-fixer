@@ -195,15 +195,9 @@ describe("Terraform single-file stack: tap_stack.tf", () => {
     expect(content).toMatch(/data\s+"aws_ami"\s+"amazon_linux"/);
   });
 
-  test("uses create_before_destroy lifecycle", () => {
+  test("uses create_before_destroy lifecycle for zero downtime updates", () => {
     const lifecycleMatches = content.match(/lifecycle\s*{[^}]*create_before_destroy\s*=\s*true[^}]*}/g);
     expect(lifecycleMatches?.length).toBeGreaterThan(5);
-  });
-
-  test("uses moved blocks for migration", () => {
-    expect(content).toMatch(/moved\s*{/);
-    expect(content).toMatch(/from\s*=/);
-    expect(content).toMatch(/to\s*=/);
   });
 
   test("creates outputs for all major resources", () => {

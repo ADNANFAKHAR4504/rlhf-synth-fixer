@@ -788,20 +788,6 @@ resource "aws_flow_log" "vpc" {
   }
 }
 
-moved {
-  from = aws_subnet.public[0]
-  to   = aws_subnet.public[local.availability_zones[0]]
-}
-
-moved {
-  from = aws_subnet.private[0]
-  to   = aws_subnet.private[local.availability_zones[0]]
-}
-
-moved {
-  from = aws_subnet.database[0]
-  to   = aws_subnet.database[local.availability_zones[0]]
-}
 
 output "vpc_id" {
   description = "VPC ID"
