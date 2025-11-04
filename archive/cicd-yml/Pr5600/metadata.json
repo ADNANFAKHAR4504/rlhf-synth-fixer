@@ -11,5 +11,10 @@
     "CI/CD Pipeline"
   ],
   "training_quality": 10,
-  "dockerS3Location": ""
+  "dockerS3Location": "",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "okorie-turing"
 }
