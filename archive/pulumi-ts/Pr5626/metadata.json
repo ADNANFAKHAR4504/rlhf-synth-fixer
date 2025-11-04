@@ -1,6 +1,6 @@
 {
   "platform": "pulumi",
-  "language": "ts",
+  "language": "typescript",
   "complexity": "hard",
   "turn_type": "single",
   "team": "synth",
@@ -11,23 +11,21 @@
   ],
   "po_id": "1au4og",
   "aws_services": [
+    "KMS",
     "S3",
     "SNS",
-    "CloudWatch",
-    "Lambda",
-    "VPC",
     "IAM",
-    "KMS",
-    "Security Hub",
-    "Inspector",
-    "Audit Manager",
-    "Detective",
-    "DevOps Guru",
-    "Compute Optimizer",
-    "Health",
-    "Well-Architected",
+    "Config",
+    "Lambda",
+    "CloudWatch",
     "EventBridge"
   ],
   "region": "ap-southeast-1",
-  "training_quality": 9
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
