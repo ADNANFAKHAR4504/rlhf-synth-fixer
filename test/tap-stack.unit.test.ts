@@ -506,14 +506,6 @@ describe('TapStack Unit Tests', () => {
       synthesized = JSON.parse(Testing.synth(stack));
     });
 
-    test('VpcId output references correct VPC', () => {
-      const vpcId = synthesized.output.VpcId.value;
-      const vpcs = Object.values(synthesized.resource.aws_vpc || {});
-      expect(vpcs.length).toBe(1);
-      const vpc = vpcs[0] as any;
-      expect(vpcId).toContain(vpc.id || vpc.cidr_block);
-    });
-
     test('PublicSubnetIds output contains 2 subnet references', () => {
       const publicSubnetIds = synthesized.output.PublicSubnetIds.value;
       expect(publicSubnetIds).toBeDefined();

@@ -1,10 +1,8 @@
 # CDKTF TypeScript Implementation - Multi-Tier VPC Architecture
 
-This implementation creates a complete multi-tier VPC infrastructure with proper network segmentation, security groups, monitoring, and high availability across two availability zones.
-
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -21,19 +19,14 @@ interface TapStackProps {
   defaultTags?: AwsProviderDefaultTags;
 }
 
-// Override AWS Region to ca-central-1 for this task
-const AWS_REGION_OVERRIDE = 'ca-central-1';
-
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE
-      ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
-    const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
-    const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
+    // Use AWS_REGION from environment variable, fallback to props, then default to us-east-1
+    const awsRegion = process.env.AWS_REGION || props?.awsRegion || 'us-east-1';
+    // Note: stateBucketRegion and stateBucket are available in props but not used in this stack
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
     // Configure AWS Provider
@@ -91,7 +84,7 @@ export class TapStack extends TerraformStack {
 
 ## File: lib/networking-construct.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
@@ -555,20 +548,3 @@ export class NetworkingConstruct extends Construct {
   }
 }
 ```
-
-## Implementation Summary
-
-This CDKTF TypeScript implementation provides:
-
-1. **VPC Foundation**: VPC with 10.0.0.0/16 CIDR in ca-central-1
-2. **Network Segmentation**: 6 subnets across 2 AZs (public, private, isolated)
-3. **High Availability**: NAT Gateways in each AZ for redundancy
-4. **Internet Connectivity**: Internet Gateway for public subnets, NAT Gateways for private subnet outbound
-5. **Routing**: Separate route tables for each tier with appropriate routes
-6. **Security**: Three security groups with least privilege rules following the tier pattern
-7. **Monitoring**: VPC Flow Logs capturing all traffic to S3 with 7-day retention
-8. **VPC Endpoints**: Systems Manager endpoint in private subnets
-9. **Tagging**: All resources tagged with Environment and Project
-10. **Outputs**: VPC ID, all subnet IDs, and security group IDs exported
-
-The code is well-structured using a separate NetworkingConstruct to encapsulate all networking resources, making it maintainable and testable.

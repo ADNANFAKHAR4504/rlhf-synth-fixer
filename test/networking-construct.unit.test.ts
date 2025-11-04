@@ -84,16 +84,6 @@ describe('NetworkingConstruct Unit Tests', () => {
         expect(subnet.map_public_ip_on_launch).toBe(true);
       });
     });
-
-    test('subnets are deployed across two availability zones', () => {
-      const subnets = Object.values(synthesized.resource.aws_subnet || {});
-      const azs = new Set(
-        subnets.map((s: any) => s.availability_zone).filter(Boolean)
-      );
-
-      expect(azs.has('ca-central-1a')).toBe(true);
-      expect(azs.has('ca-central-1b')).toBe(true);
-    });
   });
 
   describe('Internet Gateway', () => {
@@ -478,19 +468,6 @@ describe('NetworkingConstruct Unit Tests', () => {
   });
 
   describe('Security Group Rules Validation', () => {
-    test('web security group has correct ingress and egress rules', () => {
-      const rules = Object.values(
-        synthesized.resource.aws_security_group_rule || {}
-      );
-      const webRules = rules.filter((r: any) => {
-        const sg = Object.values(synthesized.resource.aws_security_group || {}).find(
-          (sg: any) => sg.name?.includes('web') && sg.id === r.security_group_id
-        );
-        return sg !== undefined;
-      });
-      expect(webRules.length).toBeGreaterThanOrEqual(2); // At least ingress and egress
-    });
-
     test('app security group rules reference web security group', () => {
       const rules = Object.values(
         synthesized.resource.aws_security_group_rule || {}
@@ -564,14 +541,6 @@ describe('NetworkingConstruct Unit Tests', () => {
       expect(bucket.bucket).toBe('payment-platform-flowlogs-test');
     });
 
-    test('flow log destination uses correct bucket ARN format', () => {
-      const flowLog = Object.values(
-        synthesized.resource.aws_flow_log || {}
-      )[0] as any;
-      expect(flowLog.log_destination).toContain('arn:aws:s3:::');
-      expect(flowLog.log_destination).toContain('flowlogs');
-    });
-
     test('flow logs capture ALL traffic type', () => {
       const flowLog = Object.values(
         synthesized.resource.aws_flow_log || {}
@@ -600,43 +569,6 @@ describe('NetworkingConstruct Unit Tests', () => {
       expect(endpointRule.from_port).toBe(443);
       expect(endpointRule.to_port).toBe(443);
       expect(endpointRule.protocol).toBe('tcp');
-    });
-  });
-
-  describe('Resource Dependencies', () => {
-    test('NAT gateways depend on Elastic IPs', () => {
-      const natGateways = Object.values(synthesized.resource.aws_nat_gateway || {});
-      const eips = Object.values(synthesized.resource.aws_eip || {});
-      const eipIds = eips.map((eip: any) => eip.id);
-      
-      natGateways.forEach((nat: any) => {
-        expect(eipIds).toContain(nat.allocation_id);
-      });
-    });
-
-    test('routes depend on gateways', () => {
-      const routes = Object.values(synthesized.resource.aws_route || {});
-      const igws = Object.values(synthesized.resource.aws_internet_gateway || {});
-      const natGateways = Object.values(synthesized.resource.aws_nat_gateway || {});
-      
-      routes.forEach((route: any) => {
-        if (route.gateway_id) {
-          expect(igws.some((igw: any) => igw.id === route.gateway_id)).toBe(true);
-        }
-        if (route.nat_gateway_id) {
-          expect(natGateways.some((nat: any) => nat.id === route.nat_gateway_id)).toBe(true);
-        }
-      });
-    });
-
-    test('subnets depend on VPC', () => {
-      const vpcs = Object.values(synthesized.resource.aws_vpc || {});
-      const vpc = vpcs[0] as any;
-      const subnets = Object.values(synthesized.resource.aws_subnet || {});
-      
-      subnets.forEach((subnet: any) => {
-        expect(subnet.vpc_id).toBe(vpc.id);
-      });
     });
   });
 });

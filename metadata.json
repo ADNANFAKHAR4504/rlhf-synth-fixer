@@ -6,9 +6,10 @@
   "team": "synth",
   "startedAt": "2025-11-04T05:00:16+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": ["VPC", "Subnets", "NAT Gateway", "Internet Gateway", "Route Tables", "VPC Flow Logs", "Security Groups", "VPC Endpoints"],
+  "subject_labels": ["Cloud Environment Setup"],
   "po_id": "ilkn5f",
   "aws_services": ["VPC", "Subnet", "Internet Gateway", "NAT Gateway", "Elastic IP", "Route Table", "Security Group", "S3", "VPC Flow Logs", "VPC Endpoint"],
   "region": "ca-central-1",
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "rajendra-s-aws"
 }
