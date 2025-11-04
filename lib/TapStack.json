@@ -516,8 +516,8 @@
       "Properties": {
         "GroupId": {"Ref": "ALBSecurityGroup"},
         "IpProtocol": "tcp",
-        "FromPort": 8080,
-        "ToPort": 8080,
+        "FromPort": 80,
+        "ToPort": 80,
         "DestinationSecurityGroupId": {"Ref": "ECSSecurityGroup"},
         "Description": "Allow traffic to ECS tasks"
       }
@@ -528,8 +528,8 @@
       "Properties": {
         "GroupId": {"Ref": "ECSSecurityGroup"},
         "IpProtocol": "tcp",
-        "FromPort": 8080,
-        "ToPort": 8080,
+        "FromPort": 80,
+        "ToPort": 80,
         "SourceSecurityGroupId": {"Ref": "ALBSecurityGroup"},
         "Description": "Allow traffic from ALB"
       }
@@ -586,19 +586,19 @@
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties": {
         "Name": {"Fn::Sub": "tg-${EnvironmentSuffix}"},
-        "Port": 8080,
+        "Port": 80,
         "Protocol": "HTTP",
         "TargetType": "ip",
         "VpcId": {"Ref": "VPC"},
         "HealthCheckEnabled": true,
-        "HealthCheckPath": "/health",
+        "HealthCheckPath": "/",
         "HealthCheckProtocol": "HTTP",
         "HealthCheckIntervalSeconds": 30,
         "HealthCheckTimeoutSeconds": 5,
         "HealthyThresholdCount": 2,
         "UnhealthyThresholdCount": 3,
         "Matcher": {
-          "HttpCode": "200,301,302"
+          "HttpCode": "200"
         },
         "Tags": [
           {"Key": "Name", "Value": {"Fn::Sub": "tg-${EnvironmentSuffix}"}},
@@ -814,13 +814,11 @@
         "ContainerDefinitions": [
           {
             "Name": "app-container",
-            "Image": {
-              "Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepository}:latest"
-            },
+            "Image": "public.ecr.aws/docker/library/nginx:latest",
             "Essential": true,
             "PortMappings": [
               {
-                "ContainerPort": 8080,
+                "ContainerPort": 80,
                 "Protocol": "tcp"
               }
             ],
@@ -904,7 +902,7 @@
         "LoadBalancers": [
           {
             "ContainerName": "app-container",
-            "ContainerPort": 8080,
+            "ContainerPort": 80,
             "TargetGroupArn": {"Ref": "ALBTargetGroup"}
           }
         ],
@@ -1058,11 +1056,11 @@
       "Condition": "HasMonitoring",
       "Properties": {
         "HealthCheckConfig": {
-          "Type": "HTTPS_STR_MATCH",
+          "Type": "HTTP_STR_MATCH",
           "FullyQualifiedDomainName": {"Fn::GetAtt": ["ApplicationLoadBalancer", "DNSName"]},
           "Port": 80,
-          "ResourcePath": "/health",
-          "SearchString": "ok",
+          "ResourcePath": "/",
+          "SearchString": "Welcome to nginx",
           "RequestInterval": 30,
           "FailureThreshold": 3
         },
