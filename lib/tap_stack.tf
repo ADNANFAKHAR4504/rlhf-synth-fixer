@@ -993,7 +993,6 @@ resource "aws_db_instance" "secondary_replica" {
     }
   )
   storage_encrypted = true
-  kms_key_id        = "alias/aws/rds" 
   depends_on = [aws_db_subnet_group.secondary]
 }
 
