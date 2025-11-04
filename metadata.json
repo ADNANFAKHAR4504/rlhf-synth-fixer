@@ -11,11 +11,12 @@
     "Security Configuration as Code"
   ],
   "aws_services": [
-    "S3 Bucket",
-    "CloudFormation",
+    "VPC",
+    "EC2",
+    "S3",
+    "CloudTrail",
     "Lambda",
-    "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
+    "IAM",
+    "CloudWatch Logs"
   ]
 }
