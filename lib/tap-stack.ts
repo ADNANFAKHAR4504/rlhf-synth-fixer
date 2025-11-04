@@ -518,7 +518,7 @@ export class TapStack extends cdk.Stack {
       evaluationPeriods: 3,
       datapointsToAlarm: 2,
       alarmDescription: 'HTTP 5XX errors exceeded 1%',
-      alarmName: `${id}-5xx-error-rate`,
+      alarmName: `${id}-${environmentSuffix}-5xx-error-rate`,
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
@@ -539,7 +539,7 @@ export class TapStack extends cdk.Stack {
       evaluationPeriods: 3,
       datapointsToAlarm: 2,
       alarmDescription: 'Transaction latency exceeded 500ms',
-      alarmName: `${id}-transaction-latency`,
+      alarmName: `${id}-${environmentSuffix}-transaction-latency`,
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
