@@ -453,7 +453,8 @@ export class TapStack extends TerraformStack {
     });
 
     // ACM Certificate
-    // Note: Certificate validation happens in background, deployment doesn't wait
+    // Note: By not using AcmCertificateValidation resource, the certificate is created
+    // and validation records are set up, but deployment doesn't wait for validation
     const certificate = new AcmCertificate(this, 'certificate', {
       domainName: `api.myapp-${props.environmentSuffix}.example.net`,
       validationMethod: 'DNS',
@@ -464,9 +465,6 @@ export class TapStack extends TerraformStack {
         createBeforeDestroy: true,
       },
     });
-
-    // Override to disable validation waiting (prevents 5-minute timeout)
-    certificate.addOverride('wait_for_validation', false);
 
     // DNS Validation Records
     new Route53Record(this, 'cert-validation-record', {
