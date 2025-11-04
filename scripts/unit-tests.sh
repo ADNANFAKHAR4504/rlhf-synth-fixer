@@ -27,9 +27,17 @@ fi
 # -------------------------------------------------------------------
 # Jest static configuration (fixed to v28)
 # -------------------------------------------------------------------
-TEST_PATTERN_FLAG="--testPathPattern"
-JEST_VERSION=$(npx jest --version 2>/dev/null || echo "28.1.3")
-echo "🧩 Using Jest v${JEST_VERSION} with flag: ${TEST_PATTERN_FLAG}"
+# Detect Jest version reliably
+JEST_RAW_VERSION=$(npx jest --version 2>/dev/null || echo "28.0.0")
+JEST_MAJOR=$(echo "$JEST_RAW_VERSION" | cut -d. -f1)
+
+if [ "$JEST_MAJOR" -ge 30 ]; then
+  TEST_PATTERN_FLAG="--testPathPatterns"
+else
+  TEST_PATTERN_FLAG="--testPathPattern"
+fi
+
+echo "🧩 Using Jest v$JEST_RAW_VERSION with flag: $TEST_PATTERN_FLAG"
 
 # -------------------------------------------------------------------
 # Run unit tests per platform/language
