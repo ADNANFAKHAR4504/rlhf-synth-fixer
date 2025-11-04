@@ -53,7 +53,6 @@ export class TapStack extends TerraformStack {
       key: `${environmentSuffix}/${id}.tfstate`,
       region: stateBucketRegion,
       encrypt: true,
-      dynamodbTable: `${stateBucket}-lock`,
     });
 
     // Environment configurations
