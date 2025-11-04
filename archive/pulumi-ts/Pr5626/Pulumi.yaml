@@ -1,0 +1,3 @@
+name: TapStack
+runtime: nodejs
+description: Automated compliance monitoring system for AWS infrastructure

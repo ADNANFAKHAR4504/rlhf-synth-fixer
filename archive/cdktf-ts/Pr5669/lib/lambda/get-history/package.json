@@ -1,0 +1,10 @@
+{
+  "name": "get-history",
+  "version": "1.0.0",
+  "description": "Lambda function to get driver location history",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0"
+  }
+}
