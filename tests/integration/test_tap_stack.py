@@ -8,43 +8,6 @@ import uuid
 from botocore.exceptions import ClientError
 
 
-# Load deployment outputs
-def load_outputs():
-    """Load stack outputs from deployment."""
-    outputs_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-        'cfn-outputs',
-        'flat-outputs.json'
-    )
-    with open(outputs_path, 'r') as f:
-        return json.load(f)
-
-
-@pytest.fixture(scope='module')
-def stack_outputs():
-    """Fixture to provide stack outputs to all tests."""
-    return load_outputs()
-
-
-@pytest.fixture(scope='module')
-def aws_clients(stack_outputs):
-    """Fixture to provide AWS clients configured for the deployment region."""
-    # Extract region from Lambda ARN
-    lambda_arn = stack_outputs['lambda_function_arn']
-    region = lambda_arn.split(':')[3]
-
-    return {
-        'dynamodb': boto3.client('dynamodb', region_name=region),
-        'dynamodb_resource': boto3.resource('dynamodb', region_name=region),
-        's3': boto3.client('s3', region_name=region),
-        'lambda': boto3.client('lambda', region_name=region),
-        'apigateway': boto3.client('apigateway', region_name=region),
-        'logs': boto3.client('logs', region_name=region),
-        'iam': boto3.client('iam', region_name=region),
-        'region': region
-    }
-
-
 class TestDynamoDBTableIntegration:
     """Integration tests for DynamoDB Table."""
 
