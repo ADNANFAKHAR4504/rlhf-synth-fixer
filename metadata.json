@@ -6,7 +6,10 @@
   "team": "synth",
   "startedAt": "2025-11-04T05:12:40+05:30",
   "subtask": "Application Deployment",
-  "subject_labels": [],
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
   "po_id": "5f94s",
   "aws_services": [
     "VPC",
@@ -22,5 +25,6 @@
     "Application Auto Scaling"
   ],
   "region": "ap-southeast-1",
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "iamarpit-turing"
 }
