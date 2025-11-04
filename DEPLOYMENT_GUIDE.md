@@ -221,11 +221,351 @@ npm run cdktf:destroy
 5. **Review Terraform plan** before applying changes
 6. **Keep database passwords secure** (use Secrets Manager in production)
 
-## Notes
+## Advanced Deployment Scenarios
 
-- The deployment uses FARGATE_SPOT for cost optimization
-- Auto-scaling is configured for 2-10 tasks based on CPU (70% target)
-- RDS Aurora uses version 16.4 (compatible with all regions)
-- CloudFront uses managed cache policy (no legacy forwarded_values)
-- All resources include environment_suffix for uniqueness
-- No deletion protection is enabled (for testing purposes)
+### Blue-Green Deployment Strategy
+
+#### Setup Blue-Green Infrastructure
+```bash
+# Create blue environment (current)
+source ./set-env.sh
+export ENVIRONMENT_SUFFIX="blue-${ENVIRONMENT_SUFFIX}"
+npm run cdktf:deploy
+
+# Create green environment (new version)
+export ENVIRONMENT_SUFFIX="green-${ENVIRONMENT_SUFFIX}" 
+export NEW_IMAGE_TAG="v2.0.0"
+npm run cdktf:deploy
+```
+
+#### Traffic Switching Process
+1. **Validate Green Environment**
+   ```bash
+   # Health check green environment
+   GREEN_ALB_DNS=$(aws elbv2 describe-load-balancers \
+     --names "alb-green-${ENVIRONMENT_SUFFIX}" \
+     --query 'LoadBalancers[0].DNSName' --output text)
+   
+   curl -f http://${GREEN_ALB_DNS}/health || echo "Health check failed"
+   ```
+
+2. **CloudFront Origin Switch**
+   ```bash
+   # Update CloudFront distribution origin
+   aws cloudfront update-distribution \
+     --id ${DISTRIBUTION_ID} \
+     --distribution-config file://new-origin-config.json
+   ```
+
+3. **Rollback Procedure**
+   ```bash
+   # Quick rollback to blue environment
+   aws cloudfront update-distribution \
+     --id ${DISTRIBUTION_ID} \
+     --distribution-config file://blue-origin-config.json
+   ```
+
+### Canary Deployment Pattern
+
+#### Weighted Routing Configuration
+```python
+# ALB target group with weighted routing
+green_target_group = ApplicationTargetGroup(
+    self, "green-target-group",
+    port=3000,
+    vpc=vpc,
+    target_type=TargetType.IP,
+    health_check=HealthCheck(
+        path="/health",
+        healthy_threshold_count=2,
+        unhealthy_threshold_count=2,
+        timeout=Duration.seconds(5),
+        interval=Duration.seconds(30)
+    )
+)
+
+# Listener rule for canary traffic (10%)
+ApplicationListenerRule(
+    self, "canary-rule",
+    listener=listener,
+    priority=100,
+    conditions=[
+        ListenerCondition.path_patterns(["/api/*"])
+    ],
+    action=ListenerAction.weighted_forward(
+        target_groups=[
+            WeightedTargetGroup(target_group=blue_target_group, weight=90),
+            WeightedTargetGroup(target_group=green_target_group, weight=10)
+        ]
+    )
+)
+```
+
+### Multi-Region Deployment
+
+#### Primary Region (eu-north-1)
+```bash
+# Deploy primary infrastructure
+export AWS_REGION="eu-north-1"
+export ENVIRONMENT_SUFFIX="primary-${ENVIRONMENT_SUFFIX}"
+source ./set-env.sh
+npm run cdktf:deploy
+```
+
+#### Secondary Region (eu-west-1)
+```bash
+# Deploy disaster recovery region
+export AWS_REGION="eu-west-1" 
+export ENVIRONMENT_SUFFIX="secondary-${ENVIRONMENT_SUFFIX}"
+export DB_REPLICA_SOURCE="primary-cluster-arn"
+source ./set-env.sh
+npm run cdktf:deploy
+```
+
+#### Cross-Region Replication Setup
+```python
+# RDS Cross-Region Read Replica
+replica_cluster = DatabaseCluster(
+    self, "replica-cluster",
+    engine=DatabaseClusterEngine.aurora_postgres(
+        version=AuroraPostgresEngineVersion.VER_16_4
+    ),
+    vpc=vpc,
+    # Reference to primary cluster in another region
+    source_cluster_identifier=f"arn:aws:rds:eu-north-1:{account}:cluster:rds-cluster-primary-{environment_suffix}"
+)
+```
+
+### Container Registry Management
+
+#### ECR Repository Setup
+```bash
+# Create ECR repository
+aws ecr create-repository \
+  --repository-name catalog-api \
+  --region eu-north-1 \
+  --image-scanning-configuration scanOnPush=true
+
+# Configure repository policy
+aws ecr set-repository-policy \
+  --repository-name catalog-api \
+  --policy-text file://ecr-policy.json
+```
+
+#### Image Build and Push Pipeline
+```bash
+#!/bin/bash
+# build-and-push.sh
+
+# Build application image
+docker build -t catalog-api:${VERSION} .
+
+# Tag for ECR
+ECR_URI="${ACCOUNT_ID}.dkr.ecr.eu-north-1.amazonaws.com/catalog-api"
+docker tag catalog-api:${VERSION} ${ECR_URI}:${VERSION}
+docker tag catalog-api:${VERSION} ${ECR_URI}:latest
+
+# Login to ECR
+aws ecr get-login-password --region eu-north-1 | \
+  docker login --username AWS --password-stdin ${ECR_URI}
+
+# Push images
+docker push ${ECR_URI}:${VERSION}
+docker push ${ECR_URI}:latest
+
+# Scan for vulnerabilities
+aws ecr start-image-scan --repository-name catalog-api --image-id imageTag=${VERSION}
+```
+
+### Database Migration Strategy
+
+#### Schema Migration Process
+```bash
+#!/bin/bash
+# migrate-database.sh
+
+# Get database connection details
+DB_HOST=$(aws rds describe-db-clusters \
+  --db-cluster-identifier rds-cluster-${ENVIRONMENT_SUFFIX} \
+  --query 'DBClusters[0].Endpoint' --output text)
+
+DB_PASSWORD=$(aws secretsmanager get-secret-value \
+  --secret-id db-secret-${ENVIRONMENT_SUFFIX} \
+  --query 'SecretString' --output text | jq -r '.password')
+
+# Run database migrations
+psql -h ${DB_HOST} -U admin -d catalog_db -c "
+BEGIN;
+
+-- Create new tables
+CREATE TABLE IF NOT EXISTS products_v2 (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  price DECIMAL(10,2),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Migrate existing data
+INSERT INTO products_v2 (name, description, price)
+SELECT name, description, price FROM products;
+
+-- Verify migration
+SELECT COUNT(*) as migrated_records FROM products_v2;
+
+COMMIT;
+"
+
+echo "Database migration completed"
+```
+
+#### Backup Before Migration
+```bash
+# Create manual snapshot before migration
+aws rds create-db-cluster-snapshot \
+  --db-cluster-identifier rds-cluster-${ENVIRONMENT_SUFFIX} \
+  --db-cluster-snapshot-identifier migration-backup-$(date +%Y%m%d-%H%M%S)
+
+# Wait for snapshot completion
+aws rds wait db-cluster-snapshot-completed \
+  --db-cluster-snapshot-identifier migration-backup-$(date +%Y%m%d-%H%M%S)
+```
+
+### Monitoring and Observability Setup
+
+#### Custom Metrics Dashboard
+```bash
+# Create CloudWatch dashboard
+aws cloudwatch put-dashboard \
+  --dashboard-name "CatalogAPI-${ENVIRONMENT_SUFFIX}" \
+  --dashboard-body file://dashboard-config.json
+```
+
+#### Application Performance Monitoring
+```python
+# X-Ray tracing integration
+from aws_xray_sdk.core import xray_recorder
+from aws_xray_sdk.core import patch_all
+
+# Patch AWS SDK calls
+patch_all()
+
+@xray_recorder.capture('product_search')
+def search_products(query):
+    # Application logic with tracing
+    pass
+```
+
+### Security Hardening Deployment
+
+#### WAF Integration
+```python
+# Web Application Firewall
+web_acl = CfnWebACL(
+    self, "catalog-api-waf",
+    scope="CLOUDFRONT",
+    default_action=CfnWebACL.DefaultActionProperty(
+        allow={}
+    ),
+    rules=[
+        # Rate limiting rule
+        CfnWebACL.RuleProperty(
+            name="RateLimitRule",
+            priority=1,
+            statement=CfnWebACL.StatementProperty(
+                rate_based_statement=CfnWebACL.RateBasedStatementProperty(
+                    limit=2000,  # 2000 requests per 5 minutes
+                    aggregate_key_type="IP"
+                )
+            ),
+            action=CfnWebACL.RuleActionProperty(
+                block={}
+            ),
+            visibility_config=CfnWebACL.VisibilityConfigProperty(
+                sampled_requests_enabled=True,
+                cloud_watch_metrics_enabled=True,
+                metric_name="RateLimitRule"
+            )
+        )
+    ]
+)
+```
+
+#### Secrets Rotation Automation
+```python
+# Automated secret rotation
+rotation_lambda = Function(
+    self, "secret-rotation",
+    runtime=Runtime.PYTHON_3_9,
+    handler="lambda_function.lambda_handler",
+    code=Code.from_asset("lambda/secret-rotation"),
+    environment={
+        'SECRET_ARN': db_secret.secret_arn,
+        'RDS_CLUSTER_ARN': rds_cluster.cluster_arn
+    }
+)
+
+# Schedule rotation every 90 days
+db_secret.add_rotation_schedule(
+    "rotation-schedule",
+    rotation_lambda=rotation_lambda,
+    automatically_after=Duration.days(90)
+)
+```
+
+### Cost Optimization Strategies
+
+#### Spot Instance Configuration
+```python
+# ECS Fargate Spot configuration
+capacity_provider = CfnCapacityProvider(
+    self, "fargate-spot-provider",
+    name=f"fargate-spot-{environment_suffix}",
+    fargate_capacity_provider=CfnCapacityProvider.FargateCapacityProviderProperty(
+        fargate_capacity_provider_name="FARGATE_SPOT"
+    )
+)
+
+# Service with spot capacity
+service = FargateService(
+    self, "catalog-api-service",
+    cluster=cluster,
+    task_definition=task_definition,
+    capacity_provider_strategies=[
+        CapacityProviderStrategy(
+            capacity_provider="FARGATE_SPOT",
+            weight=70,  # 70% spot instances
+            base=2      # Always maintain 2 on-demand tasks
+        ),
+        CapacityProviderStrategy(
+            capacity_provider="FARGATE", 
+            weight=30   # 30% on-demand instances
+        )
+    ]
+)
+```
+
+#### Reserved Capacity Planning
+```bash
+# Analyze usage patterns for Reserved Instance recommendations
+aws ce get-rightsizing-recommendation \
+  --service "Amazon Elastic Compute Cloud - Compute" \
+  --filter file://cost-filter.json
+
+# Purchase RDS Reserved Instances
+aws rds purchase-reserved-db-instances-offering \
+  --reserved-db-instances-offering-id ${OFFERING_ID} \
+  --reserved-db-instance-id "catalog-api-reserved-${ENVIRONMENT_SUFFIX}"
+```
+
+### Notes
+
+- The deployment uses FARGATE_SPOT for cost optimization with fallback to on-demand
+- Auto-scaling is configured for 2-10 tasks based on CPU (70% target) with predictive scaling
+- RDS Aurora uses version 16.4 (compatible with all regions) with automated backup and cross-region replication
+- CloudFront uses managed cache policy with WAF integration for security
+- All resources include environment_suffix for uniqueness and proper resource isolation
+- No deletion protection is enabled for testing purposes, but can be enabled for production
+- Comprehensive monitoring includes custom metrics, distributed tracing, and automated alerting
+- Security hardening includes WAF, secrets rotation, and compliance monitoring
+- Cost optimization through spot instances, reserved capacity, and automated scaling policies
