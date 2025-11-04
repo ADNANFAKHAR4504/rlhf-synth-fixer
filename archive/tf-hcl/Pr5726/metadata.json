@@ -17,9 +17,24 @@
     "S3",
     "IAM",
     "Route53",
-    "Load Balancer"
+    "LoadBalancer",
+    "NAT",
+    "IGW",
+    "EIP",
+    "CloudWatch",
+    "SNS",
+    "SecretsManager",
+    "SecurityGroup",
+    "VPCPeering"
   ],
   "task_config": {
     "deploy_env": "prod.tfvars"
-  }
+  },
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
 }
