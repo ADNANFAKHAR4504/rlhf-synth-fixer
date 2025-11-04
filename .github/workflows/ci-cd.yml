@@ -731,12 +731,8 @@ jobs:
             | jq -r '.comments[].body' > all_comments.txt
 
           echo "🍀 Searching for quality score pattern..."
-          # Match any of these:
-          # - "**Final Score: 9.5/10**"
-          # - "Training Quality: 9/10"
-          # - "SCORE:10"
-          # Handles decimals, optional markdown, emojis, and spaces
-          SCORE=$(grep -Eo '(\*\*)?(Final|Training)[[:space:]]*Quality:?[[:space:]]*[0-9]+(\.[0-9]+)?/10(\*\*)?|SCORE:[[:space:]]*[0-9]+(\.[0-9]+)?' all_comments.txt \
+          # Case-insensitive search for multiple variants (Final Score, Training Quality, etc.)
+          SCORE=$(grep -Eoi '(final[[:space:]]*(score|quality):?|training[_[:space:]]*quality:?|quality[[:space:]]*score:?|score:)[[:space:]]*[0-9]+(\.[0-9]+)?' all_comments.txt \
             | tail -1 | grep -Eo '[0-9]+(\.[0-9]+)?' | head -1)
 
           if [ -z "$SCORE" ]; then
@@ -746,6 +742,7 @@ jobs:
 
           echo "Claude quality score: $SCORE"
           echo "quality_score=$SCORE" >> $GITHUB_OUTPUT
+
 
       - name: Enforce Quality Threshold
         id: quality_gate
