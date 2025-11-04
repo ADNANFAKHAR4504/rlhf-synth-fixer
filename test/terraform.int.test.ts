@@ -381,7 +381,7 @@ describe('🔄 END-TO-END Security Workflows', () => {
         logsClient,
         logGroupName,
         testBucketName,
-        90000 // 90 seconds
+        120000 // 120 seconds
       );
 
       if (remediationDetected) {
@@ -405,7 +405,7 @@ describe('🔄 END-TO-END Security Workflows', () => {
         } catch {
           return false;
         }
-      }, 240000, 15000); // Wait up to 4 minutes with 15-second intervals for AWS delays
+      }, 300000, 15000); // Wait up to 5 minutes with 15-second intervals for AWS delays
 
       if (remediated) {
         console.log('  ✅ REMEDIATION SUCCESSFUL: Public access blocked automatically');
@@ -445,7 +445,7 @@ describe('🔄 END-TO-END Security Workflows', () => {
 
       console.log('\n' + '─'.repeat(80));
       console.log('✅ E2E Flow 1 Complete: S3 Public Access Auto-Remediation\n');
-    }, 300000); // 5 minute timeout to account for AWS EventBridge and Lambda cold start delays
+    }, 360000); // 6 minute timeout to account for AWS EventBridge and Lambda cold start delays
   });
 
   // ============================================
