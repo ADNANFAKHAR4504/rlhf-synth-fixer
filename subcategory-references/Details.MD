@@ -86,12 +86,15 @@
 
 ---
 
-## CI/CD Pipeline
-> Build secure, keys-free pipelines (OIDC) that lint/test/plan and promote infra/app changes across stages.  
-> Gate production via approvals/change sets and publish artifacts/reports for auditability.
+## CI/CD Pipeline Optimization
+> Design and implement multi-account, multi-stage CI/CD pipelines with secure OIDC authentication.
+> Focus on automated build/test/deploy workflows with security scanning (cdk-nag), manual approval gates,
+> cross-account role assumptions, KMS-encrypted artifacts, and CloudFormation change sets for safe deployments.
+> Include branch-based deployments (dev branch → dev env, main branch → prod env with approvals) and
+> notification integrations (Slack/webhooks) for deployment status visibility.
 
-**PR Reference:**  
-- _(To be linked when available)_
+**PR Reference:**
+- [PR #5600](https://github.com/TuringGpt/iac-test-automations/pull/5600) - cicd-yml
 
 ---
 
