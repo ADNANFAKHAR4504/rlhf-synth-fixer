@@ -1,5 +1,5 @@
 {
-  "platform": "cfn",
+  "platform": "cloudformation",
   "language": "yaml",
   "complexity": "expert",
   "turn_type": "single",
@@ -12,17 +12,25 @@
   ],
   "aws_services": [
     "CloudFormation",
-    "RDS Aurora MySQL",
+    "RDS",
     "S3",
     "Lambda",
     "EventBridge",
-    "SSM Parameter Store",
+    "SSM",
     "DynamoDB",
     "CloudWatch",
     "SNS",
     "Config",
     "IAM",
-    "KMS"
+    "KMS",
+    "SecretsManager",
+    "VPC"
   ],
-  "training_quality": "9"
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
 }
