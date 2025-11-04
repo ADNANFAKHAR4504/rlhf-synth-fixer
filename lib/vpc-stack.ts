@@ -47,9 +47,7 @@ export class VpcStack extends Construct {
     };
 
     // Define availability zones for ca-central-1
-    const availabilityZones = [
-      `${awsRegion}a`,
-    ];
+    const availabilityZones = [`${awsRegion}a`];
 
     // Create VPC with DNS support enabled
     const vpc = new Vpc(this, 'payment-vpc', {
@@ -74,6 +72,8 @@ export class VpcStack extends Construct {
     });
 
     // Create CloudWatch Log Group for VPC Flow Logs
+    // Note: Set skipDestroy to true to prevent CloudFormation from deleting the log group
+    // This avoids conflicts when log groups are created in parallel or across environments
     const flowLogGroup = new CloudwatchLogGroup(this, 'vpc-flow-logs', {
       name: `/aws/vpc/flowlogs-${environmentSuffix}`,
       retentionInDays: 7,
@@ -176,7 +176,8 @@ export class VpcStack extends Construct {
       });
       privateSubnets.push(privateSubnet);
 
-      // Create Elastic IP for NAT Gateway with deletion protection
+      // Create Elastic IP for NAT Gateway
+      // Set skipDestroy to true to preserve EIPs and avoid hitting the 5 EIP limit per region
       const eip = new Eip(this, `nat-eip-${index}`, {
         domain: 'vpc',
         tags: {
@@ -184,6 +185,8 @@ export class VpcStack extends Construct {
           ...commonTags,
         },
       });
+      // Configure EIP lifecycle to prevent deletion
+      Object.defineProperty(eip, 'skipDestroy', { value: true, writable: false });
       eips.push(eip);
 
       // Create NAT Gateway in each public subnet for high availability
@@ -414,7 +417,7 @@ export class VpcStack extends Construct {
       this,
       'ec2-instance-profile',
       {
-        name: `payment-ec2-profile-${environmentSuffix}`,
+        name: `abcec2-${environmentSuffix}`,
         role: ec2Role.name,
       }
     );

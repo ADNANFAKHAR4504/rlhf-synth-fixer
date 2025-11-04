@@ -39,6 +39,11 @@ export class TapStack extends TerraformStack {
     });
 
     // Create VPC infrastructure for payment processing application
+    // NOTE: To resolve "AddressLimitExceeded" errors for EIPs:
+    // - AWS limits 5 EIPs per account per region by default
+    // - Use `terraform state rm` to clean up unused EIPs from previous deployments:
+    //   terraform state rm 'aws_eip.vpc-stack_nat-eip-*'
+    // - Or request a service quota increase from AWS Support for "Elastic IPs" in your region
     new VpcStack(this, 'vpc-stack', {
       environmentSuffix,
       awsRegion,
