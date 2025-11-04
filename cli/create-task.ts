@@ -186,6 +186,8 @@ const ANALYSIS_SUBTASKS = new Set<string>([
   'General Infrastructure Tooling QA',
 ]);
 
+const CICD_PIPELINE_SUBTASKS = new Set<string>(['CI/CD Pipeline']);
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
@@ -206,6 +208,7 @@ async function main(): Promise<void> {
     });
 
     const isAnalysis = ANALYSIS_SUBTASKS.has(taskSubCategory);
+    const isCICDPipeline = CICD_PIPELINE_SUBTASKS.has(taskSubCategory);
 
     let platform = '';
     let language = '';
@@ -220,6 +223,9 @@ async function main(): Promise<void> {
         ],
       });
       language = analysisChoice;
+    } else if (isCICDPipeline) {
+      platform = 'cicd';
+      language = 'yml';
     } else {
       platform = await select({
         message: 'Select the platform:',
@@ -280,7 +286,7 @@ async function main(): Promise<void> {
     });
 
     let resourcesText: string | undefined = undefined;
-    if (!isAnalysis) {
+    if (!isAnalysis && !isCICDPipeline) {
       resourcesText = await input({
         message:
           'Enter aws_services to provision (comma-separated). e.g., S3 Bucket, CloudFormation, Lambda, Fargate, VPC',
@@ -291,9 +297,11 @@ async function main(): Promise<void> {
 
     const templateName = isAnalysis
       ? `analysis-${language}`
-      : `${platform}-${language}`;
+      : isCICDPipeline
+        ? 'cicd-yml'
+        : `${platform}-${language}`;
 
-    if (!isAnalysis) {
+    if (!isAnalysis && !isCICDPipeline) {
       const templatesDir = path.join(__dirname, '..', 'templates');
       const templatePath = path.join(templatesDir, templateName);
       if (!(await fs.pathExists(templatePath))) {
