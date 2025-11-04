@@ -24,11 +24,17 @@ export COMMIT_AUTHOR=${COMMIT_AUTHOR:-$(git config user.name 2>/dev/null || echo
 # Read AWS region from lib/AWS_REGION if available, otherwise use environment or default
 if [ -f "lib/AWS_REGION" ]; then
   CUSTOM_REGION=$(cat lib/AWS_REGION | tr -d '[:space:]')
-  export AWS_REGION="${AWS_REGION:-$CUSTOM_REGION}"
+  export AWS_REGION="$CUSTOM_REGION"
   echo "Using AWS region from lib/AWS_REGION: $AWS_REGION"
 else
   export AWS_REGION=${AWS_REGION:-us-east-1}
   echo "Using default AWS region: $AWS_REGION"
+fi
+
+# Set CURRENT_ACCOUNT_ID if not already set
+if [ -z "$CURRENT_ACCOUNT_ID" ]; then
+  export CURRENT_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "342597974367")
+  echo "Using AWS Account ID: $CURRENT_ACCOUNT_ID"
 fi
 export TERRAFORM_STATE_BUCKET=${TERRAFORM_STATE_BUCKET:-}
 export TERRAFORM_STATE_BUCKET_REGION=${TERRAFORM_STATE_BUCKET_REGION:-us-east-1}
