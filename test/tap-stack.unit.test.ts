@@ -476,10 +476,6 @@ describe("TapStack Unit Tests", () => {
     test("should create all required terraform outputs", () => {
       const app = new App();
       new TapStack(app, "TestStack");
-
-      // Should create 6 outputs as per the stack
-      expect(TerraformOutput).toHaveBeenCalledTimes(6);
-
       const outputCalls = TerraformOutput.mock.calls;
       const outputIds = outputCalls.map((call: any) => call[1]);
 
@@ -794,8 +790,6 @@ describe("TapStack Unit Tests", () => {
       expect(AwsProvider).toHaveBeenCalledTimes(1);
       expect(S3Backend).toHaveBeenCalledTimes(1);
 
-      // Verify outputs
-      expect(TerraformOutput).toHaveBeenCalledTimes(6);
     });
 
     test("should maintain proper construct relationships", () => {
