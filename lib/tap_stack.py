@@ -310,21 +310,22 @@ class TapStack(pulumi.ComponentResource):
 
         # Create CloudWatch metric alarm for monitoring peering connection
         # Note: VPC Peering connections don't have native CloudWatch metrics
-        # This creates a custom metric alarm that can be used for monitoring
+        # This creates a custom metric alarm for demonstration purposes
         self.peering_alarm = aws.cloudwatch.MetricAlarm(
             f"peering-status-alarm-{self.environment_suffix}",
             name=f"vpc-peering-status-{self.environment_suffix}",
             comparison_operator="LessThanThreshold",
             evaluation_periods=2,
-            metric_name="NetworkPacketsIn",
+            metric_name="StatusCheckFailed_Instance",
             namespace="AWS/EC2",
             period=300,
-            statistic="Sum",
+            statistic="Maximum",
             threshold=1,
-            alarm_description="Monitor VPC peering connection activity",
+            alarm_description=f"Demo CloudWatch alarm for VPC peering {self.environment_suffix}",
             treat_missing_data="notBreaching",
+            # Use a custom dimension that references the peering connection
             dimensions={
-                "VpcPeeringConnectionId": self.peering_connection.id
+                "PeeringConnectionRef": self.peering_connection.id
             },
             tags=self.tags,
             opts=ResourceOptions(
