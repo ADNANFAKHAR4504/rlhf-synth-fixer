@@ -12,5 +12,11 @@
     "Cloud Environment Setup"
   ],
   "aws_services": "[\"vpc\", \"subnet\", \"internet-gateway\", \"nat-gateway\", \"elastic-ip\", \"route-table\", \"route-table-association\", \"network-acl\", \"db-subnet-group\"]",
-   "training_quality": 9.5
+  "training_quality": 9.5,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
 }
