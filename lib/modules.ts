@@ -8,6 +8,7 @@ export interface EnvironmentConfig {
   dbInstanceClass: string;
   flowLogRetentionDays: number;
   tags: Record<string, string>;
+  awsRegion?: string;
 }
 
 // Networking Module
@@ -25,6 +26,8 @@ export class NetworkingModule extends Construct {
 
   constructor(scope: Construct, id: string, config: EnvironmentConfig) {
     super(scope, id);
+
+    const awsRegion = config.awsRegion || 'us-east-1';
 
     // Create VPC
     this.vpc = new aws.vpc.Vpc(this, 'vpc', {
@@ -58,7 +61,7 @@ export class NetworkingModule extends Construct {
       const publicSubnet = new aws.subnet.Subnet(this, `public-subnet-${az}`, {
         vpcId: this.vpc.id,
         cidrBlock: `${config.cidrBlock.split('.')[0]}.${config.cidrBlock.split('.')[1]}.${index * 10}.0/24`,
-        availabilityZone: `us-east-1${az}`,
+        availabilityZone: `${awsRegion}${az}`,
         mapPublicIpOnLaunch: true,
         tags: {
           ...config.tags,
@@ -75,7 +78,7 @@ export class NetworkingModule extends Construct {
         {
           vpcId: this.vpc.id,
           cidrBlock: `${config.cidrBlock.split('.')[0]}.${config.cidrBlock.split('.')[1]}.${100 + index * 10}.0/24`,
-          availabilityZone: `us-east-1${az}`,
+          availabilityZone: `${awsRegion}${az}`,
           tags: {
             ...config.tags,
             Name: `${config.name}-private-${az}`,
@@ -89,7 +92,7 @@ export class NetworkingModule extends Construct {
       const dbSubnet = new aws.subnet.Subnet(this, `db-subnet-${az}`, {
         vpcId: this.vpc.id,
         cidrBlock: `${config.cidrBlock.split('.')[0]}.${config.cidrBlock.split('.')[1]}.${200 + index * 10}.0/24`,
-        availabilityZone: `us-east-1${az}`,
+        availabilityZone: `${awsRegion}${az}`,
         tags: {
           ...config.tags,
           Name: `${config.name}-db-${az}`,
@@ -213,7 +216,7 @@ export class NetworkingModule extends Construct {
         `endpoint-${endpoint.replace('.', '-')}`,
         {
           vpcId: this.vpc.id,
-          serviceName: `com.amazonaws.us-east-1.${endpoint}`,
+          serviceName: `com.amazonaws.${awsRegion}.${endpoint}`,
           vpcEndpointType: endpointType,
           ...(endpointType === 'Gateway'
             ? {
@@ -298,6 +301,7 @@ export class NetworkingModule extends Construct {
 // VPC Peering Module
 export class VPCPeeringModule extends Construct {
   public peeringConnection: aws.vpcPeeringConnection.VpcPeeringConnection;
+  private routeCounter = 0;
 
   constructor(
     scope: Construct,
@@ -337,27 +341,19 @@ export class VPCPeeringModule extends Construct {
     sourceCidr?: string
   ) {
     // Add route from source to target
-    new aws.route.Route(
-      this,
-      `route-to-target-${Math.random().toString(36).substr(2, 9)}`,
-      {
-        routeTableId: sourceRouteTable.id,
-        destinationCidrBlock: targetCidr,
-        vpcPeeringConnectionId: this.peeringConnection.id,
-      }
-    );
+    new aws.route.Route(this, `route-to-target-${++this.routeCounter}`, {
+      routeTableId: sourceRouteTable.id,
+      destinationCidrBlock: targetCidr,
+      vpcPeeringConnectionId: this.peeringConnection.id,
+    });
 
     // Add reverse route if target route table provided
     if (targetRouteTable && sourceCidr) {
-      new aws.route.Route(
-        this,
-        `route-to-source-${Math.random().toString(36).substr(2, 9)}`,
-        {
-          routeTableId: targetRouteTable.id,
-          destinationCidrBlock: sourceCidr,
-          vpcPeeringConnectionId: this.peeringConnection.id,
-        }
-      );
+      new aws.route.Route(this, `route-to-source-${++this.routeCounter}`, {
+        routeTableId: targetRouteTable.id,
+        destinationCidrBlock: sourceCidr,
+        vpcPeeringConnectionId: this.peeringConnection.id,
+      });
     }
   }
 }
@@ -579,6 +575,8 @@ export class ComputeModule extends Construct {
   ) {
     super(scope, id);
 
+    const awsRegion = config.awsRegion || 'us-east-1';
+
     // ECS Cluster
     this.cluster = new aws.ecsCluster.EcsCluster(this, 'cluster', {
       name: `${config.name}-ecs-cluster`,
@@ -659,7 +657,7 @@ export class ComputeModule extends Construct {
               logDriver: 'awslogs',
               options: {
                 'awslogs-group': `/ecs/${config.name}-app`,
-                'awslogs-region': 'us-east-1',
+                'awslogs-region': awsRegion,
                 'awslogs-stream-prefix': 'ecs',
               },
             },

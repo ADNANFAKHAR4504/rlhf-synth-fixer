@@ -63,6 +63,7 @@ export class TapStack extends TerraformStack {
         cidrBlock: '10.0.0.0/16',
         dbInstanceClass: 'db.t3.micro',
         flowLogRetentionDays: 7,
+        awsRegion: awsRegion,
         tags: {
           Environment: 'dev',
           Project: 'fintech-app',
@@ -76,6 +77,7 @@ export class TapStack extends TerraformStack {
         cidrBlock: '10.1.0.0/16',
         dbInstanceClass: 'db.t3.micro',
         flowLogRetentionDays: 30,
+        awsRegion: awsRegion,
         tags: {
           Environment: 'staging',
           Project: 'fintech-app',
@@ -89,6 +91,7 @@ export class TapStack extends TerraformStack {
         cidrBlock: '10.2.0.0/16',
         dbInstanceClass: 'db.t3.micro',
         flowLogRetentionDays: 90,
+        awsRegion: awsRegion,
         tags: {
           Environment: 'prod',
           Project: 'fintech-app',
