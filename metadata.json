@@ -1,0 +1,20 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000215",
+  "team": "5",
+  "startedAt": "2025-11-04T07:42:21.282Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "Route53",
+    "IAM",
+    "SNS",
+    "S3",
+    "Dynamo"
+  ]
+}
