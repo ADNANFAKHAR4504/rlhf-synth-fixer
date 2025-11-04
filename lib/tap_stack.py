@@ -87,7 +87,8 @@ class TapStack(TerraformStack):
                 DynamodbTableAttribute(name="reviewId", type="S")
             ],
             point_in_time_recovery={"enabled": True},
-            tags={"Environment": "Production", "Name": f"product-reviews-{environment_suffix}"}
+            tags={"Environment": "Production", "Name": f"product-reviews-{environment_suffix}"},
+            lifecycle={"ignore_changes": ["*"]}
         )
 
         # S3 bucket for review images
@@ -95,7 +96,8 @@ class TapStack(TerraformStack):
             self,
             "images_bucket",
             bucket=f"review-images-{environment_suffix}",
-            tags={"Environment": "Production", "Name": f"review-images-{environment_suffix}"}
+            tags={"Environment": "Production", "Name": f"review-images-{environment_suffix}"},
+            lifecycle={"ignore_changes": ["*"]}
         )
 
         # Block public access to S3 bucket
@@ -149,7 +151,8 @@ class TapStack(TerraformStack):
             "lambda_log_group",
             name=f"/aws/lambda/review-processor-{environment_suffix}",
             retention_in_days=7,
-            tags={"Environment": "Production"}
+            tags={"Environment": "Production"},
+            lifecycle={"ignore_changes": ["*"]}
         )
 
         # IAM role for Lambda
@@ -289,7 +292,8 @@ class TapStack(TerraformStack):
             "api_log_group",
             name=f"/aws/apigateway/reviews-api-{environment_suffix}",
             retention_in_days=7,
-            tags={"Environment": "Production"}
+            tags={"Environment": "Production"},
+            lifecycle={"ignore_changes": ["*"]}
         )
 
         # API Gateway resource: /reviews
