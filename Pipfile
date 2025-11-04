@@ -19,6 +19,7 @@ aws-cdk-lib = "*"
 constructs = "*"
 cfn-lint = "*"
 cfn-flip = "*"
+tabulate = "*"
 
 [dev-packages]
 boto3 = "*"
@@ -41,7 +42,7 @@ python_version = "3.12.11"
 [scripts]
 # Validation
 cfn-validate-yaml = "cfn-lint lib/TapStack.yml"
-cfn-validate-json = "cfn-lint lib/TapStack.json"
+cfn-validate-json = "cfn-lint lib/*.json"
 cfn-flip-to-json = "cfn-flip  lib/TapStack.yml"
 cfn-flip-to-yaml = "cfn-flip -y lib/TapStack.json"
 test-py-unit = "python -m pytest -s tests/unit/ --cov=lib/ --cov-report=term-missing --cov-report=json:cov.json --cov-fail-under=90 --cov-branch -l --testdox"

@@ -12,9 +12,11 @@ Before marking a task as complete, ALL of the following must pass:
 2. ✅ **Build**: Successful compilation
 3. ✅ **Synth**: Successful template generation
 4. ✅ **Pre-Deployment Validation**: Pass all checks
-5. ✅ **Unit Tests**: 90%+ code coverage
+5. ✅ **Unit Tests**: **100% code coverage** (statements, functions, lines)
 6. ✅ **Deploy**: Successful AWS deployment
 7. ✅ **Integration Tests**: All tests pass with real AWS resources
+
+**CRITICAL**: Test coverage requirement is now **100%**, not 90%. See Section 3.1 for details.
 
 **Note**: Resource cleanup/destruction is handled after manual PR review and is NOT part of the automated task completion.
 
@@ -209,7 +211,7 @@ terraform plan
 
 ### 3.1 Coverage Requirements
 
-**MANDATORY: 90%+ code coverage**
+**MANDATORY: 100% code coverage**
 
 ```bash
 # Run tests with coverage
@@ -219,11 +221,20 @@ go test -cover ./...       # Go
 ./gradlew test            # Java
 ```
 
-**Coverage Targets:**
-- Statements: ≥ 90%
-- Branches: ≥ 85%
-- Functions: ≥ 90%
-- Lines: ≥ 90%
+**Coverage Targets (ALL must be 100%):**
+- **Statements: 100%** (every statement must be executed)
+- **Functions: 100%** (every function must be called)
+- **Lines: 100%** (every line must be executed)
+- **Branches: ≥ 95%** (almost all conditional branches tested)
+
+**Why 100%?**
+- Ensures all code paths are validated
+- Catches edge cases and error handling
+- Demonstrates thorough testing practices
+- Provides high-quality training data
+- Prevents untested code from reaching production
+
+**Note**: 100% coverage means exactly 100.0%, not 99.9%. Any rounding up is not acceptable.
 
 ### 3.2 Testing Patterns
 
@@ -607,9 +618,17 @@ This document analyzes the failures found in the MODEL_RESPONSE and the fixes ap
 
 ### Pattern 3: Low Test Coverage
 
-**Symptom**: Coverage < 90%
-**Impact**: Medium - Fails quality gate
-**Fix**: Add tests for untested code paths
+**Symptom**: Coverage < 100%
+**Impact**: CRITICAL - Fails quality gate and blocks PR
+**Fix**: Add tests for untested code paths until 100% coverage achieved
+
+**How to achieve 100%**:
+1. Run coverage report to identify untested lines
+2. Add tests for all uncovered functions
+3. Test all conditional branches (if/else, switch, ternary)
+4. Test error handling paths (try/catch, error callbacks)
+5. Test edge cases and boundary conditions
+6. Verify coverage report shows 100.0% for statements, functions, and lines
 
 ### Pattern 4: Hardcoded Values
 
@@ -645,7 +664,7 @@ Before marking a task as complete:
 - [ ] Build passed (zero errors)
 - [ ] Synth passed (templates generated)
 - [ ] Pre-validation passed
-- [ ] Unit tests passed with 90%+ coverage
+- [ ] **Unit tests passed with 100% coverage** (statements, functions, lines)
 - [ ] Deployment succeeded
 - [ ] Outputs extracted to cfn-outputs/flat-outputs.json
 - [ ] Integration tests passed (using real outputs)
