@@ -87,6 +87,7 @@ Conditions:
   EnableReplication: !Or
     - !Condition EnableReplicationToStaging
     - !Condition EnableReplicationToProd
+  IsProduction: !Equals [!Ref Environment, "prod"]
 
 # ===========================
 # Resources
@@ -858,7 +859,7 @@ Resources:
             - UPDATING
       State: ENABLED
       Targets:
-        - Arn: !GetAtt SchemaProcessorLambda.Arn
+        - Arn: !GetAtt StreamProcessorLambda.Arn
           Id: "DynamoDBChangeTarget"
 
   # Cross-Account Replication Events (Custom Events)
@@ -933,7 +934,7 @@ Resources:
                 Resource:
                   - !GetAtt ReplicationMonitorLambda.Arn
                   - !GetAtt ConfigValidatorLambda.Arn
-                  - !GetAtt SchemaProcessorLambda.Arn
+                  - !GetAtt StreamProcessorLambda.Arn
 
   # ===========================
   # Lambda Permissions for EventBridge
@@ -981,7 +982,7 @@ Resources:
   DynamoDBChangeLambdaPermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref SchemaProcessorLambda
+      FunctionName: !Ref StreamProcessorLambda
       Action: "lambda:InvokeFunction"
       Principal: events.amazonaws.com
       SourceArn: !GetAtt DynamoDBChangeEventRule.Arn
@@ -1061,9 +1062,9 @@ Resources:
           "lambdaFunctions": {
             "monitor": "${ReplicationMonitorLambda.Arn}",
             "validator": "${ConfigValidatorLambda.Arn}",
-            "processor": "${SchemaProcessorLambda.Arn}"
+            "processor": "${StreamProcessorLambda.Arn}"
           },
-          "iamRole": "${CrossAccountReplicationRole.Arn}",
+          "iamRole": "${S3ReplicationRole.Arn}",
           "cloudwatchDashboard": "${ReplicationDashboard}"
         }
       Description: Infrastructure resource identifiers
@@ -1107,13 +1108,13 @@ Resources:
     Type: AWS::SSM::Parameter
     Properties:
       Name: !Sub "${SSMPathPrefix}/${Environment}/config/security"
-      Type: SecureString
+      Type: String
       Value: !Sub |
         {
           "encryptionInTransit": true,
           "encryptionAtRest": true,
           "iamPrinciples": {
-            "replicationRole": "${CrossAccountReplicationRole.Arn}",
+            "replicationRole": "${S3ReplicationRole.Arn}",
             "lambdaExecutionRole": "${LambdaExecutionRole.Arn}"
           },
           "accessControl": {
@@ -1147,7 +1148,7 @@ Resources:
             "required": ["environment", "application", "version"]
           },
           "validationEnabled": true,
-          "strictMode": ${Environment == "prod"}
+          "strictMode": true
         }
       Description: Schema configuration for environment validation
       Tags:
@@ -1172,11 +1173,11 @@ Resources:
           "metrics": {
             "namespace": "MultiAccountReplication",
             "retentionDays": 30,
-            "detailedMonitoring": ${Environment == "prod"}
+            "detailedMonitoring": true
           },
           "notifications": {
             "snsTopicArn": "",
-            "emailAlerts": ${Environment == "prod"},
+            "emailAlerts": true,
             "slackWebhook": ""
           }
         }
