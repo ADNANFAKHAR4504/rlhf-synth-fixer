@@ -21,6 +21,7 @@
     "S3",
     "IAM"
   ],
-  "region": "eu-west-1",
-  "training_quality": 9
+  "region": "eu-central-1",
+  "training_quality": 9,
+  "author": "rajendra-s-aws"
 }
