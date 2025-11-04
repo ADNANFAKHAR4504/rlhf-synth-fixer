@@ -42,7 +42,7 @@ variable "aws_region" {
 variable "environmentSuffix" {
   description = "Environment suffix (dev, staging, prod)"
   type        = string
-  default     = "dev"
+  default     = "prod"
   validation {
     condition     = contains(["dev", "staging", "prod"], var.environmentSuffix)
     error_message = "Environment suffix must be dev, staging, or prod."
