@@ -1,6 +1,6 @@
 {
   "platform": "cdk",
-  "language": "ts",
+  "language": "typescript",
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "101000266",
@@ -26,5 +26,11 @@
     "Secrets Manager",
     "SNS",
     "VPC Flow Logs"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
 }
