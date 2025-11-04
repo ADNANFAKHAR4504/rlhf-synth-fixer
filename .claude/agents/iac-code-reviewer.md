@@ -31,7 +31,9 @@ bash .claude/scripts/verify-worktree.sh || exit 1
 
 **If verification fails**: STOP immediately, report BLOCKED.
 
-**Before Starting**: Review `.claude/lessons_learnt.md` for common issues and quality patterns.
+**Before Starting**:
+- Review `.claude/lessons_learnt.md` for common issues and quality patterns
+- Review `.claude/docs/references/cicd-file-restrictions.md` for CRITICAL file location requirements that fail CI/CD
 
 ### Phase 1: Prerequisites Check
 
@@ -187,7 +189,32 @@ If < 80% resources have suffix:
 
 #### Step 8: Add Enhanced Fields to metadata.json
 
-**Extract AWS Services from IDEAL_RESPONSE.md**:
+**Determine Task Type**:
+
+```bash
+# Check if this is a CI/CD Pipeline task
+PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
+SUBJECT_LABELS=$(jq -r '.subject_labels[]? // ""' metadata.json)
+
+if [ "$PLATFORM" = "cicd" ] || echo "$SUBJECT_LABELS" | grep -q "CI/CD Pipeline"; then
+  IS_CICD_TASK=true
+else
+  IS_CICD_TASK=false
+fi
+```
+
+**For CI/CD Pipeline Tasks (platform: "cicd" OR subject_label: "CI/CD Pipeline")**:
+
+```bash
+# CI/CD Pipeline tasks only need training_quality (no aws_services required)
+jq --arg tq "$TRAINING_QUALITY" \
+  '.training_quality = ($tq | tonumber)' \
+  metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json
+```
+
+Report: "✅ metadata.json enhanced with training_quality: {SCORE}/10 (CI/CD Pipeline task - aws_services not required)"
+
+**For Standard IaC Tasks**:
 
 Scan IDEAL_RESPONSE.md and create a JSON array of unique AWS services mentioned. Examples:
 - RDS → "RDS"
@@ -214,9 +241,34 @@ jq --arg tq "$TRAINING_QUALITY" --argjson services "$AWS_SERVICES_ARRAY" \
 jq -e '.aws_services | type == "array"' metadata.json || echo "❌ ERROR: aws_services must be an array"
 ```
 
-Report: "✅ metadata.json enhanced with training_quality: {SCORE}/10"
+Report: "✅ metadata.json enhanced with training_quality: {SCORE}/10 and aws_services array"
 
-#### Step 9: Final Quality Gate
+#### Step 9: File Location Validation
+
+**CRITICAL CI/CD CHECK**: Verify all files are in allowed locations
+
+```bash
+# Check changed files against allowed locations
+git diff --name-only origin/main...HEAD
+
+# Verify no violations exist
+# See .claude/docs/references/cicd-file-restrictions.md for rules
+```
+
+**Common Violations**:
+- ❌ `README.md` at root → Must be `lib/README.md`
+- ❌ `PROMPT.md` at root → Must be `lib/PROMPT.md`
+- ❌ `IDEAL_RESPONSE.md` at root → Must be `lib/IDEAL_RESPONSE.md`
+- ❌ `MODEL_FAILURES.md` at root → Must be `lib/MODEL_FAILURES.md`
+- ❌ Files in `.github/`, `scripts/`, `docs/`, etc. → Not allowed
+
+**If violations found**:
+- Training quality penalty: -3 points (Critical issue)
+- Report: "❌ BLOCKED: Files in wrong locations will FAIL CI/CD"
+- List violating files and correct locations
+- Do NOT proceed to PR creation
+
+#### Step 10: Final Quality Gate
 
 **Before reporting "Ready" status**:
 
@@ -231,6 +283,7 @@ FINAL CHECKLIST:
 ☐ AWS services implemented
 ☐ No Retain policies
 ☐ Tests exist and pass
+☐ All files in allowed locations (Step 9)
 
 If ALL checked:
 - Report: "✅ READY for PR creation"
