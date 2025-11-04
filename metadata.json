@@ -1,0 +1,13 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-04T05:06:59+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": ["Serverless Infrastructure (Functions as Code)"],
+  "po_id": "lcero",
+  "aws_services": [],
+  "region": "ap-southeast-1"
+}
