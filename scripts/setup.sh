@@ -2,13 +2,13 @@
 set -e
 
 echo "🔧 Starting optimized environment setup..."
-
+export PIPENV_VENV_IN_PROJECT=1
 NODE_VERSION=${NODE_VERSION:-22.17.0}
 TERRAFORM_VERSION=${TERRAFORM_VERSION:-1.12.2}
 PULUMI_VERSION=${PULUMI_VERSION:-3.109.0}
 PLATFORM=${PLATFORM:-""}
 LANGUAGE=${LANGUAGE:-""}
-
+export PIPENV_VENV_IN_PROJECT=1
 echo "Platform: $PLATFORM"
 echo "Language: $LANGUAGE"
 echo "Node: $NODE_VERSION | Terraform: $TERRAFORM_VERSION | Pulumi: $PULUMI_VERSION"
