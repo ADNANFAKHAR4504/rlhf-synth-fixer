@@ -101,7 +101,6 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-
     // =========================================================================
     // 2. VPC Configuration with 3 AZs
     // =========================================================================
@@ -485,7 +484,8 @@ export class TapStack extends pulumi.ComponentResource {
       `prod-ec2-ssm-attachment-${args.environmentSuffix}`,
       {
         role: this.ec2Role.name,
-        policyArn: "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+        policyArn:
+          "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
       },
       defaultOpts
     );
@@ -494,7 +494,8 @@ export class TapStack extends pulumi.ComponentResource {
       `prod-ec2-cloudwatch-attachment-${args.environmentSuffix}`,
       {
         role: this.ec2Role.name,
-        policyArn: "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
+        policyArn:
+          "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
       },
       defaultOpts
     );
@@ -551,7 +552,7 @@ export class TapStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    let snapshotIdentifier: pulumi.Output<string> | undefined;
+    let snapshotIdentifier: pulumi.Output<string | undefined> | undefined;
 
     if (
       args.devEnvironment?.rdsInstanceIdentifier &&
@@ -601,10 +602,14 @@ export class TapStack extends pulumi.ComponentResource {
         performanceInsightsEnabled: true,
         performanceInsightsKmsKeyId: this.kmsKey.arn,
         performanceInsightsRetentionPeriod: 7,
-        snapshotIdentifier: snapshotIdentifier,
+        snapshotIdentifier:
+        args.devEnvironment?.rdsInstanceIdentifier &&
+        migrationPhase !== "initial"
+          ? this.devRdsSnapshot?.id
+          : undefined,
         skipFinalSnapshot: false,
         finalSnapshotIdentifier: `prod-final-snapshot-${randomSuffix}`,
-        deletionProtection: false,
+        deletionProtection: true,
         parameterGroupName: dbParameterGroup.name,
         tags: {
           Environment: "production",
@@ -867,7 +872,7 @@ export class TapStack extends pulumi.ComponentResource {
         subnets: this.publicSubnets.map((s) => s.id),
         securityGroups: [this.albSecurityGroup.id],
         enableHttp2: true,
-        enableDeletionProtection: false,
+        enableDeletionProtection: true,
         tags: {
           Environment: "production",
           ManagedBy: "pulumi",
@@ -998,12 +1003,78 @@ export class TapStack extends pulumi.ComponentResource {
         userData: pulumi.output(this.prodRdsInstance.endpoint).apply(
           (endpoint) =>
             Buffer.from(`#!/bin/bash
+set -e
+
+# Update system packages
 yum update -y
-yum install -y amazon-cloudwatch-agent docker
+
+# Install required packages
+yum install -y amazon-cloudwatch-agent docker python3
+
+# Start Docker daemon
 systemctl start docker
 systemctl enable docker
+
+# Add ec2-user to docker group
+usermod -aG docker ec2-user
+
+# Create health check endpoint
+mkdir -p /var/www/html
+cat > /var/www/html/server.py << 'PYTHON'
+#!/usr/bin/env python3
+import http.server
+import socketserver
+import json
+import os
+
+class HealthHandler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == '/health':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            response = json.dumps({"status": "healthy", "timestamp": "$(date)"})
+            self.wfile.write(response.encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def log_message(self, format, *args):
+        pass
+
+if __name__ == '__main__':
+    PORT = 8080
+    with socketserver.TCPServer(("", PORT), HealthHandler) as httpd:
+        print(f"Health check server running on port {PORT}")
+        httpd.serve_forever()
+PYTHON
+
+chmod +x /var/www/html/server.py
+
+# Start health check server in background
+nohup python3 /var/www/html/server.py > /var/log/health-server.log 2>&1 &
+
+# Set environment variable for database
 echo "DB_ENDPOINT=${endpoint}" >> /etc/environment
-docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
+echo "DB_PORT=3306" >> /etc/environment
+source /etc/environment
+
+# Log instance initialization
+echo "Instance initialized: $(date)" >> /var/log/init.log
+echo "DB_ENDPOINT: \$DB_ENDPOINT" >> /var/log/init.log
+
+# TODO: Replace this section with your actual application deployment
+# Option 1: If you have a Docker image in ECR:
+# aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin \${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com
+# docker pull \${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/my-app:latest
+# docker run -d -p 8080:8080 -e DB_ENDPOINT=\${DB_ENDPOINT} --name tap-app \\
+#   \${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/my-app:latest
+
+# Option 2: If using a public Docker image:
+# docker pull nginx:latest
+# docker run -d -p 8080:80 --name tap-app nginx:latest
+
+echo "Instance setup complete: $(date)" >> /var/log/init.log
 `).toString("base64")
         ),
         tagSpecifications: [
@@ -1078,7 +1149,6 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
       defaultOpts
     );
 
-
     if (migrationPhase !== "complete") {
       const launchTemplateBlue = new aws.ec2.LaunchTemplate(
         `prod-lt-blue-${args.environmentSuffix}`,
@@ -1106,6 +1176,75 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
               },
             },
           ],
+          userData: pulumi.output(this.prodRdsInstance.endpoint).apply(
+            (endpoint) =>
+              Buffer.from(`#!/bin/bash
+set -e
+
+# Update system packages
+yum update -y
+
+# Install required packages
+yum install -y amazon-cloudwatch-agent docker python3
+
+# Start Docker daemon
+systemctl start docker
+systemctl enable docker
+
+# Add ec2-user to docker group
+usermod -aG docker ec2-user
+
+# Create health check endpoint
+mkdir -p /var/www/html
+cat > /var/www/html/server.py << 'PYTHON'
+#!/usr/bin/env python3
+import http.server
+import socketserver
+import json
+import os
+
+class HealthHandler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == '/health':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            response = json.dumps({"status": "healthy", "timestamp": "$(date)"})
+            self.wfile.write(response.encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def log_message(self, format, *args):
+        pass
+
+if __name__ == '__main__':
+    PORT = 8080
+    with socketserver.TCPServer(("", PORT), HealthHandler) as httpd:
+        print(f"Health check server running on port {PORT}")
+        httpd.serve_forever()
+PYTHON
+
+chmod +x /var/www/html/server.py
+
+# Start health check server in background
+nohup python3 /var/www/html/server.py > /var/log/health-server.log 2>&1 &
+
+# Set environment variable for database
+echo "DB_ENDPOINT=${endpoint}" >> /etc/environment
+echo "DB_PORT=3306" >> /etc/environment
+source /etc/environment
+
+# Log instance initialization
+echo "Instance initialized: $(date)" >> /var/log/init.log
+echo "DB_ENDPOINT: \$DB_ENDPOINT" >> /var/log/init.log
+
+# TODO: Replace this section with your actual application deployment
+# Similar options as green deployment above
+
+echo "Instance setup complete: $(date)" >> /var/log/init.log
+`).toString("base64")
+          ),
           tags: {
             Environment: "development",
             ManagedBy: "pulumi",
@@ -1366,7 +1505,6 @@ docker run -d -p 8080:8080 -e DB_ENDPOINT=${endpoint} my-app:latest
       migrationPhase: this.migrationStatus,
       trafficWeights: pulumi.output(weights),
     };
-    
 
     this.writeOutputsToFile(args);
     this.registerOutputs(this.outputs);

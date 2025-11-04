@@ -817,7 +817,7 @@ describe("TapStack Infrastructure Tests - 100% Coverage", () => {
       const rdsMock = aws.rds.Instance as unknown as jest.Mock;
       const args = rdsMock.mock.calls[0][1];
 
-      expect(args.deletionProtection).toBe(false);
+      expect(args.deletionProtection).toBe(true);
     });
 
     it("should not skip final snapshot", () => {
@@ -1017,7 +1017,7 @@ describe("TapStack Infrastructure Tests - 100% Coverage", () => {
 
       expect(args.loadBalancerType).toBe("application");
       expect(args.enableHttp2).toBe(true);
-      expect(args.enableDeletionProtection).toBe(false);
+      expect(args.enableDeletionProtection).toBe(true);
     });
 
     it("should create blue target group", () => {
