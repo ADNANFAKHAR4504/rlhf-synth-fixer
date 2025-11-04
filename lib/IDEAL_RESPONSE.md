@@ -73,7 +73,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -90,7 +90,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: us-east-1b
+      AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -107,7 +107,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.3.0/24
-      AvailabilityZone: us-east-1c
+      AvailabilityZone: !Select [2, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -125,7 +125,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.11.0/24
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub 'private-subnet-1-${EnvironmentSuffix}'
@@ -141,7 +141,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.12.0/24
-      AvailabilityZone: us-east-1b
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub 'private-subnet-2-${EnvironmentSuffix}'
@@ -157,7 +157,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.13.0/24
-      AvailabilityZone: us-east-1c
+      AvailabilityZone: !Select [2, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub 'private-subnet-3-${EnvironmentSuffix}'
@@ -214,7 +214,7 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
-  # NAT Gateways - Fixed: Added DependsOn for proper creation order
+  # NAT Gateways
   NATGateway1:
     Type: AWS::EC2::NatGateway
     DependsOn: AttachGateway
@@ -286,7 +286,6 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
 
-  # Fixed: Added explicit associations for all public subnets
   PublicSubnetRouteTableAssociation1:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -320,10 +319,8 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
-  # Fixed: Added DependsOn for NAT Gateway
   PrivateRoute1:
     Type: AWS::EC2::Route
-    DependsOn: NATGateway1
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
@@ -349,10 +346,8 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
-  # Fixed: Added DependsOn for NAT Gateway
   PrivateRoute2:
     Type: AWS::EC2::Route
-    DependsOn: NATGateway2
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
@@ -378,10 +373,8 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
-  # Fixed: Added DependsOn for NAT Gateway
   PrivateRoute3:
     Type: AWS::EC2::Route
-    DependsOn: NATGateway3
     Properties:
       RouteTableId: !Ref PrivateRouteTable3
       DestinationCidrBlock: 0.0.0.0/0
@@ -421,7 +414,6 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
-  # Fixed: Using SourceSecurityGroupId instead of CidrIp for proper segmentation
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -499,7 +491,6 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-DatabaseSG-ID'
 
-  # Fixed: Added NAT Gateway outputs for operational visibility
   NATGateway1Id:
     Description: NAT Gateway 1 ID in us-east-1a
     Value: !Ref NATGateway1
@@ -530,6 +521,7 @@ Outputs:
 This production-ready CloudFormation template creates a highly available VPC infrastructure with all issues corrected:
 
 **Infrastructure Components:**
+
 - VPC with CIDR 10.0.0.0/16 and DNS support enabled
 - Three public subnets (10.0.1.0/24, 10.0.2.0/24, 10.0.3.0/24) across us-east-1a, us-east-1b, us-east-1c
 - Three private subnets (10.0.11.0/24, 10.0.12.0/24, 10.0.13.0/24) in the same AZs
@@ -539,6 +531,7 @@ This production-ready CloudFormation template creates a highly available VPC inf
 - Security groups implementing defense-in-depth principles
 
 **Fixes Applied:**
+
 1. Added DependsOn: AttachGateway to all NAT Gateways for proper creation order
 2. Added missing PublicSubnetRouteTableAssociation3 for complete public routing
 3. Changed DatabaseSecurityGroup to use SourceSecurityGroupId for PCI-DSS compliance
@@ -546,6 +539,7 @@ This production-ready CloudFormation template creates a highly available VPC inf
 5. Added DependsOn to all private routes for proper NAT Gateway dependencies
 
 **Compliance and Best Practices:**
+
 - All resources use environmentSuffix parameter for uniqueness
 - Proper tagging with Environment, Project, and Owner
 - PCI-DSS compliant network segmentation
