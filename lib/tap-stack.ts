@@ -103,9 +103,9 @@ export class TapStack extends TerraformStack {
 
     // Create Route53 hosted zone for DNS records
     const hostedZone = new aws.route53Zone.Route53Zone(this, 'hosted-zone', {
-      name: 'example.com',
+      name: 'mytszone.com',
       tags: {
-        Name: 'example.com',
+        Name: 'mytszone.com',
         Project: 'fintech-app',
         ...(environmentSuffix && { EnvironmentSuffix: environmentSuffix }),
       },
@@ -266,12 +266,12 @@ export class TapStack extends TerraformStack {
     // Output Route53 Hosted Zone
     new TerraformOutput(this, 'route53-zone-id', {
       value: hostedZone.zoneId,
-      description: 'Route53 hosted zone ID for example.com',
+      description: 'Route53 hosted zone ID for mytszone.com',
     });
 
     new TerraformOutput(this, 'route53-name-servers', {
       value: hostedZone.nameServers,
-      description: 'Route53 name servers for example.com',
+      description: 'Route53 name servers for mytszone.com',
     });
   }
 }

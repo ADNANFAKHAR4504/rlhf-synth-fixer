@@ -448,7 +448,7 @@ export class DatabaseModule extends Construct {
       engineVersion: '14.6',
       databaseName: 'appdb',
       masterUsername: 'dbadmin',
-      masterPassword: password.randomPassword,
+      manageMasterUserPassword: true,
       dbSubnetGroupName: subnetGroup.name,
       vpcSecurityGroupIds: [securityGroup.id],
       storageEncrypted: true,
@@ -840,7 +840,7 @@ export class DNSModule extends Construct {
 
     this.record = new aws.route53Record.Route53Record(this, 'dns-record', {
       zoneId: hostedZoneId,
-      name: `${config.name}.example.com`,
+      name: `${config.name}.mytszone.com`,
       type: 'A',
       alias: {
         name: alb.dnsName,
