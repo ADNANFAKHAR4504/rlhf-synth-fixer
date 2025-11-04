@@ -46,6 +46,14 @@ describe('Terraform Integration Tests - Deployed Infrastructure', () => {
   beforeAll(() => {
     const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
     outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+    
+    // Parse JSON-encoded array outputs from Terraform
+    if (typeof outputs.public_subnet_ids === 'string') {
+      outputs.public_subnet_ids = JSON.parse(outputs.public_subnet_ids);
+    }
+    if (typeof outputs.private_subnet_ids === 'string') {
+      outputs.private_subnet_ids = JSON.parse(outputs.private_subnet_ids);
+    }
   });
 
   describe('VPC and Networking', () => {
@@ -141,7 +149,10 @@ describe('Terraform Integration Tests - Deployed Infrastructure', () => {
 
       // Verify subnets are private
       const subnetIds = asg.VPCZoneIdentifier!.split(',');
-      expect(outputs.private_subnet_ids).toEqual(expect.arrayContaining(subnetIds));
+      const privateSubnetIds = Array.isArray(outputs.private_subnet_ids) 
+        ? outputs.private_subnet_ids 
+        : JSON.parse(outputs.private_subnet_ids);
+      expect(privateSubnetIds).toEqual(expect.arrayContaining(subnetIds));
     });
   });
 
