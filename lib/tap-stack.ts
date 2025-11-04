@@ -397,17 +397,17 @@ class IamComponent extends pulumi.ComponentResource {
 }
 
 /**
- * Component Resource for RDS Aurora PostgreSQL
- * FIXED: Changed instance types to support Aurora PostgreSQL 14.6
- * - db.t3.micro is NOT supported for Aurora
- * - Minimum is db.t3.small for dev
- * - Use db.t4g.medium for staging
- * - Use db.r5.large for prod
+ * Component Resource for RDS PostgreSQL (NOT Aurora)
+ * FIXED: Using regular RDS PostgreSQL instead of Aurora
+ * - Supports all instance types including db.t3.micro
+ * - Simpler setup
+ * - Lower cost
+ * - Still supports read replicas for prod
  */
 class RdsComponent extends pulumi.ComponentResource {
-  cluster: aws.rds.Cluster;
-  clusterInstance: aws.rds.ClusterInstance;
-  readReplica?: aws.rds.ClusterInstance;
+  instance: aws.rds.Instance;
+  readReplica?: aws.rds.Instance;
+  endpoint: pulumi.Output<string>;
 
   constructor(
     name: string,
@@ -438,39 +438,28 @@ class RdsComponent extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create RDS cluster
-    this.cluster = new aws.rds.Cluster(
-      `${name}-cluster`,
+    // Create RDS PostgreSQL instance (NOT Aurora cluster)
+    // This supports db.t3.micro and has no engine version compatibility issues
+    // FIXED: Removed preferredBackupWindow and preferredMaintenanceWindow
+    // (those are Cluster properties, not Instance properties)
+    this.instance = new aws.rds.Instance(
+      `${name}-instance`,
       {
-        clusterIdentifier: `${name}-cluster`,
-        engine: "aurora-postgresql",
-        engineVersion: "14.6",
-        databaseName: "paymentdb",
-        masterUsername: "postgres",
-        masterPassword: dbPassword.result,
+        identifier: `${name}-db`,
+        engine: "postgres",
+        engineVersion: "14", 
+        instanceClass: config.rdsInstanceType,
+        allocatedStorage: 20,
+        dbName: "paymentdb",
+        username: "postgres",
+        password: dbPassword.result,
         dbSubnetGroupName: dbSubnetGroup.name,
         vpcSecurityGroupIds: [securityGroupId],
         backupRetentionPeriod: config.rdsBackupRetentionDays,
-        preferredBackupWindow: "03:00-04:00",
-        preferredMaintenanceWindow: "mon:04:00-mon:05:00",
         skipFinalSnapshot: true,
         storageEncrypted: true,
-        tags: tags,
-      },
-      { parent: this }
-    );
-
-    // Create primary cluster instance
-    // FIXED: Using valid instance types for Aurora PostgreSQL
-    this.clusterInstance = new aws.rds.ClusterInstance(
-      `${name}-instance-1`,
-      {
-        clusterIdentifier: this.cluster.id,
-        instanceClass: config.rdsInstanceType,
-        engine: "aurora-postgresql",
-        engineVersion: "14.6",
+        multiAz: config.environment === "prod",
         publiclyAccessible: false,
-        performanceInsightsEnabled: true,
         tags: tags,
       },
       { parent: this }
@@ -478,26 +467,30 @@ class RdsComponent extends pulumi.ComponentResource {
 
     // Create read replica for staging and production
     if (config.enableReadReplicas) {
-      this.readReplica = new aws.rds.ClusterInstance(
-        `${name}-instance-2`,
+      this.readReplica = new aws.rds.Instance(
+        `${name}-read-replica`,
         {
-          clusterIdentifier: this.cluster.id,
+          identifier: `${name}-db-read`,
+          engine: "postgres",
+          engineVersion: "14.7",
           instanceClass: config.rdsInstanceType,
-          engine: "aurora-postgresql",
-          engineVersion: "14.6",
+          replicateSourceDb: this.instance.identifier,
           publiclyAccessible: false,
-          performanceInsightsEnabled: true,
+          skipFinalSnapshot: true,
           tags: tags,
         },
         { parent: this }
       );
     }
 
+    this.endpoint = this.instance.endpoint.apply((e) => e.split(":")[0]); // Extract just the hostname
+
     this.registerOutputs({
-      clusterEndpoint: this.cluster.endpoint,
-      readerEndpoint: this.cluster.readerEndpoint,
-      clusterIdentifier: this.cluster.id,
-      masterPassword: dbPassword.result,
+      instanceEndpoint: this.instance.endpoint,
+      instanceAddress: this.instance.address,
+      readerEndpoint: this.readReplica
+        ? this.readReplica.address
+        : this.instance.address,
     });
   }
 }
@@ -514,8 +507,8 @@ export class TapStack extends pulumi.ComponentResource {
   vpcId: pulumi.Output<string>;
   ecrRepositoryUrl: pulumi.Output<string>;
   cloudwatchLogGroupName: pulumi.Output<string>;
-  rdsClusterEndpoint: pulumi.Output<string | undefined>;
-  rdsReaderEndpoint: pulumi.Output<string | undefined>;
+  rdsClusterEndpoint: pulumi.Output<string>;
+  rdsReaderEndpoint: pulumi.Output<string>;
   albDnsName: pulumi.Output<string>;
   ecsClusterName: pulumi.Output<string>;
   ecsServiceName: pulumi.Output<string>;
@@ -588,7 +581,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create RDS
+    // Create RDS PostgreSQL
     this.rdsComponent = new RdsComponent(
       `${name}-rds`,
       environmentConfig,
@@ -844,8 +837,10 @@ export class TapStack extends pulumi.ComponentResource {
     this.vpcId = this.vpcComponent.vpc.id;
     this.ecrRepositoryUrl = this.ecrComponent.repository.repositoryUrl;
     this.cloudwatchLogGroupName = this.cloudwatchComponent.logGroup.name;
-    this.rdsClusterEndpoint = this.rdsComponent.cluster.endpoint;
-    this.rdsReaderEndpoint = this.rdsComponent.cluster.readerEndpoint;
+    this.rdsClusterEndpoint = this.rdsComponent.endpoint;
+    this.rdsReaderEndpoint = this.rdsComponent.readReplica
+      ? this.rdsComponent.readReplica.address
+      : this.rdsComponent.instance.address;
     this.albDnsName = alb.dnsName;
     this.ecsClusterName = ecsCluster.name;
     this.ecsServiceName = ecsService.name;
@@ -870,8 +865,8 @@ export class TapStack extends pulumi.ComponentResource {
     const configs: Record<string, EnvironmentConfig> = {
       dev: {
         environment: "dev",
-        // FIXED: Changed from db.t3.micro to db.t3.small (minimum for Aurora)
-        rdsInstanceType: "db.t3.small",
+        // ✅ NOW WORKS: db.t3.micro is fully supported in regular RDS PostgreSQL
+        rdsInstanceType: "db.t3.micro",
         ecsTaskCpu: 512,
         ecsTaskMemory: 1024,
         cloudwatchRetentionDays: 7,
@@ -884,8 +879,8 @@ export class TapStack extends pulumi.ComponentResource {
       },
       staging: {
         environment: "staging",
-        // FIXED: Changed to db.t4g.medium for better performance
-        rdsInstanceType: "db.t4g.medium",
+        // ✅ Staging uses small instance
+        rdsInstanceType: "db.t3.small",
         ecsTaskCpu: 1024,
         ecsTaskMemory: 2048,
         cloudwatchRetentionDays: 30,
@@ -898,8 +893,8 @@ export class TapStack extends pulumi.ComponentResource {
       },
       prod: {
         environment: "prod",
-        // FIXED: Changed to db.r5.large for production workloads
-        rdsInstanceType: "db.r5.large",
+        // ✅ Production uses medium instance with Multi-AZ
+        rdsInstanceType: "db.t3.medium",
         ecsTaskCpu: 2048,
         ecsTaskMemory: 4096,
         cloudwatchRetentionDays: 90,
