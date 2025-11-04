@@ -1,6 +1,5 @@
 import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
-import { TerraformOutput } from 'cdktf';
 
 // Environment configuration interface
 export interface EnvironmentConfig {
@@ -197,7 +196,14 @@ export class NetworkingModule extends Construct {
     });
 
     // VPC Endpoints
-    const endpoints = ['s3', 'ecr.dkr', 'ecr.api', 'ssm', 'ssmmessages', 'ec2messages'];
+    const endpoints = [
+      's3',
+      'ecr.dkr',
+      'ecr.api',
+      'ssm',
+      'ssmmessages',
+      'ec2messages',
+    ];
 
     endpoints.forEach(endpoint => {
       const endpointType = endpoint === 's3' ? 'Gateway' : 'Interface';
@@ -460,7 +466,7 @@ export class DatabaseModule extends Construct {
     });
 
     // Aurora instances
-    ['instance-1', 'instance-2'].forEach((instanceId, index) => {
+    ['instance-1', 'instance-2'].forEach((instanceId, _index) => {
       new aws.rdsClusterInstance.RdsClusterInstance(this, instanceId, {
         identifier: `${config.name}-aurora-${instanceId}`,
         clusterIdentifier: this.cluster.id,
@@ -653,7 +659,7 @@ export class ComputeModule extends Construct {
               logDriver: 'awslogs',
               options: {
                 'awslogs-group': `/ecs/${config.name}-app`,
-              'awslogs-region': 'us-east-1',
+                'awslogs-region': 'us-east-1',
                 'awslogs-stream-prefix': 'ecs',
               },
             },
