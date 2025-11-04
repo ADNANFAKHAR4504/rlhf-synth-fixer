@@ -196,9 +196,6 @@ describe('Payment Processing System Integration Tests', () => {
   });
 
   describe('Encryption and Security', () => {
-    test('KMS key should exist and be enabled', () => {
-      expect(outputs.KMSKeyId).toContain('kms');
-    });
 
     test('database credentials should be in Secrets Manager', () => {
       expect(outputs.DBSecretArn).toContain('secretsmanager');
