@@ -1,0 +1,25 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000046",
+  "team": "4",
+  "startedAt": "2025-11-04T06:55:52.064Z",
+  "subtask": "IaC-Multi-Environment-Management",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "RDS",
+    "S3",
+    "IAM",
+    "Route53",
+    "Load Balancer"
+  ],
+  "task_config": {
+    "deploy_env": "prod.tfvars"
+  }
+}
