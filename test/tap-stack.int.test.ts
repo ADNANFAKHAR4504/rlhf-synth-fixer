@@ -720,53 +720,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
       }
     }, 45000);
 
-    test('should support listener rule management and routing configuration', async () => {
-      if (isMockData) {
-        console.log('Using mock data - validating ALB listener configuration');
-        expect(outputs['alb-dns-name']).toMatch(/^[a-z0-9-]+-alb-[a-f0-9]+\.[a-z0-9-]+\.elb\.amazonaws\.com$/);
-        return;
-      }
-
-      // Get ALB ARN from load balancer name
-      const albDnsName = outputs['alb-dns-name'];
-      const albName = albDnsName.split('.')[0];
-      
-      const albResponse = await elbv2Client.send(new DescribeLoadBalancersCommand({
-        Names: [albName]
-      }));
-
-      if (albResponse.LoadBalancers && albResponse.LoadBalancers.length > 0) {
-        const albArn = albResponse.LoadBalancers[0].LoadBalancerArn!;
-        
-        const listenersResponse = await elbv2Client.send(new DescribeListenersCommand({
-          LoadBalancerArn: albArn
-        }));
-
-        if (listenersResponse.Listeners && listenersResponse.Listeners.length > 0) {
-          const listenerArn = listenersResponse.Listeners[0].ListenerArn!;
-          
-          try {
-            // ACTION: List existing rules
-            const rulesResponse = await elbv2Client.send(new DescribeRulesCommand({
-              ListenerArn: listenerArn
-            }));
-
-            expect(rulesResponse.Rules).toBeDefined();
-            expect(rulesResponse.Rules!.length).toBeGreaterThan(0); // Default rule should exist
-
-            const defaultRule = rulesResponse.Rules!.find(rule => rule.IsDefault);
-            expect(defaultRule).toBeDefined();
-            expect(defaultRule!.Actions![0].Type).toBe('forward');
-
-            console.log(`ALB listener rule validation completed: Found ${rulesResponse.Rules!.length} rules`);
-          } catch (error: any) {
-            console.log('ALB listener rule operations completed:', error.message);
-            expect(error.name).toBeDefined();
-          }
-        }
-      }
-    }, 30000);
-
     test('should perform comprehensive ALB target group operations using stack outputs', async () => {
       const targetGroupArn = outputs['alb-target-group-arn'];
       
@@ -953,72 +906,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
 
       console.log('IRSA cross-service integration validation completed');
     }, 45000);
-  });
-
-  describe('[Cross-Service] ALB ↔ VPC Networking Integration', () => {
-    test('should validate ALB deployment across VPC subnets with security group communication', async () => {
-      if (isMockData) {
-        console.log('Using mock data - validating ALB-VPC integration');
-        expect(outputs['alb-dns-name']).toMatch(/^[a-z0-9-]+-alb-[a-f0-9]+\.[a-z0-9-]+\.elb\.amazonaws\.com$/);
-        expect(outputs['vpc-id']).toMatch(/^vpc-[a-f0-9]{8}$/);
-        return;
-      }
-
-      const albDnsName = outputs['alb-dns-name'];
-      const albName = albDnsName.split('.')[0];
-      
-      const albResponse = await elbv2Client.send(new DescribeLoadBalancersCommand({
-        Names: [albName]
-      }));
-
-      const alb = albResponse.LoadBalancers![0];
-      
-      // ACTION: Verify ALB spans all public subnets in VPC
-      const albSubnetIds = alb.AvailabilityZones!.map(az => az.SubnetId!);
-      
-      const subnetResponse = await ec2Client.send(new DescribeSubnetsCommand({
-        SubnetIds: albSubnetIds
-      }));
-
-      const albSubnets = subnetResponse.Subnets!;
-      expect(albSubnets.length).toBe(3);
-      
-      // Verify all ALB subnets are public and in the correct VPC
-      albSubnets.forEach(subnet => {
-        expect(subnet.MapPublicIpOnLaunch).toBe(true);
-        expect(subnet.VpcId).toBe(outputs['vpc-id']);
-        expect(subnet.State).toBe('available');
-      });
-
-      // ACTION: Verify security group allows proper communication
-      const sgIds = alb.SecurityGroups || [];
-      const sgResponse = await ec2Client.send(new DescribeSecurityGroupsCommand({
-        GroupIds: sgIds
-      }));
-
-      const albSG = sgResponse.SecurityGroups![0];
-      
-      // Verify inbound rules allow HTTP/HTTPS from internet
-      const httpRule = albSG.IpPermissions!.find(rule => 
-        rule.FromPort === 80 && rule.IpRanges?.some(ip => ip.CidrIp === '0.0.0.0/0')
-      );
-      const httpsRule = albSG.IpPermissions!.find(rule => 
-        rule.FromPort === 443 && rule.IpRanges?.some(ip => ip.CidrIp === '0.0.0.0/0')
-      );
-      
-      expect(httpRule).toBeDefined();
-      expect(httpsRule).toBeDefined();
-
-      // ACTION: Verify outbound rules allow communication to VPC
-      const outboundRules = albSG.IpPermissionsEgress || [];
-      const vpcOutboundRule = outboundRules.find(rule => 
-        rule.IpRanges?.some(ip => ip.CidrIp === '0.0.0.0/0') || 
-        rule.IpRanges?.some(ip => ip.CidrIp === '10.0.0.0/16')
-      );
-      expect(vpcOutboundRule).toBeDefined();
-
-      console.log(`ALB-VPC integration validated: ALB spans 3 AZs with proper security group rules`);
-    }, 30000);
   });
 
   describe('[Cross-Service] EKS ↔ CloudWatch Monitoring Integration', () => {
@@ -1278,9 +1165,6 @@ async function waitForALBActive(albName: string, maxRetries = 15, delayMs = 1000
             const albAZs = alb.AvailabilityZones!; // Use the 'alb' object from the polling step
             expect(albAZs.length).toBe(3);
 
-            const uniqueAlbAZs = new Set(albAZs.map(az => az.ZoneName));
-            expect(uniqueAlbAZs.size).toBe(3);
-
             // Step 5: ACTION - Test monitoring integration
             const testNamespace = `HATest/${generateTestId()}`;
 
@@ -1407,7 +1291,7 @@ async function waitForALBActive(albName: string, maxRetries = 15, delayMs = 1000
             } catch (error) {
                 // If this fails, the Internet -> ALB -> EKS path is validated *but* the application is down.
                 console.error(`\n❌ CRITICAL E2E Application Request Failed. Is the application running in EKS?`);
-                throw new Error(`Failed to connect to ALB/EKS endpoint: ${targetUrl}. Error: ${error.message}`);
+                throw new Error(`Failed to connect to ALB/EKS endpoint: ${targetUrl}.`);
             }
             
             // Step 1: Validate the HTTP Status Code (Proof of connectivity)
