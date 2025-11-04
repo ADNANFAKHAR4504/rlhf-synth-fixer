@@ -738,8 +738,10 @@ Resources:
       MaximumBatchingWindowInSeconds: 5
 
   # ===========================
-  # EventBridge Rules
+  # EventBridge Rules - Comprehensive Event Handling
   # ===========================
+
+  # CloudFormation Stack Events
   StackUpdateEventRule:
     Type: AWS::Events::Rule
     Properties:
@@ -755,25 +757,183 @@ Resources:
             status:
               - UPDATE_COMPLETE
               - CREATE_COMPLETE
+              - UPDATE_ROLLBACK_COMPLETE
       State: ENABLED
       Targets:
         - Arn: !GetAtt ConfigValidatorLambda.Arn
-          Id: "1"
+          Id: "StackUpdateTarget"
+          InputTransformer:
+            InputPathsMap:
+              stack-id: "$.detail.stack-id"
+              status: "$.detail.status-details.status"
+            InputTemplate: |
+              {
+                "eventType": "STACK_UPDATE",
+                "stackId": "<stack-id>",
+                "status": "<status>",
+                "environment": "${Environment}",
+                "timestamp": "$.time"
+              }
 
-  ConfigChangeEventRule:
+  # S3 Configuration Changes
+  S3ConfigChangeEventRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub "${ApplicationName}-config-change-${Environment}"
-      Description: Trigger replication on configuration changes
+      Name: !Sub "${ApplicationName}-s3-config-change-${Environment}"
+      Description: Trigger replication on S3 configuration artifact changes
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - Object Created
+          - Object Deleted
+        detail:
+          bucket:
+            name:
+              - !Ref ConfigurationBucket
+          object:
+            key:
+              - prefix: "configurations/"
+              - prefix: "schemas/"
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ReplicationMonitorLambda.Arn
+          Id: "S3ConfigTarget"
+          InputTransformer:
+            InputPathsMap:
+              bucket: "$.detail.bucket.name"
+              key: "$.detail.object.key"
+              eventName: "$.detail.eventName"
+            InputTemplate: |
+              {
+                "eventType": "S3_CONFIG_CHANGE",
+                "bucket": "<bucket>",
+                "objectKey": "<key>",
+                "eventName": "<eventName>",
+                "environment": "${Environment}",
+                "timestamp": "$.time"
+              }
+
+  # SSM Parameter Changes
+  SSMParameterChangeEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${ApplicationName}-ssm-param-change-${Environment}"
+      Description: Trigger replication on SSM parameter changes
       EventPattern:
         source:
           - aws.ssm
         detail-type:
           - Parameter Store Change
+        detail:
+          name:
+            - prefix: !Sub "${SSMPathPrefix}/"
+          operation:
+            - Create
+            - Update
+            - Delete
       State: ENABLED
       Targets:
         - Arn: !GetAtt ReplicationMonitorLambda.Arn
-          Id: "1"
+          Id: "SSMParameterTarget"
+        - Arn: !GetAtt ConfigValidatorLambda.Arn
+          Id: "SSMValidationTarget"
+
+  # DynamoDB Table Changes
+  DynamoDBChangeEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${ApplicationName}-dynamodb-change-${Environment}"
+      Description: Trigger cross-environment sync on DynamoDB metadata changes
+      EventPattern:
+        source:
+          - aws.dynamodb
+        detail-type:
+          - DynamoDB Table State Change
+        detail:
+          table-name:
+            - !Ref MetadataTable
+          state:
+            - ACTIVE
+            - UPDATING
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt SchemaProcessorLambda.Arn
+          Id: "DynamoDBChangeTarget"
+
+  # Cross-Account Replication Events (Custom Events)
+  CrossAccountReplicationEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${ApplicationName}-cross-account-replication-${Environment}"
+      Description: Handle custom cross-account replication events
+      EventPattern:
+        source:
+          - !Sub "${ApplicationName}.replication"
+        detail-type:
+          - Configuration Sync Request
+          - Schema Update Request
+          - Environment Promotion
+        detail:
+          sourceEnvironment:
+            - !Ref Environment
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ReplicationMonitorLambda.Arn
+          Id: "CrossAccountTarget"
+          RoleArn: !GetAtt EventBridgeExecutionRole.Arn
+
+  # Scheduled Configuration Validation (Daily)
+  ScheduledValidationEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${ApplicationName}-scheduled-validation-${Environment}"
+      Description: Daily configuration consistency validation
+      ScheduleExpression: "cron(0 2 * * ? *)" # Daily at 2 AM UTC
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ConfigValidatorLambda.Arn
+          Id: "ScheduledValidationTarget"
+          Input: !Sub |
+            {
+              "eventType": "SCHEDULED_VALIDATION",
+              "environment": "${Environment}",
+              "validationType": "FULL_CONSISTENCY_CHECK"
+            }
+
+  # ===========================
+  # EventBridge Execution Role
+  # ===========================
+  EventBridgeExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ApplicationName}-eventbridge-role-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CrossAccountEventBridgePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - events:PutEvents
+                Resource:
+                  - !Sub "arn:aws:events:*:${AccountIdDev}:event-bus/*"
+                  - !Sub "arn:aws:events:*:${AccountIdStaging}:event-bus/*"
+                  - !Sub "arn:aws:events:*:${AccountIdProd}:event-bus/*"
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt ReplicationMonitorLambda.Arn
+                  - !GetAtt ConfigValidatorLambda.Arn
+                  - !GetAtt SchemaProcessorLambda.Arn
 
   # ===========================
   # Lambda Permissions for EventBridge
@@ -786,17 +946,59 @@ Resources:
       Principal: events.amazonaws.com
       SourceArn: !GetAtt StackUpdateEventRule.Arn
 
-  ConfigChangeLambdaPermission:
+  ScheduledValidationLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ConfigValidatorLambda
+      Action: "lambda:InvokeFunction"
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ScheduledValidationEventRule.Arn
+
+  S3ConfigChangeLambdaPermission:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref ReplicationMonitorLambda
       Action: "lambda:InvokeFunction"
       Principal: events.amazonaws.com
-      SourceArn: !GetAtt ConfigChangeEventRule.Arn
+      SourceArn: !GetAtt S3ConfigChangeEventRule.Arn
+
+  SSMParameterChangeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ReplicationMonitorLambda
+      Action: "lambda:InvokeFunction"
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt SSMParameterChangeEventRule.Arn
+
+  SSMValidationLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ConfigValidatorLambda
+      Action: "lambda:InvokeFunction"
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt SSMParameterChangeEventRule.Arn
+
+  DynamoDBChangeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SchemaProcessorLambda
+      Action: "lambda:InvokeFunction"
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt DynamoDBChangeEventRule.Arn
+
+  CrossAccountReplicationLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ReplicationMonitorLambda
+      Action: "lambda:InvokeFunction"
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt CrossAccountReplicationEventRule.Arn
 
   # ===========================
-  # SSM Parameter Store Hierarchies
+  # SSM Parameter Store Hierarchical Configuration
   # ===========================
+
+  # Application Configuration Parameters
   ApplicationConfigParam:
     Type: AWS::SSM::Parameter
     Properties:
@@ -808,9 +1010,12 @@ Resources:
           "version": "1.0.0",
           "features": {
             "replication": true,
-            "monitoring": true
+            "monitoring": true,
+            "crossAccountSync": true,
+            "schemaValidation": true
           },
-          "application": "${ApplicationName}"
+          "application": "${ApplicationName}",
+          "lastUpdated": "2025-11-04T00:00:00Z"
         }
       Description: Application configuration for multi-account sync
       Tags:
@@ -819,6 +1024,7 @@ Resources:
         Application: !Ref ApplicationName
         iac-rlhf-amazon: "true"
 
+  # Database Configuration Parameters
   DatabaseConfigParam:
     Type: AWS::SSM::Parameter
     Properties:
@@ -827,11 +1033,185 @@ Resources:
       Value: !Sub |
         {
           "table": "${MetadataTable}",
+          "tableArn": "${MetadataTable.Arn}",
           "region": "${AWS::Region}",
           "replication": "GLOBAL",
-          "billingMode": "PAY_PER_REQUEST"
+          "billingMode": "PAY_PER_REQUEST",
+          "streamArn": "${MetadataTable.StreamArn}",
+          "pointInTimeRecovery": true
         }
       Description: Database configuration for multi-account sync
+      Tags:
+        Environment: !Ref Environment
+        ManagedBy: CloudFormation
+        Application: !Ref ApplicationName
+        iac-rlhf-amazon: "true"
+
+  # Infrastructure Configuration Parameters
+  InfrastructureConfigParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "${SSMPathPrefix}/${Environment}/config/infrastructure"
+      Type: String
+      Value: !Sub |
+        {
+          "s3Bucket": "${ConfigurationBucket}",
+          "s3BucketRegion": "${AWS::Region}",
+          "kmsKeyId": "${ConfigurationBucket.DomainConfigurationEncryptionKey}",
+          "lambdaFunctions": {
+            "monitor": "${ReplicationMonitorLambda.Arn}",
+            "validator": "${ConfigValidatorLambda.Arn}",
+            "processor": "${SchemaProcessorLambda.Arn}"
+          },
+          "iamRole": "${CrossAccountReplicationRole.Arn}",
+          "cloudwatchDashboard": "${ReplicationDashboard}"
+        }
+      Description: Infrastructure resource identifiers
+      Tags:
+        Environment: !Ref Environment
+        ManagedBy: CloudFormation
+        Application: !Ref ApplicationName
+        iac-rlhf-amazon: "true"
+
+  # Cross-Account Configuration Parameters
+  CrossAccountConfigParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "${SSMPathPrefix}/${Environment}/config/cross-account"
+      Type: String
+      Value: !Sub |
+        {
+          "accounts": {
+            "dev": "${AccountIdDev}",
+            "staging": "${AccountIdStaging}",
+            "prod": "${AccountIdProd}"
+          },
+          "currentAccount": "${AWS::AccountId}",
+          "replicationRole": "${ReplicationRoleName}",
+          "targetEnvironments": {
+            "dev": ["staging"],
+            "staging": ["prod"],
+            "prod": []
+          },
+          "syncEnabled": ${EnableReplication}
+        }
+      Description: Cross-account replication configuration
+      Tags:
+        Environment: !Ref Environment
+        ManagedBy: CloudFormation
+        Application: !Ref ApplicationName
+        iac-rlhf-amazon: "true"
+
+  # Security Configuration Parameters
+  SecurityConfigParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "${SSMPathPrefix}/${Environment}/config/security"
+      Type: SecureString
+      Value: !Sub |
+        {
+          "encryptionInTransit": true,
+          "encryptionAtRest": true,
+          "iamPrinciples": {
+            "replicationRole": "${CrossAccountReplicationRole.Arn}",
+            "lambdaExecutionRole": "${LambdaExecutionRole.Arn}"
+          },
+          "accessControl": {
+            "crossAccountAccess": true,
+            "principalOrgID": "${AWS::Organizations::OrganizationId}",
+            "allowedActions": ["s3:GetObject", "s3:PutObject", "dynamodb:Query", "ssm:GetParameter"]
+          }
+        }
+      Description: Security and access control configuration (encrypted)
+      Tags:
+        Environment: !Ref Environment
+        ManagedBy: CloudFormation
+        Application: !Ref ApplicationName
+        iac-rlhf-amazon: "true"
+
+  # Environment-Specific Schema Configuration
+  SchemaConfigParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "${SSMPathPrefix}/${Environment}/schema/configuration"
+      Type: String
+      Value: !Sub |
+        {
+          "schemaVersion": "1.0",
+          "configurationSchema": {
+            "properties": {
+              "environment": {"type": "string", "enum": ["dev", "staging", "prod"]},
+              "application": {"type": "string", "pattern": "^[a-z0-9-]+$"},
+              "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"}
+            },
+            "required": ["environment", "application", "version"]
+          },
+          "validationEnabled": true,
+          "strictMode": ${Environment == "prod"}
+        }
+      Description: Schema configuration for environment validation
+      Tags:
+        Environment: !Ref Environment
+        ManagedBy: CloudFormation
+        Application: !Ref ApplicationName
+        iac-rlhf-amazon: "true"
+
+  # Monitoring and Alerting Configuration
+  MonitoringConfigParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "${SSMPathPrefix}/${Environment}/config/monitoring"
+      Type: String
+      Value: !Sub |
+        {
+          "cloudwatchDashboard": "${ReplicationDashboard}",
+          "alarms": {
+            "lambdaErrors": "${LambdaErrorAlarm}",
+            "replicationFailures": "arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ApplicationName}-replication-failures-${Environment}"
+          },
+          "metrics": {
+            "namespace": "MultiAccountReplication",
+            "retentionDays": 30,
+            "detailedMonitoring": ${Environment == "prod"}
+          },
+          "notifications": {
+            "snsTopicArn": "",
+            "emailAlerts": ${Environment == "prod"},
+            "slackWebhook": ""
+          }
+        }
+      Description: Monitoring and alerting configuration
+      Tags:
+        Environment: !Ref Environment
+        ManagedBy: CloudFormation
+        Application: !Ref ApplicationName
+        iac-rlhf-amazon: "true"
+
+  # Runtime Configuration (Changeable)
+  RuntimeConfigParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "${SSMPathPrefix}/${Environment}/runtime/config"
+      Type: String
+      Value: !Sub |
+        {
+          "syncInterval": "300",
+          "batchSize": "10",
+          "retryAttempts": "3",
+          "timeoutSeconds": "60",
+          "enableDetailedLogging": ${Environment != "prod"},
+          "maintenanceWindow": {
+            "start": "02:00",
+            "end": "04:00",
+            "timezone": "UTC"
+          },
+          "featureFlags": {
+            "enableCrossRegionReplication": false,
+            "enableAutomaticRollback": true,
+            "enableSchemaEvolution": ${Environment == "dev"}
+          }
+        }
+      Description: Runtime configuration parameters (modifiable)
       Tags:
         Environment: !Ref Environment
         ManagedBy: CloudFormation
