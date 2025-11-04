@@ -8,7 +8,9 @@
   "po_id": "synth-101000809",
   "team": "synth",
   "startedAt": "2025-11-03T12:55:59Z",
-  "subject_labels": ["Cloud Environment Setup"],
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
   "aws_services": [
     "ALB",
     "AutoScaling",
@@ -24,5 +26,10 @@
     "VPC"
   ],
   "training_quality": 9,
-  "author": "emmanuel-turing"
+  "author": "iamarpit-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
