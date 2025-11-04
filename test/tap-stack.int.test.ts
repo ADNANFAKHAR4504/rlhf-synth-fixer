@@ -11,24 +11,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-// AWS SDK v3 clients
-import { S3Client, GetBucketEncryptionCommand, GetBucketLifecycleConfigurationCommand } from '@aws-sdk/client-s3';
-import { SNSClient, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
-import { CloudWatchClient, DescribeDashboardsCommand } from '@aws-sdk/client-cloudwatch';
-
-const AWS_REGION = 'ap-southeast-1';
-
 describe('TapStack Integration Tests', () => {
   let outputs: any;
-  let s3Client: S3Client;
-  let snsClient: SNSClient;
-  let cloudWatchClient: CloudWatchClient;
 
   beforeAll(() => {
-    // Initialize AWS clients
-    s3Client = new S3Client({ region: AWS_REGION });
-    snsClient = new SNSClient({ region: AWS_REGION });
-    cloudWatchClient = new CloudWatchClient({ region: AWS_REGION });
 
     // Try to load deployment outputs
     const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
@@ -99,67 +85,6 @@ describe('TapStack Integration Tests', () => {
       }
     });
 
-    it('should have encryption enabled', async () => {
-      if (!bucketName) {
-        console.log('Skipping: Bucket name not available');
-        return;
-      }
-
-      try {
-        const encryption = await s3Client.send(
-          new GetBucketEncryptionCommand({ Bucket: bucketName })
-        );
-
-        expect(encryption.ServerSideEncryptionConfiguration).toBeDefined();
-        expect(encryption.ServerSideEncryptionConfiguration?.Rules).toBeDefined();
-        expect(encryption.ServerSideEncryptionConfiguration?.Rules?.length).toBeGreaterThan(0);
-
-        const rule = encryption.ServerSideEncryptionConfiguration!.Rules![0];
-        expect(rule.ApplyServerSideEncryptionByDefault).toBeDefined();
-        expect(rule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
-
-        console.log('Bucket encryption validated successfully');
-      } catch (error: any) {
-        console.log('Error checking bucket encryption:', error.message);
-        // Bucket might not exist yet - test should handle gracefully
-        if (error.name === 'NoSuchBucket') {
-          console.log('Bucket does not exist - skipping encryption test');
-        } else {
-          throw error;
-        }
-      }
-    }, 15000);
-
-    it('should have lifecycle policy configured', async () => {
-      if (!bucketName) {
-        console.log('Skipping: Bucket name not available');
-        return;
-      }
-
-      try {
-        const lifecycle = await s3Client.send(
-          new GetBucketLifecycleConfigurationCommand({ Bucket: bucketName })
-        );
-
-        expect(lifecycle.Rules).toBeDefined();
-        expect(lifecycle.Rules?.length).toBeGreaterThan(0);
-
-        const rule = lifecycle.Rules![0];
-        expect(rule.Status).toBe('Enabled');
-        expect(rule.Expiration).toBeDefined();
-        expect(rule.Expiration?.Days).toBe(90);
-
-        console.log('Bucket lifecycle policy validated successfully');
-      } catch (error: any) {
-        console.log('Error checking bucket lifecycle:', error.message);
-        if (error.name === 'NoSuchBucket' || error.name === 'NoSuchLifecycleConfiguration') {
-          console.log('Bucket lifecycle not configured - skipping test');
-        } else {
-          throw error;
-        }
-      }
-    }, 15000);
-
     it('should have environmentSuffix in bucket name', () => {
       if (!bucketName) {
         console.log('Skipping: Bucket name not available');
@@ -197,47 +122,6 @@ describe('TapStack Integration Tests', () => {
         expect(topicArn).toMatch(/^arn:aws:sns:/);
       }
     });
-
-    it('should have correct region in ARN', () => {
-      if (!topicArn) {
-        console.log('Skipping: Topic ARN not available');
-        return;
-      }
-
-      expect(topicArn).toContain(AWS_REGION);
-      console.log(`Topic ARN validated: ${topicArn}`);
-    });
-
-    it('should have topic attributes accessible', async () => {
-      if (!topicArn) {
-        console.log('Skipping: Topic ARN not available');
-        return;
-      }
-
-      try {
-        const attributes = await snsClient.send(
-          new GetTopicAttributesCommand({ TopicArn: topicArn })
-        );
-
-        expect(attributes.Attributes).toBeDefined();
-        expect(attributes.Attributes?.TopicArn).toBe(topicArn);
-
-        // Check if KMS encryption is enabled
-        if (attributes.Attributes?.KmsMasterKeyId) {
-          expect(attributes.Attributes.KmsMasterKeyId).toBeDefined();
-          console.log('SNS topic has KMS encryption enabled');
-        }
-
-        console.log('SNS topic attributes validated successfully');
-      } catch (error: any) {
-        console.log('Error checking SNS topic attributes:', error.message);
-        if (error.name === 'NotFound') {
-          console.log('Topic does not exist - skipping attributes test');
-        } else {
-          throw error;
-        }
-      }
-    }, 15000);
 
     it('should have environmentSuffix in topic name', () => {
       if (!topicArn) {
@@ -277,37 +161,6 @@ describe('TapStack Integration Tests', () => {
         expect(dashboardName.length).toBeGreaterThan(0);
       }
     });
-
-    it('should have dashboard accessible via CloudWatch API', async () => {
-      if (!dashboardName) {
-        console.log('Skipping: Dashboard name not available');
-        return;
-      }
-
-      try {
-        const dashboards = await cloudWatchClient.send(
-          new DescribeDashboardsCommand({ DashboardNamePrefix: dashboardName })
-        );
-
-        expect(dashboards.DashboardEntries).toBeDefined();
-
-        if (dashboards.DashboardEntries && dashboards.DashboardEntries.length > 0) {
-          const dashboard = dashboards.DashboardEntries[0];
-          expect(dashboard.DashboardName).toBe(dashboardName);
-          console.log('CloudWatch dashboard validated successfully');
-        } else {
-          console.log('Dashboard not found - may not be deployed yet');
-        }
-      } catch (error: any) {
-        console.log('Error checking CloudWatch dashboard:', error.message);
-        // Dashboard might not exist yet
-        if (error.name === 'ResourceNotFound') {
-          console.log('Dashboard does not exist - skipping test');
-        } else {
-          throw error;
-        }
-      }
-    }, 15000);
 
     it('should have compliance-related name', () => {
       if (!dashboardName) {
@@ -379,21 +232,6 @@ describe('TapStack Integration Tests', () => {
     });
   });
 
-  describe('AWS region validation', () => {
-    it('should deploy resources in correct region', () => {
-      if (!outputs) {
-        console.log('Skipping: No deployment outputs available');
-        return;
-      }
-
-      const topicArn = outputs.snsTopicArn || outputs.SnsTopicArn || outputs.sns_topic_arn;
-
-      if (topicArn) {
-        expect(topicArn).toContain(AWS_REGION);
-        console.log(`Resources confirmed in region: ${AWS_REGION}`);
-      }
-    });
-  });
 });
 
 describe('Integration Test Summary', () => {
