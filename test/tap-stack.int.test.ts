@@ -121,7 +121,6 @@ function generateMockId(): string {
 const outputs = loadOutputs();
 const isMockData = !fs.existsSync(path.resolve(process.cwd(), 'cfn-outputs/flat-outputs.json'));
 
-// Skip resource validation tests if using mock data
 function skipIfMockData() {
     if (isMockData) {
         console.log('Using mock data - skipping resource validation test');
