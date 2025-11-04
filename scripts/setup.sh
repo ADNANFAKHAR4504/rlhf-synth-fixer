@@ -52,7 +52,14 @@ case "$PLATFORM" in
     fi
     ;;
   tf)
-    echo "🪄 Terraform project — no language runtime setup required."
+    echo "🪄 Terraform project — minimal setup required."
+    # Ensure Jest is available for static validation
+    if ! command -v jest &>/dev/null; then
+      echo "📦 Installing Jest + TypeScript for Terraform validation..."
+      npm install -g jest ts-node typescript @types/jest
+    else
+      echo "✅ Jest already available — skipping install."
+    fi
     ;;
   pulumi)
     echo "🪄 Pulumi project detected."
@@ -68,10 +75,27 @@ case "$PLATFORM" in
       gradle --version || echo "Gradle wrapper will handle it."
     fi
     ;;
+  cfn)
+    echo "🪄 CloudFormation project detected — enabling Jest for template validation..."
+    if ! command -v jest &>/dev/null; then
+      npm install -g jest ts-node typescript @types/jest
+    fi
+    ;;
   *)
     echo "⚠️ Unknown or empty platform — skipping tool-specific setup."
     ;;
 esac
+
+# -------------------------------------------------------------------
+# Universal Jest fallback setup
+# -------------------------------------------------------------------
+# This ensures Jest is *always* available for fallback validation (even for Go/Python/Java)
+if ! command -v jest &>/dev/null; then
+  echo "📦 Installing Jest globally for universal IaC test fallback..."
+  npm install -g jest ts-node typescript @types/jest
+else
+  echo "✅ Jest already available globally — skipping fallback install."
+fi
 
 # -------------------------------------------------------------------
 # Configure AWS if credentials are available
