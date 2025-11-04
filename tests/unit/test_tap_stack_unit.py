@@ -162,19 +162,78 @@ class TestTapStackCreation(unittest.TestCase):
         self.assertIsNotNone(stack.peering_connection)
         self.assertIsNotNone(stack.peering_accepter)
 
-    @pulumi_test
     def test_stack_creates_security_groups(self):
-        """Test that TapStack creates security groups in both VPCs."""
-        from lib.tap_stack import TapStack, TapStackArgs
-
-        tags = {"Environment": "test", "Owner": "test-team"}
-        args = TapStackArgs(environment_suffix="test", tags=tags)
-
+        """Test that the stack creates security groups with proper configuration."""
+        from lib.tap_stack import TapStack
+        args = TapStackArgs(
+            environment_suffix="test",
+            tags={"Environment": "test", "Owner": "test", "ManagedBy": "Pulumi"}
+        )
+        
         stack = TapStack("test-stack", args)
-
-        # Verify security groups exist
+        
+        # Test that security groups are created
         self.assertIsNotNone(stack.payment_sg)
         self.assertIsNotNone(stack.analytics_sg)
+
+    def test_stack_with_existing_vpcs(self):
+        """Test stack creation with existing VPC IDs."""
+        from lib.tap_stack import TapStackArgs, TapStack
+        args = TapStackArgs(
+            environment_suffix="test",
+            payment_vpc_id="vpc-12345678",
+            analytics_vpc_id="vpc-87654321",
+            create_vpcs=False,
+            tags={"Environment": "test", "Owner": "test", "ManagedBy": "Pulumi"}
+        )
+        
+        # This should not raise an exception during initialization
+        with patch('pulumi_aws.ec2.get_vpc') as mock_get_vpc:
+            mock_get_vpc.return_value = MagicMock(
+                id="vpc-12345678", 
+                cidr_block="10.0.0.0/16"
+            )
+            stack = TapStack("test-stack", args)
+            self.assertIsNotNone(stack)
+
+    def test_get_route_tables_method(self):
+        """Test the get_route_tables method."""
+        from lib.tap_stack import TapStackArgs, TapStack
+        args = TapStackArgs(
+            environment_suffix="test",
+            tags={"Environment": "test", "Owner": "test", "ManagedBy": "Pulumi"}
+        )
+        
+        stack = TapStack("test-stack", args)
+        
+        # Test with payment VPC ID
+        payment_routes = stack.get_route_tables(stack.payment_vpc_id, stack.east_provider)
+        self.assertEqual(payment_routes, [])
+        
+        # Test with analytics VPC ID  
+        analytics_routes = stack.get_route_tables(stack.analytics_vpc_id, stack.west_provider)
+        self.assertEqual(analytics_routes, [])
+        
+        # Test with unknown VPC ID
+        unknown_routes = stack.get_route_tables("vpc-unknown", stack.east_provider)
+        self.assertEqual(unknown_routes, [])
+
+    def test_existing_vpc_error_handling(self):
+        """Test error handling when existing VPC lookup fails."""
+        from lib.tap_stack import TapStackArgs, TapStack
+        args = TapStackArgs(
+            environment_suffix="test",
+            payment_vpc_id="vpc-nonexistent",
+            analytics_vpc_id="vpc-87654321", 
+            create_vpcs=False,
+            tags={"Environment": "test", "Owner": "test", "ManagedBy": "Pulumi"}
+        )
+        
+        with patch('pulumi_aws.ec2.get_vpc') as mock_get_vpc:
+            mock_get_vpc.side_effect = Exception("VPC not found")
+            
+            with self.assertRaises(Exception):
+                TapStack("test-stack", args)
 
     @pulumi_test
     def test_stack_exports_outputs(self):
