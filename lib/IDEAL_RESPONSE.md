@@ -1,5 +1,4 @@
 ## tap-stack.ts
-```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -100,6 +99,13 @@ export class TapStack extends TerraformStack {
     const awsProviderDR = new AwsProvider(this, 'aws-dr', {
       alias: 'dr',
       region: drRegion,
+      defaultTags: defaultTags,
+    });
+
+    // AWS Provider for us-east-1 (required for CloudFront and WAF with CLOUDFRONT scope)
+    const awsProviderUSEast1 = new AwsProvider(this, 'aws-us-east-1', {
+      alias: 'us-east-1',
+      region: 'us-east-1',
       defaultTags: defaultTags,
     });
 
@@ -594,12 +600,13 @@ export class TapStack extends TerraformStack {
     // });
 
     // =========================
-    // 9. CloudFront Distribution
+    // 9. CloudFront Distribution (must be in us-east-1)
     // =========================
     const cloudfrontDistribution = new CloudfrontDistribution(
       this,
       'cloudfront',
       {
+        provider: awsProviderUSEast1, // CloudFront must be created in us-east-1
         enabled: true,
         isIpv6Enabled: true,
         comment: `Fintech CloudFront Distribution - ${environmentSuffix}`,
@@ -686,10 +693,11 @@ export class TapStack extends TerraformStack {
     );
 
     // =========================
-    // 10. WAF Web ACL
+    // 10. WAF Web ACL (must be in us-east-1 for CLOUDFRONT scope)
     // =========================
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const webAcl = new Wafv2WebAcl(this, 'web-acl', {
+      provider: awsProviderUSEast1, // WAF with CLOUDFRONT scope must be in us-east-1
       name: `fintech-web-acl-${environmentSuffix}`,
       description: 'WAF rules for fintech application',
       scope: 'CLOUDFRONT',
@@ -1118,4 +1126,5 @@ export class TapStack extends TerraformStack {
     });
   }
 }
+
 ```
