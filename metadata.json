@@ -22,5 +22,7 @@
     "IAM",
     "S3"
   ],
+  "region": "us-east-1",
+  "author": "chriscrsov",
   "training_quality": 9
 }
