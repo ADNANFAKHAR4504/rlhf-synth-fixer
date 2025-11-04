@@ -1,0 +1,5 @@
+encryptionsalt: v1:knOzpYS8Pag=:v1:KN4eEnHM/WIdTX2k:sts3BNv4mkFZ5+56hCy6NeBm58mQ7w==
+config:
+  pulumi-infra:onprem_db_password:
+    secure: v1:Mz7PbFKuFh0PRAWh:y/r9NyybnzelSEiGIkyrOMhKXbgWk+0jnkQryk6Uik4luA==
+  pulumi-infra:environment_suffix: test101000826
