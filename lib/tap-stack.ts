@@ -213,5 +213,35 @@ export class TapStack extends TerraformStack {
       value: ebsCsiDriverRole.role.arn,
       description: 'EBS CSI Driver IAM Role ARN',
     });
+
+    new TerraformOutput(this, 'public-subnet-ids', {
+      value: JSON.stringify(vpcConstruct.publicSubnets.map(s => s.id)),
+      description: 'Public Subnet IDs',
+    });
+
+    new TerraformOutput(this, 'private-subnet-ids', {
+      value: JSON.stringify(vpcConstruct.privateSubnets.map(s => s.id)),
+      description: 'Private Subnet IDs',
+    });
+
+    new TerraformOutput(this, 'eks-cluster-security-group-id', {
+      value: eksClusterSecurityGroup.securityGroup.id,
+      description: 'EKS Cluster Security Group ID',
+    });
+
+    new TerraformOutput(this, 'alb-security-group-id', {
+      value: albSecurityGroup.securityGroup.id,
+      description: 'ALB Security Group ID',
+    });
+
+    new TerraformOutput(this, 'alb-target-group-arn', {
+      value: alb.targetGroup.arn,
+      description: 'ALB Target Group ARN',
+    });
+
+    new TerraformOutput(this, 'nat-gateway-ids', {
+      value: JSON.stringify(vpcConstruct.natGateways.map(ng => ng.id)),
+      description: 'NAT Gateway IDs',
+    });
   }
 }
