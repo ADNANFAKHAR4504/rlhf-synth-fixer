@@ -992,7 +992,8 @@ resource "aws_db_instance" "secondary_replica" {
       Name = "rds-secondary-replica-${local.resource_suffix}"
     }
   )
-  
+  storage_encrypted = true
+  kms_key_id        = "alias/aws/rds" 
   depends_on = [aws_db_subnet_group.secondary]
 }
 
