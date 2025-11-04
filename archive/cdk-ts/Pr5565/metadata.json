@@ -1,6 +1,6 @@
 {
   "platform": "cdk",
-  "language": "ts",
+  "language": "typescript",
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "5523",
@@ -24,5 +24,12 @@
     "IAM",
     "ECR",
     "CDK Pipelines"
-  ]
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sivakumar-turing",
+  "dockerS3Location": ""
 }
