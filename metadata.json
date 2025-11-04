@@ -11,11 +11,19 @@
     "Failure Recovery Automation"
   ],
   "aws_services": [
-    "S3 Bucket",
-    "CloudFormation",
-    "Lambda",
-    "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
-  ]
+    "Amazon Aurora",
+    "Amazon RDS",
+    "Amazon S3",
+    "AWS Lambda",
+    "Amazon EventBridge",
+    "Amazon CloudWatch",
+    "Amazon CloudWatch Logs",
+    "Amazon SNS",
+    "Amazon Route 53",
+    "Amazon VPC",
+    "AWS KMS",
+    "AWS IAM",
+    "Amazon EC2"
+  ],
+  "training_quality": 9
 }

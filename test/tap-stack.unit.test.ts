@@ -23,8 +23,8 @@ describe('TapStack', () => {
           region: 'us-east-1',
         },
       });
-    template = Template.fromStack(stack);
-  });
+      template = Template.fromStack(stack);
+    });
 
     test('should create KMS keys for database and S3 encryption', () => {
       template.hasResourceProperties('AWS::KMS::Key', {
@@ -87,16 +87,21 @@ describe('TapStack', () => {
       expect(Object.keys(buckets).length).toBeGreaterThan(0);
 
       // Verify lifecycle configuration exists (may be attached to bucket or separate resource)
-      const lifecycleConfigs = template.findResources('AWS::S3::BucketLifecycleConfiguration');
+      const lifecycleConfigs = template.findResources(
+        'AWS::S3::BucketLifecycleConfiguration'
+      );
       if (Object.keys(lifecycleConfigs).length > 0) {
-        template.hasResourceProperties('AWS::S3::BucketLifecycleConfiguration', {
-          Rules: Match.arrayWith([
-            {
-              Id: 'transition-to-glacier',
-              Status: 'Enabled',
-            },
-          ]),
-        });
+        template.hasResourceProperties(
+          'AWS::S3::BucketLifecycleConfiguration',
+          {
+            Rules: Match.arrayWith([
+              {
+                Id: 'transition-to-glacier',
+                Status: 'Enabled',
+              },
+            ]),
+          }
+        );
       }
 
       expect(stack.snapshotBucketArn).toBeDefined();
@@ -104,12 +109,10 @@ describe('TapStack', () => {
 
     test('should create S3 replication role for primary region', () => {
       const roles = template.findResources('AWS::IAM::Role');
-      const s3ReplicationRole = Object.values(roles).find(
-        (role: any) =>
-          role.Properties.AssumeRolePolicyDocument?.Statement?.some(
-            (stmt: any) =>
-              stmt.Principal?.Service === 's3.amazonaws.com'
-          )
+      const s3ReplicationRole = Object.values(roles).find((role: any) =>
+        role.Properties.AssumeRolePolicyDocument?.Statement?.some(
+          (stmt: any) => stmt.Principal?.Service === 's3.amazonaws.com'
+        )
       );
       expect(s3ReplicationRole).toBeDefined();
 
@@ -128,13 +131,12 @@ describe('TapStack', () => {
       } else {
         // Check for separate IAM Policy resources
         const policies = template.findResources('AWS::IAM::Policy');
-        const replicationPolicy = Object.values(policies).find(
-          (policy: any) =>
-            policy.Properties.PolicyDocument?.Statement?.some(
-              (stmt: any) =>
-                Array.isArray(stmt.Action) &&
-                stmt.Action.includes('s3:ReplicateObject')
-            )
+        const replicationPolicy = Object.values(policies).find((policy: any) =>
+          policy.Properties.PolicyDocument?.Statement?.some(
+            (stmt: any) =>
+              Array.isArray(stmt.Action) &&
+              stmt.Action.includes('s3:ReplicateObject')
+          )
         );
         expect(replicationPolicy).toBeDefined();
       }
@@ -201,19 +203,20 @@ describe('TapStack', () => {
       expect(Object.keys(lambdaFunctions).length).toBeGreaterThan(0);
       const lambda = Object.values(lambdaFunctions)[0] as any;
       expect(lambda.Properties.Environment.Variables.DB_ENDPOINT).toBeDefined();
-      expect(lambda.Properties.Environment.Variables.DB_SECRET_ARN).toBeDefined();
+      expect(
+        lambda.Properties.Environment.Variables.DB_SECRET_ARN
+      ).toBeDefined();
       expect(lambda.Properties.Environment.Variables.REGION).toBe('us-east-1');
 
       // Verify IAM policy for CloudWatch
       const policies = template.findResources('AWS::IAM::Policy');
-      const cloudwatchPolicy = Object.values(policies).find(
-        (policy: any) =>
-          policy.Properties.PolicyDocument.Statement?.some(
-            (stmt: any) =>
-              stmt.Action === 'cloudwatch:PutMetricData' ||
-              (Array.isArray(stmt.Action) &&
-                stmt.Action.includes('cloudwatch:PutMetricData'))
-          )
+      const cloudwatchPolicy = Object.values(policies).find((policy: any) =>
+        policy.Properties.PolicyDocument.Statement?.some(
+          (stmt: any) =>
+            stmt.Action === 'cloudwatch:PutMetricData' ||
+            (Array.isArray(stmt.Action) &&
+              stmt.Action.includes('cloudwatch:PutMetricData'))
+        )
       );
       expect(cloudwatchPolicy).toBeDefined();
     });
@@ -227,39 +230,40 @@ describe('TapStack', () => {
 
       expect(Object.keys(lambdaFunctions).length).toBeGreaterThan(0);
       const lambda = Object.values(lambdaFunctions).find(
-        (l: any) =>
-          l.Properties.Environment?.Variables?.IS_PRIMARY === 'true'
+        (l: any) => l.Properties.Environment?.Variables?.IS_PRIMARY === 'true'
       ) as any;
       expect(lambda).toBeDefined();
       expect(lambda.Properties.Environment.Variables.CLUSTER_ID).toBeDefined();
       expect(lambda.Properties.Environment.Variables.IS_PRIMARY).toBe('true');
       expect(lambda.Properties.Environment.Variables.DR_ENDPOINT).toBe('');
-      expect(lambda.Properties.Environment.Variables.SNS_TOPIC_ARN).toBeDefined();
-      expect(lambda.Properties.Environment.Variables.STATE_BUCKET).toBeDefined();
+      expect(
+        lambda.Properties.Environment.Variables.SNS_TOPIC_ARN
+      ).toBeDefined();
+      expect(
+        lambda.Properties.Environment.Variables.STATE_BUCKET
+      ).toBeDefined();
       expect(lambda.Properties.Environment.Variables.RECORD_NAME).toBe(
         'db.aurora-dr.internal'
       );
 
       // Verify IAM policies exist
       const policies = template.findResources('AWS::IAM::Policy');
-      const rdsPolicy = Object.values(policies).find(
-        (policy: any) =>
-          policy.Properties.PolicyDocument.Statement?.some(
-            (stmt: any) =>
-              Array.isArray(stmt.Action) &&
-              stmt.Action.includes('rds:PromoteReadReplicaDBCluster')
-          )
+      const rdsPolicy = Object.values(policies).find((policy: any) =>
+        policy.Properties.PolicyDocument.Statement?.some(
+          (stmt: any) =>
+            Array.isArray(stmt.Action) &&
+            stmt.Action.includes('rds:PromoteReadReplicaDBCluster')
+        )
       );
       expect(rdsPolicy).toBeDefined();
 
-      const route53Policy = Object.values(policies).find(
-        (policy: any) =>
-          policy.Properties.PolicyDocument.Statement?.some(
-            (stmt: any) =>
-              stmt.Action === 'route53:ChangeResourceRecordSets' ||
-              (Array.isArray(stmt.Action) &&
-                stmt.Action.includes('route53:ChangeResourceRecordSets'))
-          )
+      const route53Policy = Object.values(policies).find((policy: any) =>
+        policy.Properties.PolicyDocument.Statement?.some(
+          (stmt: any) =>
+            stmt.Action === 'route53:ChangeResourceRecordSets' ||
+            (Array.isArray(stmt.Action) &&
+              stmt.Action.includes('route53:ChangeResourceRecordSets'))
+        )
       );
       expect(route53Policy).toBeDefined();
     });
@@ -273,19 +277,22 @@ describe('TapStack', () => {
           !l.Properties.Environment?.Variables?.IS_PRIMARY
       ) as any;
       expect(backupLambda).toBeDefined();
-      expect(backupLambda.Properties.Environment.Variables.CLUSTER_ID).toBeDefined();
-      expect(backupLambda.Properties.Environment.Variables.SNS_TOPIC_ARN).toBeDefined();
+      expect(
+        backupLambda.Properties.Environment.Variables.CLUSTER_ID
+      ).toBeDefined();
+      expect(
+        backupLambda.Properties.Environment.Variables.SNS_TOPIC_ARN
+      ).toBeDefined();
 
       // Verify IAM policy for backup verification
       const policies = template.findResources('AWS::IAM::Policy');
-      const backupPolicy = Object.values(policies).find(
-        (policy: any) =>
-          policy.Properties.PolicyDocument.Statement?.some(
-            (stmt: any) =>
-              Array.isArray(stmt.Action) &&
-              stmt.Action.includes('rds:DescribeDBClusterSnapshots') &&
-              stmt.Action.includes('rds:RestoreDBClusterFromSnapshot')
-          )
+      const backupPolicy = Object.values(policies).find((policy: any) =>
+        policy.Properties.PolicyDocument.Statement?.some(
+          (stmt: any) =>
+            Array.isArray(stmt.Action) &&
+            stmt.Action.includes('rds:DescribeDBClusterSnapshots') &&
+            stmt.Action.includes('rds:RestoreDBClusterFromSnapshot')
+        )
       );
       expect(backupPolicy).toBeDefined();
     });
@@ -395,59 +402,54 @@ describe('TapStack', () => {
       expect(snapshotOutput).toBeDefined();
 
       const topicOutput = Object.values(allOutputs).find(
-        (output: any) =>
-          output.Export?.Name === 'aurora-dr-alerts-primary-test'
+        (output: any) => output.Export?.Name === 'aurora-dr-alerts-primary-test'
       );
       expect(topicOutput).toBeDefined();
 
       const globalOutput = Object.values(allOutputs).find(
-        (output: any) =>
-          output.Export?.Name === 'aurora-dr-global-cluster-test'
+        (output: any) => output.Export?.Name === 'aurora-dr-global-cluster-test'
       );
       expect(globalOutput).toBeDefined();
     });
 
     test('should grant Lambda permissions to read secrets', () => {
       const policies = template.findResources('AWS::IAM::Policy');
-      const secretsPolicy = Object.values(policies).find(
-        (policy: any) =>
-          policy.Properties.PolicyDocument.Statement?.some(
-            (stmt: any) =>
-              (Array.isArray(stmt.Action) &&
-                stmt.Action.includes('secretsmanager:GetSecretValue')) ||
-              stmt.Action === 'secretsmanager:GetSecretValue'
-          )
+      const secretsPolicy = Object.values(policies).find((policy: any) =>
+        policy.Properties.PolicyDocument.Statement?.some(
+          (stmt: any) =>
+            (Array.isArray(stmt.Action) &&
+              stmt.Action.includes('secretsmanager:GetSecretValue')) ||
+            stmt.Action === 'secretsmanager:GetSecretValue'
+        )
       );
       expect(secretsPolicy).toBeDefined();
     });
 
     test('should grant Lambda permissions to publish to SNS', () => {
       const policies = template.findResources('AWS::IAM::Policy');
-      const snsPolicy = Object.values(policies).find(
-        (policy: any) =>
-          policy.Properties.PolicyDocument.Statement?.some(
-            (stmt: any) =>
-              stmt.Action === 'sns:Publish' ||
-              (Array.isArray(stmt.Action) && stmt.Action.includes('sns:Publish'))
-          )
+      const snsPolicy = Object.values(policies).find((policy: any) =>
+        policy.Properties.PolicyDocument.Statement?.some(
+          (stmt: any) =>
+            stmt.Action === 'sns:Publish' ||
+            (Array.isArray(stmt.Action) && stmt.Action.includes('sns:Publish'))
+        )
       );
       expect(snsPolicy).toBeDefined();
     });
 
     test('should grant Lambda permissions to read/write S3', () => {
       const policies = template.findResources('AWS::IAM::Policy');
-      const s3Policy = Object.values(policies).find(
-        (policy: any) =>
-          policy.Properties.PolicyDocument.Statement?.some(
-            (stmt: any) =>
-              (Array.isArray(stmt.Action) &&
-                (stmt.Action.includes('s3:GetObject') ||
-                  stmt.Action.includes('s3:PutObject') ||
-                  stmt.Action.includes('s3:DeleteObject'))) ||
-              stmt.Action === 's3:GetObject' ||
-              stmt.Action === 's3:PutObject' ||
-              stmt.Action === 's3:DeleteObject'
-          )
+      const s3Policy = Object.values(policies).find((policy: any) =>
+        policy.Properties.PolicyDocument.Statement?.some(
+          (stmt: any) =>
+            (Array.isArray(stmt.Action) &&
+              (stmt.Action.includes('s3:GetObject') ||
+                stmt.Action.includes('s3:PutObject') ||
+                stmt.Action.includes('s3:DeleteObject'))) ||
+            stmt.Action === 's3:GetObject' ||
+            stmt.Action === 's3:PutObject' ||
+            stmt.Action === 's3:DeleteObject'
+        )
       );
       expect(s3Policy).toBeDefined();
     });
@@ -509,7 +511,9 @@ describe('TapStack', () => {
     });
 
     test('should associate DR cluster with global cluster identifier', () => {
-      const dbCluster = stack.node.findChild('DRCluster') as rds.DatabaseCluster;
+      const dbCluster = stack.node.findChild(
+        'DRCluster'
+      ) as rds.DatabaseCluster;
       const cfnCluster = dbCluster.node.defaultChild as rds.CfnDBCluster;
       expect(cfnCluster.globalClusterIdentifier).toBe('test-global-cluster-id');
     });
@@ -551,7 +555,7 @@ describe('TapStack', () => {
         },
       });
       // Should not have S3ReplicationRole
-      const s3ReplicationRoles = Object.keys(roles).filter((key) =>
+      const s3ReplicationRoles = Object.keys(roles).filter(key =>
         key.includes('S3ReplicationRole')
       );
       expect(s3ReplicationRoles.length).toBe(0);
@@ -560,27 +564,23 @@ describe('TapStack', () => {
     test('should not output global cluster identifier for DR', () => {
       const allOutputs = template.findOutputs('*');
       const clusterOutput = Object.values(allOutputs).find(
-        (output: any) =>
-          output.Export?.Name === 'aurora-dr-endpoint-dr-test'
+        (output: any) => output.Export?.Name === 'aurora-dr-endpoint-dr-test'
       );
       expect(clusterOutput).toBeDefined();
 
       const snapshotOutput = Object.values(allOutputs).find(
-        (output: any) =>
-          output.Export?.Name === 'aurora-dr-snapshots-dr-test'
+        (output: any) => output.Export?.Name === 'aurora-dr-snapshots-dr-test'
       );
       expect(snapshotOutput).toBeDefined();
 
       const topicOutput = Object.values(allOutputs).find(
-        (output: any) =>
-          output.Export?.Name === 'aurora-dr-alerts-dr-test'
+        (output: any) => output.Export?.Name === 'aurora-dr-alerts-dr-test'
       );
       expect(topicOutput).toBeDefined();
 
       // Should not have global cluster identifier output
       const globalOutput = Object.values(allOutputs).find(
-        (output: any) =>
-          output.Export?.Name === 'aurora-dr-global-cluster-test'
+        (output: any) => output.Export?.Name === 'aurora-dr-global-cluster-test'
       );
       expect(globalOutput).toBeUndefined();
     });
@@ -672,7 +672,7 @@ describe('TapStack', () => {
       const template = Template.fromStack(stack);
 
       const roles = template.findResources('AWS::IAM::Role');
-      const s3ReplicationRoles = Object.keys(roles).filter((key) =>
+      const s3ReplicationRoles = Object.keys(roles).filter(key =>
         key.includes('S3ReplicationRole')
       );
       expect(s3ReplicationRoles.length).toBe(0);
@@ -687,7 +687,7 @@ describe('TapStack', () => {
       const template = Template.fromStack(stack);
 
       const roles = template.findResources('AWS::IAM::Role');
-      const s3ReplicationRoles = Object.keys(roles).filter((key) =>
+      const s3ReplicationRoles = Object.keys(roles).filter(key =>
         key.includes('S3ReplicationRole')
       );
       expect(s3ReplicationRoles.length).toBe(0);
@@ -701,7 +701,9 @@ describe('TapStack', () => {
         env: { account: '123456789012', region: 'us-west-2' },
       });
 
-      const dbCluster = stack.node.findChild('DRCluster') as rds.DatabaseCluster;
+      const dbCluster = stack.node.findChild(
+        'DRCluster'
+      ) as rds.DatabaseCluster;
       const cfnCluster = dbCluster.node.defaultChild as rds.CfnDBCluster;
       expect(cfnCluster.globalClusterIdentifier).toBeUndefined();
     });
@@ -731,7 +733,7 @@ describe('TapStack', () => {
 
       // Verify VPC is created (region prefix is in construct ID)
       template.resourceCountIs('AWS::EC2::VPC', 1);
-      
+
       // Verify SNS topic uses primary prefix
       template.hasResourceProperties('AWS::SNS::Topic', {
         TopicName: 'aurora-dr-alerts-primary-test',
@@ -802,7 +804,9 @@ describe('TapStack', () => {
       // Log groups are created automatically by CDK when EnableCloudwatchLogsExports is set
       const dbClusters = template.findResources('AWS::RDS::DBCluster');
       const cluster = Object.values(dbClusters)[0] as any;
-      expect(cluster.Properties.EnableCloudwatchLogsExports).toContain('postgresql');
+      expect(cluster.Properties.EnableCloudwatchLogsExports).toContain(
+        'postgresql'
+      );
     });
   });
 
@@ -856,7 +860,9 @@ describe('TapStack', () => {
       // Verify alarms have AlarmActions
       const alarms = template.findResources('AWS::CloudWatch::Alarm');
       const alarmsWithActions = Object.values(alarms).filter(
-        (alarm: any) => alarm.Properties.AlarmActions && alarm.Properties.AlarmActions.length > 0
+        (alarm: any) =>
+          alarm.Properties.AlarmActions &&
+          alarm.Properties.AlarmActions.length > 0
       );
       expect(alarmsWithActions.length).toBeGreaterThan(0);
     });
@@ -868,11 +874,14 @@ describe('TapStack', () => {
       const template = Template.fromStack(stack);
 
       // Verify health check alarm exists and has actions
-      const healthCheckAlarm = template.findResources('AWS::CloudWatch::Alarm', {
-        Properties: {
-          MetricName: 'HealthCheckStatus',
-        },
-      });
+      const healthCheckAlarm = template.findResources(
+        'AWS::CloudWatch::Alarm',
+        {
+          Properties: {
+            MetricName: 'HealthCheckStatus',
+          },
+        }
+      );
 
       expect(Object.keys(healthCheckAlarm).length).toBeGreaterThan(0);
       const alarm = Object.values(healthCheckAlarm)[0] as any;

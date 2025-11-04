@@ -52,6 +52,7 @@ const drStack = new TapStack(app, `${stackName}-DR`, {
   primaryVpcCidr: primaryStack.vpcCidr,
   primaryKmsKeyArn: primaryStack.kmsKeyArn,
   primarySnapshotBucketArn: primaryStack.snapshotBucketArn,
+  primarySecretArn: primaryStack.secretArn,
   crossRegionReferences: true,
   env: {
     account: accountId,

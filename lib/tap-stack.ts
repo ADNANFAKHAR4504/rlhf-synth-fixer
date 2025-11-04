@@ -25,6 +25,7 @@ interface TapStackProps extends cdk.StackProps {
   primaryVpcCidr?: string;
   primaryKmsKeyArn?: string;
   primarySnapshotBucketArn?: string;
+  primarySecretArn?: string;
 }
 
 export class TapStack extends cdk.Stack {
@@ -33,6 +34,7 @@ export class TapStack extends cdk.Stack {
   public readonly vpcCidr: string;
   public readonly kmsKeyArn: string;
   public readonly snapshotBucketArn: string;
+  public readonly secretArn?: string;
 
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
@@ -221,6 +223,7 @@ export class TapStack extends cdk.Stack {
     // 🔹 Aurora Global Database
     let globalCluster: rds.CfnGlobalCluster | undefined;
     let dbCluster: rds.DatabaseCluster;
+    let cfnDRCluster: rds.CfnDBCluster | undefined;
 
     if (isPrimary) {
       // Create Global Cluster (Primary only)
@@ -276,44 +279,82 @@ export class TapStack extends cdk.Stack {
       cfnCluster.globalClusterIdentifier =
         globalCluster.globalClusterIdentifier;
       cfnCluster.addDependency(globalCluster);
+
+      // Export secret ARN for DR region
+      this.secretArn = dbCluster.secret?.secretArn;
     } else {
       // Secondary/DR Cluster
-      dbCluster = new rds.DatabaseCluster(this, 'DRCluster', {
-        engine: rds.DatabaseClusterEngine.auroraPostgres({
-          version: rds.AuroraPostgresEngineVersion.VER_15_8,
-        }),
-        instanceProps: {
-          vpc,
-          vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-          instanceType: ec2.InstanceType.of(
-            ec2.InstanceClass.R6G,
-            ec2.InstanceSize.XLARGE
-          ),
-          securityGroups: [dbSecurityGroup],
-        },
-        instances: 2,
-        storageEncrypted: true,
-        storageEncryptionKey: dbEncryptionKey,
-        parameterGroup: new rds.ParameterGroup(this, 'DRParamGroup', {
-          engine: rds.DatabaseClusterEngine.auroraPostgres({
-            version: rds.AuroraPostgresEngineVersion.VER_15_8,
-          }),
+      // For Global Database secondary clusters, we must use CfnDBCluster directly
+      // to avoid credential creation (credentials are inherited from primary)
+      const drParameterGroup = new rds.CfnDBClusterParameterGroup(
+        this,
+        'DRParamGroup',
+        {
+          family: 'aurora-postgresql15',
+          description: 'Parameter group for DR Aurora cluster',
           parameters: {
             shared_preload_libraries: 'pg_stat_statements',
             log_statement: 'all',
             log_duration: '1',
           },
-        }),
-        cloudwatchLogsExports: ['postgresql'],
-        cloudwatchLogsRetention: logs.RetentionDays.ONE_MONTH,
-        deletionProtection: false,
+        }
+      );
+
+      const drClusterIdentifier = `aurora-dr-cluster-${this.account}-${environmentSuffix}`;
+
+      // Create DB subnet group for DR cluster
+      const drSubnetGroup = new rds.SubnetGroup(this, 'DRSubnetGroup', {
+        vpc,
+        vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+        description: 'Subnet group for DR Aurora cluster',
       });
 
-      // Associate with Global Cluster from primary
-      if (props?.globalClusterIdentifier) {
-        const cfnCluster = dbCluster.node.defaultChild as rds.CfnDBCluster;
-        cfnCluster.globalClusterIdentifier = props.globalClusterIdentifier;
-      }
+      // Create CfnDBCluster directly (no credentials for Global Database secondary)
+      cfnDRCluster = new rds.CfnDBCluster(this, 'DRCluster', {
+        dbClusterIdentifier: drClusterIdentifier,
+        engine: 'aurora-postgresql',
+        engineVersion: '15.8',
+        dbClusterParameterGroupName: drParameterGroup.ref,
+        dbSubnetGroupName: drSubnetGroup.subnetGroupName,
+        vpcSecurityGroupIds: [dbSecurityGroup.securityGroupId],
+        storageEncrypted: true,
+        kmsKeyId: dbEncryptionKey.keyId,
+        enableCloudwatchLogsExports: ['postgresql'],
+        deletionProtection: false,
+        // Do NOT specify masterUsername or masterUserSecret for Global Database secondary
+        globalClusterIdentifier: props?.globalClusterIdentifier,
+      });
+
+      // Create DB instances for DR cluster
+      const drInstance1 = new rds.CfnDBInstance(this, 'DRInstance1', {
+        dbInstanceIdentifier: `${drClusterIdentifier}-instance-1`,
+        dbClusterIdentifier: cfnDRCluster.ref,
+        engine: 'aurora-postgresql',
+        engineVersion: '15.8',
+        dbInstanceClass: 'db.r6g.xlarge',
+      });
+      drInstance1.addDependency(cfnDRCluster);
+
+      const drInstance2 = new rds.CfnDBInstance(this, 'DRInstance2', {
+        dbInstanceIdentifier: `${drClusterIdentifier}-instance-2`,
+        dbClusterIdentifier: cfnDRCluster.ref,
+        engine: 'aurora-postgresql',
+        engineVersion: '15.8',
+        dbInstanceClass: 'db.r6g.xlarge',
+      });
+      drInstance2.addDependency(cfnDRCluster);
+
+      // For DR cluster, create a minimal DatabaseCluster reference for compatibility
+      // We'll use CfnDBCluster attributes directly where needed
+      dbCluster = rds.DatabaseCluster.fromDatabaseClusterAttributes(
+        this,
+        'DRClusterRef',
+        {
+          clusterIdentifier: cfnDRCluster.ref,
+          clusterEndpointAddress: cfnDRCluster.attrEndpointAddress,
+          port: 5432,
+        }
+      ) as rds.DatabaseCluster;
     }
 
     // 🔹 Health Check Lambda
@@ -398,14 +439,33 @@ export class TapStack extends cdk.Stack {
         vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
         securityGroups: [lambdaSecurityGroup],
         environment: {
-          DB_ENDPOINT: dbCluster.clusterEndpoint.hostname,
-          DB_SECRET_ARN: dbCluster.secret?.secretArn || '',
+          DB_ENDPOINT: isPrimary
+            ? dbCluster.clusterEndpoint.hostname
+            : cfnDRCluster?.attrEndpointAddress || '',
+          DB_SECRET_ARN: isPrimary
+            ? dbCluster.secret?.secretArn || ''
+            : props?.primarySecretArn || '',
           REGION: currentRegion,
         },
       }
     );
 
-    dbCluster.secret?.grantRead(healthCheckLambda);
+    // Grant secret read permissions
+    if (isPrimary) {
+      dbCluster.secret?.grantRead(healthCheckLambda);
+    } else if (props?.primarySecretArn) {
+      // For DR region, grant cross-region access to primary secret
+      healthCheckLambda.addToRolePolicy(
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'secretsmanager:GetSecretValue',
+            'secretsmanager:DescribeSecret',
+          ],
+          resources: [props.primarySecretArn],
+        })
+      );
+    }
     healthCheckLambda.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
@@ -537,9 +597,11 @@ export class TapStack extends cdk.Stack {
         vpc,
         vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
         environment: {
-          CLUSTER_ID: dbCluster.clusterIdentifier,
+          CLUSTER_ID: isPrimary
+            ? dbCluster.clusterIdentifier
+            : cfnDRCluster?.ref || '',
           IS_PRIMARY: isPrimary.toString(),
-          DR_ENDPOINT: isPrimary ? '' : dbCluster.clusterEndpoint.hostname,
+          DR_ENDPOINT: isPrimary ? '' : cfnDRCluster?.attrEndpointAddress || '',
           SNS_TOPIC_ARN: alertTopic.topicArn,
           STATE_BUCKET: snapshotBucket.bucketName,
           HOSTED_ZONE_ID: this.node.tryGetContext('hostedZoneId') || '',
@@ -667,7 +729,9 @@ export class TapStack extends cdk.Stack {
       `),
         timeout: cdk.Duration.seconds(180),
         environment: {
-          CLUSTER_ID: dbCluster.clusterIdentifier,
+          CLUSTER_ID: isPrimary
+            ? dbCluster.clusterIdentifier
+            : cfnDRCluster?.ref || '',
           SNS_TOPIC_ARN: alertTopic.topicArn,
         },
       }
@@ -768,7 +832,9 @@ export class TapStack extends cdk.Stack {
           namespace: 'AWS/RDS',
           metricName: 'AuroraGlobalDBReplicationLag',
           dimensionsMap: {
-            DBClusterIdentifier: dbCluster.clusterIdentifier,
+            DBClusterIdentifier: isPrimary
+              ? dbCluster.clusterIdentifier
+              : cfnDRCluster?.ref || '',
           },
         }),
         threshold: 5000, // 5 seconds in milliseconds
@@ -786,7 +852,9 @@ export class TapStack extends cdk.Stack {
         namespace: 'AWS/RDS',
         metricName: 'CPUUtilization',
         dimensionsMap: {
-          DBClusterIdentifier: dbCluster.clusterIdentifier,
+          DBClusterIdentifier: isPrimary
+            ? dbCluster.clusterIdentifier
+            : cfnDRCluster?.ref || '',
         },
       }),
       threshold: 80,
@@ -804,7 +872,9 @@ export class TapStack extends cdk.Stack {
           namespace: 'AWS/RDS',
           metricName: 'DatabaseConnections',
           dimensionsMap: {
-            DBClusterIdentifier: dbCluster.clusterIdentifier,
+            DBClusterIdentifier: isPrimary
+              ? dbCluster.clusterIdentifier
+              : cfnDRCluster?.ref || '',
           },
         }),
         threshold: 500,
@@ -879,7 +949,9 @@ export class TapStack extends cdk.Stack {
 
     // 🔹 Outputs
     new cdk.CfnOutput(this, `ClusterEndpointOutput-${regionPrefix}`, {
-      value: dbCluster.clusterEndpoint.hostname,
+      value: isPrimary
+        ? dbCluster.clusterEndpoint.hostname
+        : cfnDRCluster?.attrEndpointAddress || '',
       description: `Aurora cluster endpoint for ${regionPrefix} region`,
       exportName: `aurora-dr-endpoint-${regionPrefix}-${environmentSuffix}`,
     });
