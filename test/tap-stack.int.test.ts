@@ -59,8 +59,8 @@ describe('TapStack Integration Tests', () => {
       const response = await ec2Client.send(command);
 
       const tags = response.Vpcs![0].Tags || [];
-      const envTag = tags.find((t) => t.Key === 'Environment');
-      const projectTag = tags.find((t) => t.Key === 'Project');
+      const envTag = tags.find(t => t.Key === 'Environment');
+      const projectTag = tags.find(t => t.Key === 'Project');
 
       expect(envTag?.Value).toBe('production');
       expect(projectTag?.Value).toBe('apac-expansion');
@@ -87,7 +87,7 @@ describe('TapStack Integration Tests', () => {
       expect(response.Subnets).toHaveLength(6);
 
       // Check AZ distribution
-      const azs = new Set(response.Subnets!.map((s) => s.AvailabilityZone));
+      const azs = new Set(response.Subnets!.map(s => s.AvailabilityZone));
       expect(azs.size).toBe(3);
     });
 
@@ -98,13 +98,13 @@ describe('TapStack Integration Tests', () => {
       const response = await ec2Client.send(command);
 
       const publicSubnets = response.Subnets!.filter(
-        (s) => s.MapPublicIpOnLaunch === true
+        s => s.MapPublicIpOnLaunch === true
       );
 
       expect(publicSubnets).toHaveLength(3);
 
       // Verify CIDR masks
-      publicSubnets.forEach((subnet) => {
+      publicSubnets.forEach(subnet => {
         const cidr = subnet.CidrBlock!;
         const mask = cidr.split('/')[1];
         expect(mask).toBe('24');
@@ -118,13 +118,13 @@ describe('TapStack Integration Tests', () => {
       const response = await ec2Client.send(command);
 
       const privateSubnets = response.Subnets!.filter(
-        (s) => s.MapPublicIpOnLaunch === false
+        s => s.MapPublicIpOnLaunch === false
       );
 
       expect(privateSubnets).toHaveLength(3);
 
       // Verify CIDR masks
-      privateSubnets.forEach((subnet) => {
+      privateSubnets.forEach(subnet => {
         const cidr = subnet.CidrBlock!;
         const mask = cidr.split('/')[1];
         expect(mask).toBe('23');
@@ -137,10 +137,10 @@ describe('TapStack Integration Tests', () => {
       });
       const response = await ec2Client.send(command);
 
-      response.Subnets!.forEach((subnet) => {
+      response.Subnets!.forEach(subnet => {
         const tags = subnet.Tags || [];
-        const envTag = tags.find((t) => t.Key === 'Environment');
-        const projectTag = tags.find((t) => t.Key === 'Project');
+        const envTag = tags.find(t => t.Key === 'Environment');
+        const projectTag = tags.find(t => t.Key === 'Project');
 
         expect(envTag?.Value).toBe('production');
         expect(projectTag?.Value).toBe('apac-expansion');
@@ -173,7 +173,7 @@ describe('TapStack Integration Tests', () => {
       const response = await ec2Client.send(command);
 
       const activeNatGateways = response.NatGateways!.filter(
-        (ng) => ng.State === 'available'
+        ng => ng.State === 'available'
       );
       expect(activeNatGateways).toHaveLength(2);
     });
@@ -190,7 +190,7 @@ describe('TapStack Integration Tests', () => {
         outputs.PublicSubnetId3,
       ];
 
-      response.NatGateways!.forEach((natGateway) => {
+      response.NatGateways!.forEach(natGateway => {
         expect(publicSubnetIds).toContain(natGateway.SubnetId);
       });
     });
@@ -201,7 +201,7 @@ describe('TapStack Integration Tests', () => {
       });
       const response = await ec2Client.send(command);
 
-      response.NatGateways!.forEach((natGateway) => {
+      response.NatGateways!.forEach(natGateway => {
         expect(natGateway.NatGatewayAddresses).toHaveLength(1);
         expect(natGateway.NatGatewayAddresses![0].AllocationId).toBeDefined();
       });
@@ -256,18 +256,18 @@ describe('TapStack Integration Tests', () => {
       });
       const response = await ec2Client.send(command);
 
-      response.NetworkAcls!.forEach((nacl) => {
+      response.NetworkAcls!.forEach(nacl => {
         const entries = nacl.Entries || [];
-        const ingressEntries = entries.filter((e) => !e.Egress);
+        const ingressEntries = entries.filter(e => !e.Egress);
 
         const httpEntry = ingressEntries.find(
-          (e) => e.PortRange?.From === 80 && e.PortRange?.To === 80
+          e => e.PortRange?.From === 80 && e.PortRange?.To === 80
         );
         const httpsEntry = ingressEntries.find(
-          (e) => e.PortRange?.From === 443 && e.PortRange?.To === 443
+          e => e.PortRange?.From === 443 && e.PortRange?.To === 443
         );
         const sshEntry = ingressEntries.find(
-          (e) => e.PortRange?.From === 22 && e.PortRange?.To === 22
+          e => e.PortRange?.From === 22 && e.PortRange?.To === 22
         );
 
         // At least one NACL should have these rules
@@ -288,10 +288,10 @@ describe('TapStack Integration Tests', () => {
       });
       const response = await ec2Client.send(command);
 
-      response.NetworkAcls!.forEach((nacl) => {
+      response.NetworkAcls!.forEach(nacl => {
         const tags = nacl.Tags || [];
-        const envTag = tags.find((t) => t.Key === 'Environment');
-        const projectTag = tags.find((t) => t.Key === 'Project');
+        const envTag = tags.find(t => t.Key === 'Environment');
+        const projectTag = tags.find(t => t.Key === 'Project');
 
         expect(envTag?.Value).toBe('production');
         expect(projectTag?.Value).toBe('apac-expansion');
@@ -317,8 +317,8 @@ describe('TapStack Integration Tests', () => {
       const response = await ec2Client.send(command);
 
       const igwId = outputs.InternetGatewayId;
-      const publicRouteTables = response.RouteTables!.filter((rt) =>
-        rt.Routes?.some((r) => r.GatewayId === igwId)
+      const publicRouteTables = response.RouteTables!.filter(rt =>
+        rt.Routes?.some(r => r.GatewayId === igwId)
       );
 
       expect(publicRouteTables.length).toBeGreaterThanOrEqual(3);
@@ -330,8 +330,8 @@ describe('TapStack Integration Tests', () => {
       });
       const response = await ec2Client.send(command);
 
-      const privateRouteTables = response.RouteTables!.filter((rt) =>
-        rt.Routes?.some((r) => r.NatGatewayId !== undefined)
+      const privateRouteTables = response.RouteTables!.filter(rt =>
+        rt.Routes?.some(r => r.NatGatewayId !== undefined)
       );
 
       expect(privateRouteTables.length).toBeGreaterThanOrEqual(3);
@@ -346,10 +346,10 @@ describe('TapStack Integration Tests', () => {
       });
       const response = await ec2Client.send(command);
 
-      response.RouteTables!.forEach((rt) => {
+      response.RouteTables!.forEach(rt => {
         const tags = rt.Tags || [];
-        const envTag = tags.find((t) => t.Key === 'Environment');
-        const projectTag = tags.find((t) => t.Key === 'Project');
+        const envTag = tags.find(t => t.Key === 'Environment');
+        const projectTag = tags.find(t => t.Key === 'Project');
 
         if (envTag) {
           expect(envTag.Value).toBe('production');
@@ -415,19 +415,17 @@ describe('TapStack Integration Tests', () => {
         ]);
 
       // All resources should belong to the same VPC
-      expect(subnetsResponse.Subnets!.every((s) => s.VpcId === vpcId)).toBe(
-        true
-      );
+      expect(subnetsResponse.Subnets!.every(s => s.VpcId === vpcId)).toBe(true);
       expect(
         igwResponse.InternetGateways!.every(
-          (ig) => ig.Attachments![0].VpcId === vpcId
+          ig => ig.Attachments![0].VpcId === vpcId
         )
       ).toBe(true);
-      expect(natResponse.NatGateways!.every((ng) => ng.VpcId === vpcId)).toBe(
+      expect(natResponse.NatGateways!.every(ng => ng.VpcId === vpcId)).toBe(
         true
       );
       expect(
-        routeTablesResponse.RouteTables!.every((rt) => rt.VpcId === vpcId)
+        routeTablesResponse.RouteTables!.every(rt => rt.VpcId === vpcId)
       ).toBe(true);
     });
   });
