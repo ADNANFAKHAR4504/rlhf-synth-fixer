@@ -21,7 +21,6 @@ if ! command -v jq &>/dev/null; then
   sudo apt-get update -y && sudo apt-get install -y jq
 fi
 
-# Fix npm global path to avoid permission issues in CI runners
 export NPM_CONFIG_PREFIX="$HOME/.npm-global"
 export PATH="$PATH:$HOME/.npm-global/bin"
 
@@ -29,11 +28,11 @@ export PATH="$PATH:$HOME/.npm-global/bin"
 # Common sanity checks
 # -------------------------------------------------------------------
 echo "🔹 Checking available tools..."
-node --version || echo "⚠️ Node not found"
-python --version || echo "⚠️ Python not found"
-terraform --version || true
-pulumi version || true
-go version || true
+node --version 2>/dev/null || echo "⚠️ Node not found"
+python --version 2>/dev/null || echo "⚠️ Python not found"
+terraform --version 2>/dev/null || true
+pulumi version 2>/dev/null || true
+go version 2>/dev/null || true
 java -version 2>&1 | head -n 1 || true
 
 # -------------------------------------------------------------------
@@ -43,58 +42,45 @@ case "$PLATFORM" in
   cdk)
     echo "🪄 CDK project detected."
     if [[ "$LANGUAGE" =~ ^(ts|js)$ ]]; then
-      echo "📦 Installing Node.js dependencies..."
-      if [ -d "node_modules" ]; then
-        echo "node_modules exists — skipping npm ci"
-      elif [ -f "package-lock.json" ]; then
-        npm ci
-      else
-        echo "⚠️ No package-lock.json found — running npm install instead."
-        npm install
-      fi
+      if [ -d "node_modules" ]; then echo "node_modules exists — skipping npm ci";
+      elif [ -f "package-lock.json" ]; then npm ci;
+      else npm install; fi
     elif [ "$LANGUAGE" = "java" ]; then
       gradle --version || echo "Gradle wrapper will be used."
     elif [ "$LANGUAGE" = "py" ]; then
-      echo "📦 Python CDK project — installing pipenv deps..."
-      pip install pipenv
+      if ! command -v pipenv &>/dev/null; then pip install pipenv; fi
       pipenv install --dev
     fi
     ;;
 
   cdktf)
     echo "🪄 CDKTF project detected."
-
     if [ "$LANGUAGE" = "go" ]; then
-      echo "📦 CDKTF (Go) → skipping Node installs."
+      echo "📦 Go CDKTF project — skipping npm install."
 
     elif [[ "$LANGUAGE" =~ ^(ts|js)$ ]]; then
-      echo "📦 Installing npm dependencies for CDKTF..."
-      if [ -d "node_modules" ]; then
-        echo "node_modules exists — skipping npm ci"
-      elif [ -f "package-lock.json" ]; then
-        npm ci
-      else
-        npm install
-      fi
+      if [ -d "node_modules" ]; then echo "node_modules exists — skipping npm ci";
+      elif [ -f "package-lock.json" ]; then npm ci;
+      else npm install; fi
 
     elif [ "$LANGUAGE" = "py" ]; then
       echo "🐍 CDKTF + Python detected — preparing environment..."
 
-      # Ensure pipenv exists
+      # ✅ Guarantee pipenv available
       if ! command -v pipenv &>/dev/null; then
         echo "📦 Installing pipenv..."
         pip install pipenv
       fi
 
-      # Create or reuse virtual environment
-      if [ -d ".venv" ]; then
-        echo "✅ Python virtualenv exists — skipping pipenv install"
-      else
-        echo "📦 Installing Python dependencies via pipenv..."
+      # ✅ Create venv if missing
+      if [ ! -d ".venv" ]; then
+        echo "📦 Installing Python dependencies..."
         pipenv install --dev
+      else
+        echo "✅ .venv exists — skipping pipenv install"
       fi
 
-      # ✅ REQUIRED: ensure CDKTF CLI exists
+      # ✅ Ensure CDKTF CLI installed (required for cdktf synth / get)
       if ! command -v cdktf &>/dev/null; then
         echo "📦 Installing CDKTF CLI globally..."
         npm install -g cdktf-cli@latest >/dev/null 2>&1
@@ -102,15 +88,19 @@ case "$PLATFORM" in
         echo "✅ CDKTF CLI already available"
       fi
 
-    elif [ "$LANGUAGE" = "java" ]; then
-      gradle --version || echo "Gradle wrapper will handle it."
+      # ✅ Ensure .gen exists (critical for synth + lint + integration tests)
+      if [ ! -d ".gen/aws" ]; then
+        echo "📦 Generating provider bindings (.gen)..."
+        npx --yes cdktf get
+      else
+        echo "✅ .gen/aws exists — skipping cdktf get"
+      fi
     fi
     ;;
 
   tf)
-    echo "🪄 Terraform project — minimal setup required."
+    echo "🪄 Terraform project — minimal setup."
     if [ ! -d "node_modules" ]; then
-      echo "📦 Installing minimal Jest environment for Terraform test support..."
       npm init -y >/dev/null 2>&1 || true
       npm install --no-save jest ts-jest typescript @types/jest >/dev/null 2>&1
     fi
@@ -119,23 +109,19 @@ case "$PLATFORM" in
   pulumi)
     echo "🪄 Pulumi project detected."
     if [ "$LANGUAGE" = "py" ]; then
-      pip install pipenv
-      [ -d ".venv" ] && echo "✅ venv exists — skipping pipenv install" || pipenv install --dev
+      if ! command -v pipenv &>/dev/null; then pip install pipenv; fi
+      [ -d ".venv" ] && echo "✅ venv exists" || pipenv install --dev
     elif [[ "$LANGUAGE" =~ ^(ts|js)$ ]]; then
-      if [ -d "node_modules" ]; then
-        echo "node_modules exists — skipping npm ci"
-      elif [ -f "package-lock.json" ]; then
-        npm ci
-      else
-        npm install
-      fi
+      if [ -d "node_modules" ]; then echo "node_modules exists — skipping npm ci";
+      elif [ -f "package-lock.json" ]; then npm ci;
+      else npm install; fi
     elif [ "$LANGUAGE" = "java" ]; then
       gradle --version || echo "Gradle wrapper will handle it."
     fi
     ;;
 
   cfn)
-    echo "🪄 CloudFormation project detected — enabling Jest for validation..."
+    echo "🪄 CloudFormation project detected — enabling Jest..."
     if ! command -v jest &>/dev/null; then
       npm install -g jest@28.1.3 ts-node typescript@5.4.5 @types/jest
     fi
@@ -147,6 +133,20 @@ esac
 # -------------------------------------------------------------------
 if ! command -v jest &>/dev/null; then
   npm install -g jest@28.1.3 ts-node typescript@5.4.5 @types/jest
+fi
+
+# -------------------------------------------------------------------
+# Java wrapper fallback
+# -------------------------------------------------------------------
+if [ "$LANGUAGE" = "java" ] && [ ! -f "./gradlew" ]; then
+  gradle wrapper || echo "Gradle wrapper generation failed"
+fi
+
+# -------------------------------------------------------------------
+# Configure AWS
+# -------------------------------------------------------------------
+if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
+  ./scripts/configure-aws.sh
 fi
 
 # -------------------------------------------------------------------
