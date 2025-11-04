@@ -21,6 +21,15 @@
     "Application Load Balancer (ALB)",
     "Auto Scaling",
     "NAT Gateway",
-    "Security Groups"
-  ]
+    "Security Groups",
+    "KMS",
+    "SNS"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raghav-turing",
+  "dockerS3Location": ""
 }
