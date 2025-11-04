@@ -16,11 +16,16 @@
     "S3",
     "Secrets Manager",
     "CloudTrail",
-    "CloudWatch Logs",
     "CloudWatch",
     "EC2",
     "VPC",
     "Lambda"
   ],
-  "training_quality": 9
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
 }
