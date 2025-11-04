@@ -1,6 +1,6 @@
-import { Construct } from "constructs";
-import * as aws from "@cdktf/provider-aws";
-import { TerraformOutput } from "cdktf";
+import { Construct } from 'constructs';
+import * as aws from '@cdktf/provider-aws';
+import { TerraformOutput } from 'cdktf';
 
 // Environment configuration interface
 export interface EnvironmentConfig {
@@ -20,12 +20,15 @@ export class NetworkingModule extends Construct {
   public internetGateway: aws.internetGateway.InternetGateway;
   public natGateways: aws.natGateway.NatGateway[] = [];
   public vpcEndpoints: Record<string, aws.vpcEndpoint.VpcEndpoint> = {};
+  public publicRouteTable: aws.routeTable.RouteTable;
+  public privateRouteTables: aws.routeTable.RouteTable[] = [];
+  public databaseRouteTable: aws.routeTable.RouteTable;
 
   constructor(scope: Construct, id: string, config: EnvironmentConfig) {
     super(scope, id);
 
     // Create VPC
-    this.vpc = new aws.vpc.Vpc(this, "vpc", {
+    this.vpc = new aws.vpc.Vpc(this, 'vpc', {
       cidrBlock: config.cidrBlock,
       enableDnsHostnames: true,
       enableDnsSupport: true,
@@ -36,61 +39,69 @@ export class NetworkingModule extends Construct {
     });
 
     // Internet Gateway
-    this.internetGateway = new aws.internetGateway.InternetGateway(this, "igw", {
-      vpcId: this.vpc.id,
-      tags: {
-        ...config.tags,
-        Name: `${config.name}-igw`,
-      },
-    });
+    this.internetGateway = new aws.internetGateway.InternetGateway(
+      this,
+      'igw',
+      {
+        vpcId: this.vpc.id,
+        tags: {
+          ...config.tags,
+          Name: `${config.name}-igw`,
+        },
+      }
+    );
 
     // Create subnets across 3 AZs
-    const azs = ["a", "b", "c"];
-    
+    const azs = ['a', 'b', 'c'];
+
     azs.forEach((az, index) => {
       // Public subnet
       const publicSubnet = new aws.subnet.Subnet(this, `public-subnet-${az}`, {
         vpcId: this.vpc.id,
-        cidrBlock: `${config.cidrBlock.split(".")[0]}.${config.cidrBlock.split(".")[1]}.${index * 10}.0/24`,
-        availabilityZone: `${aws.dataAwsRegion.DataAwsRegion.isSingleton() ? "us-east-1" : "us-east-1"}${az}`,
+        cidrBlock: `${config.cidrBlock.split('.')[0]}.${config.cidrBlock.split('.')[1]}.${index * 10}.0/24`,
+        availabilityZone: `us-east-1${az}`,
         mapPublicIpOnLaunch: true,
         tags: {
           ...config.tags,
           Name: `${config.name}-public-${az}`,
-          Type: "public",
+          Type: 'public',
         },
       });
       this.publicSubnets.push(publicSubnet);
 
       // Private subnet
-      const privateSubnet = new aws.subnet.Subnet(this, `private-subnet-${az}`, {
-        vpcId: this.vpc.id,
-        cidrBlock: `${config.cidrBlock.split(".")[0]}.${config.cidrBlock.split(".")[1]}.${100 + index * 10}.0/24`,
-        availabilityZone: `${aws.dataAwsRegion.DataAwsRegion.isSingleton() ? "us-east-1" : "us-east-1"}${az}`,
-        tags: {
-          ...config.tags,
-          Name: `${config.name}-private-${az}`,
-          Type: "private",
-        },
-      });
+      const privateSubnet = new aws.subnet.Subnet(
+        this,
+        `private-subnet-${az}`,
+        {
+          vpcId: this.vpc.id,
+          cidrBlock: `${config.cidrBlock.split('.')[0]}.${config.cidrBlock.split('.')[1]}.${100 + index * 10}.0/24`,
+          availabilityZone: `us-east-1${az}`,
+          tags: {
+            ...config.tags,
+            Name: `${config.name}-private-${az}`,
+            Type: 'private',
+          },
+        }
+      );
       this.privateSubnets.push(privateSubnet);
 
       // Database subnet
       const dbSubnet = new aws.subnet.Subnet(this, `db-subnet-${az}`, {
         vpcId: this.vpc.id,
-        cidrBlock: `${config.cidrBlock.split(".")[0]}.${config.cidrBlock.split(".")[1]}.${200 + index * 10}.0/24`,
-        availabilityZone: `${aws.dataAwsRegion.DataAwsRegion.isSingleton() ? "us-east-1" : "us-east-1"}${az}`,
+        cidrBlock: `${config.cidrBlock.split('.')[0]}.${config.cidrBlock.split('.')[1]}.${200 + index * 10}.0/24`,
+        availabilityZone: `us-east-1${az}`,
         tags: {
           ...config.tags,
           Name: `${config.name}-db-${az}`,
-          Type: "database",
+          Type: 'database',
         },
       });
       this.databaseSubnets.push(dbSubnet);
 
       // Create NAT Gateway for each public subnet
       const eip = new aws.eip.Eip(this, `nat-eip-${az}`, {
-        vpc: true,
+        domain: 'vpc',
         tags: {
           ...config.tags,
           Name: `${config.name}-nat-eip-${az}`,
@@ -109,7 +120,7 @@ export class NetworkingModule extends Construct {
     });
 
     // Route tables
-    const publicRouteTable = new aws.routeTable.RouteTable(this, "public-rt", {
+    this.publicRouteTable = new aws.routeTable.RouteTable(this, 'public-rt', {
       vpcId: this.vpc.id,
       tags: {
         ...config.tags,
@@ -117,43 +128,56 @@ export class NetworkingModule extends Construct {
       },
     });
 
-    new aws.route.Route(this, "public-route", {
-      routeTableId: publicRouteTable.id,
-      destinationCidrBlock: "0.0.0.0/0",
+    new aws.route.Route(this, 'public-route', {
+      routeTableId: this.publicRouteTable.id,
+      destinationCidrBlock: '0.0.0.0/0',
       gatewayId: this.internetGateway.id,
     });
 
     this.publicSubnets.forEach((subnet, index) => {
-      new aws.routeTableAssociation.RouteTableAssociation(this, `public-rta-${index}`, {
-        subnetId: subnet.id,
-        routeTableId: publicRouteTable.id,
-      });
+      new aws.routeTableAssociation.RouteTableAssociation(
+        this,
+        `public-rta-${index}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: this.publicRouteTable.id,
+        }
+      );
     });
 
     // Private route tables (one per AZ for NAT Gateway)
     this.privateSubnets.forEach((subnet, index) => {
-      const privateRouteTable = new aws.routeTable.RouteTable(this, `private-rt-${index}`, {
-        vpcId: this.vpc.id,
-        tags: {
-          ...config.tags,
-          Name: `${config.name}-private-rt-${index}`,
-        },
-      });
+      const privateRouteTable = new aws.routeTable.RouteTable(
+        this,
+        `private-rt-${index}`,
+        {
+          vpcId: this.vpc.id,
+          tags: {
+            ...config.tags,
+            Name: `${config.name}-private-rt-${index}`,
+          },
+        }
+      );
+      this.privateRouteTables.push(privateRouteTable);
 
       new aws.route.Route(this, `private-route-${index}`, {
         routeTableId: privateRouteTable.id,
-        destinationCidrBlock: "0.0.0.0/0",
+        destinationCidrBlock: '0.0.0.0/0',
         natGatewayId: this.natGateways[index].id,
       });
 
-      new aws.routeTableAssociation.RouteTableAssociation(this, `private-rta-${index}`, {
-        subnetId: subnet.id,
-        routeTableId: privateRouteTable.id,
-      });
+      new aws.routeTableAssociation.RouteTableAssociation(
+        this,
+        `private-rta-${index}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: privateRouteTable.id,
+        }
+      );
     });
 
     // Database route tables
-    const dbRouteTable = new aws.routeTable.RouteTable(this, "db-rt", {
+    this.databaseRouteTable = new aws.routeTable.RouteTable(this, 'db-rt', {
       vpcId: this.vpc.id,
       tags: {
         ...config.tags,
@@ -162,79 +186,100 @@ export class NetworkingModule extends Construct {
     });
 
     this.databaseSubnets.forEach((subnet, index) => {
-      new aws.routeTableAssociation.RouteTableAssociation(this, `db-rta-${index}`, {
-        subnetId: subnet.id,
-        routeTableId: dbRouteTable.id,
-      });
+      new aws.routeTableAssociation.RouteTableAssociation(
+        this,
+        `db-rta-${index}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: this.databaseRouteTable.id,
+        }
+      );
     });
 
     // VPC Endpoints
-    const endpoints = ["s3", "ecr.dkr", "ecr.api", "ssm", "ssmmessages", "ec2messages"];
-    
-    endpoints.forEach((endpoint) => {
-      const endpointType = endpoint === "s3" ? "Gateway" : "Interface";
-      
-      this.vpcEndpoints[endpoint] = new aws.vpcEndpoint.VpcEndpoint(this, `endpoint-${endpoint.replace(".", "-")}`, {
-        vpcId: this.vpc.id,
-        serviceName: `com.amazonaws.${aws.dataAwsRegion.DataAwsRegion.isSingleton() ? "us-east-1" : "us-east-1"}.${endpoint}`,
-        vpcEndpointType: endpointType,
-        ...(endpointType === "Gateway" ? {
-          routeTableIds: [publicRouteTable.id, dbRouteTable.id],
-        } : {
-          subnetIds: this.privateSubnets.map(s => s.id),
-          privateDnsEnabled: true,
-        }),
-        tags: {
-          ...config.tags,
-          Name: `${config.name}-endpoint-${endpoint}`,
-        },
-      });
+    const endpoints = ['s3', 'ecr.dkr', 'ecr.api', 'ssm', 'ssmmessages', 'ec2messages'];
+
+    endpoints.forEach(endpoint => {
+      const endpointType = endpoint === 's3' ? 'Gateway' : 'Interface';
+
+      this.vpcEndpoints[endpoint] = new aws.vpcEndpoint.VpcEndpoint(
+        this,
+        `endpoint-${endpoint.replace('.', '-')}`,
+        {
+          vpcId: this.vpc.id,
+          serviceName: `com.amazonaws.us-east-1.${endpoint}`,
+          vpcEndpointType: endpointType,
+          ...(endpointType === 'Gateway'
+            ? {
+                routeTableIds: [
+                  this.publicRouteTable.id,
+                  this.databaseRouteTable.id,
+                ],
+              }
+            : {
+                subnetIds: this.privateSubnets.map(s => s.id),
+                privateDnsEnabled: true,
+              }),
+          tags: {
+            ...config.tags,
+            Name: `${config.name}-endpoint-${endpoint}`,
+          },
+        }
+      );
     });
 
     // VPC Flow Logs
-    const flowLogRole = new aws.iamRole.IamRole(this, "flow-log-role", {
+    const flowLogRole = new aws.iamRole.IamRole(this, 'flow-log-role', {
       name: `${config.name}-vpc-flow-log-role`,
       assumeRolePolicy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [{
-          Action: "sts:AssumeRole",
-          Principal: { Service: "vpc-flow-logs.amazonaws.com" },
-          Effect: "Allow",
-        }],
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Action: 'sts:AssumeRole',
+            Principal: { Service: 'vpc-flow-logs.amazonaws.com' },
+            Effect: 'Allow',
+          },
+        ],
       }),
       tags: config.tags,
     });
 
-    new aws.iamRolePolicy.IamRolePolicy(this, "flow-log-policy", {
-      name: "flow-log-policy",
+    new aws.iamRolePolicy.IamRolePolicy(this, 'flow-log-policy', {
+      name: 'flow-log-policy',
       role: flowLogRole.id,
       policy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [{
-          Effect: "Allow",
-          Action: [
-            "logs:CreateLogGroup",
-            "logs:CreateLogStream",
-            "logs:PutLogEvents",
-            "logs:DescribeLogGroups",
-            "logs:DescribeLogStreams",
-          ],
-          Resource: "*",
-        }],
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: [
+              'logs:CreateLogGroup',
+              'logs:CreateLogStream',
+              'logs:PutLogEvents',
+              'logs:DescribeLogGroups',
+              'logs:DescribeLogStreams',
+            ],
+            Resource: '*',
+          },
+        ],
       }),
     });
 
-    const logGroup = new aws.cloudwatchLogGroup.CloudwatchLogGroup(this, "flow-log-group", {
-      name: `/aws/vpc/flowlogs/${config.name}`,
-      retentionInDays: config.flowLogRetentionDays,
-      tags: config.tags,
-    });
+    const logGroup = new aws.cloudwatchLogGroup.CloudwatchLogGroup(
+      this,
+      'flow-log-group',
+      {
+        name: `/aws/vpc/flowlogs/${config.name}`,
+        retentionInDays: config.flowLogRetentionDays,
+        tags: config.tags,
+      }
+    );
 
-    new aws.flowLog.FlowLog(this, "flow-log", {
+    new aws.flowLog.FlowLog(this, 'flow-log', {
       iamRoleArn: flowLogRole.arn,
-      logDestinationType: "cloud-watch-logs",
+      logDestinationType: 'cloud-watch-logs',
       logDestination: logGroup.arn,
-      trafficType: "ALL",
+      trafficType: 'ALL',
       vpcId: this.vpc.id,
       tags: {
         ...config.tags,
@@ -244,93 +289,178 @@ export class NetworkingModule extends Construct {
   }
 }
 
+// VPC Peering Module
+export class VPCPeeringModule extends Construct {
+  public peeringConnection: aws.vpcPeeringConnection.VpcPeeringConnection;
+
+  constructor(
+    scope: Construct,
+    id: string,
+    sourceVpc: aws.vpc.Vpc,
+    targetVpc: aws.vpc.Vpc,
+    config: { name: string; tags: Record<string, string> }
+  ) {
+    super(scope, id);
+
+    // Create VPC Peering Connection
+    this.peeringConnection = new aws.vpcPeeringConnection.VpcPeeringConnection(
+      this,
+      'peering',
+      {
+        vpcId: sourceVpc.id,
+        peerVpcId: targetVpc.id,
+        autoAccept: true,
+        accepter: {
+          allowRemoteVpcDnsResolution: true,
+        },
+        requester: {
+          allowRemoteVpcDnsResolution: true,
+        },
+        tags: {
+          ...config.tags,
+          Name: config.name,
+        },
+      }
+    );
+  }
+
+  public addPeeringRoutes(
+    sourceRouteTable: aws.routeTable.RouteTable,
+    targetCidr: string,
+    targetRouteTable?: aws.routeTable.RouteTable,
+    sourceCidr?: string
+  ) {
+    // Add route from source to target
+    new aws.route.Route(
+      this,
+      `route-to-target-${Math.random().toString(36).substr(2, 9)}`,
+      {
+        routeTableId: sourceRouteTable.id,
+        destinationCidrBlock: targetCidr,
+        vpcPeeringConnectionId: this.peeringConnection.id,
+      }
+    );
+
+    // Add reverse route if target route table provided
+    if (targetRouteTable && sourceCidr) {
+      new aws.route.Route(
+        this,
+        `route-to-source-${Math.random().toString(36).substr(2, 9)}`,
+        {
+          routeTableId: targetRouteTable.id,
+          destinationCidrBlock: sourceCidr,
+          vpcPeeringConnectionId: this.peeringConnection.id,
+        }
+      );
+    }
+  }
+}
+
 // Database Module
 export class DatabaseModule extends Construct {
   public cluster: aws.rdsCluster.RdsCluster;
   public passwordParameter: aws.ssmParameter.SsmParameter;
-  
-  constructor(scope: Construct, id: string, config: EnvironmentConfig, network: NetworkingModule) {
+
+  constructor(
+    scope: Construct,
+    id: string,
+    config: EnvironmentConfig,
+    network: NetworkingModule
+  ) {
     super(scope, id);
 
     // KMS key for encryption
-    const kmsKey = new aws.kmsKey.KmsKey(this, "db-kms-key", {
+    const kmsKey = new aws.kmsKey.KmsKey(this, 'db-kms-key', {
       description: `${config.name} RDS encryption key`,
       tags: config.tags,
     });
 
-    new aws.kmsAlias.KmsAlias(this, "db-kms-alias", {
+    new aws.kmsAlias.KmsAlias(this, 'db-kms-alias', {
       name: `alias/${config.name}-rds`,
       targetKeyId: kmsKey.id,
     });
 
     // Generate random password
-    const password = new aws.dataAwsSecretsmanagerRandomPassword.DataAwsSecretsmanagerRandomPassword(
+    const password =
+      new aws.dataAwsSecretsmanagerRandomPassword.DataAwsSecretsmanagerRandomPassword(
+        this,
+        'db-password',
+        {
+          passwordLength: 32,
+          includeSpace: false,
+        }
+      );
+
+    // Store password in SSM
+    this.passwordParameter = new aws.ssmParameter.SsmParameter(
       this,
-      "db-password",
+      'db-password-param',
       {
-        length: 32,
-        special: true,
+        name: `/${config.name}/rds/password`,
+        type: 'SecureString',
+        value: password.randomPassword,
+        keyId: kmsKey.id,
+        tags: config.tags,
       }
     );
 
-    // Store password in SSM
-    this.passwordParameter = new aws.ssmParameter.SsmParameter(this, "db-password-param", {
-      name: `/${config.name}/rds/password`,
-      type: "SecureString",
-      value: password.randomPassword,
-      keyId: kmsKey.id,
-      tags: config.tags,
-    });
-
     // DB subnet group
-    const subnetGroup = new aws.dbSubnetGroup.DbSubnetGroup(this, "subnet-group", {
-      name: `${config.name}-db-subnet-group`,
-      subnetIds: network.databaseSubnets.map(s => s.id),
-      tags: config.tags,
-    });
+    const subnetGroup = new aws.dbSubnetGroup.DbSubnetGroup(
+      this,
+      'subnet-group',
+      {
+        name: `${config.name}-db-subnet-group`,
+        subnetIds: network.databaseSubnets.map(s => s.id),
+        tags: config.tags,
+      }
+    );
 
     // Security group for RDS
-    const securityGroup = new aws.securityGroup.SecurityGroup(this, "db-sg", {
+    const securityGroup = new aws.securityGroup.SecurityGroup(this, 'db-sg', {
       name: `${config.name}-rds-sg`,
-      description: "Security group for RDS Aurora PostgreSQL",
+      description: 'Security group for RDS Aurora PostgreSQL',
       vpcId: network.vpc.id,
-      ingress: [{
-        fromPort: 5432,
-        toPort: 5432,
-        protocol: "tcp",
-        cidrBlocks: [network.vpc.cidrBlock],
-      }],
-      egress: [{
-        fromPort: 0,
-        toPort: 0,
-        protocol: "-1",
-        cidrBlocks: ["0.0.0.0/0"],
-      }],
+      ingress: [
+        {
+          fromPort: 5432,
+          toPort: 5432,
+          protocol: 'tcp',
+          cidrBlocks: [network.vpc.cidrBlock],
+        },
+      ],
+      egress: [
+        {
+          fromPort: 0,
+          toPort: 0,
+          protocol: '-1',
+          cidrBlocks: ['0.0.0.0/0'],
+        },
+      ],
       tags: config.tags,
     });
 
     // RDS Aurora cluster
-    this.cluster = new aws.rdsCluster.RdsCluster(this, "aurora-cluster", {
+    this.cluster = new aws.rdsCluster.RdsCluster(this, 'aurora-cluster', {
       clusterIdentifier: `${config.name}-aurora-cluster`,
-      engine: "aurora-postgresql",
-      engineVersion: "14.6",
-      databaseName: "appdb",
-      masterUsername: "dbadmin",
+      engine: 'aurora-postgresql',
+      engineVersion: '14.6',
+      databaseName: 'appdb',
+      masterUsername: 'dbadmin',
       masterPassword: password.randomPassword,
       dbSubnetGroupName: subnetGroup.name,
       vpcSecurityGroupIds: [securityGroup.id],
       storageEncrypted: true,
       kmsKeyId: kmsKey.arn,
       backupRetentionPeriod: 7,
-      preferredBackupWindow: "03:00-04:00",
-      preferredMaintenanceWindow: "sun:04:00-sun:05:00",
+      preferredBackupWindow: '03:00-04:00',
+      preferredMaintenanceWindow: 'sun:04:00-sun:05:00',
       deletionProtection: false,
       skipFinalSnapshot: true,
       tags: config.tags,
     });
 
     // Aurora instances
-    ["instance-1", "instance-2"].forEach((instanceId, index) => {
+    ['instance-1', 'instance-2'].forEach((instanceId, index) => {
       new aws.rdsClusterInstance.RdsClusterInstance(this, instanceId, {
         identifier: `${config.name}-aurora-${instanceId}`,
         clusterIdentifier: this.cluster.id,
@@ -353,59 +483,72 @@ export class IAMModule extends Construct {
     super(scope, id);
 
     // ECS Task Execution Role
-    this.ecsExecutionRole = new aws.iamRole.IamRole(this, "ecs-execution-role", {
-      name: `${config.name}-ecs-execution-role`,
-      assumeRolePolicy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [{
-          Action: "sts:AssumeRole",
-          Principal: { Service: "ecs-tasks.amazonaws.com" },
-          Effect: "Allow",
-        }],
-      }),
-      tags: config.tags,
-    });
+    this.ecsExecutionRole = new aws.iamRole.IamRole(
+      this,
+      'ecs-execution-role',
+      {
+        name: `${config.name}-ecs-execution-role`,
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Principal: { Service: 'ecs-tasks.amazonaws.com' },
+              Effect: 'Allow',
+            },
+          ],
+        }),
+        tags: config.tags,
+      }
+    );
 
-    new aws.iamRolePolicyAttachment.IamRolePolicyAttachment(this, "ecs-execution-policy", {
-      role: this.ecsExecutionRole.name,
-      policyArn: "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
-    });
+    new aws.iamRolePolicyAttachment.IamRolePolicyAttachment(
+      this,
+      'ecs-execution-policy',
+      {
+        role: this.ecsExecutionRole.name,
+        policyArn:
+          'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy',
+      }
+    );
 
     // ECS Task Role
-    this.ecsTaskRole = new aws.iamRole.IamRole(this, "ecs-task-role", {
+    this.ecsTaskRole = new aws.iamRole.IamRole(this, 'ecs-task-role', {
       name: `${config.name}-ecs-task-role`,
       assumeRolePolicy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [{
-          Action: "sts:AssumeRole",
-          Principal: { Service: "ecs-tasks.amazonaws.com" },
-          Effect: "Allow",
-        }],
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Action: 'sts:AssumeRole',
+            Principal: { Service: 'ecs-tasks.amazonaws.com' },
+            Effect: 'Allow',
+          },
+        ],
       }),
       tags: config.tags,
     });
 
     // Task role policy for SSM parameter access
-    new aws.iamRolePolicy.IamRolePolicy(this, "ecs-task-policy", {
-      name: "ecs-task-policy",
+    new aws.iamRolePolicy.IamRolePolicy(this, 'ecs-task-policy', {
+      name: 'ecs-task-policy',
       role: this.ecsTaskRole.id,
       policy: JSON.stringify({
-        Version: "2012-10-17",
+        Version: '2012-10-17',
         Statement: [
           {
-            Effect: "Allow",
+            Effect: 'Allow',
             Action: [
-              "ssm:GetParameter",
-              "ssm:GetParameters",
-              "ssm:GetParameterHistory",
-              "ssm:GetParametersByPath",
+              'ssm:GetParameter',
+              'ssm:GetParameters',
+              'ssm:GetParameterHistory',
+              'ssm:GetParametersByPath',
             ],
             Resource: `arn:aws:ssm:*:*:parameter/${config.name}/*`,
           },
           {
-            Effect: "Allow",
-            Action: ["kms:Decrypt"],
-            Resource: "*",
+            Effect: 'Allow',
+            Action: ['kms:Decrypt'],
+            Resource: '*',
           },
         ],
       }),
@@ -426,52 +569,55 @@ export class ComputeModule extends Construct {
     config: EnvironmentConfig,
     network: NetworkingModule,
     iam: IAMModule,
-    alb: aws.alb.Alb
+    albSecurityGroupId: string
   ) {
     super(scope, id);
 
     // ECS Cluster
-    this.cluster = new aws.ecsCluster.EcsCluster(this, "cluster", {
+    this.cluster = new aws.ecsCluster.EcsCluster(this, 'cluster', {
       name: `${config.name}-ecs-cluster`,
-      setting: [{
-        name: "containerInsights",
-        value: "enabled",
-      }],
+      setting: [
+        {
+          name: 'containerInsights',
+          value: 'enabled',
+        },
+      ],
       tags: config.tags,
     });
 
     // Capacity Provider
-    const capacityProvider = new aws.ecsClusterCapacityProviders.EcsClusterCapacityProviders(
-      this,
-      "capacity-providers",
-      {
-        clusterName: this.cluster.name,
-        capacityProviders: ["FARGATE", "FARGATE_SPOT"],
-        defaultCapacityProviderStrategy: [
-          {
-            base: 1,
-            weight: 1,
-            capacityProvider: "FARGATE",
-          },
-        ],
-      }
-    );
+    const capacityProvider =
+      new aws.ecsClusterCapacityProviders.EcsClusterCapacityProviders(
+        this,
+        'capacity-providers',
+        {
+          clusterName: this.cluster.name,
+          capacityProviders: ['FARGATE', 'FARGATE_SPOT'],
+          defaultCapacityProviderStrategy: [
+            {
+              base: 1,
+              weight: 1,
+              capacityProvider: 'FARGATE',
+            },
+          ],
+        }
+      );
 
     // Target Group
-    this.targetGroup = new aws.albTargetGroup.AlbTargetGroup(this, "tg", {
+    this.targetGroup = new aws.albTargetGroup.AlbTargetGroup(this, 'tg', {
       name: `${config.name}-ecs-tg`,
       port: 80,
-      protocol: "HTTP",
-      targetType: "ip",
+      protocol: 'HTTP',
+      targetType: 'ip',
       vpcId: network.vpc.id,
       healthCheck: {
         enabled: true,
         healthyThreshold: 2,
         interval: 30,
-        matcher: "200",
-        path: "/health",
-        port: "traffic-port",
-        protocol: "HTTP",
+        matcher: '200',
+        path: '/health',
+        port: 'traffic-port',
+        protocol: 'HTTP',
         timeout: 5,
         unhealthyThreshold: 2,
       },
@@ -479,151 +625,197 @@ export class ComputeModule extends Construct {
     });
 
     // Task Definition
-    this.taskDefinition = new aws.ecsTaskDefinition.EcsTaskDefinition(this, "task-def", {
-      family: `${config.name}-app`,
-      networkMode: "awsvpc",
-      requiresCompatibilities: ["FARGATE"],
-      cpu: "256",
-      memory: "512",
-      executionRoleArn: iam.ecsExecutionRole.arn,
-      taskRoleArn: iam.ecsTaskRole.arn,
-      containerDefinitions: JSON.stringify([
-        {
-          name: "app",
-          image: "nginx:latest",
-          cpu: 256,
-          memory: 512,
-          essential: true,
-          portMappings: [
-            {
-              containerPort: 80,
-              protocol: "tcp",
-            },
-          ],
-          logConfiguration: {
-            logDriver: "awslogs",
-            options: {
-              "awslogs-group": `/ecs/${config.name}-app`,
-              "awslogs-region": "us-east-1",
-              "awslogs-stream-prefix": "ecs",
+    this.taskDefinition = new aws.ecsTaskDefinition.EcsTaskDefinition(
+      this,
+      'task-def',
+      {
+        family: `${config.name}-app`,
+        networkMode: 'awsvpc',
+        requiresCompatibilities: ['FARGATE'],
+        cpu: '256',
+        memory: '512',
+        executionRoleArn: iam.ecsExecutionRole.arn,
+        taskRoleArn: iam.ecsTaskRole.arn,
+        containerDefinitions: JSON.stringify([
+          {
+            name: 'app',
+            image: 'nginx:latest',
+            cpu: 256,
+            memory: 512,
+            essential: true,
+            portMappings: [
+              {
+                containerPort: 80,
+                protocol: 'tcp',
+              },
+            ],
+            logConfiguration: {
+              logDriver: 'awslogs',
+              options: {
+                'awslogs-group': `/ecs/${config.name}-app`,
+              'awslogs-region': 'us-east-1',
+                'awslogs-stream-prefix': 'ecs',
+              },
             },
           },
-        },
-      ]),
-      tags: config.tags,
-    });
+        ]),
+        tags: config.tags,
+      }
+    );
 
     // CloudWatch Log Group
-    new aws.cloudwatchLogGroup.CloudwatchLogGroup(this, "ecs-logs", {
+    new aws.cloudwatchLogGroup.CloudwatchLogGroup(this, 'ecs-logs', {
       name: `/ecs/${config.name}-app`,
       retentionInDays: 7,
       tags: config.tags,
     });
 
     // Security Group for ECS Service
-    const serviceSecurityGroup = new aws.securityGroup.SecurityGroup(this, "service-sg", {
-      name: `${config.name}-ecs-service-sg`,
-      description: "Security group for ECS service",
-      vpcId: network.vpc.id,
-      ingress: [{
-        fromPort: 80,
-        toPort: 80,
-        protocol: "tcp",
-        securityGroups: [alb.securityGroups],
-      }],
-      egress: [{
-        fromPort: 0,
-        toPort: 0,
-        protocol: "-1",
-        cidrBlocks: ["0.0.0.0/0"],
-      }],
-      tags: config.tags,
-    });
+    const serviceSecurityGroup = new aws.securityGroup.SecurityGroup(
+      this,
+      'service-sg',
+      {
+        name: `${config.name}-ecs-service-sg`,
+        description: 'Security group for ECS service',
+        vpcId: network.vpc.id,
+        ingress: [
+          {
+            fromPort: 80,
+            toPort: 80,
+            protocol: 'tcp',
+            securityGroups: [albSecurityGroupId],
+          },
+        ],
+        egress: [
+          {
+            fromPort: 0,
+            toPort: 0,
+            protocol: '-1',
+            cidrBlocks: ['0.0.0.0/0'],
+          },
+        ],
+        tags: config.tags,
+      }
+    );
 
     // ECS Service
-    this.service = new aws.ecsService.EcsService(this, "service", {
+    this.service = new aws.ecsService.EcsService(this, 'service', {
       name: `${config.name}-app-service`,
       cluster: this.cluster.id,
       taskDefinition: this.taskDefinition.arn,
       desiredCount: 2,
-      launchType: "FARGATE",
+      launchType: 'FARGATE',
       networkConfiguration: {
         subnets: network.privateSubnets.map(s => s.id),
         securityGroups: [serviceSecurityGroup.id],
         assignPublicIp: false,
       },
-      loadBalancer: [{
-        targetGroupArn: this.targetGroup.arn,
-        containerName: "app",
-        containerPort: 80,
-      }],
+      loadBalancer: [
+        {
+          targetGroupArn: this.targetGroup.arn,
+          containerName: 'app',
+          containerPort: 80,
+        },
+      ],
       tags: config.tags,
       dependsOn: [capacityProvider],
     });
 
     // Auto Scaling
-    const scalingTarget = new aws.appautoscalingTarget.AppautoscalingTarget(this, "scaling-target", {
-      maxCapacity: 10,
-      minCapacity: 2,
-      resourceId: `service/${this.cluster.name}/${this.service.name}`,
-      scalableDimension: "ecs:service:DesiredCount",
-      serviceNamespace: "ecs",
-    });
+    const scalingTarget = new aws.appautoscalingTarget.AppautoscalingTarget(
+      this,
+      'scaling-target',
+      {
+        maxCapacity: 10,
+        minCapacity: 2,
+        resourceId: `service/${this.cluster.name}/${this.service.name}`,
+        scalableDimension: 'ecs:service:DesiredCount',
+        serviceNamespace: 'ecs',
+      }
+    );
 
-    new aws.appautoscalingPolicy.AppautoscalingPolicy(this, "scaling-policy-cpu", {
-      name: `${config.name}-cpu-scaling`,
-      policyType: "TargetTrackingScaling",
-      resourceId: scalingTarget.resourceId,
-      scalableDimension: scalingTarget.scalableDimension,
-      serviceNamespace: scalingTarget.serviceNamespace,
-      targetTrackingScalingPolicyConfiguration: {
-        predefinedMetricSpecification: {
-          predefinedMetricType: "ECSServiceAverageCPUUtilization",
+    new aws.appautoscalingPolicy.AppautoscalingPolicy(
+      this,
+      'scaling-policy-cpu',
+      {
+        name: `${config.name}-cpu-scaling`,
+        policyType: 'TargetTrackingScaling',
+        resourceId: scalingTarget.resourceId,
+        scalableDimension: scalingTarget.scalableDimension,
+        serviceNamespace: scalingTarget.serviceNamespace,
+        targetTrackingScalingPolicyConfiguration: {
+          predefinedMetricSpecification: {
+            predefinedMetricType: 'ECSServiceAverageCPUUtilization',
+          },
+          targetValue: 70,
         },
-        targetValue: 70,
-      },
-    });
+      }
+    );
   }
 }
 
 // Load Balancer Module
 export class LoadBalancerModule extends Construct {
   public alb: aws.alb.Alb;
-  
-  constructor(scope: Construct, id: string, config: EnvironmentConfig, network: NetworkingModule) {
+  public securityGroup: aws.securityGroup.SecurityGroup;
+
+  constructor(
+    scope: Construct,
+    id: string,
+    config: EnvironmentConfig,
+    network: NetworkingModule
+  ) {
     super(scope, id);
 
     // ALB Security Group
-    const albSecurityGroup = new aws.securityGroup.SecurityGroup(this, "alb-sg", {
+    this.securityGroup = new aws.securityGroup.SecurityGroup(this, 'alb-sg', {
       name: `${config.name}-alb-sg`,
-      description: "Security group for Application Load Balancer",
+      description: 'Security group for Application Load Balancer',
       vpcId: network.vpc.id,
-      ingress: [{
-        fromPort: 80,
-        toPort: 80,
-        protocol: "tcp",
-        cidrBlocks: ["0.0.0.0/0"],
-        description: "Allow HTTP from anywhere",
-      }],
-      egress: [{
-        fromPort: 0,
-        toPort: 0,
-        protocol: "-1",
-        cidrBlocks: ["0.0.0.0/0"],
-      }],
+      ingress: [
+        {
+          fromPort: 80,
+          toPort: 80,
+          protocol: 'tcp',
+          cidrBlocks: ['0.0.0.0/0'],
+          description: 'Allow HTTP from anywhere',
+        },
+      ],
+      egress: [
+        {
+          fromPort: 0,
+          toPort: 0,
+          protocol: '-1',
+          cidrBlocks: ['0.0.0.0/0'],
+        },
+      ],
       tags: config.tags,
     });
 
     // Application Load Balancer
-    this.alb = new aws.alb.Alb(this, "alb", {
+    this.alb = new aws.alb.Alb(this, 'alb', {
       name: `${config.name}-alb`,
       internal: false,
-      loadBalancerType: "application",
-      securityGroups: [albSecurityGroup.id],
+      loadBalancerType: 'application',
+      securityGroups: [this.securityGroup.id],
       subnets: network.publicSubnets.map(s => s.id),
       enableDeletionProtection: false,
       enableHttp2: true,
       tags: config.tags,
+    });
+  }
+
+  public createListener(targetGroup: aws.albTargetGroup.AlbTargetGroup) {
+    return new aws.albListener.AlbListener(this, 'http-listener', {
+      loadBalancerArn: this.alb.arn,
+      port: 80,
+      protocol: 'HTTP',
+      defaultAction: [
+        {
+          type: 'forward',
+          targetGroupArn: targetGroup.arn,
+        },
+      ],
     });
   }
 }
@@ -641,10 +833,10 @@ export class DNSModule extends Construct {
   ) {
     super(scope, id);
 
-    this.record = new aws.route53Record.Route53Record(this, "dns-record", {
+    this.record = new aws.route53Record.Route53Record(this, 'dns-record', {
       zoneId: hostedZoneId,
       name: `${config.name}.example.com`,
-      type: "A",
+      type: 'A',
       alias: {
         name: alb.dnsName,
         zoneId: alb.zoneId,

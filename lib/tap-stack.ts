@@ -2,11 +2,19 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack } from 'cdktf';
+import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
-
-// ? Import your stacks here
-// import { MyStack } from './my-stack';
+import * as aws from '@cdktf/provider-aws';
+import {
+  NetworkingModule,
+  DatabaseModule,
+  IAMModule,
+  ComputeModule,
+  LoadBalancerModule,
+  DNSModule,
+  VPCPeeringModule,
+  EnvironmentConfig,
+} from './modules';
 
 interface TapStackProps {
   environmentSuffix?: string;
@@ -33,25 +41,235 @@ export class TapStack extends TerraformStack {
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
-    // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
+    // Configure AWS Provider
     new AwsProvider(this, 'aws', {
       region: awsRegion,
       defaultTags: defaultTags,
     });
 
-    // Configure S3 Backend with native state locking
+    // Configure S3 Backend with DynamoDB locking
     new S3Backend(this, {
       bucket: stateBucket,
       key: `${environmentSuffix}/${id}.tfstate`,
       region: stateBucketRegion,
       encrypt: true,
+      dynamodbTable: `${stateBucket}-lock`,
     });
-    // Using an escape hatch instead of S3Backend construct - CDKTF still does not support S3 state locking natively
-    // ref - https://developer.hashicorp.com/terraform/cdktf/concepts/resources#escape-hatch
-    this.addOverride('terraform.backend.s3.use_lockfile', true);
 
-    // ? Add your stack instantiations here
-    // ! Do NOT create resources directly in this stack.
-    // ! Instead, create separate stacks for each resource type.
+    // Environment configurations
+    const environments: EnvironmentConfig[] = [
+      {
+        name: `dev${environmentSuffix ? `-${environmentSuffix}` : ''}`,
+        cidrBlock: '10.0.0.0/16',
+        dbInstanceClass: 'db.t3.micro',
+        flowLogRetentionDays: 7,
+        tags: {
+          Environment: 'dev',
+          Project: 'fintech-app',
+          CostCenter: 'development',
+          CreatedBy: 'CDKTF',
+          ...(environmentSuffix && { EnvironmentSuffix: environmentSuffix }),
+        },
+      },
+      {
+        name: `staging${environmentSuffix ? `-${environmentSuffix}` : ''}`,
+        cidrBlock: '10.1.0.0/16',
+        dbInstanceClass: 'db.t3.micro',
+        flowLogRetentionDays: 30,
+        tags: {
+          Environment: 'staging',
+          Project: 'fintech-app',
+          CostCenter: 'staging',
+          CreatedBy: 'CDKTF',
+          ...(environmentSuffix && { EnvironmentSuffix: environmentSuffix }),
+        },
+      },
+      {
+        name: `prod${environmentSuffix ? `-${environmentSuffix}` : ''}`,
+        cidrBlock: '10.2.0.0/16',
+        dbInstanceClass: 'db.t3.micro',
+        flowLogRetentionDays: 90,
+        tags: {
+          Environment: 'prod',
+          Project: 'fintech-app',
+          CostCenter: 'production',
+          CreatedBy: 'CDKTF',
+          ...(environmentSuffix && { EnvironmentSuffix: environmentSuffix }),
+        },
+      },
+    ];
+
+    // Create Route53 hosted zone for DNS records
+    const hostedZone = new aws.route53Zone.Route53Zone(this, 'hosted-zone', {
+      name: 'example.com',
+      tags: {
+        Name: 'example.com',
+        Project: 'fintech-app',
+        ...(environmentSuffix && { EnvironmentSuffix: environmentSuffix }),
+      },
+    });
+
+    // Store networking modules for VPC peering
+    const networkingModules: { [key: string]: NetworkingModule } = {};
+    const databases: { [key: string]: DatabaseModule } = {};
+
+    // Create all environments
+    environments.forEach(envConfig => {
+      // 1. Networking
+      const networking = new NetworkingModule(
+        this,
+        `${envConfig.name}-networking`,
+        envConfig
+      );
+      networkingModules[envConfig.name] = networking;
+
+      // 2. IAM Roles
+      const iam = new IAMModule(this, `${envConfig.name}-iam`, envConfig);
+
+      // 3. Load Balancer
+      const loadBalancer = new LoadBalancerModule(
+        this,
+        `${envConfig.name}-alb`,
+        envConfig,
+        networking
+      );
+
+      // 4. Database (with dependency on networking)
+      const database = new DatabaseModule(
+        this,
+        `${envConfig.name}-database`,
+        envConfig,
+        networking
+      );
+      databases[envConfig.name] = database;
+
+      // 5. Compute (ECS) - depends on database being ready
+      const compute = new ComputeModule(
+        this,
+        `${envConfig.name}-compute`,
+        envConfig,
+        networking,
+        iam,
+        loadBalancer.securityGroup.id
+      );
+
+      // 6. ALB Listener
+      loadBalancer.createListener(compute.targetGroup);
+
+      // 7. DNS
+      const dns = new DNSModule(
+        this,
+        `${envConfig.name}-dns`,
+        envConfig,
+        loadBalancer.alb,
+        hostedZone.zoneId
+      );
+
+      // Stack dependencies - ECS depends on RDS
+      compute.service.addOverride('depends_on', [
+        `\${${database.cluster.terraformResourceType}.${database.cluster.friendlyUniqueId}}`,
+      ]);
+
+      // Output critical endpoints
+      new TerraformOutput(this, `${envConfig.name}-vpc-id`, {
+        value: networking.vpc.id,
+        description: `VPC ID for ${envConfig.name}`,
+      });
+
+      new TerraformOutput(this, `${envConfig.name}-alb-dns`, {
+        value: loadBalancer.alb.dnsName,
+        description: `ALB DNS name for ${envConfig.name}`,
+      });
+
+      new TerraformOutput(this, `${envConfig.name}-alb-zone-id`, {
+        value: loadBalancer.alb.zoneId,
+        description: `ALB Zone ID for ${envConfig.name}`,
+      });
+
+      new TerraformOutput(this, `${envConfig.name}-rds-endpoint`, {
+        value: database.cluster.endpoint,
+        description: `RDS endpoint for ${envConfig.name}`,
+        sensitive: true,
+      });
+
+      new TerraformOutput(this, `${envConfig.name}-ecs-cluster`, {
+        value: compute.cluster.name,
+        description: `ECS cluster name for ${envConfig.name}`,
+      });
+
+      new TerraformOutput(this, `${envConfig.name}-dns-record`, {
+        value: dns.record.fqdn,
+        description: `DNS FQDN for ${envConfig.name}`,
+      });
+    });
+
+    // Setup VPC Peering between staging and prod
+    const stagingEnv = `staging${environmentSuffix ? `-${environmentSuffix}` : ''}`;
+    const prodEnv = `prod${environmentSuffix ? `-${environmentSuffix}` : ''}`;
+
+    if (networkingModules[stagingEnv] && networkingModules[prodEnv]) {
+      const vpcPeering = new VPCPeeringModule(
+        this,
+        'staging-prod-peering',
+        networkingModules[stagingEnv].vpc,
+        networkingModules[prodEnv].vpc,
+        {
+          name: `${stagingEnv}-to-${prodEnv}-peering`,
+          tags: {
+            Name: `${stagingEnv}-to-${prodEnv}-peering`,
+            Project: 'fintech-app',
+            Purpose: 'data-migration',
+            ...(environmentSuffix && { EnvironmentSuffix: environmentSuffix }),
+          },
+        }
+      );
+
+      // Add peering routes to all route tables for both environments
+      const stagingNetwork = networkingModules[stagingEnv];
+      const prodNetwork = networkingModules[prodEnv];
+
+      // Staging to Prod routes
+      vpcPeering.addPeeringRoutes(
+        stagingNetwork.publicRouteTable,
+        prodNetwork.vpc.cidrBlock
+      );
+      vpcPeering.addPeeringRoutes(
+        stagingNetwork.databaseRouteTable,
+        prodNetwork.vpc.cidrBlock
+      );
+      stagingNetwork.privateRouteTables.forEach(rt => {
+        vpcPeering.addPeeringRoutes(rt, prodNetwork.vpc.cidrBlock);
+      });
+
+      // Prod to Staging routes
+      vpcPeering.addPeeringRoutes(
+        prodNetwork.publicRouteTable,
+        stagingNetwork.vpc.cidrBlock
+      );
+      vpcPeering.addPeeringRoutes(
+        prodNetwork.databaseRouteTable,
+        stagingNetwork.vpc.cidrBlock
+      );
+      prodNetwork.privateRouteTables.forEach(rt => {
+        vpcPeering.addPeeringRoutes(rt, stagingNetwork.vpc.cidrBlock);
+      });
+
+      new TerraformOutput(this, 'vpc-peering-connection-id', {
+        value: vpcPeering.peeringConnection.id,
+        description: 'VPC Peering Connection ID between staging and prod',
+      });
+    }
+
+    // Output Route53 Hosted Zone
+    new TerraformOutput(this, 'route53-zone-id', {
+      value: hostedZone.zoneId,
+      description: 'Route53 hosted zone ID for example.com',
+    });
+
+    new TerraformOutput(this, 'route53-name-servers', {
+      value: hostedZone.nameServers,
+      description: 'Route53 name servers for example.com',
+    });
   }
 }
+
