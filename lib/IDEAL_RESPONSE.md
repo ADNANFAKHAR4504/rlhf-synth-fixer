@@ -110,7 +110,7 @@ export class TapStack extends pulumi.ComponentResource {
       secretString: pulumi.jsonStringify({
         username: 'admin',
         password: pulumi.output('').apply(() => {
-          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%^&*-_+=';
           let password = '';
           for (let i = 0; i < 32; i++) {
             password += chars.charAt(Math.floor(Math.random() * chars.length));
