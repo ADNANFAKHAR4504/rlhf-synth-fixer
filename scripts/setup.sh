@@ -84,19 +84,13 @@ case "$PLATFORM" in
 
   tf)
     echo "🪄 Terraform project — minimal setup required."
-    # Ensure Jest available for static IaC validation
-    if ! command -v jest &>/dev/null; then
-      echo "📦 Installing Jest v28.1.3 + TypeScript for Terraform validation..."
-      npm install -g jest@28.1.3 ts-node typescript@5.4.5 @types/jest
+    # Ensure Jest + ts-jest exists locally (no global pollution)
+    if [ ! -d "node_modules" ]; then
+      echo "📦 Installing minimal Jest environment for Terraform test support..."
+      npm init -y >/dev/null 2>&1 || true
+      npm install --no-save jest ts-jest typescript @types/jest >/dev/null 2>&1
     else
-      echo "✅ Jest already available — skipping install."
-    fi
-    # Optional: verify Terraform version (non-breaking)
-    if command -v terraform &>/dev/null; then
-      TF_VERSION_INSTALLED=$(terraform version -json 2>/dev/null | jq -r '.terraform_version' || echo "")
-      if [ "$TF_VERSION_INSTALLED" != "$TERRAFORM_VERSION" ]; then
-        echo "⚠️ Terraform version mismatch: expected $TERRAFORM_VERSION, got $TF_VERSION_INSTALLED"
-      fi
+      echo "✅ node_modules present — Jest assumed available"
     fi
     ;;
 
