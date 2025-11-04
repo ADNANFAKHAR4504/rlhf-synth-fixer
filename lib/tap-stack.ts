@@ -718,18 +718,18 @@ export class TapStack extends cdk.Stack {
         // STAGE 3: Manual Approval (Production only)
         ...(isProd
           ? [
-            {
-              stageName: 'ManualApproval',
-              actions: [
-                new codepipeline_actions.ManualApprovalAction({
-                  actionName: 'ApproveDeployment',
-                  notificationTopic: pipelineTopic,
-                  additionalInformation: `Please review and approve the deployment to ${environment} environment`,
-                  runOrder: 1,
-                }),
-              ],
-            },
-          ]
+              {
+                stageName: 'ManualApproval',
+                actions: [
+                  new codepipeline_actions.ManualApprovalAction({
+                    actionName: 'ApproveDeployment',
+                    notificationTopic: pipelineTopic,
+                    additionalInformation: `Please review and approve the deployment to ${environment} environment`,
+                    runOrder: 1,
+                  }),
+                ],
+              },
+            ]
           : []),
         // STAGE 4: Deploy
         {
