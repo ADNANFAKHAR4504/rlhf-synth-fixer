@@ -571,7 +571,8 @@ export class ComputeModule extends Construct {
     config: EnvironmentConfig,
     network: NetworkingModule,
     iam: IAMModule,
-    albSecurityGroupId: string
+    albSecurityGroupId: string,
+    database?: DatabaseModule
   ) {
     super(scope, id);
 
@@ -722,7 +723,7 @@ export class ComputeModule extends Construct {
         },
       ],
       tags: config.tags,
-      dependsOn: [capacityProvider],
+      dependsOn: database ? [database.cluster] : [capacityProvider],
     });
 
     // Auto Scaling

@@ -153,7 +153,8 @@ export class TapStack extends TerraformStack {
         envConfig,
         networking,
         iam,
-        loadBalancer.securityGroup.id
+        loadBalancer.securityGroup.id,
+        database
       );
 
       // 6. ALB Listener
@@ -169,9 +170,9 @@ export class TapStack extends TerraformStack {
       );
 
       // Stack dependencies - ECS depends on RDS
-      compute.service.addOverride('depends_on', [
-        `\${${database.cluster.terraformResourceType}.${database.cluster.friendlyUniqueId}}`,
-      ]);
+      // compute.service.addOverride('depends_on', [
+      //   `\${${database.cluster.terraformResourceType}.${database.cluster.friendlyUniqueId}}`,
+      // ]);
 
       // Output critical endpoints
       new TerraformOutput(this, `${envConfig.name}-vpc-id`, {
