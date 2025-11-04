@@ -1,4 +1,4 @@
-name: vpc-peering
+name: TapStack
 runtime: python
 description: Cross-region VPC peering infrastructure with enhanced security and monitoring
 main: lib/
