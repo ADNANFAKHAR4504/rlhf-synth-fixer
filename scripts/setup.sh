@@ -88,7 +88,7 @@ case "$PLATFORM" in
         echo "✅ CDKTF CLI already available"
       fi
       export PATH="$HOME/.npm-global/bin:$PATH"
-    
+      echo "$HOME/.npm-global/bin" >> "$GITHUB_PATH"
       # ✅ Ensure .gen exists (critical for synth + lint + integration tests)
       if [ ! -d ".gen/aws" ]; then
         echo "📦 Generating provider bindings (.gen)..."
