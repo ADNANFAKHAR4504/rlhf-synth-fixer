@@ -214,7 +214,7 @@ export class EksClusterConstruct extends Construct {
 
     // IAM role for EKS cluster
     this.clusterRole = new aws.iamRole.IamRole(this, 'cluster-role', {
-      name: `${config.name}-cluster-role-new`,
+      name: `${config.name}-cluster-role`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -273,7 +273,7 @@ export class EksClusterConstruct extends Construct {
 
     // IAM role for node groups
     this.nodeRole = new aws.iamRole.IamRole(this, 'node-role', {
-      name: `${config.name}-node-role-new`,
+      name: `${config.name}-node-role`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -395,7 +395,7 @@ export class AlbConstruct extends Construct {
     super(scope, id);
 
     this.alb = new aws.lb.Lb(this, 'alb', {
-      name: `${config.name}-alb`,
+      name: config.name,
       internal: false,
       loadBalancerType: 'application',
       securityGroups: [config.securityGroupId],
@@ -410,7 +410,7 @@ export class AlbConstruct extends Construct {
       this,
       'target-group',
       {
-        name: `${config.name}-tgroup`,
+        name: `${config.name}-tg`,
         port: 80,
         protocol: 'HTTP',
         vpcId: config.vpcId,
