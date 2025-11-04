@@ -87,7 +87,6 @@ Conditions:
   EnableReplication: !Or
     - !Condition EnableReplicationToStaging
     - !Condition EnableReplicationToProd
-  IsProduction: !Equals [!Ref Environment, "prod"]
 
 # ===========================
 # Resources
@@ -767,7 +766,7 @@ Resources:
             InputPathsMap:
               stack-id: "$.detail.stack-id"
               status: "$.detail.status-details.status"
-            InputTemplate: |
+            InputTemplate: !Sub |
               {
                 "eventType": "STACK_UPDATE",
                 "stackId": "<stack-id>",
@@ -805,7 +804,7 @@ Resources:
               bucket: "$.detail.bucket.name"
               key: "$.detail.object.key"
               eventName: "$.detail.eventName"
-            InputTemplate: |
+            InputTemplate: !Sub |
               {
                 "eventType": "S3_CONFIG_CHANGE",
                 "bucket": "<bucket>",
@@ -1058,7 +1057,7 @@ Resources:
         {
           "s3Bucket": "${ConfigurationBucket}",
           "s3BucketRegion": "${AWS::Region}",
-          "kmsKeyId": "${ConfigurationBucket.DomainConfigurationEncryptionKey}",
+          "kmsKeyId": "alias/aws/s3",
           "lambdaFunctions": {
             "monitor": "${ReplicationMonitorLambda.Arn}",
             "validator": "${ConfigValidatorLambda.Arn}",
@@ -1094,7 +1093,7 @@ Resources:
             "staging": ["prod"],
             "prod": []
           },
-          "syncEnabled": ${EnableReplication}
+          "syncEnabled": true
         }
       Description: Cross-account replication configuration
       Tags:
@@ -1119,7 +1118,6 @@ Resources:
           },
           "accessControl": {
             "crossAccountAccess": true,
-            "principalOrgID": "${AWS::Organizations::OrganizationId}",
             "allowedActions": ["s3:GetObject", "s3:PutObject", "dynamodb:Query", "ssm:GetParameter"]
           }
         }
@@ -1136,7 +1134,7 @@ Resources:
     Properties:
       Name: !Sub "${SSMPathPrefix}/${Environment}/schema/configuration"
       Type: String
-      Value: !Sub |
+      Value: |
         {
           "schemaVersion": "1.0",
           "configurationSchema": {
@@ -1194,13 +1192,13 @@ Resources:
     Properties:
       Name: !Sub "${SSMPathPrefix}/${Environment}/runtime/config"
       Type: String
-      Value: !Sub |
+      Value: |
         {
           "syncInterval": "300",
           "batchSize": "10",
           "retryAttempts": "3",
           "timeoutSeconds": "60",
-          "enableDetailedLogging": ${Environment != "prod"},
+          "enableDetailedLogging": true,
           "maintenanceWindow": {
             "start": "02:00",
             "end": "04:00",
@@ -1209,7 +1207,7 @@ Resources:
           "featureFlags": {
             "enableCrossRegionReplication": false,
             "enableAutomaticRollback": true,
-            "enableSchemaEvolution": ${Environment == "dev"}
+            "enableSchemaEvolution": true
           }
         }
       Description: Runtime configuration parameters (modifiable)
