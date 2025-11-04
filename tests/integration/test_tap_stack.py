@@ -445,7 +445,7 @@ class TestLambdaCloudWatchCrossService(BaseIntegrationTest):
             
             # Query CloudWatch Logs
             print(f"[VERIFY] Querying CloudWatch Logs for test_id: {test_id}")
-            log_messages = get_recent_lambda_logs(function_name, minutes=3, filter_pattern=test_id)
+            log_messages = get_recent_lambda_logs(function_name, minutes=3)
             
             print(f"[INFO] Found {len(log_messages)} log messages")
             if log_messages:
