@@ -626,7 +626,7 @@ export class MultiComponentApplicationConstruct extends Construct {
       },
       tracing: lambda.Tracing.ACTIVE,
       role: lambdaRole,
-      // logRetention removed - using explicit logGroup instead (lambdaLogGroup created above)
+      logGroup: lambdaLogGroup, // Associate with the explicit log group created above
       // Do not hard-code reserved concurrency here; account limits vary and
       // can cause deployment failures. Operators can set a reserved concurrency
       // value via context or overrides if needed.
