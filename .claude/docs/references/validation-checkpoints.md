@@ -170,16 +170,20 @@ npm run synth     # if applicable (CDK, Pulumi, CDKTF)
 # Unit tests with coverage
 npm run test:coverage  # or platform equivalent
 
-# Extract coverage percentage
-COVERAGE=$(jq -r '.total.lines.pct' coverage/coverage-summary.json)
+# Extract coverage percentages
+STMT_COV=$(jq -r '.total.statements.pct' coverage/coverage-summary.json)
+FUNC_COV=$(jq -r '.total.functions.pct' coverage/coverage-summary.json)
+LINE_COV=$(jq -r '.total.lines.pct' coverage/coverage-summary.json)
 
-# Check threshold
-test "$COVERAGE" -ge 90
+# Check threshold - MUST be 100%
+test "$STMT_COV" -eq 100
+test "$FUNC_COV" -eq 100
+test "$LINE_COV" -eq 100
 ```
 
-**Pass criteria**: ≥90% line coverage, all tests pass
-**Fail action**: Add tests until coverage ≥90%
-**Reference**: validation_and_testing_guide.md Phase 3
+**Pass criteria**: 100% statement, function, and line coverage - all tests pass
+**Fail action**: Add tests until coverage reaches 100%
+**Reference**: validation_and_testing_guide.md Phase 3, pre-submission-checklist.md Section 5
 
 ---
 
@@ -317,7 +321,7 @@ pwd | grep -E 'worktree/synth-[^/]+$'
 | E | 4, 3 | generator, qa-trainer | Code platform | Matches metadata |
 | F | 3 | qa-trainer | environmentSuffix | ≥80% usage |
 | G | 3 | qa-trainer | Build quality | Lint+build+synth pass |
-| H | 3 | qa-trainer | Unit test coverage | ≥90% |
+| H | 3 | qa-trainer | Unit test coverage | 100% (stmt, func, line) |
 | I | 3 | qa-trainer | Integration tests | No mocking, uses outputs |
 | J | 4, 5 | reviewer, coordinator | Training quality | ≥8/10 |
 | K | 4, 5 | reviewer, coordinator | File locations | All in allowed locations |
