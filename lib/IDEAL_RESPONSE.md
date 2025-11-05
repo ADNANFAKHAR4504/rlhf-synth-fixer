@@ -523,7 +523,7 @@ resource "aws_security_group_rule" "ecs_ingress" {
   from_port                = each.value.port
   to_port                  = each.value.port
   protocol                 = "tcp"
-  source_security_group_id = data.aws_lb.main.security_groups[0]
+  source_security_group_id = tolist(data.aws_lb.main.security_groups)[0]
   security_group_id        = aws_security_group.ecs_services[each.key].id
   description              = "Allow inbound from ALB"
 }
