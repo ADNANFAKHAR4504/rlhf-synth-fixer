@@ -52,10 +52,16 @@ if [ -f "Pipfile" ]; then
     pip install pipenv
   fi
 
+  # Rebuild venv if cache mismatched interpreter version
+  if [ -d ".venv" ] && [ ! -f ".venv/bin/python" ]; then
+    echo "⚠️ Cached venv invalid — removing and recreating..."
+    rm -rf .venv
+  fi
+
   if [ -d ".venv" ]; then
-    echo "✅ .venv exists — cache restored — skipping pipenv install"
+    echo "✅ .venv exists — using cached environment"
   else
-    echo "📦 Creating Python venv and installing dependencies..."
+    echo "📦 Creating new pipenv environment..."
     pipenv install --dev
   fi
   if [ "$PLATFORM" = "cdktf" ] && [ "$LANGUAGE" = "py" ]; then

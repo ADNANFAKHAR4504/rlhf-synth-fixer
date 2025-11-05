@@ -56,7 +56,7 @@ runs:
         key: pip-cache-${{ runner.os }}-${{ hashFiles('Pipfile.lock') }}
         restore-keys: |
           pip-cache-${{ runner.os }}-
-          
+
     - name: Cache global npm tools
       if: ${{ inputs.platform == 'cdktf' || inputs.platform == 'cdk' || inputs.platform == 'pulumi' }}
       uses: actions/cache@v4
@@ -99,7 +99,7 @@ runs:
       if: ${{ inputs.language == 'py' || (inputs.platform == 'pulumi' && inputs.language == 'py') || inputs.platform == 'cfn' }}
       uses: actions/setup-python@v5
       with:
-        python-version: '3.12'
+        python-version: '3.12.11'
 
     # Go
     - name: Setup Go
