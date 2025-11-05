@@ -47,7 +47,7 @@ runs:
       uses: actions/cache@v4
       with:
         path: .venv
-        key: venv-${{ runner.os }}-${{ hashFiles('Pipfile.lock') }}
+        key: venv-${{ runner.os }}-${{ hashFiles('Pipfile') }}
         restore-keys: |
           venv-${{ runner.os }}-
 

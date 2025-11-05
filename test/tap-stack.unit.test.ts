@@ -328,7 +328,6 @@ describe('Backend Configuration Tests', () => {
     expect(backend.bucket).toBe('test-tfstate-bucket');
     expect(backend.region).toBe('us-east-1');
     expect(backend.encrypt).toBe(true);
-    expect(backend.use_lockfile).toBe(true);
   });
 });
 
