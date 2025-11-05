@@ -87,7 +87,13 @@ module.exports = [
       'import/prefer-default-export': 'off',
       'import/no-extraneous-dependencies': [
         'error',
-        { devDependencies: ['**/*.test.ts', 'test/**/*.ts'] },
+        {
+          devDependencies: [
+            '**/*.test.ts',
+            'test/**/*.ts',
+            'lib/lambda/**/*.ts',
+          ],
+        },
       ],
 
       // General rules

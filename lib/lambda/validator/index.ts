@@ -1,5 +1,9 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { DynamoDBClient, PutItemCommand, GetItemCommand } from '@aws-sdk/client-dynamodb';
+import {
+  DynamoDBClient,
+  PutItemCommand,
+  GetItemCommand,
+} from '@aws-sdk/client-dynamodb';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 import { v4 as uuidv4 } from 'uuid';
 

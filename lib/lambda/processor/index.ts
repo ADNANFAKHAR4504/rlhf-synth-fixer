@@ -46,7 +46,8 @@ export const handler = async (event: SQSEvent): Promise<void> => {
           Key: {
             webhookId: { S: webhookId },
           },
-          UpdateExpression: 'SET #status = :status, #processedAt = :processedAt, #s3Key = :s3Key',
+          UpdateExpression:
+            'SET #status = :status, #processedAt = :processedAt, #s3Key = :s3Key',
           ExpressionAttributeNames: {
             '#status': 'status',
             '#processedAt': 'processedAt',

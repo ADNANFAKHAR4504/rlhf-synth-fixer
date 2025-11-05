@@ -67,46 +67,56 @@ export class TapStack extends TerraformStack {
       encrypt: true,
     });
 
-    this.addOverride('terraform.backend.s3.use_lockfile', true);
-
     // S3 Bucket for processed webhook results
     // Use account ID in bucket name to ensure global uniqueness and prevent conflicts on redeployment
-    const resultsBucket = new S3Bucket(this, `webhook-results-${environmentSuffix}`, {
-      bucket: `webhook-results-${environmentSuffix}-${current.accountId}`,
-      tags: {
-        Environment: 'Production',
-        Team: 'Platform',
-      },
-    });
+    const resultsBucket = new S3Bucket(
+      this,
+      `webhook-results-${environmentSuffix}`,
+      {
+        bucket: `webhook-results-${environmentSuffix}-${current.accountId}`,
+        tags: {
+          Environment: 'Production',
+          Team: 'Platform',
+        },
+      }
+    );
 
     // Enable versioning on S3 bucket
-    new S3BucketVersioningA(this, `webhook-results-versioning-${environmentSuffix}`, {
-      bucket: resultsBucket.id,
-      versioningConfiguration: {
-        status: 'Enabled',
-      },
-    });
+    new S3BucketVersioningA(
+      this,
+      `webhook-results-versioning-${environmentSuffix}`,
+      {
+        bucket: resultsBucket.id,
+        versioningConfiguration: {
+          status: 'Enabled',
+        },
+      }
+    );
 
     // DynamoDB Table for webhook metadata
-    const webhookTable = new DynamodbTable(this, `webhook-table-${environmentSuffix}`, {
-      name: `webhook-table-${environmentSuffix}`,
-      billingMode: 'PAY_PER_REQUEST',
-      hashKey: 'webhookId',
-      attribute: [
-        {
-          name: 'webhookId',
-          type: 'S',
+    const webhookTable = new DynamodbTable(
+      this,
+      `webhook-table-${environmentSuffix}`,
+      {
+        name: `webhook-table-${environmentSuffix}`,
+        billingMode: 'PAY_PER_REQUEST',
+        hashKey: 'webhookId',
+        attribute: [
+          {
+            name: 'webhookId',
+            type: 'S',
+          },
+        ],
+        ttl: {
+          enabled: true,
+          attributeName: 'expiryTime',
         },
-      ],
-      ttl: {
-        enabled: true,
-        attributeName: 'expiryTime',
-      },
-      tags: {
-        Environment: 'Production',
-        Team: 'Platform',
-      },
-    });
+        tags: {
+          Environment: 'Production',
+          Team: 'Platform',
+        },
+      }
+    );
 
     // Dead Letter Queue for failed messages
     const dlq = new SqsQueue(this, `webhook-dlq-${environmentSuffix}`, {
@@ -119,278 +129,358 @@ export class TapStack extends TerraformStack {
     });
 
     // Main SQS Queue for webhook processing
-    const webhookQueue = new SqsQueue(this, `webhook-queue-${environmentSuffix}`, {
-      name: `webhook-queue-${environmentSuffix}`,
-      visibilityTimeoutSeconds: 180, // 6 times the Lambda timeout (30 * 6)
-      redrivePolicy: JSON.stringify({
-        deadLetterTargetArn: dlq.arn,
-        maxReceiveCount: 3,
-      }),
-      tags: {
-        Environment: 'Production',
-        Team: 'Platform',
-      },
-    });
+    const webhookQueue = new SqsQueue(
+      this,
+      `webhook-queue-${environmentSuffix}`,
+      {
+        name: `webhook-queue-${environmentSuffix}`,
+        visibilityTimeoutSeconds: 180, // 6 times the Lambda timeout (30 * 6)
+        redrivePolicy: JSON.stringify({
+          deadLetterTargetArn: dlq.arn,
+          maxReceiveCount: 3,
+        }),
+        tags: {
+          Environment: 'Production',
+          Team: 'Platform',
+        },
+      }
+    );
 
     // IAM Role for Webhook Validator Lambda
-    const validatorRole = new IamRole(this, `webhook-validator-role-${environmentSuffix}`, {
-      name: `webhook-validator-role-${environmentSuffix}`,
-      assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Action: 'sts:AssumeRole',
-            Principal: {
-              Service: 'lambda.amazonaws.com',
+    const validatorRole = new IamRole(
+      this,
+      `webhook-validator-role-${environmentSuffix}`,
+      {
+        name: `webhook-validator-role-${environmentSuffix}`,
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Principal: {
+                Service: 'lambda.amazonaws.com',
+              },
+              Effect: 'Allow',
             },
-            Effect: 'Allow',
-          },
-        ],
-      }),
-      tags: {
-        Environment: 'Production',
-        Team: 'Platform',
-      },
-    });
+          ],
+        }),
+        tags: {
+          Environment: 'Production',
+          Team: 'Platform',
+        },
+      }
+    );
 
     // Attach basic Lambda execution policy
-    new IamRolePolicyAttachment(this, `validator-basic-execution-${environmentSuffix}`, {
-      role: validatorRole.name,
-      policyArn: 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
-    });
+    new IamRolePolicyAttachment(
+      this,
+      `validator-basic-execution-${environmentSuffix}`,
+      {
+        role: validatorRole.name,
+        policyArn:
+          'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+      }
+    );
 
     // Attach X-Ray write access
-    new IamRolePolicyAttachment(this, `validator-xray-access-${environmentSuffix}`, {
-      role: validatorRole.name,
-      policyArn: 'arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess',
-    });
+    new IamRolePolicyAttachment(
+      this,
+      `validator-xray-access-${environmentSuffix}`,
+      {
+        role: validatorRole.name,
+        policyArn: 'arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess',
+      }
+    );
 
     // IAM Policy for DynamoDB and SQS access
-    const validatorPolicy = new IamPolicy(this, `validator-policy-${environmentSuffix}`, {
-      name: `webhook-validator-policy-${environmentSuffix}`,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Action: [
-              'dynamodb:PutItem',
-              'dynamodb:GetItem',
-              'dynamodb:Query',
-            ],
-            Resource: webhookTable.arn,
-          },
-          {
-            Effect: 'Allow',
-            Action: ['sqs:SendMessage'],
-            Resource: webhookQueue.arn,
-          },
-        ],
-      }),
-      tags: {
-        Environment: 'Production',
-        Team: 'Platform',
-      },
-    });
+    const validatorPolicy = new IamPolicy(
+      this,
+      `validator-policy-${environmentSuffix}`,
+      {
+        name: `webhook-validator-policy-${environmentSuffix}`,
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: [
+                'dynamodb:PutItem',
+                'dynamodb:GetItem',
+                'dynamodb:Query',
+              ],
+              Resource: webhookTable.arn,
+            },
+            {
+              Effect: 'Allow',
+              Action: ['sqs:SendMessage'],
+              Resource: webhookQueue.arn,
+            },
+          ],
+        }),
+        tags: {
+          Environment: 'Production',
+          Team: 'Platform',
+        },
+      }
+    );
 
-    new IamRolePolicyAttachment(this, `validator-policy-attachment-${environmentSuffix}`, {
-      role: validatorRole.name,
-      policyArn: validatorPolicy.arn,
-    });
+    new IamRolePolicyAttachment(
+      this,
+      `validator-policy-attachment-${environmentSuffix}`,
+      {
+        role: validatorRole.name,
+        policyArn: validatorPolicy.arn,
+      }
+    );
 
     // Lambda function for webhook validation
-    const validatorLambda = new LambdaFunction(this, `webhook-validator-${environmentSuffix}`, {
-      functionName: `webhook-validator-${environmentSuffix}`,
-      runtime: 'nodejs18.x',
-      handler: 'index.handler',
-      memorySize: 512,
-      timeout: 30,
-      role: validatorRole.arn,
-      filename: path.join(__dirname, 'lambda', 'validator.zip'),
-      sourceCodeHash: Fn.filebase64sha256(path.join(__dirname, 'lambda', 'validator.zip')),
-      environment: {
-        variables: {
-          TABLE_NAME: webhookTable.name,
-          QUEUE_URL: webhookQueue.url,
+    const validatorLambda = new LambdaFunction(
+      this,
+      `webhook-validator-${environmentSuffix}`,
+      {
+        functionName: `webhook-validator-${environmentSuffix}`,
+        runtime: 'nodejs18.x',
+        handler: 'index.handler',
+        memorySize: 512,
+        timeout: 30,
+        role: validatorRole.arn,
+        filename: path.join(__dirname, 'lambda', 'validator.zip'),
+        sourceCodeHash: Fn.filebase64sha256(
+          path.join(__dirname, 'lambda', 'validator.zip')
+        ),
+        environment: {
+          variables: {
+            TABLE_NAME: webhookTable.name,
+            QUEUE_URL: webhookQueue.url,
+          },
         },
-      },
-      tracingConfig: {
-        mode: 'Active',
-      },
-      tags: {
-        Environment: 'Production',
-        Team: 'Platform',
-      },
-    });
+        tracingConfig: {
+          mode: 'Active',
+        },
+        tags: {
+          Environment: 'Production',
+          Team: 'Platform',
+        },
+      }
+    );
 
     // IAM Role for Webhook Processor Lambda
-    const processorRole = new IamRole(this, `webhook-processor-role-${environmentSuffix}`, {
-      name: `webhook-processor-role-${environmentSuffix}`,
-      assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Action: 'sts:AssumeRole',
-            Principal: {
-              Service: 'lambda.amazonaws.com',
+    const processorRole = new IamRole(
+      this,
+      `webhook-processor-role-${environmentSuffix}`,
+      {
+        name: `webhook-processor-role-${environmentSuffix}`,
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Principal: {
+                Service: 'lambda.amazonaws.com',
+              },
+              Effect: 'Allow',
             },
-            Effect: 'Allow',
-          },
-        ],
-      }),
-      tags: {
-        Environment: 'Production',
-        Team: 'Platform',
-      },
-    });
+          ],
+        }),
+        tags: {
+          Environment: 'Production',
+          Team: 'Platform',
+        },
+      }
+    );
 
     // Attach basic Lambda execution policy
-    new IamRolePolicyAttachment(this, `processor-basic-execution-${environmentSuffix}`, {
-      role: processorRole.name,
-      policyArn: 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
-    });
+    new IamRolePolicyAttachment(
+      this,
+      `processor-basic-execution-${environmentSuffix}`,
+      {
+        role: processorRole.name,
+        policyArn:
+          'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+      }
+    );
 
     // Attach X-Ray write access
-    new IamRolePolicyAttachment(this, `processor-xray-access-${environmentSuffix}`, {
-      role: processorRole.name,
-      policyArn: 'arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess',
-    });
+    new IamRolePolicyAttachment(
+      this,
+      `processor-xray-access-${environmentSuffix}`,
+      {
+        role: processorRole.name,
+        policyArn: 'arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess',
+      }
+    );
 
     // IAM Policy for S3 and SQS access
-    const processorPolicy = new IamPolicy(this, `processor-policy-${environmentSuffix}`, {
-      name: `webhook-processor-policy-${environmentSuffix}`,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Action: [
-              's3:PutObject',
-              's3:PutObjectAcl',
-            ],
-            Resource: `${resultsBucket.arn}/*`,
-          },
-          {
-            Effect: 'Allow',
-            Action: [
-              'sqs:ReceiveMessage',
-              'sqs:DeleteMessage',
-              'sqs:GetQueueAttributes',
-            ],
-            Resource: webhookQueue.arn,
-          },
-          {
-            Effect: 'Allow',
-            Action: [
-              'dynamodb:UpdateItem',
-              'dynamodb:GetItem',
-            ],
-            Resource: webhookTable.arn,
-          },
-        ],
-      }),
-      tags: {
-        Environment: 'Production',
-        Team: 'Platform',
-      },
-    });
+    const processorPolicy = new IamPolicy(
+      this,
+      `processor-policy-${environmentSuffix}`,
+      {
+        name: `webhook-processor-policy-${environmentSuffix}`,
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: ['s3:PutObject', 's3:PutObjectAcl'],
+              Resource: `${resultsBucket.arn}/*`,
+            },
+            {
+              Effect: 'Allow',
+              Action: [
+                'sqs:ReceiveMessage',
+                'sqs:DeleteMessage',
+                'sqs:GetQueueAttributes',
+              ],
+              Resource: webhookQueue.arn,
+            },
+            {
+              Effect: 'Allow',
+              Action: ['dynamodb:UpdateItem', 'dynamodb:GetItem'],
+              Resource: webhookTable.arn,
+            },
+          ],
+        }),
+        tags: {
+          Environment: 'Production',
+          Team: 'Platform',
+        },
+      }
+    );
 
-    new IamRolePolicyAttachment(this, `processor-policy-attachment-${environmentSuffix}`, {
-      role: processorRole.name,
-      policyArn: processorPolicy.arn,
-    });
+    new IamRolePolicyAttachment(
+      this,
+      `processor-policy-attachment-${environmentSuffix}`,
+      {
+        role: processorRole.name,
+        policyArn: processorPolicy.arn,
+      }
+    );
 
     // Lambda function for webhook processing
-    const processorLambda = new LambdaFunction(this, `webhook-processor-${environmentSuffix}`, {
-      functionName: `webhook-processor-${environmentSuffix}`,
-      runtime: 'nodejs18.x',
-      handler: 'index.handler',
-      memorySize: 512,
-      timeout: 30,
-      role: processorRole.arn,
-      filename: path.join(__dirname, 'lambda', 'processor.zip'),
-      sourceCodeHash: Fn.filebase64sha256(path.join(__dirname, 'lambda', 'processor.zip')),
-      environment: {
-        variables: {
-          BUCKET_NAME: resultsBucket.bucket,
-          TABLE_NAME: webhookTable.name,
+    const processorLambda = new LambdaFunction(
+      this,
+      `webhook-processor-${environmentSuffix}`,
+      {
+        functionName: `webhook-processor-${environmentSuffix}`,
+        runtime: 'nodejs18.x',
+        handler: 'index.handler',
+        memorySize: 512,
+        timeout: 30,
+        role: processorRole.arn,
+        filename: path.join(__dirname, 'lambda', 'processor.zip'),
+        sourceCodeHash: Fn.filebase64sha256(
+          path.join(__dirname, 'lambda', 'processor.zip')
+        ),
+        environment: {
+          variables: {
+            BUCKET_NAME: resultsBucket.bucket,
+            TABLE_NAME: webhookTable.name,
+          },
         },
-      },
-      tracingConfig: {
-        mode: 'Active',
-      },
-      tags: {
-        Environment: 'Production',
-        Team: 'Platform',
-      },
-    });
+        tracingConfig: {
+          mode: 'Active',
+        },
+        tags: {
+          Environment: 'Production',
+          Team: 'Platform',
+        },
+      }
+    );
 
     // Event source mapping from SQS to processor Lambda
     // Add lifecycle configuration to handle updates properly on redeployment
-    new LambdaEventSourceMapping(this, `processor-event-source-${environmentSuffix}`, {
-      eventSourceArn: webhookQueue.arn,
-      functionName: processorLambda.functionName,
-      batchSize: 10,
-      lifecycle: {
-        createBeforeDestroy: true,
-      },
-    });
+    new LambdaEventSourceMapping(
+      this,
+      `processor-event-source-${environmentSuffix}`,
+      {
+        eventSourceArn: webhookQueue.arn,
+        functionName: processorLambda.functionName,
+        batchSize: 10,
+        lifecycle: {
+          createBeforeDestroy: true,
+        },
+      }
+    );
 
     // API Gateway REST API
-    const api = new ApiGatewayRestApi(this, `webhook-api-${environmentSuffix}`, {
-      name: `webhook-api-${environmentSuffix}`,
-      description: 'Webhook Processing API',
-      endpointConfiguration: {
-        types: ['REGIONAL'],
-      },
-      tags: {
-        Environment: 'Production',
-        Team: 'Platform',
-      },
-    });
+    const api = new ApiGatewayRestApi(
+      this,
+      `webhook-api-${environmentSuffix}`,
+      {
+        name: `webhook-api-${environmentSuffix}`,
+        description: 'Webhook Processing API',
+        endpointConfiguration: {
+          types: ['REGIONAL'],
+        },
+        tags: {
+          Environment: 'Production',
+          Team: 'Platform',
+        },
+      }
+    );
 
     // API Gateway Resource for /webhooks
-    const webhooksResource = new ApiGatewayResource(this, `webhooks-resource-${environmentSuffix}`, {
-      restApiId: api.id,
-      parentId: api.rootResourceId,
-      pathPart: 'webhooks',
-    });
+    const webhooksResource = new ApiGatewayResource(
+      this,
+      `webhooks-resource-${environmentSuffix}`,
+      {
+        restApiId: api.id,
+        parentId: api.rootResourceId,
+        pathPart: 'webhooks',
+      }
+    );
 
     // POST method for webhook submission
-    const postMethod = new ApiGatewayMethod(this, `webhooks-post-method-${environmentSuffix}`, {
-      restApiId: api.id,
-      resourceId: webhooksResource.id,
-      httpMethod: 'POST',
-      authorization: 'NONE',
-    });
+    const postMethod = new ApiGatewayMethod(
+      this,
+      `webhooks-post-method-${environmentSuffix}`,
+      {
+        restApiId: api.id,
+        resourceId: webhooksResource.id,
+        httpMethod: 'POST',
+        authorization: 'NONE',
+      }
+    );
 
     // Integration for POST method
-    const postIntegration = new ApiGatewayIntegration(this, `webhooks-post-integration-${environmentSuffix}`, {
-      restApiId: api.id,
-      resourceId: webhooksResource.id,
-      httpMethod: postMethod.httpMethod,
-      integrationHttpMethod: 'POST',
-      type: 'AWS_PROXY',
-      uri: validatorLambda.invokeArn,
-    });
+    const postIntegration = new ApiGatewayIntegration(
+      this,
+      `webhooks-post-integration-${environmentSuffix}`,
+      {
+        restApiId: api.id,
+        resourceId: webhooksResource.id,
+        httpMethod: postMethod.httpMethod,
+        integrationHttpMethod: 'POST',
+        type: 'AWS_PROXY',
+        uri: validatorLambda.invokeArn,
+      }
+    );
 
     // GET method for webhook status
-    const getMethod = new ApiGatewayMethod(this, `webhooks-get-method-${environmentSuffix}`, {
-      restApiId: api.id,
-      resourceId: webhooksResource.id,
-      httpMethod: 'GET',
-      authorization: 'NONE',
-    });
+    const getMethod = new ApiGatewayMethod(
+      this,
+      `webhooks-get-method-${environmentSuffix}`,
+      {
+        restApiId: api.id,
+        resourceId: webhooksResource.id,
+        httpMethod: 'GET',
+        authorization: 'NONE',
+      }
+    );
 
     // Integration for GET method
-    const getIntegration = new ApiGatewayIntegration(this, `webhooks-get-integration-${environmentSuffix}`, {
-      restApiId: api.id,
-      resourceId: webhooksResource.id,
-      httpMethod: getMethod.httpMethod,
-      integrationHttpMethod: 'POST',
-      type: 'AWS_PROXY',
-      uri: validatorLambda.invokeArn,
-    });
+    const getIntegration = new ApiGatewayIntegration(
+      this,
+      `webhooks-get-integration-${environmentSuffix}`,
+      {
+        restApiId: api.id,
+        resourceId: webhooksResource.id,
+        httpMethod: getMethod.httpMethod,
+        integrationHttpMethod: 'POST',
+        type: 'AWS_PROXY',
+        uri: validatorLambda.invokeArn,
+      }
+    );
 
     // Lambda permission for API Gateway to invoke validator
     // Use unique statementId per environment to prevent conflicts on redeployment
@@ -405,23 +495,32 @@ export class TapStack extends TerraformStack {
     // API Gateway Deployment
     // Add triggers to force redeployment when methods or integrations change
     // This prevents conflicts when redeploying after successful initial deployment
-    const deployment = new ApiGatewayDeployment(this, `api-deployment-${environmentSuffix}`, {
-      restApiId: api.id,
-      dependsOn: [postMethod, getMethod, postIntegration, getIntegration] as ITerraformDependable[],
-      triggers: {
-        // Force redeployment when integrations change
-        // Concatenated IDs will change when resources change, triggering new deployment
-        redeployment: Fn.join('-', [
-          postMethod.id,
-          getMethod.id,
-          postIntegration.id,
-          getIntegration.id,
-        ]),
-      },
-      lifecycle: {
-        createBeforeDestroy: true,
-      },
-    });
+    const deployment = new ApiGatewayDeployment(
+      this,
+      `api-deployment-${environmentSuffix}`,
+      {
+        restApiId: api.id,
+        dependsOn: [
+          postMethod,
+          getMethod,
+          postIntegration,
+          getIntegration,
+        ] as ITerraformDependable[],
+        triggers: {
+          // Force redeployment when integrations change
+          // Concatenated IDs will change when resources change, triggering new deployment
+          redeployment: Fn.join('-', [
+            postMethod.id,
+            getMethod.id,
+            postIntegration.id,
+            getIntegration.id,
+          ]),
+        },
+        lifecycle: {
+          createBeforeDestroy: true,
+        },
+      }
+    );
 
     // API Gateway Stage
     const stage = new ApiGatewayStage(this, `api-stage-${environmentSuffix}`, {
@@ -436,109 +535,121 @@ export class TapStack extends TerraformStack {
     });
 
     // API Gateway Method Settings for throttling
-    new ApiGatewayMethodSettings(this, `api-method-settings-${environmentSuffix}`, {
-      restApiId: api.id,
-      stageName: stage.stageName,
-      methodPath: '*/*',
-      settings: {
-        throttlingBurstLimit: 100,
-        throttlingRateLimit: 100,
-      },
-    });
+    new ApiGatewayMethodSettings(
+      this,
+      `api-method-settings-${environmentSuffix}`,
+      {
+        restApiId: api.id,
+        stageName: stage.stageName,
+        methodPath: '*/*',
+        settings: {
+          throttlingBurstLimit: 100,
+          throttlingRateLimit: 100,
+        },
+      }
+    );
 
     // CloudWatch Alarm for Validator Lambda errors (error rate > 1%)
-    new CloudwatchMetricAlarm(this, `validator-error-alarm-${environmentSuffix}`, {
-      alarmName: `webhook-validator-errors-${environmentSuffix}`,
-      comparisonOperator: 'GreaterThanThreshold',
-      evaluationPeriods: 2,
-      threshold: 1.0,
-      alarmDescription: 'Alert when validator Lambda error rate exceeds 1%',
-      metricQuery: [
-        {
-          id: 'errors',
-          metric: {
-            metricName: 'Errors',
-            namespace: 'AWS/Lambda',
-            period: 60,
-            stat: 'Sum',
-            dimensions: {
-              FunctionName: validatorLambda.functionName,
+    new CloudwatchMetricAlarm(
+      this,
+      `validator-error-alarm-${environmentSuffix}`,
+      {
+        alarmName: `webhook-validator-errors-${environmentSuffix}`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 2,
+        threshold: 1.0,
+        alarmDescription: 'Alert when validator Lambda error rate exceeds 1%',
+        metricQuery: [
+          {
+            id: 'errors',
+            metric: {
+              metricName: 'Errors',
+              namespace: 'AWS/Lambda',
+              period: 60,
+              stat: 'Sum',
+              dimensions: {
+                FunctionName: validatorLambda.functionName,
+              },
             },
+            returnData: false,
           },
-          returnData: false,
-        },
-        {
-          id: 'invocations',
-          metric: {
-            metricName: 'Invocations',
-            namespace: 'AWS/Lambda',
-            period: 60,
-            stat: 'Sum',
-            dimensions: {
-              FunctionName: validatorLambda.functionName,
+          {
+            id: 'invocations',
+            metric: {
+              metricName: 'Invocations',
+              namespace: 'AWS/Lambda',
+              period: 60,
+              stat: 'Sum',
+              dimensions: {
+                FunctionName: validatorLambda.functionName,
+              },
             },
+            returnData: false,
           },
-          returnData: false,
+          {
+            id: 'error_rate',
+            expression: 'IF(invocations > 0, (errors / invocations) * 100, 0)',
+            label: 'Error Rate (%)',
+            returnData: true,
+          },
+        ],
+        tags: {
+          Environment: 'Production',
+          Team: 'Platform',
         },
-        {
-          id: 'error_rate',
-          expression: 'IF(invocations > 0, (errors / invocations) * 100, 0)',
-          label: 'Error Rate (%)',
-          returnData: true,
-        },
-      ],
-      tags: {
-        Environment: 'Production',
-        Team: 'Platform',
-      },
-    });
+      }
+    );
 
     // CloudWatch Alarm for Processor Lambda errors (error rate > 1%)
-    new CloudwatchMetricAlarm(this, `processor-error-alarm-${environmentSuffix}`, {
-      alarmName: `webhook-processor-errors-${environmentSuffix}`,
-      comparisonOperator: 'GreaterThanThreshold',
-      evaluationPeriods: 2,
-      threshold: 1.0,
-      alarmDescription: 'Alert when processor Lambda error rate exceeds 1%',
-      metricQuery: [
-        {
-          id: 'errors',
-          metric: {
-            metricName: 'Errors',
-            namespace: 'AWS/Lambda',
-            period: 60,
-            stat: 'Sum',
-            dimensions: {
-              FunctionName: processorLambda.functionName,
+    new CloudwatchMetricAlarm(
+      this,
+      `processor-error-alarm-${environmentSuffix}`,
+      {
+        alarmName: `webhook-processor-errors-${environmentSuffix}`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 2,
+        threshold: 1.0,
+        alarmDescription: 'Alert when processor Lambda error rate exceeds 1%',
+        metricQuery: [
+          {
+            id: 'errors',
+            metric: {
+              metricName: 'Errors',
+              namespace: 'AWS/Lambda',
+              period: 60,
+              stat: 'Sum',
+              dimensions: {
+                FunctionName: processorLambda.functionName,
+              },
             },
+            returnData: false,
           },
-          returnData: false,
-        },
-        {
-          id: 'invocations',
-          metric: {
-            metricName: 'Invocations',
-            namespace: 'AWS/Lambda',
-            period: 60,
-            stat: 'Sum',
-            dimensions: {
-              FunctionName: processorLambda.functionName,
+          {
+            id: 'invocations',
+            metric: {
+              metricName: 'Invocations',
+              namespace: 'AWS/Lambda',
+              period: 60,
+              stat: 'Sum',
+              dimensions: {
+                FunctionName: processorLambda.functionName,
+              },
             },
+            returnData: false,
           },
-          returnData: false,
+          {
+            id: 'error_rate',
+            expression: 'IF(invocations > 0, (errors / invocations) * 100, 0)',
+            label: 'Error Rate (%)',
+            returnData: true,
+          },
+        ],
+        tags: {
+          Environment: 'Production',
+          Team: 'Platform',
         },
-        {
-          id: 'error_rate',
-          expression: 'IF(invocations > 0, (errors / invocations) * 100, 0)',
-          label: 'Error Rate (%)',
-          returnData: true,
-        },
-      ],
-      tags: {
-        Environment: 'Production',
-        Team: 'Platform',
-      },
-    });
+      }
+    );
 
     // Outputs
     new TerraformOutput(this, 'api-endpoint', {
@@ -577,4 +688,3 @@ export class TapStack extends TerraformStack {
     });
   }
 }
-
