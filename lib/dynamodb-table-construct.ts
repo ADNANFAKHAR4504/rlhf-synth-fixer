@@ -1,5 +1,5 @@
-import { Construct } from 'constructs';
 import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
+import { Construct } from 'constructs';
 import { EnvironmentConfig } from './environment-config';
 
 export interface DynamodbTableConstructProps {
