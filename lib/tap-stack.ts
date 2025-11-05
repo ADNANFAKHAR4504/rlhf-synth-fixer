@@ -42,7 +42,8 @@ export class TapStack extends TerraformStack {
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
     // Determine if we should append environment suffix (only if explicitly provided and not default)
-    const shouldAppendSuffix = props?.environmentSuffix && props.environmentSuffix !== 'dev';
+    const shouldAppendSuffix =
+      props?.environmentSuffix && props.environmentSuffix !== 'dev';
 
     // Configure AWS Provider
     new AwsProvider(this, 'aws', {
