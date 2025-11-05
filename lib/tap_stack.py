@@ -469,7 +469,6 @@ class TapStack:
             task_definition=self.task_definition.arn,
             desired_count=2,
             launch_type="FARGATE",
-            platform_version="LATEST",
             network_configuration=aws.ecs.ServiceNetworkConfigurationArgs(
                 assign_public_ip=False,
                 subnets=[subnet.id for subnet in self.private_subnets],
@@ -481,8 +480,6 @@ class TapStack:
                 container_port=5000
             )],
             health_check_grace_period_seconds=60,
-            deployment_maximum_percent=200,
-            deployment_minimum_healthy_percent=100,
             tags={"Name": f"ecs-service-{environment_suffix}"},
             opts=pulumi.ResourceOptions(
                 depends_on=[self.alb_listener, self.rds_instance]
