@@ -851,7 +851,7 @@ resource "aws_route53_health_check" "alb" {
   resource_path                   = var.health_check_path
   failure_threshold               = 3
   request_interval                = 30
-  insufficient_data_health_status = "Failure"
+  insufficient_data_health_status = "Unhealthy"
 
   tags = {
     Name        = "${var.project_name}-health-check-${var.environment}"
