@@ -23,7 +23,7 @@ import { ApiGatewayMethodSettings } from '@cdktf/provider-aws/lib/api-gateway-me
 import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
 import { LambdaEventSourceMapping } from '@cdktf/provider-aws/lib/lambda-event-source-mapping';
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
-import { Fn } from 'cdktf';
+import { Fn, ITerraformDependable } from 'cdktf';
 import * as path from 'path';
 
 interface TapStackProps {
@@ -407,7 +407,7 @@ export class TapStack extends TerraformStack {
     // This prevents conflicts when redeploying after successful initial deployment
     const deployment = new ApiGatewayDeployment(this, `api-deployment-${environmentSuffix}`, {
       restApiId: api.id,
-      dependsOn: [postMethod, getMethod, postIntegration, getIntegration],
+      dependsOn: [postMethod, getMethod, postIntegration, getIntegration] as ITerraformDependable[],
       triggers: {
         // Force redeployment when integrations change
         // Concatenated IDs will change when resources change, triggering new deployment
@@ -577,3 +577,4 @@ export class TapStack extends TerraformStack {
     });
   }
 }
+
