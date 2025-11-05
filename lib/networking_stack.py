@@ -317,7 +317,8 @@ class NetworkingStack(Construct):
         bucket = S3Bucket(
             self,
             "flow_log_bucket",
-            bucket=f"payment-vpc-flow-logs-{self.environment_suffix}",
+            bucket_prefix=f"payment-vpc-flow-logs-{self.environment_suffix}-",
+            force_destroy=True,
             tags={
                 "Name": f"payment-vpc-flow-logs-{self.environment_suffix}",
                 "Environment": "Production",
