@@ -867,7 +867,7 @@ public final class Main {
                     .memorySize(512)
                     .timeout(300)
                     .architectures("arm64")
-                    .code(new com.pulumi.asset.FileArchive("./lambda-placeholder"))
+                    .code(new com.pulumi.asset.FileArchive("lib/lambda-placeholder"))
                     .environment(FunctionEnvironmentArgs.builder()
                         .variables(Output.tuple(
                             storageStack.getDynamodbTable().name(),
@@ -984,7 +984,7 @@ public final class Main {
                     .memorySize(512)
                     .timeout(60)
                     .architectures("arm64")
-                    .code(new com.pulumi.asset.FileArchive("./lambda-placeholder"))
+                    .code(new com.pulumi.asset.FileArchive("lib/lambda-placeholder"))
                     .environment(FunctionEnvironmentArgs.builder()
                         .variables(searchStack.getOpenSearchDomain().endpoint()
                             .applyValue(endpoint -> Map.of(
