@@ -51,8 +51,9 @@ class TestPaymentInfrastructureIntegration(unittest.TestCase):
             env = os.environ.copy()
             env['PULUMI_BACKEND_URL'] = env.get('PULUMI_BACKEND_URL', 'file://./pulumi-state')
             
-            result = subprocess.run(['pulumi', 'stack', 'ls', '--json'], 
-                                  capture_output=True, text=True, env=env, cwd=os.getcwd())
+            result = subprocess.run(['pulumi', 'stack', 'ls', '--json'],
+                                  capture_output=True, text=True, env=env, cwd=os.getcwd(),
+                                  check=False)
             
             if result.returncode == 0:
                 stacks = json.loads(result.stdout)

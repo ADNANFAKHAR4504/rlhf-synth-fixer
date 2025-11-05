@@ -43,26 +43,56 @@ only lowercase alphanumeric characters, hyphens, underscores, periods, and space
 
 ---
 
-### 2. Missing Lambda Layer Directory Structure
+### 2. Incorrect Lambda Directory Paths
 
 **Impact Level**: Critical
 
-**MODEL_RESPONSE Issue**: Lambda functions reference layer without ensuring directory exists:
+**MODEL_RESPONSE Issue**: Lambda functions reference paths in root directory instead of lib folder:
 ```python
-# Lambda layer code references non-existent directory
-code=pulumi.AssetArchive({
-    "python": pulumi.FileArchive("./lambda_layer")  # Directory doesn't exist
-}),
+# Incorrect paths in MODEL_RESPONSE
+lambda_layer = aws.lambda_.LayerVersion(
+    code=pulumi.AssetArchive({
+        "python": pulumi.FileArchive("./lambda_layer")  # Wrong path
+    }),
+)
+
+self.payment_processor_lambda = aws.lambda_.Function(
+    code=pulumi.AssetArchive({
+        ".": pulumi.FileArchive("./lambda_functions/payment_processor")  # Wrong path
+    }),
+)
 ```
 
-**IDEAL_RESPONSE Fix**: Created required lambda layer directory structure:
+**IDEAL_RESPONSE Fix**: Updated paths to reference lib/ directory and created proper structure:
+```python
+# Correct paths in IDEAL_RESPONSE
+lambda_layer = aws.lambda_.LayerVersion(
+    code=pulumi.AssetArchive({
+        "python": pulumi.FileArchive("./lib/lambda_layer")  # Correct path
+    }),
+)
+
+self.payment_processor_lambda = aws.lambda_.Function(
+    code=pulumi.AssetArchive({
+        ".": pulumi.FileArchive("./lib/lambda_functions/payment_processor")  # Correct path
+    }),
+)
+```
+
+Directory structure created:
 ```bash
-lambda_layer/
-  python/
-    requirements.txt  # Contains dependency specifications
+lib/
+  lambda_layer/
+    python/
+      requirements.txt  # Contains dependency specifications
+  lambda_functions/
+    payment_processor/
+      main.py
+    transaction_validator/
+      main.py
 ```
 
-**Root Cause**: Model generated code assuming lambda_layer directory exists, but directory structure was not created, causing Pulumi archive hash calculation failure.
+**Root Cause**: Model generated code assuming lambda directories exist in project root, but Pulumi/CDK convention places Lambda code under lib/ directory. The incorrect paths cause Pulumi archive hash calculation failure.
 
 **Error Message**:
 ```
@@ -71,7 +101,7 @@ Exception: failed to compute archive hash for "python": couldn't read archive pa
 no such file or directory
 ```
 
-**Cost/Security/Performance Impact**: Deployment blocker - prevents Lambda function creation.
+**Cost/Security/Performance Impact**: Deployment blocker - prevents Lambda function and layer creation entirely.
 
 ---
 
@@ -244,7 +274,7 @@ Args:
 ## Summary of Fixes Required
 
 1. **Critical**: Add `environment_suffix_lower` for RDS resource naming
-2. **Critical**: Create lambda_layer directory structure
+2. **Critical**: Fix Lambda directory paths from `./lambda_*` to `./lib/lambda_*`
 3. **High**: Fix Python indentation to 4 spaces (PEP 8)
 4. **High**: Implement dynamic resource discovery in integration tests
 5. **High**: Add comprehensive unit test coverage
@@ -252,16 +282,3 @@ Args:
 7. **Low**: Format docstrings to respect line length limits
 
 These fixes enabled successful deployment to AWS eu-west-3 region with 100% unit test coverage and passing integration tests.
-
-**Cost/Security/Performance Impact**: Lambda functions fail to import required modules at runtime, breaking payment processing functionality (~$20/month in failed executions).
-
-## Summary
-
-- Total failures: 3 Critical, 1 High, 0 Medium, 0 Low
-- Primary knowledge gaps: 
-  1. AWS-specific API parameter names and usage patterns
-  2. CIDR block manipulation and subnet planning
-  3. RDS Aurora engine version availability
-- Training value: **High** - These are fundamental infrastructure deployment blockers that would prevent any real-world usage of the generated code. The fixes required deep AWS service knowledge and proper resource configuration validation.
-
-The MODEL_RESPONSE demonstrated good architectural understanding and comprehensive service coverage but failed on critical implementation details that are essential for successful deployment. These failures highlight the importance of accurate AWS API knowledge and proper resource configuration validation.

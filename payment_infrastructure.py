@@ -349,7 +349,7 @@ class PaymentInfrastructure(ComponentResource):
             layer_name=f"payment-common-{self.environment_suffix}",
             compatible_runtimes=["python3.9"],
             code=pulumi.AssetArchive({
-                "python": pulumi.FileArchive("./lambda_layer")
+                "python": pulumi.FileArchive("./lib/lambda_layer")
             }),
             opts=ResourceOptions(parent=self)
         )
@@ -359,7 +359,7 @@ class PaymentInfrastructure(ComponentResource):
             f"payment-processor-{self.environment_suffix}",
             runtime="python3.9",
             code=pulumi.AssetArchive({
-                ".": pulumi.FileArchive("./lambda_functions/payment_processor")
+                ".": pulumi.FileArchive("./lib/lambda_functions/payment_processor")
             }),
             handler="main.handler",
             role=lambda_role.arn,
@@ -386,7 +386,7 @@ class PaymentInfrastructure(ComponentResource):
             f"transaction-validator-{self.environment_suffix}",
             runtime="python3.9",
             code=pulumi.AssetArchive({
-                ".": pulumi.FileArchive("./lambda_functions/transaction_validator")
+                ".": pulumi.FileArchive("./lib/lambda_functions/transaction_validator")
             }),
             handler="main.handler",
             role=lambda_role.arn,

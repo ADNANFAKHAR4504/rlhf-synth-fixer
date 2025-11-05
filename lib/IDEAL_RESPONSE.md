@@ -415,7 +415,7 @@ class PaymentInfrastructure(ComponentResource):
             layer_name=f"payment-common-{self.environment_suffix}",
             compatible_runtimes=["python3.9"],
             code=pulumi.AssetArchive({
-                "python": pulumi.FileArchive("./lambda_layer")
+                "python": pulumi.FileArchive("./lib/lambda_layer")
             }),
             opts=ResourceOptions(parent=self)
         )
@@ -425,7 +425,7 @@ class PaymentInfrastructure(ComponentResource):
             f"payment-processor-{self.environment_suffix}",
             runtime="python3.9",
             code=pulumi.AssetArchive({
-                ".": pulumi.FileArchive("./lambda_functions/payment_processor")
+                ".": pulumi.FileArchive("./lib/lambda_functions/payment_processor")
             }),
             handler="main.handler",
             role=lambda_role.arn,
@@ -452,7 +452,7 @@ class PaymentInfrastructure(ComponentResource):
             f"transaction-validator-{self.environment_suffix}",
             runtime="python3.9",
             code=pulumi.AssetArchive({
-                ".": pulumi.FileArchive("./lambda_functions/transaction_validator")
+                ".": pulumi.FileArchive("./lib/lambda_functions/transaction_validator")
             }),
             handler="main.handler",
             role=lambda_role.arn,
@@ -780,7 +780,7 @@ if __name__ == '__main__':
 
 ```
 
-## File: lambda_layer/python/requirements.txt
+## File: lib/lambda_layer/python/requirements.txt
 
 ```
 requests==2.31.0
@@ -822,10 +822,13 @@ export PULUMI_BACKEND_URL="file://./pulumi-state"
 npm run test:integration
 ```
 
-### Quality Assurance
+### Verify Code Quality
 ```bash
-# Run full QA pipeline
-turing_qa
+# Run linting
+npm run lint
+
+# Run all tests
+npm test
 ```
 
 ## Critical Implementation Notes
@@ -847,9 +850,15 @@ self.db_subnet_group = aws.rds.SubnetGroup(
 ### 2. Lambda Layer Directory Structure
 Lambda layers must have proper directory structure before deployment:
 ```
-lambda_layer/
-  python/
-    requirements.txt
+lib/
+  lambda_layer/
+    python/
+      requirements.txt
+  lambda_functions/
+    payment_processor/
+      main.py
+    transaction_validator/
+      main.py
 ```
 
 The `python/` subdirectory is required by AWS Lambda runtime to locate Python packages.

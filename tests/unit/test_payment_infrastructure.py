@@ -151,7 +151,9 @@ class TestPaymentInfrastructure(unittest.TestCase):
                                  'ClusterInstance', 'Role', 'RolePolicyAttachment', 'LayerVersion',
                                  'Function', 'Table', 'Bucket']:
                 if hasattr(service_mock, resource_type):
-                    setattr(service_mock, resource_type, lambda *args, **kwargs: MockResource(resource_type.lower()))
+                    res_type = resource_type.lower()
+                    mock_fn = lambda *args, **kwargs: MockResource(res_type)
+                    setattr(service_mock, resource_type, mock_fn)
 
         # Create infrastructure
         infrastructure = PaymentInfrastructure(
@@ -171,14 +173,20 @@ class TestPaymentInfrastructure(unittest.TestCase):
     def test_subnet_cidr_calculation(self):
         """Test subnet CIDR block calculation."""
         test_cases = [
-            ("10.2.0.0/16", [("10.2.1.0/24", "10.2.10.0/24"), ("10.2.2.0/24", "10.2.11.0/24"), ("10.2.3.0/24", "10.2.12.0/24")]),
-            ("10.1.0.0/16", [("10.1.1.0/24", "10.1.10.0/24"), ("10.1.2.0/24", "10.1.11.0/24"), ("10.1.3.0/24", "10.1.12.0/24")]),
-            ("10.0.0.0/16", [("10.0.1.0/24", "10.0.10.0/24"), ("10.0.2.0/24", "10.0.11.0/24"), ("10.0.3.0/24", "10.0.12.0/24")])
+            ("10.2.0.0/16", [("10.2.1.0/24", "10.2.10.0/24"),
+                             ("10.2.2.0/24", "10.2.11.0/24"),
+                             ("10.2.3.0/24", "10.2.12.0/24")]),
+            ("10.1.0.0/16", [("10.1.1.0/24", "10.1.10.0/24"),
+                             ("10.1.2.0/24", "10.1.11.0/24"),
+                             ("10.1.3.0/24", "10.1.12.0/24")]),
+            ("10.0.0.0/16", [("10.0.1.0/24", "10.0.10.0/24"),
+                             ("10.0.2.0/24", "10.0.11.0/24"),
+                             ("10.0.3.0/24", "10.0.12.0/24")])
         ]
         
         for vpc_cidr, expected_subnets in test_cases:
             with self.subTest(vpc_cidr=vpc_cidr):
-                base_octets = vpc_cidr.split('/')[0].split('.')
+                base_octets = vpc_cidr.split('/', maxsplit=1)[0].split('.')
                 base_network = f"{base_octets[0]}.{base_octets[1]}"
                 
                 for i in range(3):
@@ -401,16 +409,20 @@ class TestPaymentInfrastructure(unittest.TestCase):
         for service in ['ec2', 'rds', 'iam', 'lambda_', 'dynamodb', 's3']:
             service_mock = getattr(mock_aws, service)
             for resource_type in ['Vpc', 'InternetGateway', 'Subnet', 'Instance', 'RouteTable', 
-                                 'RouteTableAssociation', 'SecurityGroup', 'SubnetGroup', 'Cluster',
-                                 'ClusterInstance', 'Role', 'RolePolicyAttachment', 'LayerVersion',
-                                 'Function', 'Table', 'Bucket']:
+                                 'RouteTableAssociation', 'SecurityGroup', 'SubnetGroup',
+                                 'Cluster', 'ClusterInstance', 'Role', 'RolePolicyAttachment',
+                                 'LayerVersion', 'Function', 'Table', 'Bucket']:
                 if hasattr(service_mock, resource_type):
                     if resource_type == 'Cluster':
-                        setattr(service_mock, resource_type, lambda *args, **kwargs: mock_cluster)
+                        mock_fn = lambda *args, **kwargs: mock_cluster
+                        setattr(service_mock, resource_type, mock_fn)
                     elif resource_type == 'ClusterInstance':
-                        setattr(service_mock, resource_type, lambda *args, **kwargs: mock_instance)
+                        mock_fn = lambda *args, **kwargs: mock_instance
+                        setattr(service_mock, resource_type, mock_fn)
                     else:
-                        setattr(service_mock, resource_type, lambda *args, **kwargs: MockResource(resource_type.lower()))
+                        res_type = resource_type.lower()
+                        mock_fn = lambda *args, **kwargs: MockResource(res_type)
+                        setattr(service_mock, resource_type, mock_fn)
 
         # Create infrastructure
         infrastructure = PaymentInfrastructure(
@@ -435,19 +447,20 @@ class TestPaymentInfrastructure(unittest.TestCase):
             service_mock = getattr(mock_aws, service)
             for resource_type in ['Vpc', 'InternetGateway', 'Subnet', 'Instance', 'RouteTable', 
                                  'RouteTableAssociation', 'SecurityGroup', 'SubnetGroup', 'Cluster',
-                                 'ClusterInstance', 'Role', 'RolePolicyAttachment', 'LayerVersion',
-                                 'Function', 'Table', 'Bucket']:
+                                 'ClusterInstance', 'Role', 'RolePolicyAttachment',
+                                 'LayerVersion', 'Function', 'Table', 'Bucket']:
                 if hasattr(service_mock, resource_type):
                     if resource_type == 'Function':
                         # Alternate between the two mock functions
                         def mock_function_creator(*args, **kwargs):
                             if 'payment-processor' in str(args):
                                 return mock_function1
-                            else:
-                                return mock_function2
+                            return mock_function2
                         setattr(service_mock, resource_type, mock_function_creator)
                     else:
-                        setattr(service_mock, resource_type, lambda *args, **kwargs: MockResource(resource_type.lower()))
+                        res_type = resource_type.lower()
+                        mock_fn = lambda *args, **kwargs: MockResource(res_type)
+                        setattr(service_mock, resource_type, mock_fn)
 
         # Create infrastructure
         infrastructure = PaymentInfrastructure(
@@ -480,11 +493,12 @@ class TestPaymentInfrastructure(unittest.TestCase):
                         def mock_table_creator(*args, **kwargs):
                             if 'transactions' in str(args):
                                 return mock_table1
-                            else:
-                                return mock_table2
+                            return mock_table2
                         setattr(service_mock, resource_type, mock_table_creator)
                     else:
-                        setattr(service_mock, resource_type, lambda *args, **kwargs: MockResource(resource_type.lower()))
+                        res_type = resource_type.lower()
+                        mock_fn = lambda *args, **kwargs: MockResource(res_type)
+                        setattr(service_mock, resource_type, mock_fn)
 
         # Create infrastructure
         infrastructure = PaymentInfrastructure(
@@ -517,11 +531,12 @@ class TestPaymentInfrastructure(unittest.TestCase):
                         def mock_bucket_creator(*args, **kwargs):
                             if 'audit' in str(args):
                                 return mock_bucket1
-                            else:
-                                return mock_bucket2
+                            return mock_bucket2
                         setattr(service_mock, resource_type, mock_bucket_creator)
                     else:
-                        setattr(service_mock, resource_type, lambda *args, **kwargs: MockResource(resource_type.lower()))
+                        res_type = resource_type.lower()
+                        mock_fn = lambda *args, **kwargs: MockResource(res_type)
+                        setattr(service_mock, resource_type, mock_fn)
 
         # Create infrastructure
         infrastructure = PaymentInfrastructure(
@@ -561,12 +576,14 @@ class TestPaymentInfrastructure(unittest.TestCase):
         for service in ['ec2', 'rds', 'iam', 'lambda_', 'dynamodb', 's3', 'cloudwatch', 'appautoscaling']:
             service_mock = getattr(mock_aws, service, MagicMock())
             setattr(mock_aws, service, service_mock)
-            for resource_type in ['Vpc', 'InternetGateway', 'Subnet', 'Instance', 'RouteTable', 
-                                 'RouteTableAssociation', 'SecurityGroup', 'SubnetGroup', 'Cluster',
-                                 'ClusterInstance', 'Role', 'RolePolicyAttachment', 'LayerVersion',
-                                 'Function', 'Table', 'Bucket', 'MetricAlarm', 'Target', 'Eip', 'NatGateway',
-                                 'BucketLifecycleConfiguration']:
-                setattr(service_mock, resource_type, lambda *args, **kwargs: MockResource(resource_type.lower()))
+            for resource_type in ['Vpc', 'InternetGateway', 'Subnet', 'Instance', 'RouteTable',
+                                 'RouteTableAssociation', 'SecurityGroup', 'SubnetGroup',
+                                 'Cluster', 'ClusterInstance', 'Role', 'RolePolicyAttachment',
+                                 'LayerVersion', 'Function', 'Table', 'Bucket', 'MetricAlarm',
+                                 'Target', 'Eip', 'NatGateway', 'BucketLifecycleConfiguration']:
+                res_type = resource_type.lower()
+                mock_fn = lambda *args, **kwargs: MockResource(res_type)
+                setattr(service_mock, resource_type, mock_fn)
 
         # Create infrastructure
         infrastructure = PaymentInfrastructure(
