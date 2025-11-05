@@ -2,7 +2,8 @@ import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
 
 const config = new pulumi.Config();
-const environmentSuffix = config.get('environmentSuffix') || 'dev';
+// Read from environment variable set by CI/CD pipeline, fallback to Pulumi config, then 'dev'
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || config.get('environmentSuffix') || 'dev';
 const notificationEmail = config.get('notificationEmail');
 
 const stack = new TapStack('tap-stack', {
