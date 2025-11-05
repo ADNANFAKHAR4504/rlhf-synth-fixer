@@ -234,6 +234,8 @@ export class TapStack extends TerraformStack {
     );
 
     // Lambda function for webhook validation
+    // Use path.resolve to reference lib directory from project root
+    const lambdaBasePath = path.resolve(process.cwd(), 'lib', 'lambda');
     const validatorLambda = new LambdaFunction(
       this,
       `webhook-validator-${environmentSuffix}`,
@@ -244,9 +246,9 @@ export class TapStack extends TerraformStack {
         memorySize: 512,
         timeout: 30,
         role: validatorRole.arn,
-        filename: path.join(__dirname, 'lambda', 'validator.zip'),
+        filename: path.join(lambdaBasePath, 'validator.zip'),
         sourceCodeHash: Fn.filebase64sha256(
-          path.join(__dirname, 'lambda', 'validator.zip')
+          path.join(lambdaBasePath, 'validator.zip')
         ),
         environment: {
           variables: {
@@ -367,9 +369,9 @@ export class TapStack extends TerraformStack {
         memorySize: 512,
         timeout: 30,
         role: processorRole.arn,
-        filename: path.join(__dirname, 'lambda', 'processor.zip'),
+        filename: path.join(lambdaBasePath, 'processor.zip'),
         sourceCodeHash: Fn.filebase64sha256(
-          path.join(__dirname, 'lambda', 'processor.zip')
+          path.join(lambdaBasePath, 'processor.zip')
         ),
         environment: {
           variables: {
