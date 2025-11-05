@@ -21,21 +21,18 @@ if [ "$LANGUAGE" = "ts" ]; then
 elif [ "$LANGUAGE" = "go" ]; then
     echo "✅ Go project detected, running go fmt and go vet..."
     if [ "$PLATFORM" = "cdktf" ]; then
-        # --- FIX: remove legacy terraform.tfstate before cdktf get ---
         if [ -f "terraform.tfstate" ]; then
             echo "⚠️ Found legacy terraform.tfstate. Removing for clean CI run..."
             rm -f terraform.tfstate
         fi
 
         if [ ! -d ".gen/aws" ]; then
-            echo "Running cdktf get to generate local bindings in .gen/ (missing .gen/aws)"
+            echo "📦 Running cdktf get to generate local bindings (.gen folder missing)"
             npx --yes cdktf get
         else
-            echo ".gen/aws exists, skipping cdktf get"
+            echo "✅ .gen/aws exists — skipping cdktf get"
         fi
     fi
-
-    # Module dependencies are prepared during build; skipping go mod tidy here
 
     UNFORMATTED=$(gofmt -l lib tests || true)
     if [ -n "$UNFORMATTED" ]; then
@@ -48,39 +45,40 @@ elif [ "$LANGUAGE" = "go" ]; then
     if [ "$PLATFORM" = "cdk" ]; then
       PKGS=$(go list ./lib/... ./tests/... 2>/dev/null || true)
     fi
-    
+
     if [ -n "$PKGS" ]; then
         echo "$PKGS" | xargs -r go vet
     else
-        echo "No Go packages found under lib or tests to vet."
+        echo "ℹ️ No Go packages found to vet."
     fi
 
-elif [ "$LANGUAGE" = "py" ]; then
-    # (unchanged pylint block)
-    LINT_OUTPUT=$(pipenv run lint 2>&1 || true)
-    LINT_EXIT_CODE=$?
+elif [[ "$LANGUAGE" = "py" || "$LANGUAGE" = "python" ]]; then
+    echo "✅ Python project detected, running pylint..."
+
+    if command -v pipenv &>/dev/null && [ -f "Pipfile" ]; then
+        LINT_OUTPUT=$(pipenv run lint 2>&1 || true)
+    else
+        echo "⚠️ pipenv not found — falling back to raw pylint"
+        pip install --quiet pylint >/dev/null 2>&1 || true
+        LINT_OUTPUT=$(pylint lib tests 2>&1 || true)
+    fi
+
     echo "--- START PYLINT OUTPUT (Raw) ---"
     echo "$LINT_OUTPUT"
     echo "--- END PYLINT OUTPUT (Raw) ---"
-    echo "Pylint command raw exit code: $LINT_EXIT_CODE"
 
-    if [ "$LINT_EXIT_CODE" -ne 0 ]; then
-        echo "⚠️ Pylint command exited with non-zero status code: $LINT_EXIT_CODE."
-    fi
-    
     SCORE=$(echo "$LINT_OUTPUT" | sed -n 's/.*rated at \([0-9.]*\)\/10.*/\1/p')
-    if [[ -z "$SCORE" || ! "$SCORE" =~ ^[0-9.]+$ ]]; then
-        echo "❌ ERROR: Could not extract linting score from Pylint output."
+    if [[ -z "$SCORE" ]]; then
+        echo "❌ ERROR: Could not extract linting score."
         exit 1
     fi
-    echo "Detected Pylint Score: $SCORE/10"
 
     MIN_SCORE=7.0
     if (( $(echo "$SCORE >= $MIN_SCORE" | bc -l) )); then
-        echo "✅ Linting score $SCORE/10 is greater than or equal to $MIN_SCORE. Linting passed."
+        echo "✅ Linting score $SCORE/10 ≥ $MIN_SCORE — Passed."
         exit 0
     else
-        echo "❌ Linting score $SCORE/10 is less than $MIN_SCORE. Linting failed."
+        echo "❌ Linting score $SCORE/10 < $MIN_SCORE — Failed."
         exit 1
     fi
 
@@ -88,19 +86,45 @@ elif [ "$LANGUAGE" = "java" ]; then
     echo "✅ Java project detected, running Checkstyle..."
     chmod +x ./gradlew
     ./gradlew check --build-cache --no-daemon
-    echo "✅ Java linting completed successfully"
+    echo "✅ Java linting completed"
 
 elif [ "$PLATFORM" = "cfn" ]; then
-    echo "✅ CloudFormation project detected, running CloudFormation validation..."
-    if [ "$LANGUAGE" = "json" ]; then
-        pipenv run cfn-validate-json
-    elif [ "$LANGUAGE" = "yaml" ]; then
-        pipenv run cfn-validate-yaml
-    fi
+    echo "✅ CloudFormation project detected, running cfn-lint..."
 
+    # If Pipfile exists → use pipenv environment
+    if [ -f "Pipfile" ]; then
+        echo "📦 Pipfile found — ensuring pipenv is available..."
+        if ! command -v pipenv &>/dev/null; then
+            echo "📦 Installing pipenv..."
+            pip install pipenv
+        fi
+
+        # Create virtualenv only if needed (cached after first run)
+        if [ ! -d ".venv" ]; then
+            echo "📦 Installing Python dependencies via pipenv..."
+            pipenv install --dev
+        else
+            echo "✅ .venv exists — skipping pipenv install"
+        fi
+
+        echo "🔍 Linting templates under lib/ using pipenv environment..."
+        find lib -type f \( -name "*.yaml" -o -name "*.yml" -o -name "*.json" \) \
+            -print0 | xargs -0 -r pipenv run cfn-lint -t
+
+    else
+        echo "ℹ️ No Pipfile found — using system Python environment"
+        if ! command -v cfn-lint &>/dev/null; then
+            echo "📦 Installing cfn-lint..."
+            pip install cfn-lint >/dev/null 2>&1
+        fi
+
+        echo "🔍 Linting templates under lib/ ..."
+        find lib -type f \( -name "*.yaml" -o -name "*.yml" -o -name "*.json" \) \
+            -print0 | xargs -0 -r cfn-lint -t
+    fi
 else
     echo "ℹ️ Unknown platform/language combination: $PLATFORM/$LANGUAGE"
-    echo "💡 Running default ESLint only"
+    echo "💡 Running default ESLint fallback"
     npm run lint
 fi
 
