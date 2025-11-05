@@ -778,4 +778,127 @@ describe('DataPipelineStack Unit Tests', () => {
       expect(topic.tags.Purpose).toBe('Alert Notifications');
     });
   });
+
+  describe('S3 Backend Configuration', () => {
+    test('should use custom stateBucket and stateBucketRegion from props', () => {
+      stack = new DataPipelineStack(app, 'TestCustomBackendStack', {
+        environment: 'dev',
+        environmentSuffix: 'test',
+        region: 'ap-southeast-1',
+        lambdaMemory: 512,
+        dynamodbReadCapacity: 5,
+        dynamodbWriteCapacity: 5,
+        dynamodbBillingMode: 'PAY_PER_REQUEST',
+        s3LifecycleDays: 30,
+        enableXrayTracing: false,
+        snsEmail: 'dev-alerts@example.com',
+        costCenter: 'development',
+        stateBucket: 'custom-state-bucket',
+        stateBucketRegion: 'eu-west-1',
+      });
+      synthesized = JSON.parse(Testing.synth(stack));
+
+      expect(synthesized.terraform.backend.s3).toBeDefined();
+      expect(synthesized.terraform.backend.s3.bucket).toBe(
+        'custom-state-bucket'
+      );
+      expect(synthesized.terraform.backend.s3.region).toBe('eu-west-1');
+      expect(synthesized.terraform.backend.s3.key).toBe(
+        'test/TestCustomBackendStack.tfstate'
+      );
+      expect(synthesized.terraform.backend.s3.encrypt).toBe(true);
+    });
+
+    test('should use environment variables for backend configuration when props not provided', () => {
+      const originalStateBucket = process.env.TERRAFORM_STATE_BUCKET;
+      const originalStateBucketRegion =
+        process.env.TERRAFORM_STATE_BUCKET_REGION;
+      const originalEnvironmentSuffix = process.env.ENVIRONMENT_SUFFIX;
+
+      process.env.TERRAFORM_STATE_BUCKET = 'env-state-bucket';
+      process.env.TERRAFORM_STATE_BUCKET_REGION = 'ap-northeast-1';
+      process.env.ENVIRONMENT_SUFFIX = 'envtest';
+
+      stack = new DataPipelineStack(app, 'TestEnvBackendStack', {
+        environment: 'dev',
+        environmentSuffix: 'envtest',
+        region: 'ap-southeast-1',
+        lambdaMemory: 512,
+        dynamodbReadCapacity: 5,
+        dynamodbWriteCapacity: 5,
+        dynamodbBillingMode: 'PAY_PER_REQUEST',
+        s3LifecycleDays: 30,
+        enableXrayTracing: false,
+        snsEmail: 'dev-alerts@example.com',
+        costCenter: 'development',
+      });
+      synthesized = JSON.parse(Testing.synth(stack));
+
+      expect(synthesized.terraform.backend.s3.bucket).toBe('env-state-bucket');
+      expect(synthesized.terraform.backend.s3.region).toBe('ap-northeast-1');
+      expect(synthesized.terraform.backend.s3.key).toBe(
+        'envtest/TestEnvBackendStack.tfstate'
+      );
+
+      if (originalStateBucket) {
+        process.env.TERRAFORM_STATE_BUCKET = originalStateBucket;
+      } else {
+        delete process.env.TERRAFORM_STATE_BUCKET;
+      }
+      if (originalStateBucketRegion) {
+        process.env.TERRAFORM_STATE_BUCKET_REGION = originalStateBucketRegion;
+      } else {
+        delete process.env.TERRAFORM_STATE_BUCKET_REGION;
+      }
+      if (originalEnvironmentSuffix) {
+        process.env.ENVIRONMENT_SUFFIX = originalEnvironmentSuffix;
+      } else {
+        delete process.env.ENVIRONMENT_SUFFIX;
+      }
+    });
+
+    test('should use default values when neither props nor environment variables provided', () => {
+      const originalStateBucket = process.env.TERRAFORM_STATE_BUCKET;
+      const originalStateBucketRegion =
+        process.env.TERRAFORM_STATE_BUCKET_REGION;
+      const originalEnvironmentSuffix = process.env.ENVIRONMENT_SUFFIX;
+
+      delete process.env.TERRAFORM_STATE_BUCKET;
+      delete process.env.TERRAFORM_STATE_BUCKET_REGION;
+      delete process.env.ENVIRONMENT_SUFFIX;
+
+      stack = new DataPipelineStack(app, 'TestDefaultBackendStack', {
+        environment: 'dev',
+        environmentSuffix: 'test',
+        region: 'ap-southeast-1',
+        lambdaMemory: 512,
+        dynamodbReadCapacity: 5,
+        dynamodbWriteCapacity: 5,
+        dynamodbBillingMode: 'PAY_PER_REQUEST',
+        s3LifecycleDays: 30,
+        enableXrayTracing: false,
+        snsEmail: 'dev-alerts@example.com',
+        costCenter: 'development',
+      });
+      synthesized = JSON.parse(Testing.synth(stack));
+
+      expect(synthesized.terraform.backend.s3.bucket).toBe(
+        'iac-rlhf-tf-states'
+      );
+      expect(synthesized.terraform.backend.s3.region).toBe('us-east-1');
+      expect(synthesized.terraform.backend.s3.key).toBe(
+        'test/TestDefaultBackendStack.tfstate'
+      );
+
+      if (originalStateBucket) {
+        process.env.TERRAFORM_STATE_BUCKET = originalStateBucket;
+      }
+      if (originalStateBucketRegion) {
+        process.env.TERRAFORM_STATE_BUCKET_REGION = originalStateBucketRegion;
+      }
+      if (originalEnvironmentSuffix) {
+        process.env.ENVIRONMENT_SUFFIX = originalEnvironmentSuffix;
+      }
+    });
+  });
 });
