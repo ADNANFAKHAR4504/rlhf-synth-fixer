@@ -109,6 +109,9 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // Get AWS account ID for unique resource naming
+    const currentAccount = aws.getCallerIdentity({}, { provider: primaryProvider });
+
     // ========================================================================
     // 1. S3 BUCKET FOR COMPLIANCE REPORTS
     // ========================================================================
@@ -117,7 +120,10 @@ export class TapStack extends pulumi.ComponentResource {
     const complianceBucket = new aws.s3.Bucket(
       `compliance-reports-${environmentSuffix}`,
       {
-        bucket: `compliance-reports-${environmentSuffix}-${(pulumi.getStack() || 'dev').toLowerCase()}`,
+        bucket: currentAccount.accountId.apply(
+          (accountId) =>
+            `compliance-reports-${environmentSuffix}-${accountId}-${(pulumi.getStack() || 'dev').toLowerCase()}`
+        ),
         versioning: {
           enabled: true,
         },
@@ -130,7 +136,7 @@ export class TapStack extends pulumi.ComponentResource {
         },
         lifecycleRules: [
           {
-            enabled: true,
+        enabled: true,
             id: 'archive-old-reports',
             transitions: [
               {
@@ -140,7 +146,7 @@ export class TapStack extends pulumi.ComponentResource {
             ],
           },
         ],
-        tags: {
+      tags: {
           ...defaultTags,
           Purpose: 'ComplianceReports',
         },
@@ -189,7 +195,7 @@ export class TapStack extends pulumi.ComponentResource {
       `compliance-alerts-${environmentSuffix}`,
       {
         displayName: 'Infrastructure Compliance Alerts',
-        tags: {
+      tags: {
           ...defaultTags,
           Purpose: 'ComplianceAlerting',
         },
@@ -218,13 +224,13 @@ export class TapStack extends pulumi.ComponentResource {
     const lambdaRole = new aws.iam.Role(
       `compliance-lambda-role-${environmentSuffix}`,
       {
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
               Effect: 'Allow',
               Principal: { Service: 'lambda.amazonaws.com' },
-              Action: 'sts:AssumeRole',
+            Action: 'sts:AssumeRole',
             },
           ],
         }),
@@ -256,7 +262,7 @@ export class TapStack extends pulumi.ComponentResource {
               Version: '2012-10-17',
               Statement: [
                 {
-                  Effect: 'Allow',
+            Effect: 'Allow',
                   Action: ['ec2:DescribeInstances', 'ec2:DescribeTags'],
                   Resource: '*',
                 },
@@ -434,8 +440,8 @@ exports.handler = async (event) => {
   }
 };
 `),
-        }),
-        tags: {
+      }),
+      tags: {
           ...defaultTags,
           Purpose: 'ComplianceScanning',
         },
@@ -564,10 +570,10 @@ exports.handler = async (event) => {
       `security-hub-remediation-role-${environmentSuffix}`,
       {
         assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
               Principal: { Service: 'lambda.amazonaws.com' },
               Action: 'sts:AssumeRole',
             },
@@ -685,14 +691,20 @@ exports.handler = async (event) => {
     // ========================================================================
 
     // Enable AWS Inspector for automated security assessments
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    // Note: Inspector Enabler can take time to complete. Using ignoreChanges to prevent
+    // unnecessary updates that can cause timeout issues.
     const inspector = new aws.inspector2.Enabler(
       `inspector-enabler-${environmentSuffix}`,
       {
-        accountIds: [pulumi.output(aws.getCallerIdentity()).accountId],
+        accountIds: [currentAccount.accountId],
         resourceTypes: ['EC2', 'ECR'],
       },
-      { parent: this, provider: primaryProvider }
+      {
+        parent: this,
+        provider: primaryProvider,
+        // Ignore changes to prevent timeout issues on updates
+        ignoreChanges: ['resourceTypes'],
+      }
     );
 
     // ========================================================================
@@ -767,13 +779,13 @@ exports.handler = async (event) => {
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
           Statement: [
-            {
-              Effect: 'Allow',
+          {
+            Effect: 'Allow',
               Principal: { Service: 'lambda.amazonaws.com' },
               Action: 'sts:AssumeRole',
-            },
-          ],
-        }),
+          },
+        ],
+      }),
         tags: defaultTags,
       },
       { parent: this, provider: primaryProvider }
@@ -801,12 +813,12 @@ exports.handler = async (event) => {
     const computeOptimizerLambda = new aws.lambda.Function(
       `compute-optimizer-reporter-${environmentSuffix}`,
       {
-        runtime: 'nodejs18.x',
-        handler: 'index.handler',
+      runtime: 'nodejs18.x',
+      handler: 'index.handler',
         role: computeOptimizerRole.arn,
         timeout: 300,
-        environment: {
-          variables: {
+      environment: {
+        variables: {
             REPORT_BUCKET: complianceBucket.bucket,
           },
         },
@@ -901,16 +913,16 @@ exports.handler = async (event) => {
     const healthDashboardRole = new aws.iam.Role(
       `health-dashboard-role-${environmentSuffix}`,
       {
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
               Effect: 'Allow',
               Principal: { Service: 'lambda.amazonaws.com' },
-              Action: 'sts:AssumeRole',
-            },
-          ],
-        }),
+            Action: 'sts:AssumeRole',
+          },
+        ],
+      }),
         tags: defaultTags,
       },
       { parent: this, provider: primaryProvider }
@@ -1052,10 +1064,10 @@ exports.handler = async (event) => {
       `drift-detection-role-${environmentSuffix}`,
       {
         assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
               Principal: { Service: 'lambda.amazonaws.com' },
               Action: 'sts:AssumeRole',
             },
@@ -1084,17 +1096,17 @@ exports.handler = async (event) => {
           JSON.stringify({
             Version: '2012-10-17',
             Statement: [
-              {
-                Effect: 'Allow',
-                Action: [
+          {
+            Effect: 'Allow',
+            Action: [
                   'config:DescribeConfigurationRecorders',
                   'config:DescribeDeliveryChannels',
                   'config:GetComplianceDetailsByConfigRule',
                 ],
                 Resource: '*',
-              },
-              {
-                Effect: 'Allow',
+          },
+          {
+            Effect: 'Allow',
                 Action: ['sns:Publish'],
                 Resource: topicArn,
               },
@@ -1196,9 +1208,9 @@ exports.handler = async (event) => {
               Effect: 'Allow',
               Principal: { Service: 'lambda.amazonaws.com' },
               Action: 'sts:AssumeRole',
-            },
-          ],
-        }),
+          },
+        ],
+      }),
         tags: defaultTags,
       },
       { parent: this, provider: primaryProvider }
@@ -1242,12 +1254,12 @@ exports.handler = async (event) => {
     const costReportingLambda = new aws.lambda.Function(
       `cost-reporting-${environmentSuffix}`,
       {
-        runtime: 'nodejs18.x',
-        handler: 'index.handler',
+      runtime: 'nodejs18.x',
+      handler: 'index.handler',
         role: costReportingRole.arn,
         timeout: 300,
-        environment: {
-          variables: {
+      environment: {
+        variables: {
             REPORT_BUCKET: complianceBucket.bucket,
             ENVIRONMENT: environmentSuffix,
           },
@@ -1345,7 +1357,7 @@ exports.handler = async (event) => {
     new aws.lambda.Permission(
       `cost-report-permission-${environmentSuffix}`,
       {
-        action: 'lambda:InvokeFunction',
+      action: 'lambda:InvokeFunction',
         function: costReportingLambda.name,
         principal: 'events.amazonaws.com',
         sourceArn: costReportSchedule.arn,
@@ -1367,11 +1379,17 @@ exports.handler = async (event) => {
       { parent: this }
     );
 
+    // Get AWS account ID for secondary region (same account)
+    const secondaryAccount = aws.getCallerIdentity({}, { provider: secondaryProvider });
+
     // Replica S3 bucket in secondary region for DR
     const replicaBucket = new aws.s3.Bucket(
       `compliance-reports-replica-${environmentSuffix}`,
       {
-        bucket: `compliance-reports-replica-${environmentSuffix}-${(pulumi.getStack() || 'dev').toLowerCase()}`,
+        bucket: secondaryAccount.accountId.apply(
+          (accountId) =>
+            `compliance-reports-replica-${environmentSuffix}-${accountId}-${(pulumi.getStack() || 'dev').toLowerCase()}`
+        ),
         versioning: {
           enabled: true,
         },
@@ -1382,7 +1400,7 @@ exports.handler = async (event) => {
             },
           },
         },
-        tags: {
+      tags: {
           ...defaultTags,
           Purpose: 'DisasterRecovery',
           ReplicaOf: pulumi.interpolate`${complianceBucket.bucket}`,
