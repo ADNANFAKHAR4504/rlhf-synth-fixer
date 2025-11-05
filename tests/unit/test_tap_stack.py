@@ -28,6 +28,11 @@ class MinimalMocks(pulumi.runtime.Mocks):
                 "names": ["us-east-1a", "us-east-1b"],
                 "zoneIds": ["use1-az1", "use1-az2"]
             }
+        if args.token == "aws:ec2/getAmi:getAmi":
+            return {
+                "id": "ami-12345678",
+                "name": "amzn2-ami-hvm-2023.0.0.0-x86_64-gp2"
+            }
         return args.args
 
 

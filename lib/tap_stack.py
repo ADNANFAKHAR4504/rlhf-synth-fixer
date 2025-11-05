@@ -703,7 +703,9 @@ echo "OK" > /var/www/html/health
         # Register outputs using pulumi.export
         pulumi.export("vpc_id", vpc.id)
         pulumi.export("alb_dns_name", alb.dns_name)
-        pulumi.export("alb_url", pulumi.Output.concat("http://", alb.dns_name))
+        # Handle None dns_name gracefully for unit tests
+        alb_url = alb.dns_name.apply(lambda dns: f"http://{dns}" if dns else "")
+        pulumi.export("alb_url", alb_url)
         pulumi.export("rds_endpoint", db_instance.endpoint)
         pulumi.export("rds_address", db_instance.address)
         pulumi.export("s3_bucket_name", s3_bucket.id)
