@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-05T19:40:19+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
+  ],
+  "po_id": "zquzq",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "Aurora",
+    "ECS",
+    "Fargate",
+    "ALB",
+    "Secrets Manager",
+    "CloudWatch",
+    "AWS Backup",
+    "Step Functions",
+    "Systems Manager",
+    "IAM",
+    "ACM"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9
+}
