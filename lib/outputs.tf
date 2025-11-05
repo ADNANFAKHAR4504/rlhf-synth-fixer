@@ -23,7 +23,7 @@ output "compliance_tagger_function_name" {
   value       = aws_lambda_function.compliance_tagger.function_name
 }
 
-output "dashboard_url" {
+output "compliance_dashboard_url" {
   description = "URL to the CloudWatch compliance dashboard"
   value       = "https://console.aws.amazon.com/cloudwatch/home?region=${var.aws_region}#dashboards:name=${aws_cloudwatch_dashboard.compliance_dashboard.dashboard_name}"
 }
