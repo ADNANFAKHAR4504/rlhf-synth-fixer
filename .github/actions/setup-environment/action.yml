@@ -30,6 +30,22 @@ runs:
     - name: Checkout
       uses: actions/checkout@v4
     # ✅ Restore NPM Cache (only if JS/TS/CDK/CDKTF/Pulumi TS)
+    - name: Cache CDKTF generated providers
+      if: ${{ inputs.platform == 'cdktf' }}
+      uses: actions/cache@v4
+      with:
+        path: .gen
+        key: gen-${{ runner.os }}-${{ hashFiles('cdktf.json') }}
+        restore-keys: |
+          gen-${{ runner.os }}-
+    - name: Cache pipenv virtualenv
+      if: ${{ inputs.language == 'py' }}
+      uses: actions/cache@v4
+      with:
+        path: .venv
+        key: venv-${{ runner.os }}-${{ hashFiles('Pipfile.lock') }}
+        restore-keys: |
+          venv-${{ runner.os }}-
     - name: Cache npm packages
       if: ${{ inputs.language == 'ts' || inputs.language == 'js' || inputs.platform == 'cdk' || inputs.platform == 'cdktf' || inputs.platform == 'pulumi' }}
       uses: actions/cache@v4
