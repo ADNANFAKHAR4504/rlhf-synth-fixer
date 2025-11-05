@@ -6,7 +6,9 @@
   "team": "synth",
   "startedAt": "2025-11-04T19:37:07+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": ["Multi-Environment Consistency and Replication"],
+  "subject_labels": [
+    "Multi-Environment Consistency and Replication"
+  ],
   "po_id": "9kwnu",
   "aws_services": [
     "S3",
@@ -18,5 +20,11 @@
     "CloudWatch"
   ],
   "region": "ap-southeast-1",
-  "training_quality": 9
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
