@@ -35,5 +35,6 @@
     "VPC Flow Logs"
   ],
   "region": "ca-central-1",
-  "training_quality": 8
+  "training_quality": 8,
+  "author": "mayanksethi-turing"
 }

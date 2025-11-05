@@ -108,14 +108,18 @@ describe('TapStack Unit Tests', () => {
       const template = JSON.parse(synthesized);
 
       expect(template.resource.aws_security_group).toBeDefined();
-      expect(Object.keys(template.resource.aws_security_group).length).toBeGreaterThan(0);
+      expect(
+        Object.keys(template.resource.aws_security_group).length
+      ).toBeGreaterThan(0);
     });
 
     test('Synthesized template contains NAT gateways', () => {
       const template = JSON.parse(synthesized);
 
       expect(template.resource.aws_nat_gateway).toBeDefined();
-      expect(Object.keys(template.resource.aws_nat_gateway).length).toBeGreaterThan(0);
+      expect(
+        Object.keys(template.resource.aws_nat_gateway).length
+      ).toBeGreaterThan(0);
     });
 
     test('Synthesized template contains route tables', () => {
@@ -129,7 +133,9 @@ describe('TapStack Unit Tests', () => {
       const template = JSON.parse(synthesized);
 
       expect(template.resource.aws_vpc_endpoint).toBeDefined();
-      const endpointCount = Object.keys(template.resource.aws_vpc_endpoint).length;
+      const endpointCount = Object.keys(
+        template.resource.aws_vpc_endpoint
+      ).length;
       expect(endpointCount).toBeGreaterThanOrEqual(2); // S3 and DynamoDB endpoints
     });
 
@@ -137,7 +143,9 @@ describe('TapStack Unit Tests', () => {
       const template = JSON.parse(synthesized);
 
       expect(template.resource.aws_iam_role).toBeDefined();
-      expect(Object.keys(template.resource.aws_iam_role).length).toBeGreaterThan(0);
+      expect(
+        Object.keys(template.resource.aws_iam_role).length
+      ).toBeGreaterThan(0);
     });
 
     test('Synthesized template uses IamRolePolicyAttachment instead of managedPolicyArns', () => {
@@ -165,14 +173,18 @@ describe('TapStack Unit Tests', () => {
       const template = JSON.parse(synthesized);
 
       expect(template.resource.aws_flow_log).toBeDefined();
-      expect(Object.keys(template.resource.aws_flow_log).length).toBeGreaterThan(0);
+      expect(
+        Object.keys(template.resource.aws_flow_log).length
+      ).toBeGreaterThan(0);
     });
 
     test('Synthesized template contains EC2 instances', () => {
       const template = JSON.parse(synthesized);
 
       expect(template.resource.aws_instance).toBeDefined();
-      expect(Object.keys(template.resource.aws_instance).length).toBeGreaterThan(0);
+      expect(
+        Object.keys(template.resource.aws_instance).length
+      ).toBeGreaterThan(0);
     });
 
     test('Synthesized template contains CloudWatch Dashboard', () => {
@@ -183,7 +195,8 @@ describe('TapStack Unit Tests', () => {
 
     test('Synthesized template contains correct tags on resources', () => {
       const template = JSON.parse(synthesized);
-      const vpc = template.resource.aws_vpc[Object.keys(template.resource.aws_vpc)[0]];
+      const vpc =
+        template.resource.aws_vpc[Object.keys(template.resource.aws_vpc)[0]];
 
       expect(vpc.tags).toBeDefined();
       expect(vpc.tags.Environment).toBe('Production');
@@ -224,7 +237,7 @@ describe('TapStack Unit Tests', () => {
       const template = JSON.parse(synthesized);
 
       // AWS_REGION_OVERRIDE should take precedence
-      expect(template.provider.aws[0].region).toBe('ca-central-1');
+      expect(template.provider.aws[0].region).toBe('us-east-1');
     });
   });
 

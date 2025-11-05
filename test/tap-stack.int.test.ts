@@ -20,7 +20,6 @@ import { GetRoleCommand, IAMClient } from '@aws-sdk/client-iam';
 import { mockClient } from 'aws-sdk-client-mock';
 import * as fs from 'fs';
 import * as path from 'path';
-import mockResponses from './aws-sdk-mock';
 
 // Create mock clients for testing without real AWS credentials
 const ec2Mock = mockClient(EC2Client);
@@ -52,13 +51,216 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
       );
     }
 
-    outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+    outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8')).TapStackpr5664;
 
     // Initialize AWS clients
     ec2Client = new EC2Client({ region });
     logsClient = new CloudWatchLogsClient({ region });
     cloudWatchClient = new CloudWatchClient({ region });
     iamClient = new IAMClient({ region });
+
+    // Define mock responses
+    const mockResponses = {
+      describeVpcs: {
+        Vpcs: [
+          {
+            VpcId: outputs['vpc-stack_vpc-id_B4D2EFC2'],
+            CidrBlock: '10.0.0.0/16',
+            Tags: [
+              { Key: 'Environment', Value: 'Production' },
+              { Key: 'Project', Value: 'PaymentGateway' },
+              { Key: 'Name', Value: `vpc-payment-${environmentSuffix}` },
+            ],
+          },
+        ],
+      },
+      describePublicSubnets: {
+        Subnets: [
+          {
+            SubnetId: outputs['vpc-stack_public-subnet-ids_9241F01E'][0],
+            CidrBlock: '10.0.0.0/24',
+            MapPublicIpOnLaunch: true,
+            AvailabilityZone: 'ca-central-1a',
+          },
+        ],
+      },
+      describePrivateSubnets: {
+        Subnets: [
+          {
+            SubnetId: outputs['vpc-stack_private-subnet-ids_7503D504'][0],
+            CidrBlock: '10.0.1.0/24',
+            MapPublicIpOnLaunch: false,
+            AvailabilityZone: 'ca-central-1a',
+          },
+        ],
+      },
+      describeAllSubnets: {
+        Subnets: [
+          {
+            SubnetId: outputs['vpc-stack_public-subnet-ids_9241F01E'][0],
+            CidrBlock: '10.0.0.0/24',
+            MapPublicIpOnLaunch: true,
+            AvailabilityZone: 'ca-central-1a',
+          },
+          {
+            SubnetId: outputs['vpc-stack_private-subnet-ids_7503D504'][0],
+            CidrBlock: '10.0.1.0/24',
+            MapPublicIpOnLaunch: false,
+            AvailabilityZone: 'ca-central-1a',
+          },
+        ],
+      },
+      describeNatGateways: {
+        NatGateways: [
+          {
+            NatGatewayId: outputs['vpc-stack_nat-gateway-ids_979318AA'][0],
+            State: 'available' as const,
+            SubnetId: outputs['vpc-stack_public-subnet-ids_9241F01E'][0],
+            NatGatewayAddresses: [{ AllocationId: 'eipalloc-12345' }],
+            VpcId: outputs['vpc-stack_vpc-id_B4D2EFC2'],
+            CreateTime: new Date(),
+          },
+        ],
+      },
+      describeSecurityGroups: {
+        web: {
+          SecurityGroups: [
+            {
+              GroupId: outputs['vpc-stack_web-security-group-id_E4BFFCEB'],
+              IpPermissions: [
+                {
+                  FromPort: 80,
+                  ToPort: 80,
+                  IpProtocol: 'tcp',
+                  IpRanges: [{ CidrIp: '10.0.0.0/16' }],
+                },
+                {
+                  FromPort: 443,
+                  ToPort: 443,
+                  IpProtocol: 'tcp',
+                  IpRanges: [{ CidrIp: '10.0.0.0/16' }],
+                },
+              ],
+              IpPermissionsEgress: [],
+            },
+          ],
+        },
+        app: {
+          SecurityGroups: [
+            {
+              GroupId: outputs['vpc-stack_app-security-group-id_53770D0F'],
+              IpPermissions: [
+                {
+                  FromPort: 8080,
+                  ToPort: 8080,
+                  IpProtocol: 'tcp',
+                  UserIdGroupPairs: [
+                    {
+                      GroupId:
+                        outputs['vpc-stack_web-security-group-id_E4BFFCEB'],
+                    },
+                  ],
+                },
+              ],
+              IpPermissionsEgress: [],
+            },
+          ],
+        },
+      },
+      describeVpcEndpoints: {
+        s3: {
+          VpcEndpoints: [
+            {
+              VpcEndpointId: outputs['vpc-stack_s3-endpoint-id_75E8EEA3'],
+              VpcEndpointType: 'Gateway',
+              ServiceName: 'com.amazonaws.ca-central-1.s3',
+              State: 'available',
+            },
+          ],
+        },
+        dynamodb: {
+          VpcEndpoints: [
+            {
+              VpcEndpointId: outputs['vpc-stack_dynamodb-endpoint-id_8FD40CED'],
+              VpcEndpointType: 'Gateway',
+              ServiceName: 'com.amazonaws.ca-central-1.dynamodb',
+              State: 'available',
+            },
+          ],
+        },
+      },
+      describeInstances: {
+        Reservations: [
+          {
+            Instances: [
+              {
+                InstanceId: outputs['vpc-stack_instance-ids_07654B89'][0],
+                ImageId: 'ami-0abcdef1234567890',
+                SubnetId: outputs['vpc-stack_private-subnet-ids_7503D504'][0],
+                IamInstanceProfile: {
+                  Arn: `arn:aws:iam::123456789012:instance-profile/payment-ec2-ssm-role-${environmentSuffix}`,
+                },
+                KeyName: undefined,
+                MetadataOptions: {
+                  HttpTokens: 'required' as const,
+                },
+              },
+            ],
+          },
+        ],
+      },
+      describeRouteTables: {
+        RouteTables: [
+          {
+            RouteTableId: 'rtb-public',
+            VpcId: outputs['vpc-stack_vpc-id_B4D2EFC2'],
+            Associations: [
+              { SubnetId: outputs['vpc-stack_public-subnet-ids_9241F01E'][0] },
+            ],
+            Routes: [
+              { DestinationCidrBlock: '0.0.0.0/0', GatewayId: 'igw-12345' },
+            ],
+          },
+          {
+            RouteTableId: 'rtb-private',
+            VpcId: outputs['vpc-stack_vpc-id_B4D2EFC2'],
+            Associations: [
+              { SubnetId: outputs['vpc-stack_private-subnet-ids_7503D504'][0] },
+            ],
+            Routes: [
+              {
+                DestinationCidrBlock: '0.0.0.0/0',
+                NatGatewayId: outputs['vpc-stack_nat-gateway-ids_979318AA'][0],
+              },
+            ],
+          },
+        ],
+      },
+      describeLogGroups: {
+        logGroups: [
+          {
+            logGroupName: outputs['vpc-stack_flow-log-group-name_24D2A9FC'],
+            retentionInDays: 7,
+          },
+        ],
+      },
+      listDashboards: {
+        DashboardEntries: [
+          {
+            DashboardName: `payment-vpc-flowlogs-${environmentSuffix}`,
+          },
+        ],
+      },
+      getRole: {
+        Role: {
+          RoleName: `payment-ec2-ssm-role-${environmentSuffix}`,
+          Path: '/',
+          RoleId: 'AROA1234567890',
+          Arn: `arn:aws:iam::123456789012:role/payment-ec2-ssm-role-${environmentSuffix}`,
+          CreateDate: new Date(),
+        },
+      },
+    };
 
     if (USE_MOCKS) {
       // Setup mock responses for EC2 calls
@@ -67,13 +269,13 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
         const subnetIds = input.SubnetIds || [];
         if (
           subnetIds.length === 1 &&
-          subnetIds[0] === 'subnet-08232423dfd9058a7'
+          subnetIds[0] === 'subnet-08b5cff2bbbe53dcc'
         ) {
           return Promise.resolve(mockResponses.describePublicSubnets);
         }
         if (
           subnetIds.length === 1 &&
-          subnetIds[0] === 'subnet-00495b0899f200b0e'
+          subnetIds[0] === 'subnet-0c9a866c52b43bbe4'
         ) {
           return Promise.resolve(mockResponses.describePrivateSubnets);
         }
@@ -82,39 +284,45 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
         }
         return Promise.resolve({ Subnets: [] });
       });
-      ec2Mock.on(DescribeNatGatewaysCommand).resolves(mockResponses.describeNatGateways);
       ec2Mock
-        .on(DescribeSecurityGroupsCommand)
-        .callsFake((input: any) => {
-          const groupIds = input.GroupIds || [];
-          if (groupIds.includes('sg-02f62581c2ce664cf')) {
-            return Promise.resolve(mockResponses.describeSecurityGroups.web);
-          }
-          if (groupIds.includes('sg-0fa0b0c2b6e9d7511')) {
-            return Promise.resolve(mockResponses.describeSecurityGroups.app);
-          }
-          return Promise.resolve({ SecurityGroups: [] });
-        });
+        .on(DescribeNatGatewaysCommand)
+        .resolves(mockResponses.describeNatGateways);
+      ec2Mock.on(DescribeSecurityGroupsCommand).callsFake((input: any) => {
+        const groupIds = input.GroupIds || [];
+        if (groupIds.includes('sg-0158b178898338cbe')) {
+          return Promise.resolve(mockResponses.describeSecurityGroups.web);
+        }
+        if (groupIds.includes('sg-00e70015d631d7372')) {
+          return Promise.resolve(mockResponses.describeSecurityGroups.app);
+        }
+        return Promise.resolve({ SecurityGroups: [] });
+      });
+      ec2Mock.on(DescribeVpcEndpointsCommand).callsFake((input: any) => {
+        const endpointIds = input.VpcEndpointIds || [];
+        if (endpointIds.includes('vpce-022db3fea97e5d1a6')) {
+          return Promise.resolve(mockResponses.describeVpcEndpoints.s3);
+        }
+        if (endpointIds.includes('vpce-07a52ab3fa841f445')) {
+          return Promise.resolve(mockResponses.describeVpcEndpoints.dynamodb);
+        }
+        return Promise.resolve({ VpcEndpoints: [] });
+      });
       ec2Mock
-        .on(DescribeVpcEndpointsCommand)
-        .callsFake((input: any) => {
-          const endpointIds = input.VpcEndpointIds || [];
-          if (endpointIds.includes('vpce-s3')) {
-            return Promise.resolve(mockResponses.describeVpcEndpoints.s3);
-          }
-          if (endpointIds.includes('vpce-dynamodb')) {
-            return Promise.resolve(mockResponses.describeVpcEndpoints.dynamodb);
-          }
-          return Promise.resolve({ VpcEndpoints: [] });
-        });
-      ec2Mock.on(DescribeInstancesCommand).resolves(mockResponses.describeInstances);
-      ec2Mock.on(DescribeRouteTablesCommand).resolves(mockResponses.describeRouteTables);
+        .on(DescribeInstancesCommand)
+        .resolves(mockResponses.describeInstances);
+      ec2Mock
+        .on(DescribeRouteTablesCommand)
+        .resolves(mockResponses.describeRouteTables);
 
       // Setup mock responses for CloudWatch Logs
-      logsClientMock.on(DescribeLogGroupsCommand).resolves(mockResponses.describeLogGroups);
+      logsClientMock
+        .on(DescribeLogGroupsCommand)
+        .resolves(mockResponses.describeLogGroups);
 
       // Setup mock responses for CloudWatch
-      cloudWatchMock.on(ListDashboardsCommand).resolves(mockResponses.listDashboards);
+      cloudWatchMock
+        .on(ListDashboardsCommand)
+        .resolves(mockResponses.listDashboards);
 
       // Setup mock responses for IAM
       iamMock.on(GetRoleCommand).resolves(mockResponses.getRole);
@@ -132,7 +340,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
 
   describe('VPC Configuration', () => {
     test('VPC should exist with correct CIDR block', async () => {
-      const vpcId = outputs['vpc-id'];
+      const vpcId = outputs['vpc-stack_vpc-id_B4D2EFC2'];
       expect(vpcId).toBeDefined();
 
       const command = new DescribeVpcsCommand({
@@ -145,7 +353,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
     });
 
     test('VPC should have correct tags', async () => {
-      const vpcId = outputs['vpc-id'];
+      const vpcId = outputs['vpc-stack_vpc-id_B4D2EFC2'];
       const command = new DescribeVpcsCommand({
         VpcIds: [vpcId],
       });
@@ -168,7 +376,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
 
   describe('Subnet Configuration', () => {
     test('Should have 1 public subnet', async () => {
-      const publicSubnetIds = outputs['public-subnet-ids'];
+      const publicSubnetIds = outputs['vpc-stack_public-subnet-ids_9241F01E'];
       expect(publicSubnetIds).toBeDefined();
       expect(publicSubnetIds).toHaveLength(1);
 
@@ -178,13 +386,13 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
       const response = await ec2Client.send(command);
 
       expect(response.Subnets).toHaveLength(1);
-      response.Subnets!.forEach((subnet) => {
+      response.Subnets!.forEach(subnet => {
         expect(subnet.MapPublicIpOnLaunch).toBe(true);
       });
     });
 
     test('Should have 1 private subnet', async () => {
-      const privateSubnetIds = outputs['private-subnet-ids'];
+      const privateSubnetIds = outputs['vpc-stack_private-subnet-ids_7503D504'];
       expect(privateSubnetIds).toBeDefined();
       expect(privateSubnetIds).toHaveLength(1);
 
@@ -194,13 +402,13 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
       const response = await ec2Client.send(command);
 
       expect(response.Subnets).toHaveLength(1);
-      response.Subnets!.forEach((subnet) => {
+      response.Subnets!.forEach(subnet => {
         expect(subnet.MapPublicIpOnLaunch).toBe(false);
       });
     });
 
     test('Subnets should be in same availability zone', async () => {
-      const publicSubnetIds = outputs['public-subnet-ids'];
+      const publicSubnetIds = outputs['vpc-stack_public-subnet-ids_9241F01E'];
       const command = new DescribeSubnetsCommand({
         SubnetIds: publicSubnetIds,
       });
@@ -213,8 +421,8 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
     });
 
     test('Subnets should have correct CIDR blocks', async () => {
-      const publicSubnetIds = outputs['public-subnet-ids'];
-      const privateSubnetIds = outputs['private-subnet-ids'];
+      const publicSubnetIds = outputs['vpc-stack_public-subnet-ids_9241F01E'];
+      const privateSubnetIds = outputs['vpc-stack_private-subnet-ids_7503D504'];
 
       const command = new DescribeSubnetsCommand({
         SubnetIds: [...publicSubnetIds, ...privateSubnetIds],
@@ -224,10 +432,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
       const cidrBlocks = response
         .Subnets!.map(subnet => subnet.CidrBlock)
         .sort();
-      const expectedCidrs = [
-        '10.0.0.0/24',
-        '10.0.1.0/24',
-      ];
+      const expectedCidrs = ['10.0.0.0/24', '10.0.1.0/24'];
 
       expect(cidrBlocks).toEqual(expectedCidrs);
     });
@@ -235,7 +440,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
 
   describe('NAT Gateway Configuration', () => {
     test('Should have 1 NAT Gateway for high availability', async () => {
-      const natGatewayIds = outputs['nat-gateway-ids'];
+      const natGatewayIds = outputs['vpc-stack_nat-gateway-ids_979318AA'];
       expect(natGatewayIds).toBeDefined();
       expect(natGatewayIds).toHaveLength(1);
 
@@ -245,14 +450,14 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
       const response = await ec2Client.send(command);
 
       expect(response.NatGateways).toHaveLength(1);
-      response.NatGateways!.forEach((nat) => {
+      response.NatGateways!.forEach(nat => {
         expect(nat.State).toBe('available');
       });
     });
 
     test('NAT Gateways should be in public subnets', async () => {
-      const natGatewayIds = outputs['nat-gateway-ids'];
-      const publicSubnetIds = outputs['public-subnet-ids'];
+      const natGatewayIds = outputs['vpc-stack_nat-gateway-ids_979318AA'];
+      const publicSubnetIds = outputs['vpc-stack_public-subnet-ids_9241F01E'];
 
       const command = new DescribeNatGatewaysCommand({
         NatGatewayIds: natGatewayIds,
@@ -265,7 +470,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
     });
 
     test('Each NAT Gateway should have an Elastic IP', async () => {
-      const natGatewayIds = outputs['nat-gateway-ids'];
+      const natGatewayIds = outputs['vpc-stack_nat-gateway-ids_979318AA'];
       const command = new DescribeNatGatewaysCommand({
         NatGatewayIds: natGatewayIds,
       });
@@ -281,7 +486,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
 
   describe('Security Group Configuration', () => {
     test('Web security group should exist and have correct rules', async () => {
-      const webSgId = outputs['web-security-group-id'];
+      const webSgId = outputs['vpc-stack_web-security-group-id_E4BFFCEB'];
       expect(webSgId).toBeDefined();
 
       const command = new DescribeSecurityGroupsCommand({
@@ -310,8 +515,8 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
     });
 
     test('App security group should allow port 8080 from web tier only', async () => {
-      const appSgId = outputs['app-security-group-id'];
-      const webSgId = outputs['web-security-group-id'];
+      const appSgId = outputs['vpc-stack_app-security-group-id_53770D0F'];
+      const webSgId = outputs['vpc-stack_web-security-group-id_E4BFFCEB'];
 
       const command = new DescribeSecurityGroupsCommand({
         GroupIds: [appSgId],
@@ -338,7 +543,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
 
   describe('VPC Endpoints Configuration', () => {
     test('S3 VPC Endpoint should exist and be gateway type', async () => {
-      const s3EndpointId = outputs['s3-endpoint-id'];
+      const s3EndpointId = outputs['vpc-stack_s3-endpoint-id_75E8EEA3'];
       expect(s3EndpointId).toBeDefined();
 
       const command = new DescribeVpcEndpointsCommand({
@@ -354,7 +559,8 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
     });
 
     test('DynamoDB VPC Endpoint should exist and be gateway type', async () => {
-      const dynamodbEndpointId = outputs['dynamodb-endpoint-id'];
+      const dynamodbEndpointId =
+        outputs['vpc-stack_dynamodb-endpoint-id_8FD40CED'];
       expect(dynamodbEndpointId).toBeDefined();
 
       const command = new DescribeVpcEndpointsCommand({
@@ -371,31 +577,22 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
   });
 
   describe('EC2 Instances Configuration', () => {
-    test('Should have 0 EC2 instances in private subnets', async () => {
-      const instanceIds = outputs['instance-ids'];
+    test('Should have 1 EC2 instance in private subnets', async () => {
+      const instanceIds = outputs['vpc-stack_instance-ids_07654B89'];
       expect(instanceIds).toBeDefined();
-      expect(instanceIds).toHaveLength(0);
-
-      // Skip the rest if no instances
-      if (instanceIds.length === 0) {
-        return;
-      }
+      expect(instanceIds).toHaveLength(1);
 
       const command = new DescribeInstancesCommand({
         InstanceIds: instanceIds,
       });
       const response = await ec2Client.send(command);
 
-      expect(response.Reservations).toHaveLength(0);
+      expect(response.Reservations).toHaveLength(1);
+      expect(response.Reservations![0].Instances).toHaveLength(1);
     });
 
     test('Instances should use Amazon Linux 2023 AMI', async () => {
-      const instanceIds = outputs['instance-ids'];
-
-      // Skip if no instances
-      if (!instanceIds || instanceIds.length === 0) {
-        return;
-      }
+      const instanceIds = outputs['vpc-stack_instance-ids_07654B89'];
 
       const command = new DescribeInstancesCommand({
         InstanceIds: instanceIds,
@@ -412,14 +609,9 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
     });
 
     test('Instances should be in private subnets', async () => {
-      const instanceIds = outputs['instance-ids'];
+      const instanceIds = outputs['vpc-stack_instance-ids_07654B89'];
 
-      // Skip if no instances
-      if (!instanceIds || instanceIds.length === 0) {
-        return;
-      }
-
-      const privateSubnetIds = outputs['private-subnet-ids'];
+      const privateSubnetIds = outputs['vpc-stack_private-subnet-ids_7503D504'];
 
       const command = new DescribeInstancesCommand({
         InstanceIds: instanceIds,
@@ -433,12 +625,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
     });
 
     test('Instances should have IAM instance profile for Session Manager', async () => {
-      const instanceIds = outputs['instance-ids'];
-
-      // Skip if no instances
-      if (!instanceIds || instanceIds.length === 0) {
-        return;
-      }
+      const instanceIds = outputs['vpc-stack_instance-ids_07654B89'];
 
       const command = new DescribeInstancesCommand({
         InstanceIds: instanceIds,
@@ -453,12 +640,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
     });
 
     test('Instances should not have SSH key pairs', async () => {
-      const instanceIds = outputs['instance-ids'];
-
-      // Skip if no instances
-      if (!instanceIds || instanceIds.length === 0) {
-        return;
-      }
+      const instanceIds = outputs['vpc-stack_instance-ids_07654B89'];
 
       const command = new DescribeInstancesCommand({
         InstanceIds: instanceIds,
@@ -472,12 +654,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
     });
 
     test('Instances should have IMDSv2 enabled', async () => {
-      const instanceIds = outputs['instance-ids'];
-
-      // Skip if no instances
-      if (!instanceIds || instanceIds.length === 0) {
-        return;
-      }
+      const instanceIds = outputs['vpc-stack_instance-ids_07654B89'];
 
       const command = new DescribeInstancesCommand({
         InstanceIds: instanceIds,
@@ -493,7 +670,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
 
   describe('VPC Flow Logs Configuration', () => {
     test('VPC Flow Logs should be enabled and logging to CloudWatch', async () => {
-      const logGroupName = outputs['flow-log-group-name'];
+      const logGroupName = outputs['vpc-stack_flow-log-group-name_24D2A9FC'];
       expect(logGroupName).toBeDefined();
 
       const command = new DescribeLogGroupsCommand({
@@ -507,7 +684,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
     });
 
     test('Flow Log Group should have retention policy', async () => {
-      const logGroupName = outputs['flow-log-group-name'];
+      const logGroupName = outputs['vpc-stack_flow-log-group-name_24D2A9FC'];
       const command = new DescribeLogGroupsCommand({
         logGroupNamePrefix: logGroupName,
       });
@@ -542,7 +719,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
 
   describe('Route Table Configuration', () => {
     test('Each subnet should have explicit route table association', async () => {
-      const vpcId = outputs['vpc-id'];
+      const vpcId = outputs['vpc-stack_vpc-id_B4D2EFC2'];
       const command = new DescribeRouteTablesCommand({
         Filters: [
           {
@@ -554,12 +731,12 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
       const response = await ec2Client.send(command);
 
       const routeTables = response.RouteTables || [];
-      expect(routeTables.length).toBeGreaterThanOrEqual(4); // 1 public + 3 private
+      expect(routeTables.length).toBeGreaterThanOrEqual(2); // 1 public + 1 private
 
       // Verify all subnets have explicit associations
       const allSubnetIds = [
-        ...outputs['public-subnet-ids'],
-        ...outputs['private-subnet-ids'],
+        ...outputs['vpc-stack_public-subnet-ids_9241F01E'],
+        ...outputs['vpc-stack_private-subnet-ids_7503D504'],
       ];
 
       const associatedSubnets = new Set();
@@ -577,8 +754,8 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
     });
 
     test('Private subnets should have routes to NAT Gateways', async () => {
-      const vpcId = outputs['vpc-id'];
-      const privateSubnetIds = outputs['private-subnet-ids'];
+      const vpcId = outputs['vpc-stack_vpc-id_B4D2EFC2'];
+      const privateSubnetIds = outputs['vpc-stack_private-subnet-ids_7503D504'];
 
       const command = new DescribeRouteTablesCommand({
         Filters: [
@@ -608,8 +785,8 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
     });
 
     test('Public subnets should have route to Internet Gateway', async () => {
-      const vpcId = outputs['vpc-id'];
-      const publicSubnetIds = outputs['public-subnet-ids'];
+      const vpcId = outputs['vpc-stack_vpc-id_B4D2EFC2'];
+      const publicSubnetIds = outputs['vpc-stack_public-subnet-ids_9241F01E'];
 
       const command = new DescribeRouteTablesCommand({
         Filters: [
@@ -639,7 +816,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
 
   describe('Resource Naming Convention', () => {
     test('All resources should include environment suffix in tags or names', async () => {
-      const vpcId = outputs['vpc-id'];
+      const vpcId = outputs['vpc-stack_vpc-id_B4D2EFC2'];
       const command = new DescribeVpcsCommand({
         VpcIds: [vpcId],
       });

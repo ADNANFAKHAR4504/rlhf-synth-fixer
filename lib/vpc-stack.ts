@@ -186,7 +186,10 @@ export class VpcStack extends Construct {
         },
       });
       // Configure EIP lifecycle to prevent deletion
-      Object.defineProperty(eip, 'skipDestroy', { value: true, writable: false });
+      Object.defineProperty(eip, 'skipDestroy', {
+        value: true,
+        writable: false,
+      });
       eips.push(eip);
 
       // Create NAT Gateway in each public subnet for high availability
