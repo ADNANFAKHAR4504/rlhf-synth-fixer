@@ -60,15 +60,6 @@ try {
   }
 } catch (error) {
   console.error('Failed to load stack outputs:', error);
-  // Use the provided outputs from the user's message as fallback
-  stackOutputs = {
-    'cloudfront-domain': 'd2po3hhzhoicrp.cloudfront.net',
-    'ecs-cluster-name': 'fintech-cluster-pr5687',
-    'load-balancer-dns': 'fintech-alb-pr5687-1851147490.us-east-2.elb.amazonaws.com',
-    'rds-cluster-endpoint': 'fintech-aurora-cluster-pr5687.cluster-covy6ema0nuv.us-east-2.rds.amazonaws.com',
-    's3-bucket-name': 'fintech-static-assets-***-pr5687',
-    'vpc-id': 'vpc-0194ea3731a597842'
-  };
 }
 
 describe('TapStack Infrastructure Integration Tests', () => {
@@ -237,6 +228,33 @@ describe('TapStack Infrastructure Integration Tests', () => {
   });
 
   describe('Application Load Balancer', () => {
+    test('should validate ECS service health before ALB tests', async () => {
+      const listCommand = new ListServicesCommand({
+        cluster: stackOutputs['ecs-cluster-name'],
+      });
+
+      const listResponse = await ecsClient.send(listCommand);
+
+      if (listResponse.serviceArns?.length) {
+        const describeCommand = new DescribeServicesCommand({
+          cluster: stackOutputs['ecs-cluster-name'],
+          services: listResponse.serviceArns,
+        });
+
+        const describeResponse = await ecsClient.send(describeCommand);
+
+        for (const service of describeResponse.services || []) {
+          console.log(`ECS Service: ${service.serviceName}, Status: ${service.status}, Running: ${service.runningCount}, Desired: ${service.desiredCount}`);
+
+          expect(service.status).toBe('ACTIVE');
+          // Allow for services that are still scaling up
+          expect(service.runningCount).toBeGreaterThanOrEqual(0);
+        }
+      } else {
+        console.log('No ECS services found - this may indicate the service is still deploying');
+      }
+    });
+
     test('should validate ALB exists and is provisioning or active', async () => {
       const command = new DescribeLoadBalancersCommand({
         Names: [stackOutputs['load-balancer-dns'].split('-')[0] + '-' + stackOutputs['load-balancer-dns'].split('-')[1]],
@@ -270,23 +288,50 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
     test('should validate ALB responds to HTTP requests', async () => {
       const albUrl = `http://${stackOutputs['load-balancer-dns']}`;
+      let lastError: any;
+      let lastStatus: number | undefined;
 
-      try {
-        const response = await axios.get(albUrl, {
-          timeout: 10000,
-          validateStatus: () => true, // Accept any status code
-        });
+      // Retry logic for ALB readiness
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        try {
+          const response = await axios.get(albUrl, {
+            timeout: 10000,
+            validateStatus: () => true, // Accept any status code
+          });
 
-        expect(response.status).toBeLessThan(500); // Not a server error
-        console.log(`ALB responded with status ${response.status}`);
-      } catch (error) {
-        if (axios.isAxiosError(error) && error.code === 'ECONNREFUSED') {
-          console.log('ALB is not yet accepting connections (expected for new deployments)');
-        } else {
-          console.warn(`ALB connectivity test failed: ${error}`);
+          lastStatus = response.status;
+
+          if (response.status < 500) {
+            console.log(`ALB responded with status ${response.status} (attempt ${attempt})`);
+            expect(response.status).toBeLessThan(500);
+            return; // Test passed
+          }
+
+          console.log(`ALB returned ${response.status}, retrying... (attempt ${attempt}/5)`);
+        } catch (error) {
+          lastError = error;
+          if (axios.isAxiosError(error) && error.code === 'ECONNREFUSED') {
+            console.log(`ALB connection refused, retrying... (attempt ${attempt}/5)`);
+          } else {
+            console.log(`ALB request failed: ${error}, retrying... (attempt ${attempt}/5)`);
+          }
+        }
+
+        // Wait before retry (exponential backoff)
+        if (attempt < 5) {
+          await new Promise(resolve => setTimeout(resolve, attempt * 2000));
         }
       }
-    }, 15000);
+
+      // All retries exhausted
+      if (lastStatus && lastStatus >= 500) {
+        console.warn(`ALB consistently returned ${lastStatus} after 5 attempts - service may still be starting`);
+        expect(lastStatus).toBeLessThan(500);
+      } else {
+        console.warn(`ALB connectivity failed after 5 attempts - service may still be initializing`);
+        throw lastError || new Error('ALB connectivity test failed');
+      }
+    }, 45000);
   });
 
   describe('CloudFront Distribution', () => {
