@@ -54,11 +54,23 @@ import {
 import fs from 'fs';
 
 // Configuration - These come from CDKTF outputs after deployment
+let rawOutputs: Record<string, any> = {};
 let outputs: Record<string, any> = {};
 try {
-  outputs = JSON.parse(
+  rawOutputs = JSON.parse(
     fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
   );
+  
+  // Handle nested structure - CDKTF outputs are nested under TapStack{suffix}
+  const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';
+  const stackKey = `TapStack${environmentSuffix}`;
+  
+  if (rawOutputs[stackKey]) {
+    outputs = rawOutputs[stackKey];
+  } else {
+    // Fallback to flat structure if nested doesn't exist
+    outputs = rawOutputs;
+  }
 } catch (error) {
   console.warn('cfn-outputs/flat-outputs.json not found. Integration tests will be skipped.');
   outputs = {};
@@ -78,8 +90,11 @@ const ssmClient = new SSMClient({ region });
 const iamClient = new IAMClient({ region });
 const cloudwatchLogsClient = new CloudWatchLogsClient({ region });
 
-// Helper function to get environment-specific output keys
-const getEnvOutput = (env: string, suffix: string) => `${env}${environmentSuffix ? `-${environmentSuffix}` : ''}-${suffix}`;
+// Helper function to get environment-specific output keys with proper naming pattern
+const getEnvOutput = (env: string, resource: string) => {
+  // Pattern: ${env}-${environmentSuffix}-${resource}
+  return `${env}-${environmentSuffix}-${resource}`;
+};
 
 // Helper function for ECS task management
 async function runEcsTask(clusterName: string, taskDefinition: string, subnets: string[], securityGroups: string[]) {
@@ -158,6 +173,10 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         'vpc-peering-connection-id',
         'route53-zone-id'
       ];
+
+      // Debug output to help with troubleshooting
+      console.log('Available outputs:', Object.keys(outputs));
+      console.log('Environment suffix:', environmentSuffix);
 
       requiredOutputs.forEach(output => {
         expect(outputs[output]).toBeDefined();
@@ -328,7 +347,7 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
 
       const environments = ['dev', 'staging', 'prod'];
       for (const env of environments) {
-        const expectedName = `${env}${environmentSuffix ? `-${environmentSuffix}` : ''}.mytszone.com.`;
+        const expectedName = `${env}-${environmentSuffix}.mytszone.com.`;
         const record = recordsResponse.ResourceRecordSets?.find(r => r.Name === expectedName);
         
         expect(record).toBeDefined();
@@ -364,7 +383,7 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
 
     test('should be able to retrieve ECS task logs from CloudWatch', async () => {
       const env = 'dev';
-      const envPrefix = `${env}${environmentSuffix ? `-${environmentSuffix}` : ''}`;
+      const envPrefix = `${env}-${environmentSuffix}`;
       
       // Check if ECS log group exists
       const logGroupName = `/ecs/${envPrefix}-app`;
@@ -383,7 +402,7 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
       const environments = ['dev', 'staging', 'prod'];
       
       for (const env of environments) {
-        const envPrefix = `${env}${environmentSuffix ? `-${environmentSuffix}` : ''}`;
+        const envPrefix = `${env}-${environmentSuffix}`;
         const parameterName = `/${envPrefix}/rds/password`;
         
         const response = await ssmClient.send(new GetParametersCommand({
@@ -678,7 +697,7 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         expect(service?.capacityProviderStrategy).toBeDefined();
         
         // Step 4: Verify log group exists for monitoring
-        const envPrefix = `${env}${environmentSuffix ? `-${environmentSuffix}` : ''}`;
+        const envPrefix = `${env}-${environmentSuffix}`;
         const logGroupName = `/ecs/${envPrefix}-app`;
         const logsResponse = await cloudwatchLogsClient.send(new DescribeLogGroupsCommand({
           logGroupNamePrefix: logGroupName
@@ -695,7 +714,7 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
       const environments = ['dev', 'staging', 'prod'];
       
       for (const env of environments) {
-        const envPrefix = `${env}${environmentSuffix ? `-${environmentSuffix}` : ''}`;
+        const envPrefix = `${env}-${environmentSuffix}`;
         const clusterName = outputs[getEnvOutput(env, 'ecs-cluster')];
         
         // Step 1: Verify ECS task role exists with correct permissions
