@@ -34,7 +34,7 @@ class TestPaymentProcessingStackUnit:
         """Test that stack is created successfully"""
         assert stack is not None
         assert isinstance(stack, Stack)
-        assert stack.environment_suffix == "test-unit"
+        assert stack.environment_suffix == "test-unit-primary-1"
 
     def test_vpc_created(self, template):
         """Test VPC is created with correct configuration"""
@@ -83,14 +83,14 @@ class TestPaymentProcessingStackUnit:
     def test_rds_kms_key_created(self, template):
         """Test KMS key for RDS is created with rotation enabled"""
         template.has_resource_properties("AWS::KMS::Key", {
-            "Description": assertions.Match.string_like_regexp(".*RDS encryption.*test-unit.*"),
+            "Description": assertions.Match.string_like_regexp(".*RDS encryption.*test-unit-primary-1.*"),
             "EnableKeyRotation": True
         })
 
     def test_s3_kms_key_created(self, template):
         """Test KMS key for S3 is created with rotation enabled"""
         template.has_resource_properties("AWS::KMS::Key", {
-            "Description": assertions.Match.string_like_regexp(".*S3 encryption.*test-unit.*"),
+            "Description": assertions.Match.string_like_regexp(".*S3 encryption.*test-unit-primary-1.*"),
             "EnableKeyRotation": True
         })
 
@@ -119,7 +119,7 @@ class TestPaymentProcessingStackUnit:
         template.resource_count_is("AWS::DynamoDB::Table", 1)
 
         template.has_resource_properties("AWS::DynamoDB::Table", {
-            "TableName": "payment-transactions-test-unit",
+            "TableName": "payment-transactions-test-unit-primary-1",
             "KeySchema": [
                 {
                     "AttributeName": "transaction_id",
@@ -189,7 +189,7 @@ class TestPaymentProcessingStackUnit:
         template.resource_count_is("AWS::SQS::Queue", 1)
 
         template.has_resource_properties("AWS::SQS::Queue", {
-            "QueueName": "payment-retry-queue-test-unit",
+            "QueueName": "payment-retry-queue-test-unit-primary-1",
             "MessageRetentionPeriod": 1209600,  # 14 days in seconds
             "VisibilityTimeout": 300  # 5 minutes in seconds
         })
@@ -245,7 +245,7 @@ class TestPaymentProcessingStackUnit:
     def test_payment_validator_lambda_properties(self, template):
         """Test payment validator Lambda has correct configuration"""
         template.has_resource_properties("AWS::Lambda::Function", {
-            "FunctionName": "payment-validator-test-unit",
+            "FunctionName": "payment-validator-test-unit-primary-1",
             "Runtime": "python3.11",
             "Handler": "index.handler",
             "MemorySize": 512,
@@ -255,7 +255,7 @@ class TestPaymentProcessingStackUnit:
                     "DYNAMODB_TABLE": assertions.Match.object_like({
                         "Ref": assertions.Match.string_like_regexp("PaymentTransactions.*")
                     }),
-                    "ENVIRONMENT_SUFFIX": "test-unit"
+                    "ENVIRONMENT_SUFFIX": "test-unit-primary-1"
                 }
             }
         })
@@ -263,7 +263,7 @@ class TestPaymentProcessingStackUnit:
     def test_payment_processor_lambda_properties(self, template):
         """Test payment processor Lambda has correct configuration"""
         template.has_resource_properties("AWS::Lambda::Function", {
-            "FunctionName": "payment-processor-test-unit",
+            "FunctionName": "payment-processor-test-unit-primary-1",
             "Runtime": "python3.11",
             "Handler": "index.handler",
             "MemorySize": 512,
@@ -273,7 +273,7 @@ class TestPaymentProcessingStackUnit:
                     "DYNAMODB_TABLE": assertions.Match.object_like({
                         "Ref": assertions.Match.string_like_regexp("PaymentTransactions.*")
                     }),
-                    "ENVIRONMENT_SUFFIX": "test-unit"
+                    "ENVIRONMENT_SUFFIX": "test-unit-primary-1"
                 }
             }
         })
@@ -281,7 +281,7 @@ class TestPaymentProcessingStackUnit:
     def test_audit_logger_lambda_properties(self, template):
         """Test audit logger Lambda has correct configuration"""
         template.has_resource_properties("AWS::Lambda::Function", {
-            "FunctionName": "audit-logger-test-unit",
+            "FunctionName": "audit-logger-test-unit-primary-1",
             "Runtime": "python3.11",
             "Handler": "index.handler",
             "MemorySize": 512,
@@ -294,7 +294,7 @@ class TestPaymentProcessingStackUnit:
                     "DYNAMODB_TABLE": assertions.Match.object_like({
                         "Ref": assertions.Match.string_like_regexp("PaymentTransactions.*")
                     }),
-                    "ENVIRONMENT_SUFFIX": "test-unit"
+                    "ENVIRONMENT_SUFFIX": "test-unit-primary-1"
                 }
             }
         })
@@ -304,7 +304,7 @@ class TestPaymentProcessingStackUnit:
         template.resource_count_is("AWS::ApiGateway::RestApi", 1)
 
         template.has_resource_properties("AWS::ApiGateway::RestApi", {
-            "Name": "payment-api-test-unit",
+            "Name": "payment-api-test-unit-primary-1",
             "Description": "Payment Processing API Gateway",
             "EndpointConfiguration": {
                 "Types": ["REGIONAL"]
@@ -339,7 +339,7 @@ class TestPaymentProcessingStackUnit:
         template.resource_count_is("AWS::ApiGateway::UsagePlan", 1)
 
         template.has_resource_properties("AWS::ApiGateway::UsagePlan", {
-            "UsagePlanName": "payment-usage-plan-test-unit",
+            "UsagePlanName": "payment-usage-plan-test-unit-primary-1",
             "Throttle": {
                 "RateLimit": 1000,
                 "BurstLimit": 2000
@@ -371,7 +371,7 @@ class TestPaymentProcessingStackUnit:
         template.resource_count_is("AWS::SNS::Topic", 1)
 
         template.has_resource_properties("AWS::SNS::Topic", {
-            "TopicName": "payment-critical-alerts-test-unit",
+            "TopicName": "payment-critical-alerts-test-unit-primary-1",
             "DisplayName": "Payment Processing Critical Alerts"
         })
 
@@ -389,7 +389,7 @@ class TestPaymentProcessingStackUnit:
         template.resource_count_is("AWS::CloudWatch::Dashboard", 1)
 
         template.has_resource_properties("AWS::CloudWatch::Dashboard", {
-            "DashboardName": "payment-dashboard-test-unit"
+            "DashboardName": "payment-dashboard-test-unit-primary-1"
         })
 
     def test_cloudwatch_alarms_created(self, template):
@@ -400,7 +400,7 @@ class TestPaymentProcessingStackUnit:
     def test_api_4xx_alarm_properties(self, template):
         """Test API 4XX errors alarm has correct configuration"""
         template.has_resource_properties("AWS::CloudWatch::Alarm", {
-            "AlarmName": "payment-api-4xx-errors-test-unit",
+            "AlarmName": "payment-api-4xx-errors-test-unit-primary-1",
             "Threshold": 50,
             "EvaluationPeriods": 2,
             "ComparisonOperator": "GreaterThanThreshold"
@@ -409,7 +409,7 @@ class TestPaymentProcessingStackUnit:
     def test_lambda_error_alarm_properties(self, template):
         """Test Lambda error alarm has correct configuration"""
         template.has_resource_properties("AWS::CloudWatch::Alarm", {
-            "AlarmName": "payment-lambda-errors-test-unit",
+            "AlarmName": "payment-lambda-errors-test-unit-primary-1",
             "Threshold": 10,
             "EvaluationPeriods": 2,
             "ComparisonOperator": "GreaterThanThreshold"
@@ -418,7 +418,7 @@ class TestPaymentProcessingStackUnit:
     def test_rds_cpu_alarm_properties(self, template):
         """Test RDS CPU alarm has correct configuration"""
         template.has_resource_properties("AWS::CloudWatch::Alarm", {
-            "AlarmName": "payment-rds-cpu-test-unit",
+            "AlarmName": "payment-rds-cpu-test-unit-primary-1",
             "Threshold": 80,
             "EvaluationPeriods": 3,
             "ComparisonOperator": "GreaterThanThreshold"
@@ -504,12 +504,12 @@ class TestPaymentProcessingStackUnit:
 
     def test_environment_suffix_in_resources(self, stack, template):
         """Test environment suffix is properly propagated"""
-        assert stack.environment_suffix == "test-unit"
+        assert stack.environment_suffix == "test-unit-primary-1"
         # VPC exists and is configured
         assert stack.vpc is not None
         # Verify DynamoDB table name in template
         template.has_resource_properties("AWS::DynamoDB::Table", {
-            "TableName": "payment-transactions-test-unit"
+            "TableName": "payment-transactions-test-unit-primary-1"
         })
 
     def test_vpc_cidr_range(self, stack):

@@ -30,7 +30,8 @@ class PaymentProcessingStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, environment_suffix: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        self.environment_suffix = environment_suffix
+        # Add -primary-1 suffix to avoid resource name conflicts with existing stack
+        self.environment_suffix = f"{environment_suffix}-primary-1"
 
         # Layer 1: Networking Infrastructure
         self.create_networking_layer()
