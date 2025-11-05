@@ -46,7 +46,7 @@
     "destroy:production": "cdk destroy --context environment=production",
     "cdktf:get": "cdktf get",
     "cdktf:synth": "cdktf synth",
-    "cdktf:deploy": "cdktf deploy '*' --auto-approve",
+    "cdktf:deploy": "cdktf destroy --auto-approve",
     "cdktf:destroy": "cdktf destroy --auto-approve",
     "tf": "terraform",
     "tf:init": "terraform -chdir=lib init -reconfigure -lock=false -upgrade $TF_INIT_OPTS",
