@@ -53,7 +53,6 @@ class TapStack(pulumi.ComponentResource):
         self.region = "us-west-1"
         self.availability_zones = [
             f"{self.region}a",
-            f"{self.region}b",
             f"{self.region}c"
         ]
 
