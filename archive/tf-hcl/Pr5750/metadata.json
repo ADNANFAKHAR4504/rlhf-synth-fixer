@@ -6,7 +6,9 @@
   "team": "synth",
   "startedAt": "2025-11-04T11:33:00+00:00",
   "subtask": "Multi-Environment Consistency & Replication",
-  "subject_labels": ["Multi-Environment Consistency and Replication"],
+  "subject_labels": [
+    "Multi-Environment Consistency and Replication"
+  ],
   "po_id": "101000818",
   "aws_services": [
     "VPC",
@@ -21,5 +23,10 @@
   ],
   "region": "us-east-1",
   "training_quality": 10,
-  "author": "emmanuel-turing"
+  "author": "iamarpit-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
