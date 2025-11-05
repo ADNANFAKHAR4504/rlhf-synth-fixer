@@ -13,19 +13,23 @@
   ],
   "aws_services": [
     "VPC",
-    "Subnets",
+    "EC2",
+    "RDS",
+    "S3",
+    "Lambda",
+    "IAM",
+    "CloudWatch",
+    "SecretsManager",
     "Internet Gateway",
     "Route Tables",
     "Security Groups",
-    "RDS MySQL",
-    "Secrets Manager",
-    "S3 Bucket",
-    "EC2 Instance",
-    "EC2 Key Pair",
-    "IAM Roles",
-    "Instance Profile",
-    "Lambda Function",
-    "CloudWatch Logs",
-    "CloudWatch Alarms"
-  ]
+    "Subnets"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
 }
