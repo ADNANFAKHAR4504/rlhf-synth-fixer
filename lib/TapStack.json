@@ -1239,7 +1239,7 @@
       "Type": "AWS::SecretsManager::Secret",
       "Properties": {
         "Name": {
-          "Fn::Sub": "${EnvironmentName}-redshift-credentials"
+          "Fn::Sub": "${AWS::StackName}-redshift-credentials"
         },
         "Description": "Redshift credentials",
         "GenerateSecretString": {
