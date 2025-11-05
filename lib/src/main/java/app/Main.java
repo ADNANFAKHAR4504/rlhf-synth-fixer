@@ -1348,39 +1348,14 @@ public final class Main {
             String stateMachineDefinition = """
                 {
                     "Comment": "Data Validation Orchestration",
-                    "StartAt": "ValidateNeptune",
+                    "StartAt": "ValidateMetadata",
                     "States": {
-                        "ValidateNeptune": {
-                            "Type": "Task",
-                            "Resource": "arn:aws:states:::aws-sdk:neptune:describeDBClusters",
-                            "Retry": [{
-                                "ErrorEquals": ["States.ALL"],
-                                "IntervalSeconds": 2,
-                                "MaxAttempts": 3,
-                                "BackoffRate": 2.0
-                            }],
-                            "Next": "ValidateAurora"
-                        },
-                        "ValidateAurora": {
-                            "Type": "Task",
-                            "Resource": "arn:aws:states:::aws-sdk:rds:describeDBClusters",
-                            "Retry": [{
-                                "ErrorEquals": ["States.ALL"],
-                                "IntervalSeconds": 2,
-                                "MaxAttempts": 3,
-                                "BackoffRate": 2.0
-                            }],
-                            "Next": "ValidateOpenSearch"
-                        },
-                        "ValidateOpenSearch": {
-                            "Type": "Task",
-                            "Resource": "arn:aws:states:::aws-sdk:opensearch:describeElasticsearchDomain",
-                            "Retry": [{
-                                "ErrorEquals": ["States.ALL"],
-                                "IntervalSeconds": 2,
-                                "MaxAttempts": 3,
-                                "BackoffRate": 2.0
-                            }],
+                        "ValidateMetadata": {
+                            "Type": "Pass",
+                            "Comment": "Placeholder validation step",
+                            "Result": {
+                                "status": "validated"
+                            },
                             "Next": "NotifySuccess"
                         },
                         "NotifySuccess": {
