@@ -1,0 +1,3 @@
+name: trading-platform-vpc
+runtime: python
+description: Production-ready VPC infrastructure for financial services trading platform
