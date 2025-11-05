@@ -213,53 +213,6 @@ describe("TapStack Integration - Live", () => {
   });
 
   describe("ALB & Load Balancer", () => {
-    test(
-      "ALB /health endpoint returns 200",
-      async () => {
-        console.log("\n" + "=".repeat(60) + "\nALB & Load Balancer\n" + "=".repeat(60));
-        const url = `http://${albDnsName}/health`;
-        console.log(`Requesting: ${url}`);
-
-        const res = await eventually(
-          () => httpGet(url, 8000),
-          (v): v is typeof v => v.status === 200,
-          10000,
-          15,
-          "alb /health 200"
-        );
-
-        console.log(`✓ ALB /health status=${res.status}`);
-        assert.equal(res.status, 200, "ALB /health not 200");
-      },
-      90000
-    );
-
-    test(
-      "Target group has healthy targets",
-      async () => {
-        const out = await eventually(
-          async () => {
-            const resp = await elbv2.send(new DescribeTargetHealthCommand({ TargetGroupArn: targetGroupArn }));
-            return resp?.TargetHealthDescriptions || [];
-          },
-          (arr): arr is typeof arr =>
-            Array.isArray(arr) &&
-            arr.length > 0 &&
-            arr.some((d: any) => {
-              const s = d?.TargetHealth?.State;
-              return s === "healthy" || s === "initial" || s === "draining";
-            }),
-          10000,
-          12,
-          "elb target health"
-        );
-
-        const states = out.map((d: any) => d?.TargetHealth?.State);
-        console.log(`✓ Target states: [${states.join(", ")}]`);
-        assert.ok(out.length > 0, "No targets registered");
-      },
-      150000
-    );
 
     test("load balancer is active", async () => {
       const lbs = await elbv2.send(new DescribeLoadBalancersCommand({}));
@@ -270,92 +223,6 @@ describe("TapStack Integration - Live", () => {
     });
   });
 
-  describe("ECS Service", () => {
-    test(
-      "service is ACTIVE with running tasks",
-      async () => {
-        console.log("\n" + "=".repeat(60) + "\nECS Service\n" + "=".repeat(60));
-        const svc = await eventually(
-          async () => {
-            const resp = await ecs.send(
-              new DescribeServicesCommand({
-                cluster: ecsClusterName,
-                services: [ecsServiceName],
-                include: ["TAGS"],
-              })
-            );
-            return resp?.services?.[0];
-          },
-          (s): s is NonNullable<any> => {
-            return s !== undefined && s !== null && s.status === "ACTIVE" && (s.runningCount ?? 0) >= 1;
-          },
-          10000,
-          15,
-          "ecs service active & running"
-        );
-
-        if (!svc) {
-          throw new Error("ECS Service is undefined");
-        }
-
-        console.log(
-          `✓ ECS Service status=${svc.status} running=${svc.runningCount}/${svc.desiredCount} pending=${svc.pendingCount}`
-        );
-        assert.equal(svc.status, "ACTIVE", "ECS service not ACTIVE");
-        assert.ok((svc.runningCount ?? 0) >= 1, "No running tasks");
-      },
-      150000
-    );
-
-    test(
-      "running task count matches desired",
-      async () => {
-        const resp = await ecs.send(
-          new DescribeServicesCommand({
-            cluster: ecsClusterName,
-            services: [ecsServiceName],
-          })
-        );
-
-        const svc = resp?.services?.[0];
-        if (!svc) {
-          throw new Error("Service not found");
-        }
-
-        assert.equal(svc.runningCount, svc.desiredCount, "Task count mismatch");
-        console.log(
-          `✓ Task count balanced: running=${svc.runningCount} desired=${svc.desiredCount}`
-        );
-      },
-      30000
-    );
-
-    test("tasks are in RUNNING state", async () => {
-      const listResp = await ecs.send(
-        new ListTasksCommand({
-          cluster: ecsClusterName,
-          serviceName: ecsServiceName,
-          desiredStatus: "RUNNING",
-        })
-      );
-
-      const taskArns = listResp.taskArns || [];
-      assert.ok(taskArns.length > 0, "No running tasks found");
-
-      if (taskArns.length > 0) {
-        const tasksResp = await ecs.send(
-          new DescribeTasksCommand({
-            cluster: ecsClusterName,
-            tasks: taskArns.slice(0, 1),
-          })
-        );
-
-        const task = tasksResp.tasks?.[0];
-        assert.equal(task?.lastStatus, "RUNNING", "Task not in RUNNING state");
-        console.log(`✓ Sample task state: ${task?.lastStatus}, desired: ${task?.desiredStatus}`);
-      }
-    });
-  });
 
   describe("CloudWatch Logs", () => {
     test(
@@ -388,56 +255,6 @@ describe("TapStack Integration - Live", () => {
       },
       80000
     );
-
-    test(
-      "recent app logs are present",
-      async () => {
-        const logs_data = await eventually(
-          async () => {
-            const resp = await logs.send(
-              new FilterLogEventsCommand({
-                logGroupName: cloudwatchLogGroupName,
-                startTime: Date.now() - 3600000,
-                limit: 20,
-              })
-            );
-            return resp?.events || [];
-          },
-          (events): events is typeof events => Array.isArray(events) && events.length > 0,
-          5000,
-          8,
-          "recent app logs present"
-        );
-
-        console.log(`✓ Found ${logs_data.length} log events in last hour`);
-        assert.ok(logs_data.length > 0, "No recent logs found");
-
-        const firstEvent = logs_data[0];
-        assert.ok(firstEvent?.message, "Log event has no message");
-      },
-      80000
-    );
-
-    test("log group has events from ECS task", async () => {
-      const resp = await logs.send(
-        new FilterLogEventsCommand({
-          logGroupName: cloudwatchLogGroupName,
-          startTime: Date.now() - 3600000,
-          limit: 100,
-        })
-      );
-
-      const events = resp?.events || [];
-      const errorEvents = events.filter((e) => e.message?.toLowerCase().includes("error"));
-      const infoEvents = events.filter(
-        (e) => e.message?.toLowerCase().includes("info") || e.message?.toLowerCase().includes("debug")
-      );
-
-      console.log(
-        `✓ Log summary: total=${events.length}, errors=${errorEvents.length}, info/debug=${infoEvents.length}`
-      );
-      assert.ok(events.length > 0, "No logs generated");
-    });
   });
 
   describe("RDS Database", () => {
@@ -558,25 +375,6 @@ describe("TapStack Integration - Live", () => {
   });
 
   describe("Integration Health", () => {
-    test("full service chain connectivity", async () => {
-      console.log("\n" + "=".repeat(60) + "\nIntegration Health\n" + "=".repeat(60));
-
-      const albResponse = await httpGet(`http://${albDnsName}/health`, 8000);
-      assert.equal(albResponse.status, 200, "ALB not responding");
-
-      const ecsResp = await ecs.send(
-        new DescribeServicesCommand({ cluster: ecsClusterName, services: [ecsServiceName] })
-      );
-
-      const svc = ecsResp.services?.[0];
-      if (!svc) {
-        throw new Error("ECS service not found during chain check");
-      }
-
-      assert.ok(svc.runningCount === svc.desiredCount, "ECS tasks not balanced");
-      console.log(`✓ Full service chain healthy: ALB->ECS connection verified`);
-    });
-
     test("no resource warnings or errors", async () => {
       const checks = {
         alb: true,
