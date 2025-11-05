@@ -4,7 +4,7 @@ Hey team,
 
 We're setting up our first AWS cloud environment for a startup that needs a proper network foundation. They want to separate their public-facing services from internal resources while keeping costs under control. The business needs a secure, scalable VPC architecture that can support their application workloads from day one.
 
-This is a greenfield deployment, so we're building everything from scratch. The team has specified exact network requirements including CIDR blocks, subnet configurations, and specific tagging conventions they use for cost allocation. They're in Canada, so everything needs to deploy to ca-central-1 region.
+This is a greenfield deployment, so we're building everything from scratch. The team has specified exact network requirements including CIDR blocks, subnet configurations, and specific tagging conventions they use for cost allocation. Everything needs to deploy to eu-central-2 region (or region specified via AWS_REGION environment variable or lib/AWS_REGION file).
 
 We need to implement this using **CDKTF with Python** - no exceptions on the platform or language choice. The infrastructure needs to follow AWS networking best practices while optimizing for cost, which means using a single NAT Gateway instead of one per AZ.
 
@@ -15,7 +15,7 @@ Create a custom VPC architecture using **CDKTF with Python** that provides netwo
 ### Core Requirements
 
 1. **VPC Configuration**
-   - Create VPC with CIDR block 10.0.0.0/16 in ca-central-1 region
+   - Create VPC with CIDR block 10.0.0.0/16 in eu-central-2 region (or region from AWS_REGION env var/lib/AWS_REGION file)
    - Enable VPC Flow Logs to CloudWatch with 5-minute capture intervals
    - Create VPC endpoints for S3 and DynamoDB (must be Gateway endpoints)
 
@@ -45,7 +45,7 @@ Create a custom VPC architecture using **CDKTF with Python** that provides netwo
 - Stack implementation in TapStack class
 - Resource names must include **environmentSuffix** variable
 - Follow naming convention: `{resource-type}-{environment-suffix}`
-- Deploy to **ca-central-1** region
+- Deploy to **eu-central-2** region (or region specified via AWS_REGION environment variable or lib/AWS_REGION file)
 - Use TerraformOutput for outputs (not CfnOutput)
 
 ### Constraints

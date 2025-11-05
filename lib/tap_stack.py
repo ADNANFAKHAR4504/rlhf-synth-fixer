@@ -1,5 +1,7 @@
 """TAP Stack module for CDKTF Python infrastructure."""
 
+import os
+from pathlib import Path
 from cdktf import TerraformStack, S3Backend, TerraformOutput
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
@@ -17,6 +19,39 @@ from cdktf_cdktf_provider_aws.flow_log import FlowLog
 from cdktf_cdktf_provider_aws.vpc_endpoint import VpcEndpoint
 
 
+def get_aws_region(**kwargs):
+    """
+    Get AWS region from environment variable, fallback to lib/AWS_REGION file, then props, then default.
+    
+    Priority:
+    1. AWS_REGION environment variable
+    2. lib/AWS_REGION file
+    3. aws_region from kwargs
+    4. Default: eu-central-2
+    """
+    # First priority: environment variable
+    if os.getenv('AWS_REGION'):
+        return os.getenv('AWS_REGION')
+    
+    # Second priority: read from lib/AWS_REGION file
+    aws_region_file = Path(__file__).parent / 'AWS_REGION'
+    if aws_region_file.exists():
+        try:
+            region_from_file = aws_region_file.read_text(encoding='utf-8').strip()
+            if region_from_file:
+                return region_from_file
+        except Exception:
+            # Ignore file read errors and continue to next fallback
+            pass
+    
+    # Third priority: kwargs
+    if kwargs.get('aws_region'):
+        return kwargs.get('aws_region')
+    
+    # Default: eu-central-2 as specified in PROMPT.md
+    return 'eu-central-2'
+
+
 class TapStack(TerraformStack):
     """CDKTF Python stack for VPC infrastructure."""
 
@@ -31,7 +66,7 @@ class TapStack(TerraformStack):
 
         # Extract configuration from kwargs
         environment_suffix = kwargs.get('environment_suffix', 'dev')
-        aws_region = kwargs.get('aws_region', 'ca-central-1')
+        aws_region = get_aws_region(**kwargs)
         state_bucket_region = kwargs.get('state_bucket_region', 'us-east-1')
         state_bucket = kwargs.get('state_bucket', 'iac-rlhf-tf-states')
         default_tags = kwargs.get('default_tags', {})
@@ -389,28 +424,28 @@ class TapStack(TerraformStack):
             self,
             "public_subnet_1_id",
             value=public_subnet_1.id,
-            description="The ID of public subnet 1 (ca-central-1a)"
+            description=f"The ID of public subnet 1 ({aws_region}a)"
         )
 
         TerraformOutput(
             self,
             "public_subnet_2_id",
             value=public_subnet_2.id,
-            description="The ID of public subnet 2 (ca-central-1b)"
+            description=f"The ID of public subnet 2 ({aws_region}b)"
         )
 
         TerraformOutput(
             self,
             "private_subnet_1_id",
             value=private_subnet_1.id,
-            description="The ID of private subnet 1 (ca-central-1a)"
+            description=f"The ID of private subnet 1 ({aws_region}a)"
         )
 
         TerraformOutput(
             self,
             "private_subnet_2_id",
             value=private_subnet_2.id,
-            description="The ID of private subnet 2 (ca-central-1b)"
+            description=f"The ID of private subnet 2 ({aws_region}b)"
         )
 
         TerraformOutput(
@@ -428,14 +463,14 @@ class TapStack(TerraformStack):
         )
 
         TerraformOutput(
-            self,
+                self,
             "s3_endpoint_id",
             value=s3_endpoint.id,
             description="The ID of the S3 VPC Endpoint"
         )
 
         TerraformOutput(
-            self,
+                self,
             "dynamodb_endpoint_id",
             value=dynamodb_endpoint.id,
             description="The ID of the DynamoDB VPC Endpoint"

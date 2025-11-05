@@ -1,12 +1,14 @@
 # MODEL_RESPONSE: CDKTF Python VPC Implementation
 
-This implementation provides a complete custom VPC architecture using CDKTF with Python, deploying to ca-central-1 region with proper network segmentation.
+This implementation provides a complete custom VPC architecture using CDKTF with Python, deploying to eu-central-2 region (or region from AWS_REGION env var/lib/AWS_REGION file) with proper network segmentation.
 
 ## File: lib/lib/tap_stack.py
 
 ```python
 """TAP Stack module for CDKTF Python infrastructure."""
 
+import os
+from pathlib import Path
 from cdktf import TerraformStack, S3Backend, TerraformOutput
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
@@ -22,7 +24,39 @@ from cdktf_cdktf_provider_aws.iam_role import IamRole
 from cdktf_cdktf_provider_aws.iam_role_policy import IamRolePolicy
 from cdktf_cdktf_provider_aws.flow_log import FlowLog
 from cdktf_cdktf_provider_aws.vpc_endpoint import VpcEndpoint
-from cdktf_cdktf_provider_aws.data_aws_availability_zones import DataAwsAvailabilityZones
+
+
+def get_aws_region(**kwargs):
+    """
+    Get AWS region from environment variable, fallback to lib/AWS_REGION file, then props, then default.
+    
+    Priority:
+    1. AWS_REGION environment variable
+    2. lib/AWS_REGION file
+    3. aws_region from kwargs
+    4. Default: eu-central-2
+    """
+    # First priority: environment variable
+    if os.getenv('AWS_REGION'):
+        return os.getenv('AWS_REGION')
+    
+    # Second priority: read from lib/AWS_REGION file
+    aws_region_file = Path(__file__).parent / 'AWS_REGION'
+    if aws_region_file.exists():
+        try:
+            region_from_file = aws_region_file.read_text(encoding='utf-8').strip()
+            if region_from_file:
+                return region_from_file
+        except Exception:
+            # Ignore file read errors and continue to next fallback
+            pass
+    
+    # Third priority: kwargs
+    if kwargs.get('aws_region'):
+        return kwargs.get('aws_region')
+    
+    # Default: eu-central-2 as specified in PROMPT.md
+    return 'eu-central-2'
 
 
 class TapStack(TerraformStack):
@@ -39,7 +73,7 @@ class TapStack(TerraformStack):
 
         # Extract configuration from kwargs
         environment_suffix = kwargs.get('environment_suffix', 'dev')
-        aws_region = kwargs.get('aws_region', 'ca-central-1')
+        aws_region = get_aws_region(**kwargs)
         state_bucket_region = kwargs.get('state_bucket_region', 'us-east-1')
         state_bucket = kwargs.get('state_bucket', 'iac-rlhf-tf-states')
         default_tags = kwargs.get('default_tags', {})
