@@ -99,7 +99,7 @@ runs:
       if: ${{ inputs.language == 'py' || (inputs.platform == 'pulumi' && inputs.language == 'py') || inputs.platform == 'cfn' }}
       uses: actions/setup-python@v5
       with:
-        python-version: '3.12'
+        python-version: '3.12.11'
 
     # Go
     - name: Setup Go
