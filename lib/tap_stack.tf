@@ -72,6 +72,13 @@ variable "database_password" {
   description = "Master password for RDS"
   type        = string
   sensitive   = true
+  default     = ""
+}
+
+resource "random_password" "db_password" {
+  length           = 32
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
 variable "compute_instance_type" {
@@ -139,6 +146,8 @@ locals {
   region      = var.aws_region
 
   name_prefix = "${local.environment}-${local.region}-${var.service_name}"
+
+  database_password = var.database_password != "" ? var.database_password : random_password.db_password.result
 
   common_tags = {
     Environment = terraform.workspace
@@ -531,7 +540,7 @@ resource "aws_db_instance" "main" {
   kms_key_id              = aws_kms_key.database.arn
   db_name                 = var.database_name
   username                = var.database_username
-  password                = var.database_password
+  password                = local.database_password
   db_subnet_group_name    = aws_db_subnet_group.main.name
   vpc_security_group_ids  = [aws_security_group.database.id]
   publicly_accessible     = false
