@@ -12,10 +12,17 @@
   ],
   "aws_services": [
     "VPC",
-    "Subnet",
     "RDS",
-    "S3",
+    "IAM",
+    "KMS",
     "CloudWatch",
-    "IAM"
-  ]
+    "SecretsManager"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
 }
