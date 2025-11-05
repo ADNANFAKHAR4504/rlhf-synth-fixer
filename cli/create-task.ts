@@ -298,7 +298,7 @@ async function main(): Promise<void> {
     const templateName = isAnalysis
       ? `analysis-${language}`
       : isCICDPipeline
-        ? `cicd-yml`
+        ? 'cicd-yml'
         : `${platform}-${language}`;
 
     if (!isAnalysis && !isCICDPipeline) {
