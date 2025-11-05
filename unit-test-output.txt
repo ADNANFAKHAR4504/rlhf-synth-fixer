@@ -1,0 +1,56 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.11, pytest-8.4.2, pluggy-1.6.0 -- /Users/mayanksethi/.local/share/virtualenvs/synth-6ekmx-DQqqVK5K/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/mayanksethi/Projects/turing/iac-test-automations/worktree/synth-6ekmx
+configfile: pytest.ini
+plugins: testdox-3.1.0, typeguard-2.13.3, env-1.2.0, cov-7.0.0
+collecting ... collected 20 items
+
+tests/unit/test_payment_stacks.py::TestDevPaymentStack::test_dev_stack_creation PASSED [  5%]
+tests/unit/test_payment_stacks.py::TestDevPaymentStack::test_dev_vpc_cidr PASSED [ 10%]
+tests/unit/test_payment_stacks.py::TestDevPaymentStack::test_dev_instance_type PASSED [ 15%]
+tests/unit/test_payment_stacks.py::TestDevPaymentStack::test_dev_capacity PASSED [ 20%]
+tests/unit/test_payment_stacks.py::TestDevPaymentStack::test_dev_alarm_thresholds PASSED [ 25%]
+tests/unit/test_payment_stacks.py::TestStagingPaymentStack::test_staging_stack_creation PASSED [ 30%]
+tests/unit/test_payment_stacks.py::TestStagingPaymentStack::test_staging_vpc_cidr PASSED [ 35%]
+tests/unit/test_payment_stacks.py::TestStagingPaymentStack::test_staging_instance_type PASSED [ 40%]
+tests/unit/test_payment_stacks.py::TestStagingPaymentStack::test_staging_capacity PASSED [ 45%]
+tests/unit/test_payment_stacks.py::TestStagingPaymentStack::test_staging_alarm_thresholds PASSED [ 50%]
+tests/unit/test_payment_stacks.py::TestProdPaymentStack::test_prod_stack_creation PASSED [ 55%]
+tests/unit/test_payment_stacks.py::TestProdPaymentStack::test_prod_vpc_cidr PASSED [ 60%]
+tests/unit/test_payment_stacks.py::TestProdPaymentStack::test_prod_instance_type PASSED [ 65%]
+tests/unit/test_payment_stacks.py::TestProdPaymentStack::test_prod_capacity PASSED [ 70%]
+tests/unit/test_payment_stacks.py::TestProdPaymentStack::test_prod_alarm_thresholds PASSED [ 75%]
+tests/unit/test_payment_stacks.py::TestCIDRValidation::test_no_cidr_overlap PASSED [ 80%]
+tests/unit/test_payment_stacks.py::TestEnvironmentSuffixUsage::test_resources_include_environment_suffix PASSED [ 85%]
+tests/unit/test_payment_stacks.py::TestTapStackOrchestrator::test_tap_stack_creates_dev_by_default PASSED [ 90%]
+tests/unit/test_payment_stacks.py::TestTapStackOrchestrator::test_tap_stack_creates_staging PASSED [ 95%]
+tests/unit/test_payment_stacks.py::TestTapStackOrchestrator::test_tap_stack_creates_prod PASSED [100%]
+ERROR: Coverage failure: total of 89 is less than fail-under=90
+
+
+================================ tests coverage ================================
+______________ coverage: platform darwin, python 3.12.11-final-0 _______________
+
+Name                                       Stmts   Miss Branch BrPart  Cover   Missing
+--------------------------------------------------------------------------------------
+lib/__init__.py                                0      0      0      0   100%
+lib/aspects/__init__.py                        0      0      0      0   100%
+lib/aspects/security_aspect.py                12      6      8      0    30%   22-28
+lib/constructs/__init__.py                     0      0      0      0   100%
+lib/constructs/database_construct.py           7      0      0      0   100%
+lib/constructs/ecs_construct.py               24      0      0      0   100%
+lib/constructs/monitoring_construct.py        11      0      0      0   100%
+lib/constructs/vpc_construct.py                7      0      0      0   100%
+lib/constructs/vpc_peering_construct.py        8      8      2      0     0%   6-39
+lib/payment_stacks/__init__.py                 0      0      0      0   100%
+lib/payment_stacks/base_payment_stack.py     109      6      2      0    95%   421, 426, 431, 436, 441, 446
+lib/payment_stacks/dev_stack.py               19      0      0      0   100%
+lib/payment_stacks/prod_stack.py              19      0      0      0   100%
+lib/payment_stacks/staging_stack.py           19      0      0      0   100%
+lib/tap_stack.py                              23      0      4      0   100%
+--------------------------------------------------------------------------------------
+TOTAL                                        258     20     16      0    89%
+Coverage JSON written to file coverage.json
+FAIL Required test coverage of 90% not reached. Total coverage: 89.05%
+============================= 20 passed in 52.85s ==============================
