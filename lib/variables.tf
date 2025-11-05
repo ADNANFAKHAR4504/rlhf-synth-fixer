@@ -53,7 +53,7 @@ variable "private_subnet_cidrs" {
 variable "database_subnet_cidrs" {
   description = "CIDR blocks for database subnets"
   type        = list(string)
-  default     = ["10.0.100.0/24", "10.0.200.0/24", "10.0.300.0/24"]
+  default     = ["10.0.100.0/24", "10.0.101.0/24", "10.0.102.0/24"]
 }
 
 # Database Configuration
