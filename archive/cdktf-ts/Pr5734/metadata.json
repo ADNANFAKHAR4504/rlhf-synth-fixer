@@ -16,8 +16,19 @@
     "NAT Gateway",
     "Security Groups",
     "EKS Cluster",
-    "Managed  Node Groups",
+    "Managed Node Groups",
     "IAM Roles and Policies",
-    "ALB"
-  ]
+    "ALB",
+    "Internet Gateway",
+    "Route Tables",
+    "Elastic IP",
+    "OIDC Provider"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
 }
