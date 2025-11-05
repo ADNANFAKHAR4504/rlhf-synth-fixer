@@ -1,12 +1,12 @@
-import * as fs from "fs";
-import * as path from "path";
 import {
-  S3Client,
-  PutObjectCommand,
+  DeleteObjectCommand,
   GetObjectCommand,
   ListObjectsV2Command,
-  DeleteObjectCommand,
+  PutObjectCommand,
+  S3Client,
 } from "@aws-sdk/client-s3";
+import * as fs from "fs";
+import * as path from "path";
 
 interface TerraformOutputs {
   vpc_id?: { value: string };
@@ -32,7 +32,7 @@ function loadTerraformOutputs(): TerraformOutputs {
     console.log("Loading outputs from:", ciOutputPath);
     const outputs = JSON.parse(content);
     console.log("Parsed outputs keys:", Object.keys(outputs));
-    
+
     if (Object.keys(outputs).length > 0) {
       return outputs;
     }
@@ -70,8 +70,8 @@ function loadTerraformOutputs(): TerraformOutputs {
     }
   }
 
-  console.warn("⚠️  No Terraform outputs found. Integration tests require deployed infrastructure.");
-  console.warn("⚠️  Expected outputs file at one of:");
+  console.warn("WARNING: No Terraform outputs found. Integration tests require deployed infrastructure.");
+  console.warn("WARNING: Expected outputs file at one of:");
   console.warn("   - cfn-outputs/all-outputs.json");
   console.warn("   - cfn-outputs/flat-outputs.json");
   console.warn("   - terraform-outputs.json");
@@ -105,10 +105,10 @@ describe("Payment Processing Infrastructure Integration Tests", () => {
       const missingOutputs = [];
       if (!transactionsBucket) missingOutputs.push("storage_bucket_names.transactions");
       if (!logsBucket) missingOutputs.push("storage_bucket_names.logs");
-      
-      console.error("❌ Missing required outputs:", missingOutputs.join(", "));
-      console.error("💡 Integration tests require deployed infrastructure with outputs.");
-      console.error("💡 Ensure terraform apply has completed and outputs are exported.");
+
+      console.error("ERROR: Missing required outputs:", missingOutputs.join(", "));
+      console.error("NOTE: Integration tests require deployed infrastructure with outputs.");
+      console.error("NOTE: Ensure terraform apply has completed and outputs are exported.");
       throw new Error(`Missing required outputs: ${missingOutputs.join(", ")}. Infrastructure may not be deployed.`);
     }
   }, 30000);
@@ -141,7 +141,7 @@ describe("Payment Processing Infrastructure Integration Tests", () => {
           },
         })
       );
-      console.log("✓ Payment archived to S3");
+      console.log("[OK] Payment archived to S3");
 
       console.log("Step 2: Verifying transaction archive in S3");
       const archivedData = await s3Client.send(
@@ -155,7 +155,7 @@ describe("Payment Processing Infrastructure Integration Tests", () => {
       expect(archivedPayment.transactionId).toBe(transactionId);
       expect(archivedPayment.amount).toBe(paymentData.amount);
       expect(archivedPayment.status).toBe("completed");
-      console.log("✓ Transaction archive verified");
+      console.log("[OK] Transaction archive verified");
 
       console.log("Step 3: Cleaning up test transaction");
       await s3Client.send(
@@ -164,7 +164,7 @@ describe("Payment Processing Infrastructure Integration Tests", () => {
           Key: archiveKey,
         })
       );
-      console.log("✓ Test transaction cleaned up");
+      console.log("[OK] Test transaction cleaned up");
     }, 120000);
 
     test("should process batch payment transactions and archive to S3", async () => {
@@ -189,7 +189,7 @@ describe("Payment Processing Infrastructure Integration Tests", () => {
           ContentType: "application/json",
         })
       );
-      console.log("✓ Batch transactions archived to S3");
+      console.log("[OK] Batch transactions archived to S3");
 
       console.log("Step 2: Verifying batch archive");
       const batchData = await s3Client.send(
@@ -202,7 +202,7 @@ describe("Payment Processing Infrastructure Integration Tests", () => {
       const batchPayments = JSON.parse(batchContent);
       expect(batchPayments.transactions).toHaveLength(batchSize);
       expect(batchPayments.transactions[0].amount).toBe(100.0);
-      console.log("✓ Batch archive verified");
+      console.log("[OK] Batch archive verified");
 
       await s3Client.send(
         new DeleteObjectCommand({
@@ -249,7 +249,7 @@ describe("Payment Processing Infrastructure Integration Tests", () => {
       expect(retrievedTransaction.transactionId).toBe(testTransactionId);
       expect(retrievedTransaction.amount).toBe(500.00);
       expect(retrievedTransaction.currency).toBe("EUR");
-      console.log("✓ Transaction retrieved successfully");
+      console.log("[OK] Transaction retrieved successfully");
 
       console.log("Step 3: Listing transactions by date prefix");
       const listResult = await s3Client.send(
@@ -259,7 +259,7 @@ describe("Payment Processing Infrastructure Integration Tests", () => {
         })
       );
       expect(listResult.Contents?.some((obj) => obj.Key === archiveKey)).toBe(true);
-      console.log("✓ Transaction listing verified");
+      console.log("[OK] Transaction listing verified");
 
       await s3Client.send(
         new DeleteObjectCommand({
@@ -314,7 +314,7 @@ describe("Payment Processing Infrastructure Integration Tests", () => {
 
       expect(customerTransactions.length).toBe(2);
       expect(customerTransactions.every((txn) => txn.customerId === customerId)).toBe(true);
-      console.log("✓ Customer filter verified");
+      console.log("[OK] Customer filter verified");
 
       for (const txn of transactions) {
         await s3Client.send(
@@ -353,7 +353,7 @@ describe("Payment Processing Infrastructure Integration Tests", () => {
           ContentType: "application/json",
         })
       );
-      console.log("✓ Logs stored in S3");
+      console.log("[OK] Logs stored in S3");
 
       console.log("Step 3: Retrieving logs for analysis");
       const logData = await s3Client.send(
@@ -366,7 +366,7 @@ describe("Payment Processing Infrastructure Integration Tests", () => {
       const retrievedLogs = JSON.parse(logContent);
       expect(retrievedLogs.logs).toHaveLength(3);
       expect(retrievedLogs.source).toBe("payment-processor");
-      console.log("✓ Logs retrieved successfully");
+      console.log("[OK] Logs retrieved successfully");
 
       console.log("Step 4: Verifying log lifecycle management (logs/ prefix)");
       const logsList = await s3Client.send(
@@ -376,7 +376,7 @@ describe("Payment Processing Infrastructure Integration Tests", () => {
         })
       );
       expect(logsList.Contents?.some((obj) => obj.Key === logKey)).toBe(true);
-      console.log("✓ Log lifecycle management verified");
+      console.log("[OK] Log lifecycle management verified");
 
       await s3Client.send(
         new DeleteObjectCommand({
@@ -418,7 +418,7 @@ describe("Payment Processing Infrastructure Integration Tests", () => {
       const retrievedError = JSON.parse(errorContent);
       expect(retrievedError.level).toBe("ERROR");
       expect(retrievedError.errorCode).toBe("TIMEOUT");
-      console.log("✓ Error log processed for alerting");
+      console.log("[OK] Error log processed for alerting");
 
       await s3Client.send(
         new DeleteObjectCommand({
@@ -477,7 +477,7 @@ describe("Payment Processing Infrastructure Integration Tests", () => {
 
       expect(totalAmount).toBe(4500);
       expect(completedCount).toBe(2);
-      console.log("✓ Reconciliation completed");
+      console.log("[OK] Reconciliation completed");
 
       console.log("Step 3: Generating reconciliation report");
       const report = {
@@ -495,7 +495,7 @@ describe("Payment Processing Infrastructure Integration Tests", () => {
           Body: JSON.stringify(report),
         })
       );
-      console.log("✓ Reconciliation report generated");
+      console.log("[OK] Reconciliation report generated");
 
       for (const txn of paymentTransactions) {
         await s3Client.send(
