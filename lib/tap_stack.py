@@ -34,15 +34,6 @@ class TapStack(TerraformStack):
             **kwargs.get('default_tags', {}),
         }
 
-        provider_args = {
-            'region': aws_region,
-        }
-
-        if default_tags:
-            provider_args['default_tags'] = [
-                AwsProviderDefaultTags(tags=default_tags)
-            ]
-
         # Configure AWS Provider with standard tags
         AwsProvider(
             self,
@@ -50,6 +41,7 @@ class TapStack(TerraformStack):
             region=aws_region,
             default_tags=[default_tags] if default_tags else None,
             **provider_args,
+            default_tags=[default_tags],
         )
 
         # Configure remote state backend in S3 for shared environments

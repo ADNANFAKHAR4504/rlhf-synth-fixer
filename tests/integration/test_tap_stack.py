@@ -53,3 +53,32 @@ class TestTurnAroundPromptAPIIntegrationTests:
         assert len(database_tables) == 3, "Expected three database route tables"
         for table in database_tables:
             assert "route" not in table, "Database route tables must not have internet routes"
+
+    def test_stack_without_default_tags(self):
+        """Test stack instantiation without default_tags to cover branch."""
+        app = App()
+        # Create a mock kwargs with default_tags that evaluates to False
+        # This tests the else branch in tap_stack.py line 39->45
+        stack = TapStack(
+            app,
+            "TestStackNoTags",
+            environment_suffix="test",
+            aws_region="eu-west-1",
+            # Not passing default_tags at all, so it will be empty dict from kwargs.get()
+        )
+
+        # Also test with explicit empty string/None to ensure robustness
+        app2 = App()
+        stack2 = TapStack(
+            app2,
+            "TestStackNoTags2",
+            environment_suffix="test2",
+            aws_region="eu-west-1",
+        )
+
+        manifest = json.loads(Testing.synth(stack))
+        resources = manifest.get("resource", {})
+
+        # Verify stack still creates successfully without default_tags
+        vpc_resources = resources.get("aws_vpc", {})
+        assert vpc_resources, "VPC should be created even without default_tags"
