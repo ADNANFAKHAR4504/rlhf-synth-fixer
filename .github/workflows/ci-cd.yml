@@ -894,25 +894,31 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "🔍 Collecting ALL comments (issue + review + file review comments)..."
+          echo "🔍 Collecting ALL PR comments from ALL sources..."
       
-          # Start fresh
           rm -f all_comments.txt
       
-          # Issue comments (normal PR comments)
+          # 1) Normal PR comments (this is where Claude usually posts)
+          gh pr view ${{ github.event.pull_request.number }} \
+            --comments --json comments \
+            --jq '.comments[].body' >> all_comments.txt || true
+      
+          # 2) Issue comments
           gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
             --paginate --jq '.[].body' >> all_comments.txt || true
       
-          # Review summaries (rarely contain content but still included)
+          # 3) Review summaries
           gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews \
             --paginate --jq '.[].body' >> all_comments.txt || true
       
-          # ✅ THIS is where Claude posts the score
+          # 4) Review file comments
           gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments \
             --paginate --jq '.[].body' >> all_comments.txt || true
       
-          echo "🍀 Searching for quality score pattern..."
+          echo "📄 Dumping collected comment bodies for validation:"
+          sed -e 's/^/>> /' all_comments.txt
       
+          echo "🍀 Searching for quality score pattern..."
           SCORE=$(grep -Eoi '(final[[:space:]]*(score|quality)|training[_[:space:]]*quality|quality[[:space:]]*score|score)[[:space:]:]*[0-9]+(\.[0-9]+)?' all_comments.txt \
             | tail -1 | grep -Eo '[0-9]+(\.[0-9]+)?' | head -1)
       
@@ -923,6 +929,7 @@ jobs:
       
           echo "✅ Claude quality score detected: $SCORE"
           echo "quality_score=$SCORE" >> $GITHUB_OUTPUT
+
 
       - name: Enforce Quality Threshold
         id: quality_gate
