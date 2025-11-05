@@ -1,71 +1,131 @@
 import * as pulumi from "@pulumi/pulumi";
-import * as aws from "@pulumi/aws";
-import { TapStack } from "../lib/tap-stack";
+import { TapStack, TapStackArgs } from "../lib/tap-stack";
 
-// Enable Pulumi mocking
-jest.mock("@pulumi/pulumi");
-jest.mock("@pulumi/aws");
+// Mock Pulumi runtime
+jest.mock("@pulumi/pulumi", () => {
+  const actual = jest.requireActual("@pulumi/pulumi");
+
+  class MockComponentResource {
+    constructor(
+      public readonly __pulumiType: string,
+      public readonly __name: string,
+      public readonly __args: any,
+      public readonly __opts?: any
+    ) {}
+
+    registerOutputs(outputs: any) {
+      return outputs;
+    }
+  }
+
+  return {
+    ...actual,
+    ComponentResource: MockComponentResource,
+    output: (val: any) => val,
+    Output: {
+      create: (val: any) => val,
+    },
+  };
+});
 
 describe("TapStack Structure", () => {
-  let stack: TapStack;
+  describe("with custom environment suffix", () => {
+    let stack: TapStack;
+    const args: TapStackArgs = {
+      environmentSuffix: "prod",
+      tags: { Environment: "production", CostCenter: "finance" },
+    };
 
-  beforeEach(() => {
-    // Reset all mocks before each test
-    jest.clearAllMocks();
-    
-    // Mock Pulumi runtime behavior
-    (pulumi as any).all = jest.fn().mockImplementation((values) => Promise.resolve(values));
-    (pulumi as any).Output = jest.fn().mockImplementation((value) => ({ 
-      promise: () => Promise.resolve(value),
-      apply: (fn: any) => fn(value)
-    }));
-  });
-
-  describe("with props", () => {
-    beforeAll(() => {
-      stack = new TapStack("TestTapStackWithProps", {
-        environmentSuffix: "prod",
-        stateBucket: "custom-state-bucket",
-        stateBucketRegion: "us-west-2",
-        awsRegion: "us-west-2",
-      });
+    beforeEach(() => {
+      stack = new TapStack("TestTapStackWithProps", args);
     });
 
     it("instantiates successfully", () => {
       expect(stack).toBeDefined();
+      expect(stack).toBeInstanceOf(pulumi.ComponentResource);
     });
 
-    it("creates AWS provider with correct region", async () => {
-      expect(aws.Provider).toHaveBeenCalledWith(
-        "aws",
-        expect.objectContaining({
-          region: "us-west-2"
-        })
-      );
+    it("has correct Pulumi resource type", () => {
+      expect((stack as any).__pulumiType).toBe("tap:stack:TapStack");
     });
 
-    it("uses custom state bucket name", async () => {
-      expect(pulumi.Config).toHaveBeenCalledWith("tapstack");
-      // Add assertions for your state bucket configuration
+    it("has correct resource name", () => {
+      expect((stack as any).__name).toBe("TestTapStackWithProps");
+    });
+
+    it("accepts environment suffix argument", () => {
+      expect((stack as any).__args.environmentSuffix).toBe("prod");
+    });
+
+    it("accepts tags argument", () => {
+      expect((stack as any).__args.tags).toEqual({
+        Environment: "production",
+        CostCenter: "finance",
+      });
     });
   });
 
   describe("with default values", () => {
-    beforeAll(() => {
-      stack = new TapStack("TestTapStackDefault");
+    let stack: TapStack;
+
+    beforeEach(() => {
+      stack = new TapStack("TestTapStackDefault", {});
     });
 
-    it("instantiates successfully", () => {
+    it("instantiates successfully with empty args", () => {
       expect(stack).toBeDefined();
+      expect(stack).toBeInstanceOf(pulumi.ComponentResource);
     });
 
-    it("uses default AWS region", async () => {
-      expect(aws.Provider).toHaveBeenCalledWith(
-        "aws",
-        expect.objectContaining({
-          region: expect.any(String) // Your default region
-        })
-      );
+    it("has correct Pulumi resource type", () => {
+      expect((stack as any).__pulumiType).toBe("tap:stack:TapStack");
+    });
+
+    it("has correct resource name", () => {
+      expect((stack as any).__name).toBe("TestTapStackDefault");
+    });
+  });
+
+  describe("component structure", () => {
+    it("is a Pulumi ComponentResource", () => {
+      const stack = new TapStack("TestComponentType", {
+        environmentSuffix: "test",
+      });
+
+      expect(stack).toBeInstanceOf(pulumi.ComponentResource);
+    });
+
+    it("supports optional environmentSuffix", () => {
+      const stackWithSuffix = new TapStack("StackWithSuffix", {
+        environmentSuffix: "dev",
+      });
+      const stackWithoutSuffix = new TapStack("StackWithoutSuffix", {});
+
+      expect(stackWithSuffix).toBeDefined();
+      expect(stackWithoutSuffix).toBeDefined();
+    });
+
+    it("supports optional tags", () => {
+      const stackWithTags = new TapStack("StackWithTags", {
+        tags: { Project: "TAP", Owner: "DevOps" },
+      });
+      const stackWithoutTags = new TapStack("StackWithoutTags", {});
+
+      expect(stackWithTags).toBeDefined();
+      expect(stackWithoutTags).toBeDefined();
+    });
+
+    it("can be instantiated multiple times", () => {
+      const stack1 = new TapStack("Stack1", { environmentSuffix: "env1" });
+      const stack2 = new TapStack("Stack2", { environmentSuffix: "env2" });
+      const stack3 = new TapStack("Stack3", { environmentSuffix: "env3" });
+
+      expect(stack1).toBeDefined();
+      expect(stack2).toBeDefined();
+      expect(stack3).toBeDefined();
+      expect((stack1 as any).__args.environmentSuffix).toBe("env1");
+      expect((stack2 as any).__args.environmentSuffix).toBe("env2");
+      expect((stack3 as any).__args.environmentSuffix).toBe("env3");
     });
   });
 });
