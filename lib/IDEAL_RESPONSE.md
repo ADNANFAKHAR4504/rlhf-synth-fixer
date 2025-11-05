@@ -1,6 +1,6 @@
-# Zero-Trust Security Infrastructure - IDEAL Implementation
+# Zero-Trust Security Infrastructure - IDEAL Implementation (Pulumi Go)
 
-This is the corrected, production-ready implementation with 100% compiling tests and full coverage of all 12 requirements.
+This is the corrected, production-ready Pulumi Go implementation with 100% compiling tests and full coverage of all 12 requirements.
 
 ## Key Improvements Over MODEL_RESPONSE
 
@@ -14,6 +14,9 @@ This is the corrected, production-ready implementation with 100% compiling tests
 8. Code compiles successfully with go build
 
 ## File: lib/tap_stack.go
+
+**Language:** Go
+**Framework:** Pulumi
 
 ```go
 package main
@@ -942,15 +945,9 @@ type TapStackArgs struct {
 }
 ```
 
-## File: lambda/index.py
+## Lambda Function Handler
 
-```python
-def handler(event, context):
-    return {
-        'statusCode': 200,
-        'body': 'Security Lambda executed successfully'
-    }
-```
+The Lambda function handler is implemented in a separate file in the `lambda/` directory. This file contains a simple handler that returns a 200 status code.
 
 ## Deployment Instructions
 
