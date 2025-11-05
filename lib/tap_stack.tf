@@ -100,7 +100,7 @@ resource "aws_subnet" "database" {
 resource "aws_eip" "nat" {
   count = length(var.availability_zones)
 
-  domain = "vpc"
+  domain     = "vpc"
   depends_on = [aws_internet_gateway.main]
 
   tags = {
@@ -265,27 +265,27 @@ resource "aws_db_subnet_group" "main" {
 
 # RDS Aurora PostgreSQL Cluster
 resource "aws_rds_cluster" "main" {
-  cluster_identifier              = "${var.project_name}-cluster-${var.environment}"
-  engine                         = "aurora-postgresql"
-  engine_version                 = var.postgres_engine_version
-  database_name                  = var.database_name
-  master_username                = var.db_username
-  manage_master_user_password    = true
-  master_user_secret_kms_key_id  = aws_kms_key.payment_processing.key_id
-  
-  db_subnet_group_name           = aws_db_subnet_group.main.name
-  vpc_security_group_ids         = [aws_security_group.rds.id]
-  
-  storage_encrypted              = true
-  kms_key_id                     = aws_kms_key.payment_processing.arn
-  
-  backup_retention_period        = 7
-  preferred_backup_window        = "03:00-04:00"
-  preferred_maintenance_window   = "sun:04:00-sun:05:00"
-  
+  cluster_identifier            = "${var.project_name}-cluster-${var.environment}"
+  engine                        = "aurora-postgresql"
+  engine_version                = var.postgres_engine_version
+  database_name                 = var.database_name
+  master_username               = var.db_username
+  manage_master_user_password   = true
+  master_user_secret_kms_key_id = aws_kms_key.payment_processing.key_id
+
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+  vpc_security_group_ids = [aws_security_group.rds.id]
+
+  storage_encrypted = true
+  kms_key_id        = aws_kms_key.payment_processing.arn
+
+  backup_retention_period      = 7
+  preferred_backup_window      = "03:00-04:00"
+  preferred_maintenance_window = "sun:04:00-sun:05:00"
+
   enabled_cloudwatch_logs_exports = ["postgresql"]
-  
-  skip_final_snapshot = false
+
+  skip_final_snapshot       = false
   final_snapshot_identifier = "${var.project_name}-final-snapshot-${var.environment}-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
 
   tags = {
@@ -306,8 +306,8 @@ resource "aws_rds_cluster_instance" "main" {
   engine_version     = aws_rds_cluster.main.engine_version
 
   performance_insights_enabled = true
-  monitoring_interval         = 60
-  monitoring_role_arn        = aws_iam_role.rds_monitoring.arn
+  monitoring_interval          = 60
+  monitoring_role_arn          = aws_iam_role.rds_monitoring.arn
 
   tags = {
     Name        = "${var.project_name}-instance-${count.index + 1}-${var.environment}"
@@ -432,29 +432,29 @@ resource "aws_ecs_task_definition" "main" {
   cpu                      = var.fargate_cpu
   memory                   = var.fargate_memory
   execution_role_arn       = aws_iam_role.ecs_execution_role.arn
-  task_role_arn           = aws_iam_role.ecs_task_role.arn
+  task_role_arn            = aws_iam_role.ecs_task_role.arn
 
   container_definitions = jsonencode([
     {
       name  = "${var.project_name}-container"
       image = var.container_image
-      
+
       portMappings = [
         {
           containerPort = var.container_port
           protocol      = "tcp"
         }
       ]
-      
+
       logConfiguration = {
         logDriver = "awslogs"
         options = {
           awslogs-group         = aws_cloudwatch_log_group.ecs.name
-          awslogs-region        = data.aws_region.current.name
+          awslogs-region        = data.aws_region.current.id
           awslogs-stream-prefix = "ecs"
         }
       }
-      
+
       environment = [
         {
           name  = "NODE_ENV"
@@ -465,7 +465,7 @@ resource "aws_ecs_task_definition" "main" {
           value = tostring(var.container_port)
         }
       ]
-      
+
       secrets = [
         {
           name      = "DB_HOST"
@@ -650,15 +650,13 @@ resource "aws_s3_bucket_versioning" "logs" {
   }
 }
 
-resource "aws_s3_bucket_encryption" "logs" {
+resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
   bucket = aws_s3_bucket.logs.id
 
-  server_side_encryption_configuration {
-    rule {
-      apply_server_side_encryption_by_default {
-        kms_master_key_id = aws_kms_key.payment_processing.arn
-        sse_algorithm     = "aws:kms"
-      }
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.payment_processing.arn
+      sse_algorithm     = "aws:kms"
     }
   }
 }
@@ -847,14 +845,12 @@ data "aws_route53_zone" "main" {
 # Route53 Health Check for ALB
 resource "aws_route53_health_check" "alb" {
   count                           = var.domain_name != "" ? 1 : 0
-  fqdn                           = aws_lb.main.dns_name
-  port                           = var.certificate_arn != "" ? 443 : 80
-  type                           = var.certificate_arn != "" ? "HTTPS" : "HTTP"
-  resource_path                  = var.health_check_path
-  failure_threshold              = 3
-  request_interval               = 30
-  cloudwatch_logs_region         = data.aws_region.current.name
-  cloudwatch_alarm_region        = data.aws_region.current.name
+  fqdn                            = aws_lb.main.dns_name
+  port                            = var.certificate_arn != "" ? 443 : 80
+  type                            = var.certificate_arn != "" ? "HTTPS" : "HTTP"
+  resource_path                   = var.health_check_path
+  failure_threshold               = 3
+  request_interval                = 30
   insufficient_data_health_status = "Failure"
 
   tags = {

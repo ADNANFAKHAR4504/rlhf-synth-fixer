@@ -79,7 +79,7 @@ variable "db_username" {
 variable "container_image" {
   description = "Docker image for the payment processing application"
   type        = string
-  default     = "nginx:latest"  # Replace with actual application image
+  default     = "nginx:latest" # Replace with actual application image
 }
 
 variable "container_port" {
@@ -135,7 +135,7 @@ variable "route53_weight" {
   description = "Weight for Route53 weighted routing (0-255). Use 0 for dev, gradually increase for prod traffic shifting"
   type        = number
   default     = 100
-  
+
   validation {
     condition     = var.route53_weight >= 0 && var.route53_weight <= 255
     error_message = "Route53 weight must be between 0 and 255."
