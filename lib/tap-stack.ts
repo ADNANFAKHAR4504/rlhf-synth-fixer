@@ -408,9 +408,10 @@ export class TapStack extends TerraformStack {
     // 5. Secrets Manager for RDS Credentials
     // =========================
     const rdsSecret = new SecretsmanagerSecret(this, 'rds-secret', {
-      name: `fintech-rds-credentials-${environmentSuffix}`,
+      name: `fintech-rds-credentials-v2-${environmentSuffix}`,
       description: 'RDS Aurora PostgreSQL credentials',
       kmsKeyId: kmsKey.arn,
+      recoveryWindowInDays: 0, // Force immediate deletion to avoid naming conflicts
       tags: {
         Name: `fintech-rds-secret-${environmentSuffix}`,
         Environment: environmentSuffix,
