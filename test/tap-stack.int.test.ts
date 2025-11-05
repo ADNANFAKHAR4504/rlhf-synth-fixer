@@ -15,80 +15,49 @@ let region: string;
 // Output mapping function to handle different environment suffix patterns
 function mapOutputs(rawOutputs: any): any {
   const mappedOutputs: any = {};
-
-  // Extract environment suffix from any output key (e.g., "dev" from "DevVpcId")
   const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-  // Create mapping patterns for different naming conventions
-  const patterns = [
-    { raw: 'VpcId', mapped: 'VpcId' },
-    { raw: 'AlbEndpoint', mapped: 'AlbEndpoint' },
-    { raw: 'AlbArn', mapped: 'AlbArn' },
-    { raw: 'RdsEndpoint', mapped: 'RdsEndpoint' },
-    { raw: 'S3BucketName', mapped: 'BucketName' },
-    { raw: 'S3BucketArn', mapped: 'BucketArn' },
-    { raw: 'LambdaFunctionName', mapped: 'FunctionName' },
-    { raw: 'LambdaFunctionArn', mapped: 'FunctionArn' },
-    { raw: 'ErrorTopicArn', mapped: 'TopicArn' },
-    { raw: 'CloudFrontDomain', mapped: 'CloudFrontDomain' },
-    { raw: 'CloudFrontDistributionId', mapped: 'DistributionId' },
-    { raw: 'HostedZoneId', mapped: 'HostedZoneId' },
-    { raw: 'DbSecretArn', mapped: 'SecretArn' },
-    { raw: 'AutoScalingGroupName', mapped: 'AutoScalingGroupName' },
-    { raw: 'DashboardUrl', mapped: 'DashboardUrl' },
-    { raw: 'DomainName', mapped: 'DomainName' },
-    { raw: 'aws_region', mapped: 'Region' },
-    { raw: 'account_id', mapped: 'AccountId' },
-  ];
+  // Helper function to find best match for a target pattern
+  const findBestMatch = (targetPatterns: string[]): string | undefined => {
+    for (const target of targetPatterns) {
+      // Try exact match first
+      if (rawOutputs[target]) return rawOutputs[target];
 
-  patterns.forEach(pattern => {
-    // Try exact match first
-    if (rawOutputs[pattern.raw]) {
-      mappedOutputs[pattern.mapped] = rawOutputs[pattern.raw];
-      return;
+      // Search through all raw output keys for patterns that end with our target
+      const keys = Object.keys(rawOutputs);
+      for (const key of keys) {
+        // Check if key ends with target (case insensitive)
+        if (key.toLowerCase().endsWith(target.toLowerCase())) {
+          return rawOutputs[key];
+        }
+        // Check if key contains target (case insensitive)
+        if (key.toLowerCase().includes(target.toLowerCase())) {
+          return rawOutputs[key];
+        }
+      }
     }
+    return undefined;
+  };
 
-    // Try with environment prefix (e.g., DevVpcId, ProdVpcId)
-    const prefixedKey = `${environmentSuffix.charAt(0).toUpperCase()}${environmentSuffix.slice(1)}${pattern.raw}`;
-    if (rawOutputs[prefixedKey]) {
-      mappedOutputs[pattern.mapped] = rawOutputs[prefixedKey];
-      return;
-    }
-
-    // Try with environment suffix (e.g., VpcIdDev, VpcIdProd)
-    const suffixedKey = `${pattern.raw}${environmentSuffix.charAt(0).toUpperCase()}${environmentSuffix.slice(1)}`;
-    if (rawOutputs[suffixedKey]) {
-      mappedOutputs[pattern.mapped] = rawOutputs[suffixedKey];
-      return;
-    }
-  });
-
-  // Add explicit mapping for cases where the raw output key doesn't match the pattern
-  // This handles the case where outputs exist but don't follow the expected naming
-  if (!mappedOutputs.BucketName && rawOutputs.S3BucketName) {
-    mappedOutputs.BucketName = rawOutputs.S3BucketName;
-  }
-  if (!mappedOutputs.BucketArn && rawOutputs.S3BucketArn) {
-    mappedOutputs.BucketArn = rawOutputs.S3BucketArn;
-  }
-  if (!mappedOutputs.FunctionName && rawOutputs.LambdaFunctionName) {
-    mappedOutputs.FunctionName = rawOutputs.LambdaFunctionName;
-  }
-  if (!mappedOutputs.FunctionArn && rawOutputs.LambdaFunctionArn) {
-    mappedOutputs.FunctionArn = rawOutputs.LambdaFunctionArn;
-  }
-  if (!mappedOutputs.TopicArn && rawOutputs.ErrorTopicArn) {
-    mappedOutputs.TopicArn = rawOutputs.ErrorTopicArn;
-  }
-  if (!mappedOutputs.SecretArn && rawOutputs.DbSecretArn) {
-    mappedOutputs.SecretArn = rawOutputs.DbSecretArn;
-  }
-  if (!mappedOutputs.DistributionId && rawOutputs.CloudFrontDistributionId) {
-    mappedOutputs.DistributionId = rawOutputs.CloudFrontDistributionId;
-  }
-  if (!mappedOutputs.CloudFrontDomain && rawOutputs.CloudFrontDomain) {
-    mappedOutputs.CloudFrontDomain = rawOutputs.CloudFrontDomain;
-  }
+  // Dynamic mapping based on semantic patterns
+  mappedOutputs.VpcId = findBestMatch(['VpcId', 'vpc_id', 'vpc']);
+  mappedOutputs.AlbEndpoint = findBestMatch(['AlbEndpoint', 'AlbDnsName', 'LoadBalancerDns', 'AlbUrl', 'alb_endpoint']);
+  mappedOutputs.AlbArn = findBestMatch(['AlbArn', 'LoadBalancerArn', 'alb_arn']);
+  mappedOutputs.RdsEndpoint = findBestMatch(['RdsEndpoint', 'DatabaseEndpoint', 'DbEndpoint', 'database_endpoint']);
+  mappedOutputs.BucketName = findBestMatch(['BucketName', 'S3BucketName', 'bucket_name', 's3_bucket']);
+  mappedOutputs.BucketArn = findBestMatch(['BucketArn', 'S3BucketArn', 'bucket_arn']);
+  mappedOutputs.FunctionName = findBestMatch(['FunctionName', 'LambdaFunctionName', 'lambda_function', 'function_name']);
+  mappedOutputs.FunctionArn = findBestMatch(['FunctionArn', 'LambdaFunctionArn', 'LambdaArn', 'lambda_arn']);
+  mappedOutputs.TopicArn = findBestMatch(['TopicArn', 'SnsTopicArn', 'SnsTopic', 'ErrorTopicArn', 'sns_topic']);
+  mappedOutputs.CloudFrontDomain = findBestMatch(['CloudFrontDomain', 'CloudFrontDistribution', 'cloudfront_domain']);
+  mappedOutputs.DistributionId = findBestMatch(['DistributionId', 'CloudFrontDistributionId', 'distribution_id']);
+  mappedOutputs.HostedZoneId = findBestMatch(['HostedZoneId', 'Route53ZoneId', 'hosted_zone_id']);
+  mappedOutputs.SecretArn = findBestMatch(['SecretArn', 'DbSecretArn', 'DatabaseSecretArn', 'secret_arn']);
+  mappedOutputs.AutoScalingGroupName = findBestMatch(['AutoScalingGroupName', 'AsgName', 'autoscaling_group']);
+  mappedOutputs.DashboardUrl = findBestMatch(['DashboardUrl', 'CloudWatchDashboard', 'dashboard_url']);
+  mappedOutputs.DomainName = findBestMatch(['DomainName', 'domain_name']);
+  mappedOutputs.Region = findBestMatch(['Region', 'aws_region', 'region']);
+  mappedOutputs.AccountId = findBestMatch(['AccountId', 'account_id', 'aws_account_id']);
 
   return mappedOutputs;
 }
