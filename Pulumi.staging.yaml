@@ -1,0 +1,15 @@
+config:
+  payment-processing-infra:environment_config:
+    vpc_cidr: "10.1.0.0/16"
+    rds_instance_count: 1
+    rds_instance_class: "db.r5.large"
+    rds_backup_retention: 7
+    lambda_memory_size: 1024
+    dynamodb_billing_mode: "PROVISIONED"
+    dynamodb_read_capacity: 5
+    dynamodb_write_capacity: 5
+    enable_cloudwatch_alarms: true
+    cloudwatch_cpu_threshold: 90
+    use_nat_gateway: true
+    enable_pitr: false
+    enable_s3_lifecycle: false
