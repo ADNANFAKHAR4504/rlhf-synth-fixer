@@ -889,40 +889,25 @@ jobs:
             Once your review is complete, post the summary comment and finish execution successfully.
             Do not exit with a non-zero code unless explicitly instructed by the workflow.
 
-      - name: Extract Claude Quality Score (latest comment only)
+      - name: Extract Claude Quality Score (latest bot comment)
         id: extract
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "🔍 Fetching latest Claude review comment..."
+          echo "🔍 Fetching latest Claude review comment from github-actions[bot]..."
       
-          # Gets comments, filters only those FROM Claude, sorts latest → first, prints newest body only
-          gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
-            --paginate --jq '.[] | select(.user.login == "github-actions[bot]" or .user.login | contains("anthropic")) | {created_at, body}' \
-            | jq -s 'sort_by(.created_at) | reverse | .[0].body' > latest_comment.txt || true
-      
-          if [ ! -s latest_comment.txt ]; then
-            echo "⚠️ No Claude review comment found. Defaulting score to 0."
-            SCORE=0
-            echo "quality_score=$SCORE" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-      
-          echo "🍀 Searching for score in latest Claude comment..."
-      
-          SCORE=$(grep -Eoi '(score|quality|final)[^0-9]{0,20}[0-9]+(\.[0-9]+)?(/10)?' latest_comment.txt \
+          SCORE=$(
+            gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+              --paginate \
+              --jq '[ .[] | select(.user.login == "github-actions[bot]") ] | sort_by(.created_at) | reverse | .[0].body' \
+            | grep -Eio '(score|quality|final)[^0-9]{0,20}[0-9]+(\.[0-9]+)?(/10)?' \
             | head -1 \
             | grep -Eo '[0-9]+(\.[0-9]+)?' \
-            | head -1)
+            || echo "0"
+          )
       
-          if [ -z "$SCORE" ]; then
-            echo "⚠️ Could not find score in the latest Claude comment. Defaulting to 0."
-            SCORE=0
-          fi
-      
-          echo "✅ Claude Score Detected (latest comment only): $SCORE"
+          echo "✅ Claude Score Detected: $SCORE"
           echo "quality_score=$SCORE" >> $GITHUB_OUTPUT
-
 
 
       - name: Enforce Quality Threshold
