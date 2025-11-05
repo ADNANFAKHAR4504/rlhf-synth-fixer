@@ -10,5 +10,22 @@
   "subject_labels": [
     "Environment Migration"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, Fargate, VPC"
+  "aws_services": [
+    "ApplicationAutoScaling",
+    "Athena",
+    "CloudWatch",
+    "DMS",
+    "DynamoDB",
+    "EC2",
+    "Events",
+    "IAM",
+    "KinesisFirehose",
+    "Lambda",
+    "Neptune",
+    "OpenSearchService",
+    "S3",
+    "SNS",
+    "StepFunctions"
+  ],
+  "training_quality": 10
 }
