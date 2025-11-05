@@ -567,8 +567,10 @@ public final class Main {
             super("custom:database:Stack", name, ComponentResourceOptions.builder().build());
 
             // Create Neptune subnet group
+            // Neptune subnet group names must be lowercase
             SubnetGroup neptuneSubnetGroup = new SubnetGroup(stackName + "-neptune-subnet-group",
                 SubnetGroupArgs.builder()
+                    .name(stackName.toLowerCase() + "-neptune-subnet-group")
                     .subnetIds(Output.all(
                         networkingStack.getPrivateSubnet1().id(),
                         networkingStack.getPrivateSubnet2().id()
@@ -583,7 +585,7 @@ public final class Main {
                     .backupRetentionPeriod(7)
                     .preferredBackupWindow("03:00-04:00")
                     .skipFinalSnapshot(false)
-                    .finalSnapshotIdentifier(stackName + "-neptune-final-snapshot")
+                    .finalSnapshotIdentifier(stackName.toLowerCase() + "-neptune-final-snapshot")
                     .iamDatabaseAuthenticationEnabled(true)
                     .neptuneSubnetGroupName(neptuneSubnetGroup.name())
                     .vpcSecurityGroupIds(networkingStack.getNeptuneSg().id().applyValue(List::of))
@@ -600,9 +602,11 @@ public final class Main {
                     .build(), CustomResourceOptions.builder().parent(this).build());
 
             // Create Aurora subnet group
+            // Aurora/RDS subnet group names must be lowercase
             com.pulumi.aws.rds.SubnetGroup auroraSubnetGroup =
                 new com.pulumi.aws.rds.SubnetGroup(stackName + "-aurora-subnet-group",
                     com.pulumi.aws.rds.SubnetGroupArgs.builder()
+                        .name(stackName.toLowerCase() + "-aurora-subnet-group")
                         .subnetIds(Output.all(
                             networkingStack.getPrivateSubnet1().id(),
                             networkingStack.getPrivateSubnet2().id()
@@ -622,7 +626,7 @@ public final class Main {
                     .backupRetentionPeriod(7)
                     .preferredBackupWindow("03:00-04:00")
                     .skipFinalSnapshot(false)
-                    .finalSnapshotIdentifier(stackName + "-aurora-final-snapshot")
+                    .finalSnapshotIdentifier(stackName.toLowerCase() + "-aurora-final-snapshot")
                     .iamDatabaseAuthenticationEnabled(true)
                     .dbSubnetGroupName(auroraSubnetGroup.name())
                     .vpcSecurityGroupIds(networkingStack.getAuroraSg().id().applyValue(List::of))
