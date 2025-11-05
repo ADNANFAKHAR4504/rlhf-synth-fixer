@@ -1,128 +1,125 @@
-# Payment Processing System Migration to AWS
+# ECS Fargate Microservices Platform for Payment Processing
 
 Hey team,
 
-We have an urgent migration project for a fintech startup that needs to move their payment processing infrastructure from on-premises to AWS. This is a critical system handling real money transactions, so we need to be extra careful about compliance, security, and zero-downtime requirements. The business has asked us to build this using **Pulumi with TypeScript** to take advantage of our existing tooling and expertise.
+We need to build out a production-grade container orchestration platform for our fintech startup's microservices architecture on AWS. The business is moving fast on their payment processing system and needs this infrastructure deployed to us-east-1 to handle real-time transactions. I've been asked to create this using **Terraform with HCL**.
 
-The current on-premises system follows a traditional three-tier architecture with application servers, database clusters, and load balancers. They're processing thousands of payment transactions daily and can't afford any downtime during the migration. The system needs to meet PCI DSS compliance requirements since they're handling payment card data.
+The architecture consists of 5 core microservices: payment-api (handles transaction processing), fraud-detection (real-time fraud checks), notification-service (customer notifications), audit-logger (compliance logging), and webhook-processor (third-party integrations). Each service needs to run independently, scale automatically based on load, and communicate securely through a service mesh.
 
-The main challenge here is orchestrating a safe migration strategy that allows them to switch between old and new environments quickly if something goes wrong. They want to start with a development environment to test the migration process, then replicate everything to production when ready.
+The business is particularly concerned about zero-downtime deployments since this is handling live payment transactions. They also need complete observability into the system through CloudWatch metrics and logs. All services must be isolated with proper IAM permissions following the principle of least privilege.
 
 ## What we need to build
 
-Create a complete AWS infrastructure using **Pulumi with TypeScript** that provisions isolated development and production environments for the payment processing system. The solution must support zero-downtime migration with blue-green deployment capabilities.
+Create a microservices orchestration platform using **Terraform with HCL** for deploying containerized services on AWS ECS Fargate in the us-east-1 region.
 
 ### Core Requirements
 
-1. **Multi-Environment Stack Management**
-   - Create separate Pulumi stacks for development and production environments
-   - Use Pulumi stack references to share outputs between stacks when needed
-   - Ensure configuration isolation between environments
-   - Support promotion of tested configurations from dev to prod
+1. **ECS Cluster Setup**
+   - Create ECS cluster with CloudWatch Container Insights enabled
+   - Enable proper tagging for cost allocation
+   - Use Fargate launch type exclusively (no EC2 instances)
 
-2. **Network Infrastructure**
-   - Deploy VPC with exactly 3 availability zones for high availability
-   - Each availability zone must have both public and private subnets
-   - Configure appropriate routing, NAT gateways, and internet gateways
-   - Ensure proper network segmentation for PCI DSS compliance
+2. **Microservices Task Definitions**
+   - Define task definitions for 5 microservices: payment-api, fraud-detection, notification-service, audit-logger, webhook-processor
+   - Configure appropriate CPU and memory allocations for each service
+   - Specify both soft and hard memory limits
+   - Configure tasks to pull container images from private ECR repositories only
 
-3. **Database Layer**
-   - Deploy RDS Aurora MySQL cluster with automated failover capabilities
-   - Enable encryption at rest for all database storage
-   - Configure point-in-time recovery for disaster recovery scenarios
-   - Set up automated backups with proper retention policies
+3. **ECS Services Configuration**
+   - Create ECS service for each microservice
+   - Set minimum desired count of 2 tasks per service
+   - Configure health check grace period of 60 seconds
+   - Deploy containers across multiple availability zones for high availability
 
-4. **Application Layer**
-   - Deploy ECS Fargate service running the payment processing application
-   - Configure auto-scaling based on CPU utilization metrics
-   - Ensure proper IAM roles and task execution roles are configured
-   - Deploy across multiple availability zones for resilience
+4. **Load Balancing**
+   - Set up Application Load Balancer for external traffic
+   - Create target groups for each microservice
+   - Implement path-based routing rules to route traffic to appropriate services
 
-5. **Load Balancing and Traffic Management**
-   - Configure Application Load Balancer with SSL termination using TLS 1.2 or higher
-   - Set up health checks to monitor application availability
-   - Implement blue-green deployment mechanism using ALB target groups for zero-downtime deployments
-   - Enable target group switching for cutover scenarios
+5. **Auto Scaling**
+   - Implement auto-scaling policies for each ECS service
+   - Scale up at 70% CPU utilization
+   - Scale down at 30% CPU utilization
+   - Configure appropriate min/max task counts
 
-6. **Secrets and Configuration Management**
-   - Implement AWS Secrets Manager to store database credentials securely
-   - Configure automatic secret rotation every 30 days
-   - Use AWS Systems Manager Parameter Store for application configuration
-   - Ensure all secrets are encrypted and never exposed in code or logs
+6. **Container Registry**
+   - Create ECR repositories for each microservice
+   - Implement lifecycle policies to retain only the last 10 images
+   - Ensure repositories are private
 
-7. **Monitoring and Observability**
-   - Create CloudWatch dashboards showing application performance metrics
-   - Display database performance indicators including connections, CPU, and storage
-   - Configure CloudWatch alarms for CPU utilization, memory usage, and database connections
-   - Set up appropriate alarm thresholds and notification mechanisms
+7. **Service Mesh**
+   - Configure AWS App Mesh for inter-service communication
+   - Set up virtual nodes and services for each microservice
+   - Enable service-to-service communication through the mesh
 
-8. **Backup and Disaster Recovery**
-   - Configure AWS Backup plans for RDS database with daily backups
-   - Include ECS task definitions in backup plans
-   - Set 30-day retention period for all backups
-   - Ensure backups support point-in-time recovery requirements
+8. **Logging and Monitoring**
+   - Create CloudWatch log groups for each service with 7-day retention
+   - Enable CloudWatch Container Insights for the ECS cluster
+   - Configure proper log streaming from containers
 
-9. **Migration Orchestration**
-   - Implement AWS Step Functions state machine to orchestrate the cutover process
-   - Define workflow for database migration, application deployment, and traffic switching
-   - Include rollback capabilities in the state machine
-   - Provide visibility into migration progress and status
+9. **IAM Roles and Permissions**
+   - Create dedicated IAM task execution roles for ECS tasks
+   - Create IAM task roles with least-privilege permissions specific to each microservice
+   - Grant appropriate permissions for ECR, CloudWatch, Secrets Manager access
 
-10. **Stack Output Management**
-    - Export stack outputs for VPC IDs, subnet IDs, security group IDs
-    - Export database endpoints, load balancer DNS names, and ARNs
-    - Enable cross-stack references for environment migration workflows
-    - Document all exported values for operational use
+10. **Secrets Management**
+    - Set up AWS Secrets Manager for storing database connection strings
+    - Store third-party API credentials securely
+    - Configure ECS tasks to retrieve secrets at runtime
 
 ### Technical Requirements
 
-- All infrastructure must be defined using **Pulumi with TypeScript**
+- All infrastructure defined using **Terraform with HCL**
+- Use **ECS Fargate** for serverless container orchestration
+- Use **ECR** for private container image storage
+- Use **Application Load Balancer** for traffic distribution
+- Use **AWS App Mesh** for service mesh capabilities
+- Use **CloudWatch** for logging and monitoring with Container Insights
+- Use **IAM** for access control and permissions
+- Use **Secrets Manager** for credential management
+- Use **VPC** with proper networking configuration
+- Resource names must include **environmentSuffix** for uniqueness
+- Follow naming convention: `{resource-type}-{service-name}-{environment-suffix}`
 - Deploy to **us-east-1** region
-- Use AWS services: VPC, RDS Aurora, ECS Fargate, Application Load Balancer, Secrets Manager, CloudWatch, AWS Backup, Step Functions, Systems Manager Parameter Store
-- Resource names must include **environmentSuffix** for uniqueness across deployments
-- Follow naming convention: resource-type-environment-suffix
-- All data in transit must use TLS 1.2 or higher encryption
-- Deploy resources across exactly 3 availability zones
+- Support VPC with 3 availability zones, private subnets for containers, public subnets for ALB
 
-### Security and Compliance Constraints
+### Constraints
 
-- System must support PCI DSS compliance requirements
-- Enable encryption at rest for all data storage (RDS, secrets, backups)
-- Use encryption in transit for all communications (TLS 1.2+)
-- Implement IAM least privilege principles for all service roles
-- Configure proper security groups with minimal required access
-- Never expose database directly to internet (private subnets only)
-- Rotate database credentials automatically every 30 days
-
-### Resource Management
-
-- All resources must be destroyable (no Retain deletion policies)
-- Tag all resources with: Environment, CostCenter, and MigrationPhase
-- Include proper error handling and logging throughout
-- Use Aurora Serverless where possible to reduce costs and improve provisioning speed
-- Configure appropriate resource cleanup policies
+- Use ECS Fargate launch type exclusively (no EC2 instances)
+- Each microservice must run in its own ECS service with dedicated task definition
+- Container images must be pulled from private ECR repositories only
+- Enable CloudWatch Container Insights for all ECS clusters
+- Implement service-to-service communication through AWS App Mesh
+- Deploy containers across multiple availability zones for high availability
+- All resources must be destroyable (no Retain policies)
+- Include proper error handling and logging
+- Support rolling deployments with zero downtime
 
 ## Success Criteria
 
-- **Functionality**: Complete infrastructure deployment in both dev and prod stacks successfully
-- **High Availability**: Application and database survive single availability zone failure
-- **Zero Downtime**: Blue-green deployment allows traffic switch with no service interruption
-- **Security**: All PCI DSS relevant controls implemented (encryption, segmentation, access control)
-- **Migration**: Step Functions state machine successfully orchestrates cutover process
-- **Recovery**: Point-in-time recovery and backups tested and functional
-- **Monitoring**: CloudWatch dashboards provide visibility into all critical metrics
-- **Resource Naming**: All named resources include environmentSuffix properly
-- **Code Quality**: TypeScript code follows best practices, includes proper types, and is well-documented
+- **Functionality**: All 5 microservices deployed and running on ECS Fargate with proper task definitions and services
+- **Scalability**: Auto-scaling policies active and responding to CPU utilization thresholds (70% up, 30% down)
+- **Reliability**: Services deployed across multiple AZs with minimum 2 tasks each, health checks configured
+- **Security**: IAM roles with least-privilege permissions, secrets stored in Secrets Manager, private ECR repositories
+- **Observability**: CloudWatch Container Insights enabled, log groups created with retention policies, metrics available
+- **Resource Naming**: All resources include environmentSuffix following naming convention
+- **Code Quality**: Modular Terraform HCL structure with separate files for different resource types, well-documented
+- **Service Mesh**: AWS App Mesh configured for inter-service communication
+- **Load Balancing**: ALB with path-based routing to appropriate microservices
+- **Container Registry**: ECR repositories with lifecycle policies retaining last 10 images
 
 ## What to deliver
 
-- Complete Pulumi TypeScript implementation with all source code
-- Infrastructure components: VPC (3 AZs), RDS Aurora MySQL, ECS Fargate, ALB
-- Security components: Secrets Manager with rotation, IAM roles, security groups
-- Monitoring components: CloudWatch dashboards, alarms
-- Backup components: AWS Backup plans with 30-day retention
-- Migration orchestration: Step Functions state machine for cutover workflow
-- Configuration: Stack references, parameter store integration
-- Documentation: Deployment instructions, architecture overview, operational runbook
-- All code ready for deployment to us-east-1 region
-- Proper TypeScript typing and error handling throughout
+- Complete Terraform HCL implementation in modular structure
+- Separate .tf files for ECS resources, networking, IAM, monitoring, ECR, App Mesh
+- ECS cluster with Container Insights enabled
+- Task definitions for payment-api, fraud-detection, notification-service, audit-logger, webhook-processor
+- ECS services with auto-scaling policies
+- Application Load Balancer with target groups and routing rules
+- ECR repositories with lifecycle policies
+- AWS App Mesh virtual nodes and services
+- CloudWatch log groups with 7-day retention
+- IAM task execution roles and task roles
+- Secrets Manager integration
+- Unit tests for all components
+- Documentation and deployment instructions

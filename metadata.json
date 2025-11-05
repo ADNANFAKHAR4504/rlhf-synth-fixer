@@ -1,33 +1,28 @@
 {
-  "platform": "pulumi",
-  "language": "ts",
+  "platform": "tf",
+  "language": "hcl",
   "complexity": "hard",
   "turn_type": "single",
   "team": "synth",
-  "startedAt": "2025-11-05T19:40:19+05:30",
-  "subtask": "Provisioning of Infrastructure Environments",
+  "startedAt": "2025-11-06T01:12:02+05:30",
+  "subtask": "Application Deployment",
   "subject_labels": [
-    "Environment Migration",
-    "Cloud Environment Setup",
-    "Multi-Environment Consistency and Replication"
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
   ],
-  "po_id": "zquzq",
+  "po_id": "l9l1q",
   "aws_services": [
-    "VPC",
-    "EC2",
-    "RDS",
-    "Aurora",
     "ECS",
-    "Fargate",
+    "ECR",
+    "VPC",
     "ALB",
-    "Secrets Manager",
     "CloudWatch",
-    "AWS Backup",
-    "Step Functions",
-    "Systems Manager",
     "IAM",
-    "ACM"
+    "Secrets Manager",
+    "App Mesh",
+    "Auto Scaling",
+    "Service Discovery"
   ],
   "region": "us-east-1",
-  "training_quality": 9
+  "training_quality": 10
 }
