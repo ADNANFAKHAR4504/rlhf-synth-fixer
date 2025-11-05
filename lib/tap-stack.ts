@@ -400,33 +400,39 @@ export class TapStack extends pulumi.ComponentResource {
       `rotation-lambda-policy-${args.environmentSuffix}`,
       {
         role: rotationLambdaRole.name,
-        policy: pulumi.all([this.dbSecret.arn, kmsKey.arn]).apply(([secretArn, keyArn]) =>
-          JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Action: [
-                  'secretsmanager:DescribeSecret',
-                  'secretsmanager:GetSecretValue',
-                  'secretsmanager:PutSecretValue',
-                  'secretsmanager:UpdateSecretVersionStage',
-                ],
-                Resource: secretArn,
-              },
-              {
-                Effect: 'Allow',
-                Action: ['secretsmanager:GetRandomPassword'],
-                Resource: '*',
-              },
-              {
-                Effect: 'Allow',
-                Action: ['kms:Decrypt', 'kms:DescribeKey', 'kms:GenerateDataKey'],
-                Resource: keyArn,
-              },
-            ],
-          })
-        ),
+        policy: pulumi
+          .all([this.dbSecret.arn, kmsKey.arn])
+          .apply(([secretArn, keyArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'secretsmanager:DescribeSecret',
+                    'secretsmanager:GetSecretValue',
+                    'secretsmanager:PutSecretValue',
+                    'secretsmanager:UpdateSecretVersionStage',
+                  ],
+                  Resource: secretArn,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['secretsmanager:GetRandomPassword'],
+                  Resource: '*',
+                },
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'kms:Decrypt',
+                    'kms:DescribeKey',
+                    'kms:GenerateDataKey',
+                  ],
+                  Resource: keyArn,
+                },
+              ],
+            })
+          ),
       },
       { parent: rotationLambdaRole }
     );
@@ -657,23 +663,25 @@ def finish_secret(service_client, arn, token):
       `lambda-secrets-policy-${args.environmentSuffix}`,
       {
         role: lambdaRole.name,
-        policy: pulumi.all([this.dbSecret.arn, kmsKey.arn]).apply(([secretArn, keyArn]) =>
-          JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Action: ['secretsmanager:GetSecretValue'],
-                Resource: secretArn,
-              },
-              {
-                Effect: 'Allow',
-                Action: ['kms:Decrypt'],
-                Resource: keyArn,
-              },
-            ],
-          })
-        ),
+        policy: pulumi
+          .all([this.dbSecret.arn, kmsKey.arn])
+          .apply(([secretArn, keyArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: ['secretsmanager:GetSecretValue'],
+                  Resource: secretArn,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['kms:Decrypt'],
+                  Resource: keyArn,
+                },
+              ],
+            })
+          ),
       },
       { parent: lambdaRole }
     );
@@ -714,7 +722,7 @@ exports.handler = async (event) => {
     );
 
     // AWS Transfer Family for SFTP
-    const transferLogGroup = new aws.cloudwatch.LogGroup(
+    new aws.cloudwatch.LogGroup(
       `transfer-logs-${args.environmentSuffix}`,
       {
         name: `/aws/transfer/${args.environmentSuffix}`,
@@ -751,7 +759,11 @@ exports.handler = async (event) => {
           Statement: [
             {
               Effect: 'Allow',
-              Action: ['logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents'],
+              Action: [
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+              ],
               Resource: '*',
             },
           ],
@@ -771,16 +783,8 @@ exports.handler = async (event) => {
       { parent: this }
     );
 
-    // CloudWatch Evidently for feature flags
-    const evidentlyProject = new aws.evidently.Project(
-      `evidently-project-${args.environmentSuffix}`,
-      {
-        name: `payment-migration-${args.environmentSuffix}`,
-        description: 'Feature flags and A/B testing for payment migration',
-        tags: defaultTags,
-      },
-      { parent: this }
-    );
+    // Note: AWS Evidently has been discontinued as of 2025.
+    // For feature flags, consider using AWS AppConfig instead.
 
     // AWS App Runner for container deployment
     const appRunnerRole = new aws.iam.Role(
@@ -805,7 +809,8 @@ exports.handler = async (event) => {
       `apprunner-ecr-policy-${args.environmentSuffix}`,
       {
         role: appRunnerRole.name,
-        policyArn: 'arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess',
+        policyArn:
+          'arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess',
       },
       { parent: appRunnerRole }
     );
@@ -876,10 +881,24 @@ exports.handler = async (event) => {
             source: 'none',
           },
         ],
+        targets: [
+          {
+            name: 'rds-target',
+            resourceType: 'aws:rds:db',
+            selectionMode: 'ALL',
+            resourceArns: [this.rdsInstance.arn],
+          },
+        ],
         actions: [
           {
             name: 'test-rds-failover',
             actionId: 'aws:rds:reboot-db-instances',
+            targets: [
+              {
+                key: 'DBInstances',
+                value: 'rds-target',
+              },
+            ],
             parameters: [
               {
                 key: 'forceFailover',
@@ -890,7 +909,7 @@ exports.handler = async (event) => {
         ],
         tags: defaultTags,
       },
-      { parent: this }
+      { parent: this, dependsOn: [this.rdsInstance] }
     );
 
     // AWS Resource Access Manager resource share
@@ -953,7 +972,6 @@ exports.handler = async (event) => {
       kmsKeyArn: kmsKey.arn,
       networkFirewallArn: networkFirewall.arn,
       transferServerArn: transferServer.arn,
-      evidentlyProjectArn: evidentlyProject.arn,
       appRunnerServiceArn: appRunnerService.arn,
       fisTemplateId: fisExperimentTemplate.id,
       ramResourceShareArn: ramResourceShare.arn,
