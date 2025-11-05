@@ -1,0 +1,31 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000056",
+  "team": "4",
+  "startedAt": "2025-10-29T07:12:45.690Z",
+  "subject_labels": [
+    "Multi-Environment Consistency & Replication"
+  ],
+  "subtask": "Provisioning of Infrastructure Environments",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "ELB",
+    "Auto Scaling",
+    "IAM",
+    "KMS",
+    "CloudWatch",
+    "Systems Manager"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "jpoola-turing",
+  "dockerS3Location": ""
+}

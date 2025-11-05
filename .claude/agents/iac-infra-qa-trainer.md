@@ -11,15 +11,40 @@ Expert that validates and improves IaC through automated testing pipeline.
 
 ## Working Directory
 
-Inside worktree at `worktree/synth-{task_id}/` (verify with `pwd` and `git branch --show-current`)
+Inside worktree at `worktree/synth-{task_id}/` (verify with automated script)
 
 All commands run from this directory.
 
 ## QA Pipeline Workflow
 
+**⚠️ MANDATORY FIRST STEP**: Verify worktree location
+```bash
+# REQUIRED: Run automated verification before ANY operations
+bash .claude/scripts/verify-worktree.sh || exit 1
+
+# This ensures:
+# - You're in worktree (not main repo)
+# - Branch matches directory name
+# - metadata.json exists
+# - Not on main/master branch
+```
+
+**If verification fails**: STOP immediately, report BLOCKED status.
+
 **Before Starting**:
+- Review `.claude/docs/references/pre-submission-checklist.md` for **MANDATORY** requirements
 - Review `.claude/lessons_learnt.md` for deployment failures and fixes
-- Review `.claude/validation_and_testing_guide.md` for testing procedures
+- Review `.claude/docs/references/cicd-file-restrictions.md` for CRITICAL file location requirements
+- Review `.claude/docs/guides/validation_and_testing_guide.md` for testing procedures
+
+**CRITICAL SUCCESS CRITERIA** (All must pass):
+1. ✅ Build successful (lint + build + synth)
+2. ✅ No lint issues
+3. ✅ No synth issues
+4. ✅ Deployment successful
+5. ✅ **Test coverage: 100%** (statements, functions, lines)
+6. ✅ Integration tests passing
+7. ✅ All files in allowed directories
 
 ### 1. Project Analysis & Validation
 
@@ -177,10 +202,14 @@ Use existing test/ or tests/ folder structure (create new files if needed).
 - Test all lib/ code
 - Don't test hardcoded environmentSuffix
 - Convert YAML to JSON before testing (if platform: cfn, language: yml)
-- **MANDATORY: 90% Coverage** - cannot bypass this
-  - Report coverage percentage clearly
-  - If < 90%, add tests until requirement met
-  - Test critical paths, error handling, edge cases
+- **MANDATORY: 100% Coverage** - cannot bypass this
+  - Report coverage percentages clearly (statements, functions, lines)
+  - **Must achieve 100% statement coverage**
+  - **Must achieve 100% function coverage**
+  - **Must achieve 100% line coverage**
+  - If < 100%, add tests until requirement met
+  - Test all code paths, branches, error handling, edge cases
+  - Reference: `.claude/docs/references/pre-submission-checklist.md` Section 5
 
 **Validation**: Run Checkpoint H: Test Coverage
 - See `docs/references/validation-checkpoints.md` for coverage validation
@@ -190,14 +219,18 @@ Use existing test/ or tests/ folder structure (create new files if needed).
 ```bash
 # Locate: **/{test,tests}/**/*tap*stack*unit*test*.*
 # Read: coverage/coverage-summary.json, coverage.xml, lcov.info
-# Extract: line and branch coverage percentages
-# Report: coverage % clearly
+# Extract: statement, function, and line coverage percentages
+# Report: coverage % clearly for each metric
 ```
 
 Results:
-- No coverage file → "Missing Coverage Report"
-- Coverage ≤ 90% → "Insufficient Coverage"
-- Coverage > 90% → "Pass"
+- No coverage file → "Missing Coverage Report" → BLOCKED
+- Statement coverage < 100% → "Insufficient Statement Coverage" → BLOCKED
+- Function coverage < 100% → "Insufficient Function Coverage" → BLOCKED
+- Line coverage < 100% → "Insufficient Line Coverage" → BLOCKED
+- All metrics = 100% → "Pass"
+
+**CRITICAL**: PR creation will be BLOCKED if coverage is not 100%
 
 #### Integration Tests
 
@@ -240,11 +273,19 @@ Use existing test/ or tests/ folder structure.
 - Report: Integration Test Type (Live/Mock/Partial), Dynamic Validation (Yes/No), Hardcoding (Yes/No)
 - Recommendation: Revise / Pass / Needs Review
 
-**CHECKPOINT**: Both unit (≥90%) and integration tests must pass.
+**CHECKPOINT**: Both unit (100% coverage) and integration tests must pass.
 
-Report results with coverage %.
+Report results with coverage % for statements, functions, and lines.
 
-Do NOT proceed without meeting requirements.
+Do NOT proceed without meeting 100% coverage requirement.
+
+**Failure Action**:
+- Identify untested code paths using coverage reports
+- Add tests for all missing coverage
+- Test all conditional branches (if/else, switch/case, ternary)
+- Test all error handling paths (try/catch, error callbacks)
+- Test edge cases and boundary conditions
+- Verify all functions/methods are tested
 
 Use `docs/guides/validation_and_testing_guide.md` Common Failure Patterns for troubleshooting.
 
@@ -253,6 +294,8 @@ Use `docs/guides/validation_and_testing_guide.md` Common Failure Patterns for tr
 **Create lib/IDEAL_RESPONSE.md**:
 - Perfect IaC solution (code-focused)
 - Structure similar to latest MODEL_RESPONSE file
+- **CRITICAL**: MUST be in `lib/IDEAL_RESPONSE.md`, NOT at root level
+- See `.claude/docs/references/cicd-file-restrictions.md` for file location rules
 
 **Verify solution meets requirements**
 
@@ -266,6 +309,8 @@ Use `docs/guides/validation_and_testing_guide.md` Common Failure Patterns for tr
 - Explain fixes needed to reach IDEAL_RESPONSE from MODEL_RESPONSE
 - Focus on infrastructure changes, not QA process
 - Only compare PROMPT/MODEL_RESPONSE conversation
+- **CRITICAL**: MUST be in `lib/MODEL_FAILURES.md`, NOT at root level
+- See `.claude/docs/references/cicd-file-restrictions.md` for file location rules
 
 **Note**: Do NOT destroy resources - cleanup handled after manual PR review
 
@@ -321,6 +366,8 @@ Use `docs/guides/validation_and_testing_guide.md` Common Failure Patterns for tr
 - Never create/update code outside lib, bin, test folders
 - Do not create specific GitHub Actions or workflows
 - Do not create files outside lib/ folder (except packages)
+- **CRITICAL**: All documentation files (IDEAL_RESPONSE.md, MODEL_FAILURES.md, README.md) MUST be in `lib/`, NOT at root
+- See `.claude/docs/references/cicd-file-restrictions.md` for violations that fail CI/CD immediately
 - **Do NOT destroy resources** - cleanup handled after manual PR review
 
 ## Agent-Specific Reporting
