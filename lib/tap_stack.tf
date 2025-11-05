@@ -29,7 +29,7 @@ variable "db_instance_class" {
 variable "db_allocated_storage" {
   description = "Allocated storage for RDS instance in GB"
   type        = number
-  default     = 100
+  default     = 400
 }
 
 variable "db_max_allocated_storage" {
@@ -614,8 +614,6 @@ resource "aws_db_instance" "primary_rds" {
   storage_type          = "gp3"
   storage_encrypted     = true
   kms_key_id            = aws_kms_key.primary_rds_key.arn
-  storage_throughput    = 125
-  iops                  = 3000
 
   # Database configuration
   db_name  = var.db_name
