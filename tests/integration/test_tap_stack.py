@@ -19,49 +19,78 @@ class TestTapStackIntegration(unittest.TestCase):
         with open("cfn-outputs/flat-outputs.json", "r", encoding="utf-8") as f:
             all_outputs = json.load(f)
 
+        # Initialize empty outputs dict
+        cls.outputs = {}
+        cls.stack_outputs = {}
+        
+        # Check if outputs dictionary is empty
+        if not all_outputs:
+            raise ValueError("No stack outputs found in cfn-outputs/flat-outputs.json. Please run stack deployment first.")
+        
         # Extract the TapStack outputs (first key in the dictionary)
         stack_key = list(all_outputs.keys())[0]
         stack_outputs = all_outputs[stack_key]
         cls.stack_outputs = stack_outputs
 
-        # Create a simplified outputs dict with cleaner keys
-        cls.outputs = {}
-        
-        # Extract VPC ID
-        vpc_id_key = [k for k in stack_outputs.keys() if "vpc-id" in k][0]
-        cls.outputs["VpcId"] = stack_outputs[vpc_id_key]
+        # Extract VPC ID - safely handle missing key
+        vpc_id_keys = [k for k in stack_outputs.keys() if "vpc-id" in k]
+        if vpc_id_keys:
+            cls.outputs["VpcId"] = stack_outputs[vpc_id_keys[0]]
+        else:
+            cls.outputs["VpcId"] = None
         
         # Extract public subnet IDs (they come as a list)
-        public_subnet_key = [k for k in stack_outputs.keys() if "public-subnet-ids" in k][0]
-        public_subnets = stack_outputs[public_subnet_key]
-        cls.outputs["PublicSubnets"] = public_subnets
+        public_subnet_keys = [k for k in stack_outputs.keys() if "public-subnet-ids" in k]
+        if public_subnet_keys:
+            public_subnets = stack_outputs[public_subnet_keys[0]]
+            cls.outputs["PublicSubnets"] = public_subnets if isinstance(public_subnets, list) else [public_subnets]
+        else:
+            cls.outputs["PublicSubnets"] = []
+        
+        public_subnets = cls.outputs.get("PublicSubnets", [])
         cls.outputs["PublicSubnet0"] = public_subnets[0] if len(public_subnets) > 0 else None
         cls.outputs["PublicSubnet1"] = public_subnets[1] if len(public_subnets) > 1 else None
         cls.outputs["PublicSubnet2"] = public_subnets[2] if len(public_subnets) > 2 else None
         
         # Extract private subnet IDs (they come as a list)
-        private_subnet_key = [k for k in stack_outputs.keys() if "private-subnet-ids" in k][0]
-        private_subnets = stack_outputs[private_subnet_key]
-        cls.outputs["PrivateSubnets"] = private_subnets
+        private_subnet_keys = [k for k in stack_outputs.keys() if "private-subnet-ids" in k]
+        if private_subnet_keys:
+            private_subnets = stack_outputs[private_subnet_keys[0]]
+            cls.outputs["PrivateSubnets"] = private_subnets if isinstance(private_subnets, list) else [private_subnets]
+        else:
+            cls.outputs["PrivateSubnets"] = []
+        
+        private_subnets = cls.outputs.get("PrivateSubnets", [])
         cls.outputs["PrivateSubnet0"] = private_subnets[0] if len(private_subnets) > 0 else None
         cls.outputs["PrivateSubnet1"] = private_subnets[1] if len(private_subnets) > 1 else None
         cls.outputs["PrivateSubnet2"] = private_subnets[2] if len(private_subnets) > 2 else None
         
         # Extract NAT Gateway IDs (they come as a list)
-        nat_key = [k for k in stack_outputs.keys() if "nat-gateway-ids" in k][0]
-        nat_gateways = stack_outputs[nat_key]
-        cls.outputs["NatGateways"] = nat_gateways
+        nat_keys = [k for k in stack_outputs.keys() if "nat-gateway-ids" in k]
+        if nat_keys:
+            nat_gateways = stack_outputs[nat_keys[0]]
+            cls.outputs["NatGateways"] = nat_gateways if isinstance(nat_gateways, list) else [nat_gateways]
+        else:
+            cls.outputs["NatGateways"] = []
+        
+        nat_gateways = cls.outputs.get("NatGateways", [])
         cls.outputs["NatGateway0"] = nat_gateways[0] if len(nat_gateways) > 0 else None
         cls.outputs["NatGateway1"] = nat_gateways[1] if len(nat_gateways) > 1 else None
         cls.outputs["NatGateway2"] = nat_gateways[2] if len(nat_gateways) > 2 else None
         
         # Extract S3 Endpoint ID
-        s3_endpoint_key = [k for k in stack_outputs.keys() if "s3-endpoint-id" in k][0]
-        cls.outputs["S3EndpointId"] = stack_outputs[s3_endpoint_key]
+        s3_endpoint_keys = [k for k in stack_outputs.keys() if "s3-endpoint-id" in k]
+        if s3_endpoint_keys:
+            cls.outputs["S3EndpointId"] = stack_outputs[s3_endpoint_keys[0]]
+        else:
+            cls.outputs["S3EndpointId"] = None
         
         # Extract Flow Logs Group
-        flow_logs_key = [k for k in stack_outputs.keys() if "flow-log-group-name" in k][0]
-        cls.outputs["FlowLogsGroup"] = stack_outputs[flow_logs_key]
+        flow_logs_keys = [k for k in stack_outputs.keys() if "flow-log-group-name" in k]
+        if flow_logs_keys:
+            cls.outputs["FlowLogsGroup"] = stack_outputs[flow_logs_keys[0]]
+        else:
+            cls.outputs["FlowLogsGroup"] = None
 
     def test_vpc_exists_and_configuration(self):
         """Test VPC ID is exported in outputs."""
