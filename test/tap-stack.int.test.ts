@@ -157,12 +157,24 @@ describe('VPC Infrastructure Integration Tests', () => {
         outputs.NatGatewayAId,
         outputs.NatGatewayBId,
         outputs.NatGatewayCId
-      ].join(' ');
+      ];
 
-      const response = awsCli(`ec2 describe-nat-gateways --nat-gateway-ids ${natGatewayIds}`);
+      // Query each NAT Gateway individually to handle partial failures
+      const natGateways = [];
+      for (const natId of natGatewayIds) {
+        try {
+          const response = awsCli(`ec2 describe-nat-gateways --nat-gateway-ids ${natId}`);
+          if (response.NatGateways && response.NatGateways.length > 0) {
+            natGateways.push(response.NatGateways[0]);
+          }
+        } catch (error) {
+          // NAT Gateway might be in deleting state or not found
+          console.warn(`NAT Gateway ${natId} not found or not accessible`);
+        }
+      }
 
-      expect(response.NatGateways.length).toBe(3);
-      response.NatGateways.forEach((nat: any) => {
+      expect(natGateways.length).toBe(3);
+      natGateways.forEach((nat: any) => {
         expect(nat.State).toBe('available');
       });
     });
@@ -172,16 +184,28 @@ describe('VPC Infrastructure Integration Tests', () => {
         outputs.NatGatewayAId,
         outputs.NatGatewayBId,
         outputs.NatGatewayCId
-      ].join(' ');
+      ];
       const publicSubnetIds = [
         outputs.PublicSubnetAId,
         outputs.PublicSubnetBId,
         outputs.PublicSubnetCId
       ];
 
-      const response = awsCli(`ec2 describe-nat-gateways --nat-gateway-ids ${natGatewayIds}`);
+      // Query each NAT Gateway individually
+      const natGateways = [];
+      for (const natId of natGatewayIds) {
+        try {
+          const response = awsCli(`ec2 describe-nat-gateways --nat-gateway-ids ${natId}`);
+          if (response.NatGateways && response.NatGateways.length > 0) {
+            natGateways.push(response.NatGateways[0]);
+          }
+        } catch (error) {
+          console.warn(`NAT Gateway ${natId} not found or not accessible`);
+        }
+      }
 
-      response.NatGateways.forEach((nat: any) => {
+      expect(natGateways.length).toBe(3);
+      natGateways.forEach((nat: any) => {
         expect(publicSubnetIds).toContain(nat.SubnetId);
       });
     });
@@ -191,11 +215,23 @@ describe('VPC Infrastructure Integration Tests', () => {
         outputs.NatGatewayAId,
         outputs.NatGatewayBId,
         outputs.NatGatewayCId
-      ].join(' ');
+      ];
 
-      const response = awsCli(`ec2 describe-nat-gateways --nat-gateway-ids ${natGatewayIds}`);
+      // Query each NAT Gateway individually
+      const natGateways = [];
+      for (const natId of natGatewayIds) {
+        try {
+          const response = awsCli(`ec2 describe-nat-gateways --nat-gateway-ids ${natId}`);
+          if (response.NatGateways && response.NatGateways.length > 0) {
+            natGateways.push(response.NatGateways[0]);
+          }
+        } catch (error) {
+          console.warn(`NAT Gateway ${natId} not found or not accessible`);
+        }
+      }
 
-      response.NatGateways.forEach((nat: any) => {
+      expect(natGateways.length).toBe(3);
+      natGateways.forEach((nat: any) => {
         expect(nat.NatGatewayAddresses).toBeDefined();
         expect(nat.NatGatewayAddresses.length).toBeGreaterThan(0);
         expect(nat.NatGatewayAddresses[0].PublicIp).toBeDefined();
