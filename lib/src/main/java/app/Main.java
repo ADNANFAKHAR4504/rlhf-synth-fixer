@@ -657,14 +657,55 @@ public final class Main {
             return openSearchDomain;
         }
 
+        /**
+         * Sanitizes the stack name to create a valid OpenSearch domain name.
+         * AWS OpenSearch domain names must:
+         * - Start with a lowercase letter
+         * - Be 3-28 characters long
+         * - Contain only lowercase letters, numbers, and hyphens
+         *
+         * @param stackName The original stack name
+         * @return A sanitized domain name
+         */
+        private static String sanitizeDomainName(final String stackName) {
+            // Convert to lowercase and replace invalid characters with hyphens
+            String sanitized = stackName.toLowerCase()
+                .replaceAll("[^a-z0-9-]", "-")
+                .replaceAll("-+", "-"); // Replace multiple hyphens with single
+
+            // Ensure it starts with a lowercase letter
+            if (!sanitized.matches("^[a-z].*")) {
+                sanitized = "os-" + sanitized;
+            }
+
+            // Trim to max 28 characters
+            if (sanitized.length() > 28) {
+                sanitized = sanitized.substring(0, 28);
+            }
+
+            // Remove trailing hyphens
+            sanitized = sanitized.replaceAll("-+$", "");
+
+            // Ensure minimum length of 3
+            if (sanitized.length() < 3) {
+                sanitized = "os-domain";
+            }
+
+            return sanitized;
+        }
+
         SearchStack(final String name, final String stackName,
                    final Map<String, String> tags,
                    final NetworkingStack networkingStack) {
             super("custom:search:Stack", name, ComponentResourceOptions.builder().build());
 
-            // Create OpenSearch domain
+            // Create OpenSearch domain with valid naming convention
+            // AWS OpenSearch domain names must start with lowercase letter and be 3-28 chars
+            String domainName = sanitizeDomainName(stackName);
+
             this.openSearchDomain = new Domain(stackName + "-opensearch-domain",
                 DomainArgs.builder()
+                    .domainName(domainName)
                     .engineVersion("OpenSearch_2.9")
                     .clusterConfig(DomainClusterConfigArgs.builder()
                         .instanceType("t3.small.search")

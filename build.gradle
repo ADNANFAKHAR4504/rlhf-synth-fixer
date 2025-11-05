@@ -45,7 +45,7 @@ ext {
 
     switch (platform) {
         case "pulumi":
-            minimumTestCoverage = 1.0
+            minimumTestCoverage = 1.7
             break
         case "cdk":
             minimumTestCoverage = 50.0
@@ -452,7 +452,6 @@ afterEvaluate {
     jacocoTestReport.configure {
         classDirectories.setFrom(files(classDirectories.files.collect {
             fileTree(dir: it, exclude: [
-                '**/Main.class',
                 '**/imports/**'
             ])
         }))
