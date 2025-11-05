@@ -143,7 +143,7 @@ export class TapStack extends cdk.Stack {
         this,
         `tap-s3-replication-config-${environmentSuffix}`,
         {
-          runtime: lambda.Runtime.NODEJS_18_X,
+          runtime: lambda.Runtime.NODEJS_16_X,
           architecture: lambda.Architecture.ARM_64,
           handler: 'index.handler',
           code: lambda.Code.fromInline(`
