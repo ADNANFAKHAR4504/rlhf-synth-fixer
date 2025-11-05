@@ -15,15 +15,15 @@ describe('TapStack integration flow', () => {
       environmentSuffix: 'int',
       isSourceRegion: true,
       sourceRegion: 'us-east-1',
-      targetRegion: 'us-west-1',
+      targetRegion: 'us-east-2',
       env: { account: '123456789012', region: 'us-east-1' },
     });
     targetStack = new TapStack(app, 'TapIntTarget', {
       environmentSuffix: 'int',
       isSourceRegion: false,
       sourceRegion: 'us-east-1',
-      targetRegion: 'us-west-1',
-      env: { account: '123456789012', region: 'us-west-1' },
+      targetRegion: 'us-east-2',
+      env: { account: '123456789012', region: 'us-east-2' },
     });
     sourceTemplate = Template.fromStack(sourceStack);
     targetTemplate = Template.fromStack(targetStack);
