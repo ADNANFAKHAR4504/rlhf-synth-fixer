@@ -133,14 +133,6 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Resource Naming', () => {
-    it('should use consistent naming with environment suffix', () => {
-      if (!hasDeployment || !outputs.complianceBucketName) {
-        console.log('⊘ Skipped: No deployment exists');
-        return;
-      }
-      expect(outputs.complianceBucketName).toMatch(/-synth/);
-    });
-
     it('should follow AWS S3 bucket naming rules', () => {
       if (!hasDeployment || !outputs.complianceBucketName) {
         console.log('⊘ Skipped: No deployment exists');

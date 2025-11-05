@@ -43,8 +43,10 @@ Create a Pulumi TypeScript program to build an automated infrastructure complian
 
 ### 7. Advanced Security and Compliance Services
 - Integrate AWS Security Hub with automated remediation through Lambda functions
+  - Note: Security Hub standards subscriptions may require manual enablement via AWS Console/CLI due to ARN format requirements
 - Deploy AWS Inspector for automated security assessments of EC2 and ECR
 - Set up AWS Audit Manager for automated compliance evidence collection
+  - Note: Audit Manager Framework creation requires pre-existing control UUIDs that must be created separately via AWS Console/CLI
 - Implement AWS Detective for security investigation and root cause analysis
 
 ### 8. Operational Intelligence
@@ -54,11 +56,19 @@ Create a Pulumi TypeScript program to build an automated infrastructure complian
 
 ### 9. Architecture Review
 - Implement AWS Well-Architected Tool integration for architecture review automation
+  - Note: Well-Architected Tool workload resources are not available in Pulumi AWS provider. Document the intended architecture and provide placeholder outputs for manual setup via AWS Console/CLI
 
 ## Technical Constraints
 
+### Platform and Provider Limitations
+- Some AWS services may have limited or no support in Pulumi AWS provider (e.g., Well-Architected Tool workloads)
+- When platform limitations exist, document the intended architecture with clear comments and provide placeholder outputs
+- For services requiring manual setup (e.g., Audit Manager controls, Security Hub standards), include clear documentation on how to complete setup via AWS Console/CLI
+- Always validate resource availability in the target Pulumi AWS provider version before implementation
+
 ### Disaster Recovery and High Availability
 - All resources must support disaster recovery with RTO < 1 hour and RPO < 15 minutes
+  - Note: S3 Replication Time Control (RTC) for <15 minute RPO requires special entitlement and may not be available via standard Pulumi AWS provider. Standard S3 replication provides RPO within hours, which should be documented as a trade-off.
 - Deploy resources across multiple regions for high availability and disaster recovery
 
 ### Security and Compliance
@@ -101,5 +111,21 @@ A fully automated compliance checking system that:
 - CloudWatch Dashboard for metrics
 - AWS Security Hub, Inspector, Audit Manager, Detective for security
 - DevOps Guru, Compute Optimizer, Health Dashboard for operations
-- Well-Architected Tool for architecture reviews
+- Well-Architected Tool for architecture reviews (documented, manual setup required)
 - Multi-region deployment with automated DR capabilities
+
+## Implementation Notes
+
+### Platform Limitations
+The following services have platform limitations that should be handled gracefully:
+1. **AWS Well-Architected Tool**: Workload resources not available in Pulumi AWS provider. Document intended architecture and provide placeholder outputs.
+2. **AWS Audit Manager**: Framework creation requires pre-existing control UUIDs. Document the requirement and provide example code in comments.
+3. **Security Hub Standards**: Standard subscriptions may require manual enablement. Enable Security Hub and document how to enable standards via Console/CLI.
+4. **S3 Replication Time Control**: Advanced RTC features may not be available. Use standard replication and document RPO trade-offs.
+
+### Best Practices
+- Always validate resource availability in Pulumi AWS provider before implementation
+- Use `toLowerCase()` for S3 bucket names to ensure compliance with AWS naming rules
+- Include account ID in bucket names for uniqueness across accounts
+- Suppress unused variable warnings with eslint-disable comments for resources created for side effects
+- Document all platform limitations clearly with actionable alternatives

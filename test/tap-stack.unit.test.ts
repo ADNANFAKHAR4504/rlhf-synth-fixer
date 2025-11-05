@@ -114,6 +114,13 @@ describe('TapStack - Comprehensive Unit Tests', () => {
       expect(typeof bucketName).toBe('string');
     });
 
+    it('should export complianceBucketArn output', async () => {
+      const bucketArn = await stack.complianceBucketArn.promise();
+      expect(bucketArn).toBeDefined();
+      expect(typeof bucketArn).toBe('string');
+      expect(bucketArn).toMatch(/arn.*s3/);
+    });
+
     it('should export snsTopicArn output', async () => {
       const topicArn = await stack.snsTopicArn.promise();
       expect(topicArn).toBeDefined();
@@ -130,6 +137,58 @@ describe('TapStack - Comprehensive Unit Tests', () => {
       const dashboardName = await stack.dashboardName.promise();
       expect(dashboardName).toBeDefined();
       expect(typeof dashboardName).toBe('string');
+    });
+
+    it('should export replicaBucketName output', async () => {
+      const replicaBucketName = await stack.replicaBucketName.promise();
+      expect(replicaBucketName).toBeDefined();
+      expect(typeof replicaBucketName).toBe('string');
+    });
+
+    it('should export replicaBucketArn output', async () => {
+      const replicaBucketArn = await stack.replicaBucketArn.promise();
+      expect(replicaBucketArn).toBeDefined();
+      expect(typeof replicaBucketArn).toBe('string');
+      expect(replicaBucketArn).toMatch(/arn.*s3/);
+    });
+
+    it('should export replicaLambdaArn output', async () => {
+      const replicaLambdaArn = await stack.replicaLambdaArn.promise();
+      expect(replicaLambdaArn).toBeDefined();
+      expect(typeof replicaLambdaArn).toBe('string');
+      expect(replicaLambdaArn).toMatch(/arn.*lambda/);
+    });
+
+    it('should export dashboardUrl output', async () => {
+      const dashboardUrl = await stack.dashboardUrl.promise();
+      expect(dashboardUrl).toBeDefined();
+      expect(typeof dashboardUrl).toBe('string');
+      expect(dashboardUrl).toContain('cloudwatch');
+    });
+
+    it('should export securityHubUrl output', async () => {
+      const securityHubUrl = await stack.securityHubUrl.promise();
+      expect(securityHubUrl).toBeDefined();
+      expect(typeof securityHubUrl).toBe('string');
+      expect(securityHubUrl).toContain('securityhub');
+    });
+
+    it('should export wellArchitectedWorkloadId output', async () => {
+      const wellArchitectedWorkloadId = await stack.wellArchitectedWorkloadId.promise();
+      expect(wellArchitectedWorkloadId).toBeDefined();
+      expect(typeof wellArchitectedWorkloadId).toBe('string');
+    });
+
+    it('should export primaryRegion output', async () => {
+      const primaryRegion = await stack.primaryRegion.promise();
+      expect(primaryRegion).toBeDefined();
+      expect(typeof primaryRegion).toBe('string');
+    });
+
+    it('should export secondaryRegion output', async () => {
+      const secondaryRegion = await stack.secondaryRegion.promise();
+      expect(secondaryRegion).toBeDefined();
+      expect(typeof secondaryRegion).toBe('string');
     });
   });
 
@@ -524,6 +583,439 @@ describe('TapStack - Comprehensive Unit Tests', () => {
 
       // Restore original mock
       mockStackName = originalMock;
+      jest.spyOn(pulumi, 'getStack').mockImplementation(() => mockStackName as string);
+    });
+  });
+
+  describe('Conditional Branch Coverage', () => {
+    it('should use provided environmentSuffix when truthy', async () => {
+      const stack = new TapStack('TestTruthyEnvSuffix', {
+        environmentSuffix: 'production',
+      });
+      const bucketName = await stack.complianceBucketName.promise();
+      expect(bucketName).toContain('production');
+    });
+
+    it('should use provided tags when truthy', async () => {
+      const customTags = { Custom: 'Value' };
+      const stack = new TapStack('TestTruthyTags', {
+        tags: customTags,
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should use provided primaryRegion when truthy', async () => {
+      const stack = new TapStack('TestTruthyPrimaryRegion', {
+        primaryRegion: 'eu-west-1',
+      });
+      const primaryRegion = await stack.primaryRegion.promise();
+      expect(primaryRegion).toBe('eu-west-1');
+    });
+
+    it('should use provided secondaryRegion when truthy', async () => {
+      const stack = new TapStack('TestTruthySecondaryRegion', {
+        secondaryRegion: 'eu-central-1',
+      });
+      const secondaryRegion = await stack.secondaryRegion.promise();
+      expect(secondaryRegion).toBe('eu-central-1');
+    });
+
+    it('should use provided notificationEmails when truthy', () => {
+      const emails = ['test@example.com'];
+      const stack = new TapStack('TestTruthyEmails', {
+        notificationEmails: emails,
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should use provided requiredTags when truthy', () => {
+      const tags = ['Tag1', 'Tag2'];
+      const stack = new TapStack('TestTruthyRequiredTags', {
+        requiredTags: tags,
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle empty notificationEmails array', () => {
+      const stack = new TapStack('TestEmptyEmails', {
+        notificationEmails: [],
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle empty requiredTags array', () => {
+      const stack = new TapStack('TestEmptyRequiredTags', {
+        requiredTags: [],
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle undefined notificationEmails', () => {
+      const stack = new TapStack('TestUndefinedEmails', {
+        notificationEmails: undefined,
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle undefined requiredTags', () => {
+      const stack = new TapStack('TestUndefinedRequiredTags', {
+        requiredTags: undefined,
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle undefined primaryRegion', () => {
+      const stack = new TapStack('TestUndefinedPrimaryRegion', {
+        primaryRegion: undefined,
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle undefined secondaryRegion', () => {
+      const stack = new TapStack('TestUndefinedSecondaryRegion', {
+        secondaryRegion: undefined,
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle undefined environmentSuffix', () => {
+      const stack = new TapStack('TestUndefinedEnvSuffix', {
+        environmentSuffix: undefined,
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle undefined tags', () => {
+      const stack = new TapStack('TestUndefinedTags', {
+        tags: undefined,
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle null notificationEmails', () => {
+      const stack = new TapStack('TestNullEmails', {
+        notificationEmails: null as any,
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle null requiredTags', () => {
+      const stack = new TapStack('TestNullRequiredTags', {
+        requiredTags: null as any,
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle null primaryRegion', () => {
+      const stack = new TapStack('TestNullPrimaryRegion', {
+        primaryRegion: null as any,
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle null secondaryRegion', () => {
+      const stack = new TapStack('TestNullSecondaryRegion', {
+        secondaryRegion: null as any,
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle null environmentSuffix', () => {
+      const stack = new TapStack('TestNullEnvSuffix', {
+        environmentSuffix: null as any,
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle null tags', () => {
+      const stack = new TapStack('TestNullTags', {
+        tags: null as any,
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle empty string environmentSuffix', () => {
+      const stack = new TapStack('TestEmptyStringEnvSuffix', {
+        environmentSuffix: '',
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle empty string primaryRegion', () => {
+      const stack = new TapStack('TestEmptyStringPrimaryRegion', {
+        primaryRegion: '',
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle empty string secondaryRegion', () => {
+      const stack = new TapStack('TestEmptyStringSecondaryRegion', {
+        secondaryRegion: '',
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle all properties set to empty values', () => {
+      const stack = new TapStack('TestAllEmpty', {
+        environmentSuffix: '',
+        primaryRegion: '',
+        secondaryRegion: '',
+        notificationEmails: [],
+        requiredTags: [],
+        tags: {},
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle very long environment suffix', () => {
+      const stack = new TapStack('TestLongEnvSuffix', {
+        environmentSuffix: 'very-long-environment-suffix-name-for-testing',
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle special characters in environment suffix', () => {
+      const stack = new TapStack('TestSpecialChars', {
+        environmentSuffix: 'test-env-123',
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle single character environment suffix', () => {
+      const stack = new TapStack('TestSingleChar', {
+        environmentSuffix: 'a',
+      });
+      expect(stack).toBeDefined();
+    });
+  });
+
+  describe('Output Property Interactions', () => {
+    it('should have consistent bucket names between primary and replica', async () => {
+      const stack = new TapStack('TestConsistentBuckets', {
+        environmentSuffix: 'test',
+      });
+
+      const primaryBucket = await stack.complianceBucketName.promise();
+      const replicaBucket = await stack.replicaBucketName.promise();
+
+      expect(primaryBucket).toBeDefined();
+      expect(replicaBucket).toBeDefined();
+      expect(primaryBucket).not.toBe(replicaBucket);
+      expect(replicaBucket).toContain('replica');
+    });
+
+    it('should have consistent regions in URLs', async () => {
+      const stack = new TapStack('TestConsistentRegions', {
+        primaryRegion: 'us-west-2',
+      });
+
+      const dashboardUrl = await stack.dashboardUrl.promise();
+      const securityHubUrl = await stack.securityHubUrl.promise();
+      const primaryRegion = await stack.primaryRegion.promise();
+
+      expect(dashboardUrl).toContain(primaryRegion);
+      expect(securityHubUrl).toContain(primaryRegion);
+    });
+
+    it('should have matching ARN formats', async () => {
+      const stack = new TapStack('TestArnFormats', {
+        environmentSuffix: 'test',
+      });
+
+      const complianceArn = await stack.complianceLambdaArn.promise();
+      const replicaArn = await stack.replicaLambdaArn.promise();
+
+      expect(complianceArn).toMatch(/arn.*lambda/);
+      expect(replicaArn).toMatch(/arn.*lambda/);
+    });
+
+    it('should have wellArchitectedWorkloadId contain environment suffix', async () => {
+      const stack = new TapStack('TestWellArchitected', {
+        environmentSuffix: 'prod',
+      });
+
+      const workloadId = await stack.wellArchitectedWorkloadId.promise();
+      expect(workloadId).toContain('prod');
+    });
+  });
+
+  describe('Edge Cases for Conditional Logic', () => {
+    it('should handle whitespace-only environment suffix', () => {
+      const stack = new TapStack('TestWhitespaceEnv', {
+        environmentSuffix: '   ',
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle very long region names', () => {
+      const stack = new TapStack('TestLongRegion', {
+        primaryRegion: 'us-east-1',
+        secondaryRegion: 'ap-southeast-1',
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle single notification email', () => {
+      const stack = new TapStack('TestSingleNotification', {
+        notificationEmails: ['single@example.com'],
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle many notification emails', () => {
+      const stack = new TapStack('TestManyNotifications', {
+        notificationEmails: [
+          'email1@example.com',
+          'email2@example.com',
+          'email3@example.com',
+          'email4@example.com',
+          'email5@example.com',
+        ],
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle single required tag', () => {
+      const stack = new TapStack('TestSingleRequiredTag', {
+        requiredTags: ['Environment'],
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle many required tags', () => {
+      const stack = new TapStack('TestManyRequiredTags', {
+        requiredTags: [
+          'Tag1',
+          'Tag2',
+          'Tag3',
+          'Tag4',
+          'Tag5',
+          'Tag6',
+          'Tag7',
+          'Tag8',
+          'Tag9',
+          'Tag10',
+        ],
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle tags with special values', () => {
+      const stack = new TapStack('TestSpecialTagValues', {
+        tags: {
+          'Tag-With-Dashes': 'value-with-dashes',
+          'Tag_With_Underscores': 'value_with_underscores',
+          'Tag.With.Dots': 'value.with.dots',
+          'Tag With Spaces': 'value with spaces',
+          '123NumericTag': '123numericvalue',
+        },
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle zero as a falsy value for arrays', () => {
+      // Testing that empty arrays are truthy (won't use default)
+      const stack = new TapStack('TestEmptyArrayTruthy', {
+        notificationEmails: [],
+        requiredTags: [],
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle all truthy parameter combinations', () => {
+      const stack = new TapStack('TestAllTruthy', {
+        environmentSuffix: 'test',
+        tags: { Key: 'Value' },
+        primaryRegion: 'us-west-2',
+        secondaryRegion: 'us-east-1',
+        notificationEmails: ['email@example.com'],
+        requiredTags: ['Tag1'],
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle all falsy parameter combinations', () => {
+      const stack = new TapStack('TestAllFalsy', {
+        environmentSuffix: undefined,
+        tags: undefined,
+        primaryRegion: undefined,
+        secondaryRegion: undefined,
+        notificationEmails: undefined,
+        requiredTags: undefined,
+      });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle mixed truthy and falsy combinations', () => {
+      const stack = new TapStack('TestMixedTruthyFalsy', {
+        environmentSuffix: 'prod', // truthy
+        tags: undefined, // falsy - will use default {}
+        primaryRegion: 'eu-west-1', // truthy
+        secondaryRegion: undefined, // falsy - will use default
+        notificationEmails: ['test@example.com'], // truthy
+        requiredTags: undefined, // falsy - will use default
+      });
+      expect(stack).toBeDefined();
+    });
+  });
+
+  describe('Lambda Code String Branch Coverage', () => {
+    // Note: Lambda code strings contain conditional logic that can't be directly
+    // tested through Pulumi mocks, but we can verify the stack constructs correctly
+    it('should construct Lambda functions with conditional code', () => {
+      const stack = new TapStack('TestLambdaConditionals', {
+        environmentSuffix: 'test',
+      });
+      expect(stack).toBeDefined();
+      expect(stack.complianceLambdaArn).toBeDefined();
+      expect(stack.replicaLambdaArn).toBeDefined();
+    });
+
+    it('should handle Lambda environment variables correctly', () => {
+      const stack = new TapStack('TestLambdaEnvVars', {
+        requiredTags: ['CustomTag1', 'CustomTag2'],
+        environmentSuffix: 'custom-env',
+      });
+      expect(stack).toBeDefined();
+    });
+  });
+
+  describe('Pulumi Output Apply Branch Coverage', () => {
+    it('should handle apply callbacks with different stack names', async () => {
+      // Test with defined stack name
+      mockStackName = 'production-stack';
+      jest.spyOn(pulumi, 'getStack').mockImplementation(() => mockStackName as string);
+      const stack1 = new TapStack('TestStackName1', {
+        environmentSuffix: 'prod',
+      });
+      const bucket1 = await stack1.complianceBucketName.promise();
+      expect(bucket1).toContain('production-stack');
+
+      // Test with undefined stack name (should use 'dev')
+      mockStackName = undefined;
+      jest.spyOn(pulumi, 'getStack').mockImplementation(() => mockStackName as string);
+      const stack2 = new TapStack('TestStackName2', {
+        environmentSuffix: 'test',
+      });
+      const bucket2 = await stack2.complianceBucketName.promise();
+      expect(bucket2).toContain('dev');
+
+      // Restore
+      mockStackName = 'test-stack';
+      jest.spyOn(pulumi, 'getStack').mockImplementation(() => mockStackName as string);
+    });
+
+    it('should handle apply callbacks with empty string stack name', async () => {
+      mockStackName = '';
+      jest.spyOn(pulumi, 'getStack').mockImplementation(() => mockStackName as string);
+      const stack = new TapStack('TestEmptyStackName', {
+        environmentSuffix: 'test',
+      });
+      const bucket = await stack.complianceBucketName.promise();
+      expect(bucket).toContain('dev');
+
+      // Restore
+      mockStackName = 'test-stack';
       jest.spyOn(pulumi, 'getStack').mockImplementation(() => mockStackName as string);
     });
   });
