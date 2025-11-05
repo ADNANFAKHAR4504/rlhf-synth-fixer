@@ -30,7 +30,7 @@ class TapStack(TerraformStack):
             self,
             "aws",
             region=aws_region,
-            default_tags=[default_tags],
+            default_tags=[default_tags] if default_tags else None,
         )
 
         # S3 Backend disabled for QA testing due to access restrictions

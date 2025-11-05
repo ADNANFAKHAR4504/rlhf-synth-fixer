@@ -30,9 +30,9 @@ class TestStackStructure:
 
         # Verify that TapStack instantiates without errors via props
         assert stack is not None
-        assert hasattr(stack, 'bucket')
-        assert hasattr(stack, 'bucket_versioning')
-        assert hasattr(stack, 'bucket_encryption')
+        assert hasattr(stack, 'networking_stack')
+        assert hasattr(stack.networking_stack, 'vpc')
+        assert hasattr(stack.networking_stack, 'flow_log_bucket')
 
     def test_tap_stack_uses_default_values_when_no_props_provided(self):
         """TapStack uses default values when no props provided."""
@@ -41,9 +41,9 @@ class TestStackStructure:
 
         # Verify that TapStack instantiates without errors when no props provided
         assert stack is not None
-        assert hasattr(stack, 'bucket')
-        assert hasattr(stack, 'bucket_versioning')
-        assert hasattr(stack, 'bucket_encryption')
+        assert hasattr(stack, 'networking_stack')
+        assert hasattr(stack.networking_stack, 'vpc')
+        assert hasattr(stack.networking_stack, 'flow_log_bucket')
 
 
 # add more test suites and cases as needed
