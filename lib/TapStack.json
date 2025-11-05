@@ -1224,7 +1224,7 @@
       "Type": "AWS::SecretsManager::Secret",
       "Properties": {
         "Name": {
-          "Fn::Sub": "${EnvironmentName}-aurora-credentials"
+          "Fn::Sub": "${AWS::StackName}-aurora-credentials"
         },
         "Description": "Aurora database credentials",
         "GenerateSecretString": {
