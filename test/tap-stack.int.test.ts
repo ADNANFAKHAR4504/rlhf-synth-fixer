@@ -92,9 +92,9 @@ for (const o of outputsArray) outputs[o.OutputKey] = o.OutputValue;
 /* ------------------------------ Helpers -------------------------------- */
 
 function deduceRegion(): string {
-  // Stack target is us-west-2; allow env override if set in CI.
+  // Stack target is us-east-1; allow env override if set in CI.
   const fromEnv = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION;
-  return fromEnv || "us-west-2";
+  return fromEnv || "us-east-1";
 }
 const region = deduceRegion();
 

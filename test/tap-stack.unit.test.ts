@@ -146,9 +146,9 @@ describe("Networking — VPC, Subnets, NAT, Routes, Endpoints", () => {
       // Fallback to YAML string inspection
       const y = yamlText();
       const hasS3Gateway = includesAll(y, ["Type: AWS::EC2::VPCEndpoint", "ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'"]) ||
-                           includesAll(y, ["Type: AWS::EC2::VPCEndpoint", "ServiceName: com.amazonaws.us-west-2.s3"]);
+                           includesAll(y, ["Type: AWS::EC2::VPCEndpoint", "ServiceName: com.amazonaws.us-east-1.s3"]);
       const hasDdbGateway = includesAll(y, ["Type: AWS::EC2::VPCEndpoint", "ServiceName: !Sub 'com.amazonaws.${AWS::Region}.dynamodb'"]) ||
-                            includesAll(y, ["Type: AWS::EC2::VPCEndpoint", "ServiceName: com.amazonaws.us-west-2.dynamodb"]);
+                            includesAll(y, ["Type: AWS::EC2::VPCEndpoint", "ServiceName: com.amazonaws.us-east-1.dynamodb"]);
       expect(hasS3Gateway && hasDdbGateway).toBe(true);
     }
   });
@@ -166,8 +166,8 @@ describe("Networking — VPC, Subnets, NAT, Routes, Endpoints", () => {
       // Fallback to YAML string search
       const y = yamlText();
       const interfaceCount = yamlCount(y, "VpcEndpointType: Interface");
-      const hasSqs = y.includes(".sqs") || y.includes("com.amazonaws.us-west-2.sqs");
-      const hasLogs = y.includes(".logs") || y.includes("com.amazonaws.us-west-2.logs");
+      const hasSqs = y.includes(".sqs") || y.includes("com.amazonaws.us-east-1.sqs");
+      const hasLogs = y.includes(".logs") || y.includes("com.amazonaws.us-east-1.logs");
       expect(interfaceCount).toBeGreaterThanOrEqual(2);
       expect(hasSqs || hasLogs).toBe(true);
     }

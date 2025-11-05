@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Serverless logging and data-processing stack with VPC, Lambda, SQS, DynamoDB Streams, S3, KMS, CloudTrail, and monitoring in us-west-2
+Description: Serverless logging and data-processing stack with VPC, Lambda, SQS, DynamoDB Streams, S3, KMS, CloudTrail, and monitoring in us-east-1
 Parameters:
   Team:
     Type: String

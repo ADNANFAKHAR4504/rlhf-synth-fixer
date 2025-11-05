@@ -2,7 +2,7 @@
 
 ## Summary
 
-The model produced a YAML CloudFormation template that provisions a secure, serverless data-processing and logging stack in `us-west-2`. It creates a new VPC with two public and two private subnets, Internet Gateway, NAT Gateways per Availability Zone, and correct route tables and associations. It runs the Lambda function exclusively in private subnets and provides NAT-based egress.
+The model produced a YAML CloudFormation template that provisions a secure, serverless data-processing and logging stack in `us-east-1`. It creates a new VPC with two public and two private subnets, Internet Gateway, NAT Gateways per Availability Zone, and correct route tables and associations. It runs the Lambda function exclusively in private subnets and provides NAT-based egress.
 
 To minimize exposure, the template adds gateway endpoints for S3 and DynamoDB and interface endpoints for SQS and CloudWatch Logs, protected by a dedicated security group that allows only necessary access from the Lambda security group.
 
@@ -24,5 +24,5 @@ A regional CloudTrail trail captures management events and delivers logs to the 
 
 ## Compliance with Constraints
 
-All resources are created in `us-west-2`. Every named resource value includes the `EnvironmentSuffix` to prevent collisions. The template is YAML-only, free of JSON syntax, and includes all required parameters and outputs for downstream testing and operational introspection. The approach follows least-privilege IAM, defense in depth, encrypted storage and logs, private networking, and actionable observability.
+All resources are created in `us-east-1`. Every named resource value includes the `EnvironmentSuffix` to prevent collisions. The template is YAML-only, free of JSON syntax, and includes all required parameters and outputs for downstream testing and operational introspection. The approach follows least-privilege IAM, defense in depth, encrypted storage and logs, private networking, and actionable observability.
 

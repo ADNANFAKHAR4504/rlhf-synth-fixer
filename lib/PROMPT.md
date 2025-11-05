@@ -1,8 +1,8 @@
 **Functional scope (build everything new):**
 
-* Build a **single, production-ready AWS CloudFormation template written entirely in YAML** to provision a secure, fully serverless data-processing and logging environment **from scratch** in **`us-west-2`**.
+* Build a **single, production-ready AWS CloudFormation template written entirely in YAML** to provision a secure, fully serverless data-processing and logging environment **from scratch** in **`us-east-1`**.
 * The template must **create every resource** independently — nothing should refer to any pre-existing infrastructure.
-* All resource names must follow the pattern `<team>-<service>-<use-case>-<resource>-<EnvironmentSuffix>` and all resources must reside in `us-west-2`.
+* All resource names must follow the pattern `<team>-<service>-<use-case>-<resource>-<EnvironmentSuffix>` and all resources must reside in `us-east-1`.
 
 ### **Networking**
 
@@ -84,7 +84,7 @@
 
 ### **Regional & Naming Requirements**
 
-* All resources must be created in `us-west-2`.
+* All resources must be created in `us-east-1`.
 * Every resource name must end with `<EnvironmentSuffix>` to support multiple environments.
 * Ensure all parameters, conditions, and outputs follow AWS YAML syntax and CloudFormation schema validation.
 

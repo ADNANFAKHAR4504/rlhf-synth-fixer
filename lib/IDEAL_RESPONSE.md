@@ -2,7 +2,7 @@
 
 ## Overview
 
-A single, production-ready AWS CloudFormation template written entirely in YAML that provisions a secure, serverless logging and data-processing stack in the `us-west-2` region. The template stands up all components from scratch and follows the naming pattern `<team>-<service>-<use-case>-<resource>-<EnvironmentSuffix>`, with every resource created in `us-west-2`. It deploys cleanly on the first attempt, passes linter validation, and avoids collisions by not hard-coding globally unique names such as S3 bucket names and IAM role names.
+A single, production-ready AWS CloudFormation template written entirely in YAML that provisions a secure, serverless logging and data-processing stack in the `us-east-1` region. The template stands up all components from scratch and follows the naming pattern `<team>-<service>-<use-case>-<resource>-<EnvironmentSuffix>`, with every resource created in `us-east-1`. It deploys cleanly on the first attempt, passes linter validation, and avoids collisions by not hard-coding globally unique names such as S3 bucket names and IAM role names.
 
 ## Scope and Architecture
 
@@ -43,7 +43,7 @@ The template is fully YAML, deploys without referencing external infrastructure,
 ```yaml
 
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Serverless logging and data-processing stack with VPC, Lambda, SQS, DynamoDB Streams, S3, KMS, CloudTrail, and monitoring in us-west-2
+Description: Serverless logging and data-processing stack with VPC, Lambda, SQS, DynamoDB Streams, S3, KMS, CloudTrail, and monitoring in us-east-1
 Parameters:
   Team:
     Type: String
