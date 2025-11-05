@@ -606,7 +606,7 @@ public final class Main {
                     .engine(EngineType.AuroraPostgresql)
                     .engineMode("provisioned")
                     .databaseName("migration")
-                    .masterUsername("admin")
+                    .masterUsername("dbadmin")
                     .manageMasterUserPassword(true)
                     .backupRetentionPeriod(7)
                     .preferredBackupWindow("03:00-04:00")
