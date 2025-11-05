@@ -246,7 +246,7 @@ describe("Terraform Compliance Monitoring Infrastructure - Unit Tests", () => {
     });
 
     test("outputs dashboard URL", () => {
-      expect(outputsTfContent).toMatch(/output\s+"dashboard_url"\s*\{/);
+      expect(outputsTfContent).toMatch(/output\s+"compliance_dashboard_url"\s*\{/);
     });
   });
 

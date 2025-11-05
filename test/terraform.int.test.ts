@@ -54,6 +54,13 @@ describe("Terraform Compliance Monitoring Infrastructure - Integration Tests", (
   describe("Terraform Plan Generation", () => {
     test("terraform plan succeeds with test environment suffix", () => {
       try {
+        // Re-init with backend config for plan tests
+        execSync("terraform init -reconfigure", {
+          cwd: LIB_DIR,
+          encoding: "utf8",
+          stdio: "pipe",
+        });
+
         const output = execSync(
           `terraform plan -var="environment_suffix=${TEST_ENV_SUFFIX}" -out=tfplan`,
           {
@@ -212,8 +219,8 @@ describe("Terraform Compliance Monitoring Infrastructure - Integration Tests", (
     test("Config rules depend on recorder", () => {
       const mainTf = fs.readFileSync(path.join(LIB_DIR, "main.tf"), "utf8");
 
-      const s3RuleBlock = mainTf.match(/resource "aws_config_config_rule" "s3_encryption"[^}]+\}/s);
-      const rdsRuleBlock = mainTf.match(/resource "aws_config_config_rule" "rds_public_access"[^}]+\}/s);
+      const s3RuleBlock = mainTf.match(/resource "aws_config_config_rule" "s3_encryption"[\s\S]*?^\}/m);
+      const rdsRuleBlock = mainTf.match(/resource "aws_config_config_rule" "rds_public_access"[\s\S]*?^\}/m);
 
       expect(s3RuleBlock![0]).toMatch(/depends_on\s*=\s*\[aws_config_configuration_recorder\.main\]/);
       expect(rdsRuleBlock![0]).toMatch(/depends_on\s*=\s*\[aws_config_configuration_recorder\.main\]/);
