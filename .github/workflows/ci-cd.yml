@@ -158,6 +158,7 @@ jobs:
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
       - name: Download build artifacts (dist/)
+        if: ${{ needs.detect-metadata.outputs.language == 'ts' || needs.detect-metadata.outputs.language == 'js' }}
         uses: actions/download-artifact@v4
         with:
           name: build-dist
@@ -367,6 +368,7 @@ jobs:
           language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Download build artifacts (dist/)
+        if: ${{ needs.detect-metadata.outputs.language == 'ts' || needs.detect-metadata.outputs.language == 'js' }}
         uses: actions/download-artifact@v4
         with:
           name: build-dist
