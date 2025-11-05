@@ -1,4 +1,4 @@
-package tests
+package lib
 
 import (
 	"fmt"
@@ -6,17 +6,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/TuringGpt/iac-test-automations/lib"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/stretchr/testify/assert"
 )
-
-// Type aliases for lib package types
-type TapStack = lib.TapStack
-type TapStackArgs = lib.TapStackArgs
-
-var NewTapStack = lib.NewTapStack
 
 type mocks int
 
