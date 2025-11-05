@@ -97,9 +97,9 @@ variable "storage_buckets" {
     versioning_enabled = bool
     encryption_enabled = bool
     lifecycle_rules = optional(list(object({
-      id      = string
-      enabled = bool
-      prefix  = optional(string)
+      id              = string
+      enabled         = bool
+      prefix          = optional(string)
       expiration_days = optional(number)
     })), [])
   }))
@@ -107,15 +107,15 @@ variable "storage_buckets" {
     transactions = {
       versioning_enabled = true
       encryption_enabled = true
-      lifecycle_rules = []
+      lifecycle_rules    = []
     }
     logs = {
       versioning_enabled = false
       encryption_enabled = true
       lifecycle_rules = [{
-        id      = "expire-old-logs"
-        enabled = true
-        prefix  = "logs/"
+        id              = "expire-old-logs"
+        enabled         = true
+        prefix          = "logs/"
         expiration_days = 30
       }]
     }
@@ -210,7 +210,7 @@ resource "aws_internet_gateway" "main" {
 resource "aws_subnet" "public" {
   for_each = {
     for idx, az in slice(local.availability_zones, 0, 2) : az => {
-      az = az
+      az  = az
       idx = idx
     }
   }
@@ -233,7 +233,7 @@ resource "aws_subnet" "public" {
 resource "aws_subnet" "private" {
   for_each = {
     for idx, az in slice(local.availability_zones, 0, 2) : az => {
-      az = az
+      az  = az
       idx = idx + 10
     }
   }
@@ -255,7 +255,7 @@ resource "aws_subnet" "private" {
 resource "aws_subnet" "database" {
   for_each = {
     for idx, az in slice(local.availability_zones, 0, 2) : az => {
-      az = az
+      az  = az
       idx = idx + 20
     }
   }
@@ -521,7 +521,7 @@ resource "aws_db_subnet_group" "main" {
 }
 
 resource "aws_db_instance" "main" {
-  identifier             = "${local.name_prefix}-database"
+  identifier              = "${local.name_prefix}-database"
   engine                  = "postgres"
   engine_version          = var.database_engine_version
   instance_class          = local.selected_db_class
@@ -535,7 +535,7 @@ resource "aws_db_instance" "main" {
   db_subnet_group_name    = aws_db_subnet_group.main.name
   vpc_security_group_ids  = [aws_security_group.database.id]
   publicly_accessible     = false
-  backup_retention_period  = 7
+  backup_retention_period = 7
   backup_window           = "03:00-04:00"
   maintenance_window      = "mon:04:00-mon:05:00"
   multi_az                = local.environment == "prod" ? true : false
@@ -768,12 +768,12 @@ resource "aws_iam_role_policy" "vpc_flow_logs" {
 }
 
 resource "aws_flow_log" "vpc" {
-  count                    = var.enable_flow_logs ? 1 : 0
-  iam_role_arn             = aws_iam_role.vpc_flow_logs[0].arn
-  log_destination_type     = "cloud-watch-logs"
-  log_destination          = aws_cloudwatch_log_group.vpc_flow_logs[0].arn
-  traffic_type             = "ALL"
-  vpc_id                   = aws_vpc.main.id
+  count                = var.enable_flow_logs ? 1 : 0
+  iam_role_arn         = aws_iam_role.vpc_flow_logs[0].arn
+  log_destination_type = "cloud-watch-logs"
+  log_destination      = aws_cloudwatch_log_group.vpc_flow_logs[0].arn
+  traffic_type         = "ALL"
+  vpc_id               = aws_vpc.main.id
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-vpc-flow-log"
@@ -845,7 +845,7 @@ output "kms_key_ids" {
   description = "KMS key IDs"
   value = {
     database = aws_kms_key.database.id
-    s3      = aws_kms_key.s3.id
+    s3       = aws_kms_key.s3.id
   }
 }
 
