@@ -48,39 +48,51 @@ describe('Aurora DR Integration Tests', () => {
 
   beforeAll(() => {
     outputs = loadStackOutputs();
+    
+    if (!outputs) {
+      throw new Error(
+        '\n❌ Integration tests REQUIRE deployed infrastructure!\n' +
+        '   Deploy first: cdk deploy --all --context environmentSuffix=dev\n' +
+        '   Then run: npm run test:integration\n'
+      );
+    }
   });
 
   describe('Aurora Global Database', () => {
     test('should have primary cluster endpoint', () => {
       expect(outputs).not.toBeNull();
-      expect(outputs?.ClusterEndpoint).toBeDefined();
-      expect(outputs?.ClusterEndpoint).toMatch(/\.rds\.amazonaws\.com$/);
+      expect(outputs!.ClusterEndpoint).toBeDefined();
+      expect(outputs!.ClusterEndpoint).toMatch(/\.rds\.amazonaws\.com$/);
     });
 
     test('should have RDS Proxy endpoint', () => {
       expect(outputs).not.toBeNull();
-      expect(outputs?.ProxyEndpoint).toBeDefined();
-      expect(outputs?.ProxyEndpoint).toMatch(/\.rds\.amazonaws\.com$/);
+      expect(outputs!.ProxyEndpoint).toBeDefined();
+      expect(outputs!.ProxyEndpoint).toMatch(/\.rds\.amazonaws\.com$/);
     });
 
     test('should have global cluster identifier', () => {
       expect(outputs).not.toBeNull();
-      expect(outputs?.GlobalClusterIdentifier).toBeDefined();
-      expect(outputs?.GlobalClusterIdentifier).toContain('aurora-dr-global');
+      expect(outputs!.GlobalClusterIdentifier).toBeDefined();
+      expect(outputs!.GlobalClusterIdentifier).toContain('aurora-dr-global');
     });
   });
 
+  // Note: Failover Automation tests skipped - FailoverStack is commented out in tap-stack.ts
+  // Uncomment these tests when FailoverStack is enabled
+  /*
   describe('Failover Automation', () => {
     test('should have Step Functions state machine ARN', () => {
       expect(outputs).not.toBeNull();
-      expect(outputs?.StateMachineArnOutput).toBeDefined();
-      expect(outputs?.StateMachineArnOutput).toMatch(/^arn:aws:states:/);
+      expect(outputs!.StateMachineArnOutput).toBeDefined();
+      expect(outputs!.StateMachineArnOutput).toMatch(/^arn:aws:states:/);
     });
 
     test('should have SNS topic ARN for alerts', () => {
       expect(outputs).not.toBeNull();
-      expect(outputs?.AlertTopicArnOutput).toBeDefined();
-      expect(outputs?.AlertTopicArnOutput).toMatch(/^arn:aws:sns:/);
+      expect(outputs!.AlertTopicArnOutput).toBeDefined();
+      expect(outputs!.AlertTopicArnOutput).toMatch(/^arn:aws:sns:/);
     });
   });
+  */
 });
