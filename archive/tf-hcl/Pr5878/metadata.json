@@ -12,20 +12,26 @@
   ],
   "po_id": "2jdat",
   "aws_services": [
-    "VPC",
+    "Auto Scaling",
+    "CloudFront",
+    "CloudWatch",
     "EC2",
     "ELB",
-    "Auto Scaling",
-    "RDS",
-    "S3",
-    "CloudFront",
     "IAM",
-    "CloudWatch",
+    "Internet Gateway",
     "KMS",
     "NAT Gateway",
-    "Internet Gateway",
-    "Security Groups"
+    "RDS",
+    "S3",
+    "Security Groups",
+    "VPC"
   ],
   "region": "us-east-1",
-  "training_quality": 10
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
