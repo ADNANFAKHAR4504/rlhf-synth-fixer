@@ -2,11 +2,11 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { TerraformStack } from 'cdktf';
+import { S3Backend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
-import { InfrastructureStack } from './infrastructure-stack';
 import * as fs from 'fs';
 import * as path from 'path';
+import { InfrastructureStack } from './infrastructure-stack';
 
 interface TapStackProps {
   environmentSuffix?: string;
@@ -73,14 +73,16 @@ export class TapStack extends TerraformStack {
       defaultTags: enhancedTags,
     });
 
-    // Note: S3 Backend removed for local state management during testing
-    // Uncomment for production use with proper state bucket
-    // new S3Backend(this, {
-    //   bucket: stateBucket,
-    //   key: `${environmentSuffix}/${id}.tfstate`,
-    //   region: stateBucketRegion,
-    //   encrypt: true,
-    // });
+    // Configure S3 Backend for state management
+    // Only configure if stateBucket is provided
+    if (props?.stateBucket) {
+      new S3Backend(this, {
+        bucket: props.stateBucket,
+        key: `${environmentSuffix}/${id}.tfstate`,
+        region: props.stateBucketRegion,
+        encrypt: true,
+      });
+    }
 
     // Instantiate the infrastructure stack
     new InfrastructureStack(this, 'Infrastructure', {
