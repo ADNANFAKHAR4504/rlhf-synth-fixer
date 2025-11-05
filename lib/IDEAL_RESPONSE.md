@@ -1,5 +1,8 @@
 # Zero-Trust Security Infrastructure - Pulumi Go Implementation
 
+Language: Go
+Platform: Pulumi
+
 This is the production-ready Pulumi Go implementation for zero-trust security infrastructure with comprehensive testing and full coverage of all 12 security requirements.
 
 ## Implementation Overview
