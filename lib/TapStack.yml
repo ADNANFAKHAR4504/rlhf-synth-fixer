@@ -1,0 +1,714 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "TAP Stack - Task Assignment Platform with DynamoDB Streams, Lambda processors, and CloudWatch monitoring"
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Environment Configuration"
+        Parameters:
+          - EnvironmentSuffix
+          - ProjectOwner
+      - Label:
+          default: "DynamoDB Configuration"
+        Parameters:
+          - PointInTimeRecoveryEnabled
+          - StreamViewType
+      - Label:
+          default: "Lambda Configuration"
+        Parameters:
+          - LambdaRuntime
+          - LambdaTimeout
+          - LambdaMemorySize
+      - Label:
+          default: "Monitoring Configuration"
+        Parameters:
+          - EnableDetailedMonitoring
+          - AlarmEmail
+    ParameterLabels:
+      EnvironmentSuffix:
+        default: "Environment Suffix"
+      ProjectOwner:
+        default: "Project Owner"
+      PointInTimeRecoveryEnabled:
+        default: "Enable Point-in-Time Recovery"
+      StreamViewType:
+        default: "DynamoDB Stream View Type"
+      EnableDetailedMonitoring:
+        default: "Enable Detailed CloudWatch Monitoring"
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: "dev"
+    Description: "Environment suffix for resource naming (e.g., dev, staging, prod)"
+    AllowedPattern: "^[a-zA-Z0-9]+$"
+    ConstraintDescription: "Must contain only alphanumeric characters"
+
+  ProjectOwner:
+    Type: String
+    Default: "TAP-Team"
+    Description: "Team or individual responsible for this project"
+    AllowedPattern: "^[a-zA-Z0-9-_]+$"
+    ConstraintDescription: "Must contain only alphanumeric characters, hyphens, and underscores"
+
+  PointInTimeRecoveryEnabled:
+    Type: String
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Enable point-in-time recovery for DynamoDB table"
+
+  StreamViewType:
+    Type: String
+    Default: "NEW_AND_OLD_IMAGES"
+    AllowedValues:
+      - "NEW_IMAGE"
+      - "OLD_IMAGE"
+      - "NEW_AND_OLD_IMAGES"
+      - "KEYS_ONLY"
+    Description: "Type of information written to the DynamoDB stream"
+
+  LambdaRuntime:
+    Type: String
+    Default: "python3.11"
+    AllowedValues:
+      - "python3.11"
+      - "python3.12"
+      - "nodejs20.x"
+      - "nodejs18.x"
+    Description: "Runtime environment for Lambda functions"
+
+  LambdaTimeout:
+    Type: Number
+    Default: 30
+    MinValue: 3
+    MaxValue: 900
+    Description: "Lambda function timeout in seconds"
+
+  LambdaMemorySize:
+    Type: Number
+    Default: 256
+    AllowedValues:
+      - 128
+      - 256
+      - 512
+      - 1024
+      - 2048
+    Description: "Lambda function memory allocation in MB"
+
+  EnableDetailedMonitoring:
+    Type: String
+    Default: "Yes"
+    AllowedValues:
+      - "Yes"
+      - "No"
+    Description: "Enable detailed CloudWatch monitoring and alarms"
+
+  AlarmEmail:
+    Type: String
+    Default: ""
+    Description: "Email address for alarm notifications (optional)"
+    AllowedPattern: '^$|^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    ConstraintDescription: "Must be a valid email address or empty"
+
+Conditions:
+  EnablePITR: !Equals [!Ref PointInTimeRecoveryEnabled, "true"]
+  EnableMonitoring: !Equals [!Ref EnableDetailedMonitoring, "Yes"]
+  HasAlarmEmail: !Not [!Equals [!Ref AlarmEmail, ""]]
+  IsProduction: !Equals [!Ref EnvironmentSuffix, "prod"]
+
+Resources:
+  # DynamoDB Table with Streams enabled for event-driven processing
+  TurnAroundPromptTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: !If [IsProduction, Retain, Delete]
+    UpdateReplacePolicy: !If [IsProduction, Retain, Delete]
+    Properties:
+      TableName: !Sub "TurnAroundPromptTable-${EnvironmentSuffix}"
+      AttributeDefinitions:
+        - AttributeName: "id"
+          AttributeType: "S"
+        - AttributeName: "taskType"
+          AttributeType: "S"
+        - AttributeName: "createdAt"
+          AttributeType: "N"
+        - AttributeName: "status"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "id"
+          KeyType: "HASH"
+      GlobalSecondaryIndexes:
+        - IndexName: "TaskTypeIndex"
+          KeySchema:
+            - AttributeName: "taskType"
+              KeyType: "HASH"
+            - AttributeName: "createdAt"
+              KeyType: "RANGE"
+          Projection:
+            ProjectionType: "ALL"
+        - IndexName: "StatusIndex"
+          KeySchema:
+            - AttributeName: "status"
+              KeyType: "HASH"
+            - AttributeName: "createdAt"
+              KeyType: "RANGE"
+          Projection:
+            ProjectionType: "ALL"
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: !If [IsProduction, true, false]
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [EnablePITR, true, false]
+      StreamSpecification:
+        StreamViewType: !Ref StreamViewType
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: "KMS"
+        KMSMasterKeyId: !GetAtt DynamoDBEncryptionKey.Arn
+      TimeToLiveSpecification:
+        AttributeName: "ttl"
+        Enabled: true
+      Tags:
+        - Key: Name
+          Value: !Sub "TurnAroundPromptTable-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: "TAP"
+        - Key: Owner
+          Value: !Ref ProjectOwner
+        - Key: iac-rlhf-amazon
+          Value: "true"
+
+  # KMS Key for DynamoDB encryption
+  DynamoDBEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub "KMS key for DynamoDB table encryption in ${EnvironmentSuffix} environment"
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: Allow DynamoDB to use the key
+            Effect: Allow
+            Principal:
+              Service: dynamodb.amazonaws.com
+            Action:
+              - "kms:Decrypt"
+              - "kms:DescribeKey"
+              - "kms:CreateGrant"
+            Resource: "*"
+            Condition:
+              StringEquals:
+                "kms:ViaService": !Sub "dynamodb.${AWS::Region}.amazonaws.com"
+      Tags:
+        - Key: Name
+          Value: !Sub "tap-dynamodb-key-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: !Ref ProjectOwner
+        - Key: iac-rlhf-amazon
+          Value: "true"
+
+  DynamoDBEncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub "alias/tap-dynamodb-${EnvironmentSuffix}"
+      TargetKeyId: !Ref DynamoDBEncryptionKey
+
+  # IAM Role for Lambda Stream Processor
+  StreamProcessorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "tap-stream-processor-role-${EnvironmentSuffix}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Policies:
+        - PolicyName: DynamoDBStreamReadPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "dynamodb:GetRecords"
+                  - "dynamodb:GetShardIterator"
+                  - "dynamodb:DescribeStream"
+                  - "dynamodb:ListStreams"
+                Resource: !GetAtt TurnAroundPromptTable.StreamArn
+              - Effect: Allow
+                Action:
+                  - "kms:Decrypt"
+                Resource: !GetAtt DynamoDBEncryptionKey.Arn
+        - PolicyName: CloudWatchMetricsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "cloudwatch:PutMetricData"
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    "cloudwatch:namespace": !Sub "TAP/${EnvironmentSuffix}"
+        - PolicyName: SNSPublishPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sns:Publish"
+                Resource: !Ref ProcessingNotificationTopic
+      Tags:
+        - Key: Name
+          Value: !Sub "tap-stream-processor-role-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: !Ref ProjectOwner
+        - Key: iac-rlhf-amazon
+          Value: "true"
+
+  # Lambda function for processing DynamoDB stream events
+  StreamProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "tap-stream-processor-${EnvironmentSuffix}"
+      Description: "Processes DynamoDB stream events for task assignment analytics and notifications"
+      Runtime: !Ref LambdaRuntime
+      Handler: "index.handler"
+      Role: !GetAtt StreamProcessorRole.Arn
+      Timeout: !Ref LambdaTimeout
+      MemorySize: !Ref LambdaMemorySize
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref EnvironmentSuffix
+          TABLE_NAME: !Ref TurnAroundPromptTable
+          NOTIFICATION_TOPIC_ARN: !Ref ProcessingNotificationTopic
+          CLOUDWATCH_NAMESPACE: !Sub "TAP/${EnvironmentSuffix}"
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import boto3
+          from datetime import datetime
+          from decimal import Decimal
+
+          cloudwatch = boto3.client('cloudwatch')
+          sns = boto3.client('sns')
+
+          def handler(event, context):
+              """
+              Real-world use case: Process DynamoDB stream events to:
+              1. Track task assignment metrics (created, completed, failed)
+              2. Calculate processing times and success rates
+              3. Send notifications for critical task status changes
+              4. Aggregate analytics for operational dashboards
+              """
+              
+              namespace = os.environ['CLOUDWATCH_NAMESPACE']
+              topic_arn = os.environ['NOTIFICATION_TOPIC_ARN']
+              
+              metrics = {
+                  'tasks_created': 0,
+                  'tasks_completed': 0,
+                  'tasks_failed': 0,
+                  'tasks_modified': 0
+              }
+              
+              notifications = []
+              
+              for record in event.get('Records', []):
+                  event_name = record['eventName']
+                  
+                  if event_name == 'INSERT':
+                      metrics['tasks_created'] += 1
+                      new_image = record['dynamodb'].get('NewImage', {})
+                      task_type = new_image.get('taskType', {}).get('S', 'unknown')
+                      
+                      print(f"New task created: {new_image.get('id', {}).get('S')} of type {task_type}")
+                      
+                  elif event_name == 'MODIFY':
+                      metrics['tasks_modified'] += 1
+                      old_image = record['dynamodb'].get('OldImage', {})
+                      new_image = record['dynamodb'].get('NewImage', {})
+                      
+                      old_status = old_image.get('status', {}).get('S')
+                      new_status = new_image.get('status', {}).get('S')
+                      
+                      if old_status != new_status:
+                          if new_status == 'completed':
+                              metrics['tasks_completed'] += 1
+                              
+                              # Calculate processing time
+                              created_at = int(new_image.get('createdAt', {}).get('N', 0))
+                              completed_at = int(new_image.get('completedAt', {}).get('N', 0))
+                              processing_time = completed_at - created_at
+                              
+                              cloudwatch.put_metric_data(
+                                  Namespace=namespace,
+                                  MetricData=[{
+                                      'MetricName': 'TaskProcessingTime',
+                                      'Value': processing_time,
+                                      'Unit': 'Seconds',
+                                      'Dimensions': [
+                                          {'Name': 'TaskType', 'Value': new_image.get('taskType', {}).get('S', 'unknown')},
+                                          {'Name': 'Environment', 'Value': os.environ['ENVIRONMENT']}
+                                      ]
+                                  }]
+                              )
+                              
+                          elif new_status == 'failed':
+                              metrics['tasks_failed'] += 1
+                              
+                              # Send notification for failed tasks
+                              task_id = new_image.get('id', {}).get('S', 'unknown')
+                              error_msg = new_image.get('errorMessage', {}).get('S', 'No error message')
+                              
+                              notifications.append({
+                                  'task_id': task_id,
+                                  'status': 'failed',
+                                  'error': error_msg
+                              })
+              
+              # Publish aggregate metrics
+              for metric_name, value in metrics.items():
+                  if value > 0:
+                      cloudwatch.put_metric_data(
+                          Namespace=namespace,
+                          MetricData=[{
+                              'MetricName': metric_name,
+                              'Value': value,
+                              'Unit': 'Count',
+                              'Dimensions': [
+                                  {'Name': 'Environment', 'Value': os.environ['ENVIRONMENT']}
+                              ]
+                          }]
+                      )
+              
+              # Send notifications for critical events
+              if notifications:
+                  sns.publish(
+                      TopicArn=topic_arn,
+                      Subject=f"TAP Task Failures - {os.environ['ENVIRONMENT']}",
+                      Message=json.dumps(notifications, indent=2)
+                  )
+              
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps({
+                      'processed_records': len(event.get('Records', [])),
+                      'metrics': metrics
+                  })
+              }
+      Tags:
+        - Key: Name
+          Value: !Sub "tap-stream-processor-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: !Ref ProjectOwner
+        - Key: iac-rlhf-amazon
+          Value: "true"
+
+  # Event Source Mapping for DynamoDB Streams
+  StreamEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt TurnAroundPromptTable.StreamArn
+      FunctionName: !Ref StreamProcessorFunction
+      StartingPosition: LATEST
+      BatchSize: 100
+      MaximumBatchingWindowInSeconds: 10
+      MaximumRecordAgeInSeconds: 604800
+      MaximumRetryAttempts: 3
+      BisectBatchOnFunctionError: true
+      ParallelizationFactor: 1
+
+  # SNS Topic for processing notifications
+  ProcessingNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "tap-processing-notifications-${EnvironmentSuffix}"
+      DisplayName: !Sub "TAP Processing Notifications (${EnvironmentSuffix})"
+      KmsMasterKeyId: !Ref SNSEncryptionKey
+      Tags:
+        - Key: Name
+          Value: !Sub "tap-processing-notifications-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: !Ref ProjectOwner
+        - Key: iac-rlhf-amazon
+          Value: "true"
+
+  # KMS Key for SNS encryption
+  SNSEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub "KMS key for SNS topic encryption in ${EnvironmentSuffix} environment"
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: Allow SNS to use the key
+            Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action:
+              - "kms:Decrypt"
+              - "kms:GenerateDataKey"
+            Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "tap-sns-key-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: !Ref ProjectOwner
+        - Key: iac-rlhf-amazon
+          Value: "true"
+
+  # Email subscription (conditional)
+  EmailSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlarmEmail
+    Properties:
+      Protocol: email
+      TopicArn: !Ref ProcessingNotificationTopic
+      Endpoint: !Ref AlarmEmail
+
+  # CloudWatch Log Group for Lambda
+  StreamProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/tap-stream-processor-${EnvironmentSuffix}"
+      RetentionInDays: !If [IsProduction, 90, 7]
+      KmsKeyId: !GetAtt CloudWatchLogsKey.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub "tap-stream-processor-logs-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: !Ref ProjectOwner
+        - Key: iac-rlhf-amazon
+          Value: "true"
+
+  # KMS Key for CloudWatch Logs encryption
+  CloudWatchLogsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub "KMS key for CloudWatch Logs encryption in ${EnvironmentSuffix} environment"
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: Allow CloudWatch Logs
+            Effect: Allow
+            Principal:
+              Service: !Sub "logs.${AWS::Region}.amazonaws.com"
+            Action:
+              - "kms:Encrypt"
+              - "kms:Decrypt"
+              - "kms:ReEncrypt*"
+              - "kms:GenerateDataKey*"
+              - "kms:CreateGrant"
+              - "kms:DescribeKey"
+            Resource: "*"
+            Condition:
+              ArnLike:
+                "kms:EncryptionContext:aws:logs:arn": !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/tap-*"
+      Tags:
+        - Key: Name
+          Value: !Sub "tap-logs-key-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: !Ref ProjectOwner
+        - Key: iac-rlhf-amazon
+          Value: "true"
+
+  # CloudWatch Alarms (Conditional)
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: EnableMonitoring
+    Properties:
+      AlarmName: !Sub "tap-lambda-errors-${EnvironmentSuffix}"
+      AlarmDescription: !Sub "Lambda function errors in ${EnvironmentSuffix} environment"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref StreamProcessorFunction
+      AlarmActions:
+        - !If [
+            HasAlarmEmail,
+            !Ref ProcessingNotificationTopic,
+            !Ref "AWS::NoValue",
+          ]
+      TreatMissingData: notBreaching
+
+  LambdaThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: EnableMonitoring
+    Properties:
+      AlarmName: !Sub "tap-lambda-throttles-${EnvironmentSuffix}"
+      AlarmDescription: !Sub "Lambda function throttles in ${EnvironmentSuffix} environment"
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref StreamProcessorFunction
+      AlarmActions:
+        - !If [
+            HasAlarmEmail,
+            !Ref ProcessingNotificationTopic,
+            !Ref "AWS::NoValue",
+          ]
+      TreatMissingData: notBreaching
+
+  DynamoDBReadThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: EnableMonitoring
+    Properties:
+      AlarmName: !Sub "tap-dynamodb-read-throttles-${EnvironmentSuffix}"
+      AlarmDescription: !Sub "DynamoDB read throttles in ${EnvironmentSuffix} environment"
+      MetricName: ReadThrottleEvents
+      Namespace: AWS/DynamoDB
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: TableName
+          Value: !Ref TurnAroundPromptTable
+      AlarmActions:
+        - !If [
+            HasAlarmEmail,
+            !Ref ProcessingNotificationTopic,
+            !Ref "AWS::NoValue",
+          ]
+      TreatMissingData: notBreaching
+
+  DynamoDBWriteThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: EnableMonitoring
+    Properties:
+      AlarmName: !Sub "tap-dynamodb-write-throttles-${EnvironmentSuffix}"
+      AlarmDescription: !Sub "DynamoDB write throttles in ${EnvironmentSuffix} environment"
+      MetricName: WriteThrottleEvents
+      Namespace: AWS/DynamoDB
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: TableName
+          Value: !Ref TurnAroundPromptTable
+      AlarmActions:
+        - !If [
+            HasAlarmEmail,
+            !Ref ProcessingNotificationTopic,
+            !Ref "AWS::NoValue",
+          ]
+      TreatMissingData: notBreaching
+
+Outputs:
+  TurnAroundPromptTableName:
+    Description: "Name of the DynamoDB table"
+    Value: !Ref TurnAroundPromptTable
+    Export:
+      Name: !Sub "${AWS::StackName}-TurnAroundPromptTableName"
+
+  TurnAroundPromptTableArn:
+    Description: "ARN of the DynamoDB table"
+    Value: !GetAtt TurnAroundPromptTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-TurnAroundPromptTableArn"
+
+  TurnAroundPromptTableStreamArn:
+    Description: "ARN of the DynamoDB table stream"
+    Value: !GetAtt TurnAroundPromptTable.StreamArn
+    Export:
+      Name: !Sub "${AWS::StackName}-TableStreamArn"
+
+  StreamProcessorFunctionArn:
+    Description: "ARN of the Lambda stream processor function"
+    Value: !GetAtt StreamProcessorFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-StreamProcessorFunctionArn"
+
+  StreamProcessorFunctionName:
+    Description: "Name of the Lambda stream processor function"
+    Value: !Ref StreamProcessorFunction
+    Export:
+      Name: !Sub "${AWS::StackName}-StreamProcessorFunctionName"
+
+  ProcessingNotificationTopicArn:
+    Description: "ARN of the SNS topic for processing notifications"
+    Value: !Ref ProcessingNotificationTopic
+    Export:
+      Name: !Sub "${AWS::StackName}-NotificationTopicArn"
+
+  DynamoDBEncryptionKeyArn:
+    Description: "ARN of the KMS key for DynamoDB encryption"
+    Value: !GetAtt DynamoDBEncryptionKey.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-DynamoDBEncryptionKeyArn"
+
+  StackName:
+    Description: "Name of this CloudFormation stack"
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub "${AWS::StackName}-StackName"
+
+  EnvironmentSuffix:
+    Description: "Environment suffix used for this deployment"
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub "${AWS::StackName}-EnvironmentSuffix"
+
+  Region:
+    Description: "AWS Region where stack is deployed"
+    Value: !Ref "AWS::Region"
+    Export:
+      Name: !Sub "${AWS::StackName}-Region"
