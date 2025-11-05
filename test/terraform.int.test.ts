@@ -5,6 +5,7 @@ import {
   EC2Client,
   DescribeInstancesCommand,
   DescribeVpcsCommand,
+  DescribeVpcAttributeCommand,
   DescribeSubnetsCommand,
   DescribeSecurityGroupsCommand,
   DescribeNatGatewaysCommand,
@@ -137,12 +138,23 @@ describe("Terraform Infrastructure Integration Tests - VPC and Networking", () =
       return;
     }
 
-    const response = await ec2Client.send(
-      new DescribeVpcsCommand({ VpcIds: [vpcId] })
-    );
-    const vpc = response.Vpcs?.[0];
-    expect(vpc?.EnableDnsSupport).toBe(true);
-    expect(vpc?.EnableDnsHostnames).toBe(true);
+    const [dnsSupport, dnsHostnames] = await Promise.all([
+      ec2Client.send(
+        new DescribeVpcAttributeCommand({
+          VpcId: vpcId,
+          Attribute: "enableDnsSupport",
+        })
+      ),
+      ec2Client.send(
+        new DescribeVpcAttributeCommand({
+          VpcId: vpcId,
+          Attribute: "enableDnsHostnames",
+        })
+      ),
+    ]);
+
+    expect(dnsSupport.EnableDnsSupport?.Value).toBe(true);
+    expect(dnsHostnames.EnableDnsHostnames?.Value).toBe(true);
   });
 
   test("Should have at least 2 public subnets", () => {
