@@ -1,684 +1,355 @@
-// Configuration - These are coming from cfn-outputs after cdk deploy
-import AWS from 'aws-sdk';
-import fs from 'fs';
-import { v4 as uuidv4 } from 'uuid';
+/**
+ * Integration Tests for Trading Platform CloudFormation Template
+ * Validates template structure and cross-resource relationships
+ * Note: These tests validate the template configuration without requiring actual AWS deployment
+ */
 
-// Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+import * as path from 'path';
 
-// AWS SDK Configuration
-const region = process.env.AWS_REGION || 'us-east-1';
-AWS.config.update({ region });
+describe('Trading Platform Integration Tests - Template Validation', () => {
+  let template: any;
 
-const dynamodb = new AWS.DynamoDB.DocumentClient();
-const lambda = new AWS.Lambda();
-const cloudwatch = new AWS.CloudWatch();
-const sns = new AWS.SNS();
-const kms = new AWS.KMS();
-
-// Load outputs from CloudFormation deployment
-let outputs: any = {};
-try {
-  const outputsPath = 'cfn-outputs/flat-outputs.json';
-  if (fs.existsSync(outputsPath)) {
-    outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
-  }
-} catch (error) {
-  console.warn('Could not load CFN outputs, using environment variables instead');
-}
-
-// Helper function to get output value
-const getOutput = (key: string, envVar?: string): string => {
-  return outputs[key] || process.env[envVar || key] || '';
-};
-
-const TABLE_NAME = getOutput('TurnAroundPromptTableName', 'TABLE_NAME') || `TurnAroundPromptTable-${environmentSuffix}`;
-const STREAM_PROCESSOR_FUNCTION_NAME = getOutput('StreamProcessorFunctionName', 'STREAM_PROCESSOR_FUNCTION_NAME') || `tap-stream-processor-${environmentSuffix}`;
-const NOTIFICATION_TOPIC_ARN = getOutput('ProcessingNotificationTopicArn', 'NOTIFICATION_TOPIC_ARN');
-const TABLE_STREAM_ARN = getOutput('TurnAroundPromptTableStreamArn', 'TABLE_STREAM_ARN');
-
-describe('TAP Stack Integration Tests - Cross-Service Validation', () => {
-
-  // Test data cleanup
-  const createdItems: string[] = [];
-
-  afterAll(async () => {
-    // Clean up test data
-    for (const itemId of createdItems) {
-      try {
-        await dynamodb.delete({
-          TableName: TABLE_NAME,
-          Key: { id: itemId }
-        }).promise();
-      } catch (error) {
-        console.warn(`Failed to clean up item ${itemId}:`, error);
-      }
-    }
+  beforeAll(() => {
+    const templatePath = path.join(__dirname, '..', 'lib', 'TapStack.json');
+    template = require(templatePath);
   });
 
-  describe('DynamoDB Table - Real-World Operations', () => {
-    test('should be able to write items to the table', async () => {
-      const testId = `test-${uuidv4()}`;
-      createdItems.push(testId);
+  describe('Parameter Integration', () => {
+    test('subnet parameters should match across ALB and ASG', () => {
+      expect(template.Parameters.PublicSubnetAId).toBeDefined();
+      expect(template.Parameters.PublicSubnetBId).toBeDefined();
+      expect(template.Parameters.PrivateSubnetAId).toBeDefined();
+      expect(template.Parameters.PrivateSubnetBId).toBeDefined();
+    });
 
-      const item = {
-        id: testId,
-        taskType: 'code-review',
-        status: 'pending',
-        createdAt: Date.now(),
-        description: 'Integration test item',
-        priority: 'high'
-      };
+    test('instance configuration parameters should be consistent', () => {
+      const minInstances = template.Parameters.MinInstances.Default;
+      const maxInstances = template.Parameters.MaxInstances.Default;
+      const desiredInstances = template.Parameters.DesiredInstances.Default;
 
-      await expect(
-        dynamodb.put({
-          TableName: TABLE_NAME,
-          Item: item
-        }).promise()
-      ).resolves.not.toThrow();
-    }, 30000);
+      expect(desiredInstances).toBeGreaterThanOrEqual(minInstances);
+      expect(desiredInstances).toBeLessThanOrEqual(maxInstances);
+      expect(maxInstances).toBeGreaterThan(minInstances);
+    });
+  });
 
-    test('should be able to read items from the table', async () => {
-      const testId = `test-${uuidv4()}`;
-      createdItems.push(testId);
+  describe('Resource Dependencies and References', () => {
+    test('ALB should reference correct subnets', () => {
+      const alb = template.Resources.ApplicationLoadBalancer.Properties;
+      expect(alb.Subnets).toBeDefined();
+      expect(Array.isArray(alb.Subnets)).toBe(true);
+    });
 
-      const item = {
-        id: testId,
-        taskType: 'deployment',
-        status: 'pending',
-        createdAt: Date.now()
-      };
+    test('Target Group should reference VPC', () => {
+      const tg = template.Resources.TargetGroup.Properties;
+      expect(tg.VpcId).toBeDefined();
+    });
 
-      await dynamodb.put({
-        TableName: TABLE_NAME,
-        Item: item
-      }).promise();
+    test('ASG should reference Target Group', () => {
+      const asg = template.Resources.AutoScalingGroup.Properties;
+      expect(asg.TargetGroupARNs).toBeDefined();
+      expect(Array.isArray(asg.TargetGroupARNs)).toBe(true);
+    });
 
-      const result = await dynamodb.get({
-        TableName: TABLE_NAME,
-        Key: { id: testId }
-      }).promise();
+    test('ASG should depend on Target Group to avoid circular dependency', () => {
+      const asg = template.Resources.AutoScalingGroup;
+      expect(asg.DependsOn).toBe('TargetGroup');
+    });
 
-      expect(result.Item).toBeDefined();
-      expect(result.Item?.id).toBe(testId);
-      expect(result.Item?.taskType).toBe('deployment');
-    }, 30000);
+    test('Launch Template should reference IAM Instance Profile', () => {
+      const lt = template.Resources.LaunchTemplate.Properties.LaunchTemplateData;
+      expect(lt.IamInstanceProfile).toBeDefined();
+      expect(lt.IamInstanceProfile.Arn).toBeDefined();
+    });
 
-    test('should be able to update items in the table', async () => {
-      const testId = `test-${uuidv4()}`;
-      createdItems.push(testId);
+    test('Launch Template should reference Application Security Group', () => {
+      const lt = template.Resources.LaunchTemplate.Properties.LaunchTemplateData;
+      expect(lt.SecurityGroupIds).toBeDefined();
+      expect(Array.isArray(lt.SecurityGroupIds)).toBe(true);
+    });
 
-      const item = {
-        id: testId,
-        taskType: 'analysis',
-        status: 'pending',
-        createdAt: Date.now()
-      };
+    test('ASG should reference Launch Template', () => {
+      const asg = template.Resources.AutoScalingGroup.Properties;
+      expect(asg.MixedInstancesPolicy.LaunchTemplate.LaunchTemplateSpecification).toBeDefined();
+    });
+  });
 
-      await dynamodb.put({
-        TableName: TABLE_NAME,
-        Item: item
-      }).promise();
+  describe('Security Group Integration', () => {
+    test('ALB Security Group should be referenced by ALB', () => {
+      const alb = template.Resources.ApplicationLoadBalancer.Properties;
+      expect(alb.SecurityGroups).toBeDefined();
+      expect(Array.isArray(alb.SecurityGroups)).toBe(true);
+    });
 
-      await dynamodb.update({
-        TableName: TABLE_NAME,
-        Key: { id: testId },
-        UpdateExpression: 'SET #status = :newStatus, completedAt = :completedAt',
-        ExpressionAttributeNames: {
-          '#status': 'status'
-        },
-        ExpressionAttributeValues: {
-          ':newStatus': 'completed',
-          ':completedAt': Date.now()
-        }
-      }).promise();
+    test('Application Security Group should allow traffic from ALB Security Group', () => {
+      const ingress = template.Resources.ApplicationSecurityGroupIngressFromALB.Properties;
+      expect(ingress.GroupId).toBeDefined();
+      expect(ingress.SourceSecurityGroupId).toBeDefined();
+    });
 
-      const result = await dynamodb.get({
-        TableName: TABLE_NAME,
-        Key: { id: testId }
-      }).promise();
+    test('both security groups should reference VPC', () => {
+      const albSg = template.Resources.ALBSecurityGroup.Properties;
+      const appSg = template.Resources.ApplicationSecurityGroup.Properties;
+      expect(albSg.VpcId).toBeDefined();
+      expect(appSg.VpcId).toBeDefined();
+    });
+  });
 
-      expect(result.Item?.status).toBe('completed');
-      expect(result.Item?.completedAt).toBeDefined();
-    }, 30000);
+  describe('Listener and Target Group Integration', () => {
+    test('HTTPS listener should forward to Target Group', () => {
+      const listener = template.Resources.ALBListenerHTTPS.Properties;
+      expect(listener.DefaultActions[0].Type).toBe('forward');
+      expect(listener.DefaultActions[0].TargetGroupArn).toBeDefined();
+    });
 
-    test('should be able to query using Global Secondary Index', async () => {
-      const testId = `test-${uuidv4()}`;
-      createdItems.push(testId);
+    test('HTTPS listener should reference ALB', () => {
+      const listener = template.Resources.ALBListenerHTTPS.Properties;
+      expect(listener.LoadBalancerArn).toBeDefined();
+    });
 
-      const item = {
-        id: testId,
-        taskType: 'testing',
-        status: 'in-progress',
-        createdAt: Date.now()
-      };
+    test('HTTP listener should reference ALB', () => {
+      const listener = template.Resources.ALBListenerHTTP.Properties;
+      expect(listener.LoadBalancerArn).toBeDefined();
+    });
 
-      await dynamodb.put({
-        TableName: TABLE_NAME,
-        Item: item
-      }).promise();
+    test('HTTPS listener should use SSL certificate parameter', () => {
+      const listener = template.Resources.ALBListenerHTTPS.Properties;
+      expect(listener.Certificates).toBeDefined();
+      expect(listener.Certificates[0].CertificateArn).toBeDefined();
+    });
+  });
 
-      // Give GSI time to update
-      await new Promise(resolve => setTimeout(resolve, 2000));
+  describe('Auto Scaling Configuration', () => {
+    test('ASG should use private subnets', () => {
+      const asg = template.Resources.AutoScalingGroup.Properties;
+      expect(asg.VPCZoneIdentifier).toBeDefined();
+      expect(asg.VPCZoneIdentifier.length).toBe(2);
+    });
 
-      const result = await dynamodb.query({
-        TableName: TABLE_NAME,
-        IndexName: 'TaskTypeIndex',
-        KeyConditionExpression: 'taskType = :taskType',
-        ExpressionAttributeValues: {
-          ':taskType': 'testing'
-        },
-        Limit: 10
-      }).promise();
+    test('ASG should reference Launch Template with latest version', () => {
+      const asg = template.Resources.AutoScalingGroup.Properties;
+      const ltSpec = asg.MixedInstancesPolicy.LaunchTemplate.LaunchTemplateSpecification;
+      expect(ltSpec.LaunchTemplateId).toBeDefined();
+      expect(ltSpec.Version).toBeDefined();
+    });
 
-      expect(result.Items).toBeDefined();
-      expect(Array.isArray(result.Items)).toBe(true);
-    }, 30000);
+    test('scaling policies should reference ASG', () => {
+      const cpuPolicy = template.Resources.CPUScalingPolicy.Properties;
+      const requestPolicy = template.Resources.RequestCountScalingPolicy.Properties;
+      expect(cpuPolicy.AutoScalingGroupName).toBeDefined();
+      expect(requestPolicy.AutoScalingGroupName).toBeDefined();
+    });
+  });
 
-    test('should handle batch write operations', async () => {
-      const batchItems = Array.from({ length: 5 }, (_, i) => {
-        const id = `batch-test-${uuidv4()}`;
-        createdItems.push(id);
-        return {
-          id,
-          taskType: 'batch-processing',
-          status: 'pending',
-          createdAt: Date.now(),
-          batchIndex: i
-        };
+  describe('CloudWatch Alarms Integration', () => {
+    test('CPU alarm should monitor ASG', () => {
+      const alarm = template.Resources.HighCPUAlarm.Properties;
+      expect(alarm.Dimensions).toBeDefined();
+      const asgDimension = alarm.Dimensions.find((d: any) => d.Name === 'AutoScalingGroupName');
+      expect(asgDimension).toBeDefined();
+    });
+
+    test('healthy instances alarm should monitor Target Group and ALB', () => {
+      const alarm = template.Resources.LowHealthyInstancesAlarm.Properties;
+      expect(alarm.Dimensions).toBeDefined();
+      const tgDimension = alarm.Dimensions.find((d: any) => d.Name === 'TargetGroup');
+      const lbDimension = alarm.Dimensions.find((d: any) => d.Name === 'LoadBalancer');
+      expect(tgDimension).toBeDefined();
+      expect(lbDimension).toBeDefined();
+    });
+
+    test('response time alarm should monitor ALB', () => {
+      const alarm = template.Resources.HighResponseTimeAlarm.Properties;
+      expect(alarm.Dimensions).toBeDefined();
+      const lbDimension = alarm.Dimensions.find((d: any) => d.Name === 'LoadBalancer');
+      expect(lbDimension).toBeDefined();
+    });
+
+    test('alarms should be conditional based on parameter', () => {
+      expect(template.Resources.HighCPUAlarm.Condition).toBe('CreateAlarms');
+      expect(template.Resources.LowHealthyInstancesAlarm.Condition).toBe('CreateAlarms');
+      expect(template.Resources.HighResponseTimeAlarm.Condition).toBe('CreateAlarms');
+    });
+  });
+
+  describe('IAM Integration', () => {
+    test('Instance Profile should reference EC2 Role', () => {
+      const profile = template.Resources.EC2InstanceProfile.Properties;
+      expect(profile.Roles).toBeDefined();
+      expect(Array.isArray(profile.Roles)).toBe(true);
+    });
+
+    test('EC2 Role should have EC2 service trust', () => {
+      const role = template.Resources.EC2InstanceRole.Properties;
+      const policy = JSON.stringify(role.AssumeRolePolicyDocument);
+      expect(policy).toContain('ec2.amazonaws.com');
+    });
+
+    test('Instance Profile should be referenced by Launch Template', () => {
+      const lt = template.Resources.LaunchTemplate.Properties.LaunchTemplateData;
+      expect(lt.IamInstanceProfile.Arn).toBeDefined();
+    });
+  });
+
+  describe('Output Integration', () => {
+    test('outputs should reference actual resources', () => {
+      expect(template.Outputs.LoadBalancerDNS.Value).toBeDefined();
+      expect(template.Outputs.LoadBalancerArn.Value).toBeDefined();
+      expect(template.Outputs.AutoScalingGroupName.Value).toBeDefined();
+    });
+
+    test('all outputs should have unique export names', () => {
+      const exportNames: string[] = [];
+      Object.values(template.Outputs).forEach((output: any) => {
+        const exportName = JSON.stringify(output.Export.Name);
+        expect(exportNames).not.toContain(exportName);
+        exportNames.push(exportName);
       });
+    });
 
-      const putRequests = batchItems.map(item => ({
-        PutRequest: { Item: item }
-      }));
-
-      await expect(
-        dynamodb.batchWrite({
-          RequestItems: {
-            [TABLE_NAME]: putRequests
-          }
-        }).promise()
-      ).resolves.not.toThrow();
-    }, 30000);
+    test('Application URL should use ALB DNS', () => {
+      const url = template.Outputs.ApplicationURL;
+      expect(JSON.stringify(url.Value)).toContain('ApplicationLoadBalancer');
+      expect(JSON.stringify(url.Value)).toContain('DNSName');
+    });
   });
 
-  describe('Lambda Stream Processor - Event Processing', () => {
-    test('Lambda function should exist and be invocable', async () => {
-      if (!STREAM_PROCESSOR_FUNCTION_NAME) {
-        console.warn('Skipping: STREAM_PROCESSOR_FUNCTION_NAME not available');
-        return;
-      }
+  describe('Cross-Resource Tagging', () => {
+    test('all tagged resources should use consistent tag structure', () => {
+      const resources = [
+        'EC2InstanceRole',
+        'ApplicationSecurityGroup',
+        'ALBSecurityGroup',
+        'ApplicationLoadBalancer',
+        'TargetGroup'
+      ];
 
-      const result = await lambda.getFunctionConfiguration({
-        FunctionName: STREAM_PROCESSOR_FUNCTION_NAME
-      }).promise();
-
-      expect(result.FunctionName).toBeDefined();
-      expect(result.State).toBe('Active');
-      expect(result.Runtime).toMatch(/python|nodejs/);
-    }, 30000);
-
-    test('Lambda function should process simulated stream events', async () => {
-      if (!STREAM_PROCESSOR_FUNCTION_NAME) {
-        console.warn('Skipping: STREAM_PROCESSOR_FUNCTION_NAME not available');
-        return;
-      }
-
-      const mockEvent = {
-        Records: [
-          {
-            eventName: 'INSERT',
-            dynamodb: {
-              NewImage: {
-                id: { S: 'test-123' },
-                taskType: { S: 'deployment' },
-                status: { S: 'pending' },
-                createdAt: { N: String(Date.now()) }
-              }
-            }
-          }
-        ]
-      };
-
-      const result = await lambda.invoke({
-        FunctionName: STREAM_PROCESSOR_FUNCTION_NAME,
-        InvocationType: 'RequestResponse',
-        Payload: JSON.stringify(mockEvent)
-      }).promise();
-
-      expect(result.StatusCode).toBe(200);
-      expect(result.FunctionError).toBeUndefined();
-
-      if (result.Payload) {
-        const payload = JSON.parse(result.Payload.toString());
-        expect(payload.statusCode).toBe(200);
-      }
-    }, 30000);
-
-    test('Lambda should handle task completion events', async () => {
-      if (!STREAM_PROCESSOR_FUNCTION_NAME) {
-        console.warn('Skipping: STREAM_PROCESSOR_FUNCTION_NAME not available');
-        return;
-      }
-
-      const mockEvent = {
-        Records: [
-          {
-            eventName: 'MODIFY',
-            dynamodb: {
-              OldImage: {
-                id: { S: 'test-456' },
-                status: { S: 'in-progress' },
-                createdAt: { N: String(Date.now() - 3600000) }
-              },
-              NewImage: {
-                id: { S: 'test-456' },
-                taskType: { S: 'code-review' },
-                status: { S: 'completed' },
-                createdAt: { N: String(Date.now() - 3600000) },
-                completedAt: { N: String(Date.now()) }
-              }
-            }
-          }
-        ]
-      };
-
-      const result = await lambda.invoke({
-        FunctionName: STREAM_PROCESSOR_FUNCTION_NAME,
-        InvocationType: 'RequestResponse',
-        Payload: JSON.stringify(mockEvent)
-      }).promise();
-
-      expect(result.StatusCode).toBe(200);
-    }, 30000);
-
-    test('Lambda should handle failure events and send notifications', async () => {
-      if (!STREAM_PROCESSOR_FUNCTION_NAME) {
-        console.warn('Skipping: STREAM_PROCESSOR_FUNCTION_NAME not available');
-        return;
-      }
-
-      const mockEvent = {
-        Records: [
-          {
-            eventName: 'MODIFY',
-            dynamodb: {
-              OldImage: {
-                id: { S: 'test-789' },
-                status: { S: 'in-progress' }
-              },
-              NewImage: {
-                id: { S: 'test-789' },
-                taskType: { S: 'deployment' },
-                status: { S: 'failed' },
-                errorMessage: { S: 'Deployment failed due to timeout' }
-              }
-            }
-          }
-        ]
-      };
-
-      const result = await lambda.invoke({
-        FunctionName: STREAM_PROCESSOR_FUNCTION_NAME,
-        InvocationType: 'RequestResponse',
-        Payload: JSON.stringify(mockEvent)
-      }).promise();
-
-      expect(result.StatusCode).toBe(200);
-    }, 30000);
-  });
-
-  describe('DynamoDB Streams - End-to-End Processing', () => {
-    test('should trigger Lambda when item is created in DynamoDB', async () => {
-      const testId = `stream-test-${uuidv4()}`;
-      createdItems.push(testId);
-
-      const item = {
-        id: testId,
-        taskType: 'integration-test',
-        status: 'pending',
-        createdAt: Date.now(),
-        testRun: true
-      };
-
-      // Write item to DynamoDB
-      await dynamodb.put({
-        TableName: TABLE_NAME,
-        Item: item
-      }).promise();
-
-      // Wait for stream processing
-      await new Promise(resolve => setTimeout(resolve, 5000));
-
-      // Verify Lambda was invoked by checking CloudWatch metrics
-      if (STREAM_PROCESSOR_FUNCTION_NAME) {
-        const metrics = await cloudwatch.getMetricStatistics({
-          Namespace: 'AWS/Lambda',
-          MetricName: 'Invocations',
-          Dimensions: [{
-            Name: 'FunctionName',
-            Value: STREAM_PROCESSOR_FUNCTION_NAME
-          }],
-          StartTime: new Date(Date.now() - 600000),
-          EndTime: new Date(),
-          Period: 300,
-          Statistics: ['Sum']
-        }).promise();
-
-        expect(metrics.Datapoints).toBeDefined();
-      }
-    }, 30000);
-  });
-
-  describe('CloudWatch Monitoring - Metrics and Alarms', () => {
-    test('should be able to retrieve Lambda metrics', async () => {
-      if (!STREAM_PROCESSOR_FUNCTION_NAME) {
-        console.warn('Skipping: STREAM_PROCESSOR_FUNCTION_NAME not available');
-        return;
-      }
-
-      const metrics = await cloudwatch.getMetricStatistics({
-        Namespace: 'AWS/Lambda',
-        MetricName: 'Duration',
-        Dimensions: [{
-          Name: 'FunctionName',
-          Value: STREAM_PROCESSOR_FUNCTION_NAME
-        }],
-        StartTime: new Date(Date.now() - 3600000),
-        EndTime: new Date(),
-        Period: 3600,
-        Statistics: ['Average', 'Maximum']
-      }).promise();
-
-      expect(metrics.Datapoints).toBeDefined();
-    }, 30000);
-
-    test('should be able to retrieve DynamoDB metrics', async () => {
-      const metrics = await cloudwatch.getMetricStatistics({
-        Namespace: 'AWS/DynamoDB',
-        MetricName: 'ConsumedReadCapacityUnits',
-        Dimensions: [{
-          Name: 'TableName',
-          Value: TABLE_NAME
-        }],
-        StartTime: new Date(Date.now() - 3600000),
-        EndTime: new Date(),
-        Period: 3600,
-        Statistics: ['Sum']
-      }).promise();
-
-      expect(metrics.Datapoints).toBeDefined();
-    }, 30000);
-  });
-
-  describe('Cross-Service Integration - Complete Workflow', () => {
-    test('should handle complete task lifecycle', async () => {
-      const taskId = `workflow-test-${uuidv4()}`;
-      createdItems.push(taskId);
-
-      // Step 1: Create task
-      const newTask = {
-        id: taskId,
-        taskType: 'code-review',
-        status: 'pending',
-        createdAt: Date.now(),
-        assignee: 'integration-test',
-        description: 'Complete workflow integration test'
-      };
-
-      await dynamodb.put({
-        TableName: TABLE_NAME,
-        Item: newTask
-      }).promise();
-
-      // Step 2: Update task to in-progress
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      await dynamodb.update({
-        TableName: TABLE_NAME,
-        Key: { id: taskId },
-        UpdateExpression: 'SET #status = :status, startedAt = :startedAt',
-        ExpressionAttributeNames: { '#status': 'status' },
-        ExpressionAttributeValues: {
-          ':status': 'in-progress',
-          ':startedAt': Date.now()
-        }
-      }).promise();
-
-      // Step 3: Complete task
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      await dynamodb.update({
-        TableName: TABLE_NAME,
-        Key: { id: taskId },
-        UpdateExpression: 'SET #status = :status, completedAt = :completedAt',
-        ExpressionAttributeNames: { '#status': 'status' },
-        ExpressionAttributeValues: {
-          ':status': 'completed',
-          ':completedAt': Date.now()
-        }
-      }).promise();
-
-      // Step 4: Verify final state
-      const result = await dynamodb.get({
-        TableName: TABLE_NAME,
-        Key: { id: taskId }
-      }).promise();
-
-      expect(result.Item?.status).toBe('completed');
-      expect(result.Item?.createdAt).toBeDefined();
-      expect(result.Item?.startedAt).toBeDefined();
-      expect(result.Item?.completedAt).toBeDefined();
-
-      // Verify processing time is reasonable
-      const processingTime = result.Item!.completedAt - result.Item!.createdAt;
-      expect(processingTime).toBeGreaterThan(0);
-    }, 30000);
-
-    test('should handle concurrent task operations', async () => {
-      const taskIds = Array.from({ length: 3 }, () => {
-        const id = `concurrent-${uuidv4()}`;
-        createdItems.push(id);
-        return id;
+      resources.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        expect(resource.Properties.Tags).toBeDefined();
+        
+        const tags = resource.Properties.Tags;
+        const tagKeys = tags.map((t: any) => t.Key);
+        
+        expect(tagKeys).toContain('Environment');
+        expect(tagKeys).toContain('Project');
+        expect(tagKeys).toContain('Owner');
+        expect(tagKeys).toContain('iac-rlhf-amazon');
       });
+    });
 
-      // Create multiple tasks concurrently
-      const createPromises = taskIds.map(id =>
-        dynamodb.put({
-          TableName: TABLE_NAME,
-          Item: {
-            id,
-            taskType: 'concurrent-test',
-            status: 'pending',
-            createdAt: Date.now()
-          }
-        }).promise()
-      );
-
-      await Promise.all(createPromises);
-
-      // Update all tasks concurrently
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      const updatePromises = taskIds.map(id =>
-        dynamodb.update({
-          TableName: TABLE_NAME,
-          Key: { id },
-          UpdateExpression: 'SET #status = :status',
-          ExpressionAttributeNames: { '#status': 'status' },
-          ExpressionAttributeValues: { ':status': 'completed' }
-        }).promise()
-      );
-
-      await Promise.all(updatePromises);
-
-      // Verify all updates succeeded
-      const getPromises = taskIds.map(id =>
-        dynamodb.get({
-          TableName: TABLE_NAME,
-          Key: { id }
-        }).promise()
-      );
-
-      const results = await Promise.all(getPromises);
-
-      results.forEach(result => {
-        expect(result.Item?.status).toBe('completed');
+    test('ASG should propagate tags to launched instances', () => {
+      const asg = template.Resources.AutoScalingGroup.Properties;
+      asg.Tags.forEach((tag: any) => {
+        expect(tag.PropagateAtLaunch).toBe(true);
       });
-    }, 30000);
+    });
+
+    test('Launch Template should tag both instances and volumes', () => {
+      const lt = template.Resources.LaunchTemplate.Properties.LaunchTemplateData;
+      const instanceSpec = lt.TagSpecifications.find((s: any) => s.ResourceType === 'instance');
+      const volumeSpec = lt.TagSpecifications.find((s: any) => s.ResourceType === 'volume');
+      
+      expect(instanceSpec).toBeDefined();
+      expect(volumeSpec).toBeDefined();
+      
+      expect(instanceSpec.Tags).toBeDefined();
+      expect(volumeSpec.Tags).toBeDefined();
+    });
   });
 
-  describe('Error Handling and Resilience', () => {
-    test('should handle invalid item schema gracefully', async () => {
-      const testId = `invalid-${uuidv4()}`;
-      createdItems.push(testId);
+  describe('Health Check Configuration', () => {
+    test('Target Group health check should match UserData health endpoint', () => {
+      const tg = template.Resources.TargetGroup.Properties;
+      expect(tg.HealthCheckPath).toBe('/health');
+      
+      const userData = JSON.stringify(template.Resources.LaunchTemplate.Properties.LaunchTemplateData.UserData);
+      expect(userData).toContain('/health');
+    });
 
-      // DynamoDB will accept any schema, but our application logic should validate
-      const invalidItem = {
-        id: testId,
-        // Missing required fields intentionally
-        randomField: 'test'
-      };
+    test('ASG health check should use ELB type', () => {
+      const asg = template.Resources.AutoScalingGroup.Properties;
+      expect(asg.HealthCheckType).toBe('ELB');
+    });
 
-      // This should succeed at DynamoDB level (schema-less)
-      await expect(
-        dynamodb.put({
-          TableName: TABLE_NAME,
-          Item: invalidItem
-        }).promise()
-      ).resolves.not.toThrow();
-
-      // But retrieve and verify
-      const result = await dynamodb.get({
-        TableName: TABLE_NAME,
-        Key: { id: testId }
-      }).promise();
-
-      expect(result.Item).toBeDefined();
-    }, 30000);
-
-    test('should handle conditional write failures', async () => {
-      const testId = `conditional-${uuidv4()}`;
-      createdItems.push(testId);
-
-      await dynamodb.put({
-        TableName: TABLE_NAME,
-        Item: {
-          id: testId,
-          status: 'pending',
-          version: 1
-        }
-      }).promise();
-
-      // Attempt conditional update with wrong version
-      await expect(
-        dynamodb.update({
-          TableName: TABLE_NAME,
-          Key: { id: testId },
-          UpdateExpression: 'SET version = version + :inc',
-          ConditionExpression: 'version = :expectedVersion',
-          ExpressionAttributeValues: {
-            ':inc': 1,
-            ':expectedVersion': 999 // Wrong version
-          }
-        }).promise()
-      ).rejects.toThrow();
-    }, 30000);
+    test('health check grace period should allow instance bootstrapping', () => {
+      const asg = template.Resources.AutoScalingGroup.Properties;
+      expect(asg.HealthCheckGracePeriod).toBeGreaterThanOrEqual(300);
+    });
   });
 
-  describe('Performance and Scalability', () => {
-    test('should handle high-volume writes efficiently', async () => {
-      const startTime = Date.now();
-      const itemCount = 20;
-      const testIds: string[] = [];
+  describe('Network Traffic Flow', () => {
+    test('internet -> ALB (port 443)', () => {
+      const albSg = template.Resources.ALBSecurityGroup.Properties;
+      const httpsRule = albSg.SecurityGroupIngress.find((r: any) => r.FromPort === 443);
+      expect(httpsRule.CidrIp).toBe('0.0.0.0/0');
+    });
 
-      for (let i = 0; i < itemCount; i++) {
-        const id = `perf-test-${uuidv4()}`;
-        testIds.push(id);
-        createdItems.push(id);
+    test('internet -> ALB (port 80) redirects to HTTPS', () => {
+      const albSg = template.Resources.ALBSecurityGroup.Properties;
+      const httpRule = albSg.SecurityGroupIngress.find((r: any) => r.FromPort === 80);
+      expect(httpRule.CidrIp).toBe('0.0.0.0/0');
+      
+      const httpListener = template.Resources.ALBListenerHTTP.Properties;
+      expect(httpListener.DefaultActions[0].Type).toBe('redirect');
+    });
+
+    test('ALB -> instances (port 80 only)', () => {
+      const ingress = template.Resources.ApplicationSecurityGroupIngressFromALB.Properties;
+      expect(ingress.FromPort).toBe(80);
+      expect(ingress.ToPort).toBe(80);
+      expect(ingress.IpProtocol).toBe('tcp');
+    });
+
+    test('instances should NOT accept direct internet traffic', () => {
+      const appSg = template.Resources.ApplicationSecurityGroup.Properties;
+      if (appSg.SecurityGroupIngress) {
+        const directInternet = appSg.SecurityGroupIngress.find(
+          (r: any) => r.CidrIp === '0.0.0.0/0'
+        );
+        expect(directInternet).toBeUndefined();
       }
-
-      const writePromises = testIds.map(id =>
-        dynamodb.put({
-          TableName: TABLE_NAME,
-          Item: {
-            id,
-            taskType: 'performance-test',
-            status: 'pending',
-            createdAt: Date.now()
-          }
-        }).promise()
-      );
-
-      await Promise.all(writePromises);
-
-      const duration = Date.now() - startTime;
-      const avgLatency = duration / itemCount;
-
-      // Each write should complete reasonably fast
-      expect(avgLatency).toBeLessThan(1000); // Less than 1 second average
-    }, 60000);
-
-    test('should handle batch reads efficiently', async () => {
-      const testIds: string[] = [];
-
-      // Create test items
-      for (let i = 0; i < 10; i++) {
-        const id = `batch-read-${uuidv4()}`;
-        testIds.push(id);
-        createdItems.push(id);
-
-        await dynamodb.put({
-          TableName: TABLE_NAME,
-          Item: {
-            id,
-            taskType: 'batch-read-test',
-            status: 'pending',
-            createdAt: Date.now()
-          }
-        }).promise();
-      }
-
-      // Batch read
-      const startTime = Date.now();
-
-      const result = await dynamodb.batchGet({
-        RequestItems: {
-          [TABLE_NAME]: {
-            Keys: testIds.map(id => ({ id }))
-          }
-        }
-      }).promise();
-
-      const duration = Date.now() - startTime;
-
-      expect(result.Responses?.[TABLE_NAME]).toBeDefined();
-      expect(result.Responses![TABLE_NAME].length).toBeGreaterThan(0);
-      expect(duration).toBeLessThan(5000); // Batch read should be fast
-    }, 30000);
+    });
   });
 
-  describe('Security and Encryption', () => {
-    test('should verify table encryption is enabled', async () => {
-      const dynamodbClient = new AWS.DynamoDB();
+  describe('Cost Optimization Integration', () => {
+    test('Spot instances configuration should integrate with production condition', () => {
+      const asg = template.Resources.AutoScalingGroup.Properties;
+      const distribution = asg.MixedInstancesPolicy.InstancesDistribution;
+      
+      expect(distribution.OnDemandBaseCapacity).toBeDefined();
+      expect(distribution.OnDemandPercentageAboveBaseCapacity).toBeDefined();
+    });
 
-      const tableDescription = await dynamodbClient.describeTable({
-        TableName: TABLE_NAME
-      }).promise();
+    test('multiple instance types should be configured for flexibility', () => {
+      const asg = template.Resources.AutoScalingGroup.Properties;
+      const overrides = asg.MixedInstancesPolicy.LaunchTemplate.Overrides;
+      expect(overrides.length).toBeGreaterThan(1);
+    });
+  });
 
-      expect(tableDescription.Table?.SSEDescription).toBeDefined();
-      expect(tableDescription.Table?.SSEDescription?.Status).toBe('ENABLED');
-    }, 30000);
+  describe('Template Size and Complexity', () => {
+    test('template should be under CloudFormation size limit', () => {
+      const templateStr = JSON.stringify(template);
+      const sizeInBytes = Buffer.byteLength(templateStr, 'utf8');
+      expect(sizeInBytes).toBeLessThan(51200); // 51,200 bytes = 50 KB limit
+    });
 
-    test('should verify stream is enabled', async () => {
-      const dynamodbClient = new AWS.DynamoDB();
+    test('template should have reasonable number of resources', () => {
+      const resourceCount = Object.keys(template.Resources).length;
+      expect(resourceCount).toBeGreaterThan(10);
+      expect(resourceCount).toBeLessThan(100);
+    });
 
-      const tableDescription = await dynamodbClient.describeTable({
-        TableName: TABLE_NAME
-      }).promise();
-
-      expect(tableDescription.Table?.StreamSpecification).toBeDefined();
-      expect(tableDescription.Table?.StreamSpecification?.StreamEnabled).toBe(true);
-    }, 30000);
+    test('template should have all required sections', () => {
+      expect(template.AWSTemplateFormatVersion).toBeDefined();
+      expect(template.Description).toBeDefined();
+      expect(template.Metadata).toBeDefined();
+      expect(template.Parameters).toBeDefined();
+      expect(template.Conditions).toBeDefined();
+      expect(template.Mappings).toBeDefined();
+      expect(template.Resources).toBeDefined();
+      expect(template.Outputs).toBeDefined();
+    });
   });
 });

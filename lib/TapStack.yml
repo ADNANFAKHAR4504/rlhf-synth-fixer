@@ -1,12 +1,12 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Optimized Trading Platform Infrastructure - Production-grade refactored template with best practices'
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Optimized Trading Platform Infrastructure - Production-grade refactored template with best practices"
 
 # Metadata for better parameter organization
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: 'Network Configuration'
+          default: "Network Configuration"
         Parameters:
           - VpcId
           - PublicSubnetAId
@@ -14,13 +14,13 @@ Metadata:
           - PrivateSubnetAId
           - PrivateSubnetBId
       - Label:
-          default: 'Application Configuration'
+          default: "Application Configuration"
         Parameters:
           - Environment
           - ProjectName
           - Owner
       - Label:
-          default: 'Instance Configuration'
+          default: "Instance Configuration"
         Parameters:
           - InstanceType
           - KeyPairName
@@ -28,23 +28,23 @@ Metadata:
           - MaxInstances
           - DesiredInstances
       - Label:
-          default: 'Monitoring Configuration'
+          default: "Monitoring Configuration"
         Parameters:
           - EnableCloudWatchAlarms
           - SNSAlertTopic
       - Label:
-          default: 'SSL Configuration'
+          default: "SSL Configuration"
         Parameters:
           - SSLCertificateArn
     ParameterLabels:
       VpcId:
-        default: 'VPC ID'
+        default: "VPC ID"
       Environment:
-        default: 'Environment Name'
+        default: "Environment Name"
       EnableCloudWatchAlarms:
-        default: 'Enable CloudWatch Monitoring'
+        default: "Enable CloudWatch Monitoring"
       SSLCertificateArn:
-        default: 'SSL Certificate ARN'
+        default: "SSL Certificate ARN"
 
 Parameters:
   VpcId:
@@ -81,7 +81,7 @@ Parameters:
     Type: String
     Default: TradingPlatform
     Description: Project name for resource identification
-    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9-]*$'
+    AllowedPattern: "^[a-zA-Z][a-zA-Z0-9-]*$"
     ConstraintDescription: Must start with a letter and contain only alphanumeric characters and hyphens
 
   Owner:
@@ -130,28 +130,28 @@ Parameters:
 
   EnableCloudWatchAlarms:
     Type: String
-    Default: 'Yes'
+    Default: "Yes"
     AllowedValues:
-      - 'Yes'
-      - 'No'
+      - "Yes"
+      - "No"
     Description: Enable CloudWatch alarms for monitoring
 
   SNSAlertTopic:
     Type: String
-    Default: ''
+    Default: ""
     Description: SNS topic ARN for alarm notifications (optional)
 
   SSLCertificateArn:
     Type: String
     Description: ARN of SSL certificate for HTTPS listener
-    AllowedPattern: '^arn:aws:acm:[a-z0-9-]+:[0-9]{12}:certificate/.+$'
+    AllowedPattern: "^arn:aws:acm:[a-z0-9-]+:[0-9]{12}:certificate/.+$"
     ConstraintDescription: Must be a valid ACM certificate ARN
 
 # Conditions for optional resources
 Conditions:
-  CreateAlarms: !Equals [!Ref EnableCloudWatchAlarms, 'Yes']
-  HasSNSTopic: !Not [!Equals [!Ref SNSAlertTopic, '']]
-  IsProduction: !Equals [!Ref Environment, 'production']
+  CreateAlarms: !Equals [!Ref EnableCloudWatchAlarms, "Yes"]
+  HasSNSTopic: !Not [!Equals [!Ref SNSAlertTopic, ""]]
+  IsProduction: !Equals [!Ref Environment, "production"]
 
 # Region-specific mappings for AMI lookups
 Mappings:
@@ -178,9 +178,9 @@ Resources:
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ProjectName}-${Environment}-ec2-role'
+      RoleName: !Sub "${ProjectName}-${Environment}-ec2-role"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -191,7 +191,7 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-ec2-role'
+          Value: !Sub "${ProjectName}-${Environment}-ec2-role"
         - Key: Environment
           Value: !Ref Environment
         - Key: Project
@@ -199,12 +199,12 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
         - Key: iac-rlhf-amazon
-          Value: 'true'
+          Value: "true"
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${ProjectName}-${Environment}-instance-profile'
+      InstanceProfileName: !Sub "${ProjectName}-${Environment}-instance-profile"
       Roles:
         - !Ref EC2InstanceRole
 
@@ -212,8 +212,8 @@ Resources:
   ApplicationSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${ProjectName}-${Environment}-app-sg'
-      GroupDescription: !Sub 'Consolidated security group for ${ProjectName} ${Environment} environment'
+      GroupName: !Sub "${ProjectName}-${Environment}-app-sg"
+      GroupDescription: !Sub "Consolidated security group for ${ProjectName} ${Environment} environment"
       VpcId: !Ref VpcId
       SecurityGroupEgress:
         - IpProtocol: -1
@@ -221,7 +221,7 @@ Resources:
           Description: Allow all outbound traffic
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-app-sg'
+          Value: !Sub "${ProjectName}-${Environment}-app-sg"
         - Key: Environment
           Value: !Ref Environment
         - Key: Project
@@ -229,14 +229,14 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
         - Key: iac-rlhf-amazon
-          Value: 'true'
+          Value: "true"
 
   # ALB Security Group
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${ProjectName}-${Environment}-alb-sg'
-      GroupDescription: !Sub 'Security group for ${ProjectName} Application Load Balancer'
+      GroupName: !Sub "${ProjectName}-${Environment}-alb-sg"
+      GroupDescription: !Sub "Security group for ${ProjectName} Application Load Balancer"
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -255,7 +255,7 @@ Resources:
           Description: Allow all outbound traffic
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-alb-sg'
+          Value: !Sub "${ProjectName}-${Environment}-alb-sg"
         - Key: Environment
           Value: !Ref Environment
         - Key: Project
@@ -263,7 +263,7 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
         - Key: iac-rlhf-amazon
-          Value: 'true'
+          Value: "true"
 
   # Allow HTTP traffic from ALB to application instances
   ApplicationSecurityGroupIngressFromALB:
@@ -280,7 +280,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${ProjectName}-${Environment}-alb'
+      Name: !Sub "${ProjectName}-${Environment}-alb"
       Type: application
       Scheme: internet-facing
       IpAddressType: ipv4
@@ -291,7 +291,7 @@ Resources:
         - !Ref ALBSecurityGroup
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-alb'
+          Value: !Sub "${ProjectName}-${Environment}-alb"
         - Key: Environment
           Value: !Ref Environment
         - Key: Project
@@ -299,7 +299,7 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
         - Key: iac-rlhf-amazon
-          Value: 'true'
+          Value: "true"
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
 
@@ -307,7 +307,7 @@ Resources:
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${ProjectName}-${Environment}-tg'
+      Name: !Sub "${ProjectName}-${Environment}-tg"
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VpcId
@@ -319,12 +319,14 @@ Resources:
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 3
       TargetType: instance
-      DeregistrationDelay: 30
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "30"
       Matcher:
-        HttpCode: '200'
+        HttpCode: "200"
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-tg'
+          Value: !Sub "${ProjectName}-${Environment}-tg"
         - Key: Environment
           Value: !Ref Environment
         - Key: Project
@@ -332,7 +334,7 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
         - Key: iac-rlhf-amazon
-          Value: 'true'
+          Value: "true"
 
   # HTTPS Listener for ALB
   ALBListenerHTTPS:
@@ -359,18 +361,18 @@ Resources:
         - Type: redirect
           RedirectConfig:
             Protocol: HTTPS
-            Port: '443'
+            Port: "443"
             StatusCode: HTTP_301
 
   # Launch Template with SSM parameter for latest AMI
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub '${ProjectName}-${Environment}-lt'
+      LaunchTemplateName: !Sub "${ProjectName}-${Environment}-lt"
       LaunchTemplateData:
         ImageId: !Sub
-          - '{{resolve:ssm:${AMIParam}}}'
-          - AMIParam: !FindInMap [RegionMap, !Ref 'AWS::Region', AMIParameter]
+          - "{{resolve:ssm:${AMIParam}}}"
+          - AMIParam: !FindInMap [RegionMap, !Ref "AWS::Region", AMIParameter]
         InstanceType: !Ref InstanceType
         KeyName: !Ref KeyPairName
         IamInstanceProfile:
@@ -413,7 +415,7 @@ Resources:
           - ResourceType: instance
             Tags:
               - Key: Name
-                Value: !Sub '${ProjectName}-${Environment}-instance'
+                Value: !Sub "${ProjectName}-${Environment}-instance"
               - Key: Environment
                 Value: !Ref Environment
               - Key: Project
@@ -421,11 +423,11 @@ Resources:
               - Key: Owner
                 Value: !Ref Owner
               - Key: iac-rlhf-amazon
-                Value: 'true'
+                Value: "true"
           - ResourceType: volume
             Tags:
               - Key: Name
-                Value: !Sub '${ProjectName}-${Environment}-volume'
+                Value: !Sub "${ProjectName}-${Environment}-volume"
               - Key: Environment
                 Value: !Ref Environment
               - Key: Project
@@ -433,7 +435,7 @@ Resources:
               - Key: Owner
                 Value: !Ref Owner
               - Key: iac-rlhf-amazon
-                Value: 'true'
+                Value: "true"
         MetadataOptions:
           HttpTokens: required
           HttpPutResponseHopLimit: 1
@@ -443,7 +445,7 @@ Resources:
     Type: AWS::AutoScaling::AutoScalingGroup
     DependsOn: TargetGroup
     Properties:
-      AutoScalingGroupName: !Sub '${ProjectName}-${Environment}-asg'
+      AutoScalingGroupName: !Sub "${ProjectName}-${Environment}-asg"
       MinSize: !Ref MinInstances
       MaxSize: !Ref MaxInstances
       DesiredCapacity: !Ref DesiredInstances
@@ -460,9 +462,9 @@ Resources:
           Overrides:
             - InstanceType: !Ref InstanceType
             - InstanceType: t3a.medium
-              WeightedCapacity: '1'
+              WeightedCapacity: "1"
             - InstanceType: t3.medium
-              WeightedCapacity: '1'
+              WeightedCapacity: "1"
         InstancesDistribution:
           OnDemandBaseCapacity: !If [IsProduction, 2, 0]
           OnDemandPercentageAboveBaseCapacity: !If [IsProduction, 50, 0]
@@ -472,7 +474,7 @@ Resources:
         - !Ref TargetGroup
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-asg-instance'
+          Value: !Sub "${ProjectName}-${Environment}-asg-instance"
           PropagateAtLaunch: true
         - Key: Environment
           Value: !Ref Environment
@@ -484,7 +486,7 @@ Resources:
           Value: !Ref Owner
           PropagateAtLaunch: true
         - Key: iac-rlhf-amazon
-          Value: 'true'
+          Value: "true"
           PropagateAtLaunch: true
     CreationPolicy:
       ResourceSignal:
@@ -519,7 +521,7 @@ Resources:
         PredefinedMetricSpecification:
           PredefinedMetricType: ALBRequestCountPerTarget
           ResourceLabel: !Join
-            - '/'
+            - "/"
             - - !GetAtt ApplicationLoadBalancer.LoadBalancerFullName
               - !GetAtt TargetGroup.TargetGroupFullName
 
@@ -528,8 +530,8 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: CreateAlarms
     Properties:
-      AlarmName: !Sub '${ProjectName}-${Environment}-high-cpu'
-      AlarmDescription: !Sub 'CPU utilization exceeds 80% for ${ProjectName} ${Environment}'
+      AlarmName: !Sub "${ProjectName}-${Environment}-high-cpu"
+      AlarmDescription: !Sub "CPU utilization exceeds 80% for ${ProjectName} ${Environment}"
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average
@@ -541,15 +543,15 @@ Resources:
         - Name: AutoScalingGroupName
           Value: !Ref AutoScalingGroup
       AlarmActions:
-        - !If [HasSNSTopic, !Ref SNSAlertTopic, !Ref 'AWS::NoValue']
+        - !If [HasSNSTopic, !Ref SNSAlertTopic, !Ref "AWS::NoValue"]
       TreatMissingData: notBreaching
 
   LowHealthyInstancesAlarm:
     Type: AWS::CloudWatch::Alarm
     Condition: CreateAlarms
     Properties:
-      AlarmName: !Sub '${ProjectName}-${Environment}-low-healthy-instances'
-      AlarmDescription: !Sub 'Healthy instance count below 2 for ${ProjectName} ${Environment}'
+      AlarmName: !Sub "${ProjectName}-${Environment}-low-healthy-instances"
+      AlarmDescription: !Sub "Healthy instance count below 2 for ${ProjectName} ${Environment}"
       MetricName: HealthyHostCount
       Namespace: AWS/ApplicationELB
       Statistic: Average
@@ -563,15 +565,15 @@ Resources:
         - Name: LoadBalancer
           Value: !GetAtt ApplicationLoadBalancer.LoadBalancerFullName
       AlarmActions:
-        - !If [HasSNSTopic, !Ref SNSAlertTopic, !Ref 'AWS::NoValue']
+        - !If [HasSNSTopic, !Ref SNSAlertTopic, !Ref "AWS::NoValue"]
       TreatMissingData: breaching
 
   HighResponseTimeAlarm:
     Type: AWS::CloudWatch::Alarm
     Condition: CreateAlarms
     Properties:
-      AlarmName: !Sub '${ProjectName}-${Environment}-high-response-time'
-      AlarmDescription: !Sub 'Target response time exceeds 1 second for ${ProjectName} ${Environment}'
+      AlarmName: !Sub "${ProjectName}-${Environment}-high-response-time"
+      AlarmDescription: !Sub "Target response time exceeds 1 second for ${ProjectName} ${Environment}"
       MetricName: TargetResponseTime
       Namespace: AWS/ApplicationELB
       Statistic: Average
@@ -583,7 +585,7 @@ Resources:
         - Name: LoadBalancer
           Value: !GetAtt ApplicationLoadBalancer.LoadBalancerFullName
       AlarmActions:
-        - !If [HasSNSTopic, !Ref SNSAlertTopic, !Ref 'AWS::NoValue']
+        - !If [HasSNSTopic, !Ref SNSAlertTopic, !Ref "AWS::NoValue"]
       TreatMissingData: notBreaching
 
 # Outputs for cross-stack references
@@ -592,52 +594,52 @@ Outputs:
     Description: DNS name of the Application Load Balancer
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
-      Name: !Sub '${AWS::StackName}-ALB-DNS'
+      Name: !Sub "${AWS::StackName}-ALB-DNS"
 
   LoadBalancerArn:
     Description: ARN of the Application Load Balancer
     Value: !Ref ApplicationLoadBalancer
     Export:
-      Name: !Sub '${AWS::StackName}-ALB-ARN'
+      Name: !Sub "${AWS::StackName}-ALB-ARN"
 
   AutoScalingGroupName:
     Description: Name of the Auto Scaling Group
     Value: !Ref AutoScalingGroup
     Export:
-      Name: !Sub '${AWS::StackName}-ASG-Name'
+      Name: !Sub "${AWS::StackName}-ASG-Name"
 
   SecurityGroupId:
     Description: ID of the consolidated application security group
     Value: !Ref ApplicationSecurityGroup
     Export:
-      Name: !Sub '${AWS::StackName}-SecurityGroup-ID'
+      Name: !Sub "${AWS::StackName}-SecurityGroup-ID"
 
   ALBSecurityGroupId:
     Description: ID of the ALB security group
     Value: !Ref ALBSecurityGroup
     Export:
-      Name: !Sub '${AWS::StackName}-ALB-SecurityGroup-ID'
+      Name: !Sub "${AWS::StackName}-ALB-SecurityGroup-ID"
 
   TargetGroupArn:
     Description: ARN of the Target Group
     Value: !Ref TargetGroup
     Export:
-      Name: !Sub '${AWS::StackName}-TargetGroup-ARN'
+      Name: !Sub "${AWS::StackName}-TargetGroup-ARN"
 
   ApplicationURL:
     Description: URL of the trading platform application
-    Value: !Sub 'https://${ApplicationLoadBalancer.DNSName}'
+    Value: !Sub "https://${ApplicationLoadBalancer.DNSName}"
     Export:
-      Name: !Sub '${AWS::StackName}-Application-URL'
+      Name: !Sub "${AWS::StackName}-Application-URL"
 
   LaunchTemplateId:
     Description: ID of the Launch Template
     Value: !Ref LaunchTemplate
     Export:
-      Name: !Sub '${AWS::StackName}-LaunchTemplate-ID'
+      Name: !Sub "${AWS::StackName}-LaunchTemplate-ID"
 
   InstanceRoleArn:
     Description: ARN of the EC2 instance IAM role
     Value: !GetAtt EC2InstanceRole.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-InstanceRole-ARN'
+      Name: !Sub "${AWS::StackName}-InstanceRole-ARN"

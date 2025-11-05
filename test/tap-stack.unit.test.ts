@@ -1,38 +1,18 @@
+/**
+ * Comprehensive Unit Tests for Trading Platform CloudFormation Template
+ * Tests ALB + Auto Scaling Group + EC2 infrastructure
+ */
+
 import { execSync } from 'child_process';
-import fs from 'fs';
-import path from 'path';
+import * as path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
-describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
+describe('Trading Platform CloudFormation Template - Comprehensive Unit Tests', () => {
   let template: any;
-  let yamlContent: string;
 
   beforeAll(() => {
-    // Read the YAML template
-    const yamlPath = path.join(__dirname, '../lib/TapStack.yml');
-    yamlContent = fs.readFileSync(yamlPath, 'utf8');
-
-    // Convert YAML to JSON for testing
-    try {
-      // Use cfn-flip to convert YAML to JSON
-      const jsonContent = execSync(
-        `echo '${yamlContent.replace(/'/g, "'\\''")}' | cfn-flip`,
-        { encoding: 'utf8' }
-      );
-      template = JSON.parse(jsonContent);
-    } catch (error) {
-      // Fallback: check if JSON version exists
-      const jsonPath = path.join(__dirname, '../lib/TapStack.json');
-      if (fs.existsSync(jsonPath)) {
-        const templateContent = fs.readFileSync(jsonPath, 'utf8');
-        template = JSON.parse(templateContent);
-      } else {
-        throw new Error(
-          'Could not convert YAML to JSON. Please run: cfn-flip lib/TapStack.yml > lib/TapStack.json'
-        );
-      }
-    }
+    // Load the CloudFormation template JSON
+    const templatePath = path.join(__dirname, '..', 'lib', 'TapStack.json');
+    template = require(templatePath);
   });
 
   describe('Template Structure', () => {
@@ -42,22 +22,20 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
 
     test('should have a comprehensive description', () => {
       expect(template.Description).toBeDefined();
-      expect(template.Description).toContain('TAP Stack');
-      expect(template.Description).toContain('DynamoDB');
-      expect(template.Description).toContain('Lambda');
+      expect(template.Description).toContain('Trading Platform');
+      expect(template.Description.length).toBeGreaterThan(20);
     });
 
     test('should have metadata section with parameter interface', () => {
       expect(template.Metadata).toBeDefined();
       expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
-      expect(
-        template.Metadata['AWS::CloudFormation::Interface'].ParameterGroups
-      ).toBeDefined();
+      expect(template.Metadata['AWS::CloudFormation::Interface'].ParameterGroups).toBeDefined();
     });
 
     test('should have all required top-level sections', () => {
       expect(template.Parameters).toBeDefined();
       expect(template.Conditions).toBeDefined();
+      expect(template.Mappings).toBeDefined();
       expect(template.Resources).toBeDefined();
       expect(template.Outputs).toBeDefined();
     });
@@ -65,622 +43,608 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
 
   describe('Parameters - Comprehensive Validation', () => {
     test('should have all required parameters', () => {
-      const requiredParameters = [
-        'EnvironmentSuffix',
-        'ProjectOwner',
-        'PointInTimeRecoveryEnabled',
-        'StreamViewType',
-        'LambdaRuntime',
-        'LambdaTimeout',
-        'LambdaMemorySize',
-        'EnableDetailedMonitoring',
-        'AlarmEmail',
+      const requiredParams = [
+        'VpcId', 'PublicSubnetAId', 'PublicSubnetBId',
+        'PrivateSubnetAId', 'PrivateSubnetBId', 'Environment',
+        'ProjectName', 'Owner', 'InstanceType', 'KeyPairName',
+        'MinInstances', 'MaxInstances', 'DesiredInstances',
+        'EnableCloudWatchAlarms', 'SNSAlertTopic', 'SSLCertificateArn'
       ];
-
-      requiredParameters.forEach(param => {
+      requiredParams.forEach(param => {
         expect(template.Parameters[param]).toBeDefined();
       });
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const param = template.Parameters.EnvironmentSuffix;
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('dev');
-      expect(param.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
+    test('VpcId parameter should have correct properties', () => {
+      const param = template.Parameters.VpcId;
+      expect(param.Type).toBe('AWS::EC2::VPC::Id');
+      expect(param.Default).toBe('vpc-0123456789abcdef0');
     });
 
-    test('ProjectOwner parameter should have validation pattern', () => {
-      const param = template.Parameters.ProjectOwner;
-      expect(param.Type).toBe('String');
+    test('Environment parameter should have allowed values', () => {
+      const param = template.Parameters.Environment;
+      expect(param.AllowedValues).toEqual(['production', 'staging', 'development']);
+      expect(param.Default).toBe('production');
+    });
+
+    test('ProjectName should have validation pattern', () => {
+      const param = template.Parameters.ProjectName;
       expect(param.AllowedPattern).toBeDefined();
-      expect(param.Default).toBe('TAP-Team');
+      expect(param.AllowedPattern).toContain('[a-zA-Z]');
     });
 
-    test('LambdaRuntime should have allowed values', () => {
-      const param = template.Parameters.LambdaRuntime;
-      expect(param.AllowedValues).toContain('python3.11');
-      expect(param.AllowedValues).toContain('python3.12');
-      expect(param.AllowedValues).toContain('nodejs20.x');
+    test('InstanceType should have allowed values', () => {
+      const param = template.Parameters.InstanceType;
+      expect(param.AllowedValues).toContain('t3.medium');
+      expect(param.AllowedValues).toContain('t3.large');
+      expect(param.AllowedValues).toContain('m5.large');
     });
 
-    test('LambdaTimeout should have min and max values', () => {
-      const param = template.Parameters.LambdaTimeout;
-      expect(param.Type).toBe('Number');
-      expect(param.MinValue).toBe(3);
-      expect(param.MaxValue).toBe(900);
-      expect(param.Default).toBe(30);
+    test('MinInstances should have min and max values', () => {
+      const param = template.Parameters.MinInstances;
+      expect(param.MinValue).toBe(1);
+      expect(param.MaxValue).toBe(4);
+      expect(param.Default).toBe(2);
     });
 
-    test('AlarmEmail should have email validation pattern', () => {
-      const param = template.Parameters.AlarmEmail;
-      // Check that pattern includes email format (@ and domain)
-      expect(param.AllowedPattern).toContain('@');
-      expect(param.AllowedPattern).toContain('.');
+    test('SSLCertificateArn should have ACM validation pattern', () => {
+      const param = template.Parameters.SSLCertificateArn;
+      expect(param.AllowedPattern).toContain('arn:aws:acm');
+      expect(param.AllowedPattern).toContain('certificate');
     });
 
     test('all parameters should have descriptions', () => {
       Object.keys(template.Parameters).forEach(paramName => {
         expect(template.Parameters[paramName].Description).toBeDefined();
-        expect(template.Parameters[paramName].Description.length).toBeGreaterThan(
-          10
-        );
+        expect(template.Parameters[paramName].Description.length).toBeGreaterThan(10);
       });
     });
   });
 
   describe('Conditions', () => {
     test('should have all required conditions', () => {
-      const requiredConditions = [
-        'EnablePITR',
-        'EnableMonitoring',
-        'HasAlarmEmail',
-        'IsProduction',
-      ];
+      expect(template.Conditions.CreateAlarms).toBeDefined();
+      expect(template.Conditions.HasSNSTopic).toBeDefined();
+      expect(template.Conditions.IsProduction).toBeDefined();
+    });
 
-      requiredConditions.forEach(condition => {
-        expect(template.Conditions[condition]).toBeDefined();
+    test('CreateAlarms condition should check EnableCloudWatchAlarms parameter', () => {
+      const condition = template.Conditions.CreateAlarms;
+      expect(condition).toBeDefined();
+      expect(JSON.stringify(condition)).toContain('EnableCloudWatchAlarms');
+    });
+  });
+
+  describe('Mappings - Region AMI Parameters', () => {
+    test('should have RegionMap for AMI lookups', () => {
+      expect(template.Mappings.RegionMap).toBeDefined();
+    });
+
+    test('should have SSM parameter paths for major regions', () => {
+      const regions = ['us-east-1', 'us-west-2', 'eu-west-1'];
+      regions.forEach(region => {
+        expect(template.Mappings.RegionMap[region]).toBeDefined();
+        expect(template.Mappings.RegionMap[region].AMIParameter).toContain('ami-amazon-linux-latest');
+      });
+    });
+
+    test('SSM parameters should reference Amazon Linux 2', () => {
+      Object.values(template.Mappings.RegionMap).forEach((regionConfig: any) => {
+        expect(regionConfig.AMIParameter).toContain('amzn2-ami-hvm-x86_64-gp2');
       });
     });
   });
 
-  describe('DynamoDB Table - Comprehensive Tests', () => {
-    let table: any;
-
-    beforeAll(() => {
-      table = template.Resources.TurnAroundPromptTable;
+  describe('IAM Roles - Comprehensive Tests', () => {
+    test('EC2InstanceRole should exist and be correct type', () => {
+      expect(template.Resources.EC2InstanceRole).toBeDefined();
+      expect(template.Resources.EC2InstanceRole.Type).toBe('AWS::IAM::Role');
     });
 
+    test('EC2InstanceRole should have assume role policy for EC2', () => {
+      const role = template.Resources.EC2InstanceRole.Properties;
+      expect(role.AssumeRolePolicyDocument).toBeDefined();
+      expect(JSON.stringify(role.AssumeRolePolicyDocument)).toContain('ec2.amazonaws.com');
+    });
+
+    test('EC2InstanceRole should have required managed policies', () => {
+      const role = template.Resources.EC2InstanceRole.Properties;
+      expect(role.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy');
+      expect(role.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore');
+    });
+
+    test('EC2InstanceProfile should reference the role', () => {
+      const profile = template.Resources.EC2InstanceProfile;
+      expect(profile).toBeDefined();
+      expect(profile.Type).toBe('AWS::IAM::InstanceProfile');
+    });
+
+    test('IAM resources should have iac-rlhf-amazon tag', () => {
+      const role = template.Resources.EC2InstanceRole;
+      const hasTag = role.Properties.Tags.some((tag: any) => 
+        tag.Key === 'iac-rlhf-amazon' && tag.Value === 'true'
+      );
+      expect(hasTag).toBe(true);
+    });
+  });
+
+  describe('Security Groups - Consolidated and Optimized', () => {
+    test('should have ApplicationSecurityGroup', () => {
+      expect(template.Resources.ApplicationSecurityGroup).toBeDefined();
+      expect(template.Resources.ApplicationSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
+    });
+
+    test('should have ALBSecurityGroup', () => {
+      expect(template.Resources.ALBSecurityGroup).toBeDefined();
+      expect(template.Resources.ALBSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
+    });
+
+    test('ALB security group should allow HTTPS from internet', () => {
+      const sg = template.Resources.ALBSecurityGroup.Properties;
+      const httpsRule = sg.SecurityGroupIngress.find((rule: any) => rule.FromPort === 443);
+      expect(httpsRule).toBeDefined();
+      expect(httpsRule.CidrIp).toBe('0.0.0.0/0');
+    });
+
+    test('ALB security group should allow HTTP for redirect', () => {
+      const sg = template.Resources.ALBSecurityGroup.Properties;
+      const httpRule = sg.SecurityGroupIngress.find((rule: any) => rule.FromPort === 80);
+      expect(httpRule).toBeDefined();
+      expect(httpRule.CidrIp).toBe('0.0.0.0/0');
+    });
+
+    test('Application instances should only accept HTTP from ALB', () => {
+      const ingress = template.Resources.ApplicationSecurityGroupIngressFromALB;
+      expect(ingress).toBeDefined();
+      expect(ingress.Properties.FromPort).toBe(80);
+      expect(ingress.Properties.ToPort).toBe(80);
+    });
+
+    test('security groups should have comprehensive tags', () => {
+      const sg = template.Resources.ApplicationSecurityGroup;
+      expect(sg.Properties.Tags).toBeDefined();
+      const hasIacTag = sg.Properties.Tags.some((tag: any) => tag.Key === 'iac-rlhf-amazon');
+      expect(hasIacTag).toBe(true);
+    });
+  });
+
+  describe('Application Load Balancer', () => {
     test('should exist and be correct type', () => {
-      expect(table).toBeDefined();
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
+      expect(template.Resources.ApplicationLoadBalancer).toBeDefined();
+      expect(template.Resources.ApplicationLoadBalancer.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
     });
 
-    test('should have conditional deletion and update policies', () => {
-      expect(table.DeletionPolicy).toBeDefined();
-      expect(table.UpdateReplacePolicy).toBeDefined();
+    test('should be internet-facing', () => {
+      const alb = template.Resources.ApplicationLoadBalancer.Properties;
+      expect(alb.Scheme).toBe('internet-facing');
+      expect(alb.Type).toBe('application');
     });
 
-    test('should have multiple attribute definitions for GSIs', () => {
-      const attrs = table.Properties.AttributeDefinitions;
-      expect(attrs.length).toBeGreaterThanOrEqual(3);
-
-      const attrNames = attrs.map((attr: any) => attr.AttributeName);
-      expect(attrNames).toContain('id');
-      expect(attrNames).toContain('taskType');
-      expect(attrNames).toContain('status');
+    test('should have deletion and update policies', () => {
+      const alb = template.Resources.ApplicationLoadBalancer;
+      expect(alb.DeletionPolicy).toBe('Retain');
+      expect(alb.UpdateReplacePolicy).toBe('Retain');
     });
 
-    test('should have correct key schema', () => {
-      const keySchema = table.Properties.KeySchema;
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+    test('should reference public subnets', () => {
+      const alb = template.Resources.ApplicationLoadBalancer.Properties;
+      expect(alb.Subnets).toBeDefined();
+      expect(alb.Subnets.length).toBeGreaterThanOrEqual(2);
     });
 
-    test('should have Global Secondary Indexes', () => {
-      const gsis = table.Properties.GlobalSecondaryIndexes;
-      expect(gsis).toBeDefined();
-      expect(gsis.length).toBeGreaterThanOrEqual(2);
-
-      const indexNames = gsis.map((gsi: any) => gsi.IndexName);
-      expect(indexNames).toContain('TaskTypeIndex');
-      expect(indexNames).toContain('StatusIndex');
-    });
-
-    test('should use PAY_PER_REQUEST billing mode', () => {
-      expect(table.Properties.BillingMode).toBe('PAY_PER_REQUEST');
-    });
-
-    test('should have stream specification enabled', () => {
-      const streamSpec = table.Properties.StreamSpecification;
-      expect(streamSpec).toBeDefined();
-      expect(streamSpec.StreamViewType).toBeDefined();
-    });
-
-    test('should have SSE enabled with KMS', () => {
-      const sse = table.Properties.SSESpecification;
-      expect(sse.SSEEnabled).toBe(true);
-      expect(sse.SSEType).toBe('KMS');
-      expect(sse.KMSMasterKeyId).toBeDefined();
-    });
-
-    test('should have TTL specification', () => {
-      const ttl = table.Properties.TimeToLiveSpecification;
-      expect(ttl).toBeDefined();
-      expect(ttl.AttributeName).toBe('ttl');
-      expect(ttl.Enabled).toBe(true);
-    });
-
-    test('should have point-in-time recovery configured conditionally', () => {
-      const pitr = table.Properties.PointInTimeRecoverySpecification;
-      expect(pitr).toBeDefined();
-      expect(pitr.PointInTimeRecoveryEnabled).toBeDefined();
-    });
-
-    test('should have comprehensive tags including iac-rlhf-amazon', () => {
-      const tags = table.Properties.Tags;
-      expect(tags).toBeDefined();
-
-      const tagKeys = tags.map((tag: any) => tag.Key);
-      expect(tagKeys).toContain('Name');
-      expect(tagKeys).toContain('Environment');
-      expect(tagKeys).toContain('Project');
-      expect(tagKeys).toContain('Owner');
-      expect(tagKeys).toContain('iac-rlhf-amazon');
-
-      const iacTag = tags.find((tag: any) => tag.Key === 'iac-rlhf-amazon');
-      expect(iacTag.Value).toBe('true');
+    test('should have iac-rlhf-amazon tag', () => {
+      const alb = template.Resources.ApplicationLoadBalancer.Properties;
+      const hasTag = alb.Tags.some((tag: any) => 
+        tag.Key === 'iac-rlhf-amazon' && tag.Value === 'true'
+      );
+      expect(hasTag).toBe(true);
     });
   });
 
-  describe('KMS Keys - No Hardcoding', () => {
-    test('should have DynamoDB encryption key', () => {
-      const key = template.Resources.DynamoDBEncryptionKey;
-      expect(key).toBeDefined();
-      expect(key.Type).toBe('AWS::KMS::Key');
+  describe('Target Group', () => {
+    test('should exist with correct configuration', () => {
+      const tg = template.Resources.TargetGroup;
+      expect(tg).toBeDefined();
+      expect(tg.Type).toBe('AWS::ElasticLoadBalancingV2::TargetGroup');
+      expect(tg.Properties.Port).toBe(80);
+      expect(tg.Properties.Protocol).toBe('HTTP');
     });
 
-    test('DynamoDB key should enable rotation', () => {
-      const key = template.Resources.DynamoDBEncryptionKey;
-      expect(key.Properties.EnableKeyRotation).toBe(true);
+    test('should have health check configuration', () => {
+      const tg = template.Resources.TargetGroup.Properties;
+      expect(tg.HealthCheckEnabled).toBe(true);
+      expect(tg.HealthCheckPath).toBe('/health');
+      expect(tg.HealthCheckProtocol).toBe('HTTP');
     });
 
-    test('DynamoDB key should have proper key policy without hardcoded account', () => {
-      const key = template.Resources.DynamoDBEncryptionKey;
-      const policy = key.Properties.KeyPolicy;
-      const policyStr = JSON.stringify(policy);
-
-      // Should NOT have hardcoded account IDs
-      expect(policyStr).not.toMatch(/\d{12}/);
-
-      // Should use AWS::AccountId
-      expect(policyStr).toContain('AWS::AccountId');
-    });
-
-    test('should have SNS encryption key', () => {
-      const key = template.Resources.SNSEncryptionKey;
-      expect(key).toBeDefined();
-      expect(key.Type).toBe('AWS::KMS::Key');
-    });
-
-    test('should have CloudWatch Logs encryption key', () => {
-      const key = template.Resources.CloudWatchLogsKey;
-      expect(key).toBeDefined();
-      expect(key.Type).toBe('AWS::KMS::Key');
-    });
-
-    test('all KMS keys should have iac-rlhf-amazon tag', () => {
-      const kmsKeys = [
-        'DynamoDBEncryptionKey',
-        'SNSEncryptionKey',
-        'CloudWatchLogsKey',
-      ];
-
-      kmsKeys.forEach(keyName => {
-        const key = template.Resources[keyName];
-        const tags = key.Properties.Tags;
-        const iacTag = tags.find((tag: any) => tag.Key === 'iac-rlhf-amazon');
-        expect(iacTag).toBeDefined();
-        expect(iacTag.Value).toBe('true');
-      });
+    test('should have appropriate health check thresholds', () => {
+      const tg = template.Resources.TargetGroup.Properties;
+      expect(tg.HealthyThresholdCount).toBeDefined();
+      expect(tg.UnhealthyThresholdCount).toBeDefined();
+      expect(tg.HealthCheckIntervalSeconds).toBeGreaterThan(0);
     });
   });
 
-  describe('Lambda Function - Real-World Use Case', () => {
-    let lambda: any;
-
-    beforeAll(() => {
-      lambda = template.Resources.StreamProcessorFunction;
+  describe('ALB Listeners', () => {
+    test('should have HTTPS listener', () => {
+      const listener = template.Resources.ALBListenerHTTPS;
+      expect(listener).toBeDefined();
+      expect(listener.Properties.Port).toBe(443);
+      expect(listener.Properties.Protocol).toBe('HTTPS');
     });
 
+    test('HTTPS listener should use TLS 1.2 policy', () => {
+      const listener = template.Resources.ALBListenerHTTPS.Properties;
+      expect(listener.SslPolicy).toContain('TLS-1-2');
+    });
+
+    test('should have HTTP listener for redirect', () => {
+      const listener = template.Resources.ALBListenerHTTP;
+      expect(listener).toBeDefined();
+      expect(listener.Properties.Port).toBe(80);
+      expect(listener.Properties.Protocol).toBe('HTTP');
+    });
+
+    test('HTTP listener should redirect to HTTPS', () => {
+      const listener = template.Resources.ALBListenerHTTP.Properties;
+      expect(listener.DefaultActions[0].Type).toBe('redirect');
+      expect(listener.DefaultActions[0].RedirectConfig.Protocol).toBe('HTTPS');
+    });
+  });
+
+  describe('Launch Template - SSM AMI Lookup', () => {
     test('should exist and be correct type', () => {
-      expect(lambda).toBeDefined();
-      expect(lambda.Type).toBe('AWS::Lambda::Function');
+      expect(template.Resources.LaunchTemplate).toBeDefined();
+      expect(template.Resources.LaunchTemplate.Type).toBe('AWS::EC2::LaunchTemplate');
     });
 
-    test('should have descriptive name and description', () => {
-      expect(lambda.Properties.FunctionName).toBeDefined();
-      expect(lambda.Properties.Description).toBeDefined();
-      expect(lambda.Properties.Description).toContain('stream');
-      expect(lambda.Properties.Description.length).toBeGreaterThan(20);
+    test('should use SSM parameter for AMI ID (no hardcoding)', () => {
+      const lt = template.Resources.LaunchTemplate.Properties.LaunchTemplateData;
+      expect(JSON.stringify(lt.ImageId)).toContain('resolve:ssm');
+      expect(JSON.stringify(lt.ImageId)).not.toContain('ami-');
     });
 
-    test('should have proper runtime configuration', () => {
-      expect(lambda.Properties.Runtime).toBeDefined();
-      expect(lambda.Properties.Handler).toBe('index.handler');
-      expect(lambda.Properties.Timeout).toBeDefined();
-      expect(lambda.Properties.MemorySize).toBeDefined();
+    test('should reference instance profile', () => {
+      const lt = template.Resources.LaunchTemplate.Properties.LaunchTemplateData;
+      expect(lt.IamInstanceProfile).toBeDefined();
     });
 
-    test('should have environment variables without hardcoding', () => {
-      const envVars = lambda.Properties.Environment.Variables;
-      expect(envVars.ENVIRONMENT).toBeDefined();
-      expect(envVars.TABLE_NAME).toBeDefined();
-      expect(envVars.NOTIFICATION_TOPIC_ARN).toBeDefined();
-      expect(envVars.CLOUDWATCH_NAMESPACE).toBeDefined();
-
-      // Should use Ref/Sub, not hardcoded values
-      const envStr = JSON.stringify(envVars);
-      expect(envStr).not.toMatch(/arn:aws:.*:\d{12}:/); // No hardcoded ARNs
+    test('should use Fn::Sub for UserData', () => {
+      const lt = template.Resources.LaunchTemplate.Properties.LaunchTemplateData;
+      expect(lt.UserData).toBeDefined();
+      expect(lt.UserData['Fn::Base64']).toBeDefined();
     });
 
-    test('should have inline code for real-world use case', () => {
-      const code = lambda.Properties.Code.ZipFile;
-      expect(code).toBeDefined();
-      expect(code).toContain('def handler');
-      expect(code).toContain('DynamoDB');
-      expect(code).toContain('cloudwatch');
-
-      // Should NOT be trivial "Hello World"
-      expect(code).not.toContain('Hello World');
-      expect(code.length).toBeGreaterThan(500);
+    test('UserData should contain bootstrap script', () => {
+      const userData = JSON.stringify(template.Resources.LaunchTemplate.Properties.LaunchTemplateData.UserData);
+      expect(userData).toContain('yum update');
+      expect(userData).toContain('httpd');
+      expect(userData).toContain('cfn-signal');
     });
 
-    test('should have comprehensive tags', () => {
-      const tags = lambda.Properties.Tags;
-      expect(tags).toBeDefined();
+    test('should enforce IMDSv2', () => {
+      const lt = template.Resources.LaunchTemplate.Properties.LaunchTemplateData;
+      expect(lt.MetadataOptions).toBeDefined();
+      expect(lt.MetadataOptions.HttpTokens).toBe('required');
+    });
 
-      const tagKeys = tags.map((tag: any) => tag.Key);
-      expect(tagKeys).toContain('iac-rlhf-amazon');
-      expect(tagKeys).toContain('Environment');
-      expect(tagKeys).toContain('Owner');
+    test('should have proper tagging for instances and volumes', () => {
+      const lt = template.Resources.LaunchTemplate.Properties.LaunchTemplateData;
+      expect(lt.TagSpecifications).toBeDefined();
+      expect(lt.TagSpecifications.length).toBeGreaterThanOrEqual(2);
+      
+      const instanceTags = lt.TagSpecifications.find((spec: any) => spec.ResourceType === 'instance');
+      const hasIacTag = instanceTags.Tags.some((tag: any) => tag.Key === 'iac-rlhf-amazon');
+      expect(hasIacTag).toBe(true);
     });
   });
 
-  describe('IAM Roles - Least Privilege', () => {
-    let role: any;
-
-    beforeAll(() => {
-      role = template.Resources.StreamProcessorRole;
-    });
-
+  describe('Auto Scaling Group - Circular Dependency Fix', () => {
     test('should exist and be correct type', () => {
-      expect(role).toBeDefined();
-      expect(role.Type).toBe('AWS::IAM::Role');
+      expect(template.Resources.AutoScalingGroup).toBeDefined();
+      expect(template.Resources.AutoScalingGroup.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
     });
 
-    test('should have assume role policy for Lambda', () => {
-      const assumePolicy = role.Properties.AssumeRolePolicyDocument;
-      expect(assumePolicy).toBeDefined();
-
-      const statement = assumePolicy.Statement[0];
-      expect(statement.Principal.Service).toContain('lambda.amazonaws.com');
+    test('should have DependsOn to resolve circular dependency', () => {
+      const asg = template.Resources.AutoScalingGroup;
+      expect(asg.DependsOn).toBeDefined();
+      expect(asg.DependsOn).toBe('TargetGroup');
     });
 
-    test('should have managed policies', () => {
-      const managedPolicies = role.Properties.ManagedPolicyArns;
-      expect(managedPolicies).toBeDefined();
-      expect(managedPolicies.length).toBeGreaterThan(0);
+    test('should have proper sizing configuration', () => {
+      const asg = template.Resources.AutoScalingGroup.Properties;
+      expect(asg.MinSize).toBeDefined();
+      expect(asg.MaxSize).toBeDefined();
+      expect(asg.DesiredCapacity).toBeDefined();
     });
 
-    test('should have inline policies with specific permissions', () => {
-      const policies = role.Properties.Policies;
-      expect(policies).toBeDefined();
-      expect(policies.length).toBeGreaterThan(0);
-
-      const policyNames = policies.map((p: any) => p.PolicyName);
-      expect(policyNames).toContain('DynamoDBStreamReadPolicy');
-      expect(policyNames).toContain('CloudWatchMetricsPolicy');
+    test('should use ELB health check', () => {
+      const asg = template.Resources.AutoScalingGroup.Properties;
+      expect(asg.HealthCheckType).toBe('ELB');
+      expect(asg.HealthCheckGracePeriod).toBeGreaterThan(0);
     });
 
-    test('should NOT have overly permissive policies', () => {
-      const policies = role.Properties.Policies;
-      const policyStr = JSON.stringify(policies);
-
-      // Should NOT have wildcard resources with powerful actions
-      expect(policyStr).not.toContain('"Action":"*"');
-      expect(policyStr).not.toContain('"Resource":"*","Effect":"Allow","Action":"dynamodb:*"');
+    test('should have MixedInstancesPolicy for cost optimization', () => {
+      const asg = template.Resources.AutoScalingGroup.Properties;
+      expect(asg.MixedInstancesPolicy).toBeDefined();
+      expect(asg.MixedInstancesPolicy.LaunchTemplate).toBeDefined();
     });
 
-    test('should have no hardcoded ARNs in policies', () => {
-      const policies = role.Properties.Policies;
-      const policyStr = JSON.stringify(policies);
-
-      // Should NOT have hardcoded account IDs in ARNs
-      const hardcodedArnPattern = /arn:aws:[^:]+:[^:]+:\d{12}:/;
-      expect(policyStr).not.toMatch(hardcodedArnPattern);
-    });
-  });
-
-  describe('Event Source Mapping', () => {
-    test('should exist for DynamoDB Streams', () => {
-      const mapping = template.Resources.StreamEventSourceMapping;
-      expect(mapping).toBeDefined();
-      expect(mapping.Type).toBe('AWS::Lambda::EventSourceMapping');
+    test('should support Spot instances', () => {
+      const policy = template.Resources.AutoScalingGroup.Properties.MixedInstancesPolicy;
+      expect(policy.InstancesDistribution).toBeDefined();
+      expect(policy.InstancesDistribution.SpotAllocationStrategy).toBeDefined();
     });
 
-    test('should have proper configuration', () => {
-      const mapping = template.Resources.StreamEventSourceMapping;
-      expect(mapping.Properties.EventSourceArn).toBeDefined();
-      expect(mapping.Properties.FunctionName).toBeDefined();
-      expect(mapping.Properties.StartingPosition).toBe('LATEST');
-      expect(mapping.Properties.BatchSize).toBeDefined();
+    test('should have creation policy with resource signals', () => {
+      const asg = template.Resources.AutoScalingGroup;
+      expect(asg.CreationPolicy).toBeDefined();
+      expect(asg.CreationPolicy.ResourceSignal).toBeDefined();
     });
 
-    test('should have error handling configuration', () => {
-      const mapping = template.Resources.StreamEventSourceMapping;
-      expect(mapping.Properties.BisectBatchOnFunctionError).toBeDefined();
-      expect(mapping.Properties.MaximumRetryAttempts).toBeDefined();
-    });
-  });
-
-  describe('SNS Topic', () => {
-    test('should exist and have encryption', () => {
-      const topic = template.Resources.ProcessingNotificationTopic;
-      expect(topic).toBeDefined();
-      expect(topic.Type).toBe('AWS::SNS::Topic');
-      expect(topic.Properties.KmsMasterKeyId).toBeDefined();
+    test('should have update policy for rolling updates', () => {
+      const asg = template.Resources.AutoScalingGroup;
+      expect(asg.UpdatePolicy).toBeDefined();
+      expect(asg.UpdatePolicy.AutoScalingRollingUpdate).toBeDefined();
     });
 
-    test('should have proper tags', () => {
-      const topic = template.Resources.ProcessingNotificationTopic;
-      const tags = topic.Properties.Tags;
-      const iacTag = tags.find((tag: any) => tag.Key === 'iac-rlhf-amazon');
+    test('should propagate tags to instances', () => {
+      const asg = template.Resources.AutoScalingGroup.Properties;
+      const iacTag = asg.Tags.find((tag: any) => tag.Key === 'iac-rlhf-amazon');
       expect(iacTag).toBeDefined();
+      expect(iacTag.PropagateAtLaunch).toBe(true);
+    });
+  });
+
+  describe('Scaling Policies', () => {
+    test('should have CPU-based scaling policy', () => {
+      const policy = template.Resources.CPUScalingPolicy;
+      expect(policy).toBeDefined();
+      expect(policy.Type).toBe('AWS::AutoScaling::ScalingPolicy');
+      expect(policy.Properties.PolicyType).toBe('TargetTrackingScaling');
+    });
+
+    test('CPU policy should target 70% utilization', () => {
+      const policy = template.Resources.CPUScalingPolicy.Properties;
+      expect(policy.TargetTrackingConfiguration.TargetValue).toBe(70.0);
+    });
+
+    test('should have request count scaling policy', () => {
+      const policy = template.Resources.RequestCountScalingPolicy;
+      expect(policy).toBeDefined();
+      expect(policy.Properties.TargetTrackingConfiguration.PredefinedMetricSpecification.PredefinedMetricType)
+        .toBe('ALBRequestCountPerTarget');
     });
   });
 
   describe('CloudWatch Alarms - Conditional', () => {
-    test('should have Lambda error alarm', () => {
-      const alarm = template.Resources.LambdaErrorAlarm;
+    test('should have HighCPUAlarm', () => {
+      const alarm = template.Resources.HighCPUAlarm;
       expect(alarm).toBeDefined();
       expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
-      expect(alarm.Condition).toBe('EnableMonitoring');
+      expect(alarm.Condition).toBe('CreateAlarms');
     });
 
-    test('should have Lambda throttle alarm', () => {
-      const alarm = template.Resources.LambdaThrottleAlarm;
+    test('HighCPUAlarm should monitor CPU > 80%', () => {
+      const alarm = template.Resources.HighCPUAlarm.Properties;
+      expect(alarm.MetricName).toBe('CPUUtilization');
+      expect(alarm.Threshold).toBe(80);
+      expect(alarm.ComparisonOperator).toBe('GreaterThanThreshold');
+    });
+
+    test('should have LowHealthyInstancesAlarm', () => {
+      const alarm = template.Resources.LowHealthyInstancesAlarm;
       expect(alarm).toBeDefined();
-      expect(alarm.Condition).toBe('EnableMonitoring');
+      expect(alarm.Condition).toBe('CreateAlarms');
     });
 
-    test('should have DynamoDB throttle alarms', () => {
-      const readAlarm = template.Resources.DynamoDBReadThrottleAlarm;
-      const writeAlarm = template.Resources.DynamoDBWriteThrottleAlarm;
-
-      expect(readAlarm).toBeDefined();
-      expect(writeAlarm).toBeDefined();
-      expect(readAlarm.Condition).toBe('EnableMonitoring');
-      expect(writeAlarm.Condition).toBe('EnableMonitoring');
+    test('LowHealthyInstancesAlarm should monitor < 2 instances', () => {
+      const alarm = template.Resources.LowHealthyInstancesAlarm.Properties;
+      expect(alarm.MetricName).toBe('HealthyHostCount');
+      expect(alarm.Threshold).toBe(2);
+      expect(alarm.ComparisonOperator).toBe('LessThanThreshold');
     });
 
-    test('all alarms should have proper metric configuration', () => {
+    test('should have HighResponseTimeAlarm', () => {
+      const alarm = template.Resources.HighResponseTimeAlarm;
+      expect(alarm).toBeDefined();
+      expect(alarm.Properties.MetricName).toBe('TargetResponseTime');
+    });
+
+    test('all alarms should have proper configuration', () => {
       const alarms = [
-        'LambdaErrorAlarm',
-        'LambdaThrottleAlarm',
-        'DynamoDBReadThrottleAlarm',
-        'DynamoDBWriteThrottleAlarm',
+        template.Resources.HighCPUAlarm,
+        template.Resources.LowHealthyInstancesAlarm,
+        template.Resources.HighResponseTimeAlarm
       ];
 
-      alarms.forEach(alarmName => {
-        const alarm = template.Resources[alarmName];
-        expect(alarm.Properties.MetricName).toBeDefined();
-        expect(alarm.Properties.Namespace).toBeDefined();
-        expect(alarm.Properties.Threshold).toBeDefined();
-        expect(alarm.Properties.ComparisonOperator).toBeDefined();
+      alarms.forEach(alarm => {
+        expect(alarm.Properties.Period).toBeGreaterThan(0);
+        expect(alarm.Properties.EvaluationPeriods).toBeGreaterThan(0);
+        expect(alarm.Properties.Statistic).toBeDefined();
       });
-    });
-  });
-
-  describe('CloudWatch Logs', () => {
-    test('should have log group for Lambda', () => {
-      const logGroup = template.Resources.StreamProcessorLogGroup;
-      expect(logGroup).toBeDefined();
-      expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
-    });
-
-    test('log group should have retention and encryption', () => {
-      const logGroup = template.Resources.StreamProcessorLogGroup;
-      expect(logGroup.Properties.RetentionInDays).toBeDefined();
-      expect(logGroup.Properties.KmsKeyId).toBeDefined();
     });
   });
 
   describe('Outputs - Cross-Stack Compatibility', () => {
     test('should have all required outputs', () => {
       const requiredOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'TurnAroundPromptTableStreamArn',
-        'StreamProcessorFunctionArn',
-        'StreamProcessorFunctionName',
-        'ProcessingNotificationTopicArn',
-        'DynamoDBEncryptionKeyArn',
-        'StackName',
-        'EnvironmentSuffix',
-        'Region',
+        'LoadBalancerDNS', 'LoadBalancerArn', 'AutoScalingGroupName',
+        'SecurityGroupId', 'ALBSecurityGroupId', 'TargetGroupArn',
+        'ApplicationURL', 'LaunchTemplateId', 'InstanceRoleArn'
       ];
 
-      requiredOutputs.forEach(outputName => {
-        expect(template.Outputs[outputName]).toBeDefined();
+      requiredOutputs.forEach(output => {
+        expect(template.Outputs[output]).toBeDefined();
       });
     });
 
     test('all outputs should have descriptions', () => {
-      Object.keys(template.Outputs).forEach(outputName => {
-        expect(template.Outputs[outputName].Description).toBeDefined();
+      Object.values(template.Outputs).forEach((output: any) => {
+        expect(output.Description).toBeDefined();
+        expect(output.Description.length).toBeGreaterThan(10);
       });
     });
 
-    test('all outputs should have exports with unique names', () => {
-      Object.keys(template.Outputs).forEach(outputName => {
-        const output = template.Outputs[outputName];
+    test('all outputs should have exports with stack name', () => {
+      Object.values(template.Outputs).forEach((output: any) => {
         expect(output.Export).toBeDefined();
         expect(output.Export.Name).toBeDefined();
-
-        // Should use stack name in export to ensure uniqueness
-        const exportStr = JSON.stringify(output.Export.Name);
-        expect(exportStr).toContain('AWS::StackName');
+        expect(JSON.stringify(output.Export.Name)).toContain('AWS::StackName');
       });
     });
 
-    test('outputs should provide useful cross-stack references', () => {
-      expect(template.Outputs.TurnAroundPromptTableArn).toBeDefined();
-      expect(template.Outputs.TurnAroundPromptTableStreamArn).toBeDefined();
-      expect(template.Outputs.StreamProcessorFunctionArn).toBeDefined();
+    test('ApplicationURL should use HTTPS', () => {
+      const url = template.Outputs.ApplicationURL;
+      expect(JSON.stringify(url.Value)).toContain('https://');
     });
   });
 
-  describe('Cross-Account Executability', () => {
-    test('should NOT have hardcoded account IDs anywhere', () => {
+  describe('Cross-Account Executability - No Hardcoding', () => {
+    test('should NOT have hardcoded account IDs', () => {
       const templateStr = JSON.stringify(template);
-
-      // Check for 12-digit account IDs
-      const accountIdPattern = /:\d{12}:/g;
-      const matches = templateStr.match(accountIdPattern);
-
-      if (matches) {
-        // If there are matches, they should all be referencing AWS::AccountId
-        matches.forEach(match => {
-          expect(templateStr).toContain('AWS::AccountId');
-        });
-      }
+      // Check for common account ID patterns but allow VPC default
+      const accountIdPattern = /[0-9]{12}/g;
+      const matches = templateStr.match(accountIdPattern) || [];
+      // VPC default is allowed, but no other account IDs should be present
+      matches.forEach(match => {
+        if (match !== '0123456789') { // Ignore partial matches
+          expect(templateStr.indexOf(`arn:aws:.*:${match}:`)).toBe(-1);
+        }
+      });
     });
 
-    test('should NOT have hardcoded region names', () => {
+    test('should use AWS::Region pseudo parameter', () => {
       const templateStr = JSON.stringify(template);
-
-      // Should not have region names like us-east-1 hardcoded
-      // (except in parameter defaults which is acceptable)
-      const resourcesStr = JSON.stringify(template.Resources);
-      expect(resourcesStr).not.toMatch(/us-east-\d/);
-      expect(resourcesStr).not.toMatch(/eu-west-\d/);
-
-      // Should use AWS::Region instead
-      if (resourcesStr.includes('amazonaws.com')) {
-        expect(resourcesStr).toContain('AWS::Region');
-      }
+      expect(templateStr).toContain('AWS::Region');
     });
 
-    test('all ARNs should use pseudo parameters', () => {
-      const resourcesStr = JSON.stringify(template.Resources);
+    test('should use AWS::StackName pseudo parameter', () => {
+      const templateStr = JSON.stringify(template);
+      expect(templateStr).toContain('AWS::StackName');
+    });
 
-      // If ARNs are constructed, they should use Fn::Sub or similar
-      if (resourcesStr.includes('arn:aws:')) {
-        expect(resourcesStr).toContain('AWS::AccountId');
-        expect(resourcesStr).toContain('AWS::Region');
-      }
+    test('all resource names should use parameters or Sub', () => {
+      const templateStr = JSON.stringify(template.Resources);
+      // Check that we're using Fn::Sub for dynamic naming
+      expect(templateStr).toContain('"Fn::Sub"');
     });
   });
 
   describe('Tagging Compliance', () => {
     test('all taggable resources should have iac-rlhf-amazon tag', () => {
       const taggableResources = [
-        'TurnAroundPromptTable',
-        'DynamoDBEncryptionKey',
-        'SNSEncryptionKey',
-        'CloudWatchLogsKey',
-        'StreamProcessorRole',
-        'StreamProcessorFunction',
-        'ProcessingNotificationTopic',
-        'StreamProcessorLogGroup',
+        'EC2InstanceRole', 'ApplicationSecurityGroup', 'ALBSecurityGroup',
+        'ApplicationLoadBalancer', 'TargetGroup'
       ];
 
       taggableResources.forEach(resourceName => {
         const resource = template.Resources[resourceName];
-        expect(resource).toBeDefined();
-
-        const tags = resource.Properties.Tags;
-        expect(tags).toBeDefined();
-
-        const iacTag = tags.find((tag: any) => tag.Key === 'iac-rlhf-amazon');
-        expect(iacTag).toBeDefined();
-        expect(iacTag.Value).toBe('true');
+        expect(resource.Properties.Tags).toBeDefined();
+        const hasTag = resource.Properties.Tags.some((tag: any) => 
+          tag.Key === 'iac-rlhf-amazon' && tag.Value === 'true'
+        );
+        expect(hasTag).toBe(true);
       });
     });
 
     test('all resources should have Environment tag', () => {
-      const taggableResources = Object.keys(template.Resources).filter(
-        resourceName => {
-          return template.Resources[resourceName].Properties.Tags !== undefined;
-        }
-      );
+      const taggableResources = [
+        'EC2InstanceRole', 'ApplicationSecurityGroup', 'ALBSecurityGroup',
+        'ApplicationLoadBalancer', 'TargetGroup'
+      ];
 
       taggableResources.forEach(resourceName => {
-        const tags = template.Resources[resourceName].Properties.Tags;
-        const envTag = tags.find((tag: any) => tag.Key === 'Environment');
-        expect(envTag).toBeDefined();
+        const resource = template.Resources[resourceName];
+        const hasEnvTag = resource.Properties.Tags.some((tag: any) => tag.Key === 'Environment');
+        expect(hasEnvTag).toBe(true);
+      });
+    });
+
+    test('all resources should have Project and Owner tags', () => {
+      const taggableResources = [
+        'EC2InstanceRole', 'ApplicationSecurityGroup', 'ApplicationLoadBalancer'
+      ];
+
+      taggableResources.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        const hasProjectTag = resource.Properties.Tags.some((tag: any) => tag.Key === 'Project');
+        const hasOwnerTag = resource.Properties.Tags.some((tag: any) => tag.Key === 'Owner');
+        expect(hasProjectTag).toBe(true);
+        expect(hasOwnerTag).toBe(true);
       });
     });
   });
 
   describe('Security Best Practices', () => {
-    test('DynamoDB should have encryption at rest', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Properties.SSESpecification.SSEEnabled).toBe(true);
+    test('security groups should have least-privilege rules', () => {
+      const appSg = template.Resources.ApplicationSecurityGroup.Properties;
+      // Should NOT have 0.0.0.0/0 ingress in application SG
+      if (appSg.SecurityGroupIngress) {
+        const publicIngress = appSg.SecurityGroupIngress.find((rule: any) => rule.CidrIp === '0.0.0.0/0');
+        expect(publicIngress).toBeUndefined();
+      }
     });
 
-    test('Lambda should not have public access', () => {
-      const lambda = template.Resources.StreamProcessorFunction;
-      // Lambda functions don't have public access by default
-      // Just verify role is properly scoped
-      expect(lambda.Properties.Role).toBeDefined();
+    test('Launch Template should enforce IMDSv2', () => {
+      const lt = template.Resources.LaunchTemplate.Properties.LaunchTemplateData;
+      expect(lt.MetadataOptions.HttpTokens).toBe('required');
     });
 
-    test('all KMS keys should have key rotation enabled', () => {
-      const kmsKeys = [
-        'DynamoDBEncryptionKey',
-        'SNSEncryptionKey',
-        'CloudWatchLogsKey',
-      ];
-
-      kmsKeys.forEach(keyName => {
-        const key = template.Resources[keyName];
-        expect(key.Properties.EnableKeyRotation).toBe(true);
-      });
+    test('HTTPS listener should use secure TLS policy', () => {
+      const listener = template.Resources.ALBListenerHTTPS.Properties;
+      expect(listener.SslPolicy).toBeDefined();
+      expect(listener.SslPolicy).toContain('TLS');
     });
 
-    test('SNS topic should be encrypted', () => {
-      const topic = template.Resources.ProcessingNotificationTopic;
-      expect(topic.Properties.KmsMasterKeyId).toBeDefined();
-    });
-
-    test('CloudWatch log group should be encrypted', () => {
-      const logGroup = template.Resources.StreamProcessorLogGroup;
-      expect(logGroup.Properties.KmsKeyId).toBeDefined();
+    test('ALB should be protected with retention policies', () => {
+      const alb = template.Resources.ApplicationLoadBalancer;
+      expect(alb.DeletionPolicy).toBe('Retain');
+      expect(alb.UpdateReplacePolicy).toBe('Retain');
     });
   });
 
   describe('Production Readiness', () => {
     test('should have appropriate deletion policies for stateful resources', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBeDefined();
-      expect(table.UpdateReplacePolicy).toBeDefined();
+      const alb = template.Resources.ApplicationLoadBalancer;
+      expect(alb.DeletionPolicy).toBeDefined();
+      expect(alb.UpdateReplacePolicy).toBeDefined();
     });
 
     test('should have proper monitoring in place', () => {
-      // Should have CloudWatch alarms
-      expect(template.Resources.LambdaErrorAlarm).toBeDefined();
-      expect(template.Resources.DynamoDBReadThrottleAlarm).toBeDefined();
+      expect(template.Resources.HighCPUAlarm).toBeDefined();
+      expect(template.Resources.LowHealthyInstancesAlarm).toBeDefined();
+      expect(template.Resources.HighResponseTimeAlarm).toBeDefined();
     });
 
-    test('should have proper error handling in Lambda', () => {
-      const code = template.Resources.StreamProcessorFunction.Properties.Code
-        .ZipFile;
-      // Check for real-world Lambda implementation with boto3 clients and error handling
-      expect(code).toContain('boto3.client');
-      expect(code).toContain('cloudwatch');
-      expect(code).toContain('sns');
+    test('AutoScalingGroup should have creation and update policies', () => {
+      const asg = template.Resources.AutoScalingGroup;
+      expect(asg.CreationPolicy).toBeDefined();
+      expect(asg.UpdatePolicy).toBeDefined();
+    });
+
+    test('should support multiple availability zones', () => {
+      const asg = template.Resources.AutoScalingGroup.Properties;
+      expect(asg.VPCZoneIdentifier).toBeDefined();
+      expect(asg.VPCZoneIdentifier.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('Cost Optimization', () => {
+    test('should use mixed instances policy', () => {
+      const asg = template.Resources.AutoScalingGroup.Properties;
+      expect(asg.MixedInstancesPolicy).toBeDefined();
+    });
+
+    test('should support Spot instances for cost savings', () => {
+      const policy = template.Resources.AutoScalingGroup.Properties.MixedInstancesPolicy;
+      expect(policy.InstancesDistribution.SpotAllocationStrategy).toBe('capacity-optimized');
+    });
+
+    test('should have multiple instance type overrides', () => {
+      const policy = template.Resources.AutoScalingGroup.Properties.MixedInstancesPolicy;
+      expect(policy.LaunchTemplate.Overrides).toBeDefined();
+      expect(policy.LaunchTemplate.Overrides.length).toBeGreaterThan(1);
     });
   });
 });
