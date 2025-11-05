@@ -9,7 +9,7 @@ import pulumi
 from pulumi import ResourceOptions
 
 # Import the classes we're testing
-from payment_infrastructure import PaymentInfrastructure, PaymentInfrastructureArgs
+from lib.payment_infrastructure import PaymentInfrastructure, PaymentInfrastructureArgs
 
 
 class MockResource:
@@ -105,8 +105,8 @@ class TestPaymentInfrastructure(unittest.TestCase):
             dynamodb_billing_mode="PAY_PER_REQUEST"
         )
 
-    @patch('payment_infrastructure.aws')
-    @patch('payment_infrastructure.pulumi')
+    @patch('lib.payment_infrastructure.aws')
+    @patch('lib.payment_infrastructure.pulumi')
     def test_environment_suffix_setting(self, mock_pulumi, mock_aws):
         """Test that environment suffix is set correctly."""
         # Mock AWS resources
@@ -137,7 +137,7 @@ class TestPaymentInfrastructure(unittest.TestCase):
         # Verify environment suffix is set correctly
         self.assertEqual(infrastructure.environment_suffix, "dev")
 
-    @patch('payment_infrastructure.aws')
+    @patch('lib.payment_infrastructure.aws')
     def test_common_tags_configuration(self, mock_aws):
         """Test that common tags are configured correctly."""
         # Mock AWS resources
@@ -356,7 +356,7 @@ class TestPaymentInfrastructure(unittest.TestCase):
                 self.assertEqual(args.lambda_memory_size, expected_memory)
 
 
-    @patch('payment_infrastructure.aws')
+    @patch('lib.payment_infrastructure.aws')
     def test_create_vpc_method(self, mock_aws):
         """Test VPC creation method."""
         # Mock AWS resources
@@ -397,7 +397,7 @@ class TestPaymentInfrastructure(unittest.TestCase):
         self.assertEqual(len(infrastructure.public_subnets), 3)
         self.assertEqual(len(infrastructure.private_subnets), 3)
 
-    @patch('payment_infrastructure.aws')
+    @patch('lib.payment_infrastructure.aws')
     def test_create_rds_cluster_method(self, mock_aws):
         """Test RDS cluster creation method."""
         # Mock AWS resources with all necessary attributes
@@ -434,7 +434,7 @@ class TestPaymentInfrastructure(unittest.TestCase):
         self.assertEqual(infrastructure.rds_cluster, mock_cluster)
         self.assertEqual(len(infrastructure.rds_instances), 1)
 
-    @patch('payment_infrastructure.aws')
+    @patch('lib.payment_infrastructure.aws')
     def test_create_lambda_functions_method(self, mock_aws):
         """Test Lambda functions creation method."""
         # Mock AWS resources
@@ -472,7 +472,7 @@ class TestPaymentInfrastructure(unittest.TestCase):
         self.assertEqual(infrastructure.payment_processor_lambda, mock_function1)
         self.assertEqual(infrastructure.transaction_validator_lambda, mock_function2)
 
-    @patch('payment_infrastructure.aws')
+    @patch('lib.payment_infrastructure.aws')
     def test_create_dynamodb_tables_method(self, mock_aws):
         """Test DynamoDB tables creation method."""
         # Mock AWS resources
@@ -510,7 +510,7 @@ class TestPaymentInfrastructure(unittest.TestCase):
         self.assertEqual(infrastructure.transactions_table, mock_table1)
         self.assertEqual(infrastructure.audit_logs_table, mock_table2)
 
-    @patch('payment_infrastructure.aws')
+    @patch('lib.payment_infrastructure.aws')
     def test_create_s3_buckets_method(self, mock_aws):
         """Test S3 buckets creation method."""
         # Mock AWS resources
@@ -548,7 +548,7 @@ class TestPaymentInfrastructure(unittest.TestCase):
         self.assertEqual(infrastructure.audit_storage_bucket, mock_bucket1)
         self.assertEqual(infrastructure.transaction_data_bucket, mock_bucket2)
 
-    @patch('payment_infrastructure.aws')
+    @patch('lib.payment_infrastructure.aws')
     def test_production_environment_with_cloudwatch_alarms(self, mock_aws):
         """Test production environment with CloudWatch alarms enabled."""
         # Create production args with CloudWatch alarms

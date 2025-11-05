@@ -9,7 +9,7 @@ Multi-environment payment processing infrastructure entry point.
 This module initializes and deploys the payment processing stack for the specified environment.
 """
 import pulumi
-from payment_infrastructure import PaymentInfrastructure, PaymentInfrastructureArgs
+from lib.payment_infrastructure import PaymentInfrastructure, PaymentInfrastructureArgs
 
 # Get Pulumi configuration
 config = pulumi.Config()
@@ -56,7 +56,7 @@ pulumi.export("s3_bucket_names", {
 })
 ```
 
-## File: payment_infrastructure.py
+## File: lib/payment_infrastructure.py
 
 ```python
 """
