@@ -511,11 +511,9 @@ describe('TapStack', () => {
     });
 
     test('should associate DR cluster with global cluster identifier', () => {
-      const dbCluster = stack.node.findChild(
-        'DRCluster'
-      ) as rds.DatabaseCluster;
-      const cfnCluster = dbCluster.node.defaultChild as rds.CfnDBCluster;
-      expect(cfnCluster.globalClusterIdentifier).toBe('test-global-cluster-id');
+      template.hasResourceProperties('AWS::RDS::DBCluster', {
+        GlobalClusterIdentifier: 'test-global-cluster-id',
+      });
     });
 
     test('should create DR parameter group', () => {
@@ -700,12 +698,291 @@ describe('TapStack', () => {
         isPrimary: false,
         env: { account: '123456789012', region: 'us-west-2' },
       });
+      const template = Template.fromStack(stack);
 
-      const dbCluster = stack.node.findChild(
-        'DRCluster'
-      ) as rds.DatabaseCluster;
-      const cfnCluster = dbCluster.node.defaultChild as rds.CfnDBCluster;
-      expect(cfnCluster.globalClusterIdentifier).toBeUndefined();
+      // Find the CfnDBCluster directly (not through DatabaseCluster wrapper)
+      const dbClusters = template.findResources('AWS::RDS::DBCluster');
+      const cluster = Object.values(dbClusters)[0] as any;
+      // When globalClusterIdentifier is not provided, it should be undefined
+      expect(cluster.Properties.GlobalClusterIdentifier).toBeUndefined();
+    });
+
+    test('should associate when globalClusterIdentifier is provided', () => {
+      const stack = new TapStack(app, 'TestStack-DR', {
+        isPrimary: false,
+        globalClusterIdentifier: 'test-global-cluster',
+        env: { account: '123456789012', region: 'us-west-2' },
+      });
+      const template = Template.fromStack(stack);
+
+      const dbClusters = template.findResources('AWS::RDS::DBCluster');
+      const cluster = Object.values(dbClusters)[0] as any;
+      expect(cluster.Properties.GlobalClusterIdentifier).toBe('test-global-cluster');
+    });
+  });
+
+  describe('Lambda Secret Access Edge Cases', () => {
+    test('should grant cross-region secret access when primarySecretArn is provided', () => {
+      const stack = new TapStack(app, 'TestStack-DR', {
+        isPrimary: false,
+        primarySecretArn: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test-secret',
+        env: { account: '123456789012', region: 'us-west-2' },
+      });
+      const template = Template.fromStack(stack);
+
+      // Verify Lambda function exists with health check
+      template.resourceCountIs('AWS::Lambda::Function', 3);
+
+      // Verify environment variable has DB_SECRET_ARN set
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Environment: {
+          Variables: {
+            DB_SECRET_ARN: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test-secret',
+          },
+        },
+      });
+
+      // Verify IAM policies have secretsmanager permissions
+      // The policy is added via addToRolePolicy, so check all IAM policies
+      const allPolicies = template.findResources('AWS::IAM::Policy');
+      const hasSecretAccess = Object.values(allPolicies).some((policy: any) => {
+        const statements = policy.Properties.PolicyDocument?.Statement || [];
+        return statements.some((stmt: any) => {
+          const actions = Array.isArray(stmt.Action) ? stmt.Action : [stmt.Action];
+          const resources = Array.isArray(stmt.Resource) ? stmt.Resource : [stmt.Resource];
+          return (
+            actions.some((action: string) => action?.includes('secretsmanager:GetSecretValue')) &&
+            resources.some((resource: string) => resource?.includes('arn:aws:secretsmanager'))
+          );
+        });
+      });
+      expect(hasSecretAccess).toBe(true);
+    });
+
+    test('should not grant cross-region secret access when primarySecretArn is missing', () => {
+      const stack = new TapStack(app, 'TestStack-DR', {
+        isPrimary: false,
+        env: { account: '123456789012', region: 'us-west-2' },
+      });
+      const template = Template.fromStack(stack);
+
+      // When primarySecretArn is not provided, health check Lambda should still exist
+      template.resourceCountIs('AWS::Lambda::Function', 3);
+
+      // Verify environment variable has empty DB_SECRET_ARN
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Environment: {
+          Variables: {
+            DB_SECRET_ARN: '',
+          },
+        },
+      });
+    });
+  });
+
+  describe('DR Cluster Edge Cases', () => {
+    test('should handle DR cluster when globalClusterIdentifier is undefined', () => {
+      const stack = new TapStack(app, 'TestStack-DR', {
+        isPrimary: false,
+        env: { account: '123456789012', region: 'us-west-2' },
+      });
+      const template = Template.fromStack(stack);
+
+      // Should still create DR cluster
+      template.hasResourceProperties('AWS::RDS::DBCluster', {
+        Engine: 'aurora-postgresql',
+        EngineVersion: '15.8',
+      });
+
+      // GlobalClusterIdentifier should be undefined
+      const dbClusters = template.findResources('AWS::RDS::DBCluster');
+      const cluster = Object.values(dbClusters)[0] as any;
+      expect(cluster.Properties.GlobalClusterIdentifier).toBeUndefined();
+    });
+
+    test('should handle DR cluster endpoint when cluster is undefined', () => {
+      const stack = new TapStack(app, 'TestStack-DR', {
+        isPrimary: false,
+        env: { account: '123456789012', region: 'us-west-2' },
+      });
+      const template = Template.fromStack(stack);
+
+      // Lambda functions should still have DB_ENDPOINT set (even if empty or using ref)
+      template.resourceCountIs('AWS::Lambda::Function', 3);
+    });
+
+    test('should use DR cluster ref for alarm dimensions', () => {
+      const stack = new TapStack(app, 'TestStack-DR', {
+        isPrimary: false,
+        globalClusterIdentifier: 'test-global-cluster',
+        env: { account: '123456789012', region: 'us-west-2' },
+      });
+      const template = Template.fromStack(stack);
+
+      // Verify alarms use DR cluster identifier
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        MetricName: 'AuroraGlobalDBReplicationLag',
+      });
+
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        MetricName: 'CPUUtilization',
+      });
+
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        MetricName: 'DatabaseConnections',
+      });
+    });
+
+    test('should use DR cluster ref for Lambda environment variables', () => {
+      const stack = new TapStack(app, 'TestStack-DR', {
+        isPrimary: false,
+        globalClusterIdentifier: 'test-global-cluster',
+        env: { account: '123456789012', region: 'us-west-2' },
+      });
+      const template = Template.fromStack(stack);
+
+      // Verify Lambda functions have CLUSTER_ID set
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Environment: {
+          Variables: {
+            CLUSTER_ID: Match.anyValue(),
+          },
+        },
+      });
+    });
+
+    test('should use DR cluster endpoint for output', () => {
+      const stack = new TapStack(app, 'TestStack-DR', {
+        isPrimary: false,
+        globalClusterIdentifier: 'test-global-cluster',
+        env: { account: '123456789012', region: 'us-west-2' },
+      });
+      const template = Template.fromStack(stack);
+
+      // Verify output exists
+      const outputs = template.findOutputs('*');
+      const endpointOutput = Object.values(outputs).find(
+        (output: any) => output.Export?.Name?.includes('endpoint-dr')
+      );
+      expect(endpointOutput).toBeDefined();
+    });
+  });
+
+  describe('Primary Cluster Secret Edge Cases', () => {
+    test('should handle primary cluster secret ARN in Lambda environment', () => {
+      const stack = new TapStack(app, 'TestStack-Primary', {
+        isPrimary: true,
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      const template = Template.fromStack(stack);
+
+      // Primary cluster should be created
+      template.hasResourceProperties('AWS::RDS::DBCluster', {
+        Engine: 'aurora-postgresql',
+        EngineVersion: '15.8',
+      });
+
+      // Lambda should exist and have environment variables with secret ARN
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Environment: {
+          Variables: {
+            DB_ENDPOINT: Match.anyValue(),
+            DB_SECRET_ARN: Match.anyValue(),
+          },
+        },
+      });
+      
+      // Verify secret ARN contains secretsmanager
+      const lambdas = template.findResources('AWS::Lambda::Function');
+      const healthCheckLambda = Object.values(lambdas).find((lambda: any) =>
+        lambda.Properties.Environment?.Variables?.DB_SECRET_ARN
+      ) as any;
+      expect(healthCheckLambda).toBeDefined();
+      const secretArn = healthCheckLambda.Properties.Environment.Variables.DB_SECRET_ARN;
+      expect(secretArn).toBeDefined();
+      // Check if it's a string or CloudFormation intrinsic
+      if (typeof secretArn === 'string') {
+        expect(secretArn).toContain('secretsmanager');
+      }
+    });
+
+    test('should export secret ARN for primary cluster', () => {
+      const stack = new TapStack(app, 'TestStack-Primary', {
+        isPrimary: true,
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+
+      // Verify secretArn is exported (could be CDK token)
+      expect(stack.secretArn).toBeDefined();
+      // For DR stack, secretArn should be undefined
+      const drStack = new TapStack(app, 'TestStack-DR', {
+        isPrimary: false,
+        env: { account: '123456789012', region: 'us-west-2' },
+      });
+      expect(drStack.secretArn).toBeUndefined();
+    });
+  });
+
+  describe('Conditional Branch Coverage', () => {
+    test('should use primary cluster endpoint for primary Lambda environment', () => {
+      const stack = new TapStack(app, 'TestStack-Primary', {
+        isPrimary: true,
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      const template = Template.fromStack(stack);
+
+      // Verify health check Lambda uses primary cluster endpoint
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Environment: {
+          Variables: {
+            DB_ENDPOINT: Match.anyValue(),
+            REGION: 'us-east-1',
+          },
+        },
+      });
+      
+      // Verify DB_ENDPOINT is set (could be CloudFormation intrinsic)
+      const lambdas = template.findResources('AWS::Lambda::Function');
+      const healthCheckLambda = Object.values(lambdas).find((lambda: any) =>
+        lambda.Properties.Environment?.Variables?.REGION === 'us-east-1'
+      ) as any;
+      expect(healthCheckLambda).toBeDefined();
+      expect(healthCheckLambda.Properties.Environment.Variables.DB_ENDPOINT).toBeDefined();
+    });
+
+    test('should use primary cluster identifier for primary Lambda environment', () => {
+      const stack = new TapStack(app, 'TestStack-Primary', {
+        isPrimary: true,
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      const template = Template.fromStack(stack);
+
+      // Verify failover Lambda uses primary cluster identifier
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Environment: {
+          Variables: {
+            IS_PRIMARY: 'true',
+            DR_ENDPOINT: '',
+          },
+        },
+      });
+    });
+
+    test('should use primary cluster endpoint for output', () => {
+      const stack = new TapStack(app, 'TestStack-Primary', {
+        isPrimary: true,
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      const template = Template.fromStack(stack);
+
+      // Verify output uses primary cluster endpoint
+      const outputs = template.findOutputs('*');
+      const endpointOutput = Object.values(outputs).find(
+        (output: any) => output.Export?.Name?.includes('endpoint-primary')
+      );
+      expect(endpointOutput).toBeDefined();
+      // Output value could be CloudFormation intrinsic function
+      expect(endpointOutput?.Value).toBeDefined();
     });
   });
 

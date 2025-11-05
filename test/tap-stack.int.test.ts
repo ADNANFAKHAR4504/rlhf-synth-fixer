@@ -55,17 +55,21 @@ function createClient<T>(
 ): T {
   const config: any = { region };
 
-  // Use explicit credentials from environment if available
-  // This prevents SDK from using dynamic imports for credential providers
-  if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
-    config.credentials = {
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-      sessionToken: process.env.AWS_SESSION_TOKEN,
-    };
+  // Require explicit credentials to avoid dynamic import issues in Jest
+  // The AWS SDK's default credential provider uses dynamic imports which Jest doesn't support
+  if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
+    throw new Error(
+      'AWS credentials not found. Integration tests require AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables to be set. This prevents dynamic import issues in Jest.'
+    );
   }
-  // Otherwise, let SDK use default credential chain (instance profile, etc.)
-  // Note: This may cause dynamic import issues in Jest if credentials aren't in env vars
+
+  // Use explicit credentials from environment
+  // This prevents SDK from using dynamic imports for credential providers
+  config.credentials = {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    sessionToken: process.env.AWS_SESSION_TOKEN,
+  };
 
   return new ClientClass(config);
 }
@@ -83,14 +87,42 @@ async function handleAWSCall<T>(
     // All AWS service errors should pass through normally
     const errorCode = error?.code;
     const errorMsg = String(error?.message || '');
+    const errorName = error?.name || '';
 
-    // Check for specific Node.js module loading errors
+    // Check for credential errors first (these are AWS service errors, not module loading errors)
+    if (
+      errorName === 'CredentialsProviderError' ||
+      errorName === 'UnrecognizedClientException' ||
+      errorMsg.includes('Unable to locate credentials') ||
+      errorMsg.includes('Missing credentials') ||
+      errorMsg.includes('No credentials') ||
+      errorCode === 'CredentialsError'
+    ) {
+      throw new Error(
+        `AWS credentials not found. Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables. ${errorMessage || ''}`
+      );
+    }
+
+    // Check for Jest dynamic import errors (this happens when AWS SDK tries to use default credential provider)
+    if (
+      errorName === 'TypeError' &&
+      (errorMsg.includes('dynamic import callback') ||
+        errorMsg.includes('experimental-vm-modules') ||
+        errorMsg.includes('A dynamic import callback was invoked'))
+    ) {
+      throw new Error(
+        `AWS SDK credential provider error. Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables to avoid dynamic imports. ${errorMessage || ''}`
+      );
+    }
+
+    // Check for specific Node.js module loading errors (must be exact matches, not substring matches in stack traces)
+    // These errors occur during module initialization, not during AWS API calls
     if (
       errorCode === 'ERR_UNSUPPORTED_DIR_IMPORT' ||
       errorCode === 'ERR_REQUIRE_ESM' ||
-      errorMsg.includes('ERR_UNSUPPORTED_DIR_IMPORT') ||
-      errorMsg.includes('dynamic import') ||
-      errorMsg.includes('experimental-vm-modules')
+      (errorMsg.includes('ERR_UNSUPPORTED_DIR_IMPORT') && errorMsg.includes('node_modules')) ||
+      (errorMsg.includes('dynamic import') && errorMsg.includes('Cannot find module')) ||
+      (errorMsg.includes('experimental-vm-modules') && errorCode === 'ERR_REQUIRE_ESM')
     ) {
       throw new Error(
         `AWS SDK module loading error. This may indicate a Jest configuration issue. ${errorMessage || ''}`

@@ -441,10 +441,10 @@ export class TapStack extends cdk.Stack {
         environment: {
           DB_ENDPOINT: isPrimary
             ? dbCluster.clusterEndpoint.hostname
-            : cfnDRCluster?.attrEndpointAddress || '',
+            : cfnDRCluster!.attrEndpointAddress,
           DB_SECRET_ARN: isPrimary
-            ? dbCluster.secret?.secretArn || ''
-            : props?.primarySecretArn || '',
+            ? dbCluster.secret!.secretArn
+            : (props?.primarySecretArn ?? ''),
           REGION: currentRegion,
         },
       }
@@ -599,9 +599,9 @@ export class TapStack extends cdk.Stack {
         environment: {
           CLUSTER_ID: isPrimary
             ? dbCluster.clusterIdentifier
-            : cfnDRCluster?.ref || '',
+            : cfnDRCluster!.ref,
           IS_PRIMARY: isPrimary.toString(),
-          DR_ENDPOINT: isPrimary ? '' : cfnDRCluster?.attrEndpointAddress || '',
+          DR_ENDPOINT: isPrimary ? '' : cfnDRCluster!.attrEndpointAddress,
           SNS_TOPIC_ARN: alertTopic.topicArn,
           STATE_BUCKET: snapshotBucket.bucketName,
           HOSTED_ZONE_ID: this.node.tryGetContext('hostedZoneId') || '',
@@ -731,7 +731,7 @@ export class TapStack extends cdk.Stack {
         environment: {
           CLUSTER_ID: isPrimary
             ? dbCluster.clusterIdentifier
-            : cfnDRCluster?.ref || '',
+            : cfnDRCluster!.ref,
           SNS_TOPIC_ARN: alertTopic.topicArn,
         },
       }
@@ -834,7 +834,7 @@ export class TapStack extends cdk.Stack {
           dimensionsMap: {
             DBClusterIdentifier: isPrimary
               ? dbCluster.clusterIdentifier
-              : cfnDRCluster?.ref || '',
+              : cfnDRCluster!.ref,
           },
         }),
         threshold: 5000, // 5 seconds in milliseconds
@@ -874,7 +874,7 @@ export class TapStack extends cdk.Stack {
           dimensionsMap: {
             DBClusterIdentifier: isPrimary
               ? dbCluster.clusterIdentifier
-              : cfnDRCluster?.ref || '',
+              : cfnDRCluster!.ref,
           },
         }),
         threshold: 500,
@@ -951,7 +951,7 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, `ClusterEndpointOutput-${regionPrefix}`, {
       value: isPrimary
         ? dbCluster.clusterEndpoint.hostname
-        : cfnDRCluster?.attrEndpointAddress || '',
+        : cfnDRCluster!.attrEndpointAddress,
       description: `Aurora cluster endpoint for ${regionPrefix} region`,
       exportName: `aurora-dr-endpoint-${regionPrefix}-${environmentSuffix}`,
     });
