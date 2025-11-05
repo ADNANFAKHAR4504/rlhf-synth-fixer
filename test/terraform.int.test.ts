@@ -1,7 +1,4 @@
 import {
-  ApplicationAutoScalingClient
-} from '@aws-sdk/client-application-auto-scaling';
-import {
   CloudWatchClient,
   DescribeAlarmsCommand
 } from '@aws-sdk/client-cloudwatch';
@@ -12,17 +9,14 @@ import {
 import {
   ConfigServiceClient,
   DescribeConfigRulesCommand,
-  DescribeConfigurationRecordersCommand,
-  GetComplianceDetailsByConfigRuleCommand
+  DescribeConfigurationRecordersCommand
 } from '@aws-sdk/client-config-service';
 import {
   GetAccountPasswordPolicyCommand,
   GetRoleCommand,
   IAMClient,
   ListAttachedRolePoliciesCommand,
-  ListRolePoliciesCommand,
-  GetRolePolicyCommand,
-  SimulatePrincipalPolicyCommand
+  ListRolePoliciesCommand
 } from '@aws-sdk/client-iam';
 import {
   DescribeKeyCommand,
@@ -31,20 +25,17 @@ import {
 } from '@aws-sdk/client-kms';
 import {
   GetBucketEncryptionCommand,
-  GetBucketVersioningCommand,
   GetPublicAccessBlockCommand,
   S3Client
 } from '@aws-sdk/client-s3';
 import {
-  GetTopicAttributesCommand,
   SNSClient
 } from '@aws-sdk/client-sns';
 import {
   DescribeDocumentCommand,
-  GetParametersCommand,
   SSMClient
 } from '@aws-sdk/client-ssm';
-import { readFileSync, existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 
 const outputsPath = join(__dirname, '../cfn-outputs/flat-outputs.json');
@@ -539,21 +530,21 @@ describe('Security Framework - Comprehensive Integration Tests', () => {
       console.log('\n  ━━━━ Security Infrastructure Deployment Summary ━━━━');
       let criticalPresent = 0;
       let totalCritical = 0;
-      
+
       Object.entries(requiredComponents).forEach(([name, value]) => {
         totalCritical++;
         const status = value ? '✓' : '✗';
         console.log(`  ${status} ${name}: ${value ? 'Deployed' : 'Missing'}`);
         if (value) criticalPresent++;
       });
-      
+
       // Also check optional KMS keys
       if (outputs.kms_key_ids) {
         console.log(`  ${outputs.kms_key_ids.s3 ? '✓' : '✗'} S3 KMS Key: ${outputs.kms_key_ids.s3 ? 'Deployed' : 'Missing'}`);
         console.log(`  ${outputs.kms_key_ids.rds ? '✓' : '✗'} RDS KMS Key: ${outputs.kms_key_ids.rds ? 'Deployed' : 'Missing'}`);
         console.log(`  ${outputs.kms_key_ids.ebs ? '✓' : '✗'} EBS KMS Key: ${outputs.kms_key_ids.ebs ? 'Deployed' : 'Missing'}`);
       }
-      
+
       console.log('  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
       // At least 80% of critical components should be present
@@ -608,7 +599,7 @@ describe('Security Framework - Comprehensive Integration Tests', () => {
       if (!hasOutputs || !outputs.config_rules) return;
 
       expect(outputs.config_rules).toBeDefined();
-      
+
       // Handle both array and non-array formats
       const rules = Array.isArray(outputs.config_rules) ? outputs.config_rules : [outputs.config_rules];
       expect(rules.length).toBeGreaterThan(0);
@@ -638,7 +629,7 @@ describe('Security Framework - Comprehensive Integration Tests', () => {
       if (!hasOutputs || !outputs.deployment_summary) return;
 
       expect(outputs.deployment_summary).toBeDefined();
-      
+
       // Check if security features are enabled (may be boolean or undefined)
       if (outputs.deployment_summary.mfa_required !== undefined) {
         expect(outputs.deployment_summary.mfa_required).toBe(true);
@@ -745,7 +736,7 @@ describe('Security Framework - Comprehensive Integration Tests', () => {
       if (!hasOutputs || !outputs.audit_log_group_name) return;
 
       expect(outputs.audit_log_group_name).toBeTruthy();
-      
+
       if (outputs.deployment_summary?.log_retention_days) {
         expect(outputs.deployment_summary.log_retention_days).toBe(365);
         console.log('  ✓ Audit logs retained for 365 days for compliance');
