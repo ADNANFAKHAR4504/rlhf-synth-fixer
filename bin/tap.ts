@@ -5,22 +5,47 @@ import { TapStack } from '../lib/tap-stack';
 
 const app = new cdk.App();
 
-// Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
 const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
-const stackName = `TapStack${environmentSuffix}`;
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
-// Apply tags to all stacks in this app (optional - you can do this at stack level instead)
 Tags.of(app).add('Environment', environmentSuffix);
 Tags.of(app).add('Repository', repositoryName);
 Tags.of(app).add('Author', commitAuthor);
 
-new TapStack(app, stackName, {
-  stackName: stackName, // This ensures CloudFormation stack name includes the suffix
-  environmentSuffix: environmentSuffix, // Pass the suffix to the stack
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION,
-  },
-});
+const sourceRegion = 'us-east-1';
+const targetRegion = 'eu-west-1';
+
+const sourceStack = new TapStack(
+  app,
+  `TapStack-${sourceRegion}-${environmentSuffix}`,
+  {
+    stackName: `TapStack-${sourceRegion}-${environmentSuffix}`,
+    environmentSuffix: environmentSuffix,
+    isSourceRegion: true,
+    sourceRegion: sourceRegion,
+    targetRegion: targetRegion,
+    env: {
+      account: process.env.CDK_DEFAULT_ACCOUNT,
+      region: sourceRegion,
+    },
+  }
+);
+
+const targetStack = new TapStack(
+  app,
+  `TapStack-${targetRegion}-${environmentSuffix}`,
+  {
+    stackName: `TapStack-${targetRegion}-${environmentSuffix}`,
+    environmentSuffix: environmentSuffix,
+    isSourceRegion: false,
+    sourceRegion: sourceRegion,
+    targetRegion: targetRegion,
+    env: {
+      account: process.env.CDK_DEFAULT_ACCOUNT,
+      region: targetRegion,
+    },
+  }
+);
+
+targetStack.addDependency(sourceStack);

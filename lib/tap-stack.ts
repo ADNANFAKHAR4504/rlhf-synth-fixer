@@ -17,16 +17,24 @@ import * as sns from 'aws-cdk-lib/aws-sns';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
+  isSourceRegion: boolean;
+  sourceRegion: string;
+  targetRegion: string;
 }
 
 export class TapStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: TapStackProps) {
+  constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
 
     const environmentSuffix =
       props?.environmentSuffix ||
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
+
+    const isSourceRegion = props.isSourceRegion;
+    const sourceRegion = props.sourceRegion;
+    const targetRegion = props.targetRegion;
+    const currentRegion = this.region;
 
     const vpc = new ec2.Vpc(this, `tap-vpc-${environmentSuffix}`, {
       maxAzs: 2,
@@ -54,7 +62,9 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    const bucketName = `tap-logs-${environmentSuffix}-${this.account}-${currentRegion}`;
     const logsBucket = new s3.Bucket(this, `tap-logs-${environmentSuffix}`, {
+      bucketName: bucketName,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: dataKmsKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -79,19 +89,104 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    const transactionsTable = new dynamodb.Table(
-      this,
-      `tap-ddb-${environmentSuffix}`,
-      {
-        partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
-        sortKey: { name: 'ts', type: dynamodb.AttributeType.STRING },
-        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-        pointInTimeRecovery: true,
-        encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
-        encryptionKey: dataKmsKey,
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-      }
-    );
+    if (isSourceRegion) {
+      const replicationRole = new iam.Role(
+        this,
+        `tap-s3-replication-role-${environmentSuffix}`,
+        {
+          assumedBy: new iam.ServicePrincipal('s3.amazonaws.com'),
+        }
+      );
+
+      replicationRole.addToPolicy(
+        new iam.PolicyStatement({
+          actions: [
+            's3:GetReplicationConfiguration',
+            's3:ListBucket',
+            's3:GetObjectVersionForReplication',
+            's3:GetObjectVersionAcl',
+            's3:GetObjectVersionTagging',
+          ],
+          resources: [logsBucket.bucketArn, `${logsBucket.bucketArn}/*`],
+        })
+      );
+
+      const targetBucketName = `tap-logs-${environmentSuffix}-${this.account}-${targetRegion}`;
+      const targetBucketArn = `arn:aws:s3:::${targetBucketName}`;
+      replicationRole.addToPolicy(
+        new iam.PolicyStatement({
+          actions: [
+            's3:ReplicateObject',
+            's3:ReplicateDelete',
+            's3:ReplicateTags',
+            's3:GetObjectVersionTagging',
+          ],
+          resources: [`${targetBucketArn}/*`],
+        })
+      );
+
+      logsBucket.addToResourcePolicy(
+        new iam.PolicyStatement({
+          sid: 'AllowReplicationRoleReadSourceObjects',
+          principals: [replicationRole],
+          actions: [
+            's3:GetObjectVersionForReplication',
+            's3:GetObjectVersionAcl',
+            's3:GetObjectVersionTagging',
+          ],
+          resources: [`${logsBucket.bucketArn}/*`],
+        })
+      );
+
+      const cfnBucket = logsBucket.node.defaultChild as s3.CfnBucket;
+      cfnBucket.replicationConfiguration = {
+        role: replicationRole.roleArn,
+        rules: [
+          {
+            id: 'ReplicateToTargetRegion',
+            status: 'Enabled',
+            priority: 1,
+            filter: {},
+            destination: {
+              bucket: targetBucketArn,
+              storageClass: 'STANDARD_IA',
+              encryptionConfiguration: {
+                replicaKmsKeyId: `arn:aws:kms:${targetRegion}:${this.account}:alias/aws/s3`,
+              },
+            },
+            deleteMarkerReplication: {
+              status: 'Enabled',
+            },
+          },
+        ],
+      };
+    }
+
+    let transactionsTable: dynamodb.ITable;
+    if (isSourceRegion) {
+      transactionsTable = new dynamodb.Table(
+        this,
+        `tap-ddb-${environmentSuffix}`,
+        {
+          partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+          sortKey: { name: 'ts', type: dynamodb.AttributeType.STRING },
+          billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+          pointInTimeRecovery: true,
+          encryption: dynamodb.TableEncryption.AWS_MANAGED,
+          removalPolicy: cdk.RemovalPolicy.DESTROY,
+          replicationRegions: [targetRegion],
+        }
+      );
+    } else {
+      const sourceTableName = cdk.Fn.importValue(
+        `tap-ddb-name-${environmentSuffix}`
+      );
+      transactionsTable = dynamodb.Table.fromTableName(
+        this,
+        `tap-ddb-${environmentSuffix}`,
+        sourceTableName
+      );
+    }
 
     const lambdaRole = new iam.Role(
       this,
@@ -129,8 +224,13 @@ export class TapStack extends cdk.Stack {
         role: lambdaRole,
         environment: {
           ENV: environmentSuffix,
-          TABLE_NAME: transactionsTable.tableName,
+          TABLE_NAME: isSourceRegion
+            ? transactionsTable.tableName
+            : cdk.Fn.importValue(`tap-ddb-name-${environmentSuffix}`),
           LOGS_BUCKET: logsBucket.bucketName,
+          SOURCE_REGION: sourceRegion,
+          TARGET_REGION: targetRegion,
+          CURRENT_REGION: currentRegion,
         },
       }
     );
@@ -152,7 +252,11 @@ export class TapStack extends cdk.Stack {
         role: lambdaRole,
         environment: {
           ENV: environmentSuffix,
-          TABLE_NAME: transactionsTable.tableName,
+          TABLE_NAME: isSourceRegion
+            ? transactionsTable.tableName
+            : cdk.Fn.importValue(`tap-ddb-name-${environmentSuffix}`),
+          SOURCE_REGION: sourceRegion,
+          TARGET_REGION: targetRegion,
         },
       }
     );
@@ -258,10 +362,40 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    new cdk.CfnOutput(this, `tap-ddb-name-${environmentSuffix}`, {
-      value: transactionsTable.tableName,
-      exportName: `tap-ddb-name-${environmentSuffix}`,
-    });
+    if (isSourceRegion) {
+      new cdk.CfnOutput(this, `tap-ddb-name-${environmentSuffix}`, {
+        value: transactionsTable.tableName,
+        exportName: `tap-ddb-name-${environmentSuffix}`,
+      });
+      new cdk.CfnOutput(this, `tap-vpc-id-${environmentSuffix}`, {
+        value: vpc.vpcId,
+        exportName: `tap-vpc-id-${environmentSuffix}`,
+      });
+    } else {
+      const sourceVpcId = cdk.Fn.importValue(`tap-vpc-id-${environmentSuffix}`);
+      const vpcPeering = new ec2.CfnVPCPeeringConnection(
+        this,
+        `tap-vpc-peering-${environmentSuffix}`,
+        {
+          vpcId: vpc.vpcId,
+          peerVpcId: sourceVpcId,
+          peerRegion: sourceRegion,
+        }
+      );
+
+      vpc.privateSubnets.forEach((subnet, index) => {
+        new ec2.CfnRoute(
+          this,
+          `tap-peering-route-${index}-${environmentSuffix}`,
+          {
+            routeTableId: subnet.routeTable.routeTableId,
+            destinationCidrBlock: '10.0.0.0/16',
+            vpcPeeringConnectionId: vpcPeering.ref,
+          }
+        );
+      });
+    }
+
     new cdk.CfnOutput(this, `tap-bucket-name-${environmentSuffix}`, {
       value: logsBucket.bucketName,
       exportName: `tap-bucket-name-${environmentSuffix}`,

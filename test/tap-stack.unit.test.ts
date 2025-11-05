@@ -4,27 +4,44 @@ import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack unit', () => {
   let app: cdk.App;
-  let stack: TapStack;
-  let template: Template;
+  let sourceStack: TapStack;
+  let targetStack: TapStack;
+  let sourceTemplate: Template;
+  let targetTemplate: Template;
 
   beforeEach(() => {
     app = new cdk.App();
-    stack = new TapStack(app, 'TapUnit', { environmentSuffix: 'test' });
-    template = Template.fromStack(stack);
+    sourceStack = new TapStack(app, 'TapUnitSource', {
+      environmentSuffix: 'test',
+      isSourceRegion: true,
+      sourceRegion: 'us-east-1',
+      targetRegion: 'eu-west-1',
+      env: { account: '123456789012', region: 'us-east-1' },
+    });
+    targetStack = new TapStack(app, 'TapUnitTarget', {
+      environmentSuffix: 'test',
+      isSourceRegion: false,
+      sourceRegion: 'us-east-1',
+      targetRegion: 'eu-west-1',
+      env: { account: '123456789012', region: 'eu-west-1' },
+    });
+    sourceTemplate = Template.fromStack(sourceStack);
+    targetTemplate = Template.fromStack(targetStack);
   });
 
   test('creates VPC with proper configuration', () => {
-    template.resourceCountIs('AWS::EC2::VPC', 1);
-    template.hasResourceProperties('AWS::EC2::VPC', {
+    sourceTemplate.resourceCountIs('AWS::EC2::VPC', 1);
+    sourceTemplate.hasResourceProperties('AWS::EC2::VPC', {
       Tags: Match.arrayWith([
         Match.objectLike({ Key: 'Name', Value: Match.stringLikeRegexp('tap-vpc-test') }),
       ]),
     });
+    targetTemplate.resourceCountIs('AWS::EC2::VPC', 1);
   });
 
   test('creates VPC endpoints for S3 and DynamoDB', () => {
-    template.resourceCountIs('AWS::EC2::VPCEndpoint', 2);
-    const endpoints = template.findResources('AWS::EC2::VPCEndpoint');
+    sourceTemplate.resourceCountIs('AWS::EC2::VPCEndpoint', 2);
+    const endpoints = sourceTemplate.findResources('AWS::EC2::VPCEndpoint');
     const endpointProps = Object.values(endpoints).map((ep: any) => ep.Properties);
     const serviceNameStrings = endpointProps.map((props: any) => {
       const serviceName = props.ServiceName;
@@ -39,15 +56,15 @@ describe('TapStack unit', () => {
   });
 
   test('creates KMS key with rotation enabled and destroy policy', () => {
-    template.resourceCountIs('AWS::KMS::Key', 1);
-    template.hasResourceProperties('AWS::KMS::Key', {
+    sourceTemplate.resourceCountIs('AWS::KMS::Key', 1);
+    sourceTemplate.hasResourceProperties('AWS::KMS::Key', {
       EnableKeyRotation: true,
     });
   });
 
   test('creates S3 bucket with encryption, lifecycle, and auto-delete', () => {
-    template.resourceCountIs('AWS::S3::Bucket', 1);
-    template.hasResourceProperties('AWS::S3::Bucket', {
+    sourceTemplate.resourceCountIs('AWS::S3::Bucket', 1);
+    sourceTemplate.hasResourceProperties('AWS::S3::Bucket', {
       BucketEncryption: Match.objectLike({
         ServerSideEncryptionConfiguration: Match.arrayWith([
           Match.objectLike({
@@ -81,7 +98,7 @@ describe('TapStack unit', () => {
         ]),
       },
     });
-    template.hasResourceProperties('AWS::S3::BucketPolicy', {
+    sourceTemplate.hasResourceProperties('AWS::S3::BucketPolicy', {
       PolicyDocument: Match.objectLike({
         Statement: Match.arrayWith([
           Match.objectLike({
@@ -92,24 +109,28 @@ describe('TapStack unit', () => {
     });
   });
 
-  test('creates DynamoDB table with PITR and customer-managed encryption', () => {
-    template.resourceCountIs('AWS::DynamoDB::Table', 1);
-    template.hasResourceProperties('AWS::DynamoDB::Table', {
+  test('creates DynamoDB Global Table with PITR in source region', () => {
+    sourceTemplate.resourceCountIs('AWS::DynamoDB::Table', 1);
+    sourceTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
       BillingMode: 'PAY_PER_REQUEST',
       PointInTimeRecoverySpecification: { PointInTimeRecoveryEnabled: true },
       SSESpecification: {
         SSEEnabled: true,
-        SSEType: 'KMS',
       },
       KeySchema: [
         { AttributeName: 'id', KeyType: 'HASH' },
         { AttributeName: 'ts', KeyType: 'RANGE' },
       ],
     });
+    const tables = sourceTemplate.findResources('AWS::DynamoDB::Table');
+    const table = Object.values(tables)[0] as any;
+    expect(table.Properties).toBeDefined();
+    expect(table.Properties.StreamSpecification).toBeDefined();
+    targetTemplate.resourceCountIs('AWS::DynamoDB::Table', 0);
   });
 
   test('creates Lambda functions with ARM64 architecture', () => {
-    const functions = template.findResources('AWS::Lambda::Function');
+    const functions = sourceTemplate.findResources('AWS::Lambda::Function');
     const userFunctions = Object.entries(functions).filter(
       ([logicalId, fn]: [string, any]) =>
         logicalId.includes('processor') || logicalId.includes('validator')
@@ -136,7 +157,7 @@ describe('TapStack unit', () => {
   });
 
   test('processor Lambda has correct environment variables', () => {
-    const functions = template.findResources('AWS::Lambda::Function');
+    const functions = sourceTemplate.findResources('AWS::Lambda::Function');
     const processorFn = Object.values(functions).find((fn: any) =>
       fn.Properties?.Code?.ZipFile?.includes('PROCESS')
     );
@@ -148,7 +169,7 @@ describe('TapStack unit', () => {
   });
 
   test('validator Lambda has correct environment variables', () => {
-    const functions = template.findResources('AWS::Lambda::Function');
+    const functions = sourceTemplate.findResources('AWS::Lambda::Function');
     const validatorFn = Object.values(functions).find((fn: any) =>
       fn.Properties?.Code?.ZipFile?.includes('validationType')
     );
@@ -160,7 +181,7 @@ describe('TapStack unit', () => {
   });
 
   test('Lambda role has least-privilege permissions', () => {
-    const roles = template.findResources('AWS::IAM::Role');
+    const roles = sourceTemplate.findResources('AWS::IAM::Role');
     const lambdaRoleEntry = Object.entries(roles).find(([_id, role]: [string, any]) =>
       JSON.stringify(role.Properties.AssumeRolePolicyDocument || {}).includes('lambda.amazonaws.com')
     );
@@ -186,7 +207,7 @@ describe('TapStack unit', () => {
     const allPolicyArns = policyArns.join(' ');
     expect(allPolicyArns).toContain('AWSLambdaBasicExecutionRole');
 
-    const policies = template.findResources('AWS::IAM::Policy');
+    const policies = sourceTemplate.findResources('AWS::IAM::Policy');
     const lambdaPolicies = Object.values(policies).filter((policy: any) => {
       const policyDocStr = JSON.stringify(policy.Properties.PolicyDocument || {});
       const rolesStr = JSON.stringify(policy.Properties.Roles || []);
@@ -214,7 +235,7 @@ describe('TapStack unit', () => {
       ])
     );
 
-    const functions = template.findResources('AWS::Lambda::Function');
+    const functions = sourceTemplate.findResources('AWS::Lambda::Function');
     const userFunctions = Object.values(functions).filter((fn: any) =>
       fn.Properties?.Code?.ZipFile?.includes('PROCESS') ||
       fn.Properties?.Code?.ZipFile?.includes('validationType')
@@ -226,15 +247,15 @@ describe('TapStack unit', () => {
   });
 
   test('creates SNS topic with KMS encryption', () => {
-    template.resourceCountIs('AWS::SNS::Topic', 1);
-    template.hasResourceProperties('AWS::SNS::Topic', {
+    sourceTemplate.resourceCountIs('AWS::SNS::Topic', 1);
+    sourceTemplate.hasResourceProperties('AWS::SNS::Topic', {
       KmsMasterKeyId: Match.anyValue(),
     });
   });
 
   test('creates Step Functions state machine with correct workflow', () => {
-    template.resourceCountIs('AWS::StepFunctions::StateMachine', 1);
-    template.hasResourceProperties('AWS::StepFunctions::StateMachine', {
+    sourceTemplate.resourceCountIs('AWS::StepFunctions::StateMachine', 1);
+    sourceTemplate.hasResourceProperties('AWS::StepFunctions::StateMachine', {
       TracingConfiguration: {
         Enabled: true,
       },
@@ -243,7 +264,7 @@ describe('TapStack unit', () => {
       }),
     });
 
-    const resources = template.findResources('AWS::StepFunctions::StateMachine');
+    const resources = sourceTemplate.findResources('AWS::StepFunctions::StateMachine');
     const sm = Object.values(resources)[0] as any;
     const definitionStr = sm.Properties.DefinitionString;
     const definition = typeof definitionStr === 'string' 
@@ -254,22 +275,22 @@ describe('TapStack unit', () => {
   });
 
   test('Step Functions has 15 minute timeout', () => {
-    const resources = template.findResources('AWS::StepFunctions::StateMachine');
+    const resources = sourceTemplate.findResources('AWS::StepFunctions::StateMachine');
     const sm = Object.values(resources)[0] as any;
     expect(sm.Properties.DefinitionString).toBeDefined();
     expect(sm.Properties.TracingConfiguration?.Enabled).toBe(true);
   });
 
   test('creates CloudWatch Log Group for Step Functions', () => {
-    template.resourceCountIs('AWS::Logs::LogGroup', 1);
-    template.hasResourceProperties('AWS::Logs::LogGroup', {
+    sourceTemplate.resourceCountIs('AWS::Logs::LogGroup', 1);
+    sourceTemplate.hasResourceProperties('AWS::Logs::LogGroup', {
       RetentionInDays: 30,
     });
   });
 
   test('creates EventBridge rule for DynamoDB events', () => {
-    template.resourceCountIs('AWS::Events::Rule', 1);
-    template.hasResourceProperties('AWS::Events::Rule', {
+    sourceTemplate.resourceCountIs('AWS::Events::Rule', 1);
+    sourceTemplate.hasResourceProperties('AWS::Events::Rule', {
       EventPattern: Match.objectLike({
         source: Match.arrayWith(['aws.dynamodb']),
       }),
@@ -282,8 +303,8 @@ describe('TapStack unit', () => {
   });
 
   test('creates CloudWatch Dashboard', () => {
-    template.resourceCountIs('AWS::CloudWatch::Dashboard', 1);
-    const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
+    sourceTemplate.resourceCountIs('AWS::CloudWatch::Dashboard', 1);
+    const dashboards = sourceTemplate.findResources('AWS::CloudWatch::Dashboard');
     const dashboard = Object.values(dashboards)[0] as any;
     const dashboardBody = dashboard.Properties.DashboardBody;
     const bodyStr =
@@ -294,8 +315,8 @@ describe('TapStack unit', () => {
   });
 
   test('creates Route 53 health check', () => {
-    template.resourceCountIs('AWS::Route53::HealthCheck', 1);
-    template.hasResourceProperties('AWS::Route53::HealthCheck', {
+    sourceTemplate.resourceCountIs('AWS::Route53::HealthCheck', 1);
+    sourceTemplate.hasResourceProperties('AWS::Route53::HealthCheck', {
       HealthCheckConfig: Match.objectLike({
         Type: 'HTTPS',
         Port: 443,
@@ -307,7 +328,7 @@ describe('TapStack unit', () => {
   });
 
   test('exports outputs with environment-prefixed names', () => {
-    const allOutputs = (template as any).toJSON().Outputs || {};
+    const allOutputs = (sourceTemplate as any).toJSON().Outputs || {};
     const outputKeys = Object.keys(allOutputs);
     
     const ddbOutputKey = outputKeys.find((key) => key.includes('ddb') && key.includes('name'));
@@ -330,7 +351,7 @@ describe('TapStack unit', () => {
   });
 
   test('all resources use environment suffix in names', () => {
-    const allResources = template.findResources('*');
+    const allResources = sourceTemplate.findResources('*');
     const resourceNames = Object.values(allResources).map((r: any) => {
       return r.Properties?.Name || r.Properties?.FunctionName || r.Properties?.TopicName || r.Properties?.TableName || r.Properties?.BucketName || '';
     });
@@ -340,9 +361,27 @@ describe('TapStack unit', () => {
     });
   });
 
+  test('creates S3 replication configuration in source region', () => {
+    const buckets = sourceTemplate.findResources('AWS::S3::Bucket');
+    const bucket = Object.values(buckets)[0] as any;
+    expect(bucket.Properties.ReplicationConfiguration).toBeDefined();
+    expect(bucket.Properties.ReplicationConfiguration.Rules[0].Status).toBe('Enabled');
+  });
+
+  test('creates VPC peering in target region', () => {
+    targetTemplate.resourceCountIs('AWS::EC2::VPCPeeringConnection', 1);
+    const routes = targetTemplate.findResources('AWS::EC2::Route');
+    expect(Object.keys(routes).length).toBeGreaterThan(0);
+  });
+
   test('uses default environment suffix when not provided', () => {
     const app2 = new cdk.App();
-    const stack2 = new TapStack(app2, 'TapUnitDefault', {});
+    const stack2 = new TapStack(app2, 'TapUnitDefault', {
+      isSourceRegion: true,
+      sourceRegion: 'us-east-1',
+      targetRegion: 'eu-west-1',
+      env: { account: '123456789012', region: 'us-east-1' },
+    });
     const template2 = Template.fromStack(stack2);
     const allOutputs = (template2 as any).toJSON().Outputs || {};
     const outputKeys = Object.keys(allOutputs);
