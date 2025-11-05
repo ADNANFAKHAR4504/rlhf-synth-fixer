@@ -387,9 +387,9 @@ export class MultiComponentApplicationConstruct extends Construct {
     // ========================================
     // CloudWatch Log Groups
     // ========================================
-    // Use a simpler, more unique log group name to avoid conflicts
+    // Use CDK's built-in unique resource naming - no explicit logGroupName
+    // This lets CDK generate a unique name automatically
     const lambdaLogGroup = new logs.LogGroup(this, 'LambdaLogGroup', {
-      logGroupName: `/aws/lambda/prod-lambda-api-${props?.baseEnvironmentSuffix || 'dev'}-${cdk.Names.uniqueId(this).toLowerCase()}`,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: RemovalPolicy.DESTROY,
     });
@@ -605,7 +605,7 @@ export class MultiComponentApplicationConstruct extends Construct {
     );
 
     const lambdaFunction = new lambda.Function(this, 'ApiLambda', {
-      functionName: `prod-lambda-api-${props?.baseEnvironmentSuffix || 'dev'}-${cdk.Names.uniqueId(this).toLowerCase()}`,
+      // Remove explicit functionName - let CDK generate unique name automatically
       runtime: lambda.Runtime.NODEJS_20_X, // Updated to Node.js 20.x for latest support
       handler: 'index.handler',
       // Use simple asset packaging. The Lambda handler uses aws-sdk from the root
