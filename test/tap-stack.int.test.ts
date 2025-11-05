@@ -321,7 +321,7 @@ describe('Turn Around Prompt Infrastructure Integration Tests', () => {
       expect(outputs.FunctionName).toMatch(/^[a-zA-Z0-9-_]+$/);
 
       // RDS endpoint format
-      expect(outputs.RdsEndpoint).toMatch(/^[a-z0-9-]+\.[a-z0-9-]+\.rds\.amazonaws\.com$/);
+      expect(outputs.RdsEndpoint).toMatch(/^[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+\.rds\.amazonaws\.com$/);
     });
 
     test('should have proper ARN formats for AWS resources', () => {
