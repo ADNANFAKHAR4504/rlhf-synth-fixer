@@ -1,53 +1,10 @@
-# CDKTF TypeScript Implementation - Serverless Webhook Processing System
+# Serverless Webhook Processing System - IDEAL RESPONSE
 
-This document contains the complete CDKTF TypeScript implementation for the serverless webhook processing system.
+This document contains the complete implementation of the serverless webhook processing system using CDKTF with TypeScript.
 
-## File: bin/tap.ts
+## Implementation Files
 
-```typescript
-#!/usr/bin/env node
-import { App } from 'cdktf';
-import { TapStack } from '../lib/tap-stack';
-
-const app = new App();
-
-// Get environment variables from the environment or use defaults
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const stateBucket = process.env.TERRAFORM_STATE_BUCKET || 'iac-rlhf-tf-states';
-const stateBucketRegion =
-  process.env.TERRAFORM_STATE_BUCKET_REGION || 'us-east-1';
-const awsRegion = process.env.AWS_REGION || 'ap-southeast-1';
-const repositoryName = process.env.REPOSITORY || 'unknown';
-const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
-
-// Calculate the stack name
-const stackName = `TapStack${environmentSuffix}`;
-
-// defaultTags is structured in adherence to the AwsProviderDefaultTags interface
-const defaultTags = {
-  tags: {
-    Environment: 'Production',
-    Team: 'Platform',
-    EnvironmentSuffix: environmentSuffix,
-    Repository: repositoryName,
-    CommitAuthor: commitAuthor,
-  },
-};
-
-// Create the TapStack with the calculated properties
-new TapStack(app, stackName, {
-  environmentSuffix: environmentSuffix,
-  stateBucket: stateBucket,
-  stateBucketRegion: stateBucketRegion,
-  awsRegion: awsRegion,
-  defaultTags: defaultTags,
-});
-
-// Synthesize the app to generate the Terraform configuration
-app.synth();
-```
-
-## File: lib/tap-stack.ts
+### File: lib/tap-stack.ts
 
 ```typescript
 import {
@@ -76,7 +33,6 @@ import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
 import { LambdaEventSourceMapping } from '@cdktf/provider-aws/lib/lambda-event-source-mapping';
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
 import { Fn } from 'cdktf';
-import * as fs from 'fs';
 import * as path from 'path';
 
 interface TapStackProps {
@@ -123,8 +79,9 @@ export class TapStack extends TerraformStack {
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     // S3 Bucket for processed webhook results
+    // Use account ID in bucket name to ensure global uniqueness and prevent conflicts on redeployment
     const resultsBucket = new S3Bucket(this, `webhook-results-${environmentSuffix}`, {
-      bucket: `webhook-results-${environmentSuffix}`,
+      bucket: `webhook-results-${environmentSuffix}-${current.accountId}`,
       tags: {
         Environment: 'Production',
         Team: 'Platform',
@@ -378,10 +335,14 @@ export class TapStack extends TerraformStack {
     });
 
     // Event source mapping from SQS to processor Lambda
+    // Add lifecycle configuration to handle updates properly on redeployment
     new LambdaEventSourceMapping(this, `processor-event-source-${environmentSuffix}`, {
       eventSourceArn: webhookQueue.arn,
       functionName: processorLambda.functionName,
       batchSize: 10,
+      lifecycle: {
+        createBeforeDestroy: true,
+      },
     });
 
     // API Gateway REST API
@@ -413,7 +374,7 @@ export class TapStack extends TerraformStack {
     });
 
     // Integration for POST method
-    new ApiGatewayIntegration(this, `webhooks-post-integration-${environmentSuffix}`, {
+    const postIntegration = new ApiGatewayIntegration(this, `webhooks-post-integration-${environmentSuffix}`, {
       restApiId: api.id,
       resourceId: webhooksResource.id,
       httpMethod: postMethod.httpMethod,
@@ -431,7 +392,7 @@ export class TapStack extends TerraformStack {
     });
 
     // Integration for GET method
-    new ApiGatewayIntegration(this, `webhooks-get-integration-${environmentSuffix}`, {
+    const getIntegration = new ApiGatewayIntegration(this, `webhooks-get-integration-${environmentSuffix}`, {
       restApiId: api.id,
       resourceId: webhooksResource.id,
       httpMethod: getMethod.httpMethod,
@@ -441,8 +402,9 @@ export class TapStack extends TerraformStack {
     });
 
     // Lambda permission for API Gateway to invoke validator
+    // Use unique statementId per environment to prevent conflicts on redeployment
     new LambdaPermission(this, `api-lambda-permission-${environmentSuffix}`, {
-      statementId: 'AllowAPIGatewayInvoke',
+      statementId: `AllowAPIGatewayInvoke-${environmentSuffix}`,
       action: 'lambda:InvokeFunction',
       functionName: validatorLambda.functionName,
       principal: 'apigateway.amazonaws.com',
@@ -450,9 +412,21 @@ export class TapStack extends TerraformStack {
     });
 
     // API Gateway Deployment
+    // Add triggers to force redeployment when methods or integrations change
+    // This prevents conflicts when redeploying after successful initial deployment
     const deployment = new ApiGatewayDeployment(this, `api-deployment-${environmentSuffix}`, {
       restApiId: api.id,
-      dependsOn: [postMethod, getMethod],
+      dependsOn: [postMethod, getMethod, postIntegration, getIntegration],
+      triggers: {
+        // Force redeployment when integrations change
+        // Concatenated IDs will change when resources change, triggering new deployment
+        redeployment: Fn.join('-', [
+          postMethod.id,
+          getMethod.id,
+          postIntegration.id,
+          getIntegration.id,
+        ]),
+      },
       lifecycle: {
         createBeforeDestroy: true,
       },
@@ -481,40 +455,94 @@ export class TapStack extends TerraformStack {
       },
     });
 
-    // CloudWatch Alarm for Validator Lambda errors
+    // CloudWatch Alarm for Validator Lambda errors (error rate > 1%)
     new CloudwatchMetricAlarm(this, `validator-error-alarm-${environmentSuffix}`, {
       alarmName: `webhook-validator-errors-${environmentSuffix}`,
       comparisonOperator: 'GreaterThanThreshold',
       evaluationPeriods: 2,
-      metricName: 'Errors',
-      namespace: 'AWS/Lambda',
-      period: 60,
-      statistic: 'Sum',
-      threshold: 1,
-      dimensions: {
-        FunctionName: validatorLambda.functionName,
-      },
+      threshold: 1.0,
       alarmDescription: 'Alert when validator Lambda error rate exceeds 1%',
+      metricQuery: [
+        {
+          id: 'errors',
+          metric: {
+            metricName: 'Errors',
+            namespace: 'AWS/Lambda',
+            period: 60,
+            stat: 'Sum',
+            dimensions: {
+              FunctionName: validatorLambda.functionName,
+            },
+          },
+          returnData: false,
+        },
+        {
+          id: 'invocations',
+          metric: {
+            metricName: 'Invocations',
+            namespace: 'AWS/Lambda',
+            period: 60,
+            stat: 'Sum',
+            dimensions: {
+              FunctionName: validatorLambda.functionName,
+            },
+          },
+          returnData: false,
+        },
+        {
+          id: 'error_rate',
+          expression: 'IF(invocations > 0, (errors / invocations) * 100, 0)',
+          label: 'Error Rate (%)',
+          returnData: true,
+        },
+      ],
       tags: {
         Environment: 'Production',
         Team: 'Platform',
       },
     });
 
-    // CloudWatch Alarm for Processor Lambda errors
+    // CloudWatch Alarm for Processor Lambda errors (error rate > 1%)
     new CloudwatchMetricAlarm(this, `processor-error-alarm-${environmentSuffix}`, {
       alarmName: `webhook-processor-errors-${environmentSuffix}`,
       comparisonOperator: 'GreaterThanThreshold',
       evaluationPeriods: 2,
-      metricName: 'Errors',
-      namespace: 'AWS/Lambda',
-      period: 60,
-      statistic: 'Sum',
-      threshold: 1,
-      dimensions: {
-        FunctionName: processorLambda.functionName,
-      },
+      threshold: 1.0,
       alarmDescription: 'Alert when processor Lambda error rate exceeds 1%',
+      metricQuery: [
+        {
+          id: 'errors',
+          metric: {
+            metricName: 'Errors',
+            namespace: 'AWS/Lambda',
+            period: 60,
+            stat: 'Sum',
+            dimensions: {
+              FunctionName: processorLambda.functionName,
+            },
+          },
+          returnData: false,
+        },
+        {
+          id: 'invocations',
+          metric: {
+            metricName: 'Invocations',
+            namespace: 'AWS/Lambda',
+            period: 60,
+            stat: 'Sum',
+            dimensions: {
+              FunctionName: processorLambda.functionName,
+            },
+          },
+          returnData: false,
+        },
+        {
+          id: 'error_rate',
+          expression: 'IF(invocations > 0, (errors / invocations) * 100, 0)',
+          label: 'Error Rate (%)',
+          returnData: true,
+        },
+      ],
       tags: {
         Environment: 'Production',
         Team: 'Platform',
@@ -523,8 +551,8 @@ export class TapStack extends TerraformStack {
 
     // Outputs
     new TerraformOutput(this, 'api-endpoint', {
-      value: `${api.executionArn}/prod/webhooks`,
-      description: 'API Gateway endpoint for webhooks',
+      value: `https://${api.id}.execute-api.${awsRegion}.amazonaws.com/${stage.stageName}/webhooks`,
+      description: 'API Gateway endpoint URL for webhooks',
     });
 
     new TerraformOutput(this, 'webhook-table-name', {
@@ -560,7 +588,7 @@ export class TapStack extends TerraformStack {
 }
 ```
 
-## File: lib/lambda/validator/index.ts
+### File: lib/lambda/validator/index.ts
 
 ```typescript
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
@@ -693,29 +721,7 @@ export const handler = async (
 };
 ```
 
-## File: lib/lambda/validator/package.json
-
-```json
-{
-  "name": "webhook-validator",
-  "version": "1.0.0",
-  "description": "Webhook validator Lambda function",
-  "main": "index.js",
-  "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.0.0",
-    "@aws-sdk/client-sqs": "^3.0.0",
-    "uuid": "^9.0.0"
-  },
-  "devDependencies": {
-    "@types/aws-lambda": "^8.10.0",
-    "@types/node": "^18.0.0",
-    "@types/uuid": "^9.0.0",
-    "typescript": "^5.0.0"
-  }
-}
-```
-
-## File: lib/lambda/processor/index.ts
+### File: lib/lambda/processor/index.ts
 
 ```typescript
 import { SQSEvent } from 'aws-lambda';
@@ -789,27 +795,7 @@ export const handler = async (event: SQSEvent): Promise<void> => {
 };
 ```
 
-## File: lib/lambda/processor/package.json
-
-```json
-{
-  "name": "webhook-processor",
-  "version": "1.0.0",
-  "description": "Webhook processor Lambda function",
-  "main": "index.js",
-  "dependencies": {
-    "@aws-sdk/client-s3": "^3.0.0",
-    "@aws-sdk/client-dynamodb": "^3.0.0"
-  },
-  "devDependencies": {
-    "@types/aws-lambda": "^8.10.0",
-    "@types/node": "^18.0.0",
-    "typescript": "^5.0.0"
-  }
-}
-```
-
-## File: lib/lambda/build.sh
+### File: lib/lambda/build.sh
 
 ```bash
 #!/bin/bash
@@ -839,225 +825,159 @@ cd ..
 echo "Lambda functions built successfully!"
 ```
 
-## File: package.json
+### File: lib/lambda/validator/package.json
 
 ```json
 {
-  "name": "webhook-processing-system",
+  "name": "webhook-validator",
   "version": "1.0.0",
-  "description": "Serverless webhook processing system using CDKTF",
-  "main": "bin/tap.js",
-  "scripts": {
-    "build": "tsc",
-    "synth": "cdktf synth",
-    "deploy": "cdktf deploy",
-    "destroy": "cdktf destroy",
-    "get": "cdktf get",
-    "watch": "tsc -w",
-    "test": "jest"
-  },
+  "description": "Webhook validator Lambda function",
+  "main": "index.js",
   "dependencies": {
-    "@cdktf/provider-aws": "^19.0.0",
-    "cdktf": "^0.20.0",
-    "constructs": "^10.0.0"
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/client-sqs": "^3.0.0",
+    "uuid": "^9.0.0"
   },
   "devDependencies": {
+    "@types/aws-lambda": "^8.10.0",
     "@types/node": "^18.0.0",
-    "typescript": "^5.0.0",
-    "jest": "^29.0.0",
-    "@types/jest": "^29.0.0",
-    "ts-jest": "^29.0.0"
+    "@types/uuid": "^9.0.0",
+    "typescript": "^5.0.0"
   }
 }
 ```
 
-## File: tsconfig.json
+### File: lib/lambda/processor/package.json
 
 ```json
 {
-  "compilerOptions": {
-    "target": "ES2020",
-    "module": "commonjs",
-    "lib": ["ES2020"],
-    "declaration": true,
-    "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "noImplicitThis": true,
-    "alwaysStrict": true,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": false,
-    "inlineSourceMap": true,
-    "inlineSources": true,
-    "experimentalDecorators": true,
-    "strictPropertyInitialization": false,
-    "typeRoots": ["./node_modules/@types"],
-    "resolveJsonModule": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "outDir": "dist"
+  "name": "webhook-processor",
+  "version": "1.0.0",
+  "description": "Webhook processor Lambda function",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/client-dynamodb": "^3.0.0"
   },
-  "include": ["bin/**/*.ts", "lib/**/*.ts"],
-  "exclude": ["node_modules", "dist", "lib/lambda"]
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.0",
+    "@types/node": "^18.0.0",
+    "typescript": "^5.0.0"
+  }
 }
 ```
 
-## File: cdktf.json
-
-```json
-{
-  "language": "typescript",
-  "app": "node bin/tap.js",
-  "projectId": "webhook-processing-system",
-  "sendCrashReports": "false",
-  "terraformProviders": ["aws@~> 5.0"],
-  "terraformModules": [],
-  "context": {}
-}
-```
-
-## File: lib/README.md
+### File: lib/PROMPT.md
 
 ```markdown
-# Serverless Webhook Processing System
+# Application Deployment
 
-A CDKTF TypeScript implementation of a serverless webhook processing system using AWS services.
+CRITICAL REQUIREMENT: This task MUST be implemented using cdktf with ts
 
-## Architecture
+Platform: cdktf
+Language: ts
+Region: ap-southeast-1
 
-This system implements a fully serverless webhook processing pipeline:
+Do not substitute or change the platform or language. All infrastructure code must be written using the specified platform and language combination.
 
-1. **API Gateway**: Regional REST API with POST and GET endpoints
-2. **Lambda Functions**:
-   - Validator: Validates webhooks, stores in DynamoDB, queues for processing
-   - Processor: Processes messages from SQS, stores results in S3
-3. **DynamoDB**: Stores webhook metadata with 7-day TTL
-4. **SQS**: Main queue with dead letter queue (3 retries, 14-day retention)
-5. **S3**: Stores processed webhook results with versioning enabled
-6. **CloudWatch**: Alarms for Lambda errors exceeding 1%
-7. **X-Ray**: Tracing enabled on all Lambda functions
+---
 
-## Prerequisites
+Create a CDKTF program to build a serverless webhook processing system. The configuration must:
 
-- Node.js 18+
-- AWS CLI configured
-- CDKTF CLI installed: `npm install -g cdktf-cli`
-- Terraform installed
+1. Deploy a REST API using API Gateway with POST and GET endpoints for webhook reception and status queries.
 
-## Setup
+2. Create a Lambda function to validate incoming webhooks and store them in a DynamoDB table with TTL enabled for 7 days.
 
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
+3. Set up an SQS queue with a dead letter queue for failed messages after 3 retries.
 
-2. Build Lambda functions:
-   ```bash
-   cd lib/lambda
-   chmod +x build.sh
-   ./build.sh
-   cd ../..
-   ```
+4. Deploy a Lambda function that processes messages from the SQS queue and stores results in S3.
 
-3. Build TypeScript:
-   ```bash
-   npm run build
-   ```
+5. Configure Lambda functions with appropriate IAM roles and environment variables.
 
-4. Synthesize Terraform:
-   ```bash
-   npm run synth
-   ```
+6. Set up DynamoDB with on-demand billing and partition key 'webhookId'.
 
-## Deployment
+7. Enable X-Ray tracing on all Lambda functions for debugging.
 
-```bash
-export ENVIRONMENT_SUFFIX="dev"
-export AWS_REGION="ap-southeast-1"
-npm run deploy
+8. Configure API Gateway with throttling limits of 100 requests per second.
+
+9. Create CloudWatch alarms for Lambda errors exceeding 1% error rate.
+
+10. Tag all resources with 'Environment: Production' and 'Team: Platform'.
+
+Expected output: A fully deployed serverless infrastructure with API endpoints returning webhook IDs on POST requests and processing status on GET requests. All webhook data should flow through the queue for async processing with results stored in S3.
+
+---
+
+## Additional Context
+
+### Background
+
+A startup needs to build a serverless event processing system that receives webhooks from various third-party services. The system must process events asynchronously while maintaining high reliability and providing real-time status updates through a REST API.
+
+### Constraints and Requirements
+
+- Lambda functions must have 512MB memory and 30-second timeout
+- DynamoDB table must use on-demand pricing mode
+- SQS visibility timeout must be 6 times the Lambda timeout
+- API Gateway must use Regional endpoint type
+- S3 bucket must have versioning enabled
+- All Lambda functions must use Node.js 18 runtime
+- Dead letter queue must retain messages for 14 days
+- API responses must include CORS headers for browser compatibility
+
+### Environment Setup
+
+Serverless webhook processing system deployed in ap-southeast-1 using API Gateway for HTTP endpoints, Lambda functions for compute, DynamoDB for webhook metadata storage, SQS for message queuing, and S3 for processed results. Requires CDKTF with TypeScript, Node.js 18+, AWS CLI configured with appropriate permissions. Architecture includes async processing with dead letter queue support and monitoring through CloudWatch and X-Ray.
+
+## Project-Specific Conventions
+
+### Resource Naming
+
+All resources must use the `environmentSuffix` variable in their names to support multiple PR environments. Example: `myresource-${environmentSuffix}` or tagging with EnvironmentSuffix.
+
+### Testing Integration
+
+Integration tests should load stack outputs from `cfn-outputs/flat-outputs.json`. Tests should validate actual deployed resources.
+
+### Resource Management
+
+Infrastructure should be fully destroyable for CI/CD workflows. Exception: Secrets should be fetched from existing AWS Secrets Manager entries, not created by the stack. Avoid using DeletionPolicy: Retain unless absolutely necessary.
+
+### Security Baseline
+
+- Implement encryption at rest and in transit
+- Follow principle of least privilege for IAM roles
+- Use AWS Secrets Manager for credential management where applicable
+- Enable appropriate logging and monitoring
+
+## Target Region
+
+All resources should be deployed to: ap-southeast-1
 ```
 
-## Environment Variables
+## Key Implementation Features
 
-- `ENVIRONMENT_SUFFIX`: Environment identifier (default: "dev")
-- `AWS_REGION`: Target AWS region (default: "ap-southeast-1")
-- `TERRAFORM_STATE_BUCKET`: S3 bucket for state (default: "iac-rlhf-tf-states")
-- `TERRAFORM_STATE_BUCKET_REGION`: State bucket region (default: "us-east-1")
+### 1. Redeployment Safety
+- S3 bucket names include account ID for global uniqueness
+- Lambda permission statementId includes environment suffix
+- API Gateway deployment uses triggers to force redeployment on changes
+- Event source mapping includes lifecycle configuration
 
-## API Usage
+### 2. CloudWatch Alarms
+- Uses metric math queries to calculate error rate percentage
+- Expression: `IF(invocations > 0, (errors / invocations) * 100, 0)`
+- Threshold set to 1.0 for 1% error rate
 
-### Submit Webhook (POST)
+### 3. API Gateway Configuration
+- Proper endpoint URL construction in outputs
+- Deployment triggers prevent conflicts on redeployment
+- Regional endpoint type for better performance
 
-```bash
-curl -X POST https://<api-id>.execute-api.ap-southeast-1.amazonaws.com/prod/webhooks \
-  -H "Content-Type: application/json" \
-  -d '{"event": "test", "data": "sample"}'
-```
+### 4. Resource Naming
+- All resources include `environmentSuffix` for multi-environment support
+- Account ID included in S3 bucket name for global uniqueness
 
-Response:
-```json
-{
-  "webhookId": "uuid-here",
-  "message": "Webhook received and queued for processing"
-}
-```
-
-### Query Webhook Status (GET)
-
-```bash
-curl "https://<api-id>.execute-api.ap-southeast-1.amazonaws.com/prod/webhooks?webhookId=<uuid>"
-```
-
-Response:
-```json
-{
-  "webhookId": "uuid-here",
-  "status": "completed",
-  "timestamp": "1234567890",
-  "processedAt": "1234567900"
-}
-```
-
-## Configuration Details
-
-- **Lambda Memory**: 512MB
-- **Lambda Timeout**: 30 seconds
-- **SQS Visibility Timeout**: 180 seconds (6x Lambda timeout)
-- **DynamoDB**: On-demand billing, partition key: webhookId
-- **API Gateway Throttling**: 100 requests/second
-- **DLQ Retention**: 14 days
-- **TTL**: 7 days on DynamoDB entries
-- **Runtime**: Node.js 18
-
-## Monitoring
-
-CloudWatch alarms are configured for:
-- Validator Lambda errors > 1%
-- Processor Lambda errors > 1%
-
-X-Ray tracing is enabled on all Lambda functions for debugging.
-
-## Resource Naming
-
-All resources include the `environmentSuffix` variable for uniqueness:
-- `webhook-validator-{environmentSuffix}`
-- `webhook-processor-{environmentSuffix}`
-- `webhook-table-{environmentSuffix}`
-- `webhook-queue-{environmentSuffix}`
-- `webhook-results-{environmentSuffix}`
-
-## Tags
-
-All resources are tagged with:
-- `Environment: Production`
-- `Team: Platform`
-
-## Cleanup
-
-```bash
-npm run destroy
-```
-```
+### 5. Error Handling
+- Lambda functions include comprehensive error handling
+- CORS headers for browser compatibility
+- Proper HTTP status codes

@@ -70,8 +70,9 @@ export class TapStack extends TerraformStack {
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     // S3 Bucket for processed webhook results
+    // Use account ID in bucket name to ensure global uniqueness and prevent conflicts on redeployment
     const resultsBucket = new S3Bucket(this, `webhook-results-${environmentSuffix}`, {
-      bucket: `webhook-results-${environmentSuffix}`,
+      bucket: `webhook-results-${environmentSuffix}-${current.accountId}`,
       tags: {
         Environment: 'Production',
         Team: 'Platform',
@@ -325,10 +326,14 @@ export class TapStack extends TerraformStack {
     });
 
     // Event source mapping from SQS to processor Lambda
+    // Add lifecycle configuration to handle updates properly on redeployment
     new LambdaEventSourceMapping(this, `processor-event-source-${environmentSuffix}`, {
       eventSourceArn: webhookQueue.arn,
       functionName: processorLambda.functionName,
       batchSize: 10,
+      lifecycle: {
+        createBeforeDestroy: true,
+      },
     });
 
     // API Gateway REST API
@@ -360,7 +365,7 @@ export class TapStack extends TerraformStack {
     });
 
     // Integration for POST method
-    new ApiGatewayIntegration(this, `webhooks-post-integration-${environmentSuffix}`, {
+    const postIntegration = new ApiGatewayIntegration(this, `webhooks-post-integration-${environmentSuffix}`, {
       restApiId: api.id,
       resourceId: webhooksResource.id,
       httpMethod: postMethod.httpMethod,
@@ -378,7 +383,7 @@ export class TapStack extends TerraformStack {
     });
 
     // Integration for GET method
-    new ApiGatewayIntegration(this, `webhooks-get-integration-${environmentSuffix}`, {
+    const getIntegration = new ApiGatewayIntegration(this, `webhooks-get-integration-${environmentSuffix}`, {
       restApiId: api.id,
       resourceId: webhooksResource.id,
       httpMethod: getMethod.httpMethod,
@@ -388,8 +393,9 @@ export class TapStack extends TerraformStack {
     });
 
     // Lambda permission for API Gateway to invoke validator
+    // Use unique statementId per environment to prevent conflicts on redeployment
     new LambdaPermission(this, `api-lambda-permission-${environmentSuffix}`, {
-      statementId: 'AllowAPIGatewayInvoke',
+      statementId: `AllowAPIGatewayInvoke-${environmentSuffix}`,
       action: 'lambda:InvokeFunction',
       functionName: validatorLambda.functionName,
       principal: 'apigateway.amazonaws.com',
@@ -397,9 +403,21 @@ export class TapStack extends TerraformStack {
     });
 
     // API Gateway Deployment
+    // Add triggers to force redeployment when methods or integrations change
+    // This prevents conflicts when redeploying after successful initial deployment
     const deployment = new ApiGatewayDeployment(this, `api-deployment-${environmentSuffix}`, {
       restApiId: api.id,
-      dependsOn: [postMethod, getMethod],
+      dependsOn: [postMethod, getMethod, postIntegration, getIntegration],
+      triggers: {
+        // Force redeployment when integrations change
+        // Concatenated IDs will change when resources change, triggering new deployment
+        redeployment: Fn.join('-', [
+          postMethod.id,
+          getMethod.id,
+          postIntegration.id,
+          getIntegration.id,
+        ]),
+      },
       lifecycle: {
         createBeforeDestroy: true,
       },
@@ -428,40 +446,94 @@ export class TapStack extends TerraformStack {
       },
     });
 
-    // CloudWatch Alarm for Validator Lambda errors
+    // CloudWatch Alarm for Validator Lambda errors (error rate > 1%)
     new CloudwatchMetricAlarm(this, `validator-error-alarm-${environmentSuffix}`, {
       alarmName: `webhook-validator-errors-${environmentSuffix}`,
       comparisonOperator: 'GreaterThanThreshold',
       evaluationPeriods: 2,
-      metricName: 'Errors',
-      namespace: 'AWS/Lambda',
-      period: 60,
-      statistic: 'Sum',
-      threshold: 1,
-      dimensions: {
-        FunctionName: validatorLambda.functionName,
-      },
+      threshold: 1.0,
       alarmDescription: 'Alert when validator Lambda error rate exceeds 1%',
+      metricQuery: [
+        {
+          id: 'errors',
+          metric: {
+            metricName: 'Errors',
+            namespace: 'AWS/Lambda',
+            period: 60,
+            stat: 'Sum',
+            dimensions: {
+              FunctionName: validatorLambda.functionName,
+            },
+          },
+          returnData: false,
+        },
+        {
+          id: 'invocations',
+          metric: {
+            metricName: 'Invocations',
+            namespace: 'AWS/Lambda',
+            period: 60,
+            stat: 'Sum',
+            dimensions: {
+              FunctionName: validatorLambda.functionName,
+            },
+          },
+          returnData: false,
+        },
+        {
+          id: 'error_rate',
+          expression: 'IF(invocations > 0, (errors / invocations) * 100, 0)',
+          label: 'Error Rate (%)',
+          returnData: true,
+        },
+      ],
       tags: {
         Environment: 'Production',
         Team: 'Platform',
       },
     });
 
-    // CloudWatch Alarm for Processor Lambda errors
+    // CloudWatch Alarm for Processor Lambda errors (error rate > 1%)
     new CloudwatchMetricAlarm(this, `processor-error-alarm-${environmentSuffix}`, {
       alarmName: `webhook-processor-errors-${environmentSuffix}`,
       comparisonOperator: 'GreaterThanThreshold',
       evaluationPeriods: 2,
-      metricName: 'Errors',
-      namespace: 'AWS/Lambda',
-      period: 60,
-      statistic: 'Sum',
-      threshold: 1,
-      dimensions: {
-        FunctionName: processorLambda.functionName,
-      },
+      threshold: 1.0,
       alarmDescription: 'Alert when processor Lambda error rate exceeds 1%',
+      metricQuery: [
+        {
+          id: 'errors',
+          metric: {
+            metricName: 'Errors',
+            namespace: 'AWS/Lambda',
+            period: 60,
+            stat: 'Sum',
+            dimensions: {
+              FunctionName: processorLambda.functionName,
+            },
+          },
+          returnData: false,
+        },
+        {
+          id: 'invocations',
+          metric: {
+            metricName: 'Invocations',
+            namespace: 'AWS/Lambda',
+            period: 60,
+            stat: 'Sum',
+            dimensions: {
+              FunctionName: processorLambda.functionName,
+            },
+          },
+          returnData: false,
+        },
+        {
+          id: 'error_rate',
+          expression: 'IF(invocations > 0, (errors / invocations) * 100, 0)',
+          label: 'Error Rate (%)',
+          returnData: true,
+        },
+      ],
       tags: {
         Environment: 'Production',
         Team: 'Platform',
@@ -470,8 +542,8 @@ export class TapStack extends TerraformStack {
 
     // Outputs
     new TerraformOutput(this, 'api-endpoint', {
-      value: `${api.executionArn}/prod/webhooks`,
-      description: 'API Gateway endpoint for webhooks',
+      value: `https://${api.id}.execute-api.${awsRegion}.amazonaws.com/${stage.stageName}/webhooks`,
+      description: 'API Gateway endpoint URL for webhooks',
     });
 
     new TerraformOutput(this, 'webhook-table-name', {

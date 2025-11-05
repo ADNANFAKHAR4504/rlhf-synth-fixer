@@ -221,13 +221,19 @@ describe('Resource Configuration Tests', () => {
       expect(Object.keys(alarms).length).toBe(2);
     });
 
-    test('Alarms monitor Lambda errors', () => {
+    test('Alarms monitor Lambda error rate using metric queries', () => {
       const alarms = manifest.resource['aws_cloudwatch_metric_alarm'];
       Object.values(alarms).forEach((alarm: any) => {
-        expect(alarm.metric_name).toBe('Errors');
-        expect(alarm.namespace).toBe('AWS/Lambda');
-        expect(alarm.threshold).toBe(1);
+        expect(alarm.threshold).toBe(1.0);
         expect(alarm.comparison_operator).toBe('GreaterThanThreshold');
+        // Verify metric queries are used for error rate calculation
+        expect(alarm.metric_query).toBeDefined();
+        expect(Array.isArray(alarm.metric_query)).toBe(true);
+        expect(alarm.metric_query.length).toBeGreaterThanOrEqual(3);
+        // Verify error rate calculation expression exists
+        const errorRateQuery = alarm.metric_query.find((q: any) => q.id === 'error_rate');
+        expect(errorRateQuery).toBeDefined();
+        expect(errorRateQuery.expression).toContain('errors / invocations');
       });
     });
   });
