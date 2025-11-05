@@ -1,0 +1,31 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-05T22:15:38+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "po_id": "2jdat",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ELB",
+    "Auto Scaling",
+    "RDS",
+    "S3",
+    "CloudFront",
+    "IAM",
+    "CloudWatch",
+    "KMS",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Groups"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10
+}
