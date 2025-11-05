@@ -17,7 +17,7 @@ env = cdk.Environment(
 # Create the main payment processing stack
 payment_stack = PaymentProcessingStack(
     app,
-    f"PaymentProcessingStack-{environment_suffix}",
+    f"TapStack{environment_suffix}",
     environment_suffix=environment_suffix,
     env=env,
     description="Payment Processing System - Production Migration Infrastructure"
