@@ -29,10 +29,40 @@ describe('TAP Stack Integration Tests', () => {
   beforeAll(() => {
     // Load outputs from flat-outputs.json
     const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
+
+    if (!fs.existsSync(outputsPath)) {
+      throw new Error(`flat-outputs.json not found at ${outputsPath}. Run ./scripts/deploy.sh first.`);
+    }
+
     outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 
+    // Get region from outputs or environment
     region = outputs.awsRegion || process.env.AWS_REGION || 'ap-northeast-1';
-    envSuffix = outputs.environmentSuffix || 'dev';
+
+    // Derive environment suffix from resource names if not in outputs
+    if (outputs.environmentSuffix) {
+      envSuffix = outputs.environmentSuffix;
+    } else {
+      // Extract environment suffix from CloudTrailBucketName (format: tap-{env}-cloudtrail-{account})
+      const bucketName = outputs.CloudTrailBucketName;
+      if (bucketName) {
+        const match = bucketName.match(/^tap-([^-]+)-/);
+        envSuffix = match ? match[1] : 'dev';
+      } else {
+        envSuffix = 'dev';
+      }
+    }
+
+    // Extract region from KMS key ARN if not set
+    if (!region && outputs.DataEncryptionKeyArn) {
+      const arnMatch = outputs.DataEncryptionKeyArn.match(/arn:aws:kms:([^:]+):/);
+      if (arnMatch) {
+        region = arnMatch[1];
+      }
+    }
+
+    console.log('Using region:', region);
+    console.log('Using envSuffix:', envSuffix);
 
     // Initialize AWS SDK v2 clients
     kms = new KMS({ region });
@@ -143,13 +173,15 @@ describe('TAP Stack Integration Tests', () => {
     test('Secrets exist with KMS encryption', async () => {
       const secretsList = await secretsManager.listSecrets().promise();
 
-      // Filter for secrets matching our environment (try both with and without trailing slash)
-      let tapSecrets = secretsList.SecretList!.filter(s => s.Name?.startsWith(`tap-${envSuffix}/`));
+      expect(secretsList.SecretList).toBeDefined();
+      expect(secretsList.SecretList!.length).toBeGreaterThan(0);
 
-      // Fallback: if no secrets with trailing slash, try without
-      if (tapSecrets.length === 0) {
-        tapSecrets = secretsList.SecretList!.filter(s => s.Name?.includes(`tap-${envSuffix}`));
-      }
+      // Filter for secrets matching our environment - check both formats
+      const tapSecrets = secretsList.SecretList!.filter(s =>
+        s.Name?.startsWith(`tap-${envSuffix}/`) ||
+        s.Name?.startsWith(`tap-${envSuffix}-`) ||
+        (s.Name?.includes(`tap-${envSuffix}`) && s.Name?.includes('/'))
+      );
 
       expect(tapSecrets).toBeDefined();
       expect(tapSecrets.length).toBeGreaterThan(0);
@@ -164,32 +196,27 @@ describe('TAP Stack Integration Tests', () => {
       const secretsList = await secretsManager.listSecrets().promise();
 
       // Filter for secrets matching our environment
-      const tapSecrets = secretsList.SecretList!.filter(s => s.Name?.startsWith(`tap-${envSuffix}/`));
+      const tapSecrets = secretsList.SecretList!.filter(s =>
+        s.Name?.startsWith(`tap-${envSuffix}/`) ||
+        s.Name?.startsWith(`tap-${envSuffix}-`)
+      );
 
       // Try to retrieve at least one secret
-      if (tapSecrets && tapSecrets.length > 0) {
-        const secretArn = tapSecrets[0].ARN!;
-        const secretValue = await secretsManager.getSecretValue({ SecretId: secretArn }).promise();
-        expect(secretValue.SecretString || secretValue.SecretBinary).toBeDefined();
-      }
+      expect(tapSecrets.length).toBeGreaterThan(0);
+
+      const secretArn = tapSecrets[0].ARN!;
+      const secretValue = await secretsManager.getSecretValue({ SecretId: secretArn }).promise();
+      expect(secretValue.SecretString || secretValue.SecretBinary).toBeDefined();
     });
   });
 
   describe('Systems Manager Parameter Store', () => {
     test('Parameters exist for the environment', async () => {
       const parameterPath = `/tap/${envSuffix}/`;
-      let params = await ssm.getParametersByPath({
+      const params = await ssm.getParametersByPath({
         Path: parameterPath,
         Recursive: true
       }).promise();
-
-      // Fallback: try without trailing slash if no results
-      if (!params.Parameters || params.Parameters.length === 0) {
-        params = await ssm.getParametersByPath({
-          Path: `/tap/${envSuffix}`,
-          Recursive: true
-        }).promise();
-      }
 
       expect(params.Parameters).toBeDefined();
       expect(params.Parameters!.length).toBeGreaterThan(0);
@@ -197,20 +224,11 @@ describe('TAP Stack Integration Tests', () => {
 
     test('Parameters have proper metadata', async () => {
       const parameterPath = `/tap/${envSuffix}/`;
-      let params = await ssm.describeParameters({
+      const params = await ssm.describeParameters({
         ParameterFilters: [
           { Key: 'Name', Option: 'BeginsWith', Values: [parameterPath] }
         ]
       }).promise();
-
-      // Fallback: try without trailing slash
-      if (!params.Parameters || params.Parameters.length === 0) {
-        params = await ssm.describeParameters({
-          ParameterFilters: [
-            { Key: 'Name', Option: 'BeginsWith', Values: [`/tap/${envSuffix}`] }
-          ]
-        }).promise();
-      }
 
       expect(params.Parameters).toBeDefined();
       expect(params.Parameters!.length).toBeGreaterThan(0);
@@ -232,16 +250,9 @@ describe('TAP Stack Integration Tests', () => {
     });
 
     test('Log groups exist for TAP environment', async () => {
-      let logGroups = await cloudwatchLogs.describeLogGroups({
-        logGroupNamePrefix: `/aws/tap/${envSuffix}/`
+      const logGroups = await cloudwatchLogs.describeLogGroups({
+        logGroupNamePrefix: `/aws/tap/${envSuffix}`
       }).promise();
-
-      // Fallback: try without trailing slash
-      if (!logGroups.logGroups || logGroups.logGroups.length === 0) {
-        logGroups = await cloudwatchLogs.describeLogGroups({
-          logGroupNamePrefix: `/aws/tap/${envSuffix}`
-        }).promise();
-      }
 
       expect(logGroups.logGroups).toBeDefined();
       expect(logGroups.logGroups!.length).toBeGreaterThan(0);
