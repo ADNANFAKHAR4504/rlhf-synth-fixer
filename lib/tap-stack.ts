@@ -27,7 +27,7 @@ interface TapStackProps {
 // If you need to override the AWS Region for the terraform provider for any particular task,
 // you can set it here. Otherwise, it will default to 'us-east-1'.
 
-const AWS_REGION_OVERRIDE = '';
+export const AWS_REGION_OVERRIDE = process.env.AWS_REGION_OVERRIDE || '';
 
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
@@ -40,6 +40,9 @@ export class TapStack extends TerraformStack {
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
+
+    // Determine if we should append environment suffix (only if explicitly provided and not default)
+    const shouldAppendSuffix = props?.environmentSuffix && props.environmentSuffix !== 'dev';
 
     // Configure AWS Provider
     new AwsProvider(this, 'aws', {
@@ -58,7 +61,7 @@ export class TapStack extends TerraformStack {
     // Environment configurations
     const environments: EnvironmentConfig[] = [
       {
-        name: `dev${environmentSuffix ? `-${environmentSuffix}` : ''}`,
+        name: `dev${shouldAppendSuffix ? `-${environmentSuffix}` : ''}`,
         cidrBlock: '10.0.0.0/16',
         dbInstanceClass: 'db.r5.large',
         flowLogRetentionDays: 7,
@@ -72,7 +75,7 @@ export class TapStack extends TerraformStack {
         },
       },
       {
-        name: `staging${environmentSuffix ? `-${environmentSuffix}` : ''}`,
+        name: `staging${shouldAppendSuffix ? `-${environmentSuffix}` : ''}`,
         cidrBlock: '10.1.0.0/16',
         dbInstanceClass: 'db.r5.large',
         flowLogRetentionDays: 30,
@@ -86,7 +89,7 @@ export class TapStack extends TerraformStack {
         },
       },
       {
-        name: `prod${environmentSuffix ? `-${environmentSuffix}` : ''}`,
+        name: `prod${shouldAppendSuffix ? `-${environmentSuffix}` : ''}`,
         cidrBlock: '10.2.0.0/16',
         dbInstanceClass: 'db.r5.large',
         flowLogRetentionDays: 90,
@@ -207,8 +210,8 @@ export class TapStack extends TerraformStack {
     });
 
     // Setup VPC Peering between staging and prod
-    const stagingEnv = `staging${environmentSuffix ? `-${environmentSuffix}` : ''}`;
-    const prodEnv = `prod${environmentSuffix ? `-${environmentSuffix}` : ''}`;
+    const stagingEnv = `staging${shouldAppendSuffix ? `-${environmentSuffix}` : ''}`;
+    const prodEnv = `prod${shouldAppendSuffix ? `-${environmentSuffix}` : ''}`;
 
     if (networkingModules[stagingEnv] && networkingModules[prodEnv]) {
       const vpcPeering = new VPCPeeringModule(
