@@ -17,8 +17,8 @@ const ec2Primary = new AWS.EC2({ region: outputs.aws_primary_region });
 const ec2Secondary = new AWS.EC2({ region: outputs.aws_secondary_region });
 const rdsPrimary = new AWS.RDS({ region: outputs.aws_primary_region });
 const rdsSecondary = new AWS.RDS({ region: outputs.aws_secondary_region });
-const cloudwatchPrimary = new AWS.CloudWatch({ region: outputs.aws_primary_region });
-const cloudwatchSecondary = new AWS.CloudWatch({ region: outputs.aws_secondary_region });
+const cloudwatchLogsPrimary = new AWS.CloudWatchLogs({ region: outputs.aws_primary_region });
+const cloudwatchLogsSecondary = new AWS.CloudWatchLogs({ region: outputs.aws_secondary_region });
 
 // Helper to diagnose AWS SDK calls
 async function diagAwsCall(label: string, fn: any, ...args: any[]) {
