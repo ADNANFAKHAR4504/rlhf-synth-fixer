@@ -103,7 +103,7 @@ if [ "$PLATFORM" = "cdk" ]; then
 elif [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ CDKTF project detected, writing outputs to cfn-outputs..."
   touch cfn-outputs/flat-outputs.json
-  if cdktf output --outputs-file cfn-outputs/flat-outputs.json; then
+  if npx cdktf output --outputs-file cfn-outputs/flat-outputs.json; then
     echo "✅ CDKTF outputs retrieved successfully"
   else
     echo "⚠️ Failed to get CDKTF outputs, creating empty file"
