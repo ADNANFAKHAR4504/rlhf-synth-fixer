@@ -896,18 +896,24 @@ jobs:
         run: |
           echo "🔍 Fetching latest Claude review comment from github-actions[bot]..."
       
-          SCORE=$(
+          SCORE="$(
             gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
               --paginate \
               --jq '[ .[] | select(.user.login == "github-actions[bot]") ] | sort_by(.created_at) | reverse | .[0].body' \
+              2>/dev/null \
             | grep -Eio '(score|quality|final)[^0-9]{0,20}[0-9]+(\.[0-9]+)?(/10)?' \
             | head -1 \
             | grep -Eo '[0-9]+(\.[0-9]+)?' \
-            || echo "0"
-          )
+            2>/dev/null
+          )"
+      
+          if [ -z "$SCORE" ]; then
+            SCORE=0
+          fi
       
           echo "✅ Claude Score Detected: $SCORE"
           echo "quality_score=$SCORE" >> $GITHUB_OUTPUT
+
 
 
       - name: Enforce Quality Threshold
