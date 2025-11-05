@@ -46,14 +46,6 @@ runs:
         key: venv-${{ runner.os }}-${{ hashFiles('Pipfile.lock') }}
         restore-keys: |
           venv-${{ runner.os }}-
-    - name: Cache npm packages
-      if: ${{ inputs.language == 'ts' || inputs.language == 'js' || inputs.platform == 'cdk' || inputs.platform == 'cdktf' || inputs.platform == 'pulumi' }}
-      uses: actions/cache@v4
-      with:
-        path: ~/.npm
-        key: npm-cache-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
-        restore-keys: |
-          npm-cache-${{ runner.os }}-
 
     # ✅ Restore pip cache (only if Python)
     - name: Cache pip packages
@@ -64,6 +56,7 @@ runs:
         key: pip-cache-${{ runner.os }}-${{ hashFiles('Pipfile.lock') }}
         restore-keys: |
           pip-cache-${{ runner.os }}-
+
     - name: Cache global npm tools
       if: ${{ inputs.platform == 'cdktf' || inputs.platform == 'cdk' || inputs.platform == 'pulumi' }}
       uses: actions/cache@v4
@@ -72,7 +65,16 @@ runs:
         key: npm-global-${{ runner.os }}
         restore-keys: |
           npm-global-${{ runner.os }}-
-
+    - name: Cache node_modules
+      if: ${{ inputs.language == 'ts' || inputs.language == 'js' || inputs.platform == 'cdk' || inputs.platform == 'cdktf' || inputs.platform == 'pulumi' }}
+      uses: actions/cache@v4
+      with:
+        path: |
+          node_modules
+          ~/.npm
+        key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+        restore-keys: |
+          node-modules-${{ runner.os }}-
     # ✅ Restore Go build/module cache (only if Go)
     - name: Cache Go modules
       if: ${{ inputs.language == 'go' }}
