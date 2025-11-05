@@ -94,7 +94,7 @@ The model used an ARN format for control IDs, but AWS Audit Manager requires UUI
 standardsArn: pulumi.interpolate`arn:aws:securityhub:${primaryRegion}::standards/cis-aws-foundations-benchmark/v/1.2.0`,
 ```
 
-The model generated invalid ARNs for Security Hub standards. The ARN format doesn't match AWS requirements for the ap-southeast-2 region.
+The model generated invalid ARNs for Security Hub standards. The ARN format doesn't match AWS requirements for the us-east-1 region.
 
 **IDEAL_RESPONSE Fix**:
 ```typescript

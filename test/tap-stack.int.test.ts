@@ -17,9 +17,9 @@ describe('TapStack Integration Tests', () => {
   let hasDeployment = false;
 
   // AWS clients for live tests
-  const s3Client = new S3Client({ region: process.env.AWS_REGION || 'ap-southeast-2' });
-  const lambdaClient = new LambdaClient({ region: process.env.AWS_REGION || 'ap-southeast-2' });
-  const snsClient = new SNSClient({ region: process.env.AWS_REGION || 'ap-southeast-2' });
+  const s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
+  const lambdaClient = new LambdaClient({ region: process.env.AWS_REGION || 'us-east-1' });
+  const snsClient = new SNSClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
   beforeAll(() => {
     // Load deployment outputs if available

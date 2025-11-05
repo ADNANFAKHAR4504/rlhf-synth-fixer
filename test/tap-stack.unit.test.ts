@@ -158,7 +158,7 @@ describe('TapStack - Comprehensive Unit Tests', () => {
   });
 
   describe('Region Configuration', () => {
-    it('should use ap-southeast-2 as default primary region', () => {
+    it('should use us-east-1 as default primary region', () => {
       const stack = new TapStack('TestDefaultRegion');
       expect(stack).toBeDefined();
     });

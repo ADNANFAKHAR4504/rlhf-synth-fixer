@@ -40,7 +40,7 @@ export interface TapStackArgs {
   tags?: pulumi.Input<{ [key: string]: string }>;
 
   /**
-   * Primary AWS region for deployment (default: ap-southeast-2)
+   * Primary AWS region for deployment (default: us-east-1)
    */
   primaryRegion?: string;
 
@@ -74,7 +74,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     const environmentSuffix = args.environmentSuffix || 'dev';
     const tags = args.tags || {};
-    const primaryRegion = args.primaryRegion || 'ap-southeast-2';
+    const primaryRegion = args.primaryRegion || 'us-east-1';
     const secondaryRegion = args.secondaryRegion || 'ap-southeast-1';
     const notificationEmails = args.notificationEmails || ['compliance@example.com'];
     const requiredTags = args.requiredTags || ['Environment', 'Owner', 'CostCenter'];
@@ -1641,7 +1641,7 @@ exports.handler = async (event) => {
 Set the following Pulumi configuration values:
 
 ```bash
-pulumi config set aws:region ap-southeast-2
+pulumi config set aws:region us-east-1
 pulumi config set env dev
 ```
 
@@ -1660,7 +1660,7 @@ pulumi stack output
 
 ### Multi-Region Deployment
 
-The stack automatically deploys to both primary (ap-southeast-2) and secondary (ap-southeast-1) regions for disaster recovery with:
+The stack automatically deploys to both primary (us-east-1) and secondary (ap-southeast-1) regions for disaster recovery with:
 - RTO < 1 hour (Lambda functions can be invoked immediately in secondary region)
 - RPO < 15 minutes (S3 replication time)
 
@@ -1684,7 +1684,7 @@ The stack automatically deploys to both primary (ap-southeast-2) and secondary (
 - **Well-Architected Tool**: Workload creation for architecture reviews
 
 ### Enterprise Requirements
-- **Multi-region DR**: Primary (ap-southeast-2) and secondary (ap-southeast-1) regions
+- **Multi-region DR**: Primary (us-east-1) and secondary (ap-southeast-1) regions
 - **RTO < 1 hour**: Replica Lambda functions ready in secondary region
 - **RPO < 15 minutes**: S3 replication with replication time control
 - **Drift Detection**: Lambda function for infrastructure drift monitoring

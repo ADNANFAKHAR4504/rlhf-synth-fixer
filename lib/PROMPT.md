@@ -76,7 +76,7 @@ Create a Pulumi TypeScript program to build an automated infrastructure complian
 ## Deployment Configuration
 
 ### Region
-- Primary region: ap-southeast-2
+- Primary region: us-east-1
 - Multi-region deployment for HA/DR as specified in constraints
 
 ### Technology Stack

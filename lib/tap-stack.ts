@@ -33,7 +33,7 @@ export interface TapStackArgs {
   tags?: pulumi.Input<{ [key: string]: string }>;
 
   /**
-   * Primary AWS region for deployment (default: ap-southeast-2)
+   * Primary AWS region for deployment (default: us-east-1)
    */
   primaryRegion?: string;
 
@@ -76,7 +76,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     const environmentSuffix = args.environmentSuffix || 'dev';
     const tags = args.tags || {};
-    const primaryRegion = args.primaryRegion || 'ap-southeast-2';
+    const primaryRegion = args.primaryRegion || 'us-east-1';
     const secondaryRegion = args.secondaryRegion || 'ap-southeast-1';
     const notificationEmails = args.notificationEmails || [
       'compliance@example.com',
