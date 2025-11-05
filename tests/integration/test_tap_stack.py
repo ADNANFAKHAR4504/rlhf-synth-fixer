@@ -48,6 +48,7 @@ class TestTapStackIntegration(unittest.TestCase):
     @classmethod
     def _fetch_pulumi_outputs(cls):
         """Fetch Pulumi outputs as a Python dictionary."""
+        # Try fetching from Pulumi stack first
         try:
             print(f"\nDebug: Environment suffix: {cls.environment_suffix}")
             print(f"Debug: Stack name: {cls.stack_name}")
@@ -65,16 +66,38 @@ class TestTapStackIntegration(unittest.TestCase):
             print(f"Successfully fetched {len(outputs)} outputs from Pulumi stack")
             if outputs:
                 print(f"Available outputs: {list(outputs.keys())}")
+                return outputs
             else:
-                print("Note: Stack has no outputs registered. Tests will use naming conventions.")
-            return outputs
+                print("Note: Stack has no outputs registered. Trying flat-outputs.json file.")
+                # Fall through to file-based approach
         except subprocess.CalledProcessError as e:
             print(f"Warning: Could not retrieve Pulumi stack outputs")
             print(f"Error: {e.stderr}")
-            print("Tests will fall back to standard naming conventions")
-            return {}
+            print("Trying to load from flat-outputs.json file...")
         except json.JSONDecodeError as e:
             print(f"Warning: Could not parse Pulumi output: {e}")
+            print("Trying to load from flat-outputs.json file...")
+        
+        # Fallback: Try reading from flat-outputs.json file
+        try:
+            flat_outputs_path = os.path.join(
+                os.path.dirname(__file__), "../..", "cfn-outputs", "flat-outputs.json"
+            )
+            if os.path.exists(flat_outputs_path):
+                print(f"Reading outputs from {flat_outputs_path}")
+                with open(flat_outputs_path, 'r') as f:
+                    outputs = json.load(f)
+                print(f"Successfully loaded {len(outputs)} outputs from flat-outputs.json")
+                if outputs:
+                    print(f"Available outputs: {list(outputs.keys())}")
+                return outputs
+            else:
+                print(f"flat-outputs.json not found at {flat_outputs_path}")
+                print("Tests will fall back to standard naming conventions")
+                return {}
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"Warning: Could not read flat-outputs.json: {e}")
+            print("Tests will fall back to standard naming conventions")
             return {}
 
     # VPC and Networking Tests
