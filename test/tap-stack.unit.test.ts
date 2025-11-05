@@ -3,7 +3,6 @@
  * Tests ALB + Auto Scaling Group + EC2 infrastructure
  */
 
-import { execSync } from 'child_process';
 import * as path from 'path';
 
 describe('Trading Platform CloudFormation Template - Comprehensive Unit Tests', () => {
@@ -58,7 +57,7 @@ describe('Trading Platform CloudFormation Template - Comprehensive Unit Tests', 
     test('VpcId parameter should have correct properties', () => {
       const param = template.Parameters.VpcId;
       expect(param.Type).toBe('AWS::EC2::VPC::Id');
-      expect(param.Default).toBe('vpc-0123456789abcdef0');
+      expect(param.Default).toBe('vpc-0c3642bb930208d98');
     });
 
     test('Environment parameter should have allowed values', () => {
@@ -161,7 +160,7 @@ describe('Trading Platform CloudFormation Template - Comprehensive Unit Tests', 
 
     test('IAM resources should have iac-rlhf-amazon tag', () => {
       const role = template.Resources.EC2InstanceRole;
-      const hasTag = role.Properties.Tags.some((tag: any) => 
+      const hasTag = role.Properties.Tags.some((tag: any) =>
         tag.Key === 'iac-rlhf-amazon' && tag.Value === 'true'
       );
       expect(hasTag).toBe(true);
@@ -234,7 +233,7 @@ describe('Trading Platform CloudFormation Template - Comprehensive Unit Tests', 
 
     test('should have iac-rlhf-amazon tag', () => {
       const alb = template.Resources.ApplicationLoadBalancer.Properties;
-      const hasTag = alb.Tags.some((tag: any) => 
+      const hasTag = alb.Tags.some((tag: any) =>
         tag.Key === 'iac-rlhf-amazon' && tag.Value === 'true'
       );
       expect(hasTag).toBe(true);
@@ -332,7 +331,7 @@ describe('Trading Platform CloudFormation Template - Comprehensive Unit Tests', 
       const lt = template.Resources.LaunchTemplate.Properties.LaunchTemplateData;
       expect(lt.TagSpecifications).toBeDefined();
       expect(lt.TagSpecifications.length).toBeGreaterThanOrEqual(2);
-      
+
       const instanceTags = lt.TagSpecifications.find((spec: any) => spec.ResourceType === 'instance');
       const hasIacTag = instanceTags.Tags.some((tag: any) => tag.Key === 'iac-rlhf-amazon');
       expect(hasIacTag).toBe(true);
@@ -541,7 +540,7 @@ describe('Trading Platform CloudFormation Template - Comprehensive Unit Tests', 
       taggableResources.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         expect(resource.Properties.Tags).toBeDefined();
-        const hasTag = resource.Properties.Tags.some((tag: any) => 
+        const hasTag = resource.Properties.Tags.some((tag: any) =>
           tag.Key === 'iac-rlhf-amazon' && tag.Value === 'true'
         );
         expect(hasTag).toBe(true);

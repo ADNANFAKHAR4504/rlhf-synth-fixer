@@ -75,28 +75,28 @@
   "Parameters": {
     "VpcId": {
       "Type": "AWS::EC2::VPC::Id",
-      "Default": "vpc-0123456789abcdef0",
+      "Default": "vpc-0c3642bb930208d98",
       "Description": "ID of existing VPC where resources will be deployed"
     },
     "PublicSubnetAId": {
       "Type": "AWS::EC2::Subnet::Id",
-      "Default": "subnet-0123456789abcdef0",
-      "Description": "Public subnet in first availability zone for ALB"
+      "Default": "subnet-04c6f1d7b5955ea4a",
+      "Description": "Public subnet in first availability zone for ALB (us-east-1a)"
     },
     "PublicSubnetBId": {
       "Type": "AWS::EC2::Subnet::Id",
-      "Default": "subnet-0123456789abcdef1",
-      "Description": "Public subnet in second availability zone for ALB"
+      "Default": "subnet-0fa545875174b05a1",
+      "Description": "Public subnet in second availability zone for ALB (us-east-1b)"
     },
     "PrivateSubnetAId": {
       "Type": "AWS::EC2::Subnet::Id",
-      "Default": "subnet-0123456789abcdef2",
-      "Description": "Private subnet in first availability zone for EC2 instances"
+      "Default": "subnet-04c6f1d7b5955ea4a",
+      "Description": "Private subnet in first availability zone for EC2 instances (us-east-1a)"
     },
     "PrivateSubnetBId": {
       "Type": "AWS::EC2::Subnet::Id",
-      "Default": "subnet-0123456789abcdef3",
-      "Description": "Private subnet in second availability zone for EC2 instances"
+      "Default": "subnet-0fa545875174b05a1",
+      "Description": "Private subnet in second availability zone for EC2 instances (us-east-1b)"
     },
     "Environment": {
       "Type": "String",
@@ -137,7 +137,7 @@
     },
     "KeyPairName": {
       "Type": "AWS::EC2::KeyPair::KeyName",
-      "Default": "default-keypair",
+      "Default": "my-keypair",
       "Description": "EC2 key pair for SSH access to instances"
     },
     "MinInstances": {
