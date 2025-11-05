@@ -450,7 +450,7 @@ class TestCrossService(unittest.TestCase):
         content = json.loads(s3_response['Body'].read().decode('utf-8'))
         
         self.assertEqual(content['request_id'], request_id)
-        self.assertEqual(content['original_data']['data'], test_marker)
+        self.assertEqual(content['original_data'], test_marker)
         
         print(f"[INFO] S3 object verified with correct content")
         print(f"[INFO] Test PASSED: Lambda successfully wrote to S3")
@@ -658,6 +658,8 @@ class TestEndToEnd(unittest.TestCase):
         s3_content = json.loads(s3_response['Body'].read().decode('utf-8'))
         
         self.assertEqual(s3_content['request_id'], request_id)
+        # For API Gateway requests, original_data contains the entire input object
+        self.assertIsInstance(s3_content['original_data'], dict)
         self.assertEqual(s3_content['original_data']['data'], test_marker)
         self.assertIn('processed_at', s3_content)
         
@@ -839,6 +841,8 @@ class TestEndToEnd(unittest.TestCase):
         content = json.loads(get_response['Body'].read().decode('utf-8'))
         
         self.assertEqual(content['request_id'], request_id)
+        # For API Gateway requests, original_data contains the entire input object
+        self.assertIsInstance(content['original_data'], dict)
         self.assertEqual(content['original_data']['data'], test_marker)
         
         print(f"[INFO] S3 object content verified")
