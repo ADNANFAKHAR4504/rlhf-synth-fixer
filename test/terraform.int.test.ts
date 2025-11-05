@@ -141,8 +141,8 @@ describe("Terraform Infrastructure Integration Tests - VPC and Networking", () =
       new DescribeVpcsCommand({ VpcIds: [vpcId] })
     );
     const vpc = response.Vpcs?.[0];
-    expect(vpc?.EnableDnsSupport?.Value).toBe(true);
-    expect(vpc?.EnableDnsHostnames?.Value).toBe(true);
+    expect(vpc?.EnableDnsSupport).toBe(true);
+    expect(vpc?.EnableDnsHostnames).toBe(true);
   });
 
   test("Should have at least 2 public subnets", () => {
