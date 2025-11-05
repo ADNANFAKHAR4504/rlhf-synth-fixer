@@ -11,6 +11,7 @@ manages environment-specific configurations.
 from typing import Optional, Dict, List
 from datetime import datetime
 import base64
+import json
 
 import pulumi
 from pulumi import ResourceOptions
@@ -518,7 +519,7 @@ class TapStack(pulumi.ComponentResource):
         lambda_s3_policy = aws.iam.RolePolicy(
             f"lambda-s3-policy-{self.environment_suffix}",
             role=lambda_role.id,
-            policy=audit_bucket.arn.apply(lambda arn: f"""{
+            policy=audit_bucket.arn.apply(lambda arn: json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [{
                     "Effect": "Allow",
@@ -526,9 +527,9 @@ class TapStack(pulumi.ComponentResource):
                         "s3:PutObject",
                         "s3:GetObject"
                     ],
-                    "Resource": "{arn}/*"
+                    "Resource": f"{arn}/*"
                 }]
-            }"""),
+            })),
             opts=ResourceOptions(parent=self)
         )
         
