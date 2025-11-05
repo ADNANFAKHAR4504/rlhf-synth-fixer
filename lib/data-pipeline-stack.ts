@@ -1,18 +1,32 @@
-import { Construct } from 'constructs';
-import { TerraformStack, TerraformOutput } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
+import { Construct } from 'constructs';
 import {
-  DataPipelineConstruct,
   DataPipelineConfig,
+  DataPipelineConstruct,
 } from './constructs/data-pipeline-construct';
 
 export interface DataPipelineStackProps extends DataPipelineConfig {
   region: string;
+  stateBucket?: string;
+  stateBucketRegion?: string;
 }
 
 export class DataPipelineStack extends TerraformStack {
   constructor(scope: Construct, id: string, props: DataPipelineStackProps) {
     super(scope, id);
+
+    // Configure S3 Backend for remote state management
+    const stateBucket = props.stateBucket || process.env.TERRAFORM_STATE_BUCKET || 'iac-rlhf-tf-states';
+    const stateBucketRegion = props.stateBucketRegion || process.env.TERRAFORM_STATE_BUCKET_REGION || 'us-east-1';
+    const environmentSuffix = props.environmentSuffix || process.env.ENVIRONMENT_SUFFIX || 'dev';
+
+    new S3Backend(this, {
+      bucket: stateBucket,
+      key: `${environmentSuffix}/${id}.tfstate`,
+      region: stateBucketRegion,
+      encrypt: true,
+    });
 
     // Configure AWS Provider
     new AwsProvider(this, 'aws', {
