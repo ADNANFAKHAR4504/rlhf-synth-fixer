@@ -265,10 +265,9 @@ func NewTapStack(ctx *pulumi.Context, name string, args *TapStackArgs, opts ...p
 		return nil, err
 	}
 
-	// 7. CloudWatch Log Group with KMS encryption and 90-day retention
+	// 7. CloudWatch Log Group with 90-day retention
 	_, err = cloudwatch.NewLogGroup(ctx, fmt.Sprintf("security-logs-%s", args.EnvironmentSuffix), &cloudwatch.LogGroupArgs{
 		RetentionInDays: pulumi.Int(90),
-		KmsKeyId:        kmsKey.Arn,
 		Tags:            commonTags,
 	}, pulumi.Parent(component))
 	if err != nil {
@@ -372,7 +371,7 @@ func NewTapStack(ctx *pulumi.Context, name string, args *TapStackArgs, opts ...p
 		return nil, err
 	}
 
-	_, err = apigateway.NewIntegration(ctx, fmt.Sprintf("api-integration-%s", args.EnvironmentSuffix), &apigateway.IntegrationArgs{
+	integration, err := apigateway.NewIntegration(ctx, fmt.Sprintf("api-integration-%s", args.EnvironmentSuffix), &apigateway.IntegrationArgs{
 		RestApi:               restApi.ID(),
 		ResourceId:            resource.ID(),
 		HttpMethod:            method.HttpMethod,
@@ -387,7 +386,7 @@ func NewTapStack(ctx *pulumi.Context, name string, args *TapStackArgs, opts ...p
 	deployment, err := apigateway.NewDeployment(ctx, fmt.Sprintf("api-deployment-%s", args.EnvironmentSuffix), &apigateway.DeploymentArgs{
 		RestApi:     restApi.ID(),
 		Description: pulumi.String("Production deployment"),
-	}, pulumi.Parent(component), pulumi.DependsOn([]pulumi.Resource{method}))
+	}, pulumi.Parent(component), pulumi.DependsOn([]pulumi.Resource{method, integration}))
 	if err != nil {
 		return nil, err
 	}
