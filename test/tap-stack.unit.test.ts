@@ -171,6 +171,140 @@ describe('environment-config.ts', () => {
   });
 });
 
+describe('getAwsRegion function', () => {
+  let originalEnv: string | undefined;
+  const fs = require('fs');
+  const path = require('path');
+
+  beforeEach(() => {
+    // Save original AWS_REGION env var
+    originalEnv = process.env.AWS_REGION;
+    // Clear module cache to ensure fresh imports
+    jest.resetModules();
+  });
+
+  afterEach(() => {
+    // Restore original AWS_REGION env var
+    if (originalEnv !== undefined) {
+      process.env.AWS_REGION = originalEnv;
+    } else {
+      delete process.env.AWS_REGION;
+    }
+    jest.restoreAllMocks();
+  });
+
+  test('should use AWS_REGION environment variable when set', () => {
+    process.env.AWS_REGION = 'us-west-1';
+    const app = Testing.app();
+    const stack = new TapStack(app, 'TestStack', {
+      awsRegion: 'eu-west-1',
+    });
+    const synthesized = Testing.synth(stack);
+    expect(synthesized).toContain('us-west-1');
+  });
+
+  test('should read from AWS_REGION file when env var not set', () => {
+    delete process.env.AWS_REGION;
+    // The file exists and contains 'ap-northeast-2'
+    const app = Testing.app();
+    const stack = new TapStack(app, 'TestStack');
+    const synthesized = Testing.synth(stack);
+    expect(synthesized).toContain('ap-northeast-2');
+  });
+
+  test('should use awsRegion from props when no AWS_REGION env var and file read fails', () => {
+    delete process.env.AWS_REGION;
+    // Mock fs.existsSync selectively for AWS_REGION file path
+    const originalExistsSync = fs.existsSync;
+    jest.spyOn(fs, 'existsSync').mockImplementation((filePath: string) => {
+      if (typeof filePath === 'string' && filePath.endsWith('AWS_REGION')) {
+        return false;
+      }
+      return originalExistsSync(filePath);
+    });
+
+    const app = Testing.app();
+    const stack = new TapStack(app, 'TestStack', {
+      awsRegion: 'eu-central-1',
+    });
+    const synthesized = Testing.synth(stack);
+    expect(synthesized).toContain('eu-central-1');
+  });
+
+  test('should use default ap-northeast-2 when no env var, file, or props', () => {
+    delete process.env.AWS_REGION;
+    // Mock fs.existsSync selectively for AWS_REGION file path
+    const originalExistsSync = fs.existsSync;
+    jest.spyOn(fs, 'existsSync').mockImplementation((filePath: string) => {
+      if (typeof filePath === 'string' && filePath.endsWith('AWS_REGION')) {
+        return false;
+      }
+      return originalExistsSync(filePath);
+    });
+
+    const app = Testing.app();
+    const stack = new TapStack(app, 'TestStack');
+    const synthesized = Testing.synth(stack);
+    expect(synthesized).toContain('ap-northeast-2');
+  });
+
+  test('should handle file read error and fall through to props', () => {
+    delete process.env.AWS_REGION;
+    // Mock fs.existsSync selectively and readFileSync to throw for AWS_REGION
+    const originalExistsSync = fs.existsSync;
+    const originalReadFileSync = fs.readFileSync;
+
+    jest.spyOn(fs, 'existsSync').mockImplementation((filePath: string) => {
+      if (typeof filePath === 'string' && filePath.endsWith('AWS_REGION')) {
+        return true;
+      }
+      return originalExistsSync(filePath);
+    });
+
+    jest.spyOn(fs, 'readFileSync').mockImplementation((filePath: any, ...args: any[]) => {
+      if (typeof filePath === 'string' && filePath.endsWith('AWS_REGION')) {
+        throw new Error('File read error');
+      }
+      return originalReadFileSync(filePath, ...args);
+    });
+
+    const app = Testing.app();
+    const stack = new TapStack(app, 'TestStack', {
+      awsRegion: 'us-east-2',
+    });
+    const synthesized = Testing.synth(stack);
+    expect(synthesized).toContain('us-east-2');
+  });
+
+  test('should handle empty AWS_REGION file and fall through to props', () => {
+    delete process.env.AWS_REGION;
+    // Mock fs.existsSync and readFileSync selectively for AWS_REGION
+    const originalExistsSync = fs.existsSync;
+    const originalReadFileSync = fs.readFileSync;
+
+    jest.spyOn(fs, 'existsSync').mockImplementation((filePath: string) => {
+      if (typeof filePath === 'string' && filePath.endsWith('AWS_REGION')) {
+        return true;
+      }
+      return originalExistsSync(filePath);
+    });
+
+    jest.spyOn(fs, 'readFileSync').mockImplementation((filePath: any, ...args: any[]) => {
+      if (typeof filePath === 'string' && filePath.endsWith('AWS_REGION')) {
+        return '  \n  ';
+      }
+      return originalReadFileSync(filePath, ...args);
+    });
+
+    const app = Testing.app();
+    const stack = new TapStack(app, 'TestStack', {
+      awsRegion: 'ap-south-1',
+    });
+    const synthesized = Testing.synth(stack);
+    expect(synthesized).toContain('ap-south-1');
+  });
+});
+
 describe('Stack Structure', () => {
   let app: App;
   let stack: TapStack;
@@ -178,6 +312,7 @@ describe('Stack Structure', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    delete process.env.AWS_REGION; // Ensure clean state for tests
     app = Testing.app();
   });
 
