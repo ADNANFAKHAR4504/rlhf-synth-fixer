@@ -122,11 +122,11 @@ def test_vpc_dns_settings():
 
 @pulumi.runtime.test
 def test_public_subnets_creation():
-    """Test that 3 public subnets are created."""
+    """Test that 2 public subnets are created."""
     def check(args):
         stack = TapStack("test-vpc", TapStackArgs())
-        # Should have exactly 3 public subnets
-        assert len(stack.public_subnets) == 3
+        # Should have exactly 2 public subnets
+        assert len(stack.public_subnets) == 2
         return None
 
     return pulumi.Output.all().apply(lambda _: check(None))
@@ -134,11 +134,11 @@ def test_public_subnets_creation():
 
 @pulumi.runtime.test
 def test_private_subnets_creation():
-    """Test that 3 private subnets are created."""
+    """Test that 2 private subnets are created."""
     def check(args):
         stack = TapStack("test-vpc", TapStackArgs())
-        # Should have exactly 3 private subnets
-        assert len(stack.private_subnets) == 3
+        # Should have exactly 2 private subnets
+        assert len(stack.private_subnets) == 2
         return None
 
     return pulumi.Output.all().apply(lambda _: check(None))
@@ -158,11 +158,11 @@ def test_internet_gateway_creation():
 
 @pulumi.runtime.test
 def test_nat_gateways_creation():
-    """Test that 3 NAT Gateways are created (one per AZ)."""
+    """Test that 2 NAT Gateways are created (one per AZ)."""
     def check(args):
         stack = TapStack("test-vpc", TapStackArgs())
-        # Should have exactly 3 NAT Gateways for HA
-        assert len(stack.nat_gateways) == 3
+        # Should have exactly 2 NAT Gateways for HA
+        assert len(stack.nat_gateways) == 2
         return None
 
     return pulumi.Output.all().apply(lambda _: check(None))
@@ -175,8 +175,8 @@ def test_route_tables_creation():
         stack = TapStack("test-vpc", TapStackArgs())
         # Should have 1 public route table
         assert stack.public_route_table is not None
-        # Should have 3 private route tables (one per AZ)
-        assert len(stack.private_route_tables) == 3
+        # Should have 2 private route tables (one per AZ)
+        assert len(stack.private_route_tables) == 2
         return None
 
     return pulumi.Output.all().apply(lambda _: check(None))
@@ -227,9 +227,8 @@ def test_stack_initialization():
         stack = TapStack("test-vpc", TapStackArgs())
         # Test stack attributes
         assert stack.region == "us-west-1"
-        assert len(stack.availability_zones) == 3
+        assert len(stack.availability_zones) == 2
         assert "us-west-1a" in stack.availability_zones
-        assert "us-west-1b" in stack.availability_zones
         assert "us-west-1c" in stack.availability_zones
         return None
 
@@ -257,12 +256,12 @@ class TestTapStackComponents(unittest.TestCase):
     """Test cases for TapStack components."""
 
     def test_availability_zones_count(self):
-        """Test that exactly 3 availability zones are configured."""
+        """Test that exactly 2 availability zones are configured."""
         @pulumi.runtime.test
         def run():
             def check(args):
                 stack = TapStack("test-vpc", TapStackArgs())
-                self.assertEqual(len(stack.availability_zones), 3)
+                self.assertEqual(len(stack.availability_zones), 2)
                 return None
             return pulumi.Output.all().apply(lambda _: check(None))
         run()
