@@ -39,15 +39,52 @@ runs:
       uses: actions/cache@v4
       with:
         path: .gen
-        key: gen-${{ runner.os }}-${{ hashFiles('cdktf.json') }}
+        key: gen-${{ runner.os }}-${{ hashFiles('cdktf.json', 'package-lock.json', 'Pipfile.lock') }}
         restore-keys: |
           gen-${{ runner.os }}-
+    
+
+    - name: Cache global npm tools
+      if: ${{ inputs.platform == 'cdktf' || inputs.platform == 'cdk' || inputs.platform == 'pulumi' }}
+      uses: actions/cache@v4
+      with:
+        path: ~/.npm-global
+        key: npm-global-${{ runner.os }}
+        restore-keys: |
+          npm-global-${{ runner.os }}-
+    
+    # Node (only if needed)
+    - name: Setup Node.js
+      if: ${{ inputs.language == 'ts' || inputs.language == 'js' || inputs.platform == 'cdk' || inputs.platform == 'cdktf' }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: 'npm'
+    
+    - name: Cache node_modules
+      if: ${{ inputs.language == 'ts' || inputs.language == 'js' || inputs.platform == 'cdk' || inputs.platform == 'cdktf' || inputs.platform == 'pulumi' }}
+      uses: actions/cache@v4
+      with:
+        path: |
+          node_modules
+          ~/.npm
+        key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+        restore-keys: |
+          node-modules-${{ runner.os }}-
+
+    # Python (only if used)
+    - name: Setup Python
+      if: ${{ inputs.language == 'py' || (inputs.platform == 'pulumi' && inputs.language == 'py') || inputs.platform == 'cfn' }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12.11'
+
     - name: Cache pipenv virtualenv
       if: ${{ inputs.language == 'py' || inputs.platform == 'cfn' }}
       uses: actions/cache@v4
       with:
         path: .venv
-        key: venv-${{ runner.os }}-${{ hashFiles('Pipfile') }}
+        key: venv-${{ runner.os }}-${{ hashFiles('Pipfile.lock') }}
         restore-keys: |
           venv-${{ runner.os }}-
 
@@ -60,25 +97,13 @@ runs:
         key: pip-cache-${{ runner.os }}-${{ hashFiles('Pipfile.lock') }}
         restore-keys: |
           pip-cache-${{ runner.os }}-
-
-    - name: Cache global npm tools
-      if: ${{ inputs.platform == 'cdktf' || inputs.platform == 'cdk' || inputs.platform == 'pulumi' }}
-      uses: actions/cache@v4
+    # Go
+    - name: Setup Go
+      if: ${{ (inputs.platform == 'cdktf' || inputs.platform == 'cdk') && inputs.language == 'go' }}
+      uses: actions/setup-go@v5
       with:
-        path: ~/.npm-global
-        key: npm-global-${{ runner.os }}
-        restore-keys: |
-          npm-global-${{ runner.os }}-
-    - name: Cache node_modules
-      if: ${{ inputs.language == 'ts' || inputs.language == 'js' || inputs.platform == 'cdk' || inputs.platform == 'cdktf' || inputs.platform == 'pulumi' }}
-      uses: actions/cache@v4
-      with:
-        path: |
-          node_modules
-          ~/.npm
-        key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
-        restore-keys: |
-          node-modules-${{ runner.os }}-
+        go-version: '1.23.12'
+    
     # ✅ Restore Go build/module cache (only if Go)
     - name: Cache Go modules
       if: ${{ inputs.language == 'go' }}
@@ -90,27 +115,6 @@ runs:
         key: go-mod-cache-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
         restore-keys: |
           go-mod-cache-${{ runner.os }}-
-    # Node (only if needed)
-    - name: Setup Node.js
-      if: ${{ inputs.language == 'ts' || inputs.language == 'js' || inputs.platform == 'cdk' || inputs.platform == 'cdktf' }}
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ inputs.node-version }}
-        cache: 'npm'
-
-    # Python (only if used)
-    - name: Setup Python
-      if: ${{ inputs.language == 'py' || (inputs.platform == 'pulumi' && inputs.language == 'py') || inputs.platform == 'cfn' }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.12.11'
-
-    # Go
-    - name: Setup Go
-      if: ${{ (inputs.platform == 'cdktf' || inputs.platform == 'cdk') && inputs.language == 'go' }}
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.23.12'
 
     # Java
     - name: Setup Java
