@@ -46,7 +46,7 @@ if [ "$EXPECTED_PLATFORM" = "analysis" ]; then
         print_success "Analysis script found in lib/"
 
         # Only validate language (should be python or bash)
-        if [ "$EXPECTED_LANGUAGE" = "python" ] || [ "$EXPECTED_LANGUAGE" = "py" ]; then
+        if [ "$EXPECTED_LANGUAGE" = "py" ] || [ "$EXPECTED_LANGUAGE" = "py" ]; then
             if grep -qE '```python|```py|^import |^def |\.py' lib/IDEAL_RESPONSE.md; then
                 print_success "Language matches: Python script detected"
                 exit 0
@@ -73,6 +73,34 @@ if [ "$EXPECTED_PLATFORM" = "analysis" ]; then
     fi
 fi
 
+# Special handling for cicd platform
+if [ "$EXPECTED_PLATFORM" = "cicd" ]; then
+    print_success "CI/CD platform detected - skipping IaC platform validation"
+
+    # For CI/CD pipeline tasks, verify that pipeline configuration exists
+    if [ -f "lib/ci-cd.yml" ] || [ -f "lib/ci-cd.yaml" ] || [ -f "lib/pipeline.yml" ]; then
+        print_success "CI/CD pipeline configuration found in lib/"
+
+        # Only validate language (should be yml or yaml)
+        if [ "$EXPECTED_LANGUAGE" = "yml" ] || [ "$EXPECTED_LANGUAGE" = "yaml" ]; then
+            if grep -qE '```yaml|```yml|^name:|^on:|^jobs:' lib/IDEAL_RESPONSE.md; then
+                print_success "Language matches: YAML pipeline configuration detected"
+                exit 0
+            else
+                print_error "Expected YAML code in IDEAL_RESPONSE.md for CI/CD pipeline task"
+                exit 1
+            fi
+        else
+            print_warning "Unexpected language '$EXPECTED_LANGUAGE' for CI/CD pipeline task"
+            print_success "Proceeding with validation (CI/CD pipeline tasks are flexible)"
+            exit 0
+        fi
+    else
+        print_error "No CI/CD pipeline configuration found (expected lib/ci-cd.yml, lib/ci-cd.yaml, or lib/pipeline.yml)"
+        exit 1
+    fi
+fi
+
 # Detect actual platform by searching IDEAL_RESPONSE.md directly
 DETECTED_PLATFORM="unknown"
 
@@ -81,10 +109,10 @@ if grep -qE 'aws-cdk-lib|@aws-cdk|software\.amazon\.awscdk|from aws_cdk import' 
     DETECTED_PLATFORM="cdk"
 # Check for Terraform
 elif grep -qE 'terraform\{|provider "aws"|resource "aws_' lib/IDEAL_RESPONSE.md; then
-    DETECTED_PLATFORM="terraform"
+    DETECTED_PLATFORM="tf"
 # Check for CloudFormation
 elif grep -qE 'AWSTemplateFormatVersion|Resources:|AWS::CloudFormation' lib/IDEAL_RESPONSE.md; then
-    DETECTED_PLATFORM="cloudformation"
+    DETECTED_PLATFORM="cfn"
 # Check for Pulumi
 elif grep -qE 'import pulumi|from pulumi import|pulumi\.' lib/IDEAL_RESPONSE.md; then
     DETECTED_PLATFORM="pulumi"
@@ -102,19 +130,20 @@ if grep -qE '```java|package app|package com|import java\.|public class |\.java'
     DETECTED_LANGUAGE="java"
 # Check for TypeScript
 elif grep -qE '```typescript|```ts|import.*from|interface |\.ts' lib/IDEAL_RESPONSE.md; then
-    DETECTED_LANGUAGE="typescript"
+    DETECTED_LANGUAGE="ts"
+# Check for HCL (Terraform configuration language) - MUST check before Python
+# Because Terraform files may reference .py files (e.g., lambda.py) which would match Python pattern
+elif grep -qE '```hcl|```terraform|resource "aws_|provider "aws"|\.tf' lib/IDEAL_RESPONSE.md; then
+    DETECTED_LANGUAGE="hcl"
 # Check for Python
 elif grep -qE '```python|```py|^import |^def |\.py' lib/IDEAL_RESPONSE.md; then
-    DETECTED_LANGUAGE="python"
+    DETECTED_LANGUAGE="py"
 # Check for Go
 elif grep -qE '```go|package main|import \(|func |\.go' lib/IDEAL_RESPONSE.md; then
     DETECTED_LANGUAGE="go"
 # Check for C#
 elif grep -qE '```csharp|```cs|using System|namespace |\.cs' lib/IDEAL_RESPONSE.md; then
     DETECTED_LANGUAGE="csharp"
-# Check for HCL (Terraform configuration language)
-elif grep -qE '```hcl|```terraform|resource "aws_|provider "aws"|\.tf' lib/IDEAL_RESPONSE.md; then
-    DETECTED_LANGUAGE="hcl"
 # Check for YAML (CloudFormation, config files) - must have code blocks
 elif grep -qE '```yaml|```yml' lib/IDEAL_RESPONSE.md; then
     DETECTED_LANGUAGE="yaml"
