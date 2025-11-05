@@ -2,13 +2,29 @@
 VPC Stack Module for Trading Platform Infrastructure
 Implements production-grade networking with high availability across 3 AZs
 """
+import json
+from typing import List, Optional
+
 import pulumi
 import pulumi_aws as aws
-import json
-from typing import List
+from pulumi import ResourceOptions
 
 
-class TapStack:
+class TapStackArgs:
+    """
+    TapStackArgs defines the input arguments for the TapStack Pulumi component.
+
+    Args:
+        environment_suffix (Optional[str]): An optional suffix for identifying the deployment environment (e.g., 'dev', 'prod').
+        tags (Optional[dict]): Optional default tags to apply to resources.
+    """
+
+    def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None):
+        self.environment_suffix = environment_suffix or 'dev'
+        self.tags = tags or {}
+
+
+class TapStack(pulumi.ComponentResource):
     """
     Production VPC infrastructure with multi-AZ support for financial services platform
 
@@ -22,21 +38,21 @@ class TapStack:
     - Network ACLs for traffic filtering
     """
 
-    def __init__(self, name: str, environment_suffix: str = None):
+    def __init__(self, name: str, args: TapStackArgs, opts: Optional[ResourceOptions] = None):
         """
         Initialize the VPC stack with all required components
 
         Args:
-            name: Base name for resources (will be combined with environmentSuffix)
-            environment_suffix: Unique suffix for resource naming (defaults to ENVIRONMENT_SUFFIX env var)
+            name: Base name for the Pulumi component
+            args: TapStackArgs containing environment_suffix and optional tags
+            opts: Optional Pulumi ResourceOptions
         """
-        import os
-        self.name = name
-        self.environment_suffix = environment_suffix or os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
-        self.region = "us-east-1"
+        super().__init__('tap:stack:TapStack', name, None, opts)
+
+        self.environment_suffix = args.environment_suffix
+        self.region = "us-west-1"
         self.availability_zones = [
             f"{self.region}a",
-            f"{self.region}b",
             f"{self.region}c"
         ]
 
@@ -44,7 +60,8 @@ class TapStack:
         self.common_tags = {
             "Environment": "production",
             "Project": "trading-platform",
-            "ManagedBy": "pulumi"
+            "ManagedBy": "pulumi",
+            **(args.tags or {})
         }
 
         # Create VPC and all components
@@ -61,6 +78,13 @@ class TapStack:
         self.flow_logs_group = self._create_flow_logs_group()
         self.flow_logs = self._create_flow_logs()
         self.network_acl = self._create_network_acl()
+
+        # Register outputs
+        self.register_outputs({
+            'vpc_id': self.vpc.id,
+            'public_subnet_ids': [s.id for s in self.public_subnets],
+            'private_subnet_ids': [s.id for s in self.private_subnets],
+        })
 
     def _create_vpc(self) -> aws.ec2.Vpc:
         """

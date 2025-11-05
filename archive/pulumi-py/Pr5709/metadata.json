@@ -1,0 +1,30 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-04T14:47:00+00:00",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "VPC Peering",
+    "Multi-Region",
+    "Security Groups"
+  ],
+  "po_id": "101000816",
+  "aws_services": [
+    "VPC",
+    "VPC-Peering",
+    "EC2-SecurityGroups",
+    "EC2-Routes",
+    "CloudWatch"
+  ],
+  "region": "us-east-1",
+  "author": "iamarpit-turing",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
