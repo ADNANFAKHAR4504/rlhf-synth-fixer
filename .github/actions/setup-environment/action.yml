@@ -30,6 +30,10 @@ runs:
     - name: Checkout
       uses: actions/checkout@v4
     # ✅ Restore NPM Cache (only if JS/TS/CDK/CDKTF/Pulumi TS)
+    - name: Configure pipenv venv path
+      shell: bash
+      run: |
+        echo "PIPENV_VENV_IN_PROJECT=1" >> "$GITHUB_ENV"
     - name: Cache CDKTF generated providers
       if: ${{ inputs.platform == 'cdktf' }}
       uses: actions/cache@v4
