@@ -88,7 +88,7 @@ class TapStack(TerraformStack):
             ],
             point_in_time_recovery={"enabled": True},
             tags={"Environment": "Production", "Name": f"product-reviews-{environment_suffix}"},
-            lifecycle={"ignore_changes": ["*"]}
+            lifecycle={"ignore_changes": "all"}
         )
 
         # S3 bucket for review images
@@ -97,7 +97,7 @@ class TapStack(TerraformStack):
             "images_bucket",
             bucket=f"review-images-{environment_suffix}",
             tags={"Environment": "Production", "Name": f"review-images-{environment_suffix}"},
-            lifecycle={"ignore_changes": ["*"]}
+            lifecycle={"ignore_changes": "all"}
         )
 
         # Block public access to S3 bucket
@@ -152,7 +152,7 @@ class TapStack(TerraformStack):
             name=f"/aws/lambda/review-processor-{environment_suffix}",
             retention_in_days=7,
             tags={"Environment": "Production"},
-            lifecycle={"ignore_changes": ["*"]}
+            lifecycle={"ignore_changes": "all"}
         )
 
         # IAM role for Lambda
@@ -293,7 +293,7 @@ class TapStack(TerraformStack):
             name=f"/aws/apigateway/reviews-api-{environment_suffix}",
             retention_in_days=7,
             tags={"Environment": "Production"},
-            lifecycle={"ignore_changes": ["*"]}
+            lifecycle={"ignore_changes": "all"}
         )
 
         # API Gateway resource: /reviews
