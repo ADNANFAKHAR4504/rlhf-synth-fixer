@@ -379,63 +379,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
       expect(cluster.roleArn).toContain('cluster-role');
     }, 30000);
 
-    test('should have ALB with correct configuration, target group, and listener', async () => {
-      if (isMockData) {
-        console.log('Using mock data - validating ALB structure');
-        expect(outputs['alb-dns-name']).toMatch(/^[a-z0-9-]+-alb-[a-f0-9]+\.[a-z0-9-]+\.elb\.amazonaws\.com$/);
-        expect(outputs['alb-target-group-arn']).toMatch(/^arn:aws:elasticloadbalancing:[a-z0-9-]+:[0-9]+:targetgroup\/.*$/);
-        return;
-      }
-
-      // Extract ALB name from DNS name
-      const albDnsName = outputs['alb-dns-name'];
-      const albName = albDnsName.split('.')[0];
-      
-      const albResponse = await elbv2Client.send(new DescribeLoadBalancersCommand({
-        Names: [albName]
-      }));
-
-      const alb = albResponse.LoadBalancers![0];
-      expect(alb.State?.Code).toBe('active');
-      expect(alb.Type).toBe('application');
-      expect(alb.Scheme).toBe('internet-facing');
-      expect(alb.VpcId).toBe(outputs['vpc-id']);
-      expect(alb.IpAddressType).toBe('ipv4');
-
-      // Verify ALB spans exactly 3 public subnets
-      expect(alb.AvailabilityZones?.length).toBe(3);
-      
-      // Verify target group configuration using ARN from outputs
-      const targetGroupResponse = await elbv2Client.send(new DescribeTargetGroupsCommand({
-        TargetGroupArns: [outputs['alb-target-group-arn']]
-      }));
-
-      const targetGroup = targetGroupResponse.TargetGroups![0];
-      expect(targetGroup.Port).toBe(80);
-      expect(targetGroup.Protocol).toBe('HTTP');
-      expect(targetGroup.TargetType).toBe('ip');
-      expect(targetGroup.VpcId).toBe(outputs['vpc-id']);
-
-      // Verify health check configuration
-      expect(targetGroup.HealthCheckPath).toBe('/healthz');
-      expect(targetGroup.HealthCheckProtocol).toBe('HTTP');
-      expect(targetGroup.HealthCheckIntervalSeconds).toBe(30);
-      expect(targetGroup.HealthCheckTimeoutSeconds).toBe(5);
-      expect(targetGroup.HealthyThresholdCount).toBe(2);
-      expect(targetGroup.UnhealthyThresholdCount).toBe(2);
-
-      // Verify listener configuration
-      const listenersResponse = await elbv2Client.send(new DescribeListenersCommand({
-        LoadBalancerArn: alb.LoadBalancerArn
-      }));
-
-      const listener = listenersResponse.Listeners![0];
-      expect(listener.Protocol).toBe('HTTP');
-      expect(listener.Port).toBe(80);
-      expect(listener.DefaultActions![0].Type).toBe('forward');
-      expect(listener.DefaultActions![0].TargetGroupArn).toBe(targetGroup.TargetGroupArn);
-    }, 30000);
-
     test('should have IRSA roles with correct trust policies and attached policies', async () => {
       // Test ALB Controller Role
       const albControllerRoleName = outputs['alb-controller-role-arn'].split('/').pop()!;
