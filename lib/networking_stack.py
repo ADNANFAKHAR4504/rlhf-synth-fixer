@@ -14,6 +14,7 @@ from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import (
     S3BucketLifecycleConfiguration,
     S3BucketLifecycleConfigurationRule,
     S3BucketLifecycleConfigurationRuleExpiration,
+    S3BucketLifecycleConfigurationRuleFilter,
 )
 from cdktf_cdktf_provider_aws.data_aws_availability_zones import DataAwsAvailabilityZones
 from cdktf import TerraformOutput, Fn
@@ -333,6 +334,9 @@ class NetworkingStack(Construct):
                 S3BucketLifecycleConfigurationRule(
                     id="delete-old-logs",
                     status="Enabled",
+                    filter=[S3BucketLifecycleConfigurationRuleFilter(
+                        prefix=""
+                    )],
                     expiration=[S3BucketLifecycleConfigurationRuleExpiration(
                         days=30
                     )],
