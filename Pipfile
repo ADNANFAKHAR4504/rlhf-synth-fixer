@@ -35,9 +35,10 @@ black = "*"
 pillow = "*"
 pytest-cov = "*"
 psycopg2-binary = "*"
+yamllint = "*"
 
 [requires]
-python_version = "3.12.11"
+python_version = "3.13"
 
 [scripts]
 # Validation
