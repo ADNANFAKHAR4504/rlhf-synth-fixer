@@ -365,7 +365,9 @@ class TestServiceLevel(unittest.TestCase):
             
             if len(streams) > 0:
                 print(f"[INFO] Most recent stream: {streams[0]['logStreamName']}")
-                print(f"[INFO] Last event time: {datetime.fromtimestamp(streams[0]['lastEventTime']/1000, tz=timezone.utc)}")
+                # lastEventTime is optional - only present if stream has events
+                if 'lastEventTime' in streams[0]:
+                    print(f"[INFO] Last event time: {datetime.fromtimestamp(streams[0]['lastEventTime']/1000, tz=timezone.utc)}")
             
             print(f"[INFO] Test PASSED: CloudWatch Logs query successful")
             
@@ -658,9 +660,8 @@ class TestEndToEnd(unittest.TestCase):
         s3_content = json.loads(s3_response['Body'].read().decode('utf-8'))
         
         self.assertEqual(s3_content['request_id'], request_id)
-        # For API Gateway requests, original_data contains the entire input object
-        self.assertIsInstance(s3_content['original_data'], dict)
-        self.assertEqual(s3_content['original_data']['data'], test_marker)
+        # Lambda extracts only body['data'], so original_data is just the string
+        self.assertEqual(s3_content['original_data'], test_marker)
         self.assertIn('processed_at', s3_content)
         
         print(f"[INFO] S3 object verified with correct content")
@@ -841,9 +842,8 @@ class TestEndToEnd(unittest.TestCase):
         content = json.loads(get_response['Body'].read().decode('utf-8'))
         
         self.assertEqual(content['request_id'], request_id)
-        # For API Gateway requests, original_data contains the entire input object
-        self.assertIsInstance(content['original_data'], dict)
-        self.assertEqual(content['original_data']['data'], test_marker)
+        # Lambda extracts only body['data'], so original_data is just the string
+        self.assertEqual(content['original_data'], test_marker)
         
         print(f"[INFO] S3 object content verified")
         
