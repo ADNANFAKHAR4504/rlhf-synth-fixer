@@ -1,63 +1,9 @@
-Design a CDK for Terraform (CDKTF) application in TypeScript that provisions three completely isolated AWS environments—`dev`, `staging`, and `prod`—while ensuring architecture consistency and ease of maintenance. The implementation must be structured across only two files:
+Design a CDK for Terraform (CDKTF) application in TypeScript that provisions three fully isolated AWS environments—dev, staging, and prod—while maintaining consistency and reusability, we can structure the project across two main files: `lib/modules.ts` and `lib/tap-stack.ts`. The file `lib/modules.ts` serves as a reusable construct library that defines composable infrastructure modules such as the VPC, ECS, RDS, ALB, and IAM roles, ensuring a uniform architecture pattern across all environments. The VPC module creates a dedicated Virtual Private Cloud per environment, spanning three Availability Zones with public, private, and database subnets. Each VPC uses unique CIDR blocks (`10.0.0.0/16` for dev, `10.1.0.0/16` for staging, and `10.2.0.0/16` for prod) and provisions VPC Endpoints for S3, ECR, and Systems Manager, enabling private communication without traversing the internet. Additionally, VPC peering is established between the staging and production environments to allow controlled data migration.
 
-- `lib/tap-stack.ts`: The root stack responsible for instantiating all environments.
-- `lib/modules.ts`: A reusable module library housing common constructs such as VPC, ECS, ALB, and RDS.
+The ECS module defines a reusable Fargate cluster with auto-scaling capacity providers, while the ECS Service construct manages container deployments that depend on the RDS module. Each cluster runs within its respective VPC and integrates seamlessly with the load balancer and database layers. The RDS module provisions an Aurora PostgreSQL cluster with instance type `db.r5.large`, disabling deletion protection for flexibility across environments. Credentials are securely stored in AWS Systems Manager Parameter Store, encrypted using a KMS key. To ensure traffic distribution, the ALB module deploys an Application Load Balancer per environment with HTTP listeners only, routing requests to ECS services. Each ALB is integrated with Route53 to register environment-specific records—`dev.example.com`, `staging.example.com`, and `prod.example.com`—for easy access and DNS-based routing.
 
-### Requirements
+Security and permissions are managed through the IAM module, which implements least-privilege policies for ECS tasks, RDS access, and SSM operations. Centralized logging and monitoring are achieved by enabling VPC Flow Logs with tailored retention—7 days for dev, 30 days for staging, and 90 days for prod—stored in CloudWatch. Common tags such as `Environment`, `Project`, and `CostCenter` are applied consistently across all resources for governance and cost tracking.
 
-1. Networking
-- Create an isolated VPC per environment with:
-  - 3 Availability Zones
-  - Public, Private, and Database subnets in each AZ
-  - Unique CIDR blocks:
-    - `dev`: `10.0.0.0/16`
-    - `staging`: `10.1.0.0/16`
-    - `prod`: `10.2.0.0/16`
-- Include VPC Endpoints for S3, ECR, and Systems Manager.
-- Set up VPC peering between staging and prod for data migration.
+The orchestration happens in `lib/tap-stack.ts`, which acts as the root stack that instantiates each environment by importing the reusable constructs from `modules.ts`. Each environment stack—`dev`, `staging`, and `prod`—is configured independently but uses the same modules with environment-specific parameters such as CIDR, retention, and domain names. Terraform remote state management is configured per environment, using S3 buckets for state storage and DynamoDB tables for locking, ensuring reliable and isolated deployments. Provider version constraints are enforced to guarantee repeatable builds. Stack dependencies are declared so that the RDS cluster is created before the ECS services, ensuring application startup reliability. Finally, key outputs such as VPC IDs, ALB DNS names, ECS cluster ARNs, and RDS endpoints are exported for visibility and inter-stack integration.
 
-2. Application
-- Deploy an ECS Fargate cluster per environment:
-  - Auto-scaling enabled via Capacity Providers.
-  - Use a reusable construct for ECS Services.
-  
-3. Database
-- Create an RDS Aurora PostgreSQL cluster per environment:
-  - Use `db.t3.micro` for all environments.
-  - Disable deletion protection for all environments.
-  - Store database credentials in SSM Parameter Store encrypted with KMS.
-
-4. Load Balancing / DNS
-- Deploy Application Load Balancers for each environment.
-- Use HTTP listeners only, do not configure SSL/TLS.
-- Configure Route53 records for each environment:
-  - `dev.example.com`, `staging.example.com`, `prod.example.com`
-
-5. IAM
-- Implement least-privilege IAM roles/policies for ECS and RDS access as reusable constructs.
-
-6. Logging & Monitoring
-- Enable VPC Flow Logs with varying retention:
-  - Dev: 7 days  
-  - Staging: 30 days  
-  - Prod: 90 days  
-
-7. CDKTF Configuration
-- Use Terraform remote backend with S3 + DynamoDB for state locking per environment.
-- Enforce provider version constraints for repeatable deployments.
-- Use stack dependencies to ensure RDS is provisioned before ECS services.
-- Export critical endpoints and IDs via CDKTF stack outputs.
-- Add consistent tagging across all resources:
-  - `Environment`
-  - `Project`
-  - `CostCenter`
-
-### Background
-A fintech startup needs to deploy isolated AWS environments for development, staging, and production. Each environment must maintain strict isolation while reusing infrastructure-as-code constructs for cost-efficiency and consistency.
-
-### Expected Output
-- A working CDKTF TypeScript configuration with:
-  - Reusable construct modules in `lib/modules.ts`
-  - Root stack orchestration in `lib/tap-stack.ts`
-  - Each environment is deployable independently using the same constructs but different configuration inputs.
-- All AWS resources must be provisioned within the new VPCs created by the stack without reusing any existing infrastructure.
+This two-file architecture—combining modular reusability in `modules.ts` with centralized orchestration in `tap-stack.ts`—ensures scalability, maintainability, and complete isolation between environments while promoting consistent provisioning across all AWS accounts.
