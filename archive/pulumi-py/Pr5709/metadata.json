@@ -20,6 +20,11 @@
     "CloudWatch"
   ],
   "region": "us-east-1",
-  "author": "chriscrsov",
-  "training_quality": 10
+  "author": "iamarpit-turing",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
