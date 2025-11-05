@@ -889,31 +889,36 @@ jobs:
             Once your review is complete, post the summary comment and finish execution successfully.
             Do not exit with a non-zero code unless explicitly instructed by the workflow.
 
-      - name: Extract Claude Quality Score (latest bot comment)
-        id: extract
+      - name: Extract Claude Quality Score (latest claude comment)
+        id: extract_claude_score
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "🔍 Fetching latest Claude review comment from github-actions[bot]..."
+          echo "🔍 Fetching latest Claude review comment..."
+      
+          gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments --paginate \
+            --jq '[ .[] | select(.user.login=="github-actions[bot]") ] | sort_by(.created_at) | reverse | .[0].body' \
+            2>/dev/null > all_comments.txt
+      
+          echo "🍀 Searching for quality score pattern..."
       
           SCORE="$(
-            gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
-              --paginate \
-              --jq '[ .[] | select(.user.login == "github-actions[bot]") ] | sort_by(.created_at) | reverse | .[0].body' \
-              2>/dev/null \
-            | grep -Eio '(score|quality|final)[^0-9]{0,20}[0-9]+(\.[0-9]+)?(/10)?' \
-            | head -1 \
-            | grep -Eo '[0-9]+(\.[0-9]+)?' \
+            < all_comments.txt \
+            sed -E 's/\r//g' \
+            | grep -Eio '(final score|quality score|training quality|score)[^0-9]{0,25}[0-9]+(\.[0-9]+)?(/10)?' \
+            | tail -n1 \
+            | grep -Eo '[0-9]+(\.[0-9]+)?(/10)?' \
+            | sed 's/\/10//' \
             2>/dev/null
           )"
       
           if [ -z "$SCORE" ]; then
+            echo "⚠️ No valid score found. Defaulting to 0."
             SCORE=0
           fi
       
-          echo "✅ Claude Score Detected: $SCORE"
-          echo "quality_score=$SCORE" >> $GITHUB_OUTPUT
-
+          echo "✅ Claude score extracted: $SCORE"
+          echo "quality_score=$SCORE" >> "$GITHUB_OUTPUT"
 
 
       - name: Enforce Quality Threshold
