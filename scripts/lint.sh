@@ -3,45 +3,20 @@ set -e
 
 echo "🔍 Running Lint checks..."
 
-# Read metadata
+# Read metadata to determine platform and language
 if [ ! -f "metadata.json" ]; then
     echo "❌ metadata.json not found, exiting with failure"
     exit 1
 fi
 
-PLATFORM=$(jq -r '.platform // "unknown"' metadata.json | tr -d '[:space:]')
-LANGUAGE=$(jq -r '.language // "unknown"' metadata.json | tr -d '[:space:]')
+PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
+LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
 
 echo "Running linting for platform: $PLATFORM, language: $LANGUAGE"
 
-# ---- Skip non-code stacks early ----
-if [[ "$PLATFORM" == "tf" || "$PLATFORM" == "terraform" || "$LANGUAGE" == "hcl" ]]; then
-    echo "🪶 Terraform project detected — skipping npm lint."
-    exit 0
-fi
-
-if [[ "$PLATFORM" == "cfn" ]]; then
-    echo "📜 CloudFormation project detected, running validation..."
-    if [ "$LANGUAGE" == "json" ]; then
-        pipenv run cfn-validate-json
-    elif [ "$LANGUAGE" == "yaml" ]; then
-        pipenv run cfn-validate-yaml
-    else
-        echo "ℹ️ Unknown CFN language ($LANGUAGE), skipping lint."
-    fi
-    echo "✅ CloudFormation lint completed successfully."
-    exit 0
-fi
-
-# ---- Language specific linting ----
-
 if [ "$LANGUAGE" = "ts" ]; then
     echo "✅ TypeScript project detected, running ESLint..."
-    if command -v npm >/dev/null 2>&1; then
-        NODE_OPTIONS="--max-old-space-size=4096" npm run lint
-    else
-        echo "⚠️ npm not found, skipping ESLint."
-    fi
+    NODE_OPTIONS="--max-old-space-size=4096" npm run lint
 
 elif [ "$LANGUAGE" = "go" ]; then
     echo "✅ Go project detected, running go fmt and go vet..."
@@ -50,6 +25,7 @@ elif [ "$LANGUAGE" = "go" ]; then
             echo "⚠️ Found legacy terraform.tfstate. Removing for clean CI run..."
             rm -f terraform.tfstate
         fi
+
         if [ ! -d ".gen/aws" ]; then
             echo "📦 Running cdktf get to generate local bindings (.gen folder missing)"
             npx --yes cdktf get
@@ -205,4 +181,4 @@ else
     npm run lint
 fi
 
-echo "✅ Lint checks completed successfully."
+echo "✅ Lint checks completed successfully"

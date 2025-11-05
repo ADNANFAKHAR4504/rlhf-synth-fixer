@@ -905,7 +905,6 @@ jobs:
           echo "Claude quality score: $SCORE"
           echo "quality_score=$SCORE" >> $GITHUB_OUTPUT
 
-
       - name: Enforce Quality Threshold
         id: quality_gate
         run: |
