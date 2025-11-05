@@ -26,22 +26,23 @@ class TapStack(TerraformStack):
         state_bucket_region = kwargs.get('state_bucket_region', 'us-east-1')
         state_bucket = kwargs.get('state_bucket', 'iac-rlhf-tf-states')
 
-        # Merge default tags with mandatory project tags
-        default_tags = {
+        # Get default tags from kwargs (already structured with "tags" key)
+        # and merge with mandatory project tags
+        default_tags_input = kwargs.get('default_tags', {"tags": {}})
+        merged_tags = {
             'Environment': 'Production',
             'Project': 'PaymentGateway',
             'EnvironmentSuffix': environment_suffix,
-            **kwargs.get('default_tags', {}),
+            **default_tags_input.get('tags', {}),
         }
+        default_tags = [{"tags": merged_tags}]
 
         # Configure AWS Provider with standard tags
         AwsProvider(
             self,
             "aws",
             region=aws_region,
-            default_tags=[default_tags] if default_tags else None,
-            **provider_args,
-            default_tags=[default_tags],
+            default_tags=default_tags,
         )
 
         # Configure remote state backend in S3 for shared environments
