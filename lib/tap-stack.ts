@@ -14,8 +14,8 @@ interface TapStackProps {
   defaultTags?: AwsProviderDefaultTags;
 }
 
-// AWS Region override for us-east-1
-const AWS_REGION_OVERRIDE = 'us-east-1';
+// AWS Region override for ap-southeast-5
+const AWS_REGION_OVERRIDE = 'ap-southeast-5';
 
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {

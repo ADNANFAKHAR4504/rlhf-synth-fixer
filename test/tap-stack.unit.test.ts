@@ -231,13 +231,13 @@ describe('TapStack Unit Tests', () => {
     test('Region override is applied correctly', () => {
       app = new App();
       stack = new TapStack(app, 'TestRegionOverride', {
-        awsRegion: 'us-west-2',
+        awsRegion: 'ap-southeast-5',
       });
       synthesized = Testing.synth(stack);
       const template = JSON.parse(synthesized);
 
       // AWS_REGION_OVERRIDE should take precedence
-      expect(template.provider.aws[0].region).toBe('us-east-1');
+      expect(template.provider.aws[0].region).toBe('ap-southeast-5');
     });
   });
 
