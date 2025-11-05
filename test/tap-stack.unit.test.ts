@@ -645,5 +645,19 @@ describe('Trading Platform CloudFormation Template - Comprehensive Unit Tests', 
       expect(policy.LaunchTemplate.Overrides).toBeDefined();
       expect(policy.LaunchTemplate.Overrides.length).toBeGreaterThan(1);
     });
+
+    test('should not have duplicate instance types in overrides', () => {
+      const policy = template.Resources.AutoScalingGroup.Properties.MixedInstancesPolicy;
+      const overrides = policy.LaunchTemplate.Overrides;
+      const instanceTypes = overrides.map((override: any) => {
+        if (override.InstanceType && typeof override.InstanceType === 'object' && override.InstanceType.Ref) {
+          return template.Parameters[override.InstanceType.Ref].Default;
+        }
+        return override.InstanceType;
+      });
+
+      const uniqueTypes = new Set(instanceTypes);
+      expect(instanceTypes.length).toBe(uniqueTypes.size);
+    });
   });
 });

@@ -467,10 +467,11 @@ Resources:
             Version: !GetAtt LaunchTemplate.LatestVersionNumber
           Overrides:
             - InstanceType: !Ref InstanceType
+              WeightedCapacity: "1"
             - InstanceType: t3a.medium
               WeightedCapacity: "1"
-            - InstanceType: t3.medium
-              WeightedCapacity: "1"
+            - InstanceType: t3.large
+              WeightedCapacity: "2"
         InstancesDistribution:
           OnDemandBaseCapacity: !If [IsProduction, 2, 0]
           OnDemandPercentageAboveBaseCapacity: !If [IsProduction, 50, 0]
