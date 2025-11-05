@@ -1,4 +1,4 @@
-**Functional scope (build everything new):**
+**Functional scope**
 
 * Build a **single, production-ready AWS CloudFormation template written entirely in YAML** to provision a secure, fully serverless data-processing and logging environment **from scratch** in **`us-east-1`**.
 * The template must **create every resource** independently — nothing should refer to any pre-existing infrastructure.
