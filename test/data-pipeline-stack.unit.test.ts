@@ -900,5 +900,65 @@ describe('DataPipelineStack Unit Tests', () => {
         process.env.ENVIRONMENT_SUFFIX = originalEnvironmentSuffix;
       }
     });
+
+    test('should use environmentSuffix from environment variable when not in props', () => {
+      const originalEnvironmentSuffix = process.env.ENVIRONMENT_SUFFIX;
+
+      process.env.ENVIRONMENT_SUFFIX = 'fromenv';
+
+      stack = new DataPipelineStack(app, 'TestEnvSuffixStack', {
+        environment: 'dev',
+        environmentSuffix: undefined as any,
+        region: 'ap-southeast-1',
+        lambdaMemory: 512,
+        dynamodbReadCapacity: 5,
+        dynamodbWriteCapacity: 5,
+        dynamodbBillingMode: 'PAY_PER_REQUEST',
+        s3LifecycleDays: 30,
+        enableXrayTracing: false,
+        snsEmail: 'dev-alerts@example.com',
+        costCenter: 'development',
+      } as any);
+      synthesized = JSON.parse(Testing.synth(stack));
+
+      expect(synthesized.terraform.backend.s3.key).toBe(
+        'fromenv/TestEnvSuffixStack.tfstate'
+      );
+
+      if (originalEnvironmentSuffix) {
+        process.env.ENVIRONMENT_SUFFIX = originalEnvironmentSuffix;
+      } else {
+        delete process.env.ENVIRONMENT_SUFFIX;
+      }
+    });
+
+    test('should use default environmentSuffix when not provided anywhere', () => {
+      const originalEnvironmentSuffix = process.env.ENVIRONMENT_SUFFIX;
+
+      delete process.env.ENVIRONMENT_SUFFIX;
+
+      stack = new DataPipelineStack(app, 'TestDefaultEnvSuffixStack', {
+        environment: 'dev',
+        environmentSuffix: undefined as any,
+        region: 'ap-southeast-1',
+        lambdaMemory: 512,
+        dynamodbReadCapacity: 5,
+        dynamodbWriteCapacity: 5,
+        dynamodbBillingMode: 'PAY_PER_REQUEST',
+        s3LifecycleDays: 30,
+        enableXrayTracing: false,
+        snsEmail: 'dev-alerts@example.com',
+        costCenter: 'development',
+      } as any);
+      synthesized = JSON.parse(Testing.synth(stack));
+
+      expect(synthesized.terraform.backend.s3.key).toBe(
+        'dev/TestDefaultEnvSuffixStack.tfstate'
+      );
+
+      if (originalEnvironmentSuffix) {
+        process.env.ENVIRONMENT_SUFFIX = originalEnvironmentSuffix;
+      }
+    });
   });
 });
