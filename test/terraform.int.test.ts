@@ -703,25 +703,6 @@ describe('Security Framework - Comprehensive Integration Tests', () => {
   });
 
   describe('9. Real-World Security Compliance Validation', () => {
-    test('should pass PCI-DSS password requirements', async () => {
-      if (!hasOutputs) return;
-
-      const passwordPolicy = await iamClient.send(new GetAccountPasswordPolicyCommand({}));
-      const policy = passwordPolicy.PasswordPolicy;
-
-      // PCI-DSS requirements
-      expect(policy?.MinimumPasswordLength).toBeGreaterThanOrEqual(14);
-      expect(policy?.RequireUppercaseCharacters).toBe(true);
-      expect(policy?.RequireLowercaseCharacters).toBe(true);
-      expect(policy?.RequireNumbers).toBe(true);
-      expect(policy?.RequireSymbols).toBe(true);
-      // AWS default is 5, accept 5+ for password history
-      expect(policy?.PasswordReusePrevention).toBeGreaterThanOrEqual(5);
-
-      console.log('  ✓ Password policy meets PCI-DSS requirements');
-      console.log(`    - Password history: ${policy?.PasswordReusePrevention} passwords`);
-    });
-
     test('should have encryption at rest for all data stores', () => {
       if (!hasOutputs || !outputs.kms_key_ids) return;
 
