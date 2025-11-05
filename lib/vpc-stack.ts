@@ -343,7 +343,7 @@ export class VpcStack extends Construct {
       vpcEndpointType: 'Gateway',
       routeTableIds: [
         publicRouteTable.id,
-        ...privateRouteTables.map((rt) => rt.id),
+        ...privateRouteTables.map(rt => rt.id),
       ],
       tags: {
         Name: `payment-s3-endpoint-${environmentSuffix}`,
@@ -358,7 +358,7 @@ export class VpcStack extends Construct {
       vpcEndpointType: 'Gateway',
       routeTableIds: [
         publicRouteTable.id,
-        ...privateRouteTables.map((rt) => rt.id),
+        ...privateRouteTables.map(rt => rt.id),
       ],
       tags: {
         Name: `payment-dynamodb-endpoint-${environmentSuffix}`,

@@ -102,7 +102,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
       const response = await ec2Client.send(command);
 
       expect(response.Subnets).toHaveLength(3);
-      response.Subnets!.forEach((subnet) => {
+      response.Subnets!.forEach(subnet => {
         expect(subnet.MapPublicIpOnLaunch).toBe(true);
       });
     });
@@ -118,7 +118,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
       const response = await ec2Client.send(command);
 
       expect(response.Subnets).toHaveLength(3);
-      response.Subnets!.forEach((subnet) => {
+      response.Subnets!.forEach(subnet => {
         expect(subnet.MapPublicIpOnLaunch).toBe(false);
       });
     });
@@ -131,7 +131,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
       const response = await ec2Client.send(command);
 
       const azs = new Set(
-        response.Subnets!.map((subnet) => subnet.AvailabilityZone)
+        response.Subnets!.map(subnet => subnet.AvailabilityZone)
       );
       expect(azs.size).toBe(3);
     });
@@ -145,9 +145,9 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
       });
       const response = await ec2Client.send(command);
 
-      const cidrBlocks = response.Subnets!.map(
-        (subnet) => subnet.CidrBlock
-      ).sort();
+      const cidrBlocks = response
+        .Subnets!.map(subnet => subnet.CidrBlock)
+        .sort();
       const expectedCidrs = [
         '10.0.0.0/24',
         '10.0.1.0/24',
@@ -173,7 +173,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
       const response = await ec2Client.send(command);
 
       expect(response.NatGateways).toHaveLength(3);
-      response.NatGateways!.forEach((nat) => {
+      response.NatGateways!.forEach(nat => {
         expect(nat.State).toBe('available');
       });
     });
@@ -187,7 +187,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
       });
       const response = await ec2Client.send(command);
 
-      response.NatGateways!.forEach((nat) => {
+      response.NatGateways!.forEach(nat => {
         expect(publicSubnetIds).toContain(nat.SubnetId);
       });
     });
@@ -199,7 +199,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
       });
       const response = await ec2Client.send(command);
 
-      response.NatGateways!.forEach((nat) => {
+      response.NatGateways!.forEach(nat => {
         expect(nat.NatGatewayAddresses).toBeDefined();
         expect(nat.NatGatewayAddresses!.length).toBeGreaterThan(0);
         expect(nat.NatGatewayAddresses![0].AllocationId).toBeDefined();
@@ -222,16 +222,16 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
 
       // Check inbound rules
       const ingressRules = sg.IpPermissions || [];
-      const httpRule = ingressRules.find((rule) => rule.FromPort === 80);
-      const httpsRule = ingressRules.find((rule) => rule.FromPort === 443);
+      const httpRule = ingressRules.find(rule => rule.FromPort === 80);
+      const httpsRule = ingressRules.find(rule => rule.FromPort === 443);
 
       expect(httpRule).toBeDefined();
       expect(httpsRule).toBeDefined();
 
       // Verify no 0.0.0.0/0 inbound rules (least privilege)
-      ingressRules.forEach((rule) => {
+      ingressRules.forEach(rule => {
         const hasOpenCidr = rule.IpRanges?.some(
-          (range) => range.CidrIp === '0.0.0.0/0'
+          range => range.CidrIp === '0.0.0.0/0'
         );
         expect(hasOpenCidr).toBeFalsy();
       });
@@ -248,16 +248,16 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
 
       const sg = response.SecurityGroups![0];
       const ingressRules = sg.IpPermissions || [];
-      const port8080Rule = ingressRules.find((rule) => rule.FromPort === 8080);
+      const port8080Rule = ingressRules.find(rule => rule.FromPort === 8080);
 
       expect(port8080Rule).toBeDefined();
       expect(port8080Rule!.UserIdGroupPairs).toBeDefined();
       expect(port8080Rule!.UserIdGroupPairs![0].GroupId).toBe(webSgId);
 
       // Verify no 0.0.0.0/0 inbound rules
-      ingressRules.forEach((rule) => {
+      ingressRules.forEach(rule => {
         const hasOpenCidr = rule.IpRanges?.some(
-          (range) => range.CidrIp === '0.0.0.0/0'
+          range => range.CidrIp === '0.0.0.0/0'
         );
         expect(hasOpenCidr).toBeFalsy();
       });
@@ -310,7 +310,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
       const response = await ec2Client.send(command);
 
       expect(response.Reservations).toHaveLength(3);
-      response.Reservations!.forEach((reservation) => {
+      response.Reservations!.forEach(reservation => {
         const instance = reservation.Instances![0];
         expect(instance.InstanceType).toBe('t3.micro');
         expect(instance.State?.Name).toBe('running');
@@ -324,7 +324,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
       });
       const response = await ec2Client.send(command);
 
-      response.Reservations!.forEach((reservation) => {
+      response.Reservations!.forEach(reservation => {
         const instance = reservation.Instances![0];
         const imageName = instance.ImageId;
         expect(imageName).toBeDefined();
@@ -342,7 +342,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
       });
       const response = await ec2Client.send(command);
 
-      response.Reservations!.forEach((reservation) => {
+      response.Reservations!.forEach(reservation => {
         const instance = reservation.Instances![0];
         expect(privateSubnetIds).toContain(instance.SubnetId);
       });
@@ -355,7 +355,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
       });
       const response = await ec2Client.send(command);
 
-      response.Reservations!.forEach((reservation) => {
+      response.Reservations!.forEach(reservation => {
         const instance = reservation.Instances![0];
         expect(instance.IamInstanceProfile).toBeDefined();
         expect(instance.IamInstanceProfile!.Arn).toBeDefined();
@@ -369,7 +369,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
       });
       const response = await ec2Client.send(command);
 
-      response.Reservations!.forEach((reservation) => {
+      response.Reservations!.forEach(reservation => {
         const instance = reservation.Instances![0];
         expect(instance.KeyName).toBeUndefined();
       });
@@ -382,7 +382,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
       });
       const response = await ec2Client.send(command);
 
-      response.Reservations!.forEach((reservation) => {
+      response.Reservations!.forEach(reservation => {
         const instance = reservation.Instances![0];
         expect(instance.MetadataOptions?.HttpTokens).toBe('required');
       });
@@ -461,15 +461,15 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
       ];
 
       const associatedSubnets = new Set();
-      routeTables.forEach((rt) => {
-        rt.Associations?.forEach((assoc) => {
+      routeTables.forEach(rt => {
+        rt.Associations?.forEach(assoc => {
           if (assoc.SubnetId) {
             associatedSubnets.add(assoc.SubnetId);
           }
         });
       });
 
-      allSubnetIds.forEach((subnetId) => {
+      allSubnetIds.forEach(subnetId => {
         expect(associatedSubnets.has(subnetId)).toBe(true);
       });
     });
@@ -489,8 +489,8 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
       const response = await ec2Client.send(command);
 
       // Find route tables associated with private subnets
-      const privateRouteTables = response.RouteTables!.filter((rt) =>
-        rt.Associations?.some((assoc) =>
+      const privateRouteTables = response.RouteTables!.filter(rt =>
+        rt.Associations?.some(assoc =>
           privateSubnetIds.includes(assoc.SubnetId || '')
         )
       );
@@ -498,8 +498,8 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
       expect(privateRouteTables.length).toBe(3);
 
       // Each private route table should have a route to a NAT Gateway
-      privateRouteTables.forEach((rt) => {
-        const natRoute = rt.Routes?.find((route) => route.NatGatewayId);
+      privateRouteTables.forEach(rt => {
+        const natRoute = rt.Routes?.find(route => route.NatGatewayId);
         expect(natRoute).toBeDefined();
         expect(natRoute!.DestinationCidrBlock).toBe('0.0.0.0/0');
       });
@@ -520,15 +520,15 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
       const response = await ec2Client.send(command);
 
       // Find route table associated with public subnets
-      const publicRouteTable = response.RouteTables!.find((rt) =>
-        rt.Associations?.some((assoc) =>
+      const publicRouteTable = response.RouteTables!.find(rt =>
+        rt.Associations?.some(assoc =>
           publicSubnetIds.includes(assoc.SubnetId || '')
         )
       );
 
       expect(publicRouteTable).toBeDefined();
-      const igwRoute = publicRouteTable!.Routes?.find(
-        (route) => route.GatewayId?.startsWith('igw-')
+      const igwRoute = publicRouteTable!.Routes?.find(route =>
+        route.GatewayId?.startsWith('igw-')
       );
       expect(igwRoute).toBeDefined();
       expect(igwRoute!.DestinationCidrBlock).toBe('0.0.0.0/0');
@@ -544,7 +544,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
       const response = await ec2Client.send(command);
 
       const tags = response.Vpcs![0].Tags || [];
-      const nameTag = tags.find((tag) => tag.Key === 'Name');
+      const nameTag = tags.find(tag => tag.Key === 'Name');
       expect(nameTag?.Value).toContain(environmentSuffix);
     });
   });
