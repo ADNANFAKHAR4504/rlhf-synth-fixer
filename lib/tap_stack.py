@@ -446,6 +446,16 @@ class TapStack(TerraformStack):
             target_id="ValidationLambdaTarget"
         )
 
+        # Add Lambda permission for Secrets Manager to invoke for rotation
+        LambdaPermission(
+            self,
+            "lambda_secrets_manager_permission",
+            statement_id="AllowSecretsManagerInvoke",
+            action="lambda:InvokeFunction",
+            function_name=validation_lambda.function_name,
+            principal="secretsmanager.amazonaws.com"
+        )
+
         # Configure secret rotation (requires Lambda rotation function)
         # Note: This is a placeholder - full rotation requires additional Lambda function
         SecretsmanagerSecretRotation(
