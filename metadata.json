@@ -10,7 +10,6 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "training_quality": 10,
   "aws_services": [
     "S3 Bucket",
     "CloudFormation",
