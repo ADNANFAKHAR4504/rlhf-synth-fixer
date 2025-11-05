@@ -1,0 +1,31 @@
+{
+  "platform": "pulumi",
+  "language": "go",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-22T06:28:14.474148",
+  "po_id": "5596902889",
+  "subtask": "Infrastructure Analysis/Monitoring",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "ECS",
+    "ElastiCache",
+    "Secrets Manager",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

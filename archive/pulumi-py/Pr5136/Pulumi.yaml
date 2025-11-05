@@ -1,0 +1,13 @@
+name: TapStack
+runtime: python
+description: Transaction Monitoring System for JapanCart e-commerce platform
+config:
+  environmentSuffix:
+    description: Unique suffix for resource naming
+    default: dev
+  db_username:
+    description: RDS master username
+    default: txadmin
+  db_secret_name:
+    description: Name of existing Secrets Manager secret for database credentials
+    default: rds-credentials-dev

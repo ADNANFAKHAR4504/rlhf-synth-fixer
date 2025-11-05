@@ -15,6 +15,7 @@ node_modules/
 # CDK
 .cdk.staging
 cdk.out/
+cdk.out.test/
 
 # Environment files
 .env
@@ -105,10 +106,10 @@ bin/.terraform.lock.hcl
 bin/tfplan
 
 build
-tasks.csv
-tasks.csv.backup
-*.csv.backup
-tasks.csv.lock/
+.claude/tasks.csv
+.claude/tasks.csv.backup
+.claude/*.csv.backup
+.claude/tasks.csv.lock/
 .sherlock/data
 .sherlock/reports
 

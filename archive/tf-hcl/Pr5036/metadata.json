@@ -1,0 +1,29 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "4961",
+  "team": "5",
+  "startedAt": "2025-10-21T11:11:02.499Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "auto-scaling blog platform infrastructure",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Application Load Balancer",
+    "Security Groups",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}

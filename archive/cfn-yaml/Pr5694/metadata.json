@@ -1,0 +1,42 @@
+{
+  "platform": "cloudformation",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350149",
+  "team": "4",
+  "startedAt": "2025-11-03T19:17:25.555Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnets",
+    "Internet Gateway",
+    "Route Table",
+    "Security Group",
+    "EC2",
+    "Auto Scaling Group",
+    "Launch Template",
+    "Application Load Balancer",
+    "Target Group",
+    "Listener",
+    "RDS",
+    "DB Subnet Group",
+    "Secrets Manager",
+    "IAM Role",
+    "IAM Instance Profile",
+    "Key Pair",
+    "CloudWatch Alarm",
+    "CloudWatch Log Group",
+    "CloudFormation"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,44 @@
+{
+  "platform": "pulumi",
+  "language": "go",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "8120486147",
+  "team": "synth",
+  "startedAt": "2025-01-23T10:22:48Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Cloud Environment Setup",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Route Tables",
+    "Subnets",
+    "Security Groups",
+    "Kinesis Data Streams",
+    "RDS PostgreSQL",
+    "Secrets Manager",
+    "ECS",
+    "ECS Fargate",
+    "IAM",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "CloudWatch Alarms",
+    "Application Auto Scaling",
+    "VPC Flow Logs"
+  ],
+  "training_quality": 8.5,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

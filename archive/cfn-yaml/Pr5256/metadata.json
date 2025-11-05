@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000281",
+  "team": "2",
+  "startedAt": "2025-10-28T13:45:52.245Z",
+  "subtask": "CI/CD Pipeline",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "CloudFormation",
+    "CodePipeline",
+    "CodeBuild",
+    "CodeDeploy",
+    "ECS",
+    "S3",
+    "Lambda",
+    "CloudWatch",
+    "SNS",
+    "Secrets Manager",
+    "IAM",
+    "VPC"
+  ],
+  "training_quality": "9",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}
