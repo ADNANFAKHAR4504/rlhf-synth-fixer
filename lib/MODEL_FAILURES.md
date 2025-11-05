@@ -80,6 +80,8 @@ trustedAccountArns: ['arn:aws:iam::123456789012:root']
 - Use environment-aware resource naming patterns
 - Gracefully handle optional resources
 - Reduced from 43 tests to 29 more focused tests
+- Fixed Secrets Manager filter syntax (filters don't support partial name matching)
+- Changed from filtered API calls to list-all then filter in code
 - Achieved 100% pass rate
 
 **Category:** Test Quality

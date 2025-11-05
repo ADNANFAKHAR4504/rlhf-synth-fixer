@@ -1655,31 +1655,29 @@ describe('TAP Stack Integration Tests', () => {
 
   describe('Secrets Manager', () => {
     test('Secrets exist with KMS encryption', async () => {
-      const secretsList = await secretsManager.listSecrets({
-        Filters: [
-          { Key: 'name', Values: [`tap-${envSuffix}/`] }
-        ]
-      }).promise();
+      const secretsList = await secretsManager.listSecrets().promise();
 
-      expect(secretsList.SecretList).toBeDefined();
-      expect(secretsList.SecretList!.length).toBeGreaterThan(0);
+      // Filter for secrets matching our environment
+      const tapSecrets = secretsList.SecretList!.filter(s => s.Name?.startsWith(`tap-${envSuffix}/`));
+
+      expect(tapSecrets).toBeDefined();
+      expect(tapSecrets.length).toBeGreaterThan(0);
 
       // Check each secret has KMS encryption
-      for (const secret of secretsList.SecretList!) {
+      for (const secret of tapSecrets) {
         expect(secret.KmsKeyId).toBeDefined();
       }
     });
 
     test('Secrets can be retrieved without errors', async () => {
-      const secretsList = await secretsManager.listSecrets({
-        Filters: [
-          { Key: 'name', Values: [`tap-${envSuffix}/`] }
-        ]
-      }).promise();
+      const secretsList = await secretsManager.listSecrets().promise();
+
+      // Filter for secrets matching our environment
+      const tapSecrets = secretsList.SecretList!.filter(s => s.Name?.startsWith(`tap-${envSuffix}/`));
 
       // Try to retrieve at least one secret
-      if (secretsList.SecretList && secretsList.SecretList.length > 0) {
-        const secretArn = secretsList.SecretList[0].ARN!;
+      if (tapSecrets && tapSecrets.length > 0) {
+        const secretArn = tapSecrets[0].ARN!;
         const secretValue = await secretsManager.getSecretValue({ SecretId: secretArn }).promise();
         expect(secretValue.SecretString || secretValue.SecretBinary).toBeDefined();
       }
