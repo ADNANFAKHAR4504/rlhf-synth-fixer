@@ -15,8 +15,8 @@ import { SnsTopic } from '@cdktf/provider-aws/lib/sns-topic';
 import { SnsTopicSubscription } from '@cdktf/provider-aws/lib/sns-topic-subscription';
 import { CloudwatchEventRule } from '@cdktf/provider-aws/lib/cloudwatch-event-rule';
 import { CloudwatchEventTarget } from '@cdktf/provider-aws/lib/cloudwatch-event-target';
-import { DataArchiveFile } from '@cdktf/provider-archive/lib/data-archive-file';
-import { ArchiveProvider } from '@cdktf/provider-archive/lib/provider';
+import { DataArchiveFile } from '../../.gen/providers/archive/data-archive-file';
+import { ArchiveProvider } from '../../.gen/providers/archive/provider';
 import * as path from 'path';
 
 export interface DataPipelineConfig {
@@ -96,6 +96,7 @@ export class DataPipelineConstruct extends Construct {
         {
           id: `expire-after-${config.s3LifecycleDays}-days`,
           status: 'Enabled',
+          filter: [{}],
           expiration: [
             {
               days: config.s3LifecycleDays,
