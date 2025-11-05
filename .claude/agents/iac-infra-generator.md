@@ -20,6 +20,7 @@ All file operations are relative to this directory.
 **Before Starting**:
 - Review `.claude/lessons_learnt.md` for common patterns and pitfalls
 - Review `.claude/docs/references/metadata-requirements.md` for strict metadata validation rules
+- Review `.claude/docs/references/cicd-file-restrictions.md` for CRITICAL file location requirements
 - Review `.claude/validation_and_testing_guide.md` Phase 1 for quality requirements
 
 ### PHASE 0: Pre-Generation Validation (CRITICAL)
@@ -100,6 +101,10 @@ echo "Target region: $REGION"
 ### PHASE 2: Generate Requirements (lib/PROMPT.md)
 
 **Target**: Create `./lib/PROMPT.md` in current worktree
+
+**⚠️ CRITICAL FILE LOCATION**: PROMPT.md MUST be in `lib/PROMPT.md`, NOT at root level.
+- See `.claude/docs/references/cicd-file-restrictions.md` for file location rules
+- Files in wrong locations will FAIL CI/CD pipeline immediately
 
 **Goal**: Human-like, conversational prompt following CLI tool patterns.
 
@@ -259,6 +264,13 @@ echo "✅ Configuration validated. Generating code..."
 **Output**: Create `./lib/MODEL_RESPONSE.md`
 **Extract Code To**: `./lib/` directory
 
+**⚠️ CRITICAL FILE LOCATIONS**: ALL files must follow CI/CD restrictions:
+- MODEL_RESPONSE.md → `lib/MODEL_RESPONSE.md` (NOT at root)
+- Infrastructure code → `lib/` directory
+- Lambda functions → `lib/lambda/` or `lib/functions/`
+- README.md → `lib/README.md` (NOT at root)
+- See `.claude/docs/references/cicd-file-restrictions.md` for complete rules
+
 1. **Use PROMPT.md to get LLM response**:
    - Send PROMPT.md to LLM for code generation
    - LLM returns complete implementation
@@ -307,6 +319,8 @@ If WRONG platform/language:
    - Do NOT create code outside bin/, lib/, test/, tests/
    - Lambda code: create in lib/lambda/ or lib/functions/
    - Never remove templates/ folder
+   - **CRITICAL**: All documentation files (PROMPT.md, MODEL_RESPONSE.md, README.md) MUST be in `lib/`, NOT at root
+   - See `.claude/docs/references/cicd-file-restrictions.md` for violations that fail CI/CD
 
 ---
 

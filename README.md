@@ -30,7 +30,7 @@ A TypeScript CDK project for creating and managing RLHF (Reinforcement Learning 
 **Runtime Versions**: This project requires specific versions of the following tools:
 
 - **Node.js**: v22.17.0 exactly
-- **Python**: 3.12.11 exactly
+- **Python**: 3.13.x
 - **Pipenv**: 2025.0.4 exactly
 
 ### Quick Setup
@@ -61,14 +61,14 @@ nodenv local 22.17.0
 If you're using pyenv:
 
 ```bash
-pyenv install 3.12.11
-pyenv local 3.12.11
+pyenv install 3.13
+pyenv local 3.13
 ```
 
 If you're using conda:
 
 ```bash
-conda install python=3.12.11
+conda install python=3.13
 ```
 
 **Pipenv Setup:**
@@ -81,7 +81,7 @@ pip install pipenv==2025.0.4
 
 ```bash
 node --version    # Should output: v22.17.0
-python --version  # Should output: Python 3.12.11
+python --version  # Should output: Python 3.13.x
 pipenv --version  # Should output: pipenv, version 2025.0.4
 ```
 

@@ -39,6 +39,11 @@ elif [ "$PLATFORM" = "cdktf" ]; then
         echo "Contents of project root:"; ls -la || true
         exit 1
       fi
+      # ✅ Ensure build output exists before synth
+        if [ "$LANGUAGE" = "ts" ] || [ "$LANGUAGE" = "js" ]; then
+          echo "📦 Building TypeScript before synth..."
+          npm run build --if-present
+        fi
       ;;
     *)
       echo "ℹ️ Skipping ensure_gen for LANGUAGE=$LANGUAGE"
