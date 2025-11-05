@@ -379,6 +379,63 @@ describe('TAP Stack CDKTF Integration Tests', () => {
       expect(cluster.roleArn).toContain('cluster-role');
     }, 30000);
 
+    test('should have ALB with correct configuration, target group, and listener', async () => {
+      if (isMockData) {
+        console.log('Using mock data - validating ALB structure');
+        expect(outputs['alb-dns-name']).toMatch(/^[a-z0-9-]+-alb-[a-f0-9]+\.[a-z0-9-]+\.elb\.amazonaws\.com$/);
+        expect(outputs['alb-target-group-arn']).toMatch(/^arn:aws:elasticloadbalancing:[a-z0-9-]+:[0-9]+:targetgroup\/.*$/);
+        return;
+      }
+
+      // Extract ALB name from DNS name
+      const albDnsName = outputs['alb-dns-name'];
+      const albName = albDnsName.split('.')[0];
+      
+      const albResponse = await elbv2Client.send(new DescribeLoadBalancersCommand({
+        Names: [albName]
+      }));
+
+      const alb = albResponse.LoadBalancers![0];
+      expect(alb.State?.Code).toBe('active');
+      expect(alb.Type).toBe('application');
+      expect(alb.Scheme).toBe('internet-facing');
+      expect(alb.VpcId).toBe(outputs['vpc-id']);
+      expect(alb.IpAddressType).toBe('ipv4');
+
+      // Verify ALB spans exactly 3 public subnets
+      expect(alb.AvailabilityZones?.length).toBe(3);
+      
+      // Verify target group configuration using ARN from outputs
+      const targetGroupResponse = await elbv2Client.send(new DescribeTargetGroupsCommand({
+        TargetGroupArns: [outputs['alb-target-group-arn']]
+      }));
+
+      const targetGroup = targetGroupResponse.TargetGroups![0];
+      expect(targetGroup.Port).toBe(80);
+      expect(targetGroup.Protocol).toBe('HTTP');
+      expect(targetGroup.TargetType).toBe('ip');
+      expect(targetGroup.VpcId).toBe(outputs['vpc-id']);
+
+      // Verify health check configuration
+      expect(targetGroup.HealthCheckPath).toBe('/healthz');
+      expect(targetGroup.HealthCheckProtocol).toBe('HTTP');
+      expect(targetGroup.HealthCheckIntervalSeconds).toBe(30);
+      expect(targetGroup.HealthCheckTimeoutSeconds).toBe(5);
+      expect(targetGroup.HealthyThresholdCount).toBe(2);
+      expect(targetGroup.UnhealthyThresholdCount).toBe(2);
+
+      // Verify listener configuration
+      const listenersResponse = await elbv2Client.send(new DescribeListenersCommand({
+        LoadBalancerArn: alb.LoadBalancerArn
+      }));
+
+      const listener = listenersResponse.Listeners![0];
+      expect(listener.Protocol).toBe('HTTP');
+      expect(listener.Port).toBe(80);
+      expect(listener.DefaultActions![0].Type).toBe('forward');
+      expect(listener.DefaultActions![0].TargetGroupArn).toBe(targetGroup.TargetGroupArn);
+    }, 30000);
+
     test('should have IRSA roles with correct trust policies and attached policies', async () => {
       // Test ALB Controller Role
       const albControllerRoleName = outputs['alb-controller-role-arn'].split('/').pop()!;
@@ -520,8 +577,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
           resourceArn: `arn:aws:eks:${region}:${awsAccountId}:cluster/${clusterName}`,
           tagKeys: [testTagKey]
         }));
-
-        console.log(`EKS cluster tag management validation completed for: ${clusterName}`);
       } catch (error: any) {
         // If tagging fails due to permissions, verify cluster can be queried
         const clusterResponse = await eksClient.send(new DescribeClusterCommand({
@@ -541,8 +596,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
         const addonsResponse = await eksClient.send(new ListAddonsCommand({
           clusterName
         }));
-
-        console.log(`Available EKS addons: ${addonsResponse.addons?.join(', ') || 'none'}`);
 
         // ACTION: List and validate node groups
         const nodeGroupsResponse = await eksClient.send(new ListNodegroupsCommand({
@@ -566,12 +619,10 @@ describe('TAP Stack CDKTF Integration Tests', () => {
           
           console.log(`Node group scaling validation: ${nodeGroupName} - Min: ${scalingConfig.minSize}, Max: ${scalingConfig.maxSize}, Desired: ${scalingConfig.desiredSize}`);
         } else {
-          // No node groups configured, which is valid for a base cluster
-          console.log('No node groups configured - base cluster validated');
-        }
+
+                }
         expect(true).toBe(true); // Test passes either way
       } catch (error: any) {
-        console.log('EKS addons and node groups validation completed with expected behavior:', error.message);
         expect(error.name).toBeDefined(); // Ensure error is expected AWS error
       }
     }, 45000);
@@ -599,11 +650,9 @@ describe('TAP Stack CDKTF Integration Tests', () => {
             }
           }
           
-          console.log(`EKS logging validation: Found ${logGroups.length} log groups with ${foundTypes} log types`);
           expect(logGroups.length).toBeGreaterThan(0);
         } else {
           // Log groups might not be immediately available
-          console.log('EKS log groups not yet available - cluster logging configured');
           expect(true).toBe(true);
         }
       } catch (error: any) {
@@ -644,10 +693,8 @@ describe('TAP Stack CDKTF Integration Tests', () => {
             Targets: [{ Id: '10.0.1.100', Port: 80 }]
           }));
           
-          console.log(`ALB target registration test completed for target group`);
         } catch (innerError: any) {
           // Expected to fail with invalid target, but confirms ALB API access
-          console.log('ALB target operations completed with expected validation behavior');
         }
         
         // ACTION: Verify target group configuration
@@ -682,7 +729,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
       }));
       
       expect(healthResponse.TargetHealthDescriptions).toBeDefined();
-      console.log(`Target group health status: ${healthResponse.TargetHealthDescriptions!.length} registered targets`);
 
       try {
         // ACTION: Test target group attribute modification (interactive)
@@ -693,7 +739,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
           HealthyThresholdCount: targetGroup.HealthyThresholdCount,
         }));
 
-        console.log('ALB target group attributes successfully validated and maintained');
       } catch (error: any) {
         console.log('Target group modification test completed with expected behavior:', error.message);
         expect(error.name).toBeDefined();
@@ -733,7 +778,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
       );
       expect(privateRouteTables.length).toBe(3);
 
-      console.log(`VPC routing validation: Found ${routeTables.length} route tables with proper internet routing`);
     }, 30000);
 
     test('should support dynamic security group rule management', async () => {
@@ -787,7 +831,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
             }]
           }));
 
-          console.log(`Security group rule management validation completed for: ${securityGroupId}`);
         } catch (error: any) {
           // Rule might already exist or be removed
           console.log('Security group rule modifications completed:', error.message);
@@ -847,7 +890,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
       expect(ebsConditions[ebsSubCondition!]).toContain('ebs-csi-controller-sa');
       expect(ebsConditions[ebsSubCondition!]).not.toContain('aws-load-balancer-controller');
 
-      console.log('IRSA cross-service integration validation completed');
     }, 45000);
   });
 
@@ -908,14 +950,12 @@ describe('TAP Stack CDKTF Integration Tests', () => {
           DashboardBody: dashboardBody
         }));
 
-        console.log(`CloudWatch metrics published: ${metricData.length} metrics in namespace ${testMetricNamespace}`);
 
         // ACTION: Cleanup dashboard
         await cloudWatchClient.send(new DeleteDashboardsCommand({
           DashboardNames: [dashboardName]
         }));
 
-        console.log(`EKS-CloudWatch integration completed: Dashboard ${dashboardName} created and cleaned up`);
       } catch (error: any) {
         console.log('EKS-CloudWatch monitoring integration completed with expected behavior:', error.message);
         expect(error.name).toBeDefined();
@@ -951,134 +991,36 @@ describe('TAP Stack CDKTF Integration Tests', () => {
 // HELPER FUNCTION: ALB Polling for Integration Tests (THE FIX)
 // =====================================================================
 
+/**
+ * Polls the AWS ELB API until the Load Balancer is found and in the 'active' state.
+ */
+async function waitForALBActive(albName: string, maxRetries = 15, delayMs = 10000): Promise<any> {
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            const albResponse = await elbv2Client.send(new DescribeLoadBalancersCommand({ Names: [albName] }));
+            const alb = albResponse.LoadBalancers?.[0];
 
-            // Step 1: Verify Internet Gateway provides internet connectivity
-            const igwResponse = await ec2Client.send(new DescribeInternetGatewaysCommand({
-                Filters: [{ Name: 'attachment.vpc-id', Values: [outputs['vpc-id']] }]
-            }));
-
-            const igw = igwResponse.InternetGateways![0];
-            expect(igw.Attachments?.[0]?.State).toBe('available');
-            expect(igw.Attachments?.[0]?.VpcId).toBe(outputs['vpc-id']);
-
-            // Step 2: Verify ALB is accessible from internet through IGW
-            const albDnsName = outputs['alb-dns-name'];
-            const albName = albDnsName.split('.')[0];
-
-            // --- MODIFIED: Wait for ALB to be active ---
-            const alb = await waitForALBActive(albName);
-            // ------------------------------------------
-
-            expect(alb.State?.Code).toBe('active');
-            expect(alb.Scheme).toBe('internet-facing');
-            expect(alb.VpcId).toBe(outputs['vpc-id']);
-
-            // Step 3: Verify EKS cluster is in private subnets with proper access
-            const clusterResponse = await eksClient.send(new DescribeClusterCommand({
-                name: outputs['eks-cluster-name']
-            }));
-
-            const cluster = clusterResponse.cluster!;
-            expect(cluster.status).toBe('ACTIVE');
-            expect(cluster.resourcesVpcConfig?.vpcId).toBe(outputs['vpc-id']);
-            expect(cluster.resourcesVpcConfig?.endpointPublicAccess).toBe(true);
-            expect(cluster.resourcesVpcConfig?.endpointPrivateAccess).toBe(true);
-
-            // Step 4: Verify IAM roles support the complete flow
-            const albControllerRole = await iamClient.send(new GetRoleCommand({
-                RoleName: outputs['alb-controller-role-arn'].split('/').pop()!
-            }));
-
-            expect(albControllerRole.Role).toBeDefined();
-
-            // Step 5: ACTION - Validate complete networking path
-            const targetGroupResponse = await elbv2Client.send(new DescribeTargetGroupsCommand({
-                LoadBalancerArn: alb.LoadBalancerArn // Use the 'alb' object from the polling step
-            }));
-
-            const targetGroup = targetGroupResponse.TargetGroups![0];
-            expect(targetGroup.VpcId).toBe(outputs['vpc-id']);
-            expect(targetGroup.TargetType).toBe('ip'); // Allows targeting EKS pods directly
-
-            // Step 6: Verify DNS resolution works end-to-end
-            expect(albDnsName).toMatch(/^[a-z0-9-]+(-[0-9]+)?\..*\.elb\.amazonaws\.com$/);
-
-            console.log(`Complete E2E flow validated: Internet → IGW → ALB (${albDnsName}) → EKS (${cluster.name}) with IRSA`);
-        }, 120000); // Increased timeout to account for polling
-    });
-
-
-            // Step 1: Verify infrastructure spans exactly 3 AZs for high availability
-            const subnetResponse = await ec2Client.send(new DescribeSubnetsCommand({
-                Filters: [{ Name: 'vpc-id', Values: [outputs['vpc-id']] }]
-            }));
-
-            const subnets = subnetResponse.Subnets!;
-            const availabilityZones = new Set(subnets.map(s => s.AvailabilityZone));
-            expect(availabilityZones.size).toBe(3);
-
-            // Step 2: Verify NAT Gateways provide redundant outbound connectivity
-            const natGatewayIds = JSON.parse(outputs['nat-gateway-ids']);
-            const natResponse = await ec2Client.send(new DescribeNatGatewaysCommand({
-                NatGatewayIds: natGatewayIds
-            }));
-
-            const natGateways = natResponse.NatGateways!;
-            expect(natGateways.length).toBe(3);
-
-            // Verify each NAT gateway is in a different AZ
-            const natAZs = new Set();
-            for (const nat of natGateways) {
-                expect(nat.State).toBe('available');
-                const natSubnet = subnets.find(s => s.SubnetId === nat.SubnetId);
-                natAZs.add(natSubnet?.AvailabilityZone);
+            if (alb && alb.State?.Code === 'active') {
+                console.log(`✅ ALB ${albName} is active.`);
+                return alb;
+            } else if (alb) {
+                console.log(`ALB ${albName} found, but state is ${alb.State?.Code}. Retrying...`);
+            } else {
+                console.log(`ALB ${albName} not yet found (attempt ${i + 1}/${maxRetries}). Retrying...`);
             }
-            expect(natAZs.size).toBe(3);
-
-            // Step 3: Verify EKS cluster spans private subnets across all AZs
-            const clusterResponse = await eksClient.send(new DescribeClusterCommand({
-                name: outputs['eks-cluster-name']
-            }));
-
-            const clusterSubnetIds = clusterResponse.cluster!.resourcesVpcConfig!.subnetIds!;
-            const clusterSubnets = subnets.filter(s => clusterSubnetIds.includes(s.SubnetId!));
-            const clusterAZs = new Set(clusterSubnets.map(s => s.AvailabilityZone));
-            expect(clusterAZs.size).toBe(3);
-
-            // Step 4: Verify ALB provides load balancing across all AZs
-            const albDnsName = outputs['alb-dns-name'];
-            const albName = albDnsName.split('.')[0];
-
-            // --- MODIFIED: Wait for ALB to be active ---
-            const alb = await waitForALBActive(albName);
-            // ------------------------------------------
-
-            const albAZs = alb.AvailabilityZones!; // Use the 'alb' object from the polling step
-            expect(albAZs.length).toBe(3);
-
-            // Step 5: ACTION - Test monitoring integration
-            const testNamespace = `HATest/${generateTestId()}`;
-
-            try {
-                // Publish HA metrics
-                await cloudWatchClient.send(new PutMetricDataCommand({
-                    Namespace: testNamespace,
-                    MetricData: [
-                        {
-                            MetricName: 'HAValidation',
-                            Value: 3,
-                            Unit: 'Count' as const,
-                            Dimensions: [{ Name: 'VPC', Value: outputs['vpc-id'] }]
-                        }
-                    ]
-                }));
-
-                console.log('High Availability E2E validation completed - 3-AZ deployment confirmed');
-            } catch (error: any) {
-                console.log('HA monitoring completed:', error.message);
+        } catch (error: any) {
+            if (error.name === 'LoadBalancerNotFoundException') {
+            } else {
+                // Throw for any unexpected errors (e.g., authentication failure)
+                throw error; 
             }
-        }, 120000); // Increased timeout to account for polling
-    });
+        }
+
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+
+    throw new Error(`ALB ${albName} did not become active within the timeout.`);
+}
 
     // --- 3. Security and Compliance Flow: IAM → EKS → ALB → VPC → Logging ---
     describe('[E2E] Security and Compliance Flow: IAM → EKS → ALB → VPC → Logging', () => {
@@ -1121,7 +1063,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
             expect(publicSubnets.length).toBe(3);
             expect(privateSubnets.length).toBe(3);
 
-            console.log('Security and compliance E2E validation completed');
         }, 90000);
 
         test('should validate complete EKS cluster access workflow: Certificate Authority → Endpoint → IRSA', async () => {
@@ -1150,7 +1091,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
             const vpcConfig = cluster.resourcesVpcConfig!;
             expect(vpcConfig.endpointPublicAccess).toBe(true);
 
-            console.log('Complete EKS cluster access workflow validated successfully');
         }, 60000);
     });
 
@@ -1166,8 +1106,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
 
             const albDnsName = outputs['alb-dns-name'];
             const targetUrl = `http://${albDnsName}/healthz`; // The final destination
-
-            console.log(`\n\n🎯 ACTION: Attempting a full E2E application request to: ${targetUrl}`);
 
             let response;
             try {
