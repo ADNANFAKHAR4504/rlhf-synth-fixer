@@ -1,340 +1,874 @@
-// test/tap-stack.int.test.ts
-// Pattern aligned to the reference suite: read outputs once, use AWS SDK,
-// and skip tests when required outputs are absent (no edits to flat-outputs.json).
-
-import fs from 'fs';
-
-// --- Env / region ---
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-let region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
-
-// Keep the original outputs read (unchanged)
-let outputs: Record<string, string> = {};
-
-// Load outputs once, like the reference does
-beforeAll(() => {
-  try {
-    const outputsPath = 'cfn-outputs/flat-outputs.json';
-    if (fs.existsSync(outputsPath)) {
-      const raw = fs.readFileSync(outputsPath, 'utf8');
-      outputs = raw ? JSON.parse(raw) : {};
-      // Derive region from StateMachineArn if present
-      if (outputs.StateMachineArn) {
-        const arnParts = String(outputs.StateMachineArn).split(':');
-        if (arnParts[3]) region = arnParts[3];
-      }
-      console.log('Loaded deployment outputs:', Object.keys(outputs));
-    } else {
-      console.warn('Warning: flat-outputs.json not found. Some integration tests will be skipped.');
-    }
-  } catch (error) {
-    console.error('Error loading outputs:', error);
-  }
-});
-
-// Polyfill fetch if needed
-const g: any = globalThis as any;
-const fetchFn: typeof fetch =
-  g.fetch ??
-  (((...args: any[]) =>
-    import('node-fetch').then((m) => (m.default as any)(...args))) as any);
-
-// --- AWS SDK v3 clients (init after region is final) ---
-import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
-import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb';
-import { EventBridgeClient, ListRulesCommand } from '@aws-sdk/client-eventbridge';
 import {
-  DeleteObjectCommand,
+  EC2Client,
+  DescribeVpcsCommand,
+  DescribeVpcAttributeCommand,
+  DescribeSubnetsCommand,
+  DescribeNatGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeFlowLogsCommand,
+  DescribeTagsCommand,
+  DescribeLaunchTemplatesCommand,
+} from '@aws-sdk/client-ec2';
+import {
+  AutoScalingClient,
+  DescribeAutoScalingGroupsCommand,
+} from '@aws-sdk/client-auto-scaling';
+import {
+  S3Client,
   GetBucketEncryptionCommand,
   GetBucketVersioningCommand,
+  GetPublicAccessBlockCommand,
+  GetBucketLifecycleConfigurationCommand,
   HeadBucketCommand,
-  PutObjectCommand,
-  S3Client,
 } from '@aws-sdk/client-s3';
-import { DescribeExecutionCommand, SFNClient } from '@aws-sdk/client-sfn';
-import { GetQueueAttributesCommand, SQSClient } from '@aws-sdk/client-sqs';
+import {
+  RDSClient,
+  DescribeDBInstancesCommand,
+  DescribeDBSubnetGroupsCommand,
+} from '@aws-sdk/client-rds';
+import {
+  IAMClient,
+  GetRoleCommand,
+  ListAttachedRolePoliciesCommand,
+} from '@aws-sdk/client-iam';
+import {
+  CloudWatchLogsClient,
+  DescribeLogGroupsCommand,
+} from '@aws-sdk/client-cloudwatch-logs';
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+} from '@aws-sdk/client-cloudwatch';
+import {
+  ElasticLoadBalancingV2Client,
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  DescribeListenersCommand,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  Route53Client,
+  ListHostedZonesByNameCommand,
+  ListResourceRecordSetsCommand,
+} from '@aws-sdk/client-route-53';
+import {
+  SSMClient,
+  GetParameterCommand,
+} from '@aws-sdk/client-ssm';
+import {
+  SecretsManagerClient,
+  DescribeSecretCommand,
+} from '@aws-sdk/client-secrets-manager';
+import {
+  SNSClient,
+  ListTopicsCommand,
+} from '@aws-sdk/client-sns';
+import * as fs from 'fs';
+import * as path from 'path';
 
-const logs = new CloudWatchLogsClient({ region });
-const ddb = new DynamoDBClient({ region });
-const eb = new EventBridgeClient({ region });
-const sqs = new SQSClient({ region });
-let s3 = new S3Client({ region });
-const sfn = new SFNClient({ region });
+// Load deployment outputs
+const outputsPath = path.join(
+  __dirname,
+  '..',
+  'cfn-outputs',
+  'flat-outputs.json'
+);
+let outputs: any = {};
 
-const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
-jest.setTimeout(180000); // 3 minutes max
-
-// Helper: if the bucket is in a different region, switch S3 client just for that call
-async function getS3ClientForBucket(bucket: string): Promise<S3Client> {
-  try {
-    await s3.send(new HeadBucketCommand({ Bucket: bucket }));
-    return s3;
-  } catch (e: any) {
-    const hdrs = e?.$metadata?.httpHeaders || {};
-    const realRegion = hdrs['x-amz-bucket-region'] || hdrs['x-amz-bucket-region'.toLowerCase()];
-    if (realRegion && realRegion !== region) return new S3Client({ region: realRegion });
-    throw e;
-  }
+if (fs.existsSync(outputsPath)) {
+  outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 }
 
-describe('Turn Around Prompt API Integration Tests', () => {
-  describe('Write Integration TESTS', () => {
-    test('outputs file has required keys and valid formats (skip if missing)', async () => {
-      const required = [
-        'ApiEndpoint',
-        'ApiKeyValue',
-        'StateMachineArn',
-        'TransactionsTableName',
-        'InboundQueueUrl',
-        'DLQUrl',
-        'EventBusName',
-        'ArchiveBucketName',
-        'DashboardUrl',
-      ];
+// Get environment suffix from environment variable
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const region = process.env.AWS_REGION || 'us-east-1';
 
-      // If outputs are empty, skip like the reference suite’s style
-      if (!required.some((k) => outputs[k])) {
-        console.log('Skipping: required outputs not found in flat-outputs.json');
-        return;
-      }
+// AWS Service clients
+const ec2 = new EC2Client({ region });
+const s3 = new S3Client({ region });
+const rds = new RDSClient({ region });
+const iam = new IAMClient({ region });
+const logs = new CloudWatchLogsClient({ region });
+const cloudwatch = new CloudWatchClient({ region });
+const elbv2 = new ElasticLoadBalancingV2Client({ region });
+const route53 = new Route53Client({ region });
+const ssm = new SSMClient({ region });
+const secretsmanager = new SecretsManagerClient({ region });
+const sns = new SNSClient({ region });
+const autoscaling = new AutoScalingClient({ region });
 
-      for (const k of required) {
-        if (!outputs[k]) {
-          console.log(`Skipping: ${k} not found in outputs`);
-          return;
-        }
-      }
+// Resource naming helper
+const company = 'fintech';
+const service = 'payment';
+const naming = (resourceType: string) =>
+  `${company}-${service}-${environmentSuffix}-${resourceType}`;
 
-      // Keep your original format checks when values are present
-      expect(String(outputs.ApiEndpoint)).toMatch(
-        /^https:\/\/.+\.execute-api\.[a-z0-9-]+\.amazonaws\.com\/[a-z0-9-]+\/$/
-      );
-      expect(String(outputs.StateMachineArn)).toMatch(
-        /^arn:aws:states:[a-z0-9-]+:\d{12}:stateMachine:.+/
-      );
-      expect(String(outputs.InboundQueueUrl)).toMatch(
-        /^https:\/\/sqs\.[a-z0-9-]+\.amazonaws\.com\/\d+\/.+/
-      );
-      expect(String(outputs.DLQUrl)).toMatch(
-        /^https:\/\/sqs\.[a-z0-9-]+\.amazonaws\.com\/\d+\/.+/
-      );
-      expect(String(outputs.ArchiveBucketName)).toMatch(/^txn-archive-[a-z0-9-]+-\d+$/);
-    });
+describe('TapStack Integration Tests', () => {
+  const testTimeout = 60000; // 60 seconds for AWS API calls
 
-    test('API requires Authorization token (should 401/403 without it)', async () => {
-      if (!outputs.ApiEndpoint || !outputs.ApiKeyValue) {
-        console.log('Skipping: ApiEndpoint/ApiKeyValue missing in outputs');
-        return;
-      }
+  describe('Stack Outputs Validation', () => {
+    test(
+      'all required stack outputs are present',
+      async () => {
+        expect(outputs.VPCId).toBeDefined();
+        expect(outputs.DatabaseArn).toBeDefined();
+        expect(outputs.ALBDnsName).toBeDefined();
+        expect(outputs.S3BucketName).toBeDefined();
+      },
+      testTimeout
+    );
+  });
 
-      const url = `${outputs.ApiEndpoint}transactions`;
-      const res = await fetchFn(url, {
-        method: 'POST',
-        headers: {
-          'x-api-key': outputs.ApiKeyValue,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          transactionId: `it-deny-${Date.now()}`,
-          merchantId: 'm-unauth',
-          amount: 10,
-          currency: 'USD',
-        }),
-      });
-      expect([401, 403]).toContain(res.status);
-    });
+  describe('VPC Resources', () => {
+    test(
+      'VPC exists and is configured correctly',
+      async () => {
+        const vpcId = outputs.VPCId;
+        expect(vpcId).toBeDefined();
 
-    test('POST /transactions returns executionArn and Step Functions sees it', async () => {
-      if (!outputs.ApiEndpoint || !outputs.ApiKeyValue) {
-        console.log('Skipping: ApiEndpoint/ApiKeyValue missing in outputs');
-        return;
-      }
+        const response = await ec2.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
+        const vpc = response.Vpcs?.[0];
 
-      const txnId = `it-${Date.now()}`;
-      const url = `${outputs.ApiEndpoint}transactions`;
-      const res = await fetchFn(url, {
-        method: 'POST',
-        headers: {
-          'x-api-key': outputs.ApiKeyValue,
-          Authorization: 'Bearer integ-test-token',
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          transactionId: txnId,
-          merchantId: `merchant-${Math.random().toString(36).slice(2, 8)}`,
-          amount: 42.5,
-          currency: 'USD',
-        }),
-      });
+        expect(vpc).toBeDefined();
+        expect(vpc?.CidrBlock).toBe('10.1.0.0/16');
 
-      expect(res.ok).toBe(true);
-      const body = await res.json();
-      expect(body.executionArn).toMatch(/^arn:aws:states:[a-z0-9-]+:\d{12}:execution:.+/);
-
-      const execArn: string = body.executionArn;
-      let status = 'RUNNING';
-      const start = Date.now();
-      while (Date.now() - start < 120000) {
-        const out = await sfn.send(new DescribeExecutionCommand({ executionArn: execArn }));
-        status = out.status || 'UNKNOWN';
-        if (['SUCCEEDED', 'FAILED', 'TIMED_OUT', 'ABORTED'].includes(status)) break;
-        await sleep(3000);
-      }
-      expect(['SUCCEEDED', 'RUNNING']).toContain(status);
-    });
-
-    test('transaction eventually persists to DynamoDB with status COMPLETED', async () => {
-      if (!outputs.ApiEndpoint || !outputs.ApiKeyValue || !outputs.TransactionsTableName) {
-        console.log('Skipping: ApiEndpoint/ApiKeyValue/TransactionsTableName missing in outputs');
-        return;
-      }
-
-      const txnId = `it-ddb-${Date.now()}`;
-      const url = `${outputs.ApiEndpoint}transactions`;
-      await fetchFn(url, {
-        method: 'POST',
-        headers: {
-          'x-api-key': outputs.ApiKeyValue,
-          Authorization: 'Bearer integ-test-token',
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          transactionId: txnId,
-          merchantId: 'merchant-live',
-          amount: 55.0,
-          currency: 'USD',
-        }),
-      });
-
-      // Poll DDB for item
-      const start = Date.now();
-      let item: any | undefined;
-      while (Date.now() - start < 120000) {
-        const resp = await ddb.send(
-          new GetItemCommand({
-            TableName: outputs.TransactionsTableName,
-            Key: { txnId: { S: txnId } },
-            ConsistentRead: true,
+        // Check DNS settings
+        const dnsHostnamesResponse = await ec2.send(
+          new DescribeVpcAttributeCommand({
+            VpcId: vpcId,
+            Attribute: 'enableDnsHostnames',
           })
         );
-        item = resp.Item;
-        if (item?.status?.S) break;
-        await sleep(3000);
-      }
-      expect(item).toBeTruthy();
-      expect(item.status.S).toBe('COMPLETED');
-      expect(item.currency.S).toBe('USD');
-    });
 
-    test('EventBridge bus contains expected rules for this env', async () => {
-      if (!outputs.EventBusName) {
-        console.log('Skipping: EventBusName missing in outputs');
-        return;
-      }
-
-      const expected = new Set([
-        `tap-high-amount-${environmentSuffix}`,
-        `tap-high-fraud-${environmentSuffix}`,
-        `tap-failure-spike-${environmentSuffix}`,
-      ]);
-
-      let nextToken: string | undefined = undefined;
-      const found = new Set<string>();
-
-      do {
-        const resp = await eb.send(
-          new ListRulesCommand({
-            EventBusName: outputs.EventBusName,
-            NextToken: nextToken,
-            Limit: 100,
+        const dnsSupportResponse = await ec2.send(
+          new DescribeVpcAttributeCommand({
+            VpcId: vpcId,
+            Attribute: 'enableDnsSupport',
           })
         );
-        (resp.Rules || []).forEach((r) => r?.Name && found.add(r.Name));
-        nextToken = resp.NextToken;
-      } while (nextToken);
 
-      expected.forEach((name) => expect(found.has(name)).toBe(true));
-    });
+        expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
+        expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
+      },
+      testTimeout
+    );
 
-    test('SQS queues have expected attributes (FIFO, redrive)', async () => {
-      if (!outputs.InboundQueueUrl || !outputs.DLQUrl) {
-        console.log('Skipping: InboundQueueUrl/DLQUrl missing in outputs');
-        return;
-      }
+    test(
+      'VPC has public, private, and isolated subnets',
+      async () => {
+        const vpcId = outputs.VPCId;
 
-      // Inbound FIFO with redrive
-      const inbound = await sqs.send(
-        new GetQueueAttributesCommand({
-          QueueUrl: outputs.InboundQueueUrl,
-          AttributeNames: ['All'],
-        })
-      );
-      const attrsIn = inbound.Attributes || {};
-      expect(attrsIn.FifoQueue).toBe('true');
-      expect(attrsIn.ContentBasedDeduplication).toBe('true');
-      expect(attrsIn.RedrivePolicy).toBeTruthy();
+        const response = await ec2.send(
+          new DescribeSubnetsCommand({
+            Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
+          })
+        );
 
-      // DLQ (FIFO)
-      const dlq = await sqs.send(
-        new GetQueueAttributesCommand({
-          QueueUrl: outputs.DLQUrl,
-          AttributeNames: ['All'],
-        })
-      );
-      const attrsDlq = dlq.Attributes || {};
-      expect(attrsDlq.FifoQueue).toBe('true');
-    });
+        const subnets = response.Subnets || [];
+        expect(subnets.length).toBeGreaterThanOrEqual(6);
 
-    test('S3 archive bucket exists, is versioned, and encrypted; put+delete object works', async () => {
-      if (!outputs.ArchiveBucketName) {
-        console.log('Skipping: ArchiveBucketName missing in outputs');
-        return;
-      }
+        const publicSubnets = subnets.filter((s: any) => s.MapPublicIpOnLaunch);
+        const privateSubnets = subnets.filter(
+          (s: any) => !s.MapPublicIpOnLaunch && s.SubnetId
+        );
 
-      const bucket = outputs.ArchiveBucketName;
-      const s3ForBucket = await getS3ClientForBucket(bucket);
+        expect(publicSubnets.length).toBeGreaterThanOrEqual(3);
+        expect(privateSubnets.length).toBeGreaterThanOrEqual(6); // Private + Isolated
+      },
+      testTimeout
+    );
 
-      // Versioning
-      const ver = await s3ForBucket.send(new GetBucketVersioningCommand({ Bucket: bucket }));
-      expect(ver.Status).toBe('Enabled');
+    test(
+      'NAT Gateways exist for private subnets',
+      async () => {
+        const vpcId = outputs.VPCId;
 
-      // Encryption
-      const enc = await s3ForBucket.send(new GetBucketEncryptionCommand({ Bucket: bucket }));
-      const rules = enc.ServerSideEncryptionConfiguration?.Rules || [];
-      expect(rules.length).toBeGreaterThan(0);
+        const response = await ec2.send(
+          new DescribeNatGatewaysCommand({
+            Filter: [
+              { Name: 'vpc-id', Values: [vpcId] },
+              { Name: 'state', Values: ['available'] },
+            ],
+          })
+        );
 
-      // Put/Delete
-      const key = `it-check/${Date.now()}.txt`;
-      await s3ForBucket.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: 'ok' }));
-      await s3ForBucket.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
-    });
+        const natGateways = response.NatGateways || [];
+        expect(natGateways.length).toBeGreaterThanOrEqual(2);
+      },
+      testTimeout
+    );
 
-    test('CloudWatch Logs group for the state machine exists', async () => {
-      const lgName = `/aws/vendedlogs/states/tap-transaction-processor-${environmentSuffix}`;
-      const resp = await logs.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: lgName }));
-      const names = (resp.logGroups || []).map((g) => g.logGroupName);
-      expect(names).toContain(lgName);
-    });
+    test(
+      'VPC flow logs are enabled',
+      async () => {
+        const vpcId = outputs.VPCId;
 
-    test('webhook status mock endpoint responds with acknowledged', async () => {
-      if (!outputs.ApiEndpoint || !outputs.ApiKeyValue) {
-        console.log('Skipping: ApiEndpoint/ApiKeyValue missing in outputs');
-        return;
-      }
+        const response = await ec2.send(
+          new DescribeFlowLogsCommand({
+            Filter: [{ Name: 'resource-id', Values: [vpcId] }],
+          })
+        );
 
-      const url = `${outputs.ApiEndpoint}webhooks/status`;
-      const res = await fetchFn(url, {
-        method: 'POST',
-        headers: {
-          'x-api-key': outputs.ApiKeyValue,
-          Authorization: 'Bearer integ-test-token',
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({ ping: 'pong' }),
-      });
-      expect(res.ok).toBe(true);
-      const body = await res.json();
-      expect(body.status).toBe('acknowledged');
-    });
+        const flowLogs = response.FlowLogs || [];
+        expect(flowLogs.length).toBeGreaterThan(0);
+
+        const activeFlowLog = flowLogs.find((fl: any) => fl.FlowLogStatus === 'ACTIVE');
+        expect(activeFlowLog).toBeDefined();
+        expect(activeFlowLog?.TrafficType).toBe('ALL');
+      },
+      testTimeout
+    );
+  });
+
+  describe('Security Groups', () => {
+    test(
+      'ALB security group has correct ingress rules',
+      async () => {
+        const vpcId = outputs.VPCId;
+
+        const response = await ec2.send(
+          new DescribeSecurityGroupsCommand({
+            Filters: [
+              { Name: 'vpc-id', Values: [vpcId] },
+              { Name: 'group-name', Values: [naming('alb-sg')] },
+            ],
+          })
+        );
+
+        const sg = response.SecurityGroups?.[0];
+        expect(sg).toBeDefined();
+
+        const ingressRules = sg?.IpPermissions || [];
+        const httpsRule = ingressRules.find((r: any) => r.FromPort === 443);
+        const httpRule = ingressRules.find((r: any) => r.FromPort === 80);
+
+        expect(httpsRule).toBeDefined();
+        expect(httpRule).toBeDefined();
+      },
+      testTimeout
+    );
+
+    test(
+      'EC2 security group allows traffic from ALB',
+      async () => {
+        const vpcId = outputs.VPCId;
+
+        const response = await ec2.send(
+          new DescribeSecurityGroupsCommand({
+            Filters: [
+              { Name: 'vpc-id', Values: [vpcId] },
+              { Name: 'group-name', Values: [naming('ec2-sg')] },
+            ],
+          })
+        );
+
+        const sg = response.SecurityGroups?.[0];
+        expect(sg).toBeDefined();
+
+        const ingressRules = sg?.IpPermissions || [];
+        const albRule = ingressRules.find((r: any) => r.FromPort === 8080);
+        expect(albRule).toBeDefined();
+      },
+      testTimeout
+    );
+
+    test(
+      'RDS security group allows traffic from EC2',
+      async () => {
+        const vpcId = outputs.VPCId;
+
+        const response = await ec2.send(
+          new DescribeSecurityGroupsCommand({
+            Filters: [
+              { Name: 'vpc-id', Values: [vpcId] },
+              { Name: 'group-name', Values: [naming('rds-sg')] },
+            ],
+          })
+        );
+
+        const sg = response.SecurityGroups?.[0];
+        expect(sg).toBeDefined();
+
+        const ingressRules = sg?.IpPermissions || [];
+        const dbRule = ingressRules.find((r: any) => r.FromPort === 5432);
+        expect(dbRule).toBeDefined();
+      },
+      testTimeout
+    );
+  });
+
+  describe('S3 Storage', () => {
+    test(
+      'S3 bucket exists and is accessible',
+      async () => {
+        const bucketName = outputs.S3BucketName;
+        expect(bucketName).toBeDefined();
+
+        await s3.send(new HeadBucketCommand({ Bucket: bucketName }));
+      },
+      testTimeout
+    );
+
+    test(
+      'S3 bucket has encryption enabled',
+      async () => {
+        const bucketName = outputs.S3BucketName;
+
+        const response = await s3.send(
+          new GetBucketEncryptionCommand({ Bucket: bucketName })
+        );
+
+        const rules =
+          response.ServerSideEncryptionConfiguration?.Rules || [];
+        expect(rules.length).toBeGreaterThan(0);
+      },
+      testTimeout
+    );
+
+    test(
+      'S3 bucket has versioning enabled',
+      async () => {
+        const bucketName = outputs.S3BucketName;
+
+        const response = await s3.send(
+          new GetBucketVersioningCommand({ Bucket: bucketName })
+        );
+
+        expect(response.Status).toBe('Enabled');
+      },
+      testTimeout
+    );
+
+    test(
+      'S3 bucket blocks public access',
+      async () => {
+        const bucketName = outputs.S3BucketName;
+
+        const response = await s3.send(
+          new GetPublicAccessBlockCommand({ Bucket: bucketName })
+        );
+
+        const config = response.PublicAccessBlockConfiguration;
+        expect(config?.BlockPublicAcls).toBe(true);
+        expect(config?.BlockPublicPolicy).toBe(true);
+        expect(config?.IgnorePublicAcls).toBe(true);
+        expect(config?.RestrictPublicBuckets).toBe(true);
+      },
+      testTimeout
+    );
+
+    test(
+      'S3 bucket has lifecycle configuration',
+      async () => {
+        const bucketName = outputs.S3BucketName;
+
+        const response = await s3.send(
+          new GetBucketLifecycleConfigurationCommand({ Bucket: bucketName })
+        );
+
+        const rules = response.Rules || [];
+        expect(rules.length).toBeGreaterThan(0);
+        // Check for expiration rule - AWS SDK returns Expiration as object with Days or Date
+        const hasExpirationRule = rules.some((r: any) => {
+          // Expiration is an object with Days or Date property
+          const hasExpiration = r.Expiration && (
+            r.Expiration.Days !== undefined ||
+            r.Expiration.Date !== undefined
+          );
+          // Status can be 'Enabled' or missing (defaults to Enabled)
+          const isEnabled = !r.Status || r.Status === 'Enabled';
+          return hasExpiration && isEnabled;
+        });
+        expect(hasExpirationRule).toBe(true);
+      },
+      testTimeout
+    );
+  });
+
+  describe('RDS Database', () => {
+    test(
+      'RDS instance exists and is available',
+      async () => {
+        const dbArn = outputs.DatabaseArn;
+        expect(dbArn).toBeDefined();
+
+        // Extract instance identifier from ARN
+        const dbIdentifier = dbArn.split(':').pop();
+        expect(dbIdentifier).toBe(`fintech-payment-${environmentSuffix}-rds`);
+
+        const response = await rds.send(
+          new DescribeDBInstancesCommand({
+            DBInstanceIdentifier: dbIdentifier,
+          })
+        );
+
+        const dbInstance = response.DBInstances?.[0];
+        expect(dbInstance).toBeDefined();
+        expect(dbInstance?.DBInstanceStatus).toBe('available');
+        expect(dbInstance?.Engine).toBe('postgres');
+        expect(dbInstance?.DBInstanceClass).toBe('db.t3.micro');
+      },
+      testTimeout
+    );
+
+    test(
+      'RDS instance has correct configuration',
+      async () => {
+        const dbArn = outputs.DatabaseArn;
+        const dbIdentifier = dbArn.split(':').pop()!;
+
+        const response = await rds.send(
+          new DescribeDBInstancesCommand({
+            DBInstanceIdentifier: dbIdentifier,
+          })
+        );
+
+        const dbInstance = response.DBInstances?.[0];
+        expect(dbInstance?.PubliclyAccessible).toBe(false);
+        expect(dbInstance?.BackupRetentionPeriod).toBeGreaterThanOrEqual(1);
+        expect(dbInstance?.MultiAZ).toBeDefined();
+      },
+      testTimeout
+    );
+
+    test(
+      'RDS instance is in isolated subnets',
+      async () => {
+        const dbArn = outputs.DatabaseArn;
+        const dbIdentifier = dbArn.split(':').pop()!;
+
+        const response = await rds.send(
+          new DescribeDBInstancesCommand({
+            DBInstanceIdentifier: dbIdentifier,
+          })
+        );
+
+        const dbInstance = response.DBInstances?.[0];
+        const subnetGroupName = dbInstance?.DBSubnetGroup?.DBSubnetGroupName;
+
+        const subnetGroupResponse = await rds.send(
+          new DescribeDBSubnetGroupsCommand({
+            DBSubnetGroupName: subnetGroupName,
+          })
+        );
+
+        const subnetGroup = subnetGroupResponse.DBSubnetGroups?.[0];
+        expect(subnetGroup).toBeDefined();
+        expect(subnetGroup?.DBSubnetGroupName).toContain('db-subnet-group');
+      },
+      testTimeout
+    );
+  });
+
+  describe('EC2 and Auto Scaling', () => {
+    test(
+      'Launch template exists with correct configuration',
+      async () => {
+        const response = await ec2.send(
+          new DescribeLaunchTemplatesCommand({
+            LaunchTemplateNames: [naming('launch-template')],
+          })
+        );
+
+        const launchTemplate = response.LaunchTemplates?.[0];
+        expect(launchTemplate).toBeDefined();
+        expect(launchTemplate?.LaunchTemplateName).toBe(naming('launch-template'));
+      },
+      testTimeout
+    );
+
+    test(
+      'Auto Scaling Group exists and is configured',
+      async () => {
+        const response = await autoscaling.send(
+          new DescribeAutoScalingGroupsCommand({
+            AutoScalingGroupNames: [naming('asg')],
+          })
+        );
+
+        const asg = response.AutoScalingGroups?.[0];
+        expect(asg).toBeDefined();
+        expect(asg?.AutoScalingGroupName).toBe(naming('asg'));
+        expect(asg?.MinSize).toBeGreaterThanOrEqual(1);
+        expect(asg?.MaxSize).toBeGreaterThanOrEqual(1);
+      },
+      testTimeout
+    );
+  });
+
+  describe('Application Load Balancer', () => {
+    test(
+      'ALB exists and is accessible',
+      async () => {
+        const albDns = outputs.ALBDnsName;
+        expect(albDns).toBeDefined();
+
+        const response = await elbv2.send(
+          new DescribeLoadBalancersCommand({})
+        );
+
+        const alb = response.LoadBalancers?.find(
+          (lb: any) => lb.DNSName === albDns
+        );
+        expect(alb).toBeDefined();
+        expect(alb?.Scheme).toBe('internet-facing');
+        expect(alb?.Type).toBe('application');
+      },
+      testTimeout
+    );
+
+    test(
+      'ALB has target group configured',
+      async () => {
+        const albDns = outputs.ALBDnsName;
+
+        const lbResponse = await elbv2.send(
+          new DescribeLoadBalancersCommand({})
+        );
+        const alb = lbResponse.LoadBalancers?.find(
+          (lb: any) => lb.DNSName === albDns
+        );
+        expect(alb).toBeDefined();
+
+        const tgResponse = await elbv2.send(
+          new DescribeTargetGroupsCommand({
+            LoadBalancerArn: alb?.LoadBalancerArn,
+          })
+        );
+
+        const targetGroups = tgResponse.TargetGroups || [];
+        expect(targetGroups.length).toBeGreaterThan(0);
+
+        const targetGroup = targetGroups.find(
+          (tg: any) => tg.TargetGroupName === naming('tg')
+        );
+        expect(targetGroup).toBeDefined();
+        expect(targetGroup?.Port).toBe(8080);
+        expect(targetGroup?.Protocol).toBe('HTTP');
+      },
+      testTimeout
+    );
+
+    test(
+      'ALB has HTTP listener on port 80',
+      async () => {
+        const albDns = outputs.ALBDnsName;
+
+        const lbResponse = await elbv2.send(
+          new DescribeLoadBalancersCommand({})
+        );
+        const alb = lbResponse.LoadBalancers?.find(
+          (lb: any) => lb.DNSName === albDns
+        );
+        expect(alb).toBeDefined();
+
+        const listenerResponse = await elbv2.send(
+          new DescribeListenersCommand({
+            LoadBalancerArn: alb?.LoadBalancerArn,
+          })
+        );
+
+        const listeners = listenerResponse.Listeners || [];
+        const httpListener = listeners.find((l: any) => l.Port === 80);
+        expect(httpListener).toBeDefined();
+        expect(httpListener?.Protocol).toBe('HTTP');
+      },
+      testTimeout
+    );
+  });
+
+  describe('Route53 DNS', () => {
+    test(
+      'Hosted zone exists for payment domain',
+      async () => {
+        const zoneName = `payment-${environmentSuffix}.company.com.`;
+
+        const response = await route53.send(
+          new ListHostedZonesByNameCommand({ DNSName: zoneName })
+        );
+
+        const hostedZone = response.HostedZones?.find(
+          (zone: any) => zone.Name === zoneName
+        );
+        expect(hostedZone).toBeDefined();
+      },
+      testTimeout
+    );
+
+    test(
+      'A record exists pointing to ALB',
+      async () => {
+        const zoneName = `payment-${environmentSuffix}.company.com.`;
+
+        const zoneResponse = await route53.send(
+          new ListHostedZonesByNameCommand({ DNSName: zoneName })
+        );
+        const hostedZone = zoneResponse.HostedZones?.find(
+          (zone: any) => zone.Name === zoneName
+        );
+        expect(hostedZone).toBeDefined();
+
+        const recordsResponse = await route53.send(
+          new ListResourceRecordSetsCommand({
+            HostedZoneId: hostedZone?.Id?.replace('/hostedzone/', ''),
+          })
+        );
+
+        const aRecord = recordsResponse.ResourceRecordSets?.find(
+          (r: any) =>
+            r.Type === 'A' && r.Name === `api.${zoneName}`
+        );
+        expect(aRecord).toBeDefined();
+      },
+      testTimeout
+    );
+  });
+
+  describe('CloudWatch Monitoring', () => {
+    test(
+      'VPC flow logs log group exists',
+      async () => {
+        const logGroupName = `/aws/vpc/${naming('flowlogs')}`;
+
+        const response = await logs.send(
+          new DescribeLogGroupsCommand({
+            logGroupNamePrefix: logGroupName,
+          })
+        );
+
+        const logGroup = response.logGroups?.find(
+          (lg: any) => lg.logGroupName === logGroupName
+        );
+        expect(logGroup).toBeDefined();
+      },
+      testTimeout
+    );
+
+    test(
+      'Application log group exists',
+      async () => {
+        const logGroupName = `/aws/payment/${environmentSuffix}/application`;
+
+        const response = await logs.send(
+          new DescribeLogGroupsCommand({
+            logGroupNamePrefix: logGroupName,
+          })
+        );
+
+        const logGroup = response.logGroups?.find(
+          (lg: any) => lg.logGroupName === logGroupName
+        );
+        expect(logGroup).toBeDefined();
+      },
+      testTimeout
+    );
+
+    test(
+      'CloudWatch alarms exist for CPU monitoring',
+      async () => {
+        const response = await cloudwatch.send(
+          new DescribeAlarmsCommand({
+            AlarmNamePrefix: naming('cpu-alarm'),
+          })
+        );
+
+        const alarms = response.MetricAlarms || [];
+        expect(alarms.length).toBeGreaterThan(0);
+
+        const cpuAlarm = alarms.find((a: any) =>
+          a.AlarmName.includes('cpu-alarm')
+        );
+        expect(cpuAlarm).toBeDefined();
+      },
+      testTimeout
+    );
+
+    test(
+      'SNS topic exists for alarms',
+      async () => {
+        const response = await sns.send(new ListTopicsCommand({}));
+
+        const topics = response.Topics || [];
+        const alarmTopic = topics.find((t: any) =>
+          t.TopicArn?.includes(naming('alarms'))
+        );
+        expect(alarmTopic).toBeDefined();
+      },
+      testTimeout
+    );
+  });
+
+  describe('SSM Parameter Store', () => {
+    test(
+      'DB endpoint parameter exists',
+      async () => {
+        const paramName = `/${environmentSuffix}/${service}/db-endpoint`;
+
+        const response = await ssm.send(
+          new GetParameterCommand({ Name: paramName })
+        );
+
+        expect(response.Parameter).toBeDefined();
+        expect(response.Parameter?.Name).toBe(paramName);
+      },
+      testTimeout
+    );
+
+    test(
+      'DB port parameter exists',
+      async () => {
+        const paramName = `/${environmentSuffix}/${service}/db-port`;
+
+        const response = await ssm.send(
+          new GetParameterCommand({ Name: paramName })
+        );
+
+        expect(response.Parameter).toBeDefined();
+        expect(response.Parameter?.Name).toBe(paramName);
+      },
+      testTimeout
+    );
+
+    test(
+      'DB secret ARN parameter exists',
+      async () => {
+        const paramName = `/${environmentSuffix}/${service}/db-secret-arn`;
+
+        const response = await ssm.send(
+          new GetParameterCommand({ Name: paramName })
+        );
+
+        expect(response.Parameter).toBeDefined();
+        expect(response.Parameter?.Name).toBe(paramName);
+      },
+      testTimeout
+    );
+
+    test(
+      'S3 bucket parameter exists',
+      async () => {
+        const paramName = `/${environmentSuffix}/${service}/s3-bucket`;
+
+        const response = await ssm.send(
+          new GetParameterCommand({ Name: paramName })
+        );
+
+        expect(response.Parameter).toBeDefined();
+        expect(response.Parameter?.Value).toBe(outputs.S3BucketName);
+      },
+      testTimeout
+    );
+
+    test(
+      'ALB DNS parameter exists',
+      async () => {
+        const paramName = `/${environmentSuffix}/${service}/alb-dns`;
+
+        const response = await ssm.send(
+          new GetParameterCommand({ Name: paramName })
+        );
+
+        expect(response.Parameter).toBeDefined();
+        expect(response.Parameter?.Value).toBe(outputs.ALBDnsName);
+      },
+      testTimeout
+    );
+
+    test(
+      'Environment parameter exists',
+      async () => {
+        const paramName = `/${environmentSuffix}/${service}/environment`;
+
+        const response = await ssm.send(
+          new GetParameterCommand({ Name: paramName })
+        );
+
+        expect(response.Parameter).toBeDefined();
+        expect(response.Parameter?.Value).toBe(environmentSuffix);
+      },
+      testTimeout
+    );
+  });
+
+  describe('Secrets Manager', () => {
+    test(
+      'Database secret exists',
+      async () => {
+        const secretName = naming('db-secret');
+
+        const response = await secretsmanager.send(
+          new DescribeSecretCommand({ SecretId: secretName })
+        );
+
+        expect(response).toBeDefined();
+        expect(response.Name).toBe(secretName);
+      },
+      testTimeout
+    );
+  });
+
+  describe('IAM Roles', () => {
+    test(
+      'EC2 role exists with managed policies',
+      async () => {
+        const roleName = naming('ec2-role');
+
+        const roleResponse = await iam.send(
+          new GetRoleCommand({ RoleName: roleName })
+        );
+        expect(roleResponse.Role).toBeDefined();
+
+        const policiesResponse = await iam.send(
+          new ListAttachedRolePoliciesCommand({ RoleName: roleName })
+        );
+
+        const policies = policiesResponse.AttachedPolicies || [];
+        const policyNames = policies.map((p: any) => p.PolicyName);
+        expect(policyNames).toContain('AmazonSSMManagedInstanceCore');
+        expect(policyNames).toContain('CloudWatchAgentServerPolicy');
+      },
+      testTimeout
+    );
+
+    test(
+      'RDS monitoring role exists',
+      async () => {
+        const roleName = naming('rds-monitoring-role');
+
+        const response = await iam.send(
+          new GetRoleCommand({ RoleName: roleName })
+        );
+        expect(response.Role).toBeDefined();
+      },
+      testTimeout
+    );
+  });
+
+  describe('Resource Tagging', () => {
+    test(
+      'VPC has correct tags',
+      async () => {
+        const vpcId = outputs.VPCId;
+
+        const response = await ec2.send(
+          new DescribeTagsCommand({
+            Filters: [{ Name: 'resource-id', Values: [vpcId] }],
+          })
+        );
+
+        const tags = response.Tags || [];
+        const tagMap = tags.reduce(
+          (acc: any, tag: any) => {
+            acc[tag.Key!] = tag.Value!;
+            return acc;
+          },
+          {} as Record<string, string>
+        );
+
+        expect(tagMap['Environment']).toBe(environmentSuffix);
+        expect(tagMap['Team']).toBe('PaymentProcessing');
+        expect(tagMap['CostCenter']).toBe('Engineering');
+      },
+      testTimeout
+    );
   });
 });

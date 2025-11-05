@@ -1,181 +1,71 @@
-## Title
+# Multi-Environment Payment Processing Infrastructure
 
-Build a serverless transaction pipeline (single-stack CDK v2 TypeScript)
+We need to set up a payment processing system that runs across dev, staging, and production environments. The tricky part is that while the architecture should be consistent, we need different configurations for each environment - things like instance sizes, backup retention, and monitoring thresholds.
 
-## TL;DR
+Our current setup uses AWS CDK v2 with TypeScript. We're deploying to multiple AWS regions - prod in us-east-1, staging in us-west-2, and dev in us-east-2.
 
-Create a production-ready, event-driven payments workflow in any region using **AWS CDK v2 + TypeScript (Node 18+)**. **Step Functions** orchestrates **parallel fraud & compliance** paths, with **compensating (Saga) rollbacks**, strict **per-merchant ordering** via **SQS FIFO**, and **real-time webhooks** for status updates. All stack code must live in **`lib/tapstack.ts`**.
+## What We're Building
 
----
+The core requirement is a single CDK application that can deploy the same infrastructure stack to any environment, but with environment-specific tweaks. Think of it like having one blueprint, but with different material sizes depending on whether you're building the prototype or the real thing.
 
-## Repository layout (must match)
+Here's what each environment needs:
 
-* `bin/tap.ts` — minimal CDK entry; instantiate the stack only
-* `lib/tapstack.ts` — **entire stack implementation in this single file**
-* `lib/other .md files` — docs only
-* `test/tap-stack.int.test.ts` — integration tests (may read stack outputs)
-* `test/tap-stack.unit.test.ts` — unit/snapshot tests
+### Environments
+- **Dev**: Small instances (t3.micro), minimal backups (1 day), shorter log retention (7 days), higher CPU thresholds (80%)
+- **Staging**: Medium instances (t3.medium), weekly backups (7 days), monthly logs (30 days), moderate CPU thresholds (70%)
+- **Prod**: Larger instances (t3.large), long-term backups (30 days), year-long logs (365 days), strict CPU thresholds (60%)
 
-**Hard placement rule:** put *all* constructs/resources/permissions/outputs inside `lib/tapstack.ts`. Do not create additional `.ts` source files.
+## Infrastructure Components
 
----
+**Networking**
+- VPC per environment using CIDR blocks 10.1.0.0/16 (dev), 10.2.0.0/16 (staging), 10.3.0.0/16 (prod)
+- Three subnet tiers: public for NAT gateways, private for EC2 instances, and isolated for RDS databases
+- Need VPC peering between environments to support cross-environment RDS read replicas
 
-## Why we’re building this
+**Compute**
+- EC2 instances behind an Application Load Balancer
+- Auto Scaling Groups to handle traffic spikes
+- Instances need SSM access for management, no public IPs
 
-* Process payment transactions **asynchronously** with **strict ordering** per merchant.
-* Run **fraud** and **compliance** checks **in parallel**.
-* Recover safely with **compensating transactions** (Saga).
-* Send **real-time webhook** notifications on status changes.
-* Operate with **strong observability**, **least-privilege IAM**, and **cost-optimized ARM** Lambdas.
+**Database**
+- RDS PostgreSQL instances with environment-specific backup retention
+- Cross-environment read replicas: staging reads from prod, dev reads from staging
+- Database credentials stored in Secrets Manager
 
----
+**Storage**
+- S3 buckets with versioning enabled
+- Lifecycle policies vary by environment: dev expires objects after 30 days, staging after 90 days, prod never expires
+- All buckets encrypted with SSE-S3
 
-## Services in scope
+**DNS**
+- Route53 hosted zones for each environment
+- Dev: dev.payment.company.com
+- Staging: staging.payment.company.com  
+- Prod: payment.company.com (no prefix)
 
-AWS Step Functions, AWS Lambda, Amazon API Gateway, Amazon DynamoDB, Amazon SQS, Amazon EventBridge, Amazon S3, AWS X-Ray, Amazon CloudWatch, AWS Identity and Access Management (IAM), AWS Secrets Manager, AWS CloudFormation (via AWS CDK)
+**Monitoring**
+- CloudWatch alarms for CPU utilization with environment-specific thresholds
+- Log groups with retention periods matching each environment's needs
+- SNS topics for alarm notifications
 
----
+**Security & Configuration**
+- IAM roles with permissions boundaries to enforce least privilege
+- SSM Parameter Store for environment-specific configuration values
+- Consistent resource naming: `{company}-{service}-{environment}-{resource-type}`
+- Standard tags: Environment, Team (PaymentProcessing), CostCenter (Engineering)
 
-## Environment & standards
-* CDK: **v2**
-* Language: **TypeScript**, **Node.js ≥ 18**
-* Lambda architecture: **ARM_64 (Graviton2) only**
-* Tracing: **AWS X-Ray** end-to-end
-* IaC: single CDK **Stack** in `lib/tapstack.ts`, minimal `bin/tap.ts`
+## Technical Constraints
 
----
+The CDK app needs to be driven by context variables - we can't have separate code paths for each environment. Everything should be parameterized.
 
-## What to build (implement all in `lib/tapstack.ts`)
+We also need to ensure that when we deploy, the stack name includes the environment suffix so multiple stacks can coexist. The entry point should read the environment from CDK context and pass it through to the stack.
 
-### 1) Orchestration — Step Functions (with compensation)
+## Output Requirements
 
-* State machine flow:
-  **Normalize input → Validate → Parallel { Fraud, Compliance } → Aggregate → Persist + Emit → Webhook dispatch**
-* **Custom retry** on each Task (exponential backoff, jitter, max attempts) with **Catch** → **Compensator** (Saga rollback).
-* Compensation must **reverse side effects**, **persist an audit record**, and **emit `transaction.rolled_back`**.
-* **X-Ray tracing** enabled; sensible state timeouts; **idempotency** guidance documented.
+We need two files:
+1. `bin/tap.ts` - Entry point that reads environment from context and instantiates the stack
+2. `lib/tap-stack.ts` - The actual stack definition with all the resources
 
-### 2) Lambda functions — Node 18, ARM_64, SDK v3 + custom retries
+The stack class should be named `TapStack` and should accept an `environmentSuffix` prop. If not provided, it should fall back to reading from context, and finally default to 'dev'.
 
-* Functions: `transaction-validation`, `fraud-scoring`, `compliance-verification`, `persist-transaction`, `emit-events`, `webhook-dispatcher`, `compensator`.
-* Use **AWS SDK v3** only, via a **shared custom retry helper** (max attempts, exponential backoff, throttle/5xx aware, timeouts).
-* **Reserved concurrency** for all functions.
-  **Provisioned concurrency** for `transaction-validation` and `webhook-dispatcher` (version + alias wired).
-* **Structured JSON logs** with correlation IDs (`transactionId`, `executionArn`); **least-privilege IAM**; **X-Ray** on.
-
-### 3) Data — DynamoDB (PAY_PER_REQUEST + Contributor Insights)
-
-* **Transactions** table
-
-  * Billing: **on-demand**; **Contributor Insights** ON; **Streams** ON (NEW_AND_OLD_IMAGES).
-  * Keys/attrs: `txnId` (PK), `merchantId`, `amount`, `currency`, `status`, `fraudScore`, `complianceFlags`, `createdAt`, `updatedAt`.
-  * **GSIs**:
-
-    * `byMerchantAndTime` — PK `merchantId`, SK `updatedAt`
-    * `byStatusAndTime` — PK `status`, SK `updatedAt`
-* **Audit** table
-
-  * Billing: **on-demand**; **Contributor Insights** ON.
-  * Keys/attrs: `auditId` (PK), `txnId`, `eventType`, `details`, `createdAt`.
-  * **GSI**: `byTxnAndTime` — PK `txnId`, SK `createdAt`
-
-### 4) Ingress & webhooks — API Gateway (auth, throttling, mappings)
-
-* REST API endpoints:
-
-  * **POST `/transactions`** — ingest new transactions
-  * **POST `/webhooks/status`** — merchant acknowledgements
-* **Custom Lambda authorizer**: validate **HMAC** and/or **API key**; inject `clientId` into request context.
-* **Per-client throttling** via **Usage Plans + API Keys** (enforce **rate** and **burst** by client ID).
-* **Models** + **request/response mapping templates**; **access/execution logs** enabled.
-
-### 5) Events & queues — EventBridge + SQS (strict ordering + DLQs)
-
-* **SQS FIFO** inbound queue:
-
-  * **MessageGroupId = merchantId** (strict per-merchant ordering).
-  * Content-based or explicit dedup strategy documented.
-  * **FIFO DLQ** with **custom redrive policy** (e.g., `maxReceiveCount`, `redriveAllowPolicy`).
-* **EventBridge** custom bus + rules:
-
-  * **HighAmountRule** — thresholded amount triggers review/workflow.
-  * **HighFraudScoreRule** — high fraud score triggers manual review path.
-  * **FailureSpikeRule** — error pattern with rate-limited incident event.
-  * Targets: Step Functions / Lambdas, each with **DLQ** configured.
-
-### 6) Storage lifecycle — S3 archival
-
-* Bucket: `txn-archive-{env}`
-
-  * Default encryption ON, block public access ON, versioning as needed.
-  * **Lifecycle**: transition completed transaction artifacts after **90 days** to cheaper storage (optional expire at 365).
-
-### 7) Observability — X-Ray + CloudWatch (metrics, dashboard, alarms)
-
-* **X-Ray** on API Gateway, all Lambdas, and Step Functions; propagate trace headers.
-* **Custom metrics** (namespace **`TxnPipeline`**):
-  `TransactionsSucceeded`, `TransactionsFailed`, `ProcessingTimeMs` (p50/p90/p99), `FraudScoreHighCount`, `ComplianceFailCount`, `WebhookDeliveryLatencyMs`, `DLQDepth`.
-* **CloudWatch Dashboard**: success rate, latency, throttles, errors per component, DLQ depth, Step Functions executions by status.
-* **Alarms** (actionable descriptions + runbook links):
-
-  * DLQ depth > 0 for 5 minutes
-  * Lambda **Throttles** > 0
-  * StateMachine **ExecutionsFailed** over threshold
-  * API **5xx** rate over threshold
-
----
-
-## Hard constraints (do not bend)
-
-* **Compensating transactions** (Saga) must be implemented for rollback paths.
-* **All Lambdas use ARM_64 (Graviton2)**.
-* Lambdas must use **AWS SDK v3** with a **custom retry** strategy.
-* DynamoDB tables must be **PAY_PER_REQUEST** and have **Contributor Insights enabled**.
-* API Gateway must enforce **per-client throttling** (usage plans + API keys with **burst limits**).
-
----
-
-## Ordering, idempotency, performance
-
-* **Strict ordering**: SQS **FIFO** with **MessageGroupId = merchantId**; document dedup strategy.
-* **Idempotency**: use `txnId` across writes and webhook retries; safe retries for non-idempotent calls.
-* **Provisioned concurrency** on hot paths; timeouts/backoffs tuned to avoid API timeouts.
-
----
-
-## Security & secrets
-
-* **Least-privilege IAM** per function/resource; scope ARNs tightly.
-* Store secrets (e.g., webhook signing keys) in **AWS Secrets Manager**; do not commit any secrets.
-
----
-
-## Deliverables
-
-* A single **CDK Stack** in `lib/tapstack.ts` implementing everything above.
-* Minimal `bin/tap.ts` that constructs the app and the stack.
-* Docs in `lib/` as `.md` files:
-
-  * **README** (bootstrap/synth/diff/deploy/destroy, env vars, sample cURL/Postman, replay/DLQ drain/stuck execution runbooks)
-  * Architecture diagram + State Machine diagram (PNG or Mermaid accepted)
-* Tests:
-
-  * `test/tap-stack.unit.test.ts` — props validation + synth snapshot
-  * `test/tap-stack.int.test.ts` — minimal integration reading stack outputs
-
----
-
-## Acceptance criteria
-
-*  All resources defined inside **one** stack file: `lib/tapstack.ts`
-*  Parallel fraud/compliance branches with **custom retries** and a **compensation** path that emits `transaction.rolled_back`
-*  DynamoDB tables with required **GSIs** and **Contributor Insights**
-*  API Gateway with **custom authorizer**, **per-client throttling**, mappings, and logging
-*  EventBridge rules that trigger workflows on thresholds/patterns
-*  SQS **FIFO** + **DLQ** with custom redrive policy
-*  S3 lifecycle moves artifacts after **90 days**
-*  Lambda **reserved** + **provisioned** concurrency as specified
-*  **X-Ray** end-to-end; **CloudWatch** dashboard, custom metrics, and alarms
-*  Project builds and deploys with **CDK v2 / Node 18+** without adding new source files beyond the structure above
-
----
+Make sure to use clear inline comments to separate the major sections - VPC setup, security groups, IAM roles, storage, database, compute, load balancer, DNS, monitoring, and configuration.

@@ -2,473 +2,884 @@ import * as cdk from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+describe('TapStack', () => {
+  describe('Environment Suffix Configuration', () => {
+    test('uses environmentSuffix from props', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'staging',
+      });
+      const template = Template.fromStack(stack);
 
-describe('TapStack (TAP transaction pipeline)', () => {
-  let app: cdk.App;
-  let stack: TapStack;
-  let template: Template;
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: 'fintech-payment-staging-storage',
+      });
+    });
 
-  beforeEach(() => {
-    app = new cdk.App();
-    stack = new TapStack(app, 'TestTapStack', { environmentSuffix });
-    template = Template.fromStack(stack);
-  });
+    test('uses environmentSuffix from context when props not provided', () => {
+      const app = new cdk.App();
+      app.node.setContext('environmentSuffix', 'prod');
+      const stack = new TapStack(app, 'TestStack');
+      const template = Template.fromStack(stack);
 
-  // -------------------------
-  // Secrets
-  // -------------------------
-  describe('Secrets', () => {
-    test('creates Secrets Manager secret for API keys with generation rules', () => {
-      template.hasResourceProperties('AWS::SecretsManager::Secret', {
-        Description: 'API keys / signing material for webhook HMAC validation',
-        GenerateSecretString: Match.objectLike({
-          SecretStringTemplate: JSON.stringify({ defaultKey: '' }),
-          GenerateStringKey: 'defaultKey',
-          ExcludeCharacters: Match.stringLikeRegexp('[%\\+~`#\\$&\\*\\(\\)\\|\\[\\]\\{\\}:;<>\\?\\"\'/@\\\\]'),
-        }),
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: 'fintech-payment-prod-storage',
+      });
+    });
+
+    test('defaults to dev when environmentSuffix not provided', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack');
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: 'fintech-payment-dev-storage',
       });
     });
   });
 
-  // -------------------------
-  // S3
-  // -------------------------
-  describe('S3 Buckets', () => {
-    test('creates access-logs bucket with SSL enforced and no public access', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', Match.objectLike({
-        BucketEncryption: {
-          ServerSideEncryptionConfiguration: Match.arrayWith([
-            Match.objectLike({ ServerSideEncryptionByDefault: { SSEAlgorithm: 'AES256' } }),
+  describe('VPC and Networking', () => {
+    test('creates VPC with correct configuration', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.1.0.0/16',
+        EnableDnsHostnames: true,
+        EnableDnsSupport: true,
+      });
+    });
+
+    test('creates public, private, and isolated subnets', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack');
+      const template = Template.fromStack(stack);
+
+      // Should have at least 6 subnets (2 NAT gateways × 3 subnet types)
+      const subnetCount = template.findResources('AWS::EC2::Subnet');
+      expect(Object.keys(subnetCount).length).toBeGreaterThanOrEqual(6);
+
+      template.hasResourceProperties('AWS::EC2::Subnet', {
+        MapPublicIpOnLaunch: true,
+        Tags: Match.arrayWith([
+          { Key: 'aws-cdk:subnet-type', Value: 'Public' },
+        ]),
+      });
+    });
+
+    test('creates NAT gateways for private subnets', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack');
+      const template = Template.fromStack(stack);
+
+      template.resourceCountIs('AWS::EC2::NatGateway', 2);
+    });
+
+    test('creates internet gateway', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack');
+      const template = Template.fromStack(stack);
+
+      template.resourceCountIs('AWS::EC2::InternetGateway', 1);
+    });
+
+    test('creates VPC flow logs', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        LogGroupName: '/aws/vpc/fintech-payment-test-flowlogs',
+        RetentionInDays: 7,
+      });
+
+      template.hasResourceProperties('AWS::EC2::FlowLog', {
+        ResourceType: 'VPC',
+        TrafficType: 'ALL',
+      });
+    });
+  });
+
+  describe('Security Groups', () => {
+    test('creates ALB security group with correct ingress rules', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupName: 'fintech-payment-test-alb-sg',
+        GroupDescription: 'Security group for Application Load Balancer',
+        SecurityGroupIngress: Match.arrayWith([
+          {
+            CidrIp: '0.0.0.0/0',
+            Description: 'HTTPS from Internet',
+            FromPort: 443,
+            ToPort: 443,
+            IpProtocol: 'tcp',
+          },
+          {
+            CidrIp: '0.0.0.0/0',
+            Description: 'HTTP from Internet',
+            FromPort: 80,
+            ToPort: 80,
+            IpProtocol: 'tcp',
+          },
+        ]),
+      });
+    });
+
+    test('creates EC2 security group with ALB ingress rule', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupName: 'fintech-payment-test-ec2-sg',
+        GroupDescription: 'Security group for EC2 instances',
+      });
+
+      template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
+        Description: 'HTTP from ALB',
+        FromPort: 8080,
+        ToPort: 8080,
+        IpProtocol: 'tcp',
+      });
+    });
+
+    test('creates RDS security group with EC2 ingress rule', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupName: 'fintech-payment-test-rds-sg',
+        GroupDescription: 'Security group for RDS database',
+      });
+
+      template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
+        Description: 'PostgreSQL from EC2',
+        FromPort: 5432,
+        ToPort: 5432,
+        IpProtocol: 'tcp',
+      });
+    });
+  });
+
+  describe('IAM Roles and Policies', () => {
+    test('creates permissions boundary with correct policies', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::IAM::ManagedPolicy', {
+        ManagedPolicyName: 'fintech-payment-test-permissions-boundary',
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            {
+              Effect: 'Allow',
+              Action: Match.arrayWith([
+                's3:GetObject',
+                's3:PutObject',
+                's3:DeleteObject',
+                's3:ListBucket',
+              ]),
+              Resource: 'arn:aws:s3:::fintech-payment-test-*',
+            },
+            {
+              Effect: 'Allow',
+              Action: Match.arrayWith([
+                'ssm:GetParameter',
+                'ssm:GetParameters',
+                'ssm:GetParameterHistory',
+                'ssm:GetParametersByPath',
+              ]),
+              Resource: 'arn:aws:ssm:*:*:parameter/test/payment/*',
+            },
           ]),
         },
-        PublicAccessBlockConfiguration: Match.objectLike({
+      });
+    });
+
+    test('creates EC2 role with permissions boundary and managed policies', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: 'fintech-payment-test-ec2-role',
+        AssumeRolePolicyDocument: Match.objectLike({
+          Statement: Match.arrayWith([
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'ec2.amazonaws.com',
+              },
+            },
+          ]),
+        }),
+        ManagedPolicyArns: Match.anyValue(),
+      });
+    });
+
+    test('creates RDS monitoring role', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: 'fintech-payment-test-rds-monitoring-role',
+        AssumeRolePolicyDocument: Match.objectLike({
+          Statement: Match.arrayWith([
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'monitoring.rds.amazonaws.com',
+              },
+            },
+          ]),
+        }),
+        ManagedPolicyArns: Match.anyValue(),
+      });
+    });
+  });
+
+  describe('S3 Storage', () => {
+    test('creates S3 bucket with correct configuration', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: 'fintech-payment-test-storage',
+        BucketEncryption: {
+          ServerSideEncryptionConfiguration: [
+            {
+              ServerSideEncryptionByDefault: {
+                SSEAlgorithm: 'AES256',
+              },
+            },
+          ],
+        },
+        PublicAccessBlockConfiguration: {
           BlockPublicAcls: true,
           BlockPublicPolicy: true,
           IgnorePublicAcls: true,
           RestrictPublicBuckets: true,
-        }),
-      }));
-
-      template.hasResourceProperties('AWS::S3::BucketPolicy', {
-        PolicyDocument: {
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Effect: 'Deny',
-              Action: 's3:*',
-              Principal: { AWS: '*' },
-              Condition: { Bool: { 'aws:SecureTransport': 'false' } },
-            }),
-          ]),
         },
-      });
-    });
-
-    test('creates archive bucket with versioning, logs, lifecycle, SSL, and no public access', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', Match.objectLike({
-        VersioningConfiguration: { Status: 'Enabled' },
-        LoggingConfiguration: Match.objectLike({
-          DestinationBucketName: Match.anyValue(),
-          LogFilePrefix: 'archive/',
-        }),
+        VersioningConfiguration: {
+          Status: 'Enabled',
+        },
         LifecycleConfiguration: {
-          Rules: Match.arrayWith([
-            Match.objectLike({
+          Rules: [
+            {
+              Id: 'ExpireObjects',
               Status: 'Enabled',
-              ExpirationInDays: 365,
-              Transitions: Match.arrayWith([
-                Match.objectLike({ StorageClass: 'GLACIER_IR', TransitionInDays: 90 }),
-              ]),
-            }),
-          ]),
+              ExpirationInDays: 30,
+            },
+          ],
         },
-        PublicAccessBlockConfiguration: Match.objectLike({
-          BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true,
-        }),
-      }));
-    });
-  });
-
-  // -------------------------
-  // DynamoDB
-  // -------------------------
-  describe('DynamoDB', () => {
-    test('creates transactions table with stream, PITR, contributor insights, and GSIs', () => {
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: `tap-transactions-${environmentSuffix}`,
-        BillingMode: 'PAY_PER_REQUEST',
-        PointInTimeRecoverySpecification: { PointInTimeRecoveryEnabled: true },
-        StreamSpecification: { StreamViewType: 'NEW_AND_OLD_IMAGES' },
-        ContributorInsightsSpecification: { Enabled: true },
-        KeySchema: Match.arrayWith([Match.objectLike({ AttributeName: 'txnId' })]),
-        GlobalSecondaryIndexes: Match.arrayWith([
-          Match.objectLike({
-            IndexName: 'byMerchantAndTime',
-            KeySchema: Match.arrayWith(
-              Match.objectLike({ AttributeName: 'merchantId' }),
-              Match.objectLike({ AttributeName: 'updatedAt' }),
-            ),
-          }),
-          Match.objectLike({
-            IndexName: 'byStatusAndTime',
-            KeySchema: Match.arrayWith(
-              Match.objectLike({ AttributeName: 'status' }),
-              Match.objectLike({ AttributeName: 'updatedAt' }),
-            ),
-          }),
-        ]),
       });
     });
 
-    test('creates audit table with PITR, contributor insights, and GSI', () => {
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: `tap-audit-${environmentSuffix}`,
-        BillingMode: 'PAY_PER_REQUEST',
-        PointInTimeRecoverySpecification: { PointInTimeRecoveryEnabled: true },
-        ContributorInsightsSpecification: { Enabled: true },
-        GlobalSecondaryIndexes: Match.arrayWith([
-          Match.objectLike({
-            IndexName: 'byTxnAndTime',
-            KeySchema: Match.arrayWith(
-              Match.objectLike({ AttributeName: 'txnId' }),
-              Match.objectLike({ AttributeName: 'createdAt' }),
-            ),
-          }),
-        ]),
+    test('grants EC2 role read/write access to S3 bucket', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack');
+      const template = Template.fromStack(stack);
+
+      const policies = template.findResources('AWS::IAM::Policy');
+      const hasS3Access = Object.values(policies).some((policy: any) => {
+        const statements = policy.Properties?.PolicyDocument?.Statement || [];
+        return statements.some((stmt: any) => {
+          const actions = Array.isArray(stmt.Action)
+            ? stmt.Action
+            : [stmt.Action].filter(Boolean);
+          return actions.some((action: string) =>
+            action.includes('s3:GetObject') || action.includes('s3:PutObject')
+          );
+        });
       });
+      expect(hasS3Access).toBe(true);
     });
   });
 
-  // -------------------------
-  // SQS
-  // -------------------------
-  describe('SQS', () => {
-    test('creates FIFO DLQ and FIFO inbound queue with redrive to DLQ', () => {
-      // DLQ
-      template.hasResourceProperties('AWS::SQS::Queue', Match.objectLike({
-        FifoQueue: true,
-        ContentBasedDeduplication: true,
-        VisibilityTimeout: 300,
-        QueueName: Match.stringLikeRegexp(`tap-txn-dlq-${environmentSuffix}\\.fifo`),
-      }));
+  describe('RDS Database', () => {
+    test('creates RDS database with correct configuration', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+      const template = Template.fromStack(stack);
 
-      // Inbound with redrive to DLQ
-      template.hasResourceProperties('AWS::SQS::Queue', Match.objectLike({
-        FifoQueue: true,
-        ContentBasedDeduplication: true,
-        VisibilityTimeout: 900,
-        RedrivePolicy: Match.objectLike({
-          deadLetterTargetArn: Match.anyValue(),
-          maxReceiveCount: 3,
-        }),
-        QueueName: Match.stringLikeRegexp(`tap-txn-inbound-${environmentSuffix}\\.fifo`),
-      }));
-
-      // CDK creates QueuePolicy resources for SQS targets + our explicit addToResourcePolicy.
-      const resources = (template.toJSON() as any).Resources;
-      const policies = Object.values(resources).filter((r: any) => r.Type === 'AWS::SQS::QueuePolicy');
-      expect(policies.length).toBeGreaterThanOrEqual(2);
-    });
-
-    test('creates standard SQS DLQ for EventBridge targets', () => {
-      template.hasResourceProperties('AWS::SQS::Queue', Match.objectLike({
-        FifoQueue: Match.absent(),
-        QueueName: `tap-eventbridge-dlq-${environmentSuffix}`,
-      }));
-    });
-  });
-
-  // -------------------------
-  // EventBridge
-  // -------------------------
-  describe('EventBridge', () => {
-    test('creates custom EventBridge event bus', () => {
-      template.hasResourceProperties('AWS::Events::EventBus', {
-        Name: `tap-transaction-events-${environmentSuffix}`,
+      template.hasResourceProperties('AWS::RDS::DBInstance', {
+        DBInstanceIdentifier: 'fintech-payment-test-rds',
+        DBInstanceClass: 'db.t3.micro',
+        Engine: 'postgres',
+        EngineVersion: '15.12',
+        AllocatedStorage: '20',
+        MaxAllocatedStorage: 100,
+        BackupRetentionPeriod: 1,
+        PreferredBackupWindow: '03:00-04:00',
+        PreferredMaintenanceWindow: 'sun:04:00-sun:05:00',
+        DeletionProtection: false,
+        MonitoringInterval: 60,
       });
     });
 
-    test('HighAmount rule pattern and DLQ/retry', () => {
-      template.hasResourceProperties('AWS::Events::Rule', {
-        Name: `tap-high-amount-${environmentSuffix}`,
-        EventBusName: Match.anyValue(), // Ref to bus
-        EventPattern: {
-          source: ['tap.compliance'],
-          'detail-type': ['High Amount Transaction'],
+    test('creates Secrets Manager secret for database credentials', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::SecretsManager::Secret', {
+        Name: 'fintech-payment-test-db-secret',
+        Description: 'RDS PostgreSQL master credentials',
+        GenerateSecretString: {
+          SecretStringTemplate: '{"username":"paymentadmin"}',
+          GenerateStringKey: 'password',
+          ExcludeCharacters:
+            ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
         },
-        Targets: Match.arrayWith([
-          Match.objectLike({
-            DeadLetterConfig: Match.anyValue(),
-            RetryPolicy: Match.anyValue(),
-          }),
-        ]),
       });
     });
 
-    test('HighFraud rule pattern and DLQ/retry', () => {
-      template.hasResourceProperties('AWS::Events::Rule', {
-        Name: `tap-high-fraud-${environmentSuffix}`,
-        EventBusName: Match.anyValue(),
-        EventPattern: {
-          source: ['tap.fraud'],
-          'detail-type': ['High Fraud Score'],
-        },
-        Targets: Match.arrayWith([
-          Match.objectLike({
-            DeadLetterConfig: Match.anyValue(),
-            RetryPolicy: Match.anyValue(),
-          }),
-        ]),
-      });
-    });
+    test('creates DB subnet group in isolated subnets', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack');
+      const template = Template.fromStack(stack);
 
-    test('FailureSpike rule sends to SQS with MessageGroupId', () => {
-      template.hasResourceProperties('AWS::Events::Rule', {
-        Name: `tap-failure-spike-${environmentSuffix}`,
-        EventBusName: Match.anyValue(),
-        EventPattern: {
-          source: ['tap.compensation'],
-          'detail-type': ['transaction.rolled_back'],
-        },
-        Targets: Match.arrayWith([
-          Match.objectLike({
-            SqsParameters: { MessageGroupId: 'compensation-rollbacks' },
-          }),
-        ]),
+      template.hasResourceProperties('AWS::RDS::DBSubnetGroup', {
+        DBSubnetGroupDescription: 'Subnet group for RDS database',
       });
+
+      template.resourceCountIs('AWS::RDS::DBSubnetGroup', 1);
     });
   });
 
-  // -------------------------
-  // Lambda
-  // -------------------------
-  describe('Lambda', () => {
-    test('creates 8 Lambda functions with Node 18, ARM64, tracing, and shared env', () => {
-      template.resourceCountIs('AWS::Lambda::Function', 8);
+  describe('EC2 and Auto Scaling', () => {
+    test('creates launch template with correct configuration', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+      const template = Template.fromStack(stack);
 
-      template.hasResourceProperties('AWS::Lambda::Function', Match.objectLike({
-        Runtime: 'nodejs18.x',
-        Architectures: Match.arrayWith(['arm64']),
-        TracingConfig: { Mode: 'Active' },
-        Handler: 'index.handler',
-        Environment: {
-          Variables: Match.objectLike({
-            TRANSACTIONS_TABLE: Match.anyValue(),
-            AUDIT_TABLE: Match.anyValue(),
-            ARCHIVE_BUCKET: Match.anyValue(),
-            EVENT_BUS_NAME: Match.anyValue(),
-            SECRET_ARN: Match.anyValue(),
-          }),
+      template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
+        LaunchTemplateName: 'fintech-payment-test-launch-template',
+        LaunchTemplateData: {
+          InstanceType: 't3.micro',
+          BlockDeviceMappings: [
+            {
+              DeviceName: '/dev/xvda',
+              Ebs: {
+                // Encrypted property not set - uses account default EBS encryption
+                VolumeSize: 30,
+                VolumeType: 'gp3',
+              },
+            },
+          ],
         },
-      }));
-    });
-
-    test('sets reserved concurrency on key functions', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', Match.objectLike({
-        FunctionName: `tap-transaction-validation-${environmentSuffix}`,
-        ReservedConcurrentExecutions: 100,
-      }));
-      template.hasResourceProperties('AWS::Lambda::Function', Match.objectLike({
-        FunctionName: `tap-webhook-dispatcher-${environmentSuffix}`,
-        ReservedConcurrentExecutions: 100,
-      }));
-      template.hasResourceProperties('AWS::Lambda::Function', Match.objectLike({
-        FunctionName: `tap-compensator-${environmentSuffix}`,
-        ReservedConcurrentExecutions: 25,
-      }));
-    });
-
-    test('creates two Lambda aliases with provisioned concurrency', () => {
-      template.resourceCountIs('AWS::Lambda::Alias', 2);
-      template.hasResourceProperties('AWS::Lambda::Alias', {
-        Name: 'provisioned',
-        ProvisionedConcurrencyConfig: { ProvisionedConcurrentExecutions: 5 },
       });
+    });
+
+    test('creates auto scaling group with correct capacity', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties(
+        'AWS::AutoScaling::AutoScalingGroup',
+        {
+          AutoScalingGroupName: 'fintech-payment-test-asg',
+          MinSize: '1',
+          MaxSize: '3',
+          DesiredCapacity: '1',
+          HealthCheckType: 'ELB',
+          HealthCheckGracePeriod: 300,
+        }
+      );
+    });
+
+    test('user data includes CloudWatch agent configuration', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+      const template = Template.fromStack(stack);
+
+      const launchTemplate = template.findResources(
+        'AWS::EC2::LaunchTemplate'
+      );
+      const userData = JSON.stringify(
+        launchTemplate[Object.keys(launchTemplate)[0]].Properties
+          .LaunchTemplateData.UserData
+      );
+
+      expect(userData).toContain('amazon-cloudwatch-agent');
+      expect(userData).toContain('fintech/payment/test');
     });
   });
 
-  // -------------------------
-  // Step Functions
-  // -------------------------
-  describe('Step Functions', () => {
-    test('creates state machine with logging and tracing', () => {
-      template.hasResourceProperties('AWS::StepFunctions::StateMachine', Match.objectLike({
-        StateMachineName: `tap-transaction-processor-${environmentSuffix}`,
-        TracingConfiguration: { Enabled: true },
-        LoggingConfiguration: {
-          Level: 'ALL',
-          Destinations: Match.arrayWith([
-            Match.objectLike({ CloudWatchLogsLogGroup: { LogGroupArn: Match.anyValue() } }),
-          ]),
-        },
-      }));
-
-      template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: `/aws/vendedlogs/states/tap-transaction-processor-${environmentSuffix}`,
-        RetentionInDays: 7,
+  describe('Application Load Balancer', () => {
+    test('creates ALB with correct configuration', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
       });
-    });
-  });
+      const template = Template.fromStack(stack);
 
-  // -------------------------
-  // API Gateway
-  // -------------------------
-  describe('API Gateway', () => {
-    test('creates REST API with stage settings', () => {
-      template.resourceCountIs('AWS::ApiGateway::RestApi', 1);
-      template.resourceCountIs('AWS::ApiGateway::Stage', 1);
-
-      // MetricsEnabled/DataTraceEnabled live inside MethodSettings, not top-level
-      template.hasResourceProperties('AWS::ApiGateway::Stage', Match.objectLike({
-        TracingEnabled: true,
-        StageName: environmentSuffix,
-        MethodSettings: Match.arrayWith([
-          Match.objectLike({
-            MetricsEnabled: true,
-            DataTraceEnabled: true,
-            LoggingLevel: 'INFO',
-          }),
-        ]),
-      }));
+      template.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::LoadBalancer',
+        {
+          Name: 'fintech-payment-test-alb',
+          Scheme: 'internet-facing',
+          Type: 'application',
+        }
+      );
     });
 
-    test('creates TOKEN authorizer with no caching', () => {
-      template.hasResourceProperties('AWS::ApiGateway::Authorizer', {
-        Type: 'TOKEN',
-        AuthorizerResultTtlInSeconds: 0,
+    test('creates target group with health check configuration', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
       });
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::TargetGroup',
+        Match.objectLike({
+          Name: 'fintech-payment-test-tg',
+          Port: 8080,
+          Protocol: 'HTTP',
+          HealthCheckPath: '/health',
+          HealthyThresholdCount: 2,
+          UnhealthyThresholdCount: 3,
+        })
+      );
     });
 
-    test('creates POST /transactions method requiring API key and model', () => {
-      template.hasResourceProperties('AWS::ApiGateway::Model', {
-        ContentType: 'application/json',
-        Name: 'TransactionRequest',
-        Schema: Match.objectLike({
-          type: 'object',
-          required: Match.arrayWith(['transactionId', 'merchantId', 'amount', 'currency']),
-        }),
-      });
+    test('creates HTTP listener on port 80', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack');
+      const template = Template.fromStack(stack);
 
-      template.hasResourceProperties('AWS::ApiGateway::Method', Match.objectLike({
-        HttpMethod: 'POST',
-        ApiKeyRequired: true,
-        RequestModels: Match.anyValue(),
-        Integration: Match.objectLike({
-          Type: 'AWS',
-          IntegrationHttpMethod: 'POST',
-          // URI is constructed with Fn::Join by CDK
-          Uri: Match.objectLike({ 'Fn::Join': Match.anyValue() }),
-        }),
-      }));
-    });
-
-    test('grants APIGW a role with permission to StartExecution', () => {
-      template.hasResourceProperties('AWS::IAM::Role', Match.objectLike({
-        AssumeRolePolicyDocument: {
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Effect: 'Allow',
-              Principal: { Service: 'apigateway.amazonaws.com' },
-              Action: 'sts:AssumeRole',
-            }),
-          ]),
-        },
-        Policies: Match.arrayWith([
-          Match.objectLike({
-            PolicyName: 'StepFunctionsPolicy',
-            PolicyDocument: Match.objectLike({
-              Statement: Match.arrayWith([
-                Match.objectLike({
-                  Effect: 'Allow',
-                  Action: Match.anyValue(),   // string or array depending on CDK version
-                  Resource: Match.anyValue(),
-                }),
-              ]),
-            }),
-          }),
-        ]),
-      }));
-    });
-
-    test('creates POST /webhooks/status mock method with authorizer', () => {
-      template.hasResourceProperties('AWS::ApiGateway::Method', Match.objectLike({
-        HttpMethod: 'POST',
-        AuthorizationType: 'CUSTOM',
-        Integration: Match.objectLike({ Type: 'MOCK' }),
-      }));
-    });
-  });
-
-  // -------------------------
-  // CloudWatch
-  // -------------------------
-  describe('CloudWatch Monitoring', () => {
-    test('creates CloudWatch dashboard', () => {
-      template.resourceCountIs('AWS::CloudWatch::Dashboard', 1);
-      template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
-        DashboardName: `tap-transaction-pipeline-${environmentSuffix}`,
-      });
-    });
-
-    test('creates alarms for DLQ depth, Lambda throttles, Step Functions failures, and API 5xx', () => {
-      template.resourceCountIs('AWS::CloudWatch::Alarm', 4);
-      template.hasResourceProperties('AWS::CloudWatch::Alarm', Match.objectLike({
-        ComparisonOperator: 'GreaterThanThreshold',
-        EvaluationPeriods: 1,
-      }));
-    });
-  });
-
-  // -------------------------
-  // Outputs
-  // -------------------------
-  describe('Outputs', () => {
-    test('exposes all required outputs', () => {
-      const outputs = template.toJSON().Outputs;
-      expect(Object.keys(outputs)).toEqual(
-        expect.arrayContaining([
-          'ApiEndpoint',
-          'ApiKeyValue',
-          'StateMachineArn',
-          'TransactionsTableName',
-          'InboundQueueUrl',
-          'DLQUrl',
-          'EventBusName',
-          'ArchiveBucketName',
-          'DashboardUrl',
-        ])
+      template.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::Listener',
+        {
+          Port: 80,
+          Protocol: 'HTTP',
+        }
       );
     });
   });
 
-  // -------------------------
-  // Env suffix handling
-  // -------------------------
-  describe('Environment suffix handling', () => {
-    test('uses provided environment suffix in names', () => {
-      template.hasResourceProperties('AWS::Events::EventBus', {
-        Name: `tap-transaction-events-${environmentSuffix}`,
+  describe('Route53 DNS', () => {
+    test('creates public hosted zone', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
       });
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: `tap-transactions-${environmentSuffix}`,
-      });
-      template.hasResourceProperties('AWS::StepFunctions::StateMachine', {
-        StateMachineName: `tap-transaction-processor-${environmentSuffix}`,
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::Route53::HostedZone', {
+        Name: 'payment-test.company.com.',
       });
     });
 
-    test('defaults to "dev" when environmentSuffix not provided', () => {
-      const app2 = new cdk.App();
-      const stack2 = new TapStack(app2, 'TapNoSuffix');
-      const template2 = Template.fromStack(stack2);
-      template2.hasResourceProperties('AWS::Events::EventBus', { Name: 'tap-transaction-events-dev' });
+    test('creates A record pointing to ALB', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack');
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::Route53::RecordSet', {
+        Name: 'api.payment-dev.company.com.',
+        Type: 'A',
+        AliasTarget: Match.anyValue(),
+      });
+    });
+  });
+
+  describe('CloudWatch Monitoring', () => {
+    test('creates SNS topic for alarms', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::SNS::Topic', {
+        TopicName: 'fintech-payment-test-alarms',
+        DisplayName: 'Payment Processing Alarms - test',
+      });
     });
 
-    test('uses context environmentSuffix when set and props not provided', () => {
-      const app3 = new cdk.App({ context: { environmentSuffix: 'staging' } });
-      const stack3 = new TapStack(app3, 'TapCtxSuffix');
-      const template3 = Template.fromStack(stack3);
-      template3.hasResourceProperties('AWS::Events::EventBus', { Name: 'tap-transaction-events-staging' });
+    test('creates CPU alarm for EC2 with correct threshold', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: 'fintech-payment-test-cpu-alarm',
+        AlarmDescription: 'CPU utilization exceeds 80%',
+        Namespace: 'AWS/EC2',
+        MetricName: 'CPUUtilization',
+        Threshold: 80,
+        EvaluationPeriods: 2,
+        DatapointsToAlarm: 2,
+        ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+        TreatMissingData: 'breaching',
+      });
+    });
+
+    test('creates CPU alarm for RDS with correct threshold', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: 'fintech-payment-test-db-cpu-alarm',
+        AlarmDescription: 'RDS CPU utilization high',
+        Namespace: 'AWS/RDS',
+        MetricName: 'CPUUtilization',
+        Threshold: 85,
+        EvaluationPeriods: 2,
+        ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+      });
+    });
+
+    test('alarms have SNS action attached', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack');
+      const template = Template.fromStack(stack);
+
+      const alarms = template.findResources('AWS::CloudWatch::Alarm');
+      Object.values(alarms).forEach((alarm: any) => {
+        expect(alarm.Properties.AlarmActions).toBeDefined();
+        expect(alarm.Properties.AlarmActions.length).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  describe('SSM Parameter Store', () => {
+    test('creates all required SSM parameters', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::SSM::Parameter', {
+        Name: '/test/payment/db-endpoint',
+        Description: 'RDS database endpoint',
+        Type: 'String',
+      });
+
+      template.hasResourceProperties('AWS::SSM::Parameter', {
+        Name: '/test/payment/db-port',
+        Description: 'RDS database port',
+        Type: 'String',
+      });
+
+      template.hasResourceProperties('AWS::SSM::Parameter', {
+        Name: '/test/payment/db-secret-arn',
+        Description: 'Secret Manager ARN for DB credentials',
+        Type: 'String',
+      });
+
+      template.hasResourceProperties('AWS::SSM::Parameter', {
+        Name: '/test/payment/s3-bucket',
+        Description: 'S3 bucket for payment data',
+        Type: 'String',
+      });
+
+      template.hasResourceProperties('AWS::SSM::Parameter', {
+        Name: '/test/payment/alb-dns',
+        Description: 'Application Load Balancer DNS',
+        Type: 'String',
+      });
+
+      template.hasResourceProperties('AWS::SSM::Parameter', {
+        Name: '/test/payment/environment',
+        Description: 'Current environment',
+        Type: 'String',
+        Value: 'test',
+      });
+    });
+
+    test('grants EC2 role read access to SSM parameters', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack');
+      const template = Template.fromStack(stack);
+
+      const policies = template.findResources('AWS::IAM::Policy');
+      const hasSSMAccess = Object.values(policies).some((policy: any) => {
+        const statements = policy.Properties?.PolicyDocument?.Statement || [];
+        return statements.some((stmt: any) => {
+          const actions = Array.isArray(stmt.Action)
+            ? stmt.Action
+            : [stmt.Action].filter(Boolean);
+          return actions.some((action: string) =>
+            action.includes('ssm:GetParameter')
+          );
+        });
+      });
+      expect(hasSSMAccess).toBe(true);
+    });
+  });
+
+  describe('CloudWatch Log Groups', () => {
+    test('creates application log group with correct retention', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        LogGroupName: '/aws/payment/test/application',
+        RetentionInDays: 7,
+      });
+    });
+
+    test('grants EC2 role write access to log group', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack');
+      const template = Template.fromStack(stack);
+
+      const policies = template.findResources('AWS::IAM::Policy');
+      const hasLogsAccess = Object.values(policies).some((policy: any) => {
+        const statements = policy.Properties?.PolicyDocument?.Statement || [];
+        return statements.some((stmt: any) => {
+          const actions = Array.isArray(stmt.Action)
+            ? stmt.Action
+            : [stmt.Action].filter(Boolean);
+          return actions.some((action: string) =>
+            action.includes('logs:PutLogEvents') ||
+            action.includes('logs:CreateLogStream')
+          );
+        });
+      });
+      expect(hasLogsAccess).toBe(true);
+    });
+  });
+
+  describe('Stack Outputs', () => {
+    test('exports VPC ID', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+      const template = Template.fromStack(stack);
+
+      template.hasOutput('VPCId', {
+        Export: { Name: 'test-vpc-id' },
+      });
+    });
+
+    test('exports Database ARN', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+      const template = Template.fromStack(stack);
+
+      template.hasOutput('DatabaseArn', {
+        Export: { Name: 'test-db-arn' },
+      });
+    });
+
+    test('exports ALB DNS name', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+      const template = Template.fromStack(stack);
+
+      template.hasOutput('ALBDnsName', {
+        Export: { Name: 'test-alb-dns' },
+      });
+    });
+
+    test('exports S3 bucket name', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+      const template = Template.fromStack(stack);
+
+      template.hasOutput('S3BucketName', {
+        Export: { Name: 'test-s3-bucket' },
+      });
+    });
+  });
+
+  describe('Resource Tagging', () => {
+    test('applies Environment tag to all resources', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'staging',
+      });
+      const template = Template.fromStack(stack);
+
+      // Check tags on multiple resource types
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        Tags: Match.arrayWith([{ Key: 'Environment', Value: 'staging' }]),
+      });
+
+      template.hasResourceProperties('AWS::EC2::VPC', {
+        Tags: Match.arrayWith([{ Key: 'Environment', Value: 'staging' }]),
+      });
+
+      template.hasResourceProperties('AWS::RDS::DBInstance', {
+        Tags: Match.arrayWith([{ Key: 'Environment', Value: 'staging' }]),
+      });
+    });
+
+    test('applies Team and CostCenter tags', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack');
+      const template = Template.fromStack(stack);
+
+      const bucket = template.findResources('AWS::S3::Bucket');
+      const bucketResource = Object.values(bucket)[0];
+      const tags = bucketResource.Properties?.Tags || [];
+      const hasTeamTag = tags.some(
+        (tag: any) =>
+          tag.Key === 'Team' && tag.Value === 'PaymentProcessing'
+      );
+      const hasCostCenterTag = tags.some(
+        (tag: any) =>
+          tag.Key === 'CostCenter' && tag.Value === 'Engineering'
+      );
+      expect(hasTeamTag).toBe(true);
+      expect(hasCostCenterTag).toBe(true);
+    });
+  });
+
+  describe('Resource Naming', () => {
+    test('all resources use consistent naming pattern', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'prod',
+      });
+      const template = Template.fromStack(stack);
+
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: 'fintech-payment-prod-storage',
+      });
+
+      template.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: 'fintech-payment-prod-ec2-role',
+      });
+
+      template.hasResourceProperties('AWS::RDS::DBInstance', {
+        DBInstanceIdentifier: 'fintech-payment-prod-rds',
+      });
+
+      template.hasResourceProperties(
+        'AWS::AutoScaling::AutoScalingGroup',
+        {
+          AutoScalingGroupName: 'fintech-payment-prod-asg',
+        }
+      );
+    });
+  });
+
+  describe('Secrets Manager Integration', () => {
+    test('grants EC2 role read access to database secret', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack');
+      const template = Template.fromStack(stack);
+
+      const policies = template.findResources('AWS::IAM::Policy');
+      const hasSecretsAccess = Object.values(policies).some((policy: any) => {
+        const statements = policy.Properties?.PolicyDocument?.Statement || [];
+        return statements.some((stmt: any) => {
+          const actions = Array.isArray(stmt.Action)
+            ? stmt.Action
+            : [stmt.Action].filter(Boolean);
+          return actions.some((action: string) =>
+            action.includes('secretsmanager:GetSecretValue') ||
+            action.includes('secretsmanager:DescribeSecret')
+          );
+        });
+      });
+      expect(hasSecretsAccess).toBe(true);
+    });
+
+    test('creates secret target attachment for RDS', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack');
+      const template = Template.fromStack(stack);
+
+      template.resourceCountIs(
+        'AWS::SecretsManager::SecretTargetAttachment',
+        1
+      );
+    });
+  });
+
+  describe('Removal Policies', () => {
+    test('sets DESTROY removal policy on S3 bucket', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack');
+      const template = Template.fromStack(stack);
+
+      const bucket = template.findResources('AWS::S3::Bucket');
+      const bucketResource = Object.values(bucket)[0];
+      expect(bucketResource.UpdateReplacePolicy).toBe('Delete');
+      expect(bucketResource.DeletionPolicy).toBe('Delete');
+    });
+
+    test('sets DESTROY removal policy on RDS database', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack');
+      const template = Template.fromStack(stack);
+
+      const db = template.findResources('AWS::RDS::DBInstance');
+      const dbResource = Object.values(db)[0];
+      expect(dbResource.UpdateReplacePolicy).toBe('Delete');
+      expect(dbResource.DeletionPolicy).toBe('Delete');
+    });
+
+    test('sets DESTROY removal policy on log groups', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'TestStack');
+      const template = Template.fromStack(stack);
+
+      const logGroups = template.findResources('AWS::Logs::LogGroup');
+      Object.values(logGroups).forEach((logGroup: any) => {
+        expect(logGroup.UpdateReplacePolicy).toBe('Delete');
+        expect(logGroup.DeletionPolicy).toBe('Delete');
+      });
     });
   });
 });
