@@ -150,16 +150,19 @@ function mapOutputs(rawOutputs: any): any {
   mapped.CloudFrontDistributionId = findOutput([
     'CloudFrontDistributionId',
     'cloudfront_distribution_id',
-    'cloudfrontDistributionId'
+    'cloudfrontDistributionId',
+    'DistributionId',
+    'distribution_id',
+    'CloudFrontId',
+    'cloudfront_id'
   ]);
 
   // If we have CloudFront domain but no distribution ID, extract it from domain
   if (!mapped.CloudFrontDistributionId && mapped.CloudFrontDomainName) {
+    // CloudFront domains are in format: d123456789.cloudfront.net
     const domainParts = mapped.CloudFrontDomainName.split('.');
-    if (domainParts.length > 0 && domainParts[0].endsWith('.cloudfront')) {
-      mapped.CloudFrontDistributionId = domainParts[0].replace('.cloudfront', '');
-    } else if (domainParts.length > 0) {
-      mapped.CloudFrontDistributionId = domainParts[0]; // First part is usually the distribution ID
+    if (domainParts.length >= 3 && domainParts[1] === 'cloudfront' && domainParts[2] === 'net') {
+      mapped.CloudFrontDistributionId = domainParts[0]; // Extract distribution ID (e.g., d123456789)
     }
   }
 
@@ -348,6 +351,11 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
     test('should have CloudFront distribution with S3 origin', async () => {
       const distributionId = mappedOutputs.CloudFrontDistributionId;
       const domainName = mappedOutputs.CloudFrontDomainName;
+
+      // Debug logging for pipeline troubleshooting
+      console.log('CloudFront debug info:');
+      console.log('  Domain name:', domainName);
+      console.log('  Distribution ID:', distributionId);
 
       if (!distributionId) {
         console.log('CloudFront distribution ID not found in outputs - skipping CloudFront test');
