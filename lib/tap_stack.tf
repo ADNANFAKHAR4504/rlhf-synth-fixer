@@ -74,7 +74,7 @@ variable "maintenance_window" {
 
 locals {
   suffix = "rdha"
-  
+
   # Common tags for all resources
   common_tags = {
     Environment = var.environment
@@ -82,15 +82,15 @@ locals {
     Project     = "HighFrequencyTrading"
     Suffix      = local.suffix
   }
-  
+
   # VPC configurations
   primary_vpc_cidr   = "10.0.0.0/16"
   secondary_vpc_cidr = "10.1.0.0/16"
-  
+
   # Availability zones for each region
   primary_azs   = ["${var.primary_region}a", "${var.primary_region}b"]
   secondary_azs = ["${var.secondary_region}a", "${var.secondary_region}b"]
-  
+
   # Resource naming
   primary_prefix   = "primary-${local.suffix}"
   secondary_prefix = "dr-${local.suffix}"
@@ -720,13 +720,13 @@ resource "aws_db_instance" "primary_rds" {
   instance_class = var.db_instance_class
 
   # Storage configuration
-  allocated_storage       = var.db_allocated_storage
-  max_allocated_storage   = var.db_max_allocated_storage
-  storage_type            = "gp3"
-  storage_encrypted       = true
-  kms_key_id              = aws_kms_key.primary_rds_key.arn
-  storage_throughput      = 125
-  iops                    = 3000
+  allocated_storage     = var.db_allocated_storage
+  max_allocated_storage = var.db_max_allocated_storage
+  storage_type          = "gp3"
+  storage_encrypted     = true
+  kms_key_id            = aws_kms_key.primary_rds_key.arn
+  storage_throughput    = 125
+  iops                  = 3000
 
   # Database configuration
   db_name  = var.db_name
@@ -740,8 +740,8 @@ resource "aws_db_instance" "primary_rds" {
   publicly_accessible    = false
 
   # High availability configuration
-  multi_az               = true
-  availability_zone      = null # Let AWS choose for Multi-AZ
+  multi_az          = true
+  availability_zone = null # Let AWS choose for Multi-AZ
 
   # Parameter group
   parameter_group_name = aws_db_parameter_group.primary_pg_params.name
@@ -756,17 +756,16 @@ resource "aws_db_instance" "primary_rds" {
   final_snapshot_identifier = "${local.primary_prefix}-postgres-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
 
   # Monitoring configuration
-  enabled_cloudwatch_logs_exports = ["postgresql"]
-  monitoring_interval             = 60
-  monitoring_role_arn             = aws_iam_role.rds_enhanced_monitoring.arn
-  performance_insights_enabled    = true
+  enabled_cloudwatch_logs_exports       = ["postgresql"]
+  monitoring_interval                   = 60
+  monitoring_role_arn                   = aws_iam_role.rds_enhanced_monitoring.arn
+  performance_insights_enabled          = true
   performance_insights_retention_period = 7
 
   # Other configurations
   auto_minor_version_upgrade  = true
   deletion_protection         = true
   allow_major_version_upgrade = false
-  apply_immediately           = false
 
   tags = merge(local.common_tags, {
     Name   = "${local.primary_prefix}-postgres-db"
@@ -787,10 +786,10 @@ resource "aws_db_instance" "primary_rds" {
 resource "aws_db_instance" "primary_read_replica_1" {
   provider = aws.us_east_1
 
-  identifier              = "${local.primary_prefix}-postgres-read-1"
-  replicate_source_db     = aws_db_instance.primary_rds.identifier
-  instance_class          = var.db_instance_class
-  
+  identifier          = "${local.primary_prefix}-postgres-read-1"
+  replicate_source_db = aws_db_instance.primary_rds.identifier
+  instance_class      = var.db_instance_class
+
   # Storage configuration (inherited from source)
   storage_encrypted = true
   kms_key_id        = aws_kms_key.primary_rds_key.arn
@@ -803,10 +802,10 @@ resource "aws_db_instance" "primary_read_replica_1" {
   parameter_group_name = aws_db_parameter_group.primary_pg_params.name
 
   # Monitoring configuration
-  enabled_cloudwatch_logs_exports = ["postgresql"]
-  monitoring_interval             = 60
-  monitoring_role_arn             = aws_iam_role.rds_enhanced_monitoring.arn
-  performance_insights_enabled    = true
+  enabled_cloudwatch_logs_exports       = ["postgresql"]
+  monitoring_interval                   = 60
+  monitoring_role_arn                   = aws_iam_role.rds_enhanced_monitoring.arn
+  performance_insights_enabled          = true
   performance_insights_retention_period = 7
 
   # Other configurations
@@ -826,10 +825,10 @@ resource "aws_db_instance" "primary_read_replica_1" {
 resource "aws_db_instance" "primary_read_replica_2" {
   provider = aws.us_east_1
 
-  identifier              = "${local.primary_prefix}-postgres-read-2"
-  replicate_source_db     = aws_db_instance.primary_rds.identifier
-  instance_class          = var.db_instance_class
-  
+  identifier          = "${local.primary_prefix}-postgres-read-2"
+  replicate_source_db = aws_db_instance.primary_rds.identifier
+  instance_class      = var.db_instance_class
+
   # Storage configuration (inherited from source)
   storage_encrypted = true
   kms_key_id        = aws_kms_key.primary_rds_key.arn
@@ -842,10 +841,10 @@ resource "aws_db_instance" "primary_read_replica_2" {
   parameter_group_name = aws_db_parameter_group.primary_pg_params.name
 
   # Monitoring configuration
-  enabled_cloudwatch_logs_exports = ["postgresql"]
-  monitoring_interval             = 60
-  monitoring_role_arn             = aws_iam_role.rds_enhanced_monitoring.arn
-  performance_insights_enabled    = true
+  enabled_cloudwatch_logs_exports       = ["postgresql"]
+  monitoring_interval                   = 60
+  monitoring_role_arn                   = aws_iam_role.rds_enhanced_monitoring.arn
+  performance_insights_enabled          = true
   performance_insights_retention_period = 7
 
   # Other configurations
@@ -868,9 +867,9 @@ resource "aws_db_instance" "primary_read_replica_2" {
 resource "aws_db_instance" "cross_region_replica" {
   provider = aws.us_west_2
 
-  identifier              = "${local.secondary_prefix}-postgres-replica"
-  replicate_source_db     = aws_db_instance.primary_rds.arn
-  instance_class          = var.db_instance_class
+  identifier          = "${local.secondary_prefix}-postgres-replica"
+  replicate_source_db = aws_db_instance.primary_rds.arn
+  instance_class      = var.db_instance_class
 
   # Storage configuration
   storage_encrypted = true
@@ -889,10 +888,10 @@ resource "aws_db_instance" "cross_region_replica" {
   backup_window           = var.backup_window
 
   # Monitoring configuration
-  enabled_cloudwatch_logs_exports = ["postgresql"]
-  monitoring_interval             = 60
-  monitoring_role_arn             = aws_iam_role.rds_enhanced_monitoring_secondary.arn
-  performance_insights_enabled    = true
+  enabled_cloudwatch_logs_exports       = ["postgresql"]
+  monitoring_interval                   = 60
+  monitoring_role_arn                   = aws_iam_role.rds_enhanced_monitoring_secondary.arn
+  performance_insights_enabled          = true
   performance_insights_retention_period = 7
 
   # Other configurations
@@ -1403,12 +1402,12 @@ output "terraform_workspace" {
   value       = terraform.workspace
 }
 
-output "aws_primary_region"{
+output "aws_primary_region" {
   description = "aws primary region"
   value       = var.primary_region
 }
 
-output "aws_secondary_region"{
+output "aws_secondary_region" {
   description = "aws secondary region"
   value       = var.secondary_region
 }
