@@ -605,7 +605,7 @@ public final class Main {
                 com.pulumi.aws.rds.ClusterArgs.builder()
                     .engine(EngineType.AuroraPostgresql)
                     .engineMode("provisioned")
-                    .engineVersion("15.3")
+                    .engineVersion("15.4")
                     .databaseName("migration")
                     .masterUsername("admin")
                     .manageMasterUserPassword(true)
@@ -629,7 +629,7 @@ public final class Main {
                     .clusterIdentifier(auroraCluster.id())
                     .instanceClass("db.serverless")
                     .engine(EngineType.AuroraPostgresql)
-                    .engineVersion("15.3")
+                    .engineVersion("15.4")
                     .tags(tags)
                     .build(), CustomResourceOptions.builder().parent(this).build());
 
