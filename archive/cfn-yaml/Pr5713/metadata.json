@@ -1,0 +1,35 @@
+{
+  "platform": "cloudformation",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000321",
+  "team": "3",
+  "startedAt": "2025-11-04T05:08:01.879Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "GuardDuty Detector",
+    "S3 Bucket",
+    "S3 Bucket Policy",
+    "SNS Topic",
+    "SNS Subscription",
+    "EventBridge Rule",
+    "EventBridge Archive",
+    "Lambda Function",
+    "IAM Role",
+    "IAM Policy",
+    "Lambda Permission",
+    "CloudWatch Log Group"
+  ],
+  "training_quality": 9,
+  "background": "Deploy a brand-new, self-contained compliance monitoring stack in us-east-1 using a single TapStack.yml. Enable GuardDuty with S3 protection and EKS audit logs, route only MEDIUM/HIGH findings via EventBridge to a Lambda enricher, publish alerts to an SNS topic with email subscription, and store enriched events in a versioned S3 audit bucket with AES256 encryption and blocked public access. Include an EventBridge archive for 90-day retention, least-privilege IAM roles and policies with explicit ARNs, and a CloudWatch log group for the Lambda with 30-day retention. All resource names include an environment suffix and the template exports key outputs for downstream integration.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
+}
