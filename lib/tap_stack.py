@@ -487,7 +487,14 @@ class TapStack(TerraformStack):
             self,
             "rds_instance_id",
             value=rds_instance.id,
-            description="RDS instance identifier"
+            description="RDS instance DBI resource ID"
+        )
+
+        TerraformOutput(
+            self,
+            "rds_instance_identifier",
+            value=rds_instance.identifier,
+            description="RDS instance identifier (DBInstanceIdentifier)"
         )
 
         TerraformOutput(
