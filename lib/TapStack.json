@@ -123,7 +123,14 @@
           "Ref": "VPC"
         },
         "CidrBlock": "10.0.0.0/24",
-        "AvailabilityZone": "us-east-1a",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
@@ -154,7 +161,14 @@
           "Ref": "VPC"
         },
         "CidrBlock": "10.0.1.0/24",
-        "AvailabilityZone": "us-east-1b",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
@@ -185,7 +199,14 @@
           "Ref": "VPC"
         },
         "CidrBlock": "10.0.2.0/24",
-        "AvailabilityZone": "us-east-1c",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
@@ -216,7 +237,14 @@
           "Ref": "VPC"
         },
         "CidrBlock": "10.0.10.0/24",
-        "AvailabilityZone": "us-east-1a",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
@@ -247,7 +275,14 @@
           "Ref": "VPC"
         },
         "CidrBlock": "10.0.11.0/24",
-        "AvailabilityZone": "us-east-1b",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
@@ -278,7 +313,14 @@
           "Ref": "VPC"
         },
         "CidrBlock": "10.0.12.0/24",
-        "AvailabilityZone": "us-east-1c",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {

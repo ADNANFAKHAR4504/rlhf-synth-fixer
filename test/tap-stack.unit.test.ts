@@ -129,9 +129,31 @@ describe('TapStack CloudFormation VPC Template', () => {
     });
 
     test('public subnets should be in correct AZs', () => {
-      expect(template.Resources.PublicSubnetA.Properties.AvailabilityZone).toBe('us-east-1a');
-      expect(template.Resources.PublicSubnetB.Properties.AvailabilityZone).toBe('us-east-1b');
-      expect(template.Resources.PublicSubnetC.Properties.AvailabilityZone).toBe('us-east-1c');
+      const azA = template.Resources.PublicSubnetA.Properties.AvailabilityZone;
+      const azB = template.Resources.PublicSubnetB.Properties.AvailabilityZone;
+      const azC = template.Resources.PublicSubnetC.Properties.AvailabilityZone;
+
+      // Accept either hardcoded AZ strings or CloudFormation intrinsics using Fn::Select/Fn::GetAZs
+      if (typeof azA === 'string') {
+        expect(azA).toBe('us-east-1a');
+      } else {
+        expect(azA['Fn::Select'][0]).toBe(0);
+        expect(azA['Fn::Select'][1]).toEqual({ 'Fn::GetAZs': '' });
+      }
+
+      if (typeof azB === 'string') {
+        expect(azB).toBe('us-east-1b');
+      } else {
+        expect(azB['Fn::Select'][0]).toBe(1);
+        expect(azB['Fn::Select'][1]).toEqual({ 'Fn::GetAZs': '' });
+      }
+
+      if (typeof azC === 'string') {
+        expect(azC).toBe('us-east-1c');
+      } else {
+        expect(azC['Fn::Select'][0]).toBe(2);
+        expect(azC['Fn::Select'][1]).toEqual({ 'Fn::GetAZs': '' });
+      }
     });
 
     test('public subnets should auto-assign public IPs', () => {
