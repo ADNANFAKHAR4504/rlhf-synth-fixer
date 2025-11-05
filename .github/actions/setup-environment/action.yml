@@ -40,25 +40,17 @@ runs:
         restore-keys: |
           gen-${{ runner.os }}-
     - name: Cache pipenv virtualenv
-      if: ${{ inputs.language == 'py' }}
+      if: ${{ inputs.language == 'py' || inputs.platform == 'cfn' }}
       uses: actions/cache@v4
       with:
         path: .venv
         key: venv-${{ runner.os }}-${{ hashFiles('Pipfile.lock') }}
         restore-keys: |
           venv-${{ runner.os }}-
-    - name: Cache npm packages
-      if: ${{ inputs.language == 'ts' || inputs.language == 'js' || inputs.platform == 'cdk' || inputs.platform == 'cdktf' || inputs.platform == 'pulumi' }}
-      uses: actions/cache@v4
-      with:
-        path: ~/.npm
-        key: npm-cache-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
-        restore-keys: |
-          npm-cache-${{ runner.os }}-
 
     # ✅ Restore pip cache (only if Python)
     - name: Cache pip packages
-      if: ${{ inputs.language == 'py' }}
+      if: ${{ inputs.language == 'py' || inputs.platform == 'cfn' }}
       uses: actions/cache@v4
       with:
         path: ~/.cache/pip
@@ -66,6 +58,24 @@ runs:
         restore-keys: |
           pip-cache-${{ runner.os }}-
 
+    - name: Cache global npm tools
+      if: ${{ inputs.platform == 'cdktf' || inputs.platform == 'cdk' || inputs.platform == 'pulumi' }}
+      uses: actions/cache@v4
+      with:
+        path: ~/.npm-global
+        key: npm-global-${{ runner.os }}
+        restore-keys: |
+          npm-global-${{ runner.os }}-
+    - name: Cache node_modules
+      if: ${{ inputs.language == 'ts' || inputs.language == 'js' || inputs.platform == 'cdk' || inputs.platform == 'cdktf' || inputs.platform == 'pulumi' }}
+      uses: actions/cache@v4
+      with:
+        path: |
+          node_modules
+          ~/.npm
+        key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+        restore-keys: |
+          node-modules-${{ runner.os }}-
     # ✅ Restore Go build/module cache (only if Go)
     - name: Cache Go modules
       if: ${{ inputs.language == 'go' }}
@@ -87,7 +97,7 @@ runs:
 
     # Python (only if used)
     - name: Setup Python
-      if: ${{ inputs.language == 'py' || (inputs.platform == 'pulumi' && inputs.language == 'py') }}
+      if: ${{ inputs.language == 'py' || (inputs.platform == 'pulumi' && inputs.language == 'py') || inputs.platform == 'cfn' }}
       uses: actions/setup-python@v5
       with:
         python-version: '3.12.11'

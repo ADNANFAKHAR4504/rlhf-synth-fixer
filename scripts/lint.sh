@@ -112,6 +112,41 @@ elif [ "$LANGUAGE" = "java" ]; then
     ./gradlew check --build-cache --no-daemon
     echo "✅ Java linting completed"
 
+elif [ "$LANGUAGE" = "js" ]; then
+    echo "✅ JavaScript project detected, running ESLint..."
+    NODE_OPTIONS="--max-old-space-size=4096" npm run lint
+
+elif [ "$PLATFORM" = "tf" ] && [ "$LANGUAGE" = "hcl" ]; then
+    echo "✅ Terraform project detected, running terraform fmt and validate..."
+
+    # Check if terraform is available
+    if ! command -v terraform &>/dev/null; then
+        echo "❌ terraform command not found"
+        exit 1
+    fi
+
+    # Navigate to lib directory where terraform files are located
+    cd lib
+
+    # Check terraform formatting
+    echo "🔍 Checking Terraform formatting..."
+    if ! terraform fmt -check -recursive; then
+        echo "❌ Terraform files are not properly formatted. Run 'terraform fmt -recursive' to fix."
+        exit 1
+    fi
+
+    # Initialize terraform if needed
+    if [ ! -d ".terraform" ]; then
+        echo "📦 Initializing Terraform..."
+        terraform init -backend=false
+    fi
+
+    # Validate terraform configuration
+    echo "🔍 Validating Terraform configuration..."
+    terraform validate
+
+    cd ..
+
 elif [ "$PLATFORM" = "cfn" ]; then
     echo "✅ CloudFormation project detected, running cfn-lint..."
 
@@ -146,6 +181,24 @@ elif [ "$PLATFORM" = "cfn" ]; then
         find lib -type f \( -name "*.yaml" -o -name "*.yml" -o -name "*.json" \) \
             -print0 | xargs -0 -r cfn-lint -t
     fi
+
+elif [ "$PLATFORM" = "cicd" ] && [ "$LANGUAGE" = "yml" ]; then
+    echo "✅ CI/CD YAML project detected, running yamllint..."
+
+    # Install yamllint if not available
+    if ! command -v yamllint &>/dev/null; then
+        echo "📦 Installing yamllint..."
+        pip install yamllint >/dev/null 2>&1
+    fi
+
+    # Run yamllint on lib directory
+    echo "🔍 Linting YAML files under lib/..."
+    if [ -d "lib" ]; then
+        yamllint lib/
+    else
+        echo "⚠️ No lib/ directory found, skipping yamllint"
+    fi
+
 else
     echo "ℹ️ Unknown platform/language combination: $PLATFORM/$LANGUAGE"
     echo "💡 Running default ESLint fallback"
