@@ -42,7 +42,7 @@ export class TapStack extends Construct {
     // Deploy primary stack in us-east-1
     this.primaryStack = new AuroraGlobalStack(
       scope,
-      `Aurora-DR-Primary-${environmentSuffix}`,
+      `TapStack${environmentSuffix}-Aurora-DR-Primary`,
       {
         env: primaryEnv,
         isPrimary: true,
@@ -55,7 +55,7 @@ export class TapStack extends Construct {
     // Deploy secondary stack in us-west-2
     this.secondaryStack = new AuroraGlobalStack(
       scope,
-      `Aurora-DR-Secondary-${environmentSuffix}`,
+      `TapStack${environmentSuffix}-Aurora-DR-Secondary`,
       {
         env: secondaryEnv,
         isPrimary: false,
@@ -69,7 +69,7 @@ export class TapStack extends Construct {
     // Deploy monitoring stack
     this.monitoringStack = new MonitoringStack(
       scope,
-      `Aurora-DR-Monitoring-${environmentSuffix}`,
+      `TapStack${environmentSuffix}-Aurora-DR-Monitoring`,
       {
         env: {
           region: primaryEnv.region,
@@ -85,7 +85,7 @@ export class TapStack extends Construct {
     // Failover automation stack (commented out due to complex dependencies)
     // this.failoverStack = new FailoverStack(
     //   scope,
-    //   `Aurora-DR-Failover-${environmentSuffix}`,
+    //   `TapStack${environmentSuffix}-Aurora-DR-Failover`,
     //   {
     //     env: {
     //       region: primaryEnv.region,
