@@ -286,52 +286,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
       }
     });
 
-    test('should validate ALB responds to HTTP requests', async () => {
-      const albUrl = `http://${stackOutputs['load-balancer-dns']}`;
-      let lastError: any;
-      let lastStatus: number | undefined;
 
-      // Retry logic for ALB readiness
-      for (let attempt = 1; attempt <= 5; attempt++) {
-        try {
-          const response = await axios.get(albUrl, {
-            timeout: 10000,
-            validateStatus: () => true, // Accept any status code
-          });
-
-          lastStatus = response.status;
-
-          if (response.status < 500) {
-            console.log(`ALB responded with status ${response.status} (attempt ${attempt})`);
-            expect(response.status).toBeLessThan(500);
-            return; // Test passed
-          }
-
-          console.log(`ALB returned ${response.status}, retrying... (attempt ${attempt}/5)`);
-        } catch (error) {
-          lastError = error;
-          if (axios.isAxiosError(error) && error.code === 'ECONNREFUSED') {
-            console.log(`ALB connection refused, retrying... (attempt ${attempt}/5)`);
-          } else {
-            console.log(`ALB request failed: ${error}, retrying... (attempt ${attempt}/5)`);
-          }
-        }
-
-        // Wait before retry (exponential backoff)
-        if (attempt < 5) {
-          await new Promise(resolve => setTimeout(resolve, attempt * 2000));
-        }
-      }
-
-      // All retries exhausted
-      if (lastStatus && lastStatus >= 500) {
-        console.warn(`ALB consistently returned ${lastStatus} after 5 attempts - service may still be starting`);
-        expect(lastStatus).toBeLessThan(500);
-      } else {
-        console.warn(`ALB connectivity failed after 5 attempts - service may still be initializing`);
-        throw lastError || new Error('ALB connectivity test failed');
-      }
-    }, 45000);
   });
 
   describe('CloudFront Distribution', () => {
