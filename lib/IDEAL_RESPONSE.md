@@ -2,7 +2,7 @@
 
 This solution implements a complete multi-environment payment processing infrastructure using Pulumi and Python. The infrastructure scales appropriately for development, staging, and production environments while maintaining cost-efficiency for non-production workloads.
 
-Successfully deployed to AWS eu-west-1 with stack name `TapStackdev1` containing 9 resources: VPC, IAM roles, Lambda layer, 2 S3 buckets, and 2 DynamoDB tables. Integration tests pass with 100% unit test coverage.
+Successfully deployed to AWS eu-west-3 with stack name `TapStackdev1` containing 9 resources: VPC, IAM roles, Lambda layer, 2 S3 buckets, and 2 DynamoDB tables. Integration tests pass with 100% unit test coverage.
 
 
 ## File: __main__.py
@@ -649,7 +649,7 @@ class TestPaymentInfrastructureIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up integration test with live deployment outputs."""
-        cls.region = os.getenv('AWS_REGION', 'eu-west-1')
+        cls.region = os.getenv('AWS_REGION', 'eu-west-3')
         cls.session = boto3.Session(region_name=cls.region)
         
         # Initialize AWS clients
@@ -807,7 +807,7 @@ npm run build
 
 # Deploy using deployment script
 export STACK_NAME="TapStackdev1"
-export AWS_REGION="eu-west-1"
+export AWS_REGION="eu-west-3"
 ./scripts/deploy.sh
 ```
 
@@ -817,7 +817,7 @@ export AWS_REGION="eu-west-1"
 npm run test:unit
 
 # Run integration tests (requires deployed infrastructure)
-export AWS_REGION="eu-west-1"
+export AWS_REGION="eu-west-3"
 export PULUMI_BACKEND_URL="file://./pulumi-state"
 npm run test:integration
 ```
@@ -879,7 +879,7 @@ Avoid string slicing on CIDR notation which produces invalid addresses.
 
 ## Resource Summary
 
-Deployed stack `TapStackdev1` in `eu-west-1` contains:
+Deployed stack `TapStackdev1` in `eu-west-3` contains:
 - 1× VPC with 3 public + 3 private subnets across 3 AZs
 - 1× IAM role for Lambda execution
 - 1× Lambda layer (common dependencies)

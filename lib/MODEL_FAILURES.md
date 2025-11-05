@@ -251,7 +251,7 @@ Args:
 6. **Medium**: Add final newlines to all Python files
 7. **Low**: Format docstrings to respect line length limits
 
-These fixes enabled successful deployment to AWS eu-west-1 region with 100% unit test coverage and passing integration tests.
+These fixes enabled successful deployment to AWS eu-west-3 region with 100% unit test coverage and passing integration tests.
 
 **Cost/Security/Performance Impact**: Lambda functions fail to import required modules at runtime, breaking payment processing functionality (~$20/month in failed executions).
 

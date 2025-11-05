@@ -110,7 +110,7 @@ class TestPaymentInfrastructure(unittest.TestCase):
     def test_environment_suffix_setting(self, mock_pulumi, mock_aws):
         """Test that environment suffix is set correctly."""
         # Mock AWS resources
-        mock_aws.get_availability_zones.return_value = MagicMock(names=["us-east-1a", "us-east-1b", "us-east-1c"])
+        mock_aws.get_availability_zones.return_value = MagicMock(names=["eu-west-3a", "eu-west-3b", "eu-west-3c"])
         mock_aws.ec2.Vpc.return_value = MockResource("vpc")
         mock_aws.ec2.InternetGateway.return_value = MockResource("igw")
         mock_aws.ec2.Subnet.return_value = MockResource("subnet")
@@ -141,7 +141,7 @@ class TestPaymentInfrastructure(unittest.TestCase):
     def test_common_tags_configuration(self, mock_aws):
         """Test that common tags are configured correctly."""
         # Mock AWS resources
-        mock_aws.get_availability_zones.return_value = MagicMock(names=["us-east-1a", "us-east-1b", "us-east-1c"])
+        mock_aws.get_availability_zones.return_value = MagicMock(names=["eu-west-3a", "eu-west-3b", "eu-west-3c"])
         
         # Mock all AWS resources to avoid actual calls
         for service in ['ec2', 'rds', 'iam', 'lambda_', 'dynamodb', 's3']:
@@ -352,7 +352,7 @@ class TestPaymentInfrastructure(unittest.TestCase):
     def test_create_vpc_method(self, mock_aws):
         """Test VPC creation method."""
         # Mock AWS resources
-        mock_aws.get_availability_zones.return_value = MagicMock(names=["us-east-1a", "us-east-1b", "us-east-1c"])
+        mock_aws.get_availability_zones.return_value = MagicMock(names=["eu-west-3a", "eu-west-3b", "eu-west-3c"])
         mock_vpc = MockResource("vpc")
         mock_igw = MockResource("igw")
         mock_subnet = MockResource("subnet")
@@ -393,7 +393,7 @@ class TestPaymentInfrastructure(unittest.TestCase):
     def test_create_rds_cluster_method(self, mock_aws):
         """Test RDS cluster creation method."""
         # Mock AWS resources with all necessary attributes
-        mock_aws.get_availability_zones.return_value = MagicMock(names=["us-east-1a", "us-east-1b", "us-east-1c"])
+        mock_aws.get_availability_zones.return_value = MagicMock(names=["eu-west-3a", "eu-west-3b", "eu-west-3c"])
         mock_cluster = MockResource("cluster")
         mock_instance = MockResource("cluster_instance")
         
@@ -426,7 +426,7 @@ class TestPaymentInfrastructure(unittest.TestCase):
     def test_create_lambda_functions_method(self, mock_aws):
         """Test Lambda functions creation method."""
         # Mock AWS resources
-        mock_aws.get_availability_zones.return_value = MagicMock(names=["us-east-1a", "us-east-1b", "us-east-1c"])
+        mock_aws.get_availability_zones.return_value = MagicMock(names=["eu-west-3a", "eu-west-3b", "eu-west-3c"])
         mock_function1 = MockResource("payment_processor")
         mock_function2 = MockResource("transaction_validator")
         
@@ -463,7 +463,7 @@ class TestPaymentInfrastructure(unittest.TestCase):
     def test_create_dynamodb_tables_method(self, mock_aws):
         """Test DynamoDB tables creation method."""
         # Mock AWS resources
-        mock_aws.get_availability_zones.return_value = MagicMock(names=["us-east-1a", "us-east-1b", "us-east-1c"])
+        mock_aws.get_availability_zones.return_value = MagicMock(names=["eu-west-3a", "eu-west-3b", "eu-west-3c"])
         mock_table1 = MockResource("transactions_table")
         mock_table2 = MockResource("audit_logs_table")
         
@@ -500,7 +500,7 @@ class TestPaymentInfrastructure(unittest.TestCase):
     def test_create_s3_buckets_method(self, mock_aws):
         """Test S3 buckets creation method."""
         # Mock AWS resources
-        mock_aws.get_availability_zones.return_value = MagicMock(names=["us-east-1a", "us-east-1b", "us-east-1c"])
+        mock_aws.get_availability_zones.return_value = MagicMock(names=["eu-west-3a", "eu-west-3b", "eu-west-3c"])
         mock_bucket1 = MockResource("audit_bucket")
         mock_bucket2 = MockResource("data_bucket")
         
@@ -555,7 +555,7 @@ class TestPaymentInfrastructure(unittest.TestCase):
         )
 
         # Mock AWS resources
-        mock_aws.get_availability_zones.return_value = MagicMock(names=["us-east-1a", "us-east-1b", "us-east-1c"])
+        mock_aws.get_availability_zones.return_value = MagicMock(names=["eu-west-3a", "eu-west-3b", "eu-west-3c"])
         
         # Mock all AWS resources
         for service in ['ec2', 'rds', 'iam', 'lambda_', 'dynamodb', 's3', 'cloudwatch', 'appautoscaling']:

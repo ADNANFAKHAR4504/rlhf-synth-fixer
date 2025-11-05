@@ -18,7 +18,7 @@ class TestPaymentInfrastructureIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up integration test with live deployment outputs."""
-        cls.region = os.getenv('AWS_REGION', 'eu-west-1')
+        cls.region = os.getenv('AWS_REGION', 'eu-west-3')
         cls.session = boto3.Session(region_name=cls.region)
         
         # Initialize AWS clients
