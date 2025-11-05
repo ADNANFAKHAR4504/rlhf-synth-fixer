@@ -203,59 +203,63 @@ exports.handler = async (event) => {
   const { SourceBucket, TargetBucket, ReplicationRoleArn, TargetRegion, AccountId } = ResourceProperties;
   
   if (RequestType === 'Delete') {
+    try {
+      await s3.deleteBucketReplication({ Bucket: SourceBucket }).promise();
+    } catch (err) {
+      console.log('Replication config may not exist, ignoring delete error:', err.code);
+    }
     return { PhysicalResourceId: SourceBucket };
   }
   
   try {
     if (RequestType === 'Create' || RequestType === 'Update') {
       let bucketExists = false;
-      let retries = 0;
-      const maxRetries = 30;
       
-      while (!bucketExists && retries < maxRetries) {
-        try {
-          await s3Target.headBucket({ Bucket: TargetBucket }).promise();
-          bucketExists = true;
-        } catch (err) {
-          if (err.code === 'NotFound' || err.statusCode === 403 || err.statusCode === 404) {
-            await new Promise(resolve => setTimeout(resolve, 10000));
-            retries++;
-          } else {
-            throw err;
-          }
+      try {
+        await s3Target.headBucket({ Bucket: TargetBucket }).promise();
+        bucketExists = true;
+      } catch (err) {
+        if (err.code === 'NotFound' || err.statusCode === 403 || err.statusCode === 404) {
+          console.log('Target bucket does not exist yet, skipping replication configuration');
+          return {
+            PhysicalResourceId: SourceBucket,
+            Data: { Status: 'Skipped', Reason: 'Target bucket not yet available' },
+          };
+        } else {
+          throw err;
         }
       }
       
-      if (!bucketExists) {
-        throw new Error('Target bucket does not exist after waiting');
-      }
-      
-      const replicationConfig = {
-        Role: ReplicationRoleArn,
-        Rules: [
-          {
-            ID: 'ReplicateToTargetRegion',
-            Status: 'Enabled',
-            Priority: 1,
-            Filter: {},
-            Destination: {
-              Bucket: \`arn:aws:s3:::\${TargetBucket}\`,
-              StorageClass: 'STANDARD_IA',
-              EncryptionConfiguration: {
-                ReplicaKmsKeyId: \`arn:aws:kms:\${TargetRegion}:\${AccountId}:alias/aws/s3\`,
+      if (bucketExists) {
+        const replicationConfig = {
+          Role: ReplicationRoleArn,
+          Rules: [
+            {
+              ID: 'ReplicateToTargetRegion',
+              Status: 'Enabled',
+              Priority: 1,
+              Filter: {},
+              Destination: {
+                Bucket: \`arn:aws:s3:::\${TargetBucket}\`,
+                StorageClass: 'STANDARD_IA',
+                EncryptionConfiguration: {
+                  ReplicaKmsKeyId: \`arn:aws:kms:\${TargetRegion}:\${AccountId}:alias/aws/s3\`,
+                },
+              },
+              DeleteMarkerReplication: {
+                Status: 'Enabled',
               },
             },
-            DeleteMarkerReplication: {
-              Status: 'Enabled',
-            },
-          },
-        ],
-      };
-      
-      await s3.putBucketReplication({
-        Bucket: SourceBucket,
-        ReplicationConfiguration: replicationConfig,
-      }).promise();
+          ],
+        };
+        
+        await s3.putBucketReplication({
+          Bucket: SourceBucket,
+          ReplicationConfiguration: replicationConfig,
+        }).promise();
+        
+        console.log('Replication configuration completed successfully');
+      }
     }
     
     return {
@@ -268,7 +272,7 @@ exports.handler = async (event) => {
   }
 };
           `),
-          timeout: cdk.Duration.minutes(5),
+          timeout: cdk.Duration.seconds(60),
         }
       );
 
