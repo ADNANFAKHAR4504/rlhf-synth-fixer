@@ -109,9 +109,11 @@ class TestPaymentProcessingStackIntegration:
         response = rds_client.describe_db_instances()
         db_instance = None
         for instance in response["DBInstances"]:
-            if instance["Endpoint"]["Address"] == rds_endpoint:
-                db_instance = instance
-                break
+            # Check if Endpoint exists and has Address key
+            if "Endpoint" in instance and "Address" in instance["Endpoint"]:
+                if instance["Endpoint"]["Address"] == rds_endpoint:
+                    db_instance = instance
+                    break
 
         assert db_instance is not None, f"RDS instance not found for endpoint: {rds_endpoint}"
         assert db_instance["DBInstanceStatus"] == "available"
@@ -325,9 +327,11 @@ class TestPaymentProcessingStackIntegration:
         response = rds_client.describe_db_instances()
         db_instance = None
         for instance in response["DBInstances"]:
-            if instance["Endpoint"]["Address"] == rds_endpoint:
-                db_instance = instance
-                break
+            # Check if Endpoint exists and has Address key
+            if "Endpoint" in instance and "Address" in instance["Endpoint"]:
+                if instance["Endpoint"]["Address"] == rds_endpoint:
+                    db_instance = instance
+                    break
 
         assert db_instance is not None
         assert db_instance["DBSubnetGroup"]["VpcId"] == vpc_id
