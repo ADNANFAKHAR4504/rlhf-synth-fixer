@@ -1,5 +1,5 @@
-name: payment-processing-staging
+name: TapStack
 runtime:
   name: python
 description: Payment processing infrastructure for staging environment with enhanced security and monitoring
-main: lib/__main__.py
+main: tap.py
