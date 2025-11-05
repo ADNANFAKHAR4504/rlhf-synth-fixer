@@ -102,25 +102,13 @@ if [ "$PLATFORM" = "cdk" ]; then
 
 elif [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ CDKTF project detected, writing outputs to cfn-outputs..."
-  mkdir -p cfn-outputs
-  
-  # First synthesize the CDKTF code to ensure outputs are available
-  echo "Synthesizing CDKTF code..."
-  if npx cdktf synth; then
-    echo "✅ CDKTF synthesis successful"
-    
-    # Try to get outputs using the correct command format
-    if npx cdktf output --outputs-file cfn-outputs/flat-outputs.json; then
-      echo "✅ CDKTF outputs retrieved successfully"
-    else
-      echo "⚠️ Failed to get CDKTF outputs, creating empty file"
-      echo "{}" > cfn-outputs/flat-outputs.json
-    fi
+  touch cfn-outputs/flat-outputs.json
+  if npx cdktf output --outputs-file cfn-outputs/flat-outputs.json; then
+    echo "✅ CDKTF outputs retrieved successfully"
   else
-    echo "⚠️ Failed to synthesize CDKTF, creating empty file"
+    echo "⚠️ Failed to get CDKTF outputs, creating empty file"
     echo "{}" > cfn-outputs/flat-outputs.json
   fi
-  
   cat cfn-outputs/flat-outputs.json || echo "No outputs found in cfn-outputs/flat-outputs.json"
   echo "{}" > cfn-outputs/all-outputs.json
 
