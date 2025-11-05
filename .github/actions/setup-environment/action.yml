@@ -30,12 +30,19 @@ runs:
     - name: Checkout
       uses: actions/checkout@v4
     # ✅ Restore NPM Cache (only if JS/TS/CDK/CDKTF/Pulumi TS)
-
-    - name: Cache pipenv virtualenv
-      if: ${{ inputs.language == 'py' || (inputs.platform == 'cfn') }}
+    - name: Cache CDKTF generated providers
+      if: ${{ inputs.platform == 'cdktf' }}
       uses: actions/cache@v4
       with:
-        path: ~/.local/share/virtualenvs
+        path: .gen
+        key: gen-${{ runner.os }}-${{ hashFiles('cdktf.json') }}
+        restore-keys: |
+          gen-${{ runner.os }}-
+    - name: Cache pipenv virtualenv
+      if: ${{ inputs.language == 'py' }}
+      uses: actions/cache@v4
+      with:
+        path: .venv
         key: venv-${{ runner.os }}-${{ hashFiles('Pipfile.lock') }}
         restore-keys: |
           venv-${{ runner.os }}-
@@ -82,7 +89,7 @@ runs:
       if: ${{ inputs.language == 'py' || (inputs.platform == 'pulumi' && inputs.language == 'py') }}
       uses: actions/setup-python@v5
       with:
-        python-version: '3.12.11'
+        python-version: '3.13'
 
     # Go
     - name: Setup Go

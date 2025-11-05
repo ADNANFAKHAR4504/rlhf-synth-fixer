@@ -2,13 +2,13 @@
 set -e
 
 echo "🔧 Starting optimized environment setup..."
-
+export PIPENV_VENV_IN_PROJECT=1
 NODE_VERSION=${NODE_VERSION:-22.17.0}
 TERRAFORM_VERSION=${TERRAFORM_VERSION:-1.12.2}
 PULUMI_VERSION=${PULUMI_VERSION:-3.109.0}
 PLATFORM=${PLATFORM:-""}
 LANGUAGE=${LANGUAGE:-""}
-
+export PIPENV_VENV_IN_PROJECT=1
 echo "Platform: $PLATFORM"
 echo "Language: $LANGUAGE"
 echo "Node: $NODE_VERSION | Terraform: $TERRAFORM_VERSION | Pulumi: $PULUMI_VERSION"
@@ -87,7 +87,8 @@ case "$PLATFORM" in
       else
         echo "✅ CDKTF CLI already available"
       fi
-
+      export PATH="$HOME/.npm-global/bin:$PATH"
+      echo "$HOME/.npm-global/bin" >> "$GITHUB_PATH"
       # ✅ Ensure .gen exists (critical for synth + lint + integration tests)
       if [ ! -d ".gen/aws" ]; then
         echo "📦 Generating provider bindings (.gen)..."
@@ -123,29 +124,11 @@ case "$PLATFORM" in
   cfn)
     echo "🪄 CloudFormation project detected."
 
-    # CFN projects use pipenv in lint/unit tests, so ensure pipenv exists
-    if [ -f "Pipfile" ]; then
-      echo "📦 Pipfile found — installing pipenv environment..."
-      if ! command -v pipenv &>/dev/null; then
-        pip install pipenv
-      fi
+    # No pipenv, no Python environment setup — CFN uses npm-based tests.
+    echo "✅ Skipping pipenv setup for CFN (tests will run via npm)."
 
-      # Create virtualenv only if not already present (fast on repeat runs)
-      if [ ! -d ".venv" ]; then
-        pipenv install --dev
-      else
-        echo "✅ .venv exists — skipping pipenv install"
-      fi
-    else
-      echo "ℹ️ No Pipfile present — using system python + pip"
-      pip install --user cfn-lint cfn-flip || pip install cfn-lint cfn-flip
-      export PATH="$PATH:$HOME/.local/bin"
-    fi
-
-    # Jest for template structure validation tests
-    if ! command -v jest &>/dev/null; then
-      npm install -g jest@28.1.3 ts-node typescript@5.4.5 @types/jest
-    fi
+    echo "📦 Installing Node dependencies for CFN..."
+    npm ci --prefer-offline --no-audit --omit=optional
     ;;
 esac
 

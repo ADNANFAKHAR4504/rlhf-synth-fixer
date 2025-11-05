@@ -3,39 +3,39 @@ set -e
 
 echo "🔨 Running Build..."
 
+# Read platform information to handle platform-specific builds if needed
 if [ -f "metadata.json" ]; then
   PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
   LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
-else
-  echo "⚠️ metadata.json missing; skipping build."
-  exit 0
+  echo "Project: platform=$PLATFORM, language=$LANGUAGE"
 fi
 
-echo "Project: platform=$PLATFORM, language=$LANGUAGE"
+# CDKTF Go preparation happens once during build to warm caches and generate .gen
+if [ "$PLATFORM" = "cdktf" ] && [ "$LANGUAGE" = "go" ]; then
+  echo "🔧 Preparing CDKTF Go (one-time in build)..."
+  bash ./scripts/cdktf-go-prepare.sh
+fi
 
-case "$PLATFORM-$LANGUAGE" in
-  cdk-ts|cdktf-ts|pulumi-ts)
-    echo "📦 Building TypeScript-based project..."
-    npm ci
-    npm run build
-    ;;
-  pulumi-py|cdk-py)
-    echo "🐍 Python project — skipping TS build."
-    ;;
-  pulumi-go|cdktf-go)
-    echo "🐹 Go project — skipping TS build."
-    ;;
-  tf-hcl|cfn-yaml|cfn-json)
-    echo "🪶 Terraform/CloudFormation — no build required."
-    ;;
-  pulumi-java|cdk-java)
-    echo "☕ Building Java project with Gradle..."
+# Build the project based on language
+case "$LANGUAGE" in
+  java)
+    echo "⚡ Building Java project with Gradle..."
     chmod +x ./gradlew
-    ./gradlew assemble --no-daemon
+    ./gradlew assemble \
+      --build-cache \
+      --parallel \
+      --max-workers=$(nproc) \
+      --no-daemon
+    echo "✅ Java build completed successfully"
     ;;
+
+  py)
+    echo "⏭️ Skipping build for Python project (language=$LANGUAGE)"
+    ;;
+
   *)
-    echo "ℹ️ Unknown combination ($PLATFORM-$LANGUAGE) — skipping build."
+    echo "📦 Running generic build (npm)..."
+    npm run build
+    echo "✅ Build completed successfully"
     ;;
 esac
-
-echo "✅ Build stage complete."
