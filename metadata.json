@@ -31,5 +31,8 @@
     "S3PublicAccessBlock",
     "S3BucketPolicy"
   ],
+  "region": "eu-west-3",
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
   "training_quality": 10
 }

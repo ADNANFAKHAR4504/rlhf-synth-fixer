@@ -16,19 +16,20 @@ class PulumiMocks(pulumi.runtime.Mocks):
         outputs = args.inputs
 
         # Add resource-specific outputs
-        if args.typ == "aws:ec2/vpc:Vpc":
-            outputs["id"] = "vpc-12345"
-            outputs["arn"] = "arn:aws:ec2:us-east-1:123456789012:vpc/vpc-12345"
+        resource_type = args.typ
+        if resource_type == "aws:ec2/vpc:Vpc":
+            outputs["id"] = f"vpc-{args.name}"
+            outputs["arn"] = "arn:aws:ec2:eu-west-3:123456789012:vpc/vpc-12345"
             outputs["cidr_block"] = args.inputs.get("cidr_block", "10.0.0.0/16")
 
-        elif args.typ == "aws:ec2/subnet:Subnet":
+        elif resource_type == "aws:ec2/subnet:Subnet":
+            outputs["arn"] = f"arn:aws:ec2:eu-west-3:123456789012:subnet/subnet-{args.name}"
             outputs["id"] = f"subnet-{args.name}"
-            outputs["arn"] = f"arn:aws:ec2:us-east-1:123456789012:subnet/subnet-{args.name}"
             outputs["cidr_block"] = args.inputs.get("cidr_block", "10.0.0.0/24")
 
-        elif args.typ == "aws:ec2/internetGateway:InternetGateway":
-            outputs["id"] = "igw-12345"
-            outputs["arn"] = "arn:aws:ec2:us-east-1:123456789012:internet-gateway/igw-12345"
+        elif resource_type == "aws:ec2/internetGateway:InternetGateway":
+            outputs["arn"] = "arn:aws:ec2:eu-west-3:123456789012:internet-gateway/igw-12345"
+            outputs["id"] = f"igw-{args.name}"
 
         elif args.typ == "aws:ec2/eip:Eip":
             outputs["id"] = f"eip-{args.name}"
@@ -51,7 +52,7 @@ class PulumiMocks(pulumi.runtime.Mocks):
 
         elif args.typ == "aws:ec2/flowLog:FlowLog":
             outputs["id"] = f"fl-{args.name}"
-            outputs["arn"] = f"arn:aws:ec2:us-east-1:123456789012:vpc-flow-log/fl-{args.name}"
+            outputs["arn"] = f"arn:aws:ec2:eu-west-3:123456789012:vpc-flow-log/fl-{args.name}"
 
         return [outputs.get("id", args.name), outputs]
 
@@ -59,8 +60,8 @@ class PulumiMocks(pulumi.runtime.Mocks):
         """Mock Pulumi function calls"""
         if args.token == "aws:index/getAvailabilityZones:getAvailabilityZones":
             return {
-                "names": ["us-east-1a", "us-east-1b", "us-east-1c", "us-east-1d"],
-                "zone_ids": ["use1-az1", "use1-az2", "use1-az3", "use1-az4"]
+                "names": ["eu-west-3a", "eu-west-3b", "eu-west-3c"],
+                "zone_ids": ["euw3-az1", "euw3-az2", "euw3-az3"]
             }
         return {}
 

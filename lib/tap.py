@@ -10,7 +10,7 @@ import json
 # Configuration
 config = pulumi.Config()
 environment_suffix = config.get("environmentSuffix") or "dev"
-region = config.get("aws:region") or "us-east-1"
+region = config.get("aws:region") or "eu-west-3"
 
 # Standard tags for all resources
 tags = {

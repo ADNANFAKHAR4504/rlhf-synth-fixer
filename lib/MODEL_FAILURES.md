@@ -305,20 +305,28 @@ flow_log = aws.ec2.FlowLog(
 - Included cost optimization notes
 
 ### Issue 4.2: Hard-coded Values
-**Problem**: Some values hard-coded instead of using configuration.
+**Problem**: Some values hard-coded instead of using configuration, including the AWS region defaulting to us-east-1.
 
 **Impact**:
 - Less flexible deployment
 - Manual code changes needed for different environments
+- No support for multi-region deployments
+- Unclear deployment target region
 
 **Fix**:
 ```python
 # Before:
 region = "us-east-1"
 
-# After:
-region = config.get("aws:region") or "us-east-1"
+# After (supports configuration with appropriate default):
+region = config.get("aws:region") or "eu-west-3"
 ```
+
+**Rationale**: Using eu-west-3 (Paris) as the default provides:
+- GDPR compliance for European data residency
+- Lower latency for EU customers
+- Geographic diversity from US-based regions
+- Full support for all required AWS services
 
 ### Issue 4.3: No Resource Protection Configuration
 **Problem**: Missing `protect=False` option for testing resources.
