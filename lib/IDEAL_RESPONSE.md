@@ -159,7 +159,7 @@
       "Type": "AWS::Redshift::Cluster",
       "Properties": {
         "ClusterIdentifier": {
-          "Fn::Sub": "cdr-redshift-${EnvironmentSuffix}"
+          "Fn::Sub": "${EnvironmentName}-cdr-redshift-${EnvironmentSuffix}"
         },
         "DBName": "cdrwarehouse",
         "MasterUsername": {
@@ -611,7 +611,7 @@
         },
         "DatabaseInput": {
           "Name": {
-            "Fn::Sub": "${EnvironmentName}_cdr_database"
+            "Fn::Sub": "cdr_database-${EnvironmentSuffix}"
           },
           "Description": "CDR Data Catalog Database"
         }
@@ -621,7 +621,7 @@
       "Type": "AWS::Glue::Crawler",
       "Properties": {
         "Name": {
-          "Fn::Sub": "${EnvironmentName}-cdr-crawler"
+          "Fn::Sub": "cdr-crawler-${EnvironmentSuffix}"
         },
         "Role": {
           "Fn::GetAtt": [
@@ -694,7 +694,7 @@
       "Type": "AWS::Lambda::Function",
       "Properties": {
         "FunctionName": {
-          "Fn::Sub": "${EnvironmentName}-crawler-trigger"
+          "Fn::Sub": "crawler-trigger-${EnvironmentSuffix}"
         },
         "Runtime": "python3.11",
         "Handler": "index.lambda_handler",
@@ -760,7 +760,7 @@
       "Type": "AWS::Athena::WorkGroup",
       "Properties": {
         "Name": {
-          "Fn::Sub": "${EnvironmentName}-cdr-validation"
+          "Fn::Sub": "cdr-validation-${EnvironmentSuffix}"
         },
         "Description": "WorkGroup for CDR data validation queries",
         "WorkGroupConfiguration": {
@@ -865,7 +865,7 @@
       "Type": "AWS::Lambda::Function",
       "Properties": {
         "FunctionName": {
-          "Fn::Sub": "${EnvironmentName}-data-validation"
+          "Fn::Sub": "data-validation-${EnvironmentSuffix}"
         },
         "Runtime": "python3.11",
         "Handler": "index.lambda_handler",
@@ -1120,7 +1120,7 @@
       "Type": "AWS::StepFunctions::StateMachine",
       "Properties": {
         "StateMachineName": {
-          "Fn::Sub": "${EnvironmentName}-billing-workflow"
+          "Fn::Sub": "billing-workflow-${EnvironmentSuffix}"
         },
         "StateMachineType": "EXPRESS",
         "RoleArn": {
@@ -1154,7 +1154,7 @@
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
         "LogGroupName": {
-          "Fn::Sub": "/aws/vendedlogs/states/${EnvironmentName}-billing-workflow"
+          "Fn::Sub": "/aws/vendedlogs/states/billing-workflow-${EnvironmentSuffix}"
         },
         "RetentionInDays": 7
       }
@@ -1163,7 +1163,7 @@
       "Type": "AWS::Events::Rule",
       "Properties": {
         "Name": {
-          "Fn::Sub": "${EnvironmentName}-billing-schedule"
+          "Fn::Sub": "billing-schedule-${EnvironmentSuffix}"
         },
         "Description": "Trigger billing workflow daily",
         "ScheduleExpression": "cron(0 2 * * ? *)",
@@ -1225,7 +1225,7 @@
       "Type": "AWS::SecretsManager::Secret",
       "Properties": {
         "Name": {
-          "Fn::Sub": "${EnvironmentName}-aurora-credentials"
+          "Fn::Sub": "${AWS::StackName}-aurora-credentials"
         },
         "Description": "Aurora database credentials",
         "GenerateSecretString": {
@@ -1240,7 +1240,7 @@
       "Type": "AWS::SecretsManager::Secret",
       "Properties": {
         "Name": {
-          "Fn::Sub": "${EnvironmentName}-redshift-credentials"
+          "Fn::Sub": "${AWS::StackName}-redshift-credentials"
         },
         "Description": "Redshift credentials",
         "GenerateSecretString": {
@@ -1255,7 +1255,7 @@
       "Type": "AWS::SecretsManager::Secret",
       "Properties": {
         "Name": {
-          "Fn::Sub": "${EnvironmentName}-aurora-password"
+          "Fn::Sub": "${AWS::StackName}-aurora-password"
         },
         "Description": "Aurora master user password",
         "GenerateSecretString": {
@@ -1353,7 +1353,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${EnvironmentName}-Redshift-SG"
+              "Fn::Sub": "Redshift-SG-${EnvironmentSuffix}"
             }
           }
         ]
