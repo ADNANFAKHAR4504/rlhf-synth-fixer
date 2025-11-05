@@ -172,7 +172,7 @@ class TapStack(cdk.Stack):
             self,
             f"DatabaseParameterGroup-{environment_suffix}",
             engine=rds.DatabaseInstanceEngine.postgres(
-                version=rds.PostgresEngineVersion.VER_14_10
+                version=rds.PostgresEngineVersion.VER_14_17
             ),
             description="Parameter group for staging PostgreSQL database",
             parameters={
@@ -213,7 +213,7 @@ class TapStack(cdk.Stack):
             self,
             f"StagingDatabase-{environment_suffix}",
             engine=rds.DatabaseInstanceEngine.postgres(
-                version=rds.PostgresEngineVersion.VER_14_10
+                version=rds.PostgresEngineVersion.VER_14_17
             ),
             instance_type=ec2.InstanceType.of(
                 ec2.InstanceClass.BURSTABLE3,
