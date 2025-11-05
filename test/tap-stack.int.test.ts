@@ -1,7 +1,5 @@
-import fs from 'fs';
-import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeNatGatewaysCommand, DescribeInternetGatewaysCommand, DescribeRouteTablesCommand, DescribeNetworkAclsCommand, DescribeFlowLogsCommand } from '@aws-sdk/client-ec2';
-import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
-import { IAMClient, GetRoleCommand } from '@aws-sdk/client-iam';
+import { execSync } from 'child_process';
+import * as fs from 'fs';
 
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
@@ -10,9 +8,19 @@ const outputs = JSON.parse(
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const region = process.env.AWS_REGION || 'us-east-1';
 
-const ec2Client = new EC2Client({ region });
-const logsClient = new CloudWatchLogsClient({ region });
-const iamClient = new IAMClient({ region });
+// Helper function to execute AWS CLI commands
+function awsCli(command: string): any {
+  try {
+    const result = execSync(`aws ${command} --region ${region} --output json`, {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+    return JSON.parse(result);
+  } catch (error: any) {
+    console.error(`AWS CLI Error: ${error.message}`);
+    throw error;
+  }
+}
 
 describe('VPC Infrastructure Integration Tests', () => {
   describe('VPC Configuration', () => {
@@ -20,9 +28,7 @@ describe('VPC Infrastructure Integration Tests', () => {
       const vpcId = outputs.VPCId;
       expect(vpcId).toBeDefined();
 
-      const response = await ec2Client.send(
-        new DescribeVpcsCommand({ VpcIds: [vpcId] })
-      );
+      const response = awsCli(`ec2 describe-vpcs --vpc-ids ${vpcId}`);
 
       expect(response.Vpcs).toBeDefined();
       expect(response.Vpcs.length).toBe(1);
@@ -32,12 +38,12 @@ describe('VPC Infrastructure Integration Tests', () => {
 
     test('VPC should have DNS support enabled', async () => {
       const vpcId = outputs.VPCId;
-      const response = await ec2Client.send(
-        new DescribeVpcsCommand({ VpcIds: [vpcId] })
-      );
 
-      expect(response.Vpcs[0].EnableDnsSupport).toBe(true);
-      expect(response.Vpcs[0].EnableDnsHostnames).toBe(true);
+      const dnsSupportResponse = awsCli(`ec2 describe-vpc-attribute --vpc-id ${vpcId} --attribute enableDnsSupport`);
+      const dnsHostnamesResponse = awsCli(`ec2 describe-vpc-attribute --vpc-id ${vpcId} --attribute enableDnsHostnames`);
+
+      expect(dnsSupportResponse.EnableDnsSupport.Value).toBe(true);
+      expect(dnsHostnamesResponse.EnableDnsHostnames.Value).toBe(true);
     });
   });
 
@@ -64,13 +70,11 @@ describe('VPC Infrastructure Integration Tests', () => {
         outputs.PublicSubnetAId,
         outputs.PublicSubnetBId,
         outputs.PublicSubnetCId
-      ];
+      ].join(' ');
 
-      const response = await ec2Client.send(
-        new DescribeSubnetsCommand({ SubnetIds: subnetIds })
-      );
+      const response = awsCli(`ec2 describe-subnets --subnet-ids ${subnetIds}`);
 
-      const cidrs = response.Subnets.map(s => s.CidrBlock).sort();
+      const cidrs = response.Subnets.map((s: any) => s.CidrBlock).sort();
       expect(cidrs).toEqual(['10.0.0.0/24', '10.0.1.0/24', '10.0.2.0/24']);
     });
 
@@ -79,21 +83,17 @@ describe('VPC Infrastructure Integration Tests', () => {
         outputs.PrivateSubnetAId,
         outputs.PrivateSubnetBId,
         outputs.PrivateSubnetCId
-      ];
+      ].join(' ');
 
-      const response = await ec2Client.send(
-        new DescribeSubnetsCommand({ SubnetIds: subnetIds })
-      );
+      const response = awsCli(`ec2 describe-subnets --subnet-ids ${subnetIds}`);
 
-      const cidrs = response.Subnets.map(s => s.CidrBlock).sort();
+      const cidrs = response.Subnets.map((s: any) => s.CidrBlock).sort();
       expect(cidrs).toEqual(['10.0.10.0/24', '10.0.11.0/24', '10.0.12.0/24']);
     });
 
     test('subnets should be in correct availability zones', async () => {
       const publicA = outputs.PublicSubnetAId;
-      const response = await ec2Client.send(
-        new DescribeSubnetsCommand({ SubnetIds: [publicA] })
-      );
+      const response = awsCli(`ec2 describe-subnets --subnet-ids ${publicA}`);
 
       expect(response.Subnets[0].AvailabilityZone).toBe('us-east-1a');
     });
@@ -103,13 +103,11 @@ describe('VPC Infrastructure Integration Tests', () => {
         outputs.PublicSubnetAId,
         outputs.PublicSubnetBId,
         outputs.PublicSubnetCId
-      ];
+      ].join(' ');
 
-      const response = await ec2Client.send(
-        new DescribeSubnetsCommand({ SubnetIds: subnetIds })
-      );
+      const response = awsCli(`ec2 describe-subnets --subnet-ids ${subnetIds}`);
 
-      response.Subnets.forEach(subnet => {
+      response.Subnets.forEach((subnet: any) => {
         expect(subnet.MapPublicIpOnLaunch).toBe(true);
       });
     });
@@ -119,13 +117,11 @@ describe('VPC Infrastructure Integration Tests', () => {
         outputs.PrivateSubnetAId,
         outputs.PrivateSubnetBId,
         outputs.PrivateSubnetCId
-      ];
+      ].join(' ');
 
-      const response = await ec2Client.send(
-        new DescribeSubnetsCommand({ SubnetIds: subnetIds })
-      );
+      const response = awsCli(`ec2 describe-subnets --subnet-ids ${subnetIds}`);
 
-      response.Subnets.forEach(subnet => {
+      response.Subnets.forEach((subnet: any) => {
         expect(subnet.MapPublicIpOnLaunch).toBe(false);
       });
     });
@@ -137,16 +133,12 @@ describe('VPC Infrastructure Integration Tests', () => {
         outputs.NatGatewayAId,
         outputs.NatGatewayBId,
         outputs.NatGatewayCId
-      ];
+      ].join(' ');
 
-      expect(natGatewayIds.length).toBe(3);
-
-      const response = await ec2Client.send(
-        new DescribeNatGatewaysCommand({ NatGatewayIds: natGatewayIds })
-      );
+      const response = awsCli(`ec2 describe-nat-gateways --nat-gateway-ids ${natGatewayIds}`);
 
       expect(response.NatGateways.length).toBe(3);
-      response.NatGateways.forEach(nat => {
+      response.NatGateways.forEach((nat: any) => {
         expect(nat.State).toBe('available');
       });
     });
@@ -156,18 +148,16 @@ describe('VPC Infrastructure Integration Tests', () => {
         outputs.NatGatewayAId,
         outputs.NatGatewayBId,
         outputs.NatGatewayCId
-      ];
+      ].join(' ');
       const publicSubnetIds = [
         outputs.PublicSubnetAId,
         outputs.PublicSubnetBId,
         outputs.PublicSubnetCId
       ];
 
-      const response = await ec2Client.send(
-        new DescribeNatGatewaysCommand({ NatGatewayIds: natGatewayIds })
-      );
+      const response = awsCli(`ec2 describe-nat-gateways --nat-gateway-ids ${natGatewayIds}`);
 
-      response.NatGateways.forEach(nat => {
+      response.NatGateways.forEach((nat: any) => {
         expect(publicSubnetIds).toContain(nat.SubnetId);
       });
     });
@@ -177,13 +167,11 @@ describe('VPC Infrastructure Integration Tests', () => {
         outputs.NatGatewayAId,
         outputs.NatGatewayBId,
         outputs.NatGatewayCId
-      ];
+      ].join(' ');
 
-      const response = await ec2Client.send(
-        new DescribeNatGatewaysCommand({ NatGatewayIds: natGatewayIds })
-      );
+      const response = awsCli(`ec2 describe-nat-gateways --nat-gateway-ids ${natGatewayIds}`);
 
-      response.NatGateways.forEach(nat => {
+      response.NatGateways.forEach((nat: any) => {
         expect(nat.NatGatewayAddresses).toBeDefined();
         expect(nat.NatGatewayAddresses.length).toBeGreaterThan(0);
         expect(nat.NatGatewayAddresses[0].PublicIp).toBeDefined();
@@ -197,9 +185,7 @@ describe('VPC Infrastructure Integration Tests', () => {
       const vpcId = outputs.VPCId;
       expect(igwId).toBeDefined();
 
-      const response = await ec2Client.send(
-        new DescribeInternetGatewaysCommand({ InternetGatewayIds: [igwId] })
-      );
+      const response = awsCli(`ec2 describe-internet-gateways --internet-gateway-ids ${igwId}`);
 
       expect(response.InternetGateways.length).toBe(1);
       expect(response.InternetGateways[0].Attachments.length).toBe(1);
@@ -211,11 +197,7 @@ describe('VPC Infrastructure Integration Tests', () => {
   describe('Route Tables', () => {
     test('should have route tables for all subnets', async () => {
       const vpcId = outputs.VPCId;
-      const response = await ec2Client.send(
-        new DescribeRouteTablesCommand({
-          Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
-        })
-      );
+      const response = awsCli(`ec2 describe-route-tables --filters "Name=vpc-id,Values=${vpcId}"`);
 
       expect(response.RouteTables.length).toBeGreaterThanOrEqual(4);
     });
@@ -225,17 +207,11 @@ describe('VPC Infrastructure Integration Tests', () => {
       const igwId = outputs.InternetGatewayId;
       const publicSubnetId = outputs.PublicSubnetAId;
 
-      const response = await ec2Client.send(
-        new DescribeRouteTablesCommand({
-          Filters: [
-            { Name: 'association.subnet-id', Values: [publicSubnetId] }
-          ]
-        })
-      );
+      const response = awsCli(`ec2 describe-route-tables --filters "Name=association.subnet-id,Values=${publicSubnetId}"`);
 
       expect(response.RouteTables.length).toBe(1);
       const routes = response.RouteTables[0].Routes;
-      const igwRoute = routes.find(r => r.GatewayId === igwId);
+      const igwRoute = routes.find((r: any) => r.GatewayId === igwId);
       expect(igwRoute).toBeDefined();
       expect(igwRoute.DestinationCidrBlock).toBe('0.0.0.0/0');
     });
@@ -244,17 +220,11 @@ describe('VPC Infrastructure Integration Tests', () => {
       const privateSubnetId = outputs.PrivateSubnetAId;
       const natGatewayId = outputs.NatGatewayAId;
 
-      const response = await ec2Client.send(
-        new DescribeRouteTablesCommand({
-          Filters: [
-            { Name: 'association.subnet-id', Values: [privateSubnetId] }
-          ]
-        })
-      );
+      const response = awsCli(`ec2 describe-route-tables --filters "Name=association.subnet-id,Values=${privateSubnetId}"`);
 
       expect(response.RouteTables.length).toBe(1);
       const routes = response.RouteTables[0].Routes;
-      const natRoute = routes.find(r => r.NatGatewayId === natGatewayId);
+      const natRoute = routes.find((r: any) => r.NatGatewayId === natGatewayId);
       expect(natRoute).toBeDefined();
       expect(natRoute.DestinationCidrBlock).toBe('0.0.0.0/0');
     });
@@ -263,29 +233,21 @@ describe('VPC Infrastructure Integration Tests', () => {
   describe('Network ACLs', () => {
     test('VPC should have custom Network ACLs', async () => {
       const vpcId = outputs.VPCId;
-      const response = await ec2Client.send(
-        new DescribeNetworkAclsCommand({
-          Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
-        })
-      );
+      const response = awsCli(`ec2 describe-network-acls --filters "Name=vpc-id,Values=${vpcId}"`);
 
-      const customNacls = response.NetworkAcls.filter(nacl => !nacl.IsDefault);
+      const customNacls = response.NetworkAcls.filter((nacl: any) => !nacl.IsDefault);
       expect(customNacls.length).toBeGreaterThan(0);
     });
 
     test('custom Network ACL should deny SSH from 0.0.0.0/0', async () => {
       const vpcId = outputs.VPCId;
-      const response = await ec2Client.send(
-        new DescribeNetworkAclsCommand({
-          Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
-        })
-      );
+      const response = awsCli(`ec2 describe-network-acls --filters "Name=vpc-id,Values=${vpcId}"`);
 
-      const customNacls = response.NetworkAcls.filter(nacl => !nacl.IsDefault);
+      const customNacls = response.NetworkAcls.filter((nacl: any) => !nacl.IsDefault);
       expect(customNacls.length).toBeGreaterThan(0);
 
       const nacl = customNacls[0];
-      const sshDenyRule = nacl.Entries.find(entry =>
+      const sshDenyRule = nacl.Entries.find((entry: any) =>
         !entry.Egress &&
         entry.RuleNumber === 100 &&
         entry.Protocol === '6' && // TCP
@@ -301,11 +263,7 @@ describe('VPC Infrastructure Integration Tests', () => {
   describe('VPC Flow Logs', () => {
     test('VPC should have Flow Logs enabled', async () => {
       const vpcId = outputs.VPCId;
-      const response = await ec2Client.send(
-        new DescribeFlowLogsCommand({
-          Filters: [{ Name: 'resource-id', Values: [vpcId] }]
-        })
-      );
+      const response = awsCli(`ec2 describe-flow-logs --filter "Name=resource-id,Values=${vpcId}"`);
 
       expect(response.FlowLogs.length).toBeGreaterThan(0);
       expect(response.FlowLogs[0].TrafficType).toBe('ALL');
@@ -316,11 +274,7 @@ describe('VPC Infrastructure Integration Tests', () => {
       const logGroupName = outputs.VPCFlowLogsLogGroupName;
       expect(logGroupName).toBeDefined();
 
-      const response = await logsClient.send(
-        new DescribeLogGroupsCommand({
-          logGroupNamePrefix: logGroupName
-        })
-      );
+      const response = awsCli(`logs describe-log-groups --log-group-name-prefix ${logGroupName}`);
 
       expect(response.logGroups.length).toBeGreaterThan(0);
       expect(response.logGroups[0].logGroupName).toBe(logGroupName);
@@ -330,9 +284,7 @@ describe('VPC Infrastructure Integration Tests', () => {
     test('IAM Role for Flow Logs should exist', async () => {
       const roleName = `vpc-flowlogs-role-${environmentSuffix}`;
 
-      const response = await iamClient.send(
-        new GetRoleCommand({ RoleName: roleName })
-      );
+      const response = awsCli(`iam get-role --role-name ${roleName}`);
 
       expect(response.Role).toBeDefined();
       expect(response.Role.RoleName).toBe(roleName);
@@ -342,14 +294,12 @@ describe('VPC Infrastructure Integration Tests', () => {
   describe('Resource Tagging', () => {
     test('VPC should have correct tags', async () => {
       const vpcId = outputs.VPCId;
-      const response = await ec2Client.send(
-        new DescribeVpcsCommand({ VpcIds: [vpcId] })
-      );
+      const response = awsCli(`ec2 describe-vpcs --vpc-ids ${vpcId}`);
 
       const tags = response.Vpcs[0].Tags || [];
-      const envTag = tags.find(t => t.Key === 'Environment');
-      const costTag = tags.find(t => t.Key === 'CostCenter');
-      const nameTag = tags.find(t => t.Key === 'Name');
+      const envTag = tags.find((t: any) => t.Key === 'Environment');
+      const costTag = tags.find((t: any) => t.Key === 'CostCenter');
+      const nameTag = tags.find((t: any) => t.Key === 'Name');
 
       expect(envTag).toBeDefined();
       expect(envTag.Value).toBe('Production');
@@ -363,13 +313,11 @@ describe('VPC Infrastructure Integration Tests', () => {
 
     test('subnets should have correct tags', async () => {
       const subnetId = outputs.PublicSubnetAId;
-      const response = await ec2Client.send(
-        new DescribeSubnetsCommand({ SubnetIds: [subnetId] })
-      );
+      const response = awsCli(`ec2 describe-subnets --subnet-ids ${subnetId}`);
 
       const tags = response.Subnets[0].Tags || [];
-      const envTag = tags.find(t => t.Key === 'Environment');
-      const costTag = tags.find(t => t.Key === 'CostCenter');
+      const envTag = tags.find((t: any) => t.Key === 'Environment');
+      const costTag = tags.find((t: any) => t.Key === 'CostCenter');
 
       expect(envTag).toBeDefined();
       expect(envTag.Value).toBe('Production');
@@ -385,13 +333,11 @@ describe('VPC Infrastructure Integration Tests', () => {
         outputs.PublicSubnetAId,
         outputs.PublicSubnetBId,
         outputs.PublicSubnetCId
-      ];
+      ].join(' ');
 
-      const response = await ec2Client.send(
-        new DescribeSubnetsCommand({ SubnetIds: subnetIds })
-      );
+      const response = awsCli(`ec2 describe-subnets --subnet-ids ${subnetIds}`);
 
-      const azs = response.Subnets.map(s => s.AvailabilityZone).sort();
+      const azs = response.Subnets.map((s: any) => s.AvailabilityZone).sort();
       expect(azs).toEqual(['us-east-1a', 'us-east-1b', 'us-east-1c']);
     });
 
@@ -403,16 +349,10 @@ describe('VPC Infrastructure Integration Tests', () => {
       ];
 
       for (const subnet of privateSubnets) {
-        const response = await ec2Client.send(
-          new DescribeRouteTablesCommand({
-            Filters: [
-              { Name: 'association.subnet-id', Values: [subnet.id] }
-            ]
-          })
-        );
+        const response = awsCli(`ec2 describe-route-tables --filters "Name=association.subnet-id,Values=${subnet.id}"`);
 
         const routes = response.RouteTables[0].Routes;
-        const natRoute = routes.find(r => r.NatGatewayId === subnet.nat);
+        const natRoute = routes.find((r: any) => r.NatGatewayId === subnet.nat);
         expect(natRoute).toBeDefined();
       }
     });
