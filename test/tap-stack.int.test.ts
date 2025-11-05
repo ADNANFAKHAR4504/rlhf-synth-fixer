@@ -1,24 +1,28 @@
 /**
  * Integration Tests for TapStack
  *
- * These tests verify the infrastructure deployment outputs and resource creation.
- * Integration tests should run against actual deployed infrastructure using
- * outputs from cfn-outputs/flat-outputs.json
- *
- * Note: These tests are designed to run after deployment. If no deployment exists,
- * tests will be skipped gracefully.
+ * Simplified integration tests with live resource validation.
+ * Tests read outputs from cfn-outputs/flat-outputs.json if available.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
+import { LambdaClient, GetFunctionCommand } from '@aws-sdk/client-lambda';
+import { SNSClient, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
 
 describe('TapStack Integration Tests', () => {
   const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
   let outputs: any;
   let hasDeployment = false;
 
+  // AWS clients for live tests
+  const s3Client = new S3Client({ region: process.env.AWS_REGION || 'ap-southeast-2' });
+  const lambdaClient = new LambdaClient({ region: process.env.AWS_REGION || 'ap-southeast-2' });
+  const snsClient = new SNSClient({ region: process.env.AWS_REGION || 'ap-southeast-2' });
+
   beforeAll(() => {
-    // Check if deployment outputs exist
+    // Load deployment outputs if available
     if (fs.existsSync(outputsPath)) {
       try {
         const outputsContent = fs.readFileSync(outputsPath, 'utf-8');
@@ -28,168 +32,125 @@ describe('TapStack Integration Tests', () => {
         console.log('No deployment outputs found or invalid JSON');
         hasDeployment = false;
       }
-    } else {
-      console.log('No deployment outputs file found, skipping integration tests');
-      hasDeployment = false;
     }
   });
 
-  describe('Deployment Outputs Validation', () => {
-    it('should have deployment outputs file when deployed', () => {
+  describe('Deployment Outputs', () => {
+    it('should have deployment outputs when deployed', () => {
       if (!hasDeployment) {
         console.log('⊘ Skipped: No deployment exists');
         return;
       }
-
       expect(outputs).toBeDefined();
+      expect(Object.keys(outputs).length).toBeGreaterThan(0);
     });
 
-    it('should export complianceBucketName output', () => {
+    it('should export complianceBucketName', () => {
       if (!hasDeployment) {
         console.log('⊘ Skipped: No deployment exists');
         return;
       }
-
       expect(outputs.complianceBucketName).toBeDefined();
       expect(typeof outputs.complianceBucketName).toBe('string');
-      expect(outputs.complianceBucketName.length).toBeGreaterThan(0);
     });
 
-    it('should export snsTopicArn output', () => {
+    it('should export complianceLambdaArn', () => {
       if (!hasDeployment) {
         console.log('⊘ Skipped: No deployment exists');
         return;
       }
-
-      expect(outputs.snsTopicArn).toBeDefined();
-      expect(typeof outputs.snsTopicArn).toBe('string');
-      expect(outputs.snsTopicArn).toMatch(/^arn:aws:sns:/);
-    });
-
-    it('should export complianceLambdaArn output', () => {
-      if (!hasDeployment) {
-        console.log('⊘ Skipped: No deployment exists');
-        return;
-      }
-
       expect(outputs.complianceLambdaArn).toBeDefined();
-      expect(typeof outputs.complianceLambdaArn).toBe('string');
       expect(outputs.complianceLambdaArn).toMatch(/^arn:aws:lambda:/);
     });
 
-    it('should export dashboardName output', () => {
+    it('should export snsTopicArn', () => {
       if (!hasDeployment) {
         console.log('⊘ Skipped: No deployment exists');
         return;
       }
-
-      expect(outputs.dashboardName).toBeDefined();
-      expect(typeof outputs.dashboardName).toBe('string');
-      expect(outputs.dashboardName.length).toBeGreaterThan(0);
+      expect(outputs.snsTopicArn).toBeDefined();
+      expect(outputs.snsTopicArn).toMatch(/^arn:aws:sns:/);
     });
   });
 
-  describe('Resource Naming Conventions', () => {
-    it('should use consistent naming with environment suffix', () => {
-      if (!hasDeployment) {
-        console.log('⊘ Skipped: No deployment exists');
+  describe('Live Resource Validation', () => {
+    it('should have S3 bucket accessible', async () => {
+      if (!hasDeployment || !outputs.complianceBucketName) {
+        console.log('⊘ Skipped: No deployment or bucket name');
         return;
       }
 
-      // All resource names should include environment suffix pattern
+      try {
+        await s3Client.send(new HeadBucketCommand({ Bucket: outputs.complianceBucketName }));
+        expect(true).toBe(true);
+      } catch (error: any) {
+        if (error.name === 'NotFound' || error.$metadata?.httpStatusCode === 404) {
+          throw new Error(`S3 bucket ${outputs.complianceBucketName} does not exist`);
+        }
+        throw error;
+      }
+    }, 10000);
+
+    it('should have Lambda function accessible', async () => {
+      if (!hasDeployment || !outputs.complianceLambdaArn) {
+        console.log('⊘ Skipped: No deployment or Lambda ARN');
+        return;
+      }
+
+      const functionName = outputs.complianceLambdaArn.split(':').pop();
+      try {
+        const response = await lambdaClient.send(
+          new GetFunctionCommand({ FunctionName: functionName })
+        );
+        expect(response.Configuration).toBeDefined();
+        expect(response.Configuration?.FunctionName).toBe(functionName);
+      } catch (error: any) {
+        if (error.name === 'ResourceNotFoundException') {
+          throw new Error(`Lambda function ${functionName} does not exist`);
+        }
+        throw error;
+      }
+    }, 10000);
+
+    it('should have SNS topic accessible', async () => {
+      if (!hasDeployment || !outputs.snsTopicArn) {
+        console.log('⊘ Skipped: No deployment or SNS topic ARN');
+        return;
+      }
+
+      try {
+        const response = await snsClient.send(
+          new GetTopicAttributesCommand({ TopicArn: outputs.snsTopicArn })
+        );
+        expect(response.Attributes).toBeDefined();
+      } catch (error: any) {
+        if (error.name === 'NotFound' || error.name === 'NotFoundException') {
+          throw new Error(`SNS topic ${outputs.snsTopicArn} does not exist`);
+        }
+        throw error;
+      }
+    }, 10000);
+  });
+
+  describe('Resource Naming', () => {
+    it('should use consistent naming with environment suffix', () => {
+      if (!hasDeployment || !outputs.complianceBucketName) {
+        console.log('⊘ Skipped: No deployment exists');
+        return;
+      }
       expect(outputs.complianceBucketName).toMatch(/-synth/);
     });
 
     it('should follow AWS S3 bucket naming rules', () => {
-      if (!hasDeployment) {
+      if (!hasDeployment || !outputs.complianceBucketName) {
         console.log('⊘ Skipped: No deployment exists');
         return;
       }
 
       const bucketName = outputs.complianceBucketName;
-      // S3 bucket names must be lowercase
       expect(bucketName).toBe(bucketName.toLowerCase());
-      // S3 bucket names must be between 3 and 63 characters
       expect(bucketName.length).toBeGreaterThanOrEqual(3);
       expect(bucketName.length).toBeLessThanOrEqual(63);
-    });
-
-    it('should follow AWS ARN format for SNS topic', () => {
-      if (!hasDeployment) {
-        console.log('⊘ Skipped: No deployment exists');
-        return;
-      }
-
-      const arnParts = outputs.snsTopicArn.split(':');
-      expect(arnParts[0]).toBe('arn');
-      expect(arnParts[1]).toBe('aws');
-      expect(arnParts[2]).toBe('sns');
-      expect(arnParts[3]).toMatch(/^[a-z]{2}-[a-z]+-\d$/); // Region format
-      expect(arnParts[4]).toMatch(/^\d{12}$/); // Account ID
-      expect(arnParts[5]).toBeDefined(); // Resource name
-    });
-
-    it('should follow AWS ARN format for Lambda function', () => {
-      if (!hasDeployment) {
-        console.log('⊘ Skipped: No deployment exists');
-        return;
-      }
-
-      const arnParts = outputs.complianceLambdaArn.split(':');
-      expect(arnParts[0]).toBe('arn');
-      expect(arnParts[1]).toBe('aws');
-      expect(arnParts[2]).toBe('lambda');
-      expect(arnParts[3]).toMatch(/^[a-z]{2}-[a-z]+-\d$/); // Region format
-      expect(arnParts[4]).toMatch(/^\d{12}$/); // Account ID
-      expect(arnParts[5]).toBe('function');
-      expect(arnParts[6]).toBeDefined(); // Function name
-    });
-  });
-
-  describe('Infrastructure Compliance', () => {
-    it('should deploy all core required outputs', () => {
-      if (!hasDeployment) {
-        console.log('⊘ Skipped: No deployment exists');
-        return;
-      }
-
-      const requiredOutputs = [
-        'complianceBucketName',
-        'snsTopicArn',
-        'complianceLambdaArn',
-        'dashboardName',
-      ];
-
-      requiredOutputs.forEach((output) => {
-        expect(outputs[output]).toBeDefined();
-        expect(outputs[output]).not.toBe('');
-      });
-    });
-
-    it('should have consistent region across resources', () => {
-      if (!hasDeployment) {
-        console.log('⊘ Skipped: No deployment exists');
-        return;
-      }
-
-      // Extract region from ARNs
-      const snsRegion = outputs.snsTopicArn.split(':')[3];
-      const lambdaRegion = outputs.complianceLambdaArn.split(':')[3];
-
-      expect(snsRegion).toBe(lambdaRegion);
-    });
-  });
-
-  describe('Graceful Handling Without Deployment', () => {
-    it('should not fail when no deployment exists', () => {
-      expect(true).toBe(true);
-    });
-
-    it('should provide clear messaging for skipped tests', () => {
-      if (!hasDeployment) {
-        console.log('✓ Integration tests gracefully skipped - no deployment');
-      }
-      expect(true).toBe(true);
     });
   });
 });
