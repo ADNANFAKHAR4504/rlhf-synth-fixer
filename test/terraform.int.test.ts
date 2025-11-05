@@ -28,28 +28,50 @@ const IS_CICD = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'tru
 // Path to outputs file (created by CI/CD after deployment)
 const OUTPUTS_FILE = path.join(__dirname, '../cfn-outputs/all-outputs.json');
 
+// Terraform output value structure
+interface TerraformOutput<T = any> {
+  value: T;
+  type?: string;
+}
+
 // Mock outputs for local testing
 const MOCK_OUTPUTS = {
-  hub_vpc_id: 'vpc-mock-hub',
-  hub_vpc_cidr: '10.0.0.0/16',
-  us_west_spoke_vpc_id: 'vpc-mock-us-west',
-  eu_west_spoke_vpc_id: 'vpc-mock-eu-west',
-  hub_transit_gateway_id: 'tgw-mock-hub',
-  flow_logs_s3_bucket: 'trading-platform-vpc-flow-logs-mock',
-  private_hosted_zone_id: null,
-  private_hosted_zone_name: null,
+  hub_vpc_id: { value: 'vpc-mock-hub' },
+  hub_vpc_cidr: { value: '10.0.0.0/16' },
+  us_west_spoke_vpc_id: { value: 'vpc-mock-us-west' },
+  eu_west_spoke_vpc_id: { value: 'vpc-mock-eu-west' },
+  hub_transit_gateway_id: { value: 'tgw-mock-hub' },
+  flow_logs_s3_bucket: { value: 'trading-platform-vpc-flow-logs-mock' },
+  private_hosted_zone_id: { value: null },
+  private_hosted_zone_name: { value: null },
 };
 
-// Load outputs
+// Load and parse outputs
 function loadOutputs(): any {
   if (IS_CICD) {
     if (!fs.existsSync(OUTPUTS_FILE)) {
       throw new Error(`Outputs file not found: ${OUTPUTS_FILE}. Deployment may have failed.`);
     }
-    return JSON.parse(fs.readFileSync(OUTPUTS_FILE, 'utf8'));
+    const rawOutputs = JSON.parse(fs.readFileSync(OUTPUTS_FILE, 'utf8'));
+    
+    // Parse terraform outputs - extract .value from each output
+    const parsed: any = {};
+    for (const [key, val] of Object.entries(rawOutputs)) {
+      if (val && typeof val === 'object' && 'value' in val) {
+        parsed[key] = (val as TerraformOutput).value;
+      } else {
+        parsed[key] = val;
+      }
+    }
+    return parsed;
   }
   console.warn('Running locally with mock outputs. Integration tests will be limited.');
-  return MOCK_OUTPUTS;
+  // Extract .value from mock outputs for consistency
+  const parsed: any = {};
+  for (const [key, val] of Object.entries(MOCK_OUTPUTS)) {
+    parsed[key] = (val as any).value;
+  }
+  return parsed;
 }
 
 const outputs = loadOutputs();
