@@ -1,195 +1,129 @@
-
 name: "Setup Environment"
-description: "Sets up Node.js, Python, Java and Terraform environment and restores build artifacts"
+description: "Sets up environment dynamically based on platform and language"
+
 inputs:
   node-version:
-    description: 'Node.js version to use'
-    required: true
     default: '22.17.0'
+  terraform-version:
+    default: '1.12.2'
+  pulumi-version:
+    default: '3.109.0'
+  language:
+    default: ''
+  platform:
+    default: ''
+  is-analysis:
+    default: 'false'
   download-artifacts:
     description: 'Whether to download build artifacts'
     required: false
-    default: 'true'
-  language:
-    description: "Project language (ts, py, java, go, yaml, json, hcl)"
-    required: false
-    default: ''
-  terraform-version:
-    description: 'Terraform version to use'
-    required: false
-    default: '1.12.2'
-  pulumi-version:
-    description: 'Pulumi version to use'
-    required: false
-    default: '3.109.0'
+    default: 'false'
   upload-artifacts:
-    description: 'Whether to upload build artifacts (only for build job)'
+    description: 'Whether to upload build artifacts'
     required: false
     default: 'false'
-  platform:
-    description: 'The platform type (cdk, cdktf, cfn, pulumi, terraform)'
-    required: false
-    default: ''
-  is-analysis:
-    description: 'Whether this is an analysis job (installs pipenv and system dependencies)'
-    required: false
-    default: 'false'
+
 
 runs:
   using: 'composite'
   steps:
-    - name: Download build artifacts
-      if: inputs.download-artifacts == 'true'
-      id: download-artifacts
-      uses: actions/download-artifact@v4
+    - name: Checkout
+      uses: actions/checkout@v4
+    # ✅ Restore NPM Cache (only if JS/TS/CDK/CDKTF/Pulumi TS)
+    - name: Cache CDKTF generated providers
+      if: ${{ inputs.platform == 'cdktf' }}
+      uses: actions/cache@v4
       with:
-        name: build-artifacts
-      continue-on-error: true
-
-    - name: Set artifact status
-      if: inputs.download-artifacts == 'true'
-      shell: bash
-      run: echo "ARTIFACTS_FOUND=${{ steps.download-artifacts.outcome == 'success' && 'true' || 'false' }}" >> $GITHUB_ENV
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
+        path: .gen
+        key: gen-${{ runner.os }}-${{ hashFiles('cdktf.json') }}
+        restore-keys: |
+          gen-${{ runner.os }}-
+    - name: Cache pipenv virtualenv
+      if: ${{ inputs.language == 'py' || inputs.platform == 'cfn' }}
+      uses: actions/cache@v4
       with:
-        node-version: ${{ inputs.node-version }}
-        cache: 'npm'
-
-    - name: Setup Python 3.12.11
-      uses: actions/setup-python@v5
+        path: .venv
+        key: venv-${{ runner.os }}-${{ hashFiles('Pipfile.lock') }}
+        restore-keys: |
+          venv-${{ runner.os }}-
+    - name: Cache npm packages
+      if: ${{ inputs.language == 'ts' || inputs.language == 'js' || inputs.platform == 'cdk' || inputs.platform == 'cdktf' || inputs.platform == 'pulumi' }}
+      uses: actions/cache@v4
       with:
-        python-version: '3.12.11'
-        check-latest: true
+        path: ~/.npm
+        key: npm-cache-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          npm-cache-${{ runner.os }}-
 
-    - name: Install analysis dependencies
-      if: inputs.is-analysis == 'true'
-      shell: bash
-      run: |
-        echo "Installing analysis dependencies..."
-        python -m pip install --upgrade pip
-        pip install pipenv
-        pipenv install --dev --system
-        sudo apt-get update && sudo apt-get install -y jq
-        echo "✅ Analysis dependencies installed"
-
-    - name: Setup Go 1.23.x
-      if: ${{ (inputs.platform == 'cdktf' && inputs.language == 'go') || (inputs.platform == 'cdk' && inputs.language == 'go') }}
-      uses: actions/setup-go@v5
+    # ✅ Restore pip cache (only if Python)
+    - name: Cache pip packages
+      if: ${{ inputs.language == 'py' || inputs.platform == 'cfn' }}
+      uses: actions/cache@v4
       with:
-        go-version: '1.23.12'
-        cache: false # We'll handle caching manually for better control
+        path: ~/.cache/pip
+        key: pip-cache-${{ runner.os }}-${{ hashFiles('Pipfile.lock') }}
+        restore-keys: |
+          pip-cache-${{ runner.os }}-
 
+    # ✅ Restore Go build/module cache (only if Go)
     - name: Cache Go modules
-      if: ${{ (inputs.platform == 'cdktf' && inputs.language == 'go') || (inputs.platform == 'cdk' && inputs.language == 'go') }}
+      if: ${{ inputs.language == 'go' }}
       uses: actions/cache@v4
       with:
         path: |
           ~/go/pkg/mod
           ~/.cache/go-build
-          ${{ github.workspace }}/.cache/go-build
-          ${{ github.workspace }}/.cache/go-mod
-        key: ${{ runner.os }}-go-${{ inputs.platform }}-${{ hashFiles('go.sum', 'lib/go.sum', '**/go.sum') }}
+        key: go-mod-cache-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
         restore-keys: |
-          ${{ runner.os }}-go-${{ inputs.platform }}-
-          ${{ runner.os }}-go-
-
-    - name: Cache CDKTF .gen (Go)
-      if: ${{ (inputs.platform == 'cdktf' && inputs.language == 'go') || (inputs.platform == 'cdk' && inputs.language == 'go') }}
-      uses: actions/cache@v4
+          go-mod-cache-${{ runner.os }}-
+    # Node (only if needed)
+    - name: Setup Node.js
+      if: ${{ inputs.language == 'ts' || inputs.language == 'js' || inputs.platform == 'cdk' || inputs.platform == 'cdktf' }}
+      uses: actions/setup-node@v4
       with:
-        path: .gen
-        key: ${{ runner.os }}-cdktf-gen-${{ hashFiles('cdktf.json', 'package-lock.json', 'package.json') }}
-        restore-keys: |
-          ${{ runner.os }}-cdktf-gen-
+        node-version: ${{ inputs.node-version }}
+        cache: 'npm'
 
-    - name: Setup Java 17
-      if: inputs.language == 'java' || inputs.platform == ''
+    # Python (only if used)
+    - name: Setup Python
+      if: ${{ inputs.language == 'py' || (inputs.platform == 'pulumi' && inputs.language == 'py') || inputs.platform == 'cfn' }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    # Go
+    - name: Setup Go
+      if: ${{ (inputs.platform == 'cdktf' || inputs.platform == 'cdk') && inputs.language == 'go' }}
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23.12'
+
+    # Java
+    - name: Setup Java
+      if: ${{ inputs.language == 'java' }}
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '17'
 
-    - name: Cache Gradle Wrapper
-      if: inputs.language == 'java' || inputs.platform == ''
-      uses: actions/cache@v4
-      with:
-        path: ~/.gradle/wrapper/dists
-        key: gradle-wrapper-${{ hashFiles('**/gradle-wrapper.properties') }}
-        restore-keys: gradle-wrapper-
-
-    - name: Setup Gradle
-      if: ${{ inputs.language == 'java' || inputs.platform == '' }}
-      uses: gradle/actions/setup-gradle@v4
-      with:
-        gradle-home-cache-cleanup: true
-
+    # Terraform
     - name: Setup Terraform
-      if: ${{ inputs.platform == 'cdktf' || inputs.platform == 'tf' || inputs.platform == '' }}
+      if: ${{ inputs.platform == 'cdktf' || inputs.platform == 'tf' }}
       uses: hashicorp/setup-terraform@v3
       with:
         terraform_version: ${{ inputs.terraform-version }}
 
-    - name: Install Pulumi CLI
-      if: ${{ inputs.platform == 'pulumi' || inputs.platform == '' }}
+    # Pulumi
+    - name: Setup Pulumi
+      if: ${{ inputs.platform == 'pulumi' }}
       uses: pulumi/actions@v5
       with:
         pulumi-version: ${{ inputs.pulumi-version }}
 
-    - name: Cache Python virtual environment
-      uses: actions/cache@v4
-      with:
-        path: .venv
-        key: ${{ runner.os }}-python-${{ hashFiles('Pipfile.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-python-
-
-    - name: Setup environment using script
+    # Execute script (setup.sh handles dependency installation)
+    - name: Setup dependencies
       shell: bash
       run: ./scripts/setup.sh
       env:
-        NODE_VERSION: ${{ inputs.node-version }}
-        TERRAFORM_VERSION: ${{ inputs.terraform-version }}
-        PULUMI_VERSION: ${{ inputs.pulumi-version }}
-        DOWNLOAD_ARTIFACTS: ${{ inputs.download-artifacts }}
-        UPLOAD_ARTIFACTS: ${{ inputs.upload-artifacts }}
         PLATFORM: ${{ inputs.platform }}
         LANGUAGE: ${{ inputs.language }}
-        # Go environment variables for consistent caching
-        GOCACHE: ${{ github.workspace }}/.cache/go-build
-        GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
-        GOPROXY: https://proxy.golang.org,direct
-        GOSUMDB: sum.golang.org
-
-    - name: Upload build artifacts
-      if: inputs.upload-artifacts == 'true'
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-artifacts
-        include-hidden-files: true
-        path: |
-          .gen/
-          bin/
-          lib/
-          tests/
-          src/
-          package*.json
-          Pipfile
-          Pipfile.lock
-          tsconfig.json
-          cdk.json
-          metadata.json
-          lambda/
-          build.gradle
-          settings.gradle
-          gradle.properties
-          gradle/
-          gradlew
-          gradlew.bat
-          config/
-          .gradle/
-          build/
-          go.mod
-          go.sum
-          tap.go
