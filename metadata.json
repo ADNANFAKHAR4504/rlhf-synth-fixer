@@ -1,0 +1,14 @@
+{
+  "platform": "pulumi",
+  "language": "java",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "5012",
+  "team": "stf",
+  "startedAt": "2025-11-05T09:07:52.891Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "aws_services": "s3, lambda, neptune, dynamo db, aws glue, aurora, eventbridge"
+}
