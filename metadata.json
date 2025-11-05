@@ -1,0 +1,21 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000042",
+  "team": "2",
+  "startedAt": "2025-11-05T10:04:12.808Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3 Bucket",
+    "CloudFormation",
+    "Lambda",
+    "EventBridge",
+    "CloudWatch LogGroup",
+    "VPC"
+  ]
+}
