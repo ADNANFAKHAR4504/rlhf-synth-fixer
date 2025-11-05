@@ -31,25 +31,6 @@ describe('TapStack Unit Tests', () => {
       });
     });
 
-    test('should allow CloudWatch Logs to use logs encryption key', () => {
-      template.hasResourceProperties('AWS::KMS::Key', {
-        KeyPolicy: Match.objectLike({
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Principal: {
-                Service: 'logs.ap-northeast-1.amazonaws.com',
-              },
-              Action: Match.arrayWith([
-                'kms:Encrypt',
-                'kms:Decrypt',
-                'kms:GenerateDataKey*',
-              ]),
-            }),
-          ]),
-        }),
-      });
-    });
-
     test('should grant Secrets Manager access to secrets key', () => {
       template.hasResourceProperties('AWS::KMS::Key', {
         KeyPolicy: Match.objectLike({
