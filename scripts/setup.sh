@@ -52,11 +52,29 @@ if [ -f "Pipfile" ]; then
     pip install pipenv
   fi
 
+  # Rebuild venv if cache mismatched interpreter version
+  if [ -d ".venv" ] && [ ! -f ".venv/bin/python" ]; then
+    echo "⚠️ Cached venv invalid — removing and recreating..."
+    rm -rf .venv
+  fi
+
   if [ -d ".venv" ]; then
-    echo "✅ .venv exists — cache restored — skipping pipenv install"
+    echo "✅ .venv exists — using cached environment"
+    pipenv sync --dev
   else
-    echo "📦 Creating Python venv and installing dependencies..."
+    echo "📦 Creating new pipenv environment..."
     pipenv install --dev
+  fi
+  if [ "$PLATFORM" = "cdktf" ] && [ "$LANGUAGE" = "py" ]; then
+    echo "📦 Ensuring CDKTF Python libraries are available..."
+
+    # Check if cdktf is installed in the venv
+    if ! pipenv run python -c "import cdktf" 2>/dev/null; then
+      echo "📦 Installing CDKTF Python SDK into existing venv..."
+      pipenv install "cdktf~=0.21.0" "constructs>=10.0.0,<11.0.0"
+    else
+      echo "✅ CDKTF Python library already installed in venv"
+    fi
   fi
 
   echo "$(pwd)/.venv/bin" >> "$GITHUB_PATH"
