@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "medium",
+  "team": "synth",
+  "startedAt": "2025-10-30T13:44:57+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Web Application Deployment",
+    "Security Configuration as Code"
+  ],
+  "po_id": "bba7c",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ELB",
+    "ECS",
+    "CloudWatch",
+    "IAM",
+    "ApplicationAutoScaling",
+    "ECR"
+  ],
+  "region": "ap-southeast-1",
+  "turn_type": "single",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

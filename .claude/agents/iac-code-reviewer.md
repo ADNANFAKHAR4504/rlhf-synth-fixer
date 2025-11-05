@@ -31,7 +31,21 @@ bash .claude/scripts/verify-worktree.sh || exit 1
 
 **If verification fails**: STOP immediately, report BLOCKED.
 
-**Before Starting**: Review `.claude/lessons_learnt.md` for common issues and quality patterns.
+**Before Starting**:
+- Review `.claude/docs/references/pre-submission-checklist.md` for **MANDATORY** requirements before PR
+- Review `.claude/lessons_learnt.md` for common issues and quality patterns
+- Review `.claude/docs/references/cicd-file-restrictions.md` for CRITICAL file location requirements that fail CI/CD
+
+**PRE-SUBMISSION REQUIREMENTS** (All must pass):
+1. ✅ Build successful
+2. ✅ No lint issues  
+3. ✅ No synth issues
+4. ✅ Deployment successful
+5. ✅ **Test coverage: 100%** (statements, functions, lines)
+6. ✅ No files outside allowed directories
+7. ✅ Training quality ≥ 8
+
+**Reference**: `.claude/docs/references/pre-submission-checklist.md`
 
 ### Phase 1: Prerequisites Check
 
@@ -72,20 +86,48 @@ If FAIL:
 
 **CRITICAL** - Catches major training data quality issues.
 
+**IMPORTANT FILE CONTEXT**:
+- `lib/MODEL_RESPONSE.md` = Initial model output (MAY contain errors - that's the point!)
+- `lib/IDEAL_RESPONSE.md` = Final corrected code (THIS is what you validate!)
+- `lib/MODEL_FAILURES.md` = List of what WAS FIXED (past tense documentation)
+
 **Validation**: Run Checkpoint E: Platform Code Compliance
-- See `docs/references/validation-checkpoints.md` for platform detection patterns
-- See `docs/references/shared-validations.md` for detailed platform requirements
+```bash
+# Run the validation script
+bash ./.claude/scripts/validate-code-platform.sh
+
+# This script checks lib/IDEAL_RESPONSE.md against metadata.json
+# Exit code 0 = pass, exit code 1 = fail
+```
+
+**What the script validates**:
+1. Platform in IDEAL_RESPONSE.md matches metadata.json platform (cdk/pulumi/terraform/etc)
+2. Language in IDEAL_RESPONSE.md matches metadata.json language (java/python/typescript/etc)
+3. Build system matches project structure (build.gradle = Gradle, pom.xml = Maven)
 
 **Mismatch Detection**:
 ```
-If platform OR language mismatch:
+If script exits with code 1 (validation failed):
 - CRITICAL QUALITY FAILURE
-- Report: "❌ CRITICAL: Platform/Language Mismatch
+- Read the script output to see what mismatched
+- Report: "❌ CRITICAL: Platform/Language Mismatch in IDEAL_RESPONSE.md
   Expected: {platform}-{language} from metadata.json
   Found: {actual_platform}-{actual_language} in IDEAL_RESPONSE.md"
 - Training quality penalty: -5 (minimum)
 - If score < 8 after penalty: Report BLOCKED, recommend regeneration
+
+If script exits with code 0 (validation passed):
+- ✅ IDEAL_RESPONSE.md matches requirements
+- If MODEL_FAILURES.md shows build system or architecture fixes:
+  * This is GOOD - model made mistakes that were corrected
+  * Training quality bonus: +1 to +2 (significant learning value)
+  * Document in MODEL_FAILURES analysis
 ```
+
+**COMMON MISTAKE TO AVOID**:
+- DO NOT read MODEL_RESPONSE.md and think those errors exist in IDEAL_RESPONSE.md
+- MODEL_FAILURES.md describes "what was fixed" (past), not "what is wrong" (present)
+- Only validate IDEAL_RESPONSE.md for current compliance
 
 #### Step 5: AWS Services Completeness
 
@@ -159,7 +201,32 @@ If < 80% resources have suffix:
 
 #### Step 8: Add Enhanced Fields to metadata.json
 
-**Extract AWS Services from IDEAL_RESPONSE.md**:
+**Determine Task Type**:
+
+```bash
+# Check if this is a CI/CD Pipeline task
+PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
+SUBJECT_LABELS=$(jq -r '.subject_labels[]? // ""' metadata.json)
+
+if [ "$PLATFORM" = "cicd" ] || echo "$SUBJECT_LABELS" | grep -q "CI/CD Pipeline"; then
+  IS_CICD_TASK=true
+else
+  IS_CICD_TASK=false
+fi
+```
+
+**For CI/CD Pipeline Tasks (platform: "cicd" OR subject_label: "CI/CD Pipeline")**:
+
+```bash
+# CI/CD Pipeline tasks only need training_quality (no aws_services required)
+jq --arg tq "$TRAINING_QUALITY" \
+  '.training_quality = ($tq | tonumber)' \
+  metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json
+```
+
+Report: "✅ metadata.json enhanced with training_quality: {SCORE}/10 (CI/CD Pipeline task - aws_services not required)"
+
+**For Standard IaC Tasks**:
 
 Scan IDEAL_RESPONSE.md and create a JSON array of unique AWS services mentioned. Examples:
 - RDS → "RDS"
@@ -186,9 +253,34 @@ jq --arg tq "$TRAINING_QUALITY" --argjson services "$AWS_SERVICES_ARRAY" \
 jq -e '.aws_services | type == "array"' metadata.json || echo "❌ ERROR: aws_services must be an array"
 ```
 
-Report: "✅ metadata.json enhanced with training_quality: {SCORE}/10"
+Report: "✅ metadata.json enhanced with training_quality: {SCORE}/10 and aws_services array"
 
-#### Step 9: Final Quality Gate
+#### Step 9: File Location Validation
+
+**CRITICAL CI/CD CHECK**: Verify all files are in allowed locations
+
+```bash
+# Check changed files against allowed locations
+git diff --name-only origin/main...HEAD
+
+# Verify no violations exist
+# See .claude/docs/references/cicd-file-restrictions.md for rules
+```
+
+**Common Violations**:
+- ❌ `README.md` at root → Must be `lib/README.md`
+- ❌ `PROMPT.md` at root → Must be `lib/PROMPT.md`
+- ❌ `IDEAL_RESPONSE.md` at root → Must be `lib/IDEAL_RESPONSE.md`
+- ❌ `MODEL_FAILURES.md` at root → Must be `lib/MODEL_FAILURES.md`
+- ❌ Files in `.github/`, `scripts/`, `docs/`, etc. → Not allowed
+
+**If violations found**:
+- Training quality penalty: -3 points (Critical issue)
+- Report: "❌ BLOCKED: Files in wrong locations will FAIL CI/CD"
+- List violating files and correct locations
+- Do NOT proceed to PR creation
+
+#### Step 10: Final Quality Gate
 
 **Before reporting "Ready" status**:
 
@@ -203,6 +295,7 @@ FINAL CHECKLIST:
 ☐ AWS services implemented
 ☐ No Retain policies
 ☐ Tests exist and pass
+☐ All files in allowed locations (Step 9)
 
 If ALL checked:
 - Report: "✅ READY for PR creation"
@@ -263,19 +356,54 @@ If ANY unchecked:
   - **Skip detailed comparison if files are identical** (check hashes first: `md5sum`)
   - Only report actual differences
 - Calculate compliance percentage
-- Compare lib/IDEAL_RESPONSE.md and latest MODEL_RESPONSE file
-  - **Focus on infrastructure differences**: resources, configuration, security
+- **FOR SCORING ONLY**: Compare lib/IDEAL_RESPONSE.md and latest MODEL_RESPONSE file
+  - **PURPOSE**: Understand what the model got wrong and what was fixed (for training quality score)
+  - **NOT FOR**: Finding current errors (those are already fixed in IDEAL_RESPONSE.md!)
+  - **Focus on infrastructure differences**: resources, configuration, security, architecture
   - Avoid listing trivial formatting/comment differences
+  - Document significant fixes for MODEL_FAILURES analysis and training quality bonus
 
 ### Phase 3: Test Coverage
 
-**Cost Optimization**: Focus on gaps rather than comprehensive listings.
+**CRITICAL REQUIREMENT: 100% Coverage**
 
+**Unit Test Coverage Validation**:
+```bash
+# Extract coverage metrics
+STMT_COV=$(jq -r '.total.statements.pct' coverage/coverage-summary.json)
+FUNC_COV=$(jq -r '.total.functions.pct' coverage/coverage-summary.json)
+LINE_COV=$(jq -r '.total.lines.pct' coverage/coverage-summary.json)
+
+# Validate 100% requirement
+if [ "$STMT_COV" != "100" ] || [ "$FUNC_COV" != "100" ] || [ "$LINE_COV" != "100" ]; then
+  echo "❌ Coverage below 100%"
+  echo "Statements: ${STMT_COV}%"
+  echo "Functions: ${FUNC_COV}%"  
+  echo "Lines: ${LINE_COV}%"
+  exit 1
+fi
+```
+
+**Pass Criteria**:
+- Statement coverage: **100%** (not 99%, not 99.9%, exactly 100%)
+- Function coverage: **100%**
+- Line coverage: **100%**
+- All unit tests passing
+
+**If coverage < 100%**:
+- BLOCK PR creation
+- Report specific coverage gaps
+- Training quality penalty: -3 points
+- Cannot proceed to Phase 4
+
+**Integration Test Coverage**:
 - Analyze integration test coverage (must use cfn-outputs, no mocks)
 - Generate coverage report focusing on gaps: Requirement | Covered? | Test | Notes
   - **Prioritize uncovered resources** - list missing first
   - Briefly summarize what's covered
 - Provide Ready/Pending recommendation
+
+**Reference**: `.claude/docs/references/pre-submission-checklist.md` Section 5
 
 ### Phase 4: Final Training Quality Gate
 
@@ -308,8 +436,19 @@ If training_quality < 8:
 - All phases passed
 - Training quality ≥ 8
 - All metadata fields validated
-- Tests passing
+- **Unit test coverage = 100%** (statements, functions, lines)
+- Integration tests passing
+- All files in allowed directories
 - Requirements met
+
+**Pre-Submission Validation**:
+Before reporting "Ready", run final validation:
+```bash
+# Recommended: Run pre-submission check script
+bash .claude/scripts/pre-submission-check.sh
+```
+
+This validates all 6 critical requirements. If any fail, report BLOCKED and list specific issues.
 
 ## Focus Areas
 
