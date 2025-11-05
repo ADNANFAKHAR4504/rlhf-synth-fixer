@@ -25,6 +25,6 @@ For the file organization, structure it like this:
 - lib/main.tf for all infrastructure resources (create everything new - no existing resource lookups)
 - lib/lambda_function.py for the snapshot management Lambda handler code
 
-Remember to use the environmentSuffix variable and add random suffixes to ALL resource names following the pattern: resourcename-${var.environmentSuffix}-${random_string.suffix.result}. This ensures global uniqueness for resources like S3 buckets and RDS instances. Only use data.aws_caller_identity.current for getting the AWS account ID - create all other resources fresh.
+Remember to use the environmentSuffix variable and add random suffixes to ALL resource names following the pattern: resourcename-${var.environmentSuffix}. This ensures global uniqueness for resources like S3 buckets and RDS instances. Only use data.aws_caller_identity.current for getting the AWS account ID - create all other resources fresh.
 
 The goal is a production-ready disaster recovery solution that can automatically recover from a complete regional failure within 45 minutes using the latest snapshot. Make sure monitoring is comprehensive so we'll know immediately if something's wrong with our backup strategy.
