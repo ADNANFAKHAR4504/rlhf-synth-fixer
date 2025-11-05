@@ -362,10 +362,34 @@ describe('TapStack unit', () => {
   });
 
   test('creates S3 replication configuration in source region', () => {
-    const buckets = sourceTemplate.findResources('AWS::S3::Bucket');
-    const bucket = Object.values(buckets)[0] as any;
-    expect(bucket.Properties.ReplicationConfiguration).toBeDefined();
-    expect(bucket.Properties.ReplicationConfiguration.Rules[0].Status).toBe('Enabled');
+    const customResources = sourceTemplate.findResources('AWS::CloudFormation::CustomResource');
+    const replicationResource = Object.values(customResources).find((cr: any) =>
+      JSON.stringify(cr).includes('replication') || JSON.stringify(cr).includes('Replication')
+    );
+    expect(replicationResource).toBeDefined();
+
+    const functions = sourceTemplate.findResources('AWS::Lambda::Function');
+    const replicationLambda = Object.values(functions).find((fn: any) => {
+      const fnStr = JSON.stringify(fn);
+      return (
+        fnStr.includes('replication') ||
+        fnStr.includes('Replication') ||
+        (fn.Properties?.Code?.ZipFile && fn.Properties.Code.ZipFile.includes('putBucketReplication'))
+      );
+    });
+    expect(replicationLambda).toBeDefined();
+
+    const roles = sourceTemplate.findResources('AWS::IAM::Role');
+    const replicationRole = Object.values(roles).find((role: any) => {
+      const roleStr = JSON.stringify(role);
+      return (
+        roleStr.includes('replication') ||
+        roleStr.includes('Replication') ||
+        (role.Properties?.AssumeRolePolicyDocument &&
+          JSON.stringify(role.Properties.AssumeRolePolicyDocument).includes('s3.amazonaws.com'))
+      );
+    });
+    expect(replicationRole).toBeDefined();
   });
 
   test('creates VPC peering in target region', () => {

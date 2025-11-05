@@ -61,6 +61,7 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as sns from 'aws-cdk-lib/aws-sns';
+import * as custom_resources from 'aws-cdk-lib/custom-resources';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -185,28 +186,131 @@ export class TapStack extends cdk.Stack {
         })
       );
 
-      const cfnBucket = logsBucket.node.defaultChild as s3.CfnBucket;
-      cfnBucket.replicationConfiguration = {
-        role: replicationRole.roleArn,
-        rules: [
+      const replicationConfigLambda = new lambda.Function(
+        this,
+        `tap-s3-replication-config-${environmentSuffix}`,
+        {
+          runtime: lambda.Runtime.NODEJS_18_X,
+          architecture: lambda.Architecture.ARM_64,
+          handler: 'index.handler',
+          code: lambda.Code.fromInline(`
+const AWS = require('aws-sdk');
+const s3 = new AWS.S3({ region: '${this.region}' });
+const s3Target = new AWS.S3({ region: '${targetRegion}' });
+
+exports.handler = async (event) => {
+  const { RequestType, ResourceProperties } = event;
+  const { SourceBucket, TargetBucket, ReplicationRoleArn, TargetRegion, AccountId } = ResourceProperties;
+  
+  if (RequestType === 'Delete') {
+    return { PhysicalResourceId: SourceBucket };
+  }
+  
+  try {
+    if (RequestType === 'Create' || RequestType === 'Update') {
+      let bucketExists = false;
+      let retries = 0;
+      const maxRetries = 30;
+      
+      while (!bucketExists && retries < maxRetries) {
+        try {
+          await s3Target.headBucket({ Bucket: TargetBucket }).promise();
+          bucketExists = true;
+        } catch (err) {
+          if (err.code === 'NotFound' || err.statusCode === 403 || err.statusCode === 404) {
+            await new Promise(resolve => setTimeout(resolve, 10000));
+            retries++;
+          } else {
+            throw err;
+          }
+        }
+      }
+      
+      if (!bucketExists) {
+        throw new Error('Target bucket does not exist after waiting');
+      }
+      
+      const replicationConfig = {
+        Role: ReplicationRoleArn,
+        Rules: [
           {
-            id: 'ReplicateToTargetRegion',
-            status: 'Enabled',
-            priority: 1,
-            filter: {},
-            destination: {
-              bucket: targetBucketArn,
-              storageClass: 'STANDARD_IA',
-              encryptionConfiguration: {
-                replicaKmsKeyId: `arn:aws:kms:${targetRegion}:${this.account}:alias/aws/s3`,
+            ID: 'ReplicateToTargetRegion',
+            Status: 'Enabled',
+            Priority: 1,
+            Filter: {},
+            Destination: {
+              Bucket: \`arn:aws:s3:::\${TargetBucket}\`,
+              StorageClass: 'STANDARD_IA',
+              EncryptionConfiguration: {
+                ReplicaKmsKeyId: \`arn:aws:kms:\${TargetRegion}:\${AccountId}:alias/aws/s3\`,
               },
             },
-            deleteMarkerReplication: {
-              status: 'Enabled',
+            DeleteMarkerReplication: {
+              Status: 'Enabled',
             },
           },
         ],
       };
+      
+      await s3.putBucketReplication({
+        Bucket: SourceBucket,
+        ReplicationConfiguration: replicationConfig,
+      }).promise();
+    }
+    
+    return {
+      PhysicalResourceId: SourceBucket,
+      Data: { Status: 'Success' },
+    };
+  } catch (error) {
+    console.error('Error configuring replication:', error);
+    throw error;
+  }
+};
+          `),
+          timeout: cdk.Duration.minutes(5),
+        }
+      );
+
+      replicationConfigLambda.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: [
+            's3:PutBucketReplication',
+            's3:GetBucketReplication',
+            's3:DeleteBucketReplication',
+          ],
+          resources: [logsBucket.bucketArn],
+        })
+      );
+
+      replicationConfigLambda.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['s3:HeadBucket', 's3:ListBucket'],
+          resources: [
+            `arn:aws:s3:::${targetBucketName}`,
+            `arn:aws:s3:::${targetBucketName}/*`,
+          ],
+        })
+      );
+
+      const replicationProvider = new custom_resources.Provider(
+        this,
+        `tap-s3-replication-provider-${environmentSuffix}`,
+        {
+          onEventHandler: replicationConfigLambda,
+        }
+      );
+
+      new cdk.CustomResource(this, `tap-s3-replication-resource-${environmentSuffix}`, {
+        serviceToken: replicationProvider.serviceToken,
+        properties: {
+          SourceBucket: logsBucket.bucketName,
+          TargetBucket: targetBucketName,
+          ReplicationRoleArn: replicationRole.roleArn,
+          TargetRegion: targetRegion,
+          AccountId: this.account,
+        },
+      });
     }
 
     let transactionsTable: dynamodb.ITable;
