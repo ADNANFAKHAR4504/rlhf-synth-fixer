@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000069",
+  "team": "1",
+  "startedAt": "2025-10-22T13:16:31.962Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "RDS",
+    "S3",
+    "CloudFront",
+    "Route53",
+    "ApplicationLoadBalancer",
+    "CloudWatch",
+    "SNS",
+    "DynamoDB",
+    "KMS"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raghav-turing",
+  "dockerS3Location": ""
+}

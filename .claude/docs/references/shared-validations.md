@@ -2,6 +2,23 @@
 
 This document contains common validation rules and requirements used across all agents. Reference this instead of duplicating validation logic.
 
+## CI/CD File Location Requirements
+
+**CRITICAL**: The CI/CD pipeline enforces strict file location restrictions. This is the #1 reason synthetic tasks fail.
+
+**See `.claude/docs/references/cicd-file-restrictions.md` for complete rules.**
+
+**Quick Reference**:
+- ✅ All infrastructure code → `lib/`
+- ✅ All tests → `test/` or `tests/`
+- ✅ Entry points → `bin/`
+- ✅ Documentation (PROMPT.md, IDEAL_RESPONSE.md, etc.) → `lib/`
+- ✅ Lambda functions → `lib/lambda/`
+- ❌ NO files at root except: `metadata.json`, `cdk.json`, `cdktf.json`, `Pulumi.yaml`, `tap.py`, `tap.go`, `package.json`, `package-lock.json`
+- ❌ NO files in: `.github/`, `scripts/`, `docs/`, `.claude/`, `templates/`, etc.
+
+**Violation = CI/CD pipeline fails immediately at check-project-files.sh**
+
 ## Metadata Required Fields
 
 All tasks must have `metadata.json` with these fields:
@@ -158,4 +175,4 @@ git branch --show-current  # Must match: synth-{task_id}
 - Verify location before ALL file operations
 
 **Files in worktree**: metadata.json, lib/, test/, cfn-outputs/
-**Files in main repo only**: tasks.csv (not accessible from worktree)
+**Files in main repo only**: .claude/tasks.csv (not accessible from worktree)

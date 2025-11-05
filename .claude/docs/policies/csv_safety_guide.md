@@ -2,16 +2,16 @@
 
 ## Overview
 
-The `tasks.csv` file is a critical data file that contains all task information for the IaC test automation system. **Loss or corruption of this file means loss of all task tracking data.**
+The `.claude/tasks.csv` file is a critical data file that contains all task information for the IaC test automation system. **Loss or corruption of this file means loss of all task tracking data.**
 
 ## Critical Rules for CSV Operations
 
 ### Rule 1: ALWAYS Create Backups
 
-Before ANY modification to `tasks.csv`:
+Before ANY modification to `.claude/tasks.csv`:
 ```python
 import shutil
-shutil.copy2('tasks.csv', 'tasks.csv.backup')
+shutil.copy2('.claude/tasks.csv', '.claude/.claude/tasks.csv.backup')
 ```
 
 ### Rule 2: ALWAYS Read ALL Rows
@@ -19,7 +19,7 @@ shutil.copy2('tasks.csv', 'tasks.csv.backup')
 **WRONG** ❌ (will lose data):
 ```python
 # This only processes matching rows and loses others!
-with open('tasks.csv', 'r') as f:
+with open('.claude/tasks.csv', 'r') as f:
     reader = csv.DictReader(f)
     for row in reader:
         if row['task_id'] == target_id:
@@ -30,7 +30,7 @@ with open('tasks.csv', 'r') as f:
 **CORRECT** ✅:
 ```python
 rows = []  # Collect ALL rows
-with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
+with open('.claude/tasks.csv', 'r', newline='', encoding='utf-8') as f:
     reader = csv.DictReader(f)
     fieldnames = reader.fieldnames
     for row in reader:
@@ -39,7 +39,7 @@ with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
         rows.append(row)  # Append EVERY row
 
 # Write ALL rows back
-with open('tasks.csv', 'w', newline='', encoding='utf-8') as f:
+with open('.claude/tasks.csv', 'w', newline='', encoding='utf-8') as f:
     writer = csv.DictWriter(f, fieldnames=fieldnames)
     writer.writeheader()
     writer.writerows(rows)  # Write ALL rows
@@ -52,14 +52,14 @@ Before and after writing:
 # Before write
 if len(rows) != original_count or not fieldnames:
     print("ERROR: Validation failed")
-    shutil.copy2('tasks.csv.backup', 'tasks.csv')
+    shutil.copy2('.claude/.claude/tasks.csv.backup', '.claude/tasks.csv')
     sys.exit(1)
 
 # After write
-verify_count = sum(1 for _ in csv.DictReader(open('tasks.csv', 'r')))
+verify_count = sum(1 for _ in csv.DictReader(open('.claude/tasks.csv', 'r')))
 if verify_count != original_count:
     print("ERROR: Write failed")
-    shutil.copy2('tasks.csv.backup', 'tasks.csv')
+    shutil.copy2('.claude/.claude/tasks.csv.backup', '.claude/tasks.csv')
     sys.exit(1)
 ```
 
@@ -70,8 +70,8 @@ try:
     # ... CSV operations ...
 except Exception as e:
     print(f"ERROR: {e}")
-    if os.path.exists('tasks.csv.backup'):
-        shutil.copy2('tasks.csv.backup', 'tasks.csv')
+    if os.path.exists('.claude/.claude/tasks.csv.backup'):
+        shutil.copy2('.claude/.claude/tasks.csv.backup', '.claude/tasks.csv')
     sys.exit(1)
 ```
 
@@ -91,12 +91,12 @@ new_status = "new_status_value"
 
 try:
     # STEP 1: BACKUP
-    shutil.copy2('tasks.csv', 'tasks.csv.backup')
+    shutil.copy2('.claude/tasks.csv', '.claude/.claude/tasks.csv.backup')
     
     # STEP 2: READ ALL ROWS
     rows = []
     original_count = 0
-    with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
+    with open('.claude/tasks.csv', 'r', newline='', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         fieldnames = reader.fieldnames
         for row in reader:
@@ -110,24 +110,24 @@ try:
     if len(rows) != original_count:
         print(f"❌ ERROR: Row count mismatch. Original: {original_count}, Current: {len(rows)}")
         print("Restoring from backup...")
-        shutil.copy2('tasks.csv.backup', 'tasks.csv')
+        shutil.copy2('.claude/.claude/tasks.csv.backup', '.claude/tasks.csv')
         sys.exit(1)
     
     if not fieldnames or len(fieldnames) == 0:
         print("❌ ERROR: No fieldnames found in CSV")
         print("Restoring from backup...")
-        shutil.copy2('tasks.csv.backup', 'tasks.csv')
+        shutil.copy2('.claude/.claude/tasks.csv.backup', '.claude/tasks.csv')
         sys.exit(1)
     
     # STEP 4: WRITE ALL ROWS
-    with open('tasks.csv', 'w', newline='', encoding='utf-8') as f:
+    with open('.claude/tasks.csv', 'w', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)  # Write ALL rows
     
     # STEP 5: VERIFY WRITE
     verify_count = 0
-    with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
+    with open('.claude/tasks.csv', 'r', newline='', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         for row in reader:
             verify_count += 1
@@ -135,7 +135,7 @@ try:
     if verify_count != original_count:
         print(f"❌ ERROR: Write verification failed. Expected {original_count} rows, found {verify_count}")
         print("Restoring from backup...")
-        shutil.copy2('tasks.csv.backup', 'tasks.csv')
+        shutil.copy2('.claude/.claude/tasks.csv.backup', '.claude/tasks.csv')
         sys.exit(1)
     
     print(f"✅ Successfully updated ({verify_count} total rows preserved)")
@@ -143,8 +143,8 @@ try:
 except Exception as e:
     print(f"❌ ERROR: {e}")
     print("Restoring from backup...")
-    if os.path.exists('tasks.csv.backup'):
-        shutil.copy2('tasks.csv.backup', 'tasks.csv')
+    if os.path.exists('.claude/.claude/tasks.csv.backup'):
+        shutil.copy2('.claude/.claude/tasks.csv.backup', '.claude/tasks.csv')
     sys.exit(1)
 ```
 
@@ -169,7 +169,7 @@ python3 .claude/scripts/validate-tasks-csv.py --restore
 
 1. **Check for automatic backup** (created by safe update operations):
    ```bash
-   ls -la tasks.csv.backup
+   ls -la .claude/.claude/tasks.csv.backup
    ```
 
 2. **Validate the backup**:
@@ -184,36 +184,36 @@ python3 .claude/scripts/validate-tasks-csv.py --restore
    
    Or manually:
    ```bash
-   cp tasks.csv.backup tasks.csv
+   cp .claude/.claude/tasks.csv.backup .claude/tasks.csv
    ```
 
 4. **If no backup exists, use git**:
    ```bash
    # Check git status
-   git status tasks.csv
+   git status .claude/tasks.csv
    
    # Restore from last commit
-   git checkout tasks.csv
+   git checkout .claude/tasks.csv
    
    # Or restore from specific commit
-   git log -- tasks.csv
-   git checkout <commit-hash> -- tasks.csv
+   git log -- .claude/tasks.csv
+   git checkout <commit-hash> -- .claude/tasks.csv
    ```
 
 ### If Backup is Also Corrupted
 
 1. Check for `.corrupted` backup created during restore:
    ```bash
-   ls -la tasks.csv.corrupted
+   ls -la .claude/tasks.csv.corrupted
    ```
 
 2. Use git history:
    ```bash
    # Find when file was last good
-   git log --oneline -- tasks.csv
+   git log --oneline -- .claude/tasks.csv
    
    # Show file at specific commit
-   git show <commit-hash>:tasks.csv > tasks.csv.recovered
+   git show <commit-hash>:.claude/tasks.csv > .claude/tasks.csv.recovered
    
    # Validate recovered file
    python3 .claude/scripts/validate-tasks-csv.py
@@ -232,13 +232,13 @@ for row in reader:
 ### ❌ Pitfall 2: Not Using newline='' Parameter
 ```python
 # WRONG - can cause line ending issues
-with open('tasks.csv', 'r') as f:  # Missing newline=''
+with open('.claude/tasks.csv', 'r') as f:  # Missing newline=''
 ```
 
 ### ❌ Pitfall 3: No Validation
 ```python
 # WRONG - no check if write succeeded
-with open('tasks.csv', 'w') as f:
+with open('.claude/tasks.csv', 'w') as f:
     writer.writerows(rows)
 # What if this failed?
 ```
@@ -246,7 +246,7 @@ with open('tasks.csv', 'w') as f:
 ### ❌ Pitfall 4: No Error Handling
 ```python
 # WRONG - if anything fails, CSV is left corrupted
-with open('tasks.csv', 'w') as f:
+with open('.claude/tasks.csv', 'w') as f:
     writer.writerows(rows)  # If this crashes, file is lost!
 ```
 
@@ -256,7 +256,7 @@ Before deploying any CSV modification code:
 
 1. **Create a test CSV** with known data:
    ```bash
-   cp tasks.csv tasks.csv.test
+   cp .claude/tasks.csv .claude/tasks.csv.test
    ```
 
 2. **Run your modification code** on the test file
@@ -264,13 +264,13 @@ Before deploying any CSV modification code:
 3. **Validate the results**:
    ```bash
    # Check row count
-   wc -l tasks.csv.test
+   wc -l .claude/tasks.csv.test
    
    # Validate structure
    python3 .claude/scripts/validate-tasks-csv.py
    
    # Compare with original
-   diff tasks.csv tasks.csv.test
+   diff .claude/tasks.csv .claude/tasks.csv.test
    ```
 
 4. **Test error scenarios**:
@@ -283,7 +283,7 @@ Before deploying any CSV modification code:
 
 Before ANY CSV modification:
 
-- [ ] Created backup with `shutil.copy2('tasks.csv', 'tasks.csv.backup')`
+- [ ] Created backup with `shutil.copy2('.claude/tasks.csv', '.claude/.claude/tasks.csv.backup')`
 - [ ] Reading ALL rows into memory with `rows.append(row)`
 - [ ] Validating row count matches before write
 - [ ] Validating fieldnames exist and are non-empty
