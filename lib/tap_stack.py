@@ -64,15 +64,14 @@ class TapStack(TerraformStack):
             default_tags=[default_tags],
         )
 
-        # Configure S3 Backend with encryption
-        # Note: Commented out for local testing due to access restrictions
-        # S3Backend(
-        #     self,
-        #     bucket=state_bucket,
-        #     key=f"{environment_suffix}/{construct_id}.tfstate",
-        #     region=state_bucket_region,
-        #     encrypt=True,
-        # )
+        # Configure S3 Backend with encryption for remote state management
+        S3Backend(
+            self,
+            bucket=state_bucket,
+            key=f"{environment_suffix}/{construct_id}.tfstate",
+            region=state_bucket_region,
+            encrypt=True,
+        )
 
         # DynamoDB table for product reviews
         reviews_table = DynamodbTable(
