@@ -25,5 +25,11 @@
     "SSM Parameter Store",
     "CloudWatch",
     "EventBridge"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-creator",
+  "dockerS3Location": ""
 }
