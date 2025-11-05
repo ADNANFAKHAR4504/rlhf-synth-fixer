@@ -588,3 +588,19 @@ class TestBackendConfiguration:
         assert backend["region"] == "us-east-1"
         assert "test" in backend["key"]
         assert backend["encrypt"] is True
+
+    def test_no_backend_when_bucket_empty(self):
+        """No S3 backend is configured when bucket is empty."""
+        app = App()
+        stack = TapStack(
+            app,
+            "TestNoBackend",
+            environment_suffix="test",
+            state_bucket="",
+            aws_region="ap-southeast-1"
+        )
+        synth = Testing.synth(stack)
+        terraform_config = json.loads(synth)["terraform"]
+
+        # Backend should not be configured
+        assert "backend" not in terraform_config or terraform_config["backend"] == {}

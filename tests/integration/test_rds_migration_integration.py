@@ -21,7 +21,28 @@ def stack_outputs() -> Dict[str, Any]:
         pytest.skip(f"Stack outputs file not found: {outputs_file}. Deploy infrastructure first.")
 
     with open(outputs_file, "r", encoding="utf-8") as f:
-        return json.load(f)
+        all_outputs = json.load(f)
+        
+        # Handle nested stack structure (CDKTF) or flat structure
+        # CDKTF outputs can be in format: 
+        # {"TapStack{suffix}": {"output_key": {"value": "..."}}} or 
+        # {"TapStack{suffix}": {"output_key": "value"}}
+        if all_outputs:
+            # Check if outputs are nested under a stack key
+            first_key = next(iter(all_outputs.keys())) if all_outputs else None
+            if first_key and first_key.startswith("TapStack") and isinstance(all_outputs[first_key], dict):
+                # Extract values from nested structure
+                flattened = {}
+                for key, val in all_outputs[first_key].items():
+                    # Handle both {"value": "..."} and direct value formats
+                    if isinstance(val, dict) and "value" in val:
+                        flattened[key] = val["value"]
+                    else:
+                        flattened[key] = val
+                return flattened
+        
+        # Return as-is if already flat
+        return all_outputs
 
 
 @pytest.fixture(scope="module")
