@@ -11,6 +11,26 @@
     "Environment Migration"
   ],
   "aws_services": [
-    "RDS"
-  ]
+    "VPC",
+    "EC2",
+    "RDS",
+    "ECS",
+    "ELB",
+    "Route53",
+    "CloudWatch",
+    "IAM",
+    "KMS",
+    "S3",
+    "SSM",
+    "SNS",
+    "WAF",
+    "Auto Scaling"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "jpoola-turing",
+  "dockerS3Location": ""
 }
