@@ -19,17 +19,18 @@ from pulumi_aws import s3  # example import for any AWS resource
 
 
 class TapStackArgs:
-  """
-  TapStackArgs defines the input arguments for the TapStack Pulumi component.
+    """
+    TapStackArgs defines the input arguments for the TapStack Pulumi component.
 
-  Args:
-    environment_suffix (Optional[str]): An optional suffix for identifying the deployment environment (e.g., 'dev', 'prod').
-    tags (Optional[dict]): Optional default tags to apply to resources.
-  """
+    Args:
+        environment_suffix (Optional[str]): An optional suffix for identifying
+        the deployment environment (e.g., 'dev', 'prod').
+        tags (Optional[dict]): Optional default tags to apply to resources.
+    """
 
-  def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None):
-    self.environment_suffix = environment_suffix or 'dev'
-    self.tags = tags
+    def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None):
+        self.environment_suffix = environment_suffix or 'dev'
+        self.tags = tags
 
 
 class TapStack(pulumi.ComponentResource):

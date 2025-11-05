@@ -61,6 +61,7 @@ class PaymentInfrastructure(ComponentResource):
         
         self.args = args
         self.environment_suffix = args.environment
+        self.environment_suffix_lower = args.environment.lower()
         
         # Common tags for all resources
         self.common_tags = {
@@ -274,7 +275,7 @@ class PaymentInfrastructure(ComponentResource):
         """Create RDS Aurora PostgreSQL cluster."""
         # DB subnet group
         self.db_subnet_group = aws.rds.SubnetGroup(
-            f"payment-db-subnet-group-{self.environment_suffix}",
+            f"payment-db-subnet-group-{self.environment_suffix_lower}",
             subnet_ids=[subnet.id for subnet in self.private_subnets],
             tags={**self.common_tags, "Name": f"payment-db-subnet-group-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
@@ -282,7 +283,7 @@ class PaymentInfrastructure(ComponentResource):
         
         # Aurora cluster
         self.rds_cluster = aws.rds.Cluster(
-            f"payment-aurora-cluster-{self.environment_suffix}",
+            f"payment-aurora-cluster-{self.environment_suffix_lower}",
             engine="aurora-postgresql",
             engine_version="13.21",
             database_name="payments",
@@ -302,8 +303,8 @@ class PaymentInfrastructure(ComponentResource):
         self.rds_instances = []
         for i in range(self.args.rds_instance_count):
             instance = aws.rds.ClusterInstance(
-                f"payment-aurora-instance-{i}-{self.environment_suffix}",
-                identifier=f"payment-aurora-instance-{i}-{self.environment_suffix}",
+                f"payment-aurora-instance-{i}-{self.environment_suffix_lower}",
+                identifier=f"payment-aurora-instance-{i}-{self.environment_suffix_lower}",
                 cluster_identifier=self.rds_cluster.id,
                 instance_class=self.args.rds_instance_class,
                 engine=self.rds_cluster.engine,
