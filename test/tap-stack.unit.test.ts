@@ -1,11 +1,21 @@
 import { beforeEach, describe, expect, test } from "@jest/globals";
 import { App } from "cdktf";
 import "cdktf/lib/testing/adapters/jest";
+import * as fs from 'fs';
+import * as path from 'path';
 import { TapStack } from "../lib/tap-stack";
 
 // Helper to get dynamic region and account for region-agnostic tests
-// Default to 'us-east-2' to match stack implementation default
-const getTestRegion = () => process.env.AWS_DEFAULT_REGION || process.env.AWS_REGION || 'us-east-2';
+// Read from lib/AWS_REGION file, fallback to environment variables, then default
+const getTestRegion = () => {
+  try {
+    const regionFile = path.join(__dirname, '..', 'lib', 'AWS_REGION');
+    const fileRegion = fs.readFileSync(regionFile, 'utf-8').trim();
+    return fileRegion || process.env.AWS_DEFAULT_REGION || process.env.AWS_REGION || 'us-east-2';
+  } catch {
+    return process.env.AWS_DEFAULT_REGION || process.env.AWS_REGION || 'us-east-2';
+  }
+};
 const getTestAccountId = () => process.env.AWS_ACCOUNT_ID || '123456789012';
 const TEST_REGION = getTestRegion();
 const TEST_ACCOUNT_ID = getTestAccountId();
