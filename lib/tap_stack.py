@@ -50,7 +50,7 @@ class TapStack(pulumi.ComponentResource):
         super().__init__('tap:stack:TapStack', name, None, opts)
 
         self.environment_suffix = args.environment_suffix
-        self.region = "us-east-1"
+        self.region = "us-west-1"
         self.availability_zones = [
             f"{self.region}a",
             f"{self.region}b",
