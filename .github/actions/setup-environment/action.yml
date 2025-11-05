@@ -64,6 +64,14 @@ runs:
         key: pip-cache-${{ runner.os }}-${{ hashFiles('Pipfile.lock') }}
         restore-keys: |
           pip-cache-${{ runner.os }}-
+    - name: Cache global npm tools
+      if: ${{ inputs.platform == 'cdktf' || inputs.platform == 'cdk' || inputs.platform == 'pulumi' }}
+      uses: actions/cache@v4
+      with:
+        path: ~/.npm-global
+        key: npm-global-${{ runner.os }}
+        restore-keys: |
+          npm-global-${{ runner.os }}-
 
     # ✅ Restore Go build/module cache (only if Go)
     - name: Cache Go modules
