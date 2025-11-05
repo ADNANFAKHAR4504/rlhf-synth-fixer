@@ -58,6 +58,10 @@ if [ -f "Pipfile" ]; then
     echo "📦 Creating Python venv and installing dependencies..."
     pipenv install --dev
   fi
+  if [ "$PLATFORM" = "cdktf" ] && [ "$LANGUAGE" = "py" ]; then
+    echo "📦 Ensuring CDKTF Python libraries are available..."
+    pipenv install "cdktf~=0.21.0" constructs >/dev/null 2>&1
+  fi
 
   echo "$(pwd)/.venv/bin" >> "$GITHUB_PATH"
 fi
