@@ -453,8 +453,7 @@ export class TapStack extends TerraformStack {
     });
 
     // ACM Certificate
-    // Note: We use addOverride to set timeouts that prevent waiting for validation
-    // The certificate is created without waiting for DNS validation to complete
+    // Note: Certificate is created but deployment doesn't wait for validation
     // Validation happens asynchronously after DNS records propagate
     const certificate = new AcmCertificate(this, 'certificate', {
       domainName: `api.myapp-${props.environmentSuffix}.example.net`,
@@ -467,8 +466,8 @@ export class TapStack extends TerraformStack {
       },
     });
 
-    // Override the Terraform resource to add a minimal timeout
-    certificate.addOverride('timeouts', {
+    // Use putTimeouts to set minimal timeout preventing wait for validation
+    (certificate as any).putTimeouts({
       create: '1s',
     });
 
