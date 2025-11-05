@@ -1,10 +1,7 @@
-name: payment-vpc
-runtime:
-  name: python
-  options:
-    virtualenv: pipenv
+name: TapStack
+runtime: python
 description: Production-ready VPC infrastructure for payment processing with PCI-DSS compliance
-main: tap.py
+main: lib/tap.py
 config:
   environmentSuffix:
     description: Environment suffix for resource naming and isolation
