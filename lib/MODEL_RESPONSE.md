@@ -1,168 +1,421 @@
-I'll provide a comprehensive Terraform migration plan for moving your AWS application from us-west-1 to us-west-2. This approach uses `terraform import` to preserve resource identities and minimize downtime.
+### Reasoning Trace
+---
+
+This is a comprehensive payment processing application migration project. The user is asking me to explain how to approach this project using Terraform to migrate from development to production. Let me break down the key aspects and provide a structured approach.
+
+The project involves:
+1. Setting up production infrastructure for a payment processing application
+2. Ensuring zero downtime migration
+3. Meeting financial industry security requirements
+4. Using Terraform for infrastructure as code
+
+I should provide:
+- A structured approach to the migration
+- Key Terraform configurations and examples
+- Best practices for handling sensitive financial data
+- Migration strategy with zero downtime
+- Security considerations
+
+Let me structure my response to cover all these aspects comprehensively.
+### Answer 
+---
+
+# Payment Processing Application Migration Strategy
+
+## 🎯 Migration Approach Overview
+
+This migration requires a phased approach to ensure zero downtime and maintain data integrity. Here's the comprehensive strategy using Terraform:
+
+## 📁 Project Structure
+
+```
+terraform-payment-migration/
+├── environments/
+│   ├── dev/
+│   │   ├── terraform.tfvars
+│   │   └── backend.tf
+│   └── prod/
+│       ├── terraform.tfvars
+│       └── backend.tf
+├── modules/
+│   ├── networking/
+│   ├── database/
+│   ├── ecs/
+│   ├── load_balancer/
+│   ├── security/
+│   └── monitoring/
+├── scripts/
+│   └── data_migration/
+└── main.tf
+```
+
+## 🔧 Core Terraform Modules
+
+### 1. **Networking Module**
 
 ```hcl
-# main.tf
-terraform {
-  required_version = ">= 1.0"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-}
-
-# Primary provider for the new region (us-west-2)
-provider "aws" {
-  region = var.aws_region
-  
-  default_tags {
-    tags = {
-      Environment   = var.environment
-      Project       = var.project_name
-      ManagedBy     = "terraform"
-      MigratedFrom  = "us-west-1"
-      MigrationDate = var.migration_date
-    }
-  }
-}
-
-# Alias provider for the old region (for reference/cleanup)
-provider "aws" {
-  alias  = "old_region"
-  region = "us-west-1"
-}
-
-# Data sources for existing resources in new region
-data "aws_availability_zones" "available" {
-  state = "available"
-}
-
-data "aws_caller_identity" "current" {}
-
-# VPC and Networking
+# modules/networking/main.tf
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
 
   tags = {
-    Name = "${var.project_name}-vpc"
+    Name        = "${var.environment}-payment-vpc"
+    Environment = var.environment
+    CostCenter  = var.cost_center
   }
 }
 
-resource "aws_internet_gateway" "main" {
-  vpc_id = aws_vpc.main.id
-
-  tags = {
-    Name = "${var.project_name}-igw"
-  }
-}
-
+# Public Subnets for Load Balancers
 resource "aws_subnet" "public" {
-  count = length(var.public_subnet_cidrs)
-
+  count                   = 3
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.public_subnet_cidrs[count.index]
+  cidr_block              = cidrsubnet(var.vpc_cidr, 4, count.index)
   availability_zone       = data.aws_availability_zones.available.names[count.index]
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "${var.project_name}-public-subnet-${count.index + 1}"
-    Type = "public"
+    Name = "${var.environment}-public-subnet-${count.index + 1}"
+    Type = "Public"
   }
 }
 
+# Private Subnets for ECS and RDS
 resource "aws_subnet" "private" {
-  count = length(var.private_subnet_cidrs)
-
+  count             = 3
   vpc_id            = aws_vpc.main.id
-  cidr_block        = var.private_subnet_cidrs[count.index]
+  cidr_block        = cidrsubnet(var.vpc_cidr, 4, count.index + 3)
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = {
-    Name = "${var.project_name}-private-subnet-${count.index + 1}"
-    Type = "private"
+    Name = "${var.environment}-private-subnet-${count.index + 1}"
+    Type = "Private"
   }
 }
 
-# Route Tables
-resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.main.id
+# NAT Gateways for outbound internet access
+resource "aws_nat_gateway" "main" {
+  count         = 3
+  allocation_id = aws_eip.nat[count.index].id
+  subnet_id     = aws_subnet.public[count.index].id
 
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main.id
+  tags = {
+    Name = "${var.environment}-nat-gateway-${count.index + 1}"
+  }
+}
+```
+
+### 2. **Database Module with Encryption**
+
+```hcl
+# modules/database/main.tf
+resource "aws_kms_key" "rds" {
+  description             = "KMS key for RDS encryption"
+  deletion_window_in_days = 10
+
+  tags = {
+    Name        = "${var.environment}-rds-kms-key"
+    Environment = var.environment
+  }
+}
+
+resource "aws_db_subnet_group" "aurora" {
+  name       = "${var.environment}-aurora-subnet-group"
+  subnet_ids = var.private_subnet_ids
+
+  tags = {
+    Name = "${var.environment}-aurora-subnet-group"
+  }
+}
+
+resource "aws_rds_cluster" "aurora_postgresql" {
+  cluster_identifier      = "${var.environment}-payment-aurora-cluster"
+  engine                  = "aurora-postgresql"
+  engine_version          = "13.7"
+  database_name           = "payment_db"
+  master_username         = "admin"
+  master_password         = random_password.db_password.result
+  
+  # Security & Encryption
+  storage_encrypted       = true
+  kms_key_id             = aws_kms_key.rds.arn
+  
+  # Backup Configuration
+  backup_retention_period = 30
+  preferred_backup_window = "03:00-04:00"
+  
+  # High Availability
+  db_subnet_group_name    = aws_db_subnet_group.aurora.name
+  vpc_security_group_ids  = [aws_security_group.rds.id]
+  
+  skip_final_snapshot     = false
+  final_snapshot_identifier = "${var.environment}-payment-aurora-final-snapshot-${timestamp()}"
+
+  tags = {
+    Environment = var.environment
+    CostCenter  = var.cost_center
+  }
+}
+
+resource "aws_rds_cluster_instance" "aurora_instances" {
+  count              = 2  # Multi-AZ deployment
+  identifier         = "${var.environment}-aurora-instance-${count.index}"
+  cluster_identifier = aws_rds_cluster.aurora_postgresql.id
+  instance_class     = "db.t3.micro"
+  engine             = aws_rds_cluster.aurora_postgresql.engine
+  engine_version     = aws_rds_cluster.aurora_postgresql.engine_version
+
+  performance_insights_enabled = true
+  monitoring_interval         = 60
+  monitoring_role_arn        = aws_iam_role.rds_monitoring.arn
+
+  tags = {
+    Name = "${var.environment}-aurora-instance-${count.index}"
+  }
+}
+```
+
+### 3. **ECS Fargate Configuration**
+
+```hcl
+# modules/ecs/main.tf
+resource "aws_ecs_cluster" "main" {
+  name = "${var.environment}-payment-cluster"
+
+  setting {
+    name  = "containerInsights"
+    value = "enabled"
   }
 
   tags = {
-    Name = "${var.project_name}-public-rt"
+    Environment = var.environment
+    CostCenter  = var.cost_center
   }
 }
 
-resource "aws_route_table" "private" {
-  count  = length(aws_subnet.private)
-  vpc_id = aws_vpc.main.id
+resource "aws_ecs_task_definition" "payment_app" {
+  family                   = "${var.environment}-payment-app"
+  network_mode            = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                     = "512"
+  memory                  = "1024"
+  execution_role_arn      = aws_iam_role.ecs_execution.arn
+  task_role_arn          = aws_iam_role.ecs_task.arn
+
+  container_definitions = jsonencode([
+    {
+      name  = "payment-processor"
+      image = "${var.ecr_repository_url}:${var.image_tag}"
+      
+      portMappings = [
+        {
+          containerPort = 8080
+          protocol      = "tcp"
+        }
+      ]
+
+      environment = [
+        {
+          name  = "ENVIRONMENT"
+          value = var.environment
+        }
+      ]
+
+      secrets = [
+        {
+          name      = "DB_PASSWORD"
+          valueFrom = aws_ssm_parameter.db_password.arn
+        },
+        {
+          name      = "API_KEY"
+          valueFrom = aws_ssm_parameter.api_key.arn
+        }
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = "/ecs/${var.environment}-payment-app"
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+        }
+      }
+    }
+  ])
+}
+
+resource "aws_ecs_service" "payment_service" {
+  name            = "${var.environment}-payment-service"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.payment_app.arn
+  desired_count   = 3
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets          = var.private_subnet_ids
+    security_groups  = [aws_security_group.ecs.id]
+    assign_public_ip = false
+  }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.payment_app.arn
+    container_name   = "payment-processor"
+    container_port   = 8080
+  }
+
+  # Auto-scaling configuration
+  lifecycle {
+    ignore_changes = [desired_count]
+  }
+}
+
+# Auto-scaling for ECS Service
+resource "aws_appautoscaling_target" "ecs_target" {
+  max_capacity       = 10
+  min_capacity       = 2
+  resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.payment_service.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "ecs_policy_cpu" {
+  name               = "${var.environment}-cpu-autoscaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.ecs_target.resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs_target.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ecs_target.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    target_value = 70.0
+  }
+}
+```
+
+### 4. **Load Balancer with WAF Protection**
+
+```hcl
+# modules/load_balancer/main.tf
+resource "aws_lb" "main" {
+  name               = "${var.environment}-payment-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets           = var.public_subnet_ids
+
+  enable_deletion_protection = var.environment == "prod" ? true : false
+  enable_http2              = true
 
   tags = {
-    Name = "${var.project_name}-private-rt-${count.index + 1}"
+    Environment = var.environment
+    CostCenter  = var.cost_center
   }
 }
 
-resource "aws_route_table_association" "public" {
-  count = length(aws_subnet.public)
+resource "aws_lb_target_group" "payment_app" {
+  name        = "${var.environment}-payment-tg"
+  port        = 8080
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = "ip"
 
-  subnet_id      = aws_subnet.public[count.index].id
-  route_table_id = aws_route_table.public.id
-}
-
-resource "aws_route_table_association" "private" {
-  count = length(aws_subnet.private)
-
-  subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private[count.index].id
-}
-
-# Security Groups
-resource "aws_security_group" "web" {
-  name_prefix = "${var.project_name}-web-"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+  health_check {
+    enabled             = true
+    interval            = 30
+    path                = "/health"
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
   }
 
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  deregistration_delay = 30
 
   tags = {
-    Name = "${var.project_name}-web-sg"
+    Name = "${var.environment}-payment-target-group"
   }
 }
 
-resource "aws_security_group" "app" {
-  name_prefix = "${var.project_name}-app-"
-  vpc_id      = aws_vpc.main.id
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
+  certificate_arn   = aws_acm_certificate.main.arn
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.payment_app.arn
+  }
+}
+
+# WAF Configuration for SQL Injection Protection
+resource "aws_wafv2_web_acl" "payment_protection" {
+  name  = "${var.environment}-payment-waf"
+  scope = "REGIONAL"
+
+  default_action {
+    allow {}
+  }
+
+  rule {
+    name     = "SQLiProtection"
+    priority = 1
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesSQLiRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    action {
+      block {}
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name               = "${var.environment}-sqli-protection"
+      sampled_requests_enabled   = true
+    }
+  }
+}
+
+resource "aws_wafv2_web_acl_association" "alb" {
+  resource_arn = aws_lb.main.arn
+  web_acl_arn  = aws_wafv2_web_acl.payment_protection.arn
+}
+```
+
+### 5. **Security & Parameter Store**
+
+```hcl
+# modules/security/main.tf
+resource "aws_ssm_parameter" "db_password" {
+  name        = "/${var.environment}/payment/db/password"
+  description = "Database password for payment processing app"
+  type        = "SecureString"
+  value       = random_password.db_password.result
+  key_id      = aws_kms_key.parameter_store.id
+
+  tags = {
+    Environment = var.environment
+    Sensitive   = "true"
+  }
+}
+
+resource "aws_security_group" "ecs" {
+  name        = "${var.environment}-ecs-sg"
+  description = "Security group for ECS tasks"
+  vpc_id      = var.vpc_id
 
   ingress {
     from_port       = 8080
     to_port         = 8080
     protocol        = "tcp"
-    security_groups = [aws_security_group.web.id]
+    security_groups = [aws_security_group.alb.id]
   }
 
   egress {
@@ -173,747 +426,162 @@ resource "aws_security_group" "app" {
   }
 
   tags = {
-    Name = "${var.project_name}-app-sg"
+    Name = "${var.environment}-ecs-security-group"
   }
 }
 
-resource "aws_security_group" "database" {
-  name_prefix = "${var.project_name}-db-"
-  vpc_id      = aws_vpc.main.id
+resource "aws_security_group" "rds" {
+  name        = "${var.environment}-rds-sg"
+  description = "Security group for RDS database"
+  vpc_id      = var.vpc_id
 
   ingress {
-    from_port       = 3306
-    to_port         = 3306
+    from_port       = 5432
+    to_port         = 5432
     protocol        = "tcp"
-    security_groups = [aws_security_group.app.id]
+    security_groups = [aws_security_group.ecs.id]
   }
 
   tags = {
-    Name = "${var.project_name}-db-sg"
-  }
-}
-
-# Application Load Balancer
-resource "aws_lb" "main" {
-  name               = "${var.project_name}-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.web.id]
-  subnets            = aws_subnet.public[*].id
-
-  enable_deletion_protection = var.enable_deletion_protection
-
-  tags = {
-    Name = "${var.project_name}-alb"
-  }
-}
-
-resource "aws_lb_target_group" "app" {
-  name     = "${var.project_name}-app-tg"
-  port     = 8080
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id
-
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 5
-    interval            = 30
-    path                = "/health"
-    matcher             = "200"
-  }
-
-  tags = {
-    Name = "${var.project_name}-app-tg"
-  }
-}
-
-resource "aws_lb_listener" "app" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = "80"
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
-  }
-}
-
-# Launch Template and Auto Scaling Group
-resource "aws_launch_template" "app" {
-  name_prefix   = "${var.project_name}-app-"
-  image_id      = var.ami_id
-  instance_type = var.instance_type
-  key_name      = var.key_pair_name
-
-  vpc_security_group_ids = [aws_security_group.app.id]
-
-  user_data = base64encode(var.user_data_script)
-
-  tag_specifications {
-    resource_type = "instance"
-    tags = {
-      Name = "${var.project_name}-app-instance"
-    }
-  }
-
-  tags = {
-    Name = "${var.project_name}-app-lt"
-  }
-}
-
-resource "aws_autoscaling_group" "app" {
-  name                = "${var.project_name}-app-asg"
-  vpc_zone_identifier = aws_subnet.private[*].id
-  target_group_arns   = [aws_lb_target_group.app.arn]
-  health_check_type   = "ELB"
-  health_check_grace_period = 300
-
-  min_size         = var.asg_min_size
-  max_size         = var.asg_max_size
-  desired_capacity = var.asg_desired_capacity
-
-  launch_template {
-    id      = aws_launch_template.app.id
-    version = "$Latest"
-  }
-
-  tag {
-    key                 = "Name"
-    value               = "${var.project_name}-app-asg"
-    propagate_at_launch = false
-  }
-}
-
-# RDS Subnet Group and Database
-resource "aws_db_subnet_group" "main" {
-  name       = "${var.project_name}-db-subnet-group"
-  subnet_ids = aws_subnet.private[*].id
-
-  tags = {
-    Name = "${var.project_name}-db-subnet-group"
-  }
-}
-
-resource "aws_db_instance" "main" {
-  identifier = "${var.project_name}-database"
-
-  engine         = "mysql"
-  engine_version = var.db_engine_version
-  instance_class = var.db_instance_class
-
-  allocated_storage     = var.db_allocated_storage
-  max_allocated_storage = var.db_max_allocated_storage
-  storage_type          = "gp2"
-  storage_encrypted     = true
-
-  db_name  = var.db_name
-  username = var.db_username
-  password = var.db_password
-
-  vpc_security_group_ids = [aws_security_group.database.id]
-  db_subnet_group_name   = aws_db_subnet_group.main.name
-
-  backup_retention_period = var.db_backup_retention_period
-  backup_window          = var.db_backup_window
-  maintenance_window     = var.db_maintenance_window
-
-  skip_final_snapshot = var.skip_final_snapshot
-  deletion_protection = var.enable_deletion_protection
-
-  tags = {
-    Name = "${var.project_name}-database"
+    Name = "${var.environment}-rds-security-group"
   }
 }
 ```
+
+## 📊 Monitoring Configuration
 
 ```hcl
-# variables.tf
-variable "aws_region" {
-  description = "AWS region for resources"
-  type        = string
-  default     = "us-west-2"
-}
+# modules/monitoring/main.tf
+resource "aws_cloudwatch_metric_alarm" "database_cpu" {
+  alarm_name          = "${var.environment}-rds-high-cpu"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name        = "CPUUtilization"
+  namespace          = "AWS/RDS"
+  period             = "300"
+  statistic          = "Average"
+  threshold          = "80"
+  alarm_description  = "This metric monitors RDS CPU utilization"
 
-variable "environment" {
-  description = "Environment name"
-  type        = string
-  default     = "production"
-}
-
-variable "project_name" {
-  description = "Project name for resource naming"
-  type        = string
-  default     = "myapp"
-}
-
-variable "migration_date" {
-  description = "Date of migration for tagging"
-  type        = string
-  default     = "2024-01-15"
-}
-
-# Network Configuration
-variable "vpc_cidr" {
-  description = "CIDR block for VPC"
-  type        = string
-  default     = "10.0.0.0/16"
-}
-
-variable "public_subnet_cidrs" {
-  description = "CIDR blocks for public subnets"
-  type        = list(string)
-  default     = ["10.0.1.0/24", "10.0.2.0/24"]
-}
-
-variable "private_subnet_cidrs" {
-  description = "CIDR blocks for private subnets"
-  type        = list(string)
-  default     = ["10.0.10.0/24", "10.0.20.0/24"]
-}
-
-# EC2 Configuration
-variable "ami_id" {
-  description = "AMI ID for EC2 instances"
-  type        = string
-  default     = "ami-0c02fb55956c7d316" # Amazon Linux 2 in us-west-2
-}
-
-variable "instance_type" {
-  description = "EC2 instance type"
-  type        = string
-  default     = "t3.medium"
-}
-
-variable "key_pair_name" {
-  description = "EC2 Key Pair name"
-  type        = string
-  default     = "myapp-keypair"
-}
-
-variable "user_data_script" {
-  description = "User data script for EC2 instances"
-  type        = string
-  default     = <<-EOF
-    #!/bin/bash
-    yum update -y
-    yum install -y docker
-    service docker start
-    usermod -a -G docker ec2-user
-    # Add your application startup commands here
-  EOF
-}
-
-# Auto Scaling Configuration
-variable "asg_min_size" {
-  description = "Minimum size of Auto Scaling Group"
-  type        = number
-  default     = 2
-}
-
-variable "asg_max_size" {
-  description = "Maximum size of Auto Scaling Group"
-  type        = number
-  default     = 6
-}
-
-variable "asg_desired_capacity" {
-  description = "Desired capacity of Auto Scaling Group"
-  type        = number
-  default     = 2
-}
-
-# Database Configuration
-variable "db_engine_version" {
-  description = "RDS engine version"
-  type        = string
-  default     = "8.0.35"
-}
-
-variable "db_instance_class" {
-  description = "RDS instance class"
-  type        = string
-  default     = "db.t3.micro"
-}
-
-variable "db_allocated_storage" {
-  description = "RDS allocated storage in GB"
-  type        = number
-  default     = 20
-}
-
-variable "db_max_allocated_storage" {
-  description = "RDS maximum allocated storage in GB"
-  type        = number
-  default     = 100
-}
-
-variable "db_name" {
-  description = "Database name"
-  type        = string
-  default     = "myappdb"
-}
-
-variable "db_username" {
-  description = "Database username"
-  type        = string
-  default     = "admin"
-  sensitive   = true
-}
-
-variable "db_password" {
-  description = "Database password"
-  type        = string
-  sensitive   = true
-}
-
-variable "db_backup_retention_period" {
-  description = "Database backup retention period in days"
-  type        = number
-  default     = 7
-}
-
-variable "db_backup_window" {
-  description = "Database backup window"
-  type        = string
-  default     = "03:00-04:00"
-}
-
-variable "db_maintenance_window" {
-  description = "Database maintenance window"
-  type        = string
-  default     = "sun:04:00-sun:05:00"
-}
-
-# General Configuration
-variable "enable_deletion_protection" {
-  description = "Enable deletion protection for critical resources"
-  type        = bool
-  default     = true
-}
-
-variable "skip_final_snapshot" {
-  description = "Skip final snapshot when destroying RDS instance"
-  type        = bool
-  default     = false
-}
-```
-
-```hcl
-# backend.tf
-terraform {
-  backend "s3" {
-    bucket         = "PLACEHOLDER-terraform-state-bucket"
-    key            = "myapp/us-west-2/terraform.tfstate"
-    region         = "us-west-2"
-    encrypt        = true
-    dynamodb_table = "PLACEHOLDER-terraform-locks"
-    
-    # Optional: Use assume role for cross-account access
-    # role_arn = "arn:aws:iam::ACCOUNT-ID:role/TerraformRole"
+  dimensions = {
+    DBClusterIdentifier = aws_rds_cluster.aurora_postgresql.id
   }
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
 }
 
-# Alternative backend configuration for remote state management
-# terraform {
-#   backend "remote" {
-#     hostname     = "app.terraform.io"
-#     organization = "PLACEHOLDER-ORG-NAME"
-#
-#     workspaces {
-#       name = "myapp-us-west-2"
-#     }
-#   }
-# }
+resource "aws_cloudwatch_metric_alarm" "ecs_service_health" {
+  alarm_name          = "${var.environment}-ecs-service-unhealthy"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "2"
+  metric_name        = "HealthyHostCount"
+  namespace          = "AWS/ApplicationELB"
+  period             = "60"
+  statistic          = "Average"
+  threshold          = "1"
 
-# Local backend for testing (not recommended for production)
-# terraform {
-#   backend "local" {
-#     path = "terraform.tfstate"
-#   }
-# }
+  dimensions = {
+    TargetGroup  = aws_lb_target_group.payment_app.arn_suffix
+    LoadBalancer = aws_lb.main.arn_suffix
+  }
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+}
 ```
 
-```markdown
-# state-migration.md
+## 🔄 Zero-Downtime Migration Strategy
 
-# Terraform State Migration Guide: us-west-1 → us-west-2
-
-## Prerequisites
-
-1. Ensure you have appropriate AWS credentials configured
-2. Backup existing Terraform state files
-3. Verify all resources exist in both regions
-4. Have the old resource IDs documented (see id-mapping.csv)
-
-## Step 1: Backup Current State
-
+### Phase 1: Infrastructure Preparation
 ```bash
-# Backup current state from us-west-1
-terraform workspace select myapp-us-west-1
-terraform state pull > backup-us-west-1-$(date +%Y%m%d-%H%M%S).json
-
-# List all resources in current state
-terraform state list > resources-us-west-1.txt
-```
-
-## Step 2: Create New Workspace for us-west-2
-
-```bash
-# Create new workspace for us-west-2
-terraform workspace new myapp-us-west-2
-
-# Or select if already exists
-terraform workspace select myapp-us-west-2
-
-# Initialize the new workspace
+# Initialize and apply production infrastructure
+cd environments/prod
 terraform init
+terraform plan -out=prod.tfplan
+terraform apply prod.tfplan
 ```
 
-## Step 3: Import Resources to New State
+### Phase 2: Data Migration Script
+```python
+# scripts/data_migration/migrate.py
+import psycopg2
+from psycopg2 import sql
+import boto3
+import logging
 
-**Important**: Execute imports in dependency order (VPC → Subnets → Security Groups → etc.)
-
-### Network Resources
-
-```bash
-# Import VPC
-terraform import aws_vpc.main vpc-0123456789abcdef0
-
-# Import Internet Gateway
-terraform import aws_internet_gateway.main igw-0123456789abcdef0
-
-# Import Subnets
-terraform import 'aws_subnet.public[0]' subnet-0123456789abcdef0
-terraform import 'aws_subnet.public[1]' subnet-0123456789abcdef1
-terraform import 'aws_subnet.private[0]' subnet-0123456789abcdef2
-terraform import 'aws_subnet.private[1]' subnet-0123456789abcdef3
-
-# Import Route Tables
-terraform import aws_route_table.public rtb-0123456789abcdef0
-terraform import 'aws_route_table.private[0]' rtb-0123456789abcdef1
-terraform import 'aws_route_table.private[1]' rtb-0123456789abcdef2
-
-# Import Route Table Associations
-terraform import 'aws_route_table_association.public[0]' subnet-0123456789abcdef0/rtb-0123456789abcdef0
-terraform import 'aws_route_table_association.public[1]' subnet-0123456789abcdef1/rtb-0123456789abcdef0
-terraform import 'aws_route_table_association.private[0]' subnet-0123456789abcdef2/rtb-0123456789abcdef1
-terraform import 'aws_route_table_association.private[1]' subnet-0123456789abcdef3/rtb-0123456789abcdef2
+def migrate_data(source_conn_str, target_conn_str):
+    """
+    Migrate data with transaction support and rollback capability
+    """
+    source_conn = psycopg2.connect(source_conn_str)
+    target_conn = psycopg2.connect(target_conn_str)
+    
+    try:
+        # Begin transaction
+        target_conn.autocommit = False
+        
+        # Copy schema and data
+        with source_conn.cursor() as src_cur:
+            with target_conn.cursor() as tgt_cur:
+                # Migrate schema first
+                src_cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public'")
+                tables = src_cur.fetchall()
+                
+                for table in tables:
+                    # Copy table structure and data
+                    copy_table_data(src_cur, tgt_cur, table[0])
+        
+        # Verify data integrity
+        if verify_migration(source_conn, target_conn):
+            target_conn.commit()
+            logging.info("Migration completed successfully")
+        else:
+            target_conn.rollback()
+            raise Exception("Data verification failed")
+            
+    except Exception as e:
+        target_conn.rollback()
+        logging.error(f"Migration failed: {str(e)}")
+        raise
+    finally:
+        source_conn.close()
+        target_conn.close()
 ```
 
-### Security Groups
+### Phase 3: Traffic Shifting with Route53
 
-```bash
-# Import Security Groups
-terraform import aws_security_group.web sg-0123456789abcdef0
-terraform import aws_security_group.app sg-0123456789abcdef1
-terraform import aws_security_group.database sg-0123456789abcdef2
+```hcl
+# Gradual traffic shifting configuration
+resource "aws_route53_record" "weighted_dev" {
+  zone_id = aws_route53_zone.main.zone_id
+  name    = "payment.${var.domain_name}"
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.dev.dns_name
+    zone_id                = aws_lb.dev.zone_id
+    evaluate_target_health = true
+  }
+
+  set_identifier = "dev"
+  weighted_routing_policy {
+    weight = var.dev_traffic_weight  # Start at 90, gradually reduce to 0
+  }
+}
+
+resource "aws_route53_record" "weighted_prod" {
+  zone_id = aws_route53_zone.main.zone_id
+  name    = "payment.${var.domain_name}"
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.prod.dns_name
+    zone_id                = aws_lb.prod.zone_id
+    evaluate_target_health = true
+  }
+
+  set_identifier = "prod"
+  weighted_routing_policy {
+    weight = var.prod_traffic_weight  # Start at 10, gradually increase to 100
+  }
+}
 ```
-
-### Load Balancer Resources
-
-```bash
-# Import ALB
-terraform import aws_lb.main arn:aws:elasticloadbalancing:us-west-2:123456789012:loadbalancer/app/myapp-alb/1234567890123456
-
-# Import Target Group
-terraform import aws_lb_target_group.app arn:aws:elasticloadbalancing:us-west-2:123456789012:targetgroup/myapp-app-tg/1234567890123456
-
-# Import Listener
-terraform import aws_lb_listener.app arn:aws:elasticloadbalancing:us-west-2:123456789012:listener/app/myapp-alb/1234567890123456/1234567890123456
-```
-
-### Auto Scaling Resources
-
-```bash
-# Import Launch Template
-terraform import aws_launch_template.app lt-0123456789abcdef0
-
-# Import Auto Scaling Group
-terraform import aws_autoscaling_group.app myapp-app-asg
-```
-
-### Database Resources
-
-```bash
-# Import DB Subnet Group
-terraform import aws_db_subnet_group.main myapp-db-subnet-group
-
-# Import RDS Instance
-terraform import aws_db_instance.main myapp-database
-```
-
-## Step 4: Verify State Consistency
-
-```bash
-# Plan should show no changes if import was successful
-terraform plan
-
-# If there are differences, review and adjust configuration
-terraform show
-
-# Verify all resources are in state
-terraform state list
-```
-
-## Step 5: Test Configuration
-
-```bash
-# Validate configuration
-terraform validate
-
-# Run plan to ensure no unexpected changes
-terraform plan -out=migration-plan
-
-# Apply only if plan shows expected results
-# terraform apply migration-plan
-```
-
-## Step 6: State Verification Commands
-
-```bash
-# Compare resource counts
-echo "Old region resources:"
-wc -l resources-us-west-1.txt
-
-echo "New region resources:"
-terraform state list | wc -l
-
-# Verify specific resources
-terraform state show aws_vpc.main
-terraform state show aws_db_instance.main
-terraform state show aws_lb.main
-
-# Check for any drift
-terraform plan -detailed-exitcode
-```
-
-## Rollback Procedure
-
-If migration fails:
-
-```bash
-# Switch back to old workspace
-terraform workspace select myapp-us-west-1
-
-# Restore from backup if needed
-terraform state push backup-us-west-1-TIMESTAMP.json
-
-# Delete problematic new workspace
-terraform workspace select default
-terraform workspace delete myapp-us-west-2
-```
-
-## Post-Migration Cleanup
-
-```bash
-# After successful migration and testing
-terraform workspace select myapp-us-west-1
-
-# Document old resources for cleanup
-terraform state list > old-resources-for-cleanup.txt
-
-# Eventually destroy old resources (after DNS cutover)
-# terraform destroy
-```
-```
-
-```csv
-# id-mapping.csv
-resource,address,old_id,new_id,notes
-VPC,aws_vpc.main,vpc-abc123def456,vpc-def456abc123,Main application VPC
-Internet Gateway,aws_internet_gateway.main,igw-abc123def456,igw-def456abc123,Main internet gateway
-Public Subnet 1,aws_subnet.public[0],subnet-abc123def456,subnet-def456abc123,Public subnet AZ-a
-Public Subnet 2,aws_subnet.public[1],subnet-bcd234efa567,subnet-efa567bcd234,Public subnet AZ-b
-Private Subnet 1,aws_subnet.private[0],subnet-cde345fgb678,subnet-fgb678cde345,Private subnet AZ-a
-Private Subnet 2,aws_subnet.private[1],subnet-def456ghc789,subnet-ghc789def456,Private subnet AZ-b
-Public Route Table,aws_route_table.public,rtb-abc123def456,rtb-def456abc123,Public route table
-Private Route Table 1,aws_route_table.private[0],rtb-bcd234efa567,rtb-efa567bcd234,Private route table AZ-a
-Private Route Table 2,aws_route_table.private[1],rtb-cde345fgb678,rtb-fgb678cde345,Private route table AZ-b
-Web Security Group,aws_security_group.web,sg-abc123def456,sg-def456abc123,Web tier security group
-App Security Group,aws_security_group.app,sg-bcd234efa567,sg-efa567bcd234,Application tier security group
-DB Security Group,aws_security_group.database,sg-cde345fgb678,sg-fgb678cde345,Database tier security group
-Application Load Balancer,aws_lb.main,arn:aws:elasticloadbalancing:us-west-1:123456789012:loadbalancer/app/myapp-alb/50dc6c495c0c9188,arn:aws:elasticloadbalancing:us-west-2:123456789012:loadbalancer/app/myapp-alb/60ec7d596d1d9299,Main application load balancer
-Target Group,aws_lb_target_group.app,arn:aws:elasticloadbalancing:us-west-1:123456789012:targetgroup/myapp-app-tg/73e2d6ba618ba529,arn:aws:elasticloadbalancing:us-west-2:123456789012:targetgroup/myapp-app-tg/84f3e7cb729cb63a,Application target group
-ALB Listener,aws_lb_listener.app,arn:aws:elasticloadbalancing:us-west-1:123456789012:listener/app/myapp-alb/50dc6c495c0c9188/f2f7dc8efc522ab2,arn:aws:elasticloadbalancing:us-west-2:123456789012:listener/app/myapp-alb/60ec7d596d1d9299/g3g8ed9fgd633bc3,HTTP listener port 80
-Launch Template,aws_launch_template.app,lt-abc123def456,lt-def456abc123,Application launch template
-Auto Scaling Group,aws_autoscaling_group.app,myapp-app-asg,myapp-app-asg,Application auto scaling group
-DB Subnet Group,aws_db_subnet_group.main,myapp-db-subnet-group,myapp-db-subnet-group,Database subnet group
-RDS Instance,aws_db_instance.main,myapp-database,myapp-database,Main database instance
-Route Table Association 1,aws_route_table_association.public[0],subnet-abc123def456/rtb-abc123def456,subnet-def456abc123/rtb-def456abc123,Public subnet 1 association
-Route Table Association 2,aws_route_table_association.public[1],subnet-bcd234efa567/rtb-abc123def456,subnet-efa567bcd234/rtb-def456abc123,Public subnet 2 association
-Route Table Association 3,aws_route_table_association.private[0],subnet-cde345fgb678/rtb-bcd234efa567,subnet-fgb678cde345/rtb-efa567bcd234,Private subnet 1 association
-Route Table Association 4,aws_route_table_association.private[1],subnet-def456ghc789/rtb-cde345fgb678,subnet-ghc789def456/rtb-fgb678cde345,Private subnet 2 association
-```
-
-```markdown
-# runbook.md
-
-# AWS Region Migration Runbook: us-west-1 → us-west-2
-
-## Overview
-
-This runbook provides step-by-step instructions for migrating the application from us-west-1 to us-west-2 with minimal downtime.
-
-## Pre-Migration Checklist
-
-- [ ] All stakeholders notified of maintenance window
-- [ ] Backup verification completed
-- [ ] New region resources provisioned and tested
-- [ ] Database replication/backup restored in new region
-- [ ] Application configuration updated for new region
-- [ ] DNS TTL reduced to 60 seconds (24-48 hours before migration)
-- [ ] Monitoring and alerting configured for new region
-- [ ] Rollback procedures tested
-
-## Migration Timeline
-
-**Total Estimated Downtime: 15-30 minutes**
-
-### Phase 1: Pre-Cutover (No Downtime)
-*Duration: 2-4 hours*
-
-#### Step 1: Final Data Sync
-```bash
-# Stop application writes (enable maintenance mode)
-# Perform final database backup/sync
-aws rds create-db-snapshot \
-  --db-instance-identifier myapp-database \
-  --db-snapshot-identifier myapp-final-snapshot-$(date +%Y%m%d-%H%M%S) \
-  --region us-west-1
-
-# Wait for snapshot completion
-aws rds wait db-snapshot-completed \
-  --db-snapshot-identifier myapp-final-snapshot-TIMESTAMP \
-  --region us-west-1
-
-# Restore snapshot in new region
-aws rds restore-db-instance-from-db-snapshot \
-  --db-instance-identifier myapp-database \
-  --db-snapshot-identifier myapp-final-snapshot-TIMESTAMP \
-  --region us-west-2
-```
-
-#### Step 2: Application Deployment
-```bash
-# Deploy application to new region
-terraform workspace select myapp-us-west-2
-terraform apply
-
-# Verify application health
-curl -f https://internal-alb-us-west-2.example.com/health
-```
-
-#### Step 3: Pre-Cutover Testing
-```bash
-# Test application functionality
-./scripts/smoke-test.sh us-west-2
-
-# Verify database connectivity
-./scripts/db-connectivity-test.sh us-west-2
-
-# Load test (optional)
-./scripts/load-test.sh us-west-2
-```
-
-### Phase 2: DNS Cutover (Downtime Begins)
-*Duration: 5-10 minutes*
-
-#### Step 4: Update DNS Records
-```bash
-# Get new ALB DNS name
-NEW_ALB_DNS=$(aws elbv2 describe-load-balancers \
-  --names myapp-alb \
-  --region us-west-2 \
-  --query 'LoadBalancers[0].DNSName' \
-  --output text)
-
-echo "New ALB DNS: $NEW_ALB_DNS"
-
-# Update Route 53 records
-aws route53 change-resource-record-sets \
-  --hosted-zone-id Z123456789 \
-  --change-batch '{
-    "Changes": [{
-      "Action": "UPSERT",
-      "ResourceRecordSet": {
-        "Name": "api.example.com",
-        "Type": "CNAME",
-        "TTL": 60,
-        "ResourceRecords": [{"Value": "'$NEW_ALB_DNS'"}]
-      }
-    }]
-  }'
-```
-
-#### Step 5: Verify DNS Propagation
-```bash
-# Monitor DNS propagation
-while true; do
-  RESOLVED=$(dig +short api.example.com)
-  echo "$(date): DNS resolves to: $RESOLVED"
-  if [[ "$RESOLVED" == *"us-west-2"* ]]; then
-    echo "DNS cutover successful!"
-    break
-  fi
-  sleep 10
-done
-```
-
-### Phase 3: Post-Cutover Verification (Downtime Ends)
-*Duration: 10-15 minutes*
-
-#### Step 6: Application Health Checks
-```bash
-# Verify application is responding
-curl -f https://api.example.com/health
-
-# Check application logs
-aws logs tail /aws/ec2/myapp --region us-west-2 --follow
-
-# Verify database connectivity
-./scripts/db-connectivity-test.sh production
-```
-
-#### Step 7: Traffic Monitoring
-```bash
-# Monitor ALB metrics
-aws cloudwatch get-metric-statistics \
-  --namespace AWS/ApplicationELB \
-  --metric-name RequestCount \
-  --dimensions Name=LoadBalancer,Value=app/myapp-alb/1234567890123456 \
-  --start-time $(date -u -d '10 minutes ago' +%Y-%m-%dT%H:%M:%S) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
-  --period 300 \
-  --statistics Sum \
-  --region us-west-2
-
-# Check error rates
-aws cloudwatch get-metric-statistics \
-  --namespace AWS/ApplicationELB \
-  --metric-name HTTPCode_ELB_5XX_Count \
-  --dimensions Name=LoadBalancer,Value=app/myapp-alb/1234567890123456 \
-  --start-time $(date -u -d '10 minutes ago' +%Y-%m-%dT%H:%M:%S) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
-  --period 300 \
-  --statistics Sum \
-  --region us-west-2
-```
-
-## Post-Migration Tasks
-
-### Immediate (Within 1 hour)
-- [ ] Verify all application functionality
-- [ ] Confirm monitoring and alerting are working
-- [ ] Update documentation with new resource IDs
-- [ ] Notify stakeholders of successful migration
-- [ ] Monitor application performance for anomalies
-
-### Within 24 hours
-- [ ] Increase DNS TTL back to normal values (300-3600 seconds)
-- [ ] Update any hardcoded references to old region
-- [ ] Verify backup procedures are working in new region
-- [ ] Update disaster recovery procedures
-
-### Within 1 week

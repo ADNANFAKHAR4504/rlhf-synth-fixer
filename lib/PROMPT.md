@@ -1,25 +1,67 @@
-ROLE: You are a senior Terraform engineer.
+# Payment Processing Application Migration Project
 
-CONTEXT:
-We must migrate an AWS application from region us-west-1 to us-west-2 using Terraform HCL.
+## Project Overview
 
-CONSTRAINTS:
-- Preserve logical identity: keep the same names/tags/topology.
-- Resource IDs are region-scoped; provide an old→new ID mapping plan using terraform import (do NOT recreate).
-- Migrate Terraform state to the new region/workspace without data loss.
-- Preserve all SG rules and network configuration semantics.
-- Minimize downtime; propose DNS cutover steps and TTL strategy.
+This project involves migrating a containerized payment processing application from a development environment to a production-ready infrastructure using Terraform. The goal is to create a robust, scalable, and secure production environment while ensuring a smooth transition with zero downtime.
 
-DELIVERABLES:
-1) main.tf (providers, resources, modules as needed)
-2) variables.tf
-3) backend.tf (if required) with placeholders, not real secrets
-4) state-migration.md (exact Terraform CLI commands: workspace create/select, import, and verification)
-5) id-mapping.csv sample (headers: resource,address,old_id,new_id,notes)
-6) runbook.md (cutover plan, roll-back, checks)
+## Business Context
 
-OUTPUT FORMAT (IMPORTANT):
-- Provide each file in a separate fenced code block with its filename as the first line in a comment, e.g.:
-```hcl
-# main.tf
-...
+A fintech startup has developed their payment processing platform in a development environment and now needs to deploy it to production. This migration is critical for the company to start processing real customer payments securely and reliably. The infrastructure must handle sensitive financial data while meeting industry compliance requirements.
+
+## Technical Requirements
+
+### Infrastructure Components
+
+1. **Database Infrastructure**
+   - Set up Amazon RDS Aurora PostgreSQL clusters for production
+   - Enable encrypted storage for data security
+   - Configure automated backups for data protection
+
+2. **Container Services**
+   - Deploy application using Amazon ECS Fargate
+   - Implement auto-scaling based on CPU and memory usage
+   - Ensure containers run in secure, private network segments
+
+3. **Load Balancing & Traffic Management**
+   - Configure Application Load Balancers with SSL/TLS certificates
+   - Set up Route53 for DNS management with weighted routing
+   - Enable gradual traffic shifting from development to production
+
+4. **Storage & Logging**
+   - Create S3 buckets for application logs
+   - Implement lifecycle policies for 90-day log retention
+   - Ensure proper log organization and access controls
+
+5. **Security & Configuration Management**
+   - Store sensitive credentials in AWS Systems Manager Parameter Store
+   - Configure security groups with principle of least privilege
+   - Implement Web Application Firewall (WAF) protection
+
+6. **Monitoring & Alerting**
+   - Set up CloudWatch alarms for database performance
+   - Monitor ECS service health and availability
+   - Track load balancer target health and response times
+
+7. **Data Migration**
+   - Create automated scripts to safely migrate data from development to production
+   - Preserve all database relationships and indexes during migration
+   - Ensure data integrity throughout the process
+
+### Architecture Specifications
+
+**Network Setup:**
+- Deploy across 3 availability zones in US East (N. Virginia) region
+- Use public subnets for load balancers (internet-facing)
+- Use private subnets for application containers and databases
+- Include NAT gateways for secure outbound internet access
+
+**Security Requirements:**
+- All stored data must be encrypted using AWS Key Management Service
+- Database instances must be deployed across multiple availability zones
+- Application containers cannot have direct internet access
+- Implement SQL injection protection at the load balancer level
+
+**Resource Management:**
+- Use small database instances (db.t3.micro) for cost optimization
+- Tag all resources with environment and cost center information
+- Separate Terraform state management for development and production
