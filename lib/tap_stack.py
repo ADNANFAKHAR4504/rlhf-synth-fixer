@@ -19,10 +19,10 @@ import pulumi_aws as aws
 
 
 class TapStackArgs:
-  """
+    """
     TapStackArgs defines the properties for the TapStack component.
 
-  Args:
+    Args:
         environment_suffix (Optional[str]): An optional suffix to identify the 
             deployment environment (e.g., 'dev', 'prod', 'pr1234').
         aws_region (Optional[str]): AWS region for deployment. Defaults to 'us-east-1'.
@@ -36,7 +36,7 @@ class TapStackArgs:
         tags (Optional[Dict[str, str]]): Stores custom tags.
         db_password (pulumi.Output[str]): Stores the database password.
     """
-    
+
     def __init__(
         self,
         environment_suffix: Optional[str] = None,
@@ -44,9 +44,9 @@ class TapStackArgs:
         tags: Optional[Dict[str, str]] = None,
         db_password: Optional[pulumi.Output[str]] = None
     ):
-    self.environment_suffix = environment_suffix or 'dev'
+        self.environment_suffix = environment_suffix or 'dev'
         self.aws_region = aws_region or 'us-east-1'
-    self.tags = tags
+        self.tags = tags
         self.db_password = db_password or pulumi.Output.from_input('DefaultPassword123!')
 
 
