@@ -15,9 +15,8 @@ const region =
   process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || 'us-east-1';
 const account = process.env.CDK_DEFAULT_ACCOUNT;
 
-// Generate environment suffix for unique resource naming (capitalize first letter)
-const environmentSuffix =
-  environment.charAt(0).toUpperCase() + environment.slice(1);
+// Generate environment suffix for unique resource naming (keep original case)
+const environmentSuffix = environment;
 const stackName = `TapStack${environmentSuffix}`;
 
 // Create the main stack with all constructs
