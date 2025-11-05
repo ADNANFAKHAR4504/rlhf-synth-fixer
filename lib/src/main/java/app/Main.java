@@ -16,7 +16,6 @@ import com.pulumi.aws.ec2.SecurityGroupArgs;
 import com.pulumi.aws.ec2.inputs.SecurityGroupEgressArgs;
 import com.pulumi.aws.ec2.inputs.SecurityGroupIngressArgs;
 import com.pulumi.aws.ec2.VpcEndpoint;
-import com.pulumi.aws.ec2.VpcEndpointArgs;
 import com.pulumi.aws.s3.Bucket;
 import com.pulumi.aws.s3.BucketArgs;
 import com.pulumi.aws.s3.BucketVersioningV2;
@@ -102,7 +101,7 @@ import java.util.Collections;
  */
 public final class Main {
 
-    private static final String REGION = "us-east-2";
+    private static final String REGION = "us-east-1";
     private static final String PROJECT_NAME = "migration-connector";
 
     /**
@@ -371,22 +370,9 @@ public final class Main {
                     .tags(tags)
                     .build(), CustomResourceOptions.builder().parent(this).build());
 
-            // Create VPC endpoints (Gateway endpoints)
-            this.s3Endpoint = new VpcEndpoint(stackName + "-s3-endpoint",
-                VpcEndpointArgs.builder()
-                    .vpcId(vpc.id())
-                    .serviceName("com.amazonaws." + REGION + ".s3")
-                    .vpcEndpointType("Gateway")
-                    .tags(tags)
-                    .build(), CustomResourceOptions.builder().parent(this).build());
-
-            this.dynamodbEndpoint = new VpcEndpoint(stackName + "-dynamodb-endpoint",
-                VpcEndpointArgs.builder()
-                    .vpcId(vpc.id())
-                    .serviceName("com.amazonaws." + REGION + ".dynamodb")
-                    .vpcEndpointType("Gateway")
-                    .tags(tags)
-                    .build(), CustomResourceOptions.builder().parent(this).build());
+            // VPC endpoints disabled - not needed for demo deployment
+            this.s3Endpoint = null;
+            this.dynamodbEndpoint = null;
 
             this.registerOutputs(Collections.emptyMap());
         }
