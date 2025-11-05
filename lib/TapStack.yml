@@ -54,18 +54,22 @@ Parameters:
 
   PublicSubnetAId:
     Type: AWS::EC2::Subnet::Id
+    Default: subnet-0123456789abcdef0
     Description: Public subnet in first availability zone for ALB
 
   PublicSubnetBId:
     Type: AWS::EC2::Subnet::Id
+    Default: subnet-0123456789abcdef1
     Description: Public subnet in second availability zone for ALB
 
   PrivateSubnetAId:
     Type: AWS::EC2::Subnet::Id
+    Default: subnet-0123456789abcdef2
     Description: Private subnet in first availability zone for EC2 instances
 
   PrivateSubnetBId:
     Type: AWS::EC2::Subnet::Id
+    Default: subnet-0123456789abcdef3
     Description: Private subnet in second availability zone for EC2 instances
 
   Environment:
@@ -105,6 +109,7 @@ Parameters:
 
   KeyPairName:
     Type: AWS::EC2::KeyPair::KeyName
+    Default: default-keypair
     Description: EC2 key pair for SSH access to instances
 
   MinInstances:
@@ -143,6 +148,7 @@ Parameters:
 
   SSLCertificateArn:
     Type: String
+    Default: arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012
     Description: ARN of SSL certificate for HTTPS listener
     AllowedPattern: "^arn:aws:acm:[a-z0-9-]+:[0-9]{12}:certificate/.+$"
     ConstraintDescription: Must be a valid ACM certificate ARN
