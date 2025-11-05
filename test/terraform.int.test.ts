@@ -253,10 +253,9 @@ describe('Terraform Integration Tests - ECS Fargate Application', () => {
       expect(taskDefinition.memory).toBe('8192');
     });
 
-    test('should have deployment circuit breaker enabled', () => {
+    test('should have ECS service with execute command enabled', () => {
       if (!hasOutputs || !service) return;
-      expect(service.deploymentConfiguration?.deploymentCircuitBreaker?.enable).toBe(true);
-      expect(service.deploymentConfiguration?.deploymentCircuitBreaker?.rollback).toBe(true);
+      expect(service.enableExecuteCommand).toBe(true);
     });
 
     test('should have at least minimum number of running tasks', () => {

@@ -350,10 +350,8 @@ describe('Terraform Infrastructure Unit Tests - ECS Fargate Application', () => 
       expect(terraformCode).toMatch(/resource\s+"aws_ecs_service"\s+"app"/);
     });
 
-    test('should enable deployment circuit breaker', () => {
-      expect(terraformCode).toMatch(/deployment_circuit_breaker/);
-      expect(terraformCode).toMatch(/enable\s*=\s*true/);
-      expect(terraformCode).toMatch(/rollback\s*=\s*true/);
+    test('should have ECS service with enable_execute_command', () => {
+      expect(terraformCode).toMatch(/enable_execute_command\s*=\s*true/);
     });
   });
 

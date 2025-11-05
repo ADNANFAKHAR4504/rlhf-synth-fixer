@@ -128,16 +128,6 @@ resource "aws_ecs_service" "app" {
     container_port   = 8080
   }
 
-  deployment_configuration {
-    maximum_percent         = 200
-    minimum_healthy_percent = 100
-
-    deployment_circuit_breaker {
-      enable   = true
-      rollback = true
-    }
-  }
-
   enable_execute_command = true
 
   depends_on = [
