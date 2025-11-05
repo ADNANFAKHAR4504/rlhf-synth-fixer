@@ -110,7 +110,10 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Get AWS account ID for unique resource naming
-    const currentAccount = aws.getCallerIdentity({}, { provider: primaryProvider });
+    const currentAccount = aws.getCallerIdentityOutput(
+      {},
+      { provider: primaryProvider }
+    );
 
     // ========================================================================
     // 1. S3 BUCKET FOR COMPLIANCE REPORTS
@@ -121,7 +124,7 @@ export class TapStack extends pulumi.ComponentResource {
       `compliance-reports-${environmentSuffix}`,
       {
         bucket: currentAccount.accountId.apply(
-          (accountId) =>
+          (accountId: string) =>
             `compliance-reports-${environmentSuffix}-${accountId}-${(pulumi.getStack() || 'dev').toLowerCase()}`
         ),
         versioning: {
@@ -696,7 +699,7 @@ exports.handler = async (event) => {
     const inspector = new aws.inspector2.Enabler(
       `inspector-enabler-${environmentSuffix}`,
       {
-        accountIds: [currentAccount.accountId],
+        accountIds: pulumi.all([currentAccount.accountId]).apply(([accountId]) => [accountId]),
         resourceTypes: ['EC2', 'ECR'],
       },
       {
@@ -1380,14 +1383,17 @@ exports.handler = async (event) => {
     );
 
     // Get AWS account ID for secondary region (same account)
-    const secondaryAccount = aws.getCallerIdentity({}, { provider: secondaryProvider });
+    const secondaryAccount = aws.getCallerIdentityOutput(
+      {},
+      { provider: secondaryProvider }
+    );
 
     // Replica S3 bucket in secondary region for DR
     const replicaBucket = new aws.s3.Bucket(
       `compliance-reports-replica-${environmentSuffix}`,
       {
         bucket: secondaryAccount.accountId.apply(
-          (accountId) =>
+          (accountId: string) =>
             `compliance-reports-replica-${environmentSuffix}-${accountId}-${(pulumi.getStack() || 'dev').toLowerCase()}`
         ),
         versioning: {
