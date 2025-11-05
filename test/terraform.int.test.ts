@@ -32,34 +32,51 @@ function loadTerraformOutputs(): TerraformOutputs {
     console.log("Loading outputs from:", ciOutputPath);
     const outputs = JSON.parse(content);
     console.log("Parsed outputs keys:", Object.keys(outputs));
-    return outputs;
+    
+    if (Object.keys(outputs).length > 0) {
+      return outputs;
+    }
+    console.warn("Outputs file exists but is empty, trying fallback paths...");
   }
 
   const flatOutputPath = path.resolve(__dirname, "../cfn-outputs/flat-outputs.json");
   if (fs.existsSync(flatOutputPath)) {
     console.log("Loading flat outputs from:", flatOutputPath);
     const flatOutputs = JSON.parse(fs.readFileSync(flatOutputPath, "utf8"));
-    const converted: any = {};
-    for (const [key, value] of Object.entries(flatOutputs)) {
-      converted[key] = { value };
+    if (Object.keys(flatOutputs).length > 0) {
+      const converted: any = {};
+      for (const [key, value] of Object.entries(flatOutputs)) {
+        converted[key] = { value };
+      }
+      return converted;
     }
-    return converted;
   }
 
   const outputPath = path.resolve(__dirname, "../terraform-outputs.json");
   if (fs.existsSync(outputPath)) {
     console.log("Loading outputs from:", outputPath);
-    return JSON.parse(fs.readFileSync(outputPath, "utf8"));
+    const outputs = JSON.parse(fs.readFileSync(outputPath, "utf8"));
+    if (Object.keys(outputs).length > 0) {
+      return outputs;
+    }
   }
 
   const altPath = path.resolve(__dirname, "../lib/terraform.tfstate");
   if (fs.existsSync(altPath)) {
     console.log("Loading outputs from state file:", altPath);
     const state = JSON.parse(fs.readFileSync(altPath, "utf8"));
-    return state.outputs || {};
+    if (state.outputs && Object.keys(state.outputs).length > 0) {
+      return state.outputs;
+    }
   }
 
-  throw new Error("Could not find Terraform outputs");
+  console.warn("⚠️  No Terraform outputs found. Integration tests require deployed infrastructure.");
+  console.warn("⚠️  Expected outputs file at one of:");
+  console.warn("   - cfn-outputs/all-outputs.json");
+  console.warn("   - cfn-outputs/flat-outputs.json");
+  console.warn("   - terraform-outputs.json");
+  console.warn("   - lib/terraform.tfstate");
+  return {};
 }
 
 describe("Payment Processing Infrastructure Integration Tests", () => {
@@ -81,10 +98,18 @@ describe("Payment Processing Infrastructure Integration Tests", () => {
       environment: outputs.environment?.value,
       transactionsBucket: transactionsBucket || "missing",
       logsBucket: logsBucket || "missing",
+      availableOutputs: Object.keys(outputs),
     });
 
     if (!transactionsBucket || !logsBucket) {
-      throw new Error("Missing required outputs: storage_bucket_names");
+      const missingOutputs = [];
+      if (!transactionsBucket) missingOutputs.push("storage_bucket_names.transactions");
+      if (!logsBucket) missingOutputs.push("storage_bucket_names.logs");
+      
+      console.error("❌ Missing required outputs:", missingOutputs.join(", "));
+      console.error("💡 Integration tests require deployed infrastructure with outputs.");
+      console.error("💡 Ensure terraform apply has completed and outputs are exported.");
+      throw new Error(`Missing required outputs: ${missingOutputs.join(", ")}. Infrastructure may not be deployed.`);
     }
   }, 30000);
 
