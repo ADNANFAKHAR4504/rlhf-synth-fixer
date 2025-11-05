@@ -4,7 +4,7 @@ Thanks for reaching out about setting up the networking foundation for your micr
 
 ## Solution Overview
 
-I've designed a production-ready VPC with comprehensive network segmentation across three availability zones in us-east-1. The architecture includes public and private subnets, high-availability NAT Gateways, VPC Flow Logs for security monitoring, and custom Network ACLs to enforce security policies.
+I've designed a production-ready VPC with comprehensive network segmentation across three availability zones. The architecture includes public and private subnets, high-availability NAT Gateways, VPC Flow Logs for security monitoring, and custom Network ACLs to enforce security policies.
 
 ## Architecture Components
 
@@ -14,22 +14,24 @@ I've designed a production-ready VPC with comprehensive network segmentation acr
 - DHCP options configured with AmazonProvidedDNS
 
 **Subnet Strategy**:
-- 3 Public subnets (10.0.0.0/24, 10.0.1.0/24, 10.0.2.0/24) across us-east-1a, 1b, 1c
-- 3 Private subnets (10.0.10.0/24, 10.0.11.0/24, 10.0.12.0/24) across us-east-1a, 1b, 1c
+- 3 Public subnets (10.0.0.0/24, 10.0.1.0/24, 10.0.2.0/24) across availability zones
+- 3 Private subnets (10.0.10.0/24, 10.0.11.0/24, 10.0.12.0/24) across availability zones
 - Public subnets auto-assign public IPs for EC2 instances
+- Dynamic availability zone selection using Fn::Select and Fn::GetAZs
 
 **High Availability NAT Strategy**:
 - 3 NAT Gateways deployed in each public subnet
 - Each private subnet routes through its AZ-specific NAT Gateway
-- Elastic IPs allocated for each NAT Gateway
+- Elastic IPs allocated for each NAT Gateway with proper DependsOn
 
 **Security Controls**:
 - VPC Flow Logs capturing ALL traffic to CloudWatch Logs
 - Custom Network ACLs denying inbound SSH from 0.0.0.0/0
 - CloudWatch Log Group with 7-day retention
+- IAM role with least-privilege permissions scoped to specific log group
 
 **Route Configuration**:
-- Public route table routing 0.0.0.0/0 to Internet Gateway
+- Public route table routing 0.0.0.0/0 to Internet Gateway with DependsOn
 - Private route tables routing 0.0.0.0/0 to respective NAT Gateways
 
 ## CloudFormation Template
@@ -162,7 +164,14 @@ Here's the complete implementation using **CloudFormation JSON**:
           "Ref": "VPC"
         },
         "CidrBlock": "10.0.0.0/24",
-        "AvailabilityZone": "us-east-1a",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
@@ -193,7 +202,14 @@ Here's the complete implementation using **CloudFormation JSON**:
           "Ref": "VPC"
         },
         "CidrBlock": "10.0.1.0/24",
-        "AvailabilityZone": "us-east-1b",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
@@ -224,7 +240,14 @@ Here's the complete implementation using **CloudFormation JSON**:
           "Ref": "VPC"
         },
         "CidrBlock": "10.0.2.0/24",
-        "AvailabilityZone": "us-east-1c",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
@@ -255,7 +278,14 @@ Here's the complete implementation using **CloudFormation JSON**:
           "Ref": "VPC"
         },
         "CidrBlock": "10.0.10.0/24",
-        "AvailabilityZone": "us-east-1a",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
@@ -286,7 +316,14 @@ Here's the complete implementation using **CloudFormation JSON**:
           "Ref": "VPC"
         },
         "CidrBlock": "10.0.11.0/24",
-        "AvailabilityZone": "us-east-1b",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
@@ -317,7 +354,14 @@ Here's the complete implementation using **CloudFormation JSON**:
           "Ref": "VPC"
         },
         "CidrBlock": "10.0.12.0/24",
-        "AvailabilityZone": "us-east-1c",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
@@ -1114,97 +1158,20 @@ Here's the complete implementation using **CloudFormation JSON**:
 }
 ```
 
-## Integration Tests
-
-The infrastructure includes comprehensive integration tests using AWS CLI that validate the deployed resources without using mocked values.
-
-**Test Approach**: Uses AWS CLI via `child_process.execSync` to avoid Node.js ESM module compatibility issues with AWS SDK v3.
-
-```typescript
-import { execSync } from 'child_process';
-import * as fs from 'fs';
-
-const outputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-);
-
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const region = process.env.AWS_REGION || 'us-east-1';
-
-// Helper function to execute AWS CLI commands
-function awsCli(command: string): any {
-  try {
-    const result = execSync(`aws ${command} --region ${region} --output json`, {
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'pipe']
-    });
-    return JSON.parse(result);
-  } catch (error: any) {
-    console.error(`AWS CLI Error: ${error.message}`);
-    throw error;
-  }
-}
-
-describe('VPC Infrastructure Integration Tests', () => {
-  describe('VPC Configuration', () => {
-    test('VPC should exist with correct CIDR block', async () => {
-      const vpcId = outputs.VPCId;
-      expect(vpcId).toBeDefined();
-
-      const response = awsCli(`ec2 describe-vpcs --vpc-ids ${vpcId}`);
-
-      expect(response.Vpcs).toBeDefined();
-      expect(response.Vpcs.length).toBe(1);
-      expect(response.Vpcs[0].CidrBlock).toBe('10.0.0.0/16');
-      expect(response.Vpcs[0].State).toBe('available');
-    });
-
-    test('VPC should have DNS support enabled', async () => {
-      const vpcId = outputs.VPCId;
-
-      const dnsSupportResponse = awsCli(`ec2 describe-vpc-attribute --vpc-id ${vpcId} --attribute enableDnsSupport`);
-      const dnsHostnamesResponse = awsCli(`ec2 describe-vpc-attribute --vpc-id ${vpcId} --attribute enableDnsHostnames`);
-
-      expect(dnsSupportResponse.EnableDnsSupport.Value).toBe(true);
-      expect(dnsHostnamesResponse.EnableDnsHostnames.Value).toBe(true);
-    });
-  });
-
-  // Additional test suites for Subnets, NAT Gateways, Internet Gateway,
-  // Route Tables, Network ACLs, VPC Flow Logs, Resource Tagging, and High Availability
-});
-```
-
-**Test Coverage** (24 comprehensive tests):
-
-1. **VPC Configuration**: VPC exists with correct CIDR, DNS support enabled
-2. **Subnets**: 6 subnets total, correct CIDR blocks, AZ distribution, MapPublicIpOnLaunch settings
-3. **NAT Gateways**: 3 NAT Gateways in available state, in public subnets, with Elastic IPs
-4. **Internet Gateway**: Attached to VPC in available state
-5. **Route Tables**: Routes exist for all subnets, public routes to IGW, private routes to NAT Gateways
-6. **Network ACLs**: Custom ACLs configured, SSH denied from 0.0.0.0/0
-7. **VPC Flow Logs**: Flow Logs enabled, CloudWatch Log Group exists, IAM Role exists
-8. **Resource Tagging**: Correct tags on VPC and subnets
-9. **High Availability**: Resources distributed across 3 AZs, each private subnet has own NAT Gateway
-
 ## Deployment Instructions
 
 1. Deploy the infrastructure:
    ```bash
    aws cloudformation deploy \
      --template-file lib/TapStack.json \
-     --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} \
+     --stack-name TapStackdev \
      --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
-     --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev}
+     --parameter-overrides EnvironmentSuffix=dev
    ```
 
-2. Generate outputs file for integration tests:
+2. Extract outputs:
    ```bash
-   aws cloudformation describe-stacks \
-     --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} \
-     --query 'Stacks[0].Outputs' \
-     --output json | jq 'reduce .[] as $item ({}; .[$item.OutputKey] = $item.OutputValue)' \
-     > cfn-outputs/flat-outputs.json
+   aws cloudformation describe-stacks --stack-name TapStackdev --query 'Stacks[0].Outputs' --output json | jq 'reduce .[] as $item ({}; .[$item.OutputKey] = $item.OutputValue)' > cfn-outputs/flat-outputs.json
    ```
 
 3. Run integration tests:
@@ -1214,13 +1181,36 @@ describe('VPC Infrastructure Integration Tests', () => {
 
 ## Key Features
 
+- **Multi-Environment Support**: EnvironmentSuffix parameter with validation enables dev/staging/prod deployments
 - **Network Isolation**: Separate public and private subnets across 3 AZs provide strong network segmentation
 - **High Availability**: 3 NAT Gateways ensure outbound connectivity remains available even if an entire AZ fails
 - **Security Monitoring**: VPC Flow Logs capture all network traffic to CloudWatch for security analysis
 - **SSH Protection**: Custom Network ACLs deny inbound SSH from the internet
 - **Cost Tagging**: All resources tagged with Environment and CostCenter for cost allocation
-- **Environment Flexibility**: EnvironmentSuffix parameter enables multi-environment deployments
-- **Cross-Stack Integration**: All outputs include Export sections for cross-stack references
-- **IAM Least Privilege**: VPC Flow Logs role permissions scoped to specific log group ARN
+- **Region Agnostic**: Uses Fn::GetAZs to dynamically select availability zones
+- **Cross-Stack Integration**: Comprehensive outputs with exports for cross-stack references
 
-This solution provides a robust, scalable, and secure VPC foundation for your financial services microservices platform with comprehensive testing and monitoring capabilities.
+## Stack Outputs
+
+**Network Resources**:
+- **VPCId**: The VPC identifier with export ${AWS::StackName}-VPCId
+- **InternetGatewayId**: Internet Gateway ID for reference
+
+**Public Subnets**:
+- **PublicSubnetAId**, **PublicSubnetBId**, **PublicSubnetCId**: Public subnet IDs with exports
+
+**Private Subnets**:
+- **PrivateSubnetAId**, **PrivateSubnetBId**, **PrivateSubnetCId**: Private subnet IDs with exports
+
+**NAT Gateways**:
+- **NatGatewayAId**, **NatGatewayBId**, **NatGatewayCId**: NAT Gateway IDs with exports
+
+**Monitoring**:
+- **VPCFlowLogsLogGroupName**: CloudWatch Log Group for VPC Flow Logs
+
+**Configuration**:
+- **EnvironmentSuffix**: The suffix used for this deployment
+
+All outputs include CloudFormation exports for cross-stack references using the pattern `${AWS::StackName}-{OutputName}`.
+
+This solution provides a robust, scalable, and secure VPC foundation for your financial services microservices platform.

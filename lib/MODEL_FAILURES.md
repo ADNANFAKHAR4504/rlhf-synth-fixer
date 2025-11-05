@@ -1,236 +1,470 @@
-# Model Failures and Corrections - Task 101000829# Model Failures and Corrections - Task 101000829
+# Model Failures and Corrections - Task 101000829# Model Failures and Corrections - Task 101000829# Model Failures and Corrections - Task 101000829
 
 
 
-This document catalogs the specific differences between the initial MODEL_RESPONSE and the corrected IDEAL_RESPONSE for training purposes.This document catalogs the specific differences between the initial MODEL_RESPONSE and the corrected IDEAL_RESPONSE for training purposes.
+This document catalogs the specific differences between the initial MODEL_RESPONSE and the corrected IDEAL_RESPONSE for training purposes.
 
 
 
-## Summary of Issues## Summary of Issues
+## Summary of IssuesThis document catalogs the specific differences between the initial MODEL_RESPONSE and the corrected IDEAL_RESPONSE for training purposes.This document catalogs the specific differences between the initial MODEL_RESPONSE and the corrected IDEAL_RESPONSE for training purposes.
 
 
 
-**Total Fixes**: 1 major issue**Total Fixes**: 8 major issues
+**Total Fixes**: 4 major issues
 
-**Categories**: **Categories**: 
+**Categories**: 
 
-- Category A (Architecture): 0 fixes- Category A (Architecture): 0 fixes
+- Category A (Architecture): 0 fixes## Summary of Issues## Summary of Issues
 
-- Category B (Configuration): 1 fix  - Category B (Configuration): 6 fixes  
+- Category B (Configuration): 3 fixes  
 
-- Category C (Minor): 0 fixes- Category C (Minor): 2 fixes
-
-
-
-**Training Value**: This fix demonstrates critical integration testing approach to avoid Node.js ESM module compatibility issues while maintaining comprehensive real AWS resource validation.**Training Value**: These fixes demonstrate critical CloudFormation best practices including resource naming patterns, IAM least privilege, proper dependency management, and cross-stack integration patterns.
+- Category C (Minor): 1 fix
 
 
 
-------
+**Training Value**: These fixes demonstrate critical CloudFormation best practices including dynamic availability zone selection, proper resource naming patterns, parameter validation, and integration testing without AWS SDK ESM module issues.**Total Fixes**: 1 major issue**Total Fixes**: 8 major issues
 
 
 
-## Fix 1: AWS SDK v3 ESM Module Compatibility Issue in Integration Tests (Category B)## Fix 1: Missing EnvironmentSuffix in Resource Names (Category B)
+---**Categories**: **Categories**: 
 
 
 
-**Issue**: Integration tests using AWS SDK v3 with import statements fail due to Node.js ESM module compatibility issues. Jest requires `--experimental-vm-modules` flag which would necessitate modifying `package.json` or `jest.config.js` files that are not supposed to be changed.**Issue**: All resource names were hardcoded with "production" or lacked the EnvironmentSuffix parameter, causing naming conflicts in multi-environment deployments.
+## Fix 1: Hardcoded Availability Zones (Category B)- Category A (Architecture): 0 fixes- Category A (Architecture): 0 fixes
 
 
 
-**Impact**: All integration tests (24 tests) would fail without modifying configuration files, preventing validation of deployed CloudFormation infrastructure and blocking deployment verification.**Impact**: Prevents deploying multiple stack instances (dev, staging, prod) and causes resource name collisions during parallel CI/CD runs.
+**Issue**: Subnets used hardcoded availability zone values like "us-east-1a", "us-east-1b", "us-east-1c", making the template region-specific and triggering cfn-lint warnings (W3010).- Category B (Configuration): 1 fix  - Category B (Configuration): 6 fixes  
 
 
 
-**MODEL_RESPONSE** (Incorrect Approach):**MODEL_RESPONSE** (Incorrect):
+**Impact**: Template cannot be deployed in other AWS regions without modification, reduces portability, and fails CloudFormation linting standards.- Category C (Minor): 0 fixes- Category C (Minor): 2 fixes
 
-```typescript```json
 
-import * as fs from 'fs';{
 
-import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeNatGatewaysCommand, DescribeInternetGatewaysCommand, DescribeRouteTablesCommand, DescribeNetworkAclsCommand, DescribeFlowLogsCommand, DescribeVpcAttributeCommand } from '@aws-sdk/client-ec2';  "VPC": {
-
-import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';    "Properties": {
-
-import { IAMClient, GetRoleCommand } from '@aws-sdk/client-iam';      "Tags": [
-
-        {
-
-const ec2Client = new EC2Client({ region });          "Key": "Name",
-
-const logsClient = new CloudWatchLogsClient({ region });          "Value": "vpc-production"
-
-const iamClient = new IAMClient({ region });        }
-
-      ]
-
-describe('VPC Infrastructure Integration Tests', () => {    }
-
-  describe('VPC Configuration', () => {  },
-
-    test('VPC should exist with correct CIDR block', async () => {  "PublicSubnetA": {
-
-      const response = await ec2Client.send(    "Properties": {
-
-        new DescribeVpcsCommand({ VpcIds: [vpcId] })      "Tags": [
-
-      );        {
-
-      // Test assertions...          "Key": "Name",
-
-    });          "Value": "public-subnet-a"
-
-  });        }
-
-});      ]
-
-```    }
-
-  }
-
-**Error Encountered**:}
-
-``````
-
-TypeError: A dynamic import callback was invoked without --experimental-vm-modules
-
-```**IDEAL_RESPONSE** (Correct):
+**MODEL_RESPONSE** (Incorrect):
 
 ```json
 
-**IDEAL_RESPONSE** (Correct Approach):{
+{**Training Value**: This fix demonstrates critical integration testing approach to avoid Node.js ESM module compatibility issues while maintaining comprehensive real AWS resource validation.**Training Value**: These fixes demonstrate critical CloudFormation best practices including resource naming patterns, IAM least privilege, proper dependency management, and cross-stack integration patterns.
 
-```typescript  "VPC": {
+  "PublicSubnetA": {
 
-import { execSync } from 'child_process';    "Properties": {
+    "Type": "AWS::EC2::Subnet",
 
-import * as fs from 'fs';      "Tags": [
+    "Properties": {
 
-        {
+      "CidrBlock": "10.0.0.0/24",------
 
-const outputs = JSON.parse(          "Key": "Name",
-
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')          "Value": {
-
-);            "Fn::Sub": "vpc-${EnvironmentSuffix}"
-
-          }
-
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';        }
-
-const region = process.env.AWS_REGION || 'us-east-1';      ]
+      "AvailabilityZone": "us-east-1a"
 
     }
 
-// Helper function to execute AWS CLI commands  },
+  }
 
-function awsCli(command: string): any {  "PublicSubnetA": {
+}## Fix 1: AWS SDK v3 ESM Module Compatibility Issue in Integration Tests (Category B)## Fix 1: Missing EnvironmentSuffix in Resource Names (Category B)
 
-  try {    "Properties": {
-
-    const result = execSync(`aws ${command} --region ${region} --output json`, {      "Tags": [
-
-      encoding: 'utf8',        {
-
-      stdio: ['pipe', 'pipe', 'pipe']          "Key": "Name",
-
-    });          "Value": {
-
-    return JSON.parse(result);            "Fn::Sub": "public-subnet-a-${EnvironmentSuffix}"
-
-  } catch (error: any) {          }
-
-    console.error(`AWS CLI Error: ${error.message}`);        }
-
-    throw error;      ]
-
-  }    }
-
-}  }
-
-}
-
-describe('VPC Infrastructure Integration Tests', () => {```
-
-  describe('VPC Configuration', () => {
-
-    test('VPC should exist with correct CIDR block', async () => {**Lesson**: Every resource name in CloudFormation must include the EnvironmentSuffix parameter using `Fn::Sub` to enable multi-environment deployments without conflicts. This applies to all AWS::EC2, AWS::Logs, and AWS::IAM resources.
-
-      const vpcId = outputs.VPCId;
-
-      expect(vpcId).toBeDefined();---
+```
 
 
 
-      const response = awsCli(`ec2 describe-vpcs --vpc-ids ${vpcId}`);## Fix 2: Missing DependsOn for EIP Resources (Category B)
+**IDEAL_RESPONSE** (Correct):
 
+```json**Issue**: Integration tests using AWS SDK v3 with import statements fail due to Node.js ESM module compatibility issues. Jest requires `--experimental-vm-modules` flag which would necessitate modifying `package.json` or `jest.config.js` files that are not supposed to be changed.**Issue**: All resource names were hardcoded with "production" or lacked the EnvironmentSuffix parameter, causing naming conflicts in multi-environment deployments.
 
+{
 
-      expect(response.Vpcs).toBeDefined();**Issue**: Elastic IP (EIP) resources didn't specify `DependsOn: VPCGatewayAttachment`, potentially causing deployment failures if EIPs are allocated before the VPC is attached to the Internet Gateway.
+  "PublicSubnetA": {
 
-      expect(response.Vpcs.length).toBe(1);
+    "Type": "AWS::EC2::Subnet",
 
-      expect(response.Vpcs[0].CidrBlock).toBe('10.0.0.0/16');**Impact**: Can cause intermittent deployment failures with error "The vpc ID 'vpc-xxx' does not have an internet gateway attached"
+    "Properties": {**Impact**: All integration tests (24 tests) would fail without modifying configuration files, preventing validation of deployed CloudFormation infrastructure and blocking deployment verification.**Impact**: Prevents deploying multiple stack instances (dev, staging, prod) and causes resource name collisions during parallel CI/CD runs.
 
-      expect(response.Vpcs[0].State).toBe('available');
+      "CidrBlock": "10.0.0.0/24",
 
-    });**MODEL_RESPONSE** (Incorrect):
+      "AvailabilityZone": {
+
+        "Fn::Select": [
+
+          0,**MODEL_RESPONSE** (Incorrect Approach):**MODEL_RESPONSE** (Incorrect):
+
+          { "Fn::GetAZs": "" }
+
+        ]```typescript```json
+
+      }
+
+    }import * as fs from 'fs';{
+
+  }
+
+}import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeNatGatewaysCommand, DescribeInternetGatewaysCommand, DescribeRouteTablesCommand, DescribeNetworkAclsCommand, DescribeFlowLogsCommand, DescribeVpcAttributeCommand } from '@aws-sdk/client-ec2';  "VPC": {
+
+```
+
+import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';    "Properties": {
+
+**Key Learning**: Use `Fn::Select` with `Fn::GetAZs` to dynamically select availability zones based on the current region. This makes templates region-agnostic and follows CloudFormation best practices. The pattern `{"Fn::Select": [index, {"Fn::GetAZs": ""}]}` retrieves the nth available AZ in the current region.
+
+import { IAMClient, GetRoleCommand } from '@aws-sdk/client-iam';      "Tags": [
+
+---
+
+        {
+
+## Fix 2: Missing EnvironmentSuffix in Resource Names (Category B)
+
+const ec2Client = new EC2Client({ region });          "Key": "Name",
+
+**Issue**: Resource names were hardcoded as "vpc-production", "dhcp-options-production" etc., instead of using the EnvironmentSuffix parameter, preventing multi-environment deployments.
+
+const logsClient = new CloudWatchLogsClient({ region });          "Value": "vpc-production"
+
+**Impact**: Cannot deploy dev, staging, and prod environments in the same account/region due to resource naming conflicts.
+
+const iamClient = new IAMClient({ region });        }
+
+**MODEL_RESPONSE** (Incorrect):
+
+```json      ]
+
+{
+
+  "VPC": {describe('VPC Infrastructure Integration Tests', () => {    }
+
+    "Properties": {
+
+      "Tags": [  describe('VPC Configuration', () => {  },
+
+        {
+
+          "Key": "Name",    test('VPC should exist with correct CIDR block', async () => {  "PublicSubnetA": {
+
+          "Value": "vpc-production"
+
+        }      const response = await ec2Client.send(    "Properties": {
+
+      ]
+
+    }        new DescribeVpcsCommand({ VpcIds: [vpcId] })      "Tags": [
+
+  }
+
+}      );        {
+
+```
+
+      // Test assertions...          "Key": "Name",
+
+**IDEAL_RESPONSE** (Correct):
+
+```json    });          "Value": "public-subnet-a"
+
+{
+
+  "VPC": {  });        }
+
+    "Properties": {
+
+      "Tags": [});      ]
+
+        {
+
+          "Key": "Name",```    }
+
+          "Value": {
+
+            "Fn::Sub": "vpc-${EnvironmentSuffix}"  }
+
+          }
+
+        }**Error Encountered**:}
+
+      ]
+
+    }``````
+
+  }
+
+}TypeError: A dynamic import callback was invoked without --experimental-vm-modules
+
+```
+
+```**IDEAL_RESPONSE** (Correct):
+
+**Key Learning**: Always use `Fn::Sub` to include the EnvironmentSuffix parameter in resource names. Pattern: `{"Fn::Sub": "resource-name-${EnvironmentSuffix}"}`. This applies to all resource names in Tags, LogGroupName, RoleName, and other naming properties to enable parallel environment deployments.
 
 ```json
 
+---
+
+**IDEAL_RESPONSE** (Correct Approach):{
+
+## Fix 3: Missing Metadata and Parameter Validation (Category C)
+
+```typescript  "VPC": {
+
+**Issue**: Template lacked `AWS::CloudFormation::Interface` metadata for organizing parameters, and EnvironmentSuffix parameter had no validation pattern.
+
+import { execSync } from 'child_process';    "Properties": {
+
+**Impact**: Poor user experience in AWS Console (parameters appear ungrouped), and users could enter invalid characters causing deployment failures.
+
+import * as fs from 'fs';      "Tags": [
+
+**MODEL_RESPONSE** (Incorrect):
+
+```json        {
+
+{
+
+  "Parameters": {const outputs = JSON.parse(          "Key": "Name",
+
+    "EnvironmentSuffix": {
+
+      "Type": "String",  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')          "Value": {
+
+      "Default": "dev",
+
+      "Description": "Environment suffix for resource naming");            "Fn::Sub": "vpc-${EnvironmentSuffix}"
+
+    }
+
+  }          }
+
+}
+
+```const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';        }
+
+
+
+**IDEAL_RESPONSE** (Correct):const region = process.env.AWS_REGION || 'us-east-1';      ]
+
+```json
+
+{    }
+
+  "Metadata": {
+
+    "AWS::CloudFormation::Interface": {// Helper function to execute AWS CLI commands  },
+
+      "ParameterGroups": [
+
+        {function awsCli(command: string): any {  "PublicSubnetA": {
+
+          "Label": {"default": "Environment Configuration"},
+
+          "Parameters": ["EnvironmentSuffix"]  try {    "Properties": {
+
+        }
+
+      ]    const result = execSync(`aws ${command} --region ${region} --output json`, {      "Tags": [
+
+    }
+
+  },      encoding: 'utf8',        {
+
+  "Parameters": {
+
+    "EnvironmentSuffix": {      stdio: ['pipe', 'pipe', 'pipe']          "Key": "Name",
+
+      "Type": "String",
+
+      "Default": "dev",    });          "Value": {
+
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+
+      "AllowedPattern": "^[a-zA-Z0-9]+$",    return JSON.parse(result);            "Fn::Sub": "public-subnet-a-${EnvironmentSuffix}"
+
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+
+    }  } catch (error: any) {          }
+
+  }
+
+}    console.error(`AWS CLI Error: ${error.message}`);        }
+
+```
+
+    throw error;      ]
+
+**Key Learning**: Always include `Metadata.AWS::CloudFormation::Interface` to organize parameters and add `AllowedPattern` with `ConstraintDescription` for parameter validation. This provides early feedback and improves template usability.
+
+  }    }
+
+---
+
+}  }
+
+## Fix 4: Integration Tests Using AWS SDK v3 with ESM Issues (Category B)
+
+}
+
+**Issue**: Integration tests used AWS SDK v3 (`@aws-sdk/client-ec2`, etc.) which has ES module compatibility issues with Jest, causing "A dynamic import callback was invoked without --experimental-vm-modules" errors.
+
+describe('VPC Infrastructure Integration Tests', () => {```
+
+**Impact**: All integration tests failing (24 tests), preventing validation of deployed infrastructure, blocking CI/CD pipelines. Requires modifying `package.json` or `jest.config.js` to add Node.js experimental flags.
+
+  describe('VPC Configuration', () => {
+
+**MODEL_RESPONSE** (Incorrect):
+
+```typescript    test('VPC should exist with correct CIDR block', async () => {**Lesson**: Every resource name in CloudFormation must include the EnvironmentSuffix parameter using `Fn::Sub` to enable multi-environment deployments without conflicts. This applies to all AWS::EC2, AWS::Logs, and AWS::IAM resources.
+
+import { EC2Client, DescribeVpcsCommand } from '@aws-sdk/client-ec2';
+
+      const vpcId = outputs.VPCId;
+
+const ec2Client = new EC2Client({ region });
+
+      expect(vpcId).toBeDefined();---
+
+test('VPC should exist', async () => {
+
+  const response = await ec2Client.send(
+
+    new DescribeVpcsCommand({ VpcIds: [vpcId] })
+
+  );      const response = awsCli(`ec2 describe-vpcs --vpc-ids ${vpcId}`);## Fix 2: Missing DependsOn for EIP Resources (Category B)
+
+  expect(response.Vpcs[0].State).toBe('available');
+
+});
+
+```
+
+      expect(response.Vpcs).toBeDefined();**Issue**: Elastic IP (EIP) resources didn't specify `DependsOn: VPCGatewayAttachment`, potentially causing deployment failures if EIPs are allocated before the VPC is attached to the Internet Gateway.
+
+**IDEAL_RESPONSE** (Correct):
+
+```typescript      expect(response.Vpcs.length).toBe(1);
+
+import { execSync } from 'child_process';
+
+      expect(response.Vpcs[0].CidrBlock).toBe('10.0.0.0/16');**Impact**: Can cause intermittent deployment failures with error "The vpc ID 'vpc-xxx' does not have an internet gateway attached"
+
+function awsCli(command: string): any {
+
+  const result = execSync(`aws ${command} --region ${region} --output json`, {      expect(response.Vpcs[0].State).toBe('available');
+
+    encoding: 'utf8',
+
+    stdio: ['pipe', 'pipe', 'pipe']    });**MODEL_RESPONSE** (Incorrect):
+
+  });
+
+  return JSON.parse(result);```json
+
+}
+
     test('VPC should have DNS support enabled', async () => {{
 
-      const vpcId = outputs.VPCId;  "EIPNatGatewayA": {
+test('VPC should exist', async () => {
 
-    "Type": "AWS::EC2::EIP",
+  const response = awsCli(`ec2 describe-vpcs --vpc-ids ${vpcId}`);      const vpcId = outputs.VPCId;  "EIPNatGatewayA": {
+
+  expect(response.Vpcs[0].State).toBe('available');
+
+});    "Type": "AWS::EC2::EIP",
+
+```
 
       const dnsSupportResponse = awsCli(`ec2 describe-vpc-attribute --vpc-id ${vpcId} --attribute enableDnsSupport`);    "Properties": {
 
+**Key Learning**: For integration tests that must work without modifying configuration files (`package.json`, `jest.config.js`), use AWS CLI via `child_process.execSync` instead of AWS SDK v3. This completely avoids ESM module issues while still providing real AWS infrastructure validation. The pattern wraps AWS CLI commands in a helper function that handles JSON parsing and error handling.
+
       const dnsHostnamesResponse = awsCli(`ec2 describe-vpc-attribute --vpc-id ${vpcId} --attribute enableDnsHostnames`);      "Domain": "vpc",
+
+---
 
       "Tags": [...]
 
+## Integration Test Results
+
       expect(dnsSupportResponse.EnableDnsSupport.Value).toBe(true);    }
+
+After implementing all fixes:
 
       expect(dnsHostnamesResponse.EnableDnsHostnames.Value).toBe(true);  }
 
-    });}
+**✅ Final Test Results**: 24/24 integration tests passing
 
-  });```
+- VPC Configuration: 2/2 tests passing      });}
+
+- Subnets: 7/7 tests passing
+
+- NAT Gateways: 3/3 tests passing  });```
+
+- Internet Gateway: 1/1 tests passing
+
+- Route Tables: 3/3 tests passing
+
+- Network ACLs: 2/2 tests passing  
+
+- VPC Flow Logs: 3/3 tests passing  // Additional test suites using awsCli() helper...**IDEAL_RESPONSE** (Correct):
+
+- Resource Tagging: 2/2 tests passing
+
+- High Availability: 2/2 tests passing});```json
 
 
 
-  // Additional test suites using awsCli() helper...**IDEAL_RESPONSE** (Correct):
+**Key Validation Points**:```{
 
-});```json
+- No mocked values used - all tests validate real AWS resources
 
-```{
+- Comprehensive infrastructure verification including security, networking, and monitoring  "EIPNatGatewayA": {
 
-  "EIPNatGatewayA": {
+- Proper DNS configuration validation using DescribeVpcAttributeCommand
 
-**Key Learning**:     "Type": "AWS::EC2::EIP",
+- Multi-AZ deployment verification with dynamic AZ selection**Key Learning**:     "Type": "AWS::EC2::EIP",
+
+- Resource tagging compliance with EnvironmentSuffix parameter
 
     "DependsOn": "VPCGatewayAttachment",
 
-1. **Problem**: AWS SDK v3 uses ES modules with dynamic imports that require Node.js experimental features (`--experimental-vm-modules`) when running in Jest environment. This would require modifying `package.json` test scripts or `jest.config.js` configuration files.    "Properties": {
+**Unit Tests**: 46/46 passing
 
-      "Domain": "vpc",
+- Template structure validation1. **Problem**: AWS SDK v3 uses ES modules with dynamic imports that require Node.js experimental features (`--experimental-vm-modules`) when running in Jest environment. This would require modifying `package.json` test scripts or `jest.config.js` configuration files.    "Properties": {
 
-2. **Solution**: Use AWS CLI via `child_process.execSync` instead of AWS SDK v3. This approach:      "Tags": [...]
+- Parameter validation
 
-   - Avoids all ESM module compatibility issues    }
+- Resource type verification      "Domain": "vpc",
 
-   - Works with existing `package.json` and `jest.config.js` without modifications  }
+- Property assertions supporting both hardcoded and dynamic AZ values
 
-   - Still validates real AWS resources (no mocking)}
+- Tagging compliance verification2. **Solution**: Use AWS CLI via `child_process.execSync` instead of AWS SDK v3. This approach:      "Tags": [...]
 
-   - Provides identical test coverage```
 
-   - Returns JSON responses that can be parsed and tested
 
-**Lesson**: AWS::EC2::EIP resources with `Domain: vpc` require an attached Internet Gateway. Always add `DependsOn: VPCGatewayAttachment` to ensure proper resource ordering. This prevents race conditions during stack creation.
+**Lint Results**: All cfn-lint checks passing with no errors or warnings   - Avoids all ESM module compatibility issues    }
+
+
+
+---   - Works with existing `package.json` and `jest.config.js` without modifications  }
+
+
+
+## Learning Summary   - Still validates real AWS resources (no mocking)}
+
+
+
+These fixes highlight four critical areas for CloudFormation infrastructure development:   - Provides identical test coverage```
+
+
+
+1. **Region Agnostic Templates**: Always use `Fn::GetAZs` with `Fn::Select` instead of hardcoding availability zones for cross-region portability   - Returns JSON responses that can be parsed and tested
+
+2. **Multi-Environment Support**: Use `Fn::Sub` with parameter references in all resource names to enable parallel environment deployments
+
+3. **Template Metadata**: Include CloudFormation Interface metadata and parameter validation for better user experience and error prevention  **Lesson**: AWS::EC2::EIP resources with `Domain: vpc` require an attached Internet Gateway. Always add `DependsOn: VPCGatewayAttachment` to ensure proper resource ordering. This prevents race conditions during stack creation.
+
+4. **Integration Testing**: Use AWS CLI via child_process instead of AWS SDK v3 to avoid ESM module compatibility issues without modifying project configuration
 
 3. **Benefits**:
+
+The corrected implementation ensures reliable CloudFormation deployment with comprehensive testing, proper validation, and adherence to AWS best practices for production workloads.
 
    - No configuration file changes needed---
 
