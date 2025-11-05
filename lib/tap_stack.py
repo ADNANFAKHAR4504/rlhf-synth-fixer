@@ -408,7 +408,7 @@ class TapStack(pulumi.ComponentResource):
         )
         
         # S3 Bucket for Audit Logs
-        audit_bucket = aws.s3.BucketV2(
+        audit_bucket = aws.s3.Bucket(
             f"payment-audit-logs-{self.environment_suffix}",
             bucket=f"payment-logs-{self.environment_suffix}",
             tags={**common_tags, "Name": f"payment-audit-logs-{self.environment_suffix}"},
@@ -416,21 +416,21 @@ class TapStack(pulumi.ComponentResource):
         )
         
         # S3 Bucket Versioning
-        audit_bucket_versioning = aws.s3.BucketVersioningV2(
+        audit_bucket_versioning = aws.s3.BucketVersioning(
             f"audit-bucket-versioning-{self.environment_suffix}",
             bucket=audit_bucket.id,
-            versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
+            versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
                 status="Enabled"
             ),
             opts=ResourceOptions(parent=self)
         )
         
         # S3 Bucket Server-side Encryption
-        audit_bucket_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2(
+        audit_bucket_encryption = aws.s3.BucketServerSideEncryptionConfiguration(
             f"audit-bucket-encryption-{self.environment_suffix}",
             bucket=audit_bucket.id,
-            rules=[aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
-                apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+            rules=[aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
                     sse_algorithm="AES256"
                 )
             )],
@@ -438,13 +438,13 @@ class TapStack(pulumi.ComponentResource):
         )
         
         # S3 Lifecycle Policy (90-day retention)
-        audit_bucket_lifecycle = aws.s3.BucketLifecycleConfigurationV2(
+        audit_bucket_lifecycle = aws.s3.BucketLifecycleConfiguration(
             f"audit-bucket-lifecycle-{self.environment_suffix}",
             bucket=audit_bucket.id,
-            rules=[aws.s3.BucketLifecycleConfigurationV2RuleArgs(
+            rules=[aws.s3.BucketLifecycleConfigurationRuleArgs(
                 id="delete-old-logs",
                 status="Enabled",
-                expiration=aws.s3.BucketLifecycleConfigurationV2RuleExpirationArgs(
+                expiration=aws.s3.BucketLifecycleConfigurationRuleExpirationArgs(
                     days=90
                 )
             )],
@@ -856,14 +856,14 @@ def handler(event, context):
         )
         
         # Launch Template for ASG
-        user_data = base64.b64encode("""
-#!/bin/bash
+        user_data_script = f"""#!/bin/bash
 yum update -y
 yum install -y httpd
 systemctl start httpd
 systemctl enable httpd
-echo "<h1>Payment Service - """ + self.environment_suffix + """</h1>" > /var/www/html/index.html
-""".encode()).decode()
+echo "<h1>Payment Service - {self.environment_suffix}</h1>" > /var/www/html/index.html
+"""
+        user_data = base64.b64encode(user_data_script.encode()).decode()
         
         launch_template = aws.ec2.LaunchTemplate(
             f"payment-lt-{self.environment_suffix}",
