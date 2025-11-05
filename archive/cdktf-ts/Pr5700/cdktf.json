@@ -1,0 +1,9 @@
+{
+  "language": "typescript",
+  "app": "node dist/bin/tap.js",
+  "projectId": "webhook-processing-system",
+  "sendCrashReports": "false",
+  "terraformProviders": ["aws@~> 5.0"],
+  "terraformModules": [],
+  "context": {}
+}
