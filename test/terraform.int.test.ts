@@ -10,6 +10,7 @@ import {
   DescribeVpcsCommand,
   DescribeSubnetsCommand,
   DescribeSecurityGroupsCommand,
+  DescribeVpcAttributeCommand,
 } from '@aws-sdk/client-ec2';
 import {
   ElasticLoadBalancingV2Client,
@@ -86,9 +87,20 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(response.Vpcs).toHaveLength(1);
       const vpc = response.Vpcs![0];
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
-      expect(vpc.EnableDnsHostnames).toBe(true);
-      expect(vpc.EnableDnsSupport).toBe(true);
       expect(vpc.State).toBe('available');
+
+      // Check DNS attributes separately
+      const dnsHostnamesResponse = await ec2Client.send(new DescribeVpcAttributeCommand({
+        VpcId: outputs.vpc_id,
+        Attribute: 'enableDnsHostnames'
+      }));
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
+
+      const dnsSupportResponse = await ec2Client.send(new DescribeVpcAttributeCommand({
+        VpcId: outputs.vpc_id,
+        Attribute: 'enableDnsSupport'
+      }));
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
     });
 
     test('VPC has 3 public and 3 private subnets', async () => {
