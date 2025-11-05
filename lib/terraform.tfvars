@@ -6,14 +6,14 @@ aws_region = "eu-west-3"
 hub_region = "eu-west-3"
 spoke_regions = {
   "ap-northeast-1" = "ap-northeast-1"
-  "ap-southeast-2"      = "ap-southeast-2"
+  "ap-southeast-2" = "ap-southeast-2"
 }
 
 # Network Configuration
 hub_vpc_cidr = "10.0.0.0/16"
 spoke_vpc_cidrs = {
   "ap-northeast-1" = "10.1.0.0/16"
-  "ap-southeast-2"      = "10.2.0.0/16"
+  "ap-southeast-2" = "10.2.0.0/16"
 }
 
 # DNS Configuration
