@@ -118,7 +118,8 @@ class TestTapStackIntegration:
         assert flow_log["TrafficType"] == "ALL"
         assert flow_log["LogDestinationType"] == "cloud-watch-logs"
 
-        log_group_name = outputs["flow_log_id"]
+        # Use flow_log_group_name if available, otherwise fall back to flow_log_id
+        log_group_name = outputs.get("flow_log_group_name") or outputs.get("flow_log_id")
         try:
             logs_client.describe_log_groups(logGroupNamePrefix=log_group_name)
         except ClientError as exc:  # pragma: no cover - network failure scenario

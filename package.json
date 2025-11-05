@@ -15,7 +15,7 @@
   },
   "scripts": {
     "check-node": "node -e \"const v=process.version; const req='v22.17.0'; if(v!==req){console.error('❌ Node.js version mismatch! Required:',req,'Current:',v); process.exit(1);} console.log('✅ Node.js version is correct:',v);\"",
-    "check-python": "python -c \"import sys; req='3.12.11'; curr=f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}'; print(f'❌ Python version mismatch! Required: {req}, Current: {curr}') or exit(1) if curr != req else print(f'✅ Python version is correct: {curr}');\"",
+    "check-python": "python -c \"import sys; req='3.13'; curr=f'{sys.version_info.major}.{sys.version_info.minor}'; print(f'❌ Python version mismatch! Required: {req}, Current: {curr}') or exit(1) if curr != req else print(f'✅ Python version is correct: {curr}');\"",
     "check-pipenv": "bash -c \"req='2025.0.4'; curr=$(pipenv --version 2>/dev/null | grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+' || echo 'not installed'); if [ \\\"\\$curr\\\" != \\\"\\$req\\\" ]; then echo \\\"❌ Pipenv version mismatch! Required: \\$req, Current: \\$curr\\\"; exit 1; fi; echo \\\"✅ Pipenv version is correct: \\$curr\\\"\"",
     "check-versions": "npm run check-node && npm run check-python && npm run check-pipenv",
     "preinstall": "echo 'Skipping version checks for CI/CD'",
@@ -46,7 +46,7 @@
     "destroy:production": "cdk destroy --context environment=production",
     "cdktf:get": "cdktf get",
     "cdktf:synth": "cdktf synth",
-    "cdktf:deploy": "cdktf destroy --auto-approve",
+    "cdktf:deploy": "cdktf deploy '*' --auto-approve",
     "cdktf:destroy": "cdktf destroy --auto-approve",
     "tf": "terraform",
     "tf:init": "terraform -chdir=lib init -reconfigure -lock=false -upgrade $TF_INIT_OPTS",
