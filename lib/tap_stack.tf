@@ -594,117 +594,6 @@ resource "aws_db_subnet_group" "secondary_db_subnet_group" {
   })
 }
 
-# ===================================================================
-# RDS PARAMETER GROUPS
-# ===================================================================
-
-# Primary DB Parameter Group
-resource "aws_db_parameter_group" "primary_pg_params" {
-  provider    = aws.us_east_1
-  name        = "${local.primary_prefix}-pg17-params"
-  family      = "postgres17"
-  description = "PostgreSQL 17 parameter group with SSL enforcement"
-
-  # SSL enforcement
-  parameter {
-    name  = "rds.force_ssl"
-    value = "1"
-  }
-
-  # Connection limits
-  parameter {
-    name  = "max_connections"
-    value = "500"
-  }
-
-  # Query timeout (30 minutes)
-  parameter {
-    name  = "statement_timeout"
-    value = "1800000"
-  }
-
-  # Shared buffers (25% of instance memory)
-  parameter {
-    name  = "shared_buffers"
-    value = "{DBInstanceClassMemory/4}"
-  }
-
-  # Work memory
-  parameter {
-    name  = "work_mem"
-    value = "16384"
-  }
-
-  # Maintenance work memory
-  parameter {
-    name  = "maintenance_work_mem"
-    value = "524288"
-  }
-
-  # Enable query performance insights
-  parameter {
-    name  = "track_io_timing"
-    value = "1"
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.primary_prefix}-pg17-params"
-  })
-}
-
-# Secondary DB Parameter Group
-resource "aws_db_parameter_group" "secondary_pg_params" {
-  provider    = aws.us_west_2
-  name        = "${local.secondary_prefix}-pg17-params"
-  family      = "postgres17"
-  description = "PostgreSQL 17 parameter group with SSL enforcement for DR"
-
-  # SSL enforcement
-  parameter {
-    name  = "rds.force_ssl"
-    value = "1"
-  }
-
-  # Connection limits
-  parameter {
-    name  = "max_connections"
-    value = "500"
-  }
-
-  # Query timeout (30 minutes)
-  parameter {
-    name  = "statement_timeout"
-    value = "1800000"
-  }
-
-  # Shared buffers (25% of instance memory)
-  parameter {
-    name  = "shared_buffers"
-    value = "{DBInstanceClassMemory/4}"
-  }
-
-  # Work memory
-  parameter {
-    name  = "work_mem"
-    value = "16384"
-  }
-
-  # Maintenance work memory
-  parameter {
-    name  = "maintenance_work_mem"
-    value = "524288"
-  }
-
-  # Enable query performance insights
-  parameter {
-    name  = "track_io_timing"
-    value = "1"
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.secondary_prefix}-pg17-params"
-  })
-}
 
 # ===================================================================
 # PRIMARY RDS INSTANCE (Multi-AZ)
@@ -743,8 +632,6 @@ resource "aws_db_instance" "primary_rds" {
   multi_az          = true
   availability_zone = null # Let AWS choose for Multi-AZ
 
-  # Parameter group
-  parameter_group_name = aws_db_parameter_group.primary_pg_params.name
 
   # Backup configuration
   backup_retention_period   = var.backup_retention_period
@@ -798,8 +685,6 @@ resource "aws_db_instance" "primary_read_replica_1" {
   publicly_accessible = false
   availability_zone   = local.primary_azs[0]
 
-  # Parameter group
-  parameter_group_name = aws_db_parameter_group.primary_pg_params.name
 
   # Monitoring configuration
   enabled_cloudwatch_logs_exports       = ["postgresql"]
@@ -837,8 +722,6 @@ resource "aws_db_instance" "primary_read_replica_2" {
   publicly_accessible = false
   availability_zone   = local.primary_azs[1]
 
-  # Parameter group
-  parameter_group_name = aws_db_parameter_group.primary_pg_params.name
 
   # Monitoring configuration
   enabled_cloudwatch_logs_exports       = ["postgresql"]
@@ -880,8 +763,6 @@ resource "aws_db_instance" "cross_region_replica" {
   vpc_security_group_ids = [aws_security_group.secondary_rds_sg.id]
   publicly_accessible    = false
 
-  # Parameter group
-  parameter_group_name = aws_db_parameter_group.secondary_pg_params.name
 
   # Backup configuration for DR
   backup_retention_period = var.backup_retention_period
