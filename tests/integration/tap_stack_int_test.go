@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/TuringGpt/iac-test-automations/lib"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/stretchr/testify/assert"
 )
@@ -40,10 +41,10 @@ func TestIntegrationStackCreation(t *testing.T) {
 // integrationMocks provides mock implementations for integration testing
 type integrationMocks struct{}
 
-func (integrationMocks) NewResource(args pulumi.MockResourceArgs) (string, map[string]interface{}, error) {
+func (integrationMocks) NewResource(args pulumi.MockResourceArgs) (string, resource.PropertyMap, error) {
 	return args.Name + "_id", args.Inputs, nil
 }
 
-func (integrationMocks) Call(args pulumi.MockCallArgs) (map[string]interface{}, error) {
+func (integrationMocks) Call(args pulumi.MockCallArgs) (resource.PropertyMap, error) {
 	return args.Args, nil
 }
