@@ -22,9 +22,6 @@ import {
 import fs from 'fs';
 import path from 'path';
 
-// Determine if we're running in CI/CD
-const IS_CICD = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
-
 // Path to outputs file (created by CI/CD after deployment)
 const OUTPUTS_FILE = path.join(__dirname, '../cfn-outputs/all-outputs.json');
 
@@ -34,43 +31,28 @@ interface TerraformOutput<T = any> {
   type?: string;
 }
 
-// Mock outputs for local testing
-const MOCK_OUTPUTS = {
-  hub_vpc_id: { value: 'vpc-mock-hub' },
-  hub_vpc_cidr: { value: '10.0.0.0/16' },
-  us_west_spoke_vpc_id: { value: 'vpc-mock-us-west' },
-  eu_west_spoke_vpc_id: { value: 'vpc-mock-eu-west' },
-  hub_transit_gateway_id: { value: 'tgw-mock-hub' },
-  flow_logs_s3_bucket: { value: 'trading-platform-vpc-flow-logs-mock' },
-  private_hosted_zone_id: { value: null },
-  private_hosted_zone_name: { value: null },
-};
-
-// Load and parse outputs
+// Load and parse outputs from deployed infrastructure
 function loadOutputs(): any {
-  if (IS_CICD) {
-    if (!fs.existsSync(OUTPUTS_FILE)) {
-      throw new Error(`Outputs file not found: ${OUTPUTS_FILE}. Deployment may have failed.`);
-    }
-    const rawOutputs = JSON.parse(fs.readFileSync(OUTPUTS_FILE, 'utf8'));
-    
-    // Parse terraform outputs - extract .value from each output
-    const parsed: any = {};
-    for (const [key, val] of Object.entries(rawOutputs)) {
-      if (val && typeof val === 'object' && 'value' in val) {
-        parsed[key] = (val as TerraformOutput).value;
-      } else {
-        parsed[key] = val;
-      }
-    }
-    return parsed;
+  if (!fs.existsSync(OUTPUTS_FILE)) {
+    throw new Error(
+      `Outputs file not found: ${OUTPUTS_FILE}. ` +
+        'Integration tests require deployed infrastructure. ' +
+        'Run terraform apply in CI/CD or skip integration tests locally.'
+    );
   }
-  console.warn('Running locally with mock outputs. Integration tests will be limited.');
-  // Extract .value from mock outputs for consistency
+
+  const rawOutputs = JSON.parse(fs.readFileSync(OUTPUTS_FILE, 'utf8'));
+
+  // Parse terraform outputs - extract .value from each output
   const parsed: any = {};
-  for (const [key, val] of Object.entries(MOCK_OUTPUTS)) {
-    parsed[key] = (val as any).value;
+  for (const [key, val] of Object.entries(rawOutputs)) {
+    if (val && typeof val === 'object' && 'value' in val) {
+      parsed[key] = (val as TerraformOutput).value;
+    } else {
+      parsed[key] = val;
+    }
   }
+
   return parsed;
 }
 
@@ -91,11 +73,6 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
     test(
       'Hub VPC exists with correct CIDR',
       async () => {
-        if (!IS_CICD) {
-          console.log('Skipping: not in CI/CD environment');
-          return;
-        }
-
         const command = new DescribeVpcsCommand({
           VpcIds: [outputs.hub_vpc_id],
         });
@@ -113,11 +90,6 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
     test(
       'AP-Northeast-1 Spoke VPC exists',
       async () => {
-        if (!IS_CICD) {
-          console.log('Skipping: not in CI/CD environment');
-          return;
-        }
-
         const command = new DescribeVpcsCommand({
           VpcIds: [outputs.us_west_spoke_vpc_id],
         });
@@ -133,11 +105,6 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
     test(
       'AP-Southeast-2 Spoke VPC exists',
       async () => {
-        if (!IS_CICD) {
-          console.log('Skipping: not in CI/CD environment');
-          return;
-        }
-
         const command = new DescribeVpcsCommand({
           VpcIds: [outputs.eu_west_spoke_vpc_id],
         });
@@ -153,11 +120,6 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
     test(
       'Hub VPC has 3 public and 3 private subnets',
       async () => {
-        if (!IS_CICD) {
-          console.log('Skipping: not in CI/CD environment');
-          return;
-        }
-
         const command = new DescribeSubnetsCommand({
           Filters: [{ Name: 'vpc-id', Values: [outputs.hub_vpc_id] }],
         });
@@ -179,11 +141,6 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
     test(
       'Hub Transit Gateway exists and is available',
       async () => {
-        if (!IS_CICD) {
-          console.log('Skipping: not in CI/CD environment');
-          return;
-        }
-
         const command = new DescribeTransitGatewaysCommand({
           TransitGatewayIds: [outputs.hub_transit_gateway_id],
         });
@@ -201,11 +158,6 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
     test(
       'Transit Gateway has VPC attachments',
       async () => {
-        if (!IS_CICD) {
-          console.log('Skipping: not in CI/CD environment');
-          return;
-        }
-
         const command = new DescribeTransitGatewayAttachmentsCommand({
           Filters: [
             { Name: 'transit-gateway-id', Values: [outputs.hub_transit_gateway_id] },
@@ -222,11 +174,6 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
     test(
       'Transit Gateway has custom route tables',
       async () => {
-        if (!IS_CICD) {
-          console.log('Skipping: not in CI/CD environment');
-          return;
-        }
-
         const command = new DescribeTransitGatewayRouteTablesCommand({
           Filters: [{ Name: 'transit-gateway-id', Values: [outputs.hub_transit_gateway_id] }],
         });
@@ -243,11 +190,6 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
     test(
       'S3 bucket exists for flow logs',
       async () => {
-        if (!IS_CICD) {
-          console.log('Skipping: not in CI/CD environment');
-          return;
-        }
-
         // Check bucket versioning
         const versioningCommand = new GetBucketVersioningCommand({
           Bucket: outputs.flow_logs_s3_bucket,
@@ -262,11 +204,6 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
     test(
       'S3 bucket has encryption enabled',
       async () => {
-        if (!IS_CICD) {
-          console.log('Skipping: not in CI/CD environment');
-          return;
-        }
-
         const command = new GetBucketEncryptionCommand({
           Bucket: outputs.flow_logs_s3_bucket,
         });
@@ -284,11 +221,6 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
     test(
       'S3 bucket has public access blocked',
       async () => {
-        if (!IS_CICD) {
-          console.log('Skipping: not in CI/CD environment');
-          return;
-        }
-
         const command = new GetPublicAccessBlockCommand({
           Bucket: outputs.flow_logs_s3_bucket,
         });
@@ -305,11 +237,6 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
     test(
       'Flow logs are configured for all VPCs',
       async () => {
-        if (!IS_CICD) {
-          console.log('Skipping: not in CI/CD environment');
-          return;
-        }
-
         // Check hub VPC flow logs
         const hubCommand = new DescribeFlowLogsCommand({
           Filter: [{ Name: 'resource-id', Values: [outputs.hub_vpc_id] }],
@@ -328,11 +255,6 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
     test(
       'SSM endpoints exist in Hub VPC',
       async () => {
-        if (!IS_CICD) {
-          console.log('Skipping: not in CI/CD environment');
-          return;
-        }
-
         const command = new DescribeVpcEndpointsCommand({
           Filters: [{ Name: 'vpc-id', Values: [outputs.hub_vpc_id] }],
         });
@@ -357,11 +279,6 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
     test(
       'SSM endpoints exist in AP-Northeast-1 Spoke VPC',
       async () => {
-        if (!IS_CICD) {
-          console.log('Skipping: not in CI/CD environment');
-          return;
-        }
-
         const command = new DescribeVpcEndpointsCommand({
           Filters: [{ Name: 'vpc-id', Values: [outputs.us_west_spoke_vpc_id] }],
         });
@@ -375,11 +292,6 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
     test(
       'SSM endpoints exist in AP-Southeast-2 Spoke VPC',
       async () => {
-        if (!IS_CICD) {
-          console.log('Skipping: not in CI/CD environment');
-          return;
-        }
-
         const command = new DescribeVpcEndpointsCommand({
           Filters: [{ Name: 'vpc-id', Values: [outputs.eu_west_spoke_vpc_id] }],
         });
@@ -395,11 +307,6 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
     test(
       'Route53 zone validation (skip if not enabled)',
       async () => {
-        if (!IS_CICD) {
-          console.log('Skipping: not in CI/CD environment');
-          return;
-        }
-
         if (!outputs.private_hosted_zone_id || outputs.private_hosted_zone_id === null) {
           console.log('Route53 is not enabled (enable_route53 = false). Skipping test.');
           return;
@@ -421,11 +328,6 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
     test(
       'VPCs have required tags',
       async () => {
-        if (!IS_CICD) {
-          console.log('Skipping: not in CI/CD environment');
-          return;
-        }
-
         const command = new DescribeVpcsCommand({
           VpcIds: [outputs.hub_vpc_id],
         });
@@ -445,11 +347,6 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
     test(
       'Transit Gateway has required tags',
       async () => {
-        if (!IS_CICD) {
-          console.log('Skipping: not in CI/CD environment');
-          return;
-        }
-
         const command = new DescribeTransitGatewaysCommand({
           TransitGatewayIds: [outputs.hub_transit_gateway_id],
         });
@@ -471,11 +368,6 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
     test(
       'Transit Gateway routing enables hub-and-spoke topology',
       async () => {
-        if (!IS_CICD) {
-          console.log('Skipping: not in CI/CD environment');
-          return;
-        }
-
         // Get route tables
         const rtCommand = new DescribeTransitGatewayRouteTablesCommand({
           Filters: [{ Name: 'transit-gateway-id', Values: [outputs.hub_transit_gateway_id] }],
@@ -502,11 +394,6 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
     test(
       'Blackhole routes exist for unused RFC1918 ranges',
       async () => {
-        if (!IS_CICD) {
-          console.log('Skipping: not in CI/CD environment');
-          return;
-        }
-
         // Get route tables
         const rtCommand = new DescribeTransitGatewayRouteTablesCommand({
           Filters: [{ Name: 'transit-gateway-id', Values: [outputs.hub_transit_gateway_id] }],
@@ -548,15 +435,13 @@ describe('Hub-and-Spoke Network Infrastructure Integration Tests', () => {
 
 // Summary test
 describe('Integration Test Summary', () => {
-  test('Environment check', () => {
-    if (IS_CICD) {
-      console.log('Running in CI/CD environment with real AWS resources');
-      expect(outputs).toHaveProperty('hub_vpc_id');
-      expect(outputs).toHaveProperty('hub_transit_gateway_id');
-      expect(outputs).toHaveProperty('flow_logs_s3_bucket');
-    } else {
-      console.log('Running locally with mock data. Deploy to AWS to run full integration tests.');
-      expect(MOCK_OUTPUTS).toBeDefined();
-    }
+  test('Outputs are loaded from deployed infrastructure', () => {
+    // Verify required outputs exist
+    expect(outputs).toHaveProperty('hub_vpc_id');
+    expect(outputs).toHaveProperty('hub_transit_gateway_id');
+    expect(outputs).toHaveProperty('flow_logs_s3_bucket');
+    expect(outputs.hub_vpc_id).toBeTruthy();
+    expect(outputs.hub_transit_gateway_id).toBeTruthy();
+    expect(outputs.flow_logs_s3_bucket).toBeTruthy();
   });
 });
