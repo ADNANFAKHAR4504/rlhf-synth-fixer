@@ -63,6 +63,33 @@ function mapOutputs(rawOutputs: any): any {
     }
   });
 
+  // Add explicit mapping for cases where the raw output key doesn't match the pattern
+  // This handles the case where outputs exist but don't follow the expected naming
+  if (!mappedOutputs.BucketName && rawOutputs.S3BucketName) {
+    mappedOutputs.BucketName = rawOutputs.S3BucketName;
+  }
+  if (!mappedOutputs.BucketArn && rawOutputs.S3BucketArn) {
+    mappedOutputs.BucketArn = rawOutputs.S3BucketArn;
+  }
+  if (!mappedOutputs.FunctionName && rawOutputs.LambdaFunctionName) {
+    mappedOutputs.FunctionName = rawOutputs.LambdaFunctionName;
+  }
+  if (!mappedOutputs.FunctionArn && rawOutputs.LambdaFunctionArn) {
+    mappedOutputs.FunctionArn = rawOutputs.LambdaFunctionArn;
+  }
+  if (!mappedOutputs.TopicArn && rawOutputs.ErrorTopicArn) {
+    mappedOutputs.TopicArn = rawOutputs.ErrorTopicArn;
+  }
+  if (!mappedOutputs.SecretArn && rawOutputs.DbSecretArn) {
+    mappedOutputs.SecretArn = rawOutputs.DbSecretArn;
+  }
+  if (!mappedOutputs.DistributionId && rawOutputs.CloudFrontDistributionId) {
+    mappedOutputs.DistributionId = rawOutputs.CloudFrontDistributionId;
+  }
+  if (!mappedOutputs.CloudFrontDomain && rawOutputs.CloudFrontDomain) {
+    mappedOutputs.CloudFrontDomain = rawOutputs.CloudFrontDomain;
+  }
+
   return mappedOutputs;
 }
 
@@ -86,6 +113,8 @@ describe('Turn Around Prompt Infrastructure Integration Tests', () => {
 
     console.log('Testing infrastructure in region:', region);
     console.log('Available outputs:', Object.keys(outputs));
+    console.log('Raw outputs keys:', Object.keys(rawOutputs));
+    console.log('Environment suffix from env:', process.env.ENVIRONMENT_SUFFIX);
   });
 
   describe('Infrastructure Outputs Validation', () => {
