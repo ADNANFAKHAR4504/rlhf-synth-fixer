@@ -15,15 +15,15 @@ describe('TapStack unit', () => {
       environmentSuffix: 'test',
       isSourceRegion: true,
       sourceRegion: 'us-east-1',
-      targetRegion: 'eu-west-1',
+      targetRegion: 'us-west-1',
       env: { account: '123456789012', region: 'us-east-1' },
     });
     targetStack = new TapStack(app, 'TapUnitTarget', {
       environmentSuffix: 'test',
       isSourceRegion: false,
       sourceRegion: 'us-east-1',
-      targetRegion: 'eu-west-1',
-      env: { account: '123456789012', region: 'eu-west-1' },
+      targetRegion: 'us-west-1',
+      env: { account: '123456789012', region: 'us-west-1' },
     });
     sourceTemplate = Template.fromStack(sourceStack);
     targetTemplate = Template.fromStack(targetStack);
@@ -379,7 +379,7 @@ describe('TapStack unit', () => {
     const stack2 = new TapStack(app2, 'TapUnitDefault', {
       isSourceRegion: true,
       sourceRegion: 'us-east-1',
-      targetRegion: 'eu-west-1',
+      targetRegion: 'us-west-1',
       env: { account: '123456789012', region: 'us-east-1' },
     });
     const template2 = Template.fromStack(stack2);

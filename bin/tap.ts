@@ -14,7 +14,7 @@ Tags.of(app).add('Repository', repositoryName);
 Tags.of(app).add('Author', commitAuthor);
 
 const sourceRegion = 'us-east-1';
-const targetRegion = 'eu-west-1';
+const targetRegion = 'us-west-1';
 
 const sourceStack = new TapStack(
   app,
