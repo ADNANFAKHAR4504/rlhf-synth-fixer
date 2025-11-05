@@ -115,8 +115,29 @@ class TestTapStackIntegration(unittest.TestCase):
             vpc = response['Vpcs'][0]
             self.assertEqual(vpc['CidrBlock'], '10.0.0.0/16', "VPC should have correct CIDR block")
             self.assertEqual(vpc['State'], 'available', "VPC should be available")
-            self.assertTrue(vpc['EnableDnsHostnames'], "VPC should have DNS hostnames enabled")
-            self.assertTrue(vpc['EnableDnsSupport'], "VPC should have DNS support enabled")
+            
+            # EnableDnsHostnames and EnableDnsSupport are VPC attributes, not returned by describe_vpcs
+            # Query them separately using describe_vpc_attribute
+            dns_hostnames = self.ec2_client.describe_vpc_attribute(
+                VpcId=vpc_id,
+                Attribute='enableDnsHostnames'
+            )
+            dns_support = self.ec2_client.describe_vpc_attribute(
+                VpcId=vpc_id,
+                Attribute='enableDnsSupport'
+            )
+            
+            # Verify DNS attributes are enabled
+            if 'EnableDnsHostnames' in dns_hostnames:
+                self.assertTrue(
+                    dns_hostnames['EnableDnsHostnames']['Value'],
+                    "VPC should have DNS hostnames enabled"
+                )
+            if 'EnableDnsSupport' in dns_support:
+                self.assertTrue(
+                    dns_support['EnableDnsSupport']['Value'],
+                    "VPC should have DNS support enabled"
+                )
             
             print(f"✓ VPC {vpc_id} is properly configured")
             
