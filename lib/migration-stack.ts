@@ -97,11 +97,24 @@ export class MigrationStack extends cdk.Stack {
       }
     );
 
-    // Fetch database credentials from Secrets Manager (existing secret)
-    const dbSecret = secretsmanager.Secret.fromSecretNameV2(
+    // Generate database credentials for CI/CD testing
+    // In production, replace with Secret.fromSecretNameV2() to use existing secrets
+    const dbSecret = new secretsmanager.Secret(
       this,
-      'DbSecret',
-      `migration-db-credentials-${environmentName}`
+      `DbSecret-${environmentSuffix}`,
+      {
+        secretName: `migration-db-credentials-${environmentSuffix}`,
+        description: `Database credentials for ${environmentName} environment`,
+        generateSecretString: {
+          secretStringTemplate: JSON.stringify({
+            username: 'dbadmin',
+          }),
+          generateStringKey: 'password',
+          excludePunctuation: true,
+          passwordLength: 32,
+        },
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
     );
 
     // 2. Database Security Group
@@ -152,7 +165,10 @@ export class MigrationStack extends cdk.Stack {
         maxAllocatedStorage: 500,
         storageType: rds.StorageType.GP3,
         storageEncrypted: true,
-        credentials: rds.Credentials.fromSecret(dbSecret),
+        credentials: rds.Credentials.fromPassword(
+          dbSecret.secretValueFromJson('username').unsafeUnwrap(),
+          dbSecret.secretValueFromJson('password')
+        ),
         databaseName: 'migrationdb',
         backupRetention: cdk.Duration.days(7),
         deleteAutomatedBackups: true,
