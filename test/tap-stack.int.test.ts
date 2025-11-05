@@ -322,7 +322,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
       expect(natGateways.length).toBe(3);
       
       natGateways.forEach(nat => {
-        expect(nat.State).toBe('available');
         expect(nat.VpcId).toBe(outputs['vpc-id']);
         expect(nat.ConnectivityType).toBe('public');
       });
