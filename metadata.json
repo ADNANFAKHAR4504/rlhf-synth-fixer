@@ -11,11 +11,21 @@
     "Cloud Environment Setup"
   ],
   "aws_services": [
-    "S3 Bucket",
-    "CloudFormation",
+    "API Gateway",
     "Lambda",
+    "Step Functions",
+    "DynamoDB",
     "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
-  ]
+    "IAM",
+    "KMS",
+    "SQS",
+    "CloudWatch Logs"
+  ],
+   "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "training_quality": 10,
+  "author": "kanishkah-turing",
+  "dockerS3Location": ""
 }
