@@ -74,8 +74,9 @@ export class AuroraClusterConstruct extends Construct {
 
     if (props.isPrimary && !props.globalClusterIdentifier) {
       // Create global cluster if this is the primary
+      // Note: Identifier must be stable across deployments to avoid recreation
       const globalCluster = new rds.CfnGlobalCluster(this, 'GlobalCluster', {
-        globalClusterIdentifier: `aurora-dr-global-${suffix}-${Date.now()}`,
+        globalClusterIdentifier: `aurora-dr-global-${suffix}`,
         sourceDbClusterIdentifier: undefined,
         engine: 'aurora-postgresql',
         engineVersion: '15.12',

@@ -462,6 +462,66 @@ new TapStack(app, 'TapStack', { environmentSuffix });
 
 ---
 
+## Issue 16: GlobalCluster Recreation on Every Deployment (CRITICAL)
+
+**Problem**: Redeployment of successfully deployed stacks fails with UPDATE_ROLLBACK_FAILED and cross-region export errors
+
+**Error Message**:
+```
+Error: Some exports have changed!
+/cdk/exports/Aurora-DR-Secondary-pr5653/AuroraDRPrimarypr5653useast1RefAuroraClusterGlobalCluster89D2B9BFD15335ED
+```
+
+**Root Cause**:
+
+The GlobalCluster identifier included `Date.now()`:
+
+```typescript
+globalClusterIdentifier: `aurora-dr-global-${suffix}-${Date.now()}`
+```
+
+This causes:
+- Different timestamp generated on every `cdk synth`
+- CloudFormation treats it as a NEW resource (replacement required)
+- GlobalCluster recreation breaks cross-region export dependencies
+- Secondary stack still depends on OLD export → deployment fails
+- Stack enters UPDATE_ROLLBACK_FAILED state
+
+**Solution**:
+
+Changed to stable identifier in `lib/constructs/aurora-cluster.ts`:
+
+```typescript
+// Before (unstable)
+globalClusterIdentifier: `aurora-dr-global-${suffix}-${Date.now()}`
+
+// After (stable)
+globalClusterIdentifier: `aurora-dr-global-${suffix}`
+```
+
+**Result**:
+- GlobalCluster identifier is now deterministic
+- Subsequent deployments update in-place (no recreation)
+- Cross-region exports remain stable
+- Redeployments work correctly
+
+**Recovery Required**:
+- Delete failed stacks in order (Monitoring → Secondary → Primary)
+- Fresh deployment with fixed code
+- Future deployments will work correctly
+
+**Lesson Learned**:
+
+Never use non-deterministic values (Date.now(), random(), UUID) in resource identifiers:
+- CloudFormation identifies resources by physical ID
+- Changing physical ID triggers resource replacement
+- Replacements can break dependencies and cross-region exports
+- Always use stable, predictable values (environment suffix, region, service name)
+
+**Key Principle**: Infrastructure as Code must be **idempotent** - same input should always produce same output
+
+---
+
 ## Production-Ready Features Implemented
 
 **Security**:
