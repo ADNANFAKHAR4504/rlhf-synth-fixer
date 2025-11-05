@@ -1,4 +1,9 @@
+<<<<<<< HEAD
 pulumi>=3.0.0,<4.0.0
 pulumi-aws>=6.0.0,<7.0.0
 psycopg2-binary>=2.9.0
 boto3>=1.26.0
+=======
+aws-cdk-lib>=2.100.0
+constructs>=10.0.0
+>>>>>>> 8e8f5fabbe14508526d98f463cccd7862e7c92b9
