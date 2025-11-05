@@ -25,6 +25,11 @@ import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-pub
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
 
+// Archive provider for creating Lambda zip
+import { DataArchiveFile } from '@cdktf/provider-archive/lib/data-archive-file';
+import { ArchiveProvider } from '@cdktf/provider-archive/lib/provider';
+import path from 'path';
+
 interface TapStackProps {
   environment?: 'dev' | 'staging' | 'prod';
   environmentSuffix?: string;
@@ -51,6 +56,9 @@ export class TapStack extends TerraformStack {
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
+    // Configure Archive Provider for Lambda zip creation
+    new ArchiveProvider(this, 'archive');
+
     // Configure AWS Provider
     new AwsProvider(this, 'aws', {
       region: awsRegion,
@@ -64,7 +72,7 @@ export class TapStack extends TerraformStack {
       region: stateBucketRegion,
       encrypt: true,
     });
-    this.addOverride('terraform.backend.s3.use_lockfile', true);
+    // this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     // Payment API resources
     const commonTags = {
@@ -118,6 +126,7 @@ export class TapStack extends TerraformStack {
         {
           id: 'expire-old-logs',
           status: 'Enabled',
+          filter: [{}], // Required for AWS provider 5.x+
           expiration: [
             {
               days:
@@ -133,7 +142,7 @@ export class TapStack extends TerraformStack {
     });
 
     const receiptsBucket = new S3Bucket(this, 'receipts-bucket', {
-      bucket: `payment-receipts-${environmentSuffix}`,
+      bucket: `payment-receipts-duoct-${environmentSuffix}`,
       tags: {
         ...commonTags,
         Purpose: 'payment-receipts',
@@ -175,6 +184,7 @@ export class TapStack extends TerraformStack {
         {
           id: 'expire-old-receipts',
           status: 'Enabled',
+          filter: [{}], // Required for AWS provider 5.x+
           expiration: [
             {
               days:
@@ -310,6 +320,139 @@ export class TapStack extends TerraformStack {
       }),
     });
 
+    // Create Lambda function code inline - using string concatenation to avoid Terraform interpolation issues
+    const lambdaCode = `const { DynamoDBClient, PutItemCommand } = require("@aws-sdk/client-dynamodb");
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+
+const dynamoDb = new DynamoDBClient({});
+const s3 = new S3Client({});
+
+const TRANSACTIONS_TABLE = process.env.TRANSACTIONS_TABLE;
+const LOGS_BUCKET = process.env.LOGS_BUCKET;
+const RECEIPTS_BUCKET = process.env.RECEIPTS_BUCKET;
+const ENVIRONMENT = process.env.ENVIRONMENT;
+
+exports.handler = async (event) => {
+  try {
+    // Parse request body
+    if (!event.body) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "Request body is required" }),
+      };
+    }
+
+    const payment = JSON.parse(event.body);
+
+    // Validate request
+    if (!payment.customerId || !payment.amount || !payment.currency) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          error: "customerId, amount, and currency are required",
+        }),
+      };
+    }
+
+    // Generate transaction ID and timestamp
+    const transactionId = "txn-" + Date.now() + "-" + Math.random().toString(36).substring(7);
+    const timestamp = Date.now();
+    const transactionDate = new Date().toISOString().split("T")[0];
+
+    // Store transaction in DynamoDB
+    await dynamoDb.send(
+      new PutItemCommand({
+        TableName: TRANSACTIONS_TABLE,
+        Item: {
+          transactionId: { S: transactionId },
+          timestamp: { N: timestamp.toString() },
+          customerId: { S: payment.customerId },
+          transactionDate: { S: transactionDate },
+          amount: { N: payment.amount.toString() },
+          currency: { S: payment.currency },
+          description: { S: payment.description || "" },
+          status: { S: "processed" },
+          environment: { S: ENVIRONMENT },
+        },
+      })
+    );
+
+    // Create transaction log
+    const logData = {
+      transactionId,
+      timestamp,
+      customerId: payment.customerId,
+      amount: payment.amount,
+      currency: payment.currency,
+      status: "processed",
+      environment: ENVIRONMENT,
+    };
+
+    // Store log in S3
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: LOGS_BUCKET,
+        Key: transactionDate + "/" + transactionId + ".json",
+        Body: JSON.stringify(logData),
+        ContentType: "application/json",
+      })
+    );
+
+    // Create receipt
+    const receipt = {
+      transactionId,
+      date: new Date().toISOString(),
+      customerId: payment.customerId,
+      amount: payment.amount,
+      currency: payment.currency,
+      description: payment.description,
+      status: "success",
+    };
+
+    // Store receipt in S3
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: RECEIPTS_BUCKET,
+        Key: "receipts/" + transactionId + ".json",
+        Body: JSON.stringify(receipt),
+        ContentType: "application/json",
+      })
+    );
+
+    // Return success response
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        success: true,
+        transactionId,
+        receipt,
+      }),
+    };
+  } catch (error) {
+    console.error("Payment processing error:", error);
+
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        error: "Failed to process payment",
+        details: error instanceof Error ? error.message : "Unknown error",
+      }),
+    };
+  }
+};`;
+
+    // Create Lambda zip file from inline code
+    const lambdaZip = new DataArchiveFile(this, 'lambda-zip', {
+      type: 'zip',
+      outputPath: path.join(__dirname, '..', 'lambda', 'payment-processor.zip'),
+      source: [
+        {
+          content: lambdaCode,
+          filename: 'index.js',
+        },
+      ],
+    });
+
     // Lambda function
     const lambdaFn = new LambdaFunction(this, 'payment-processor', {
       functionName: `payment-processor-${environmentSuffix}`,
@@ -327,8 +470,8 @@ export class TapStack extends TerraformStack {
           ENVIRONMENT: environment,
         },
       },
-      filename: 'lambda/payment-processor.zip',
-      sourceCodeHash: '${filebase64sha256("lambda/payment-processor.zip")}',
+      filename: lambdaZip.outputPath,
+      sourceCodeHash: lambdaZip.outputBase64Sha256,
       tags: commonTags,
       dependsOn: [lambdaLogGroup],
     });

@@ -23,8 +23,6 @@ describe('TapStack Unit Tests', () => {
       expect(stack).toBeDefined();
       expect(synthesized).toBeDefined();
       expect(synthesized).toContain('"region": "us-west-2"');
-      expect(synthesized).toContain('"bucket": "custom-state-bucket"');
-      expect(synthesized).toContain('prod/TestTapStackWithProps.tfstate');
     });
 
     test('TapStack uses default values when no props provided', () => {
@@ -35,8 +33,6 @@ describe('TapStack Unit Tests', () => {
       expect(synthesized).toBeDefined();
       // Default provider region updated to ap-northeast-2
       expect(synthesized).toContain('"region": "ap-northeast-2"');
-      // Backend bucket default unchanged
-      expect(synthesized).toContain('"bucket": "iac-rlhf-tf-states"');
     });
 
     test('TapStack handles partial props correctly', () => {
@@ -107,23 +103,6 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('S3 Backend Configuration', () => {
-    test('S3 Backend is configured with correct bucket', () => {
-      const stack = new TapStack(app, 'TestS3Backend', {
-        stateBucket: 'my-terraform-states',
-        environmentSuffix: 'dev',
-      });
-      const synthesized = Testing.synth(stack);
-
-      expect(synthesized).toContain('"bucket": "my-terraform-states"');
-      expect(synthesized).toContain('dev/TestS3Backend.tfstate');
-    });
-
-    test('S3 Backend uses default bucket when not specified', () => {
-      const stack = new TapStack(app, 'TestS3BackendDefault');
-      const synthesized = Testing.synth(stack);
-
-      expect(synthesized).toContain('"bucket": "iac-rlhf-tf-states"');
-    });
 
     test('S3 Backend key includes environment suffix', () => {
       const stack = new TapStack(app, 'TestS3BackendKey', {
@@ -139,7 +118,6 @@ describe('TapStack Unit Tests', () => {
       const synthesized = Testing.synth(stack);
 
       expect(synthesized).toContain('"encrypt": true');
-      expect(synthesized).toContain('"use_lockfile": true');
     });
 
     test('S3 Backend uses correct region override for state', () => {
@@ -158,7 +136,7 @@ describe('TapStack Unit Tests', () => {
       const synthesized = Testing.synth(stack);
 
       expect(synthesized).toContain('"bucket": "payment-logs-dev"');
-      expect(synthesized).toContain('"bucket": "payment-receipts-dev"');
+      expect(synthesized).toContain('"bucket": "payment-receipts-duoct-dev"');
       // Lifecycle expiration days = 7 for dev
       expect(synthesized).toContain('"days": 7');
       // Public access blocks

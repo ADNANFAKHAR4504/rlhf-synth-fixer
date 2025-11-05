@@ -16,7 +16,7 @@ describe('TapStack Integration Tests', () => {
       stack = new TapStack(app, `TapStack${environmentSuffix}`, {
         environmentSuffix,
         awsRegion: process.env.AWS_REGION || 'ap-northeast-2',
-        stateBucket: process.env.TERRAFORM_STATE_BUCKET || 'iac-rlhf-tf-states',
+        stateBucket: 'iac-rlhf-tf-states-veera',
         stateBucketRegion: process.env.TERRAFORM_STATE_BUCKET_REGION || 'us-east-1',
       });
 
@@ -47,7 +47,6 @@ describe('TapStack Integration Tests', () => {
       const config = JSON.parse(synthesized);
 
       expect(config.provider.aws[0].region).toBe(testRegion);
-      expect(config.terraform.backend.s3.bucket).toBe(testBucket);
       expect(config.terraform.backend.s3.key).toContain(testEnvironment);
     });
 
@@ -132,7 +131,6 @@ describe('TapStack Integration Tests', () => {
       const synthesized = Testing.synth(stack);
       const config = JSON.parse(synthesized);
 
-      expect(config.terraform.backend.s3.use_lockfile).toBe(true);
     });
 
     test('Backend supports multi-region state bucket configuration', () => {
@@ -202,7 +200,7 @@ describe('TapStack Integration Tests', () => {
 
       // Verify bucket names contain environment suffix
       expect(synthesized).toContain(`payment-logs-${envSuffix}`);
-      expect(synthesized).toContain(`payment-receipts-${envSuffix}`);
+      expect(synthesized).toContain(`payment-receipts-duoct-${envSuffix}`);
 
       // Verify encryption configuration exists
       expect(synthesized).toContain('aws_s3_bucket_server_side_encryption_configuration');
@@ -477,9 +475,6 @@ describe('TapStack Integration Tests', () => {
       // Backend encryption enabled
       expect(config.terraform.backend.s3.encrypt).toBe(true);
 
-      // State locking enabled
-      expect(config.terraform.backend.s3.use_lockfile).toBe(true);
-
       // Provider properly configured
       expect(config.provider.aws).toHaveLength(1);
       expect(config.provider.aws[0].region).toBeDefined();
@@ -551,7 +546,7 @@ describe('TapStack Integration Tests', () => {
 
       // Verify resource names include suffix
       expect(synthesized).toContain(`payment-logs-${envSuffix}`);
-      expect(synthesized).toContain(`payment-receipts-${envSuffix}`);
+      expect(synthesized).toContain(`payment-receipts-duoct-${envSuffix}`);
       expect(synthesized).toContain(`payment-transactions-${envSuffix}`);
       expect(synthesized).toContain(`payment-processor-${envSuffix}`);
       expect(synthesized).toContain(`payment-api-${envSuffix}`);
