@@ -1,7 +1,8 @@
 """TAP Stack module for CDKTF Python infrastructure - RDS Migration."""
 
+import os
 from datetime import datetime
-from cdktf import TerraformStack, S3Backend, TerraformOutput, Fn
+from cdktf import TerraformStack, S3Backend, TerraformOutput, Fn, TerraformAsset, AssetType
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.vpc import Vpc
@@ -56,17 +57,16 @@ class TapStack(TerraformStack):
             default_tags=[default_tags],
         )
 
-        # Configure S3 Backend with native state locking
-        S3Backend(
-            self,
-            bucket=state_bucket,
-            key=f"{environment_suffix}/{construct_id}.tfstate",
-            region=state_bucket_region,
-            encrypt=True,
-        )
-
-        # Add S3 state locking using escape hatch
-        self.add_override("terraform.backend.s3.use_lockfile", True)
+        # Configure S3 Backend only if bucket is provided and not empty
+        # (DynamoDB table is used automatically for locking when S3 backend is used)
+        if state_bucket and state_bucket.strip():
+            S3Backend(
+                self,
+                bucket=state_bucket,
+                key=f"{environment_suffix}/{construct_id}.tfstate",
+                region=state_bucket_region,
+                encrypt=True,
+            )
 
         # Get availability zones
         azs = DataAwsAvailabilityZones(
@@ -364,6 +364,16 @@ class TapStack(TerraformStack):
             policy_arn=lambda_custom_policy.arn
         )
 
+        # Create Lambda asset for deployment package
+        # Use absolute path to lambda_function.zip from project root
+        lambda_zip_path = os.path.join(os.getcwd(), "lambda_function.zip")
+        lambda_asset = TerraformAsset(
+            self,
+            "lambda_asset",
+            path=lambda_zip_path,
+            type=AssetType.FILE
+        )
+
         # Create Lambda function for validation
         validation_lambda = LambdaFunction(
             self,
@@ -374,7 +384,8 @@ class TapStack(TerraformStack):
             role=lambda_role.arn,
             timeout=300,
             memory_size=256,
-            filename="lambda_function.zip",
+            filename=lambda_asset.path,
+            source_code_hash=lambda_asset.asset_hash,
             environment={
                 "variables": {
                     "DB_SECRET_ARN": db_secret.arn,
