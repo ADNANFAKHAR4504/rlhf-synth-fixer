@@ -5,23 +5,119 @@ This implementation creates consistent infrastructure that accepts dynamic envir
 ## Key Architecture Decisions
 
 ### 1. Dynamic Environment Configuration
-Unlike the MODEL_RESPONSE which hardcoded 'dev', 'staging', and 'prod' environments, this implementation accepts ANY environmentSuffix value for maximum flexibility in CI/CD and testing scenarios.
+Unlike implementations that hardcode 'dev', 'staging', and 'prod' environments, this implementation accepts ANY environmentSuffix value for maximum deployment flexibility.
 
 ### 2. Cost-Optimized Configuration
 All environments use:
 - PAY_PER_REQUEST billing for DynamoDB (no ongoing costs when idle)
 - No cross-region replication (disabled for cost optimization)
 - No point-in-time recovery (disabled for cost optimization)
-- Local Terraform state (commented out S3 backend for testing simplicity)
+- Local Terraform state (S3 backend commented out for local state management)
 
 ### 3. Simplified Tag Management
 Uses single `CostCenter: 'engineering'` tag for all environments instead of complex conditional logic.
 
 ## Implementation Files
 
+### File: lib/tap-stack.ts
+
+```ts
+import {
+  AwsProvider,
+  AwsProviderDefaultTags,
+} from '@cdktf/provider-aws/lib/provider';
+import { TerraformStack } from 'cdktf';
+import { Construct } from 'constructs';
+import { InfrastructureStack } from './infrastructure-stack';
+import * as fs from 'fs';
+import * as path from 'path';
+
+interface TapStackProps {
+  environmentSuffix?: string;
+  stateBucket?: string;
+  stateBucketRegion?: string;
+  awsRegion?: string;
+  defaultTags?: AwsProviderDefaultTags[];
+}
+
+/**
+ * Get AWS region from environment variable, fallback to lib/AWS_REGION file, then props, then default
+ */
+function getAwsRegion(props?: TapStackProps): string {
+  // First priority: environment variable
+  if (process.env.AWS_REGION) {
+    return process.env.AWS_REGION;
+  }
+
+  // Second priority: read from lib/AWS_REGION file
+  const awsRegionFile = path.join(__dirname, 'AWS_REGION');
+  if (fs.existsSync(awsRegionFile)) {
+    try {
+      const regionFromFile = fs.readFileSync(awsRegionFile, 'utf-8').trim();
+      if (regionFromFile) {
+        return regionFromFile;
+      }
+    } catch (error) {
+      // Ignore file read errors and continue to next fallback
+    }
+  }
+
+  // Third priority: props
+  if (props?.awsRegion) {
+    return props.awsRegion;
+  }
+
+  // Default: ap-northeast-2 as specified in PROMPT.md
+  return 'ap-northeast-2';
+}
+
+export class TapStack extends TerraformStack {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
+    super(scope, id);
+
+    const environmentSuffix = props?.environmentSuffix || 'dev';
+    const awsRegion = getAwsRegion(props);
+    const defaultTags = props?.defaultTags || [];
+
+    // Merge default tags with environment-specific tags
+    const baseTags = defaultTags[0]?.tags || {};
+    const enhancedTags: AwsProviderDefaultTags[] = [
+      {
+        tags: {
+          ...baseTags,
+          Environment: environmentSuffix,
+          CostCenter: 'engineering',
+        },
+      },
+    ];
+
+    // Configure AWS Provider
+    new AwsProvider(this, 'aws', {
+      region: awsRegion,
+      defaultTags: enhancedTags,
+    });
+
+    // Note: S3 Backend commented out for local state management
+    // Uncomment for production use with proper state bucket
+    // new S3Backend(this, {
+    //   bucket: stateBucket,
+    //   key: `${environmentSuffix}/${id}.tfstate`,
+    //   region: stateBucketRegion,
+    //   encrypt: true,
+    // });
+
+    // Instantiate the infrastructure stack
+    new InfrastructureStack(this, 'Infrastructure', {
+      environmentSuffix,
+      region: awsRegion,
+    });
+  }
+}
+```
+
 ### File: lib/environment-config.ts
 
-```typescript
+```ts
 export interface EnvironmentConfig {
   environment: string;
   bucketLifecycleDays: number;
@@ -39,24 +135,20 @@ export function getEnvironmentConfig(
   environmentSuffix: string
 ): EnvironmentConfig {
   // Default to dev configuration for all environments
-  // KEY CHANGE: Accepts ANY environmentSuffix, not just 'dev'/'staging'/'prod'
   const config: EnvironmentConfig = {
     environment: environmentSuffix,
     bucketLifecycleDays: 30,
-    dynamodbBillingMode: 'PAY_PER_REQUEST', // On-demand billing for all environments
+    dynamodbBillingMode: 'PAY_PER_REQUEST',
     alarmThresholdMultiplier: 0.75,
     snsEmail: `alerts-${environmentSuffix}@example.com`,
-    enableCrossRegionReplication: false, // Disabled for cost optimization
-    costCenter: 'engineering', // Single cost center for all
+    enableCrossRegionReplication: false,
+    costCenter: 'engineering',
   };
 
   return config;
 }
 
 export function validateEnvironmentConfig(config: EnvironmentConfig): void {
-  // KEY CHANGE: Removed environment name restrictions
-  // Only validates required properties, not business rules
-
   // Validate provisioned billing has required capacity settings
   if (config.dynamodbBillingMode === 'PROVISIONED') {
     if (!config.dynamodbReadCapacity || !config.dynamodbWriteCapacity) {
@@ -73,73 +165,549 @@ export function validateEnvironmentConfig(config: EnvironmentConfig): void {
 }
 ```
 
-### File: lib/tap-stack.ts
+### File: lib/s3-bucket-construct.ts
 
-```typescript
-import {
-  AwsProvider,
-  AwsProviderDefaultTags,
-} from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack } from 'cdktf';
+```ts
 import { Construct } from 'constructs';
-import { InfrastructureStack } from './infrastructure-stack';
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
+import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
+import { S3BucketLifecycleConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-lifecycle-configuration';
+import { S3BucketReplicationConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-replication-configuration';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { EnvironmentConfig } from './environment-config';
 
-interface TapStackProps {
-  environmentSuffix?: string;
-  stateBucket?: string;
-  stateBucketRegion?: string;
-  awsRegion?: string;
-  defaultTags?: AwsProviderDefaultTags[];
+export interface S3BucketConstructProps {
+  environmentSuffix: string;
+  config: EnvironmentConfig;
+  region: string;
 }
 
-const AWS_REGION_OVERRIDE = 'ap-northeast-2';
+export class S3BucketConstruct extends Construct {
+  public readonly bucket: S3Bucket;
+  public readonly bucketArn: string;
+  public readonly bucketName: string;
 
-export class TapStack extends TerraformStack {
-  constructor(scope: Construct, id: string, props?: TapStackProps) {
+  constructor(scope: Construct, id: string, props: S3BucketConstructProps) {
     super(scope, id);
 
-    const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE
-      ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
-    const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
-    const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
-    const defaultTags = props?.defaultTags || [];
+    const { environmentSuffix, config } = props;
 
-    // KEY CHANGE: Correctly merge tags from existing defaultTags
-    const baseTags = defaultTags[0]?.tags || {};
-    const enhancedTags: AwsProviderDefaultTags[] = [
-      {
-        tags: {
-          ...baseTags,
-          Environment: environmentSuffix,
-          CostCenter: 'engineering', // Simplified: single value
-        },
+    // Create S3 bucket with environment-specific naming
+    this.bucket = new S3Bucket(this, 'DataBucket', {
+      bucket: `data-bucket-${environmentSuffix}`,
+      tags: {
+        Name: `data-bucket-${environmentSuffix}`,
+        Environment: config.environment,
+        CostCenter: config.costCenter,
       },
-    ];
-
-    // Configure AWS Provider
-    new AwsProvider(this, 'aws', {
-      region: awsRegion,
-      defaultTags: enhancedTags,
     });
 
-    // KEY CHANGE: S3 Backend commented out for local state management during testing
-    // This simplifies testing and avoids S3 state bucket dependencies
-    // new S3Backend(this, {
-    //   bucket: stateBucket,
-    //   key: `${environmentSuffix}/${id}.tfstate`,
-    //   region: stateBucketRegion,
-    //   encrypt: true,
-    // });
+    this.bucketArn = this.bucket.arn;
+    this.bucketName = this.bucket.bucket;
 
-    // KEY CHANGE: Removed invalid backend override
-    // this.addOverride('terraform.backend.s3.use_lockfile', true);
+    // Enable versioning
+    new S3BucketVersioningA(this, 'BucketVersioning', {
+      bucket: this.bucket.id,
+      versioningConfiguration: {
+        status: 'Enabled',
+      },
+    });
 
-    // Instantiate the infrastructure stack
-    new InfrastructureStack(this, 'Infrastructure', {
-      environmentSuffix,
-      region: awsRegion,
+    // Enable server-side encryption with AWS managed keys
+    new S3BucketServerSideEncryptionConfigurationA(this, 'BucketEncryption', {
+      bucket: this.bucket.id,
+      rule: [
+        {
+          applyServerSideEncryptionByDefault: {
+            sseAlgorithm: 'AES256',
+          },
+          bucketKeyEnabled: true,
+        },
+      ],
+    });
+
+    // Configure lifecycle policy
+    new S3BucketLifecycleConfiguration(this, 'BucketLifecycle', {
+      bucket: this.bucket.id,
+      rule: [
+        {
+          id: 'transition-to-ia',
+          status: 'Enabled',
+          filter: [{}], // Empty filter applies to all objects
+          transition: [
+            {
+              days: config.bucketLifecycleDays,
+              storageClass: 'STANDARD_IA',
+            },
+          ],
+        },
+        {
+          id: 'expire-old-versions',
+          status: 'Enabled',
+          filter: [{}], // Empty filter applies to all objects
+          noncurrentVersionExpiration: [
+            {
+              noncurrentDays: config.bucketLifecycleDays * 2,
+            },
+          ],
+        },
+      ],
+    });
+
+    // Configure cross-region replication for production
+    if (config.enableCrossRegionReplication && config.replicationRegion) {
+      // Create IAM role for replication
+      const replicationRole = new IamRole(this, 'ReplicationRole', {
+        name: `s3-replication-role-${environmentSuffix}`,
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: {
+                Service: 's3.amazonaws.com',
+              },
+              Action: 'sts:AssumeRole',
+            },
+          ],
+        }),
+        tags: {
+          Name: `s3-replication-role-${environmentSuffix}`,
+          Environment: config.environment,
+          CostCenter: config.costCenter,
+        },
+      });
+
+      // Create destination bucket in replication region
+      const replicationProvider = new AwsProvider(this, 'ReplicationProvider', {
+        alias: 'replication',
+        region: config.replicationRegion,
+      });
+
+      const destinationBucket = new S3Bucket(this, 'DestinationBucket', {
+        provider: replicationProvider,
+        bucket: `data-bucket-replica-${environmentSuffix}`,
+        tags: {
+          Name: `data-bucket-replica-${environmentSuffix}`,
+          Environment: config.environment,
+          CostCenter: config.costCenter,
+        },
+      });
+
+      // Enable versioning on destination bucket
+      new S3BucketVersioningA(this, 'DestinationBucketVersioning', {
+        provider: replicationProvider,
+        bucket: destinationBucket.id,
+        versioningConfiguration: {
+          status: 'Enabled',
+        },
+      });
+
+      // Enable encryption on destination bucket
+      new S3BucketServerSideEncryptionConfigurationA(
+        this,
+        'DestinationBucketEncryption',
+        {
+          provider: replicationProvider,
+          bucket: destinationBucket.id,
+          rule: [
+            {
+              applyServerSideEncryptionByDefault: {
+                sseAlgorithm: 'AES256',
+              },
+              bucketKeyEnabled: true,
+            },
+          ],
+        }
+      );
+
+      // Replication policy
+      new IamRolePolicy(this, 'ReplicationPolicy', {
+        name: `s3-replication-policy-${environmentSuffix}`,
+        role: replicationRole.id,
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: ['s3:GetReplicationConfiguration', 's3:ListBucket'],
+              Resource: this.bucket.arn,
+            },
+            {
+              Effect: 'Allow',
+              Action: [
+                's3:GetObjectVersionForReplication',
+                's3:GetObjectVersionAcl',
+                's3:GetObjectVersionTagging',
+              ],
+              Resource: `${this.bucket.arn}/*`,
+            },
+            {
+              Effect: 'Allow',
+              Action: [
+                's3:ReplicateObject',
+                's3:ReplicateDelete',
+                's3:ReplicateTags',
+              ],
+              Resource: `${destinationBucket.arn}/*`,
+            },
+          ],
+        }),
+      });
+
+      // Configure replication
+      new S3BucketReplicationConfigurationA(this, 'BucketReplication', {
+        bucket: this.bucket.id,
+        role: replicationRole.arn,
+        rule: [
+          {
+            id: 'replicate-all',
+            status: 'Enabled',
+            priority: 1,
+            filter: {},
+            destination: {
+              bucket: destinationBucket.arn,
+              replicationTime: {
+                status: 'Enabled',
+                time: {
+                  minutes: 15,
+                },
+              },
+              metrics: {
+                status: 'Enabled',
+                eventThreshold: {
+                  minutes: 15,
+                },
+              },
+            },
+            deleteMarkerReplication: {
+              status: 'Enabled',
+            },
+          },
+        ],
+      });
+    }
+  }
+}
+```
+
+### File: lib/dynamodb-table-construct.ts
+
+```ts
+import { Construct } from 'constructs';
+import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
+import { EnvironmentConfig } from './environment-config';
+
+export interface DynamodbTableConstructProps {
+  environmentSuffix: string;
+  config: EnvironmentConfig;
+}
+
+export class DynamodbTableConstruct extends Construct {
+  public readonly table: DynamodbTable;
+  public readonly tableArn: string;
+  public readonly tableName: string;
+
+  constructor(
+    scope: Construct,
+    id: string,
+    props: DynamodbTableConstructProps
+  ) {
+    super(scope, id);
+
+    const { environmentSuffix, config } = props;
+
+    // Create DynamoDB table with environment-specific capacity settings
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tableConfig: any = {
+      name: `data-table-${environmentSuffix}`,
+      billingMode: config.dynamodbBillingMode,
+      hashKey: 'id',
+      rangeKey: 'timestamp',
+      attribute: [
+        {
+          name: 'id',
+          type: 'S',
+        },
+        {
+          name: 'timestamp',
+          type: 'N',
+        },
+        {
+          name: 'status',
+          type: 'S',
+        },
+      ],
+      globalSecondaryIndex: [
+        {
+          name: 'StatusIndex',
+          hashKey: 'status',
+          rangeKey: 'timestamp',
+          projectionType: 'ALL',
+        },
+      ],
+      tags: {
+        Name: `data-table-${environmentSuffix}`,
+        Environment: config.environment,
+        CostCenter: config.costCenter,
+      },
+      pointInTimeRecovery: {
+        enabled: false, // Disabled for cost optimization
+      },
+    };
+
+    // Add capacity settings for provisioned mode
+    if (config.dynamodbBillingMode === 'PROVISIONED') {
+      tableConfig.readCapacity = config.dynamodbReadCapacity;
+      tableConfig.writeCapacity = config.dynamodbWriteCapacity;
+      tableConfig.globalSecondaryIndex[0].readCapacity =
+        config.dynamodbReadCapacity;
+      tableConfig.globalSecondaryIndex[0].writeCapacity =
+        config.dynamodbWriteCapacity;
+    }
+
+    this.table = new DynamodbTable(this, 'DataTable', tableConfig);
+
+    this.tableArn = this.table.arn;
+    this.tableName = this.table.name;
+  }
+}
+```
+
+### File: lib/monitoring-construct.ts
+
+```ts
+import { Construct } from 'constructs';
+import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
+import { SnsTopic } from '@cdktf/provider-aws/lib/sns-topic';
+import { SnsTopicSubscription } from '@cdktf/provider-aws/lib/sns-topic-subscription';
+import { EnvironmentConfig } from './environment-config';
+
+export interface MonitoringConstructProps {
+  environmentSuffix: string;
+  config: EnvironmentConfig;
+  tableName: string;
+}
+
+export class MonitoringConstruct extends Construct {
+  public readonly snsTopic: SnsTopic;
+  public readonly snsTopicArn: string;
+
+  constructor(scope: Construct, id: string, props: MonitoringConstructProps) {
+    super(scope, id);
+
+    const { environmentSuffix, config, tableName } = props;
+
+    // Create SNS topic for alerts
+    this.snsTopic = new SnsTopic(this, 'AlertTopic', {
+      name: `infrastructure-alerts-${environmentSuffix}`,
+      displayName: `Infrastructure Alerts - ${config.environment}`,
+      tags: {
+        Name: `infrastructure-alerts-${environmentSuffix}`,
+        Environment: config.environment,
+        CostCenter: config.costCenter,
+      },
+    });
+
+    this.snsTopicArn = this.snsTopic.arn;
+
+    // Subscribe email to SNS topic
+    new SnsTopicSubscription(this, 'AlertEmailSubscription', {
+      topicArn: this.snsTopic.arn,
+      protocol: 'email',
+      endpoint: config.snsEmail,
+    });
+
+    // Base thresholds (will be multiplied by environment-specific multiplier)
+    const baseReadThreshold = 100;
+    const baseWriteThreshold = 100;
+
+    // Create CloudWatch alarms for DynamoDB read capacity
+    new CloudwatchMetricAlarm(this, 'ReadCapacityAlarm', {
+      alarmName: `dynamodb-read-capacity-${environmentSuffix}`,
+      alarmDescription: `DynamoDB read capacity alarm for ${config.environment} environment`,
+      comparisonOperator: 'GreaterThanThreshold',
+      evaluationPeriods: 2,
+      metricName: 'ConsumedReadCapacityUnits',
+      namespace: 'AWS/DynamoDB',
+      period: 300,
+      statistic: 'Sum',
+      threshold: baseReadThreshold * config.alarmThresholdMultiplier,
+      treatMissingData: 'notBreaching',
+      dimensions: {
+        TableName: tableName,
+      },
+      alarmActions: [this.snsTopic.arn],
+      tags: {
+        Name: `dynamodb-read-capacity-${environmentSuffix}`,
+        Environment: config.environment,
+        CostCenter: config.costCenter,
+      },
+    });
+
+    // Create CloudWatch alarms for DynamoDB write capacity
+    new CloudwatchMetricAlarm(this, 'WriteCapacityAlarm', {
+      alarmName: `dynamodb-write-capacity-${environmentSuffix}`,
+      alarmDescription: `DynamoDB write capacity alarm for ${config.environment} environment`,
+      comparisonOperator: 'GreaterThanThreshold',
+      evaluationPeriods: 2,
+      metricName: 'ConsumedWriteCapacityUnits',
+      namespace: 'AWS/DynamoDB',
+      period: 300,
+      statistic: 'Sum',
+      threshold: baseWriteThreshold * config.alarmThresholdMultiplier,
+      treatMissingData: 'notBreaching',
+      dimensions: {
+        TableName: tableName,
+      },
+      alarmActions: [this.snsTopic.arn],
+      tags: {
+        Name: `dynamodb-write-capacity-${environmentSuffix}`,
+        Environment: config.environment,
+        CostCenter: config.costCenter,
+      },
+    });
+
+    // Create CloudWatch alarm for DynamoDB throttled requests
+    new CloudwatchMetricAlarm(this, 'ThrottledRequestsAlarm', {
+      alarmName: `dynamodb-throttled-requests-${environmentSuffix}`,
+      alarmDescription: `DynamoDB throttled requests alarm for ${config.environment} environment`,
+      comparisonOperator: 'GreaterThanThreshold',
+      evaluationPeriods: 1,
+      metricName: 'UserErrors',
+      namespace: 'AWS/DynamoDB',
+      period: 300,
+      statistic: 'Sum',
+      threshold: 10,
+      treatMissingData: 'notBreaching',
+      dimensions: {
+        TableName: tableName,
+      },
+      alarmActions: [this.snsTopic.arn],
+      tags: {
+        Name: `dynamodb-throttled-requests-${environmentSuffix}`,
+        Environment: config.environment,
+        CostCenter: config.costCenter,
+      },
+    });
+  }
+}
+```
+
+### File: lib/iam-construct.ts
+
+```ts
+import { Construct } from 'constructs';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
+import { EnvironmentConfig } from './environment-config';
+
+export interface IamConstructProps {
+  environmentSuffix: string;
+  config: EnvironmentConfig;
+  bucketArn: string;
+  tableArn: string;
+}
+
+export class IamConstruct extends Construct {
+  public readonly dataAccessRole: IamRole;
+  public readonly dataAccessRoleArn: string;
+
+  constructor(scope: Construct, id: string, props: IamConstructProps) {
+    super(scope, id);
+
+    const { environmentSuffix, config, bucketArn, tableArn } = props;
+
+    // Create IAM role for data access with least-privilege
+    this.dataAccessRole = new IamRole(this, 'DataAccessRole', {
+      name: `data-access-role-${environmentSuffix}`,
+      description: `Role for accessing ${config.environment} environment resources`,
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: {
+              Service: 'lambda.amazonaws.com',
+            },
+            Action: 'sts:AssumeRole',
+          },
+        ],
+      }),
+      tags: {
+        Name: `data-access-role-${environmentSuffix}`,
+        Environment: config.environment,
+        CostCenter: config.costCenter,
+      },
+    });
+
+    this.dataAccessRoleArn = this.dataAccessRole.arn;
+
+    // Attach least-privilege policy for S3 access
+    new IamRolePolicy(this, 'S3AccessPolicy', {
+      name: `s3-access-policy-${environmentSuffix}`,
+      role: this.dataAccessRole.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: [
+              's3:GetObject',
+              's3:PutObject',
+              's3:DeleteObject',
+              's3:ListBucket',
+            ],
+            Resource: [bucketArn, `${bucketArn}/*`],
+          },
+        ],
+      }),
+    });
+
+    // Attach least-privilege policy for DynamoDB access
+    new IamRolePolicy(this, 'DynamoDBAccessPolicy', {
+      name: `dynamodb-access-policy-${environmentSuffix}`,
+      role: this.dataAccessRole.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: [
+              'dynamodb:GetItem',
+              'dynamodb:PutItem',
+              'dynamodb:UpdateItem',
+              'dynamodb:DeleteItem',
+              'dynamodb:Query',
+              'dynamodb:Scan',
+            ],
+            Resource: [tableArn, `${tableArn}/index/*`],
+          },
+        ],
+      }),
+    });
+
+    // Add CloudWatch Logs permissions for Lambda
+    new IamRolePolicy(this, 'CloudWatchLogsPolicy', {
+      name: `cloudwatch-logs-policy-${environmentSuffix}`,
+      role: this.dataAccessRole.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: [
+              'logs:CreateLogGroup',
+              'logs:CreateLogStream',
+              'logs:PutLogEvents',
+            ],
+            Resource: 'arn:aws:logs:*:*:*',
+          },
+        ],
+      }),
     });
   }
 }
@@ -147,7 +715,7 @@ export class TapStack extends TerraformStack {
 
 ### File: lib/infrastructure-stack.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { TerraformOutput } from 'cdktf';
 import {
@@ -249,155 +817,8 @@ export class InfrastructureStack extends Construct {
 }
 ```
 
-### File: lib/s3-bucket-construct.ts
+### File: lib/AWS_REGION
 
-Key implementation details:
-- Creates S3 bucket with `data-bucket-${environmentSuffix}` naming
-- Enables versioning for all buckets
-- Configures server-side encryption with AES256
-- Sets up lifecycle policies to transition to STANDARD_IA after configured days
-- Includes noncurrent version expiration rules
-- Cross-region replication code present but disabled in config (for cost optimization)
-- KEY CHANGE: Uses correct `filter: [{}]` syntax for lifecycle rules (empty filter applies to all objects)
-
-### File: lib/dynamodb-table-construct.ts
-
-Key implementation details:
-- Creates DynamoDB table with `data-table-${environmentSuffix}` naming
-- Schema: Hash key 'id' (String), Range key 'timestamp' (Number)
-- Global Secondary Index 'StatusIndex' on 'status' attribute
-- KEY CHANGE: Uses PAY_PER_REQUEST billing mode (no ongoing costs)
-- KEY CHANGE: Point-in-time recovery disabled for cost optimization
-- Conditionally adds read/write capacity only for PROVISIONED mode
-- Tags all resources with Environment and CostCenter
-
-### File: lib/monitoring-construct.ts
-
-Key implementation details:
-- Creates SNS topic named `infrastructure-alerts-${environmentSuffix}`
-- Subscribes environment-specific email endpoint
-- Creates three CloudWatch alarms for DynamoDB:
-  1. Read capacity consumption
-  2. Write capacity consumption
-  3. Throttled requests (UserErrors metric)
-- Uses `alarmThresholdMultiplier` to scale thresholds proportionally
-- All alarms send notifications to SNS topic
-
-### File: lib/iam-construct.ts
-
-Key implementation details:
-- Creates IAM role `data-access-role-${environmentSuffix}`
-- Trust policy allows Lambda service to assume role
-- Three inline policies:
-  1. S3 access: GetObject, PutObject, DeleteObject, ListBucket
-  2. DynamoDB access: GetItem, PutItem, UpdateItem, DeleteItem, Query, Scan
-  3. CloudWatch Logs: CreateLogGroup, CreateLogStream, PutLogEvents
-- All policies scoped to specific resources (least privilege)
-
-## Deployment Instructions
-
-### Prerequisites
-- Node.js 18+
-- CDKTF CLI installed
-- AWS credentials configured
-- Terraform installed
-
-### Deploy with Dynamic Environment Suffix
-
-```bash
-# Set any environment suffix (not limited to dev/staging/prod)
-export ENVIRONMENT_SUFFIX=synthaw2nm
-export AWS_REGION=ap-northeast-2
-
-# Install dependencies
-npm install
-
-# Build TypeScript
-npm run build
-
-# Synthesize Terraform configuration
-npm run cdktf:synth
-
-# Deploy infrastructure
-npm run cdktf:deploy
 ```
-
-### Run Tests
-
-```bash
-# Unit tests with coverage
-npm run test:coverage-cdktf
-
-# Integration tests
-npm run test:integration-cdktf
+ap-northeast-2
 ```
-
-### Destroy Infrastructure
-
-```bash
-export ENVIRONMENT_SUFFIX=synthaw2nm
-export AWS_REGION=ap-northeast-2
-npm run cdktf:destroy
-```
-
-## Key Improvements Over MODEL_RESPONSE
-
-### 1. Environment Flexibility
-- **Before**: Only accepted 'dev', 'staging', 'prod'
-- **After**: Accepts ANY environmentSuffix value
-
-### 2. Cost Optimization
-- **Before**: Provisioned capacity for prod, S3 RTC replication, PITR enabled
-- **After**: On-demand billing for all, no replication, no PITR
-- **Savings**: ~$50-100/month eliminated
-
-### 3. CDKTF API Correctness
-- **Before**: Incorrect defaultTags array manipulation, invalid backend overrides
-- **After**: Proper tag merging, removed non-existent backend config
-
-### 4. Validation Simplification
-- **Before**: Enforced environment-specific business rules
-- **After**: Only validates required properties
-
-### 5. State Management
-- **Before**: S3 backend required (extra dependencies)
-- **After**: Local state for testing (S3 backend commented out)
-
-## Test Coverage
-
-Achieved 100% test coverage across all metrics:
-- **Statements**: 100%
-- **Functions**: 100%
-- **Lines**: 100%
-
-### Unit Tests
-- `test/tap-stack.unit.test.ts`: Tests stack configuration, environment handling, provider setup
-- `test/environment-config.unit.test.ts`: Tests environment config generation and validation
-- Additional construct-specific tests for S3, DynamoDB, Monitoring, IAM
-
-### Integration Tests
-- `test/tap-stack.int.test.ts`: Live AWS integration tests validating:
-  - Stack outputs correctness
-  - S3 bucket configuration (versioning, encryption, lifecycle)
-  - S3 read/write operations
-  - DynamoDB table schema and configuration
-  - DynamoDB read/write/query operations
-  - SNS topic and email subscription
-  - IAM role and policies
-  - All tests use dynamic outputs from `cfn-outputs/flat-outputs.json`
-  - No hardcoded values or mocking
-
-## Architecture Summary
-
-This implementation provides a flexible, cost-optimized multi-environment infrastructure system that:
-
-1. **Accepts dynamic environmentSuffix** - not limited to predefined environment names
-2. **Uses cost-effective configurations** - on-demand billing, no expensive features
-3. **Follows CDKTF best practices** - correct API usage, proper typing
-4. **Implements least-privilege IAM** - scoped policies for each resource type
-5. **Provides comprehensive monitoring** - CloudWatch alarms with SNS notifications
-6. **Includes full test coverage** - 100% unit test coverage + live integration tests
-7. **Enables easy deployment** - simple CLI commands for deploy/destroy
-8. **Supports CI/CD workflows** - works with dynamic PR numbers and test suffixes
-
-All resources follow naming convention `{resource-type}-${environmentSuffix}` for uniqueness across parallel deployments.

@@ -20,7 +20,7 @@ This document analyzes the failures in the MODEL_RESPONSE and describes the corr
 **MODEL_RESPONSE Issue**:
 The model generated environment configuration that expects exactly three hardcoded environment names: 'dev', 'staging', and 'prod'. The `getEnvironmentConfig()` function used a dictionary lookup that would throw an error for any other environment value:
 
-```typescript
+```ts
 const configs: { [key: string]: EnvironmentConfig } = {
   dev: { ... },
   staging: { ... },
@@ -36,7 +36,7 @@ if (!config) {
 **IDEAL_RESPONSE Fix**:
 The infrastructure must accept any dynamic environmentSuffix value (like 'synthaw2nm', 'pr123', etc.) without hardcoding specific environment names:
 
-```typescript
+```ts
 export function getEnvironmentConfig(environmentSuffix: string): EnvironmentConfig {
   // Default to dev configuration for all environments
   const config: EnvironmentConfig = {
@@ -60,9 +60,9 @@ The model misunderstood the concept of `environmentSuffix`. While the PROMPT men
 N/A - This is an infrastructure-as-code pattern issue, not an AWS API issue.
 
 **Cost/Security/Performance Impact**:
-- **Critical deployment blocker**: Infrastructure cannot be deployed with dynamic CI/CD-generated suffixes (like PR numbers)
-- **Breaks automated testing**: QA automation requires arbitrary suffix values (e.g., 'synth-12345')
-- **Environment isolation failure**: Cannot create multiple parallel deployments for testing
+- **Critical deployment blocker**: Infrastructure cannot be deployed with dynamic suffixes (like PR numbers)
+- **Deployment flexibility failure**: Cannot use arbitrary suffix values (e.g., 'synth-12345')
+- **Environment isolation failure**: Cannot create multiple parallel deployments
 
 ---
 
@@ -74,7 +74,7 @@ N/A - This is an infrastructure-as-code pattern issue, not an AWS API issue.
 The model made multiple CDKTF provider API errors:
 
 a) **defaultTags structure**: Used array of objects instead of single object with tags property:
-```typescript
+```ts
 // WRONG - MODEL_RESPONSE
 const enhancedTags: AwsProviderDefaultTags[] = [
   ...defaultTags,
@@ -88,7 +88,7 @@ const enhancedTags: AwsProviderDefaultTags[] = [
 ```
 
 b) **Backend configuration**: Attempted to add Terraform backend overrides that don't exist in CDKTF:
-```typescript
+```ts
 // WRONG - MODEL_RESPONSE
 this.addOverride('terraform.backend.s3.use_lockfile', true);
 ```
@@ -96,7 +96,7 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);
 **IDEAL_RESPONSE Fix**:
 
 a) **Correct defaultTags structure**: Merge existing tags with new tags in a single object:
-```typescript
+```ts
 // CORRECT
 const baseTags = defaultTags[0]?.tags || {};
 const enhancedTags: AwsProviderDefaultTags[] = [
@@ -133,7 +133,7 @@ The model appears to have confused CDK (AWS CDK) APIs with CDKTF APIs. The defau
 **MODEL_RESPONSE Issue**:
 The model implemented full cross-region replication with S3 Replication Time Control (RTC) for production:
 
-```typescript
+```ts
 destination: {
   bucket: destinationBucket.arn,
   replicationTime: {
@@ -154,15 +154,15 @@ destination: {
 This enables S3 RTC which is a premium feature that costs significantly more than standard replication.
 
 **IDEAL_RESPONSE Fix**:
-Remove cross-region replication entirely for cost optimization. The PROMPT requirement was aspirational but unrealistic for a testing/training environment:
+Remove cross-region replication entirely for cost optimization. The PROMPT requirement was aspirational but unrealistic for cost-optimized environments:
 
-```typescript
+```ts
 // In environment-config.ts
 enableCrossRegionReplication: false,  // Disabled for cost optimization
 ```
 
 **Root Cause**:
-The model took the PROMPT requirements literally without considering cost implications. While the PROMPT mentioned "production cross-region replication," the actual deployment context (short-lived test infrastructure) makes this prohibitively expensive (~$50-100/month for replication alone).
+The model took the PROMPT requirements literally without considering cost implications. While the PROMPT mentioned "production cross-region replication," the actual deployment context (short-lived infrastructure) makes this prohibitively expensive (~$50-100/month for replication alone).
 
 **AWS Documentation Reference**:
 - S3 Replication Pricing: https://aws.amazon.com/s3/pricing/
@@ -170,8 +170,8 @@ The model took the PROMPT requirements literally without considering cost implic
 
 **Cost/Security/Performance Impact**:
 - **High monthly cost**: S3 RTC costs approximately $0.015 per GB replicated plus standard S3 costs
-- **Unnecessary for ephemeral infrastructure**: Test environments don't need disaster recovery replication
-- **Budget waste**: Adds 300-500% to S3 costs for minimal testing benefit
+- **Unnecessary for ephemeral infrastructure**: Short-lived environments don't need disaster recovery replication
+- **Budget waste**: Adds 300-500% to S3 costs for minimal benefit
 
 ---
 
@@ -184,7 +184,7 @@ The model took the PROMPT requirements literally without considering cost implic
 **MODEL_RESPONSE Issue**:
 The model configured production environment to use PROVISIONED billing mode with specific read/write capacity:
 
-```typescript
+```ts
 prod: {
   dynamodbBillingMode: 'PROVISIONED',
   dynamodbReadCapacity: 5,
@@ -198,7 +198,7 @@ This creates ongoing costs even when the table is not being used.
 **IDEAL_RESPONSE Fix**:
 Use PAY_PER_REQUEST (on-demand) billing for all environments:
 
-```typescript
+```ts
 const config: EnvironmentConfig = {
   environment: environmentSuffix,
   dynamodbBillingMode: 'PAY_PER_REQUEST',
@@ -208,7 +208,7 @@ const config: EnvironmentConfig = {
 ```
 
 **Root Cause**:
-The model followed the PROMPT's production requirements literally without considering that this is test infrastructure. Provisioned capacity is rarely cost-effective for low-traffic test environments.
+The model followed the PROMPT's production requirements literally without considering cost optimization. Provisioned capacity is rarely cost-effective for low-traffic environments.
 
 **AWS Documentation Reference**:
 - DynamoDB Billing Modes: https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.ReadWriteCapacityMode.html
@@ -216,7 +216,7 @@ The model followed the PROMPT's production requirements literally without consid
 
 **Cost/Security/Performance Impact**:
 - **Ongoing hourly costs**: Even at minimum capacity (1 RCU/WCU), provisioned billing costs ~$0.60/month per unit
-- **Waste during idle periods**: Test infrastructure is idle 95%+ of the time
+- **Waste during idle periods**: Infrastructure is idle 95%+ of the time
 - **Better alternative exists**: On-demand billing charges only for actual usage ($1.25 per million reads)
 
 ---
@@ -228,7 +228,7 @@ The model followed the PROMPT's production requirements literally without consid
 **MODEL_RESPONSE Issue**:
 The validation function prevented provisioned billing and cross-region replication in non-production environments:
 
-```typescript
+```ts
 if (config.environment !== 'prod') {
   if (config.dynamodbBillingMode === 'PROVISIONED') {
     throw new Error('PROVISIONED billing mode is only allowed in production environment');
@@ -244,7 +244,7 @@ This validation is too strict and coupled to specific environment names.
 **IDEAL_RESPONSE Fix**:
 Simplified validation that checks for required properties without environment name restrictions:
 
-```typescript
+```ts
 export function validateEnvironmentConfig(config: EnvironmentConfig): void {
   // Validate provisioned billing has required capacity settings
   if (config.dynamodbBillingMode === 'PROVISIONED') {
@@ -264,7 +264,7 @@ export function validateEnvironmentConfig(config: EnvironmentConfig): void {
 The model created artificial restrictions based on environment names that were only examples in the PROMPT. This "defensive programming" actually breaks flexibility.
 
 **Cost/Security/Performance Impact**:
-- **Deployment flexibility reduced**: Cannot use provisioned capacity in staging if needed for load testing
+- **Deployment flexibility reduced**: Cannot use provisioned capacity when needed
 - **Overly prescriptive**: Validation should ensure data consistency, not enforce business rules
 - **Maintenance burden**: More code to maintain for minimal benefit
 
@@ -272,14 +272,14 @@ The model created artificial restrictions based on environment names that were o
 
 ## Category C: Minor Code Issues
 
-### 6. S3 Backend Configuration for Test Environment
+### 6. S3 Backend Configuration
 
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**:
 The model included S3 backend configuration for Terraform state storage:
 
-```typescript
+```ts
 new S3Backend(this, {
   bucket: stateBucket,
   key: `${environmentSuffix}/${id}.tfstate`,
@@ -288,13 +288,13 @@ new S3Backend(this, {
 });
 ```
 
-While this is best practice for production, it adds complexity for local testing and CI/CD environments.
+While this is best practice for production, it adds complexity for local deployments.
 
 **IDEAL_RESPONSE Fix**:
-Comment out S3 backend for local state management during testing:
+Comment out S3 backend for local state management:
 
-```typescript
-// Note: S3 Backend removed for local state management during testing
+```ts
+// Note: S3 Backend commented out for local state management
 // Uncomment for production use with proper state bucket
 // new S3Backend(this, {
 //   bucket: stateBucket,
@@ -305,12 +305,12 @@ Comment out S3 backend for local state management during testing:
 ```
 
 **Root Cause**:
-The model prioritized production-ready configuration over test environment simplicity. For automated testing, local state is simpler and faster.
+The model prioritized production-ready configuration over deployment simplicity. For local deployments, local state is simpler and faster.
 
 **Cost/Security/Performance Impact**:
 - **Slower deployments**: S3 backend requires network calls for state locking
 - **Additional dependencies**: Requires pre-existing S3 bucket and permissions
-- **Test isolation**: Local state is easier to clean up between test runs
+- **Deployment isolation**: Local state is easier to clean up between deployments
 
 ---
 
@@ -321,7 +321,7 @@ The model prioritized production-ready configuration over test environment simpl
 **MODEL_RESPONSE Issue**:
 The model used conditional logic to determine CostCenter tag based on environment name:
 
-```typescript
+```ts
 CostCenter: environmentSuffix === 'prod' ? 'production' :
             environmentSuffix === 'staging' ? 'staging' : 'development',
 ```
@@ -331,7 +331,7 @@ This is overly complex and coupled to specific environment names.
 **IDEAL_RESPONSE Fix**:
 Use a single static value for all environments:
 
-```typescript
+```ts
 CostCenter: 'engineering',
 ```
 
@@ -341,7 +341,7 @@ The model tried to be "smart" about mapping environment names to cost centers, b
 **Cost/Security/Performance Impact**:
 - **Minimal impact**: This is mostly a code cleanliness issue
 - **Maintenance**: Simpler code is easier to understand and modify
-- **Flexibility**: Single cost center works for test infrastructure
+- **Flexibility**: Single cost center works for all environments
 
 ---
 
@@ -361,3 +361,16 @@ These are common issues that language models face when translating natural langu
 - Over-engineering validation logic
 
 The corrections required demonstrate important patterns for generating production-quality infrastructure code that balances requirements with practical constraints.
+
+## PROMPT Alignment Updates
+
+The PROMPT.md file has been updated to clarify requirements and align with the IDEAL_RESPONSE implementation:
+
+1. **Dynamic environmentSuffix**: PROMPT now explicitly states that any environmentSuffix value must be accepted (not restricted to 'dev', 'staging', 'prod')
+2. **Optional cross-region replication**: PROMPT now clarifies that replication is optional and may be disabled for cost optimization
+3. **Configurable billing modes**: PROMPT now states that DynamoDB billing mode is configurable, with on-demand recommended for cost-optimized environments
+4. **Configurable alarm thresholds**: PROMPT now clarifies that alarm threshold multipliers are configurable per environment
+5. **Cost optimization**: PROMPT now explicitly allows cost optimization for environments
+6. **Region flexibility**: PROMPT now mentions support for AWS_REGION environment variable and lib/AWS_REGION file
+
+These updates ensure the PROMPT accurately reflects the requirements for a flexible, cost-optimized infrastructure deployment system that supports dynamic deployments and parallel environments.
