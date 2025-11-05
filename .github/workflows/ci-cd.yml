@@ -153,7 +153,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'true'
+          download-artifacts: 'false'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
