@@ -894,29 +894,34 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "🔍 Fetching latest Claude review comment..."
-          gh pr view ${{ github.event.pull_request.number }} --comments --json comments \
-            | jq -r '.comments[].body' > all_comments.txt
-          # Fetch issue comments
-          gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
-            --paginate \
-            --jq '.[].body' > all_comments.txt
+          echo "🔍 Collecting ALL comments (issue + review + file review comments)..."
       
-          # Fetch review comments
+          # Start fresh
+          rm -f all_comments.txt
+      
+          # Issue comments (normal PR comments)
+          gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+            --paginate --jq '.[].body' >> all_comments.txt || true
+      
+          # Review summaries (rarely contain content but still included)
           gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews \
-            --paginate \
-            --jq '.[].body' >> all_comments.txt
+            --paginate --jq '.[].body' >> all_comments.txt || true
+      
+          # ✅ THIS is where Claude posts the score
+          gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments \
+            --paginate --jq '.[].body' >> all_comments.txt || true
+      
           echo "🍀 Searching for quality score pattern..."
-          # Case-insensitive search for multiple variants (Final Score, Training Quality, etc.)
-          SCORE=$(grep -Eoi '(final[[:space:]]*(score|quality):?|training[_[:space:]]*quality:?|quality[[:space:]]*score:?|score:)[[:space:]]*[0-9]+(\.[0-9]+)?' all_comments.txt \
+      
+          SCORE=$(grep -Eoi '(final[[:space:]]*(score|quality)|training[_[:space:]]*quality|quality[[:space:]]*score|score)[[:space:]:]*[0-9]+(\.[0-9]+)?' all_comments.txt \
             | tail -1 | grep -Eo '[0-9]+(\.[0-9]+)?' | head -1)
-
+      
           if [ -z "$SCORE" ]; then
             echo "⚠️ Could not find any quality score in PR comments. Defaulting to 0."
             SCORE=0
           fi
-
-          echo "Claude quality score: $SCORE"
+      
+          echo "✅ Claude quality score detected: $SCORE"
           echo "quality_score=$SCORE" >> $GITHUB_OUTPUT
 
       - name: Enforce Quality Threshold
