@@ -168,22 +168,22 @@ describe('TapStack Integration Tests Strictly for flat-outputs.json and tap_stac
   });
 
   test('Primary CloudWatch Log Group exists', async () => {
-    const logGroupName = outputs.primary_cloudwatch_log_group;
-    if (!logGroupName) return console.warn('Missing primary_cloudwatch_log_group, skipping.');
-    const res = await diagAwsCall('PrimaryCloudWatchLogs', cloudwatchPrimary.describeLogGroups.bind(cloudwatchPrimary), { logGroupNamePrefix: logGroupName });
-    if (skipIfNull(res?.logGroups, 'PrimaryCloudWatchLogs')) return;
-    const found = res.logGroups.some((lg: any) => lg.logGroupName === logGroupName);
-    expect(found).toBe(true);
-  });
+  const logGroupName = outputs.primary_cloudwatch_log_group;
+  if (!logGroupName) return console.warn('Missing primary_cloudwatch_log_group, skipping.');
+  const res = await diagAwsCall('PrimaryCloudWatchLogs', cloudwatchLogsPrimary.describeLogGroups.bind(cloudwatchLogsPrimary), { logGroupNamePrefix: logGroupName });
+  if (skipIfNull(res?.logGroups, 'PrimaryCloudWatchLogs')) return;
+  const found = res.logGroups.some((lg: any) => lg.logGroupName === logGroupName);
+  expect(found).toBe(true);
+});
 
-  test('Secondary CloudWatch Log Group exists', async () => {
-    const logGroupName = outputs.secondary_cloudwatch_log_group;
-    if (!logGroupName) return console.warn('Missing secondary_cloudwatch_log_group, skipping.');
-    const res = await diagAwsCall('SecondaryCloudWatchLogs', cloudwatchSecondary.describeLogGroups.bind(cloudwatchSecondary), { logGroupNamePrefix: logGroupName });
-    if (skipIfNull(res?.logGroups, 'SecondaryCloudWatchLogs')) return;
-    const found = res.logGroups.some((lg: any) => lg.logGroupName === logGroupName);
-    expect(found).toBe(true);
-  });
+test('Secondary CloudWatch Log Group exists', async () => {
+  const logGroupName = outputs.secondary_cloudwatch_log_group;
+  if (!logGroupName) return console.warn('Missing secondary_cloudwatch_log_group, skipping.');
+  const res = await diagAwsCall('SecondaryCloudWatchLogs', cloudwatchLogsSecondary.describeLogGroups.bind(cloudwatchLogsSecondary), { logGroupNamePrefix: logGroupName });
+  if (skipIfNull(res?.logGroups, 'SecondaryCloudWatchLogs')) return;
+  const found = res.logGroups.some((lg: any) => lg.logGroupName === logGroupName);
+  expect(found).toBe(true);
+});
 
   test('Primary KMS Key ID format check', () => {
     const kmsKeyId = outputs.primary_kms_key_id;
