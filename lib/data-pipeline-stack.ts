@@ -17,9 +17,16 @@ export class DataPipelineStack extends TerraformStack {
     super(scope, id);
 
     // Configure S3 Backend for remote state management
-    const stateBucket = props.stateBucket || process.env.TERRAFORM_STATE_BUCKET || 'iac-rlhf-tf-states';
-    const stateBucketRegion = props.stateBucketRegion || process.env.TERRAFORM_STATE_BUCKET_REGION || 'us-east-1';
-    const environmentSuffix = props.environmentSuffix || process.env.ENVIRONMENT_SUFFIX || 'dev';
+    const stateBucket =
+      props.stateBucket ||
+      process.env.TERRAFORM_STATE_BUCKET ||
+      'iac-rlhf-tf-states';
+    const stateBucketRegion =
+      props.stateBucketRegion ||
+      process.env.TERRAFORM_STATE_BUCKET_REGION ||
+      'us-east-1';
+    const environmentSuffix =
+      props.environmentSuffix || process.env.ENVIRONMENT_SUFFIX || 'dev';
 
     new S3Backend(this, {
       bucket: stateBucket,
