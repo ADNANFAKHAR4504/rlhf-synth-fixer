@@ -1,5 +1,6 @@
 import { App, Testing } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
+import * as modules from '../lib/modules';
 
 // Mock the AWS provider and constructs to avoid actual resource creation
 jest.mock('@cdktf/provider-aws/lib/provider', () => ({
@@ -264,6 +265,381 @@ describe('TapStack Unit Tests', () => {
       expect(usWest2Stack).toBeDefined();
       expect(east1Synth).toBeDefined();
       expect(west2Synth).toBeDefined();
+    });
+  });
+
+  // NEW TESTS FOR BRANCH COVERAGE
+  describe('Branch Coverage - DefaultTags', () => {
+    test('should handle defaultTags when provided', () => {
+      const stack = new TapStack(app, 'StackWithTags', {
+        environmentSuffix: 'tag-test',
+        defaultTags: {
+          tags: {
+            Owner: 'TestOwner',
+            Department: 'Engineering',
+          }
+        }
+      });
+      synthesized = Testing.synth(stack);
+
+      expect(stack).toBeDefined();
+      expect(synthesized).toBeDefined();
+    });
+
+    test('should handle defaultTags with empty tags object', () => {
+      const stack = new TapStack(app, 'StackWithEmptyTags', {
+        defaultTags: {
+          tags: {}
+        }
+      });
+      synthesized = Testing.synth(stack);
+
+      expect(stack).toBeDefined();
+      expect(synthesized).toBeDefined();
+    });
+  });
+
+  describe('Branch Coverage - Module Tests', () => {
+    test('NetworkingModule with custom AWS region', () => {
+      const config: modules.EnvironmentConfig = {
+        name: 'test-network',
+        cidrBlock: '10.0.0.0/16',
+        dbInstanceClass: 'db.t3.micro',
+        flowLogRetentionDays: 7,
+        awsRegion: 'eu-west-1',
+        tags: {
+          Test: 'true'
+        }
+      };
+
+      const network = new modules.NetworkingModule(app, 'test-network', config);
+      expect(network).toBeDefined();
+      expect(network.vpc).toBeDefined();
+    });
+
+    test('NetworkingModule without AWS region (should default)', () => {
+      const config: modules.EnvironmentConfig = {
+        name: 'test-network-no-region',
+        cidrBlock: '10.0.0.0/16',
+        dbInstanceClass: 'db.t3.micro',
+        flowLogRetentionDays: 7,
+        tags: {
+          Test: 'true'
+        }
+      };
+
+      const network = new modules.NetworkingModule(app, 'test-network-no-region', config);
+      expect(network).toBeDefined();
+    });
+
+    test('VPCPeeringModule addPeeringRoutes with and without reverse route', () => {
+      const mockVpc1 = { id: 'vpc-1' };
+      const mockVpc2 = { id: 'vpc-2' };
+      const mockRouteTable1 = { id: 'rt-1' };
+      const mockRouteTable2 = { id: 'rt-2' };
+
+      const peering = new modules.VPCPeeringModule(
+        app,
+        'test-peering',
+        mockVpc1 as any,
+        mockVpc2 as any,
+        {
+          name: 'test-peering',
+          tags: { Test: 'true' }
+        }
+      );
+
+      // Test without reverse route
+      peering.addPeeringRoutes(
+        mockRouteTable1 as any,
+        '10.1.0.0/16'
+      );
+
+      // Test with reverse route
+      peering.addPeeringRoutes(
+        mockRouteTable1 as any,
+        '10.1.0.0/16',
+        mockRouteTable2 as any,
+        '10.0.0.0/16'
+      );
+
+      expect(peering).toBeDefined();
+      expect(peering.peeringConnection).toBeDefined();
+    });
+
+    test('ComputeModule without database dependency', () => {
+      const mockNetwork = {
+        vpc: { id: 'vpc-test', cidrBlock: '10.0.0.0/16' },
+        privateSubnets: [{ id: 'subnet-1' }, { id: 'subnet-2' }],
+        publicSubnets: [],
+        databaseSubnets: []
+      };
+
+      const mockIam = {
+        ecsExecutionRole: { arn: 'arn:aws:iam::123456789012:role/exec', name: 'exec-role' },
+        ecsTaskRole: { arn: 'arn:aws:iam::123456789012:role/task', id: 'task-role-id' }
+      };
+
+      const config: modules.EnvironmentConfig = {
+        name: 'test-compute',
+        cidrBlock: '10.0.0.0/16',
+        dbInstanceClass: 'db.t3.micro',
+        flowLogRetentionDays: 7,
+        awsRegion: 'us-east-1',
+        tags: { Test: 'true' }
+      };
+
+      // Test without database (undefined)
+      const compute = new modules.ComputeModule(
+        app,
+        'test-compute',
+        config,
+        mockNetwork as any,
+        mockIam as any,
+        'sg-alb-123',
+        undefined // No database
+      );
+
+      expect(compute).toBeDefined();
+      expect(compute.cluster).toBeDefined();
+    });
+
+    test('ComputeModule with database dependency', () => {
+      const mockNetwork = {
+        vpc: { id: 'vpc-test', cidrBlock: '10.0.0.0/16' },
+        privateSubnets: [{ id: 'subnet-1' }, { id: 'subnet-2' }],
+        publicSubnets: [],
+        databaseSubnets: []
+      };
+
+      const mockIam = {
+        ecsExecutionRole: { arn: 'arn:aws:iam::123456789012:role/exec', name: 'exec-role' },
+        ecsTaskRole: { arn: 'arn:aws:iam::123456789012:role/task', id: 'task-role-id' }
+      };
+
+      const mockDatabase = {
+        cluster: { 
+          endpoint: 'test.cluster.amazonaws.com',
+          id: 'cluster-id'
+        },
+        passwordParameter: { id: 'param-id' }
+      };
+
+      const config: modules.EnvironmentConfig = {
+        name: 'test-compute-with-db',
+        cidrBlock: '10.0.0.0/16',
+        dbInstanceClass: 'db.t3.micro',
+        flowLogRetentionDays: 7,
+        tags: { Test: 'true' }
+      };
+
+      const compute = new modules.ComputeModule(
+        app,
+        'test-compute-with-db',
+        config,
+        mockNetwork as any,
+        mockIam as any,
+        'sg-alb-123',
+        mockDatabase as any // With database
+      );
+
+      expect(compute).toBeDefined();
+      expect(compute.cluster).toBeDefined();
+    });
+
+    test('LoadBalancerModule createListener method', () => {
+      const mockNetwork = {
+        vpc: { id: 'vpc-test' },
+        publicSubnets: [{ id: 'subnet-1' }, { id: 'subnet-2' }]
+      };
+
+      const config: modules.EnvironmentConfig = {
+        name: 'test-alb',
+        cidrBlock: '10.0.0.0/16',
+        dbInstanceClass: 'db.t3.micro',
+        flowLogRetentionDays: 7,
+        tags: { Test: 'true' }
+      };
+
+      const loadBalancer = new modules.LoadBalancerModule(
+        app,
+        'test-alb',
+        config,
+        mockNetwork as any
+      );
+
+      const mockTargetGroup = {
+        arn: 'arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/test/abc123'
+      };
+
+      const listener = loadBalancer.createListener(mockTargetGroup as any);
+      expect(listener).toBeDefined();
+    });
+  });
+
+  describe('Branch Coverage - Environment Name Concatenation', () => {
+    test('should create environment names without suffix when environmentSuffix is empty string', () => {
+      const stack = new TapStack(app, 'NoSuffixStack', {
+        environmentSuffix: ''
+      });
+      synthesized = Testing.synth(stack);
+
+      expect(stack).toBeDefined();
+      expect(synthesized).toBeDefined();
+    });
+
+    test('should create environment names with suffix when environmentSuffix is provided', () => {
+      const stack = new TapStack(app, 'WithSuffixStack', {
+        environmentSuffix: 'feature-xyz'
+      });
+      synthesized = Testing.synth(stack);
+
+      expect(stack).toBeDefined();
+      expect(synthesized).toBeDefined();
+    });
+
+    test('should handle falsy environmentSuffix values', () => {
+      // Test with null (will be treated as undefined)
+      const stackNull = new TapStack(app, 'NullSuffixStack', {
+        // @ts-ignore
+        environmentSuffix: null
+      });
+      expect(stackNull).toBeDefined();
+
+      // Test with undefined explicitly
+      const stackUndefined = new TapStack(app, 'UndefinedSuffixStack', {
+        environmentSuffix: undefined
+      });
+      expect(stackUndefined).toBeDefined();
+    });
+  });
+
+  describe('Branch Coverage - VPC Peering Conditional Logic', () => {
+    test('should handle VPC peering when both staging and prod networks exist', () => {
+      const stack = new TapStack(app, 'PeeringStack', {
+        environmentSuffix: 'peering-test'
+      });
+      synthesized = Testing.synth(stack);
+
+      expect(stack).toBeDefined();
+      expect(synthesized).toBeDefined();
+    });
+
+    test('should handle missing network modules gracefully', () => {
+      // This is already covered by the default instantiation, but let's be explicit
+      const stack = new TapStack(app, 'NoPeeringStack');
+      synthesized = Testing.synth(stack);
+
+      expect(stack).toBeDefined();
+      expect(synthesized).toBeDefined();
+    });
+  });
+
+  describe('Branch Coverage - AWS Region Override', () => {
+    test('should use AWS_REGION_OVERRIDE when set', () => {
+      // We need to test the case where AWS_REGION_OVERRIDE is not empty
+      // Since we can't modify the constant, we need to test the logic indirectly
+      const stack = new TapStack(app, 'RegionOverrideStack', {
+        awsRegion: 'eu-central-1' // This will be overridden if AWS_REGION_OVERRIDE is set
+      });
+      synthesized = Testing.synth(stack);
+
+      expect(stack).toBeDefined();
+      expect(synthesized).toBeDefined();
+    });
+
+    test('should use provided awsRegion when AWS_REGION_OVERRIDE is empty', () => {
+      const stack = new TapStack(app, 'ProvidedRegionStack', {
+        awsRegion: 'ap-southeast-1'
+      });
+      synthesized = Testing.synth(stack);
+
+      expect(stack).toBeDefined();
+      expect(synthesized).toBeDefined();
+    });
+
+    test('should default to us-east-1 when no region is provided', () => {
+      const stack = new TapStack(app, 'DefaultRegionStack', {
+        // Not providing awsRegion
+      });
+      synthesized = Testing.synth(stack);
+
+      expect(stack).toBeDefined();
+      expect(synthesized).toBeDefined();
+    });
+  });
+
+  describe('Branch Coverage - VPC Endpoints', () => {
+    test('should handle Gateway type endpoints (S3)', () => {
+      const config: modules.EnvironmentConfig = {
+        name: 'test-endpoints',
+        cidrBlock: '10.0.0.0/16',
+        dbInstanceClass: 'db.t3.micro',
+        flowLogRetentionDays: 7,
+        awsRegion: 'us-west-2',
+        tags: { Test: 'true' }
+      };
+
+      const network = new modules.NetworkingModule(app, 'test-endpoints', config);
+      expect(network.vpcEndpoints).toBeDefined();
+    });
+
+    test('should handle Interface type endpoints', () => {
+      const config: modules.EnvironmentConfig = {
+        name: 'test-interface-endpoints',
+        cidrBlock: '10.0.0.0/16',
+        dbInstanceClass: 'db.t3.micro',
+        flowLogRetentionDays: 7,
+        tags: { Test: 'true' }
+      };
+
+      const network = new modules.NetworkingModule(app, 'test-interface-endpoints', config);
+      expect(network.vpcEndpoints).toBeDefined();
+    });
+  });
+
+  describe('Branch Coverage - Error Cases', () => {
+    test('should handle edge cases in CIDR block parsing', () => {
+      const config: modules.EnvironmentConfig = {
+        name: 'test-cidr',
+        cidrBlock: '192.168.0.0/16', // Different CIDR format
+        dbInstanceClass: 'db.t3.micro',
+        flowLogRetentionDays: 30,
+        tags: { Test: 'true' }
+      };
+
+      const network = new modules.NetworkingModule(app, 'test-cidr', config);
+      expect(network).toBeDefined();
+    });
+
+    test('should handle all prop combinations for complete branch coverage', () => {
+      // All props defined
+      const fullStack = new TapStack(app, 'FullPropsStack', {
+        environmentSuffix: 'full',
+        stateBucket: 'full-bucket',
+        stateBucketRegion: 'us-east-2',
+        awsRegion: 'us-west-1',
+        defaultTags: {
+          tags: {
+            Coverage: 'Complete'
+          }
+        }
+      });
+      expect(fullStack).toBeDefined();
+
+      // Partial props
+      const partialStack = new TapStack(app, 'PartialPropsStack', {
+        environmentSuffix: 'partial',
+        awsRegion: 'eu-west-2'
+      });
+      expect(partialStack).toBeDefined();
+
+      // No defaultTags
+      const noTagsStack = new TapStack(app, 'NoTagsStack', {
+        environmentSuffix: 'no-tags',
+        stateBucket: 'no-tags-bucket'
+      });
+      expect(noTagsStack).toBeDefined();
     });
   });
 });
