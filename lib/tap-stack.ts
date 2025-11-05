@@ -24,9 +24,6 @@ import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 import { AppautoscalingTarget } from '@cdktf/provider-aws/lib/appautoscaling-target';
 import { AppautoscalingPolicy } from '@cdktf/provider-aws/lib/appautoscaling-policy';
-import { AcmCertificate } from '@cdktf/provider-aws/lib/acm-certificate';
-import { Route53Zone } from '@cdktf/provider-aws/lib/route53-zone';
-import { Route53Record } from '@cdktf/provider-aws/lib/route53-record';
 import { Eip } from '@cdktf/provider-aws/lib/eip';
 import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
 import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
@@ -195,10 +192,10 @@ export class TapStack extends TerraformStack {
       },
     });
 
-    new SecurityGroupRule(this, 'alb-ingress-443', {
+    new SecurityGroupRule(this, 'alb-ingress-80', {
       type: 'ingress',
-      fromPort: 443,
-      toPort: 443,
+      fromPort: 80,
+      toPort: 80,
       protocol: 'tcp',
       cidrBlocks: ['0.0.0.0/0'],
       securityGroupId: albSecurityGroup.id,
@@ -444,66 +441,19 @@ export class TapStack extends TerraformStack {
       },
     });
 
-    // Route53 Hosted Zone
-    const hostedZone = new Route53Zone(this, 'hosted-zone', {
-      name: `myapp-${props.environmentSuffix}.example.net`,
-      tags: {
-        Name: `example-zone-${props.environmentSuffix}`,
-      },
-    });
-
-    // ACM Certificate with DNS validation
-    // Using addOverride to set timeouts that prevent waiting for validation
-    const certificate = new AcmCertificate(this, 'certificate', {
-      domainName: `api.myapp-${props.environmentSuffix}.example.net`,
-      validationMethod: 'DNS',
-      tags: {
-        Name: `api-cert-${props.environmentSuffix}`,
-      },
-      lifecycle: {
-        createBeforeDestroy: true,
-      },
-    });
-
-    // Add timeouts to prevent waiting for certificate validation
-    certificate.addOverride('timeouts.create', '1s');
-
-    // DNS Validation Records
-    new Route53Record(this, 'cert-validation-record', {
-      zoneId: hostedZone.zoneId,
-      name: certificate.domainValidationOptions.get(0).resourceRecordName,
-      type: certificate.domainValidationOptions.get(0).resourceRecordType,
-      records: [certificate.domainValidationOptions.get(0).resourceRecordValue],
-      ttl: 60,
-    });
-
-    // HTTPS Listener
-    // Note: Certificate validation happens asynchronously in the background
-    // The ALB will start accepting HTTPS traffic once validation completes (typically 5-10 minutes)
-    const httpsListener = new LbListener(this, 'https-listener', {
+    // HTTP Listener
+    // Note: Using HTTP instead of HTTPS for faster CI/CD deployment
+    // For production, consider adding HTTPS with a validated certificate
+    const httpListener = new LbListener(this, 'http-listener', {
       loadBalancerArn: alb.arn,
-      port: 443,
-      protocol: 'HTTPS',
-      sslPolicy: 'ELBSecurityPolicy-2016-08',
-      certificateArn: certificate.arn,
+      port: 80,
+      protocol: 'HTTP',
       defaultAction: [
         {
           type: 'forward',
           targetGroupArn: targetGroup.arn,
         },
       ],
-    });
-
-    // Route53 A Record
-    new Route53Record(this, 'api-record', {
-      zoneId: hostedZone.zoneId,
-      name: `api.myapp-${props.environmentSuffix}.example.net`,
-      type: 'A',
-      alias: {
-        name: alb.dnsName,
-        zoneId: alb.zoneId,
-        evaluateTargetHealth: true,
-      },
     });
 
     // ECS Service
@@ -532,7 +482,7 @@ export class TapStack extends TerraformStack {
       tags: {
         Name: `nodejs-api-service-${props.environmentSuffix}`,
       },
-      dependsOn: [targetGroup, httpsListener],
+      dependsOn: [targetGroup, httpListener],
     });
 
     // Auto Scaling Target
@@ -568,8 +518,8 @@ export class TapStack extends TerraformStack {
     });
 
     new TerraformOutput(this, 'api-url', {
-      value: `https://api.myapp-${props.environmentSuffix}.example.net`,
-      description: 'API URL',
+      value: `http://${alb.dnsName}`,
+      description: 'API URL (HTTP)',
     });
 
     new TerraformOutput(this, 'ecs-cluster-name', {

@@ -103,7 +103,7 @@ describe('TapStack Integration Tests', () => {
       expect(ecsService.desired_count).toBe(2);
     });
 
-    test('should configure ALB with HTTPS listener', () => {
+    test('should configure ALB with HTTP listener', () => {
       const app = new App();
       const stack = new TapStack(app, 'ALBTestStack', {
         environmentSuffix: 'albtest',
@@ -121,8 +121,8 @@ describe('TapStack Integration Tests', () => {
       expect(manifest.resource.aws_lb_listener).toBeDefined();
 
       const listener = Object.values(manifest.resource.aws_lb_listener)[0] as any;
-      expect(listener.port).toBe(443);
-      expect(listener.protocol).toBe('HTTPS');
+      expect(listener.port).toBe(80);
+      expect(listener.protocol).toBe('HTTP');
     });
 
     test('should include terraform outputs', () => {

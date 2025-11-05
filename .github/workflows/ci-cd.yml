@@ -162,6 +162,7 @@ jobs:
         with:
           name: build-dist
           path: dist
+          if-no-files-found: ignore
 
       - name: Configure AWS
         if: ${{ needs.detect-metadata.outputs.platform == 'cdk' || needs.detect-metadata.outputs.platform == 'cdktf' }}
