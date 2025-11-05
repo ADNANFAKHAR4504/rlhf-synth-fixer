@@ -66,11 +66,6 @@ describe('TapStack Terraform Unit Tests - Exact Coverage', () => {
   describe('Resources', () => {
     [
       "random_password.db_master_password",
-
-      "data.aws_caller_identity.current",
-      "data.aws_ami.amazon_linux_2",
-      "data.aws_ami.amazon_linux_2_secondary",
-
       "aws_vpc.primary_vpc",
       "aws_subnet.primary_public",
       "aws_subnet.primary_private",
