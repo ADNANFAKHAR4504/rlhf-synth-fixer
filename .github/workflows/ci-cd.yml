@@ -897,7 +897,15 @@ jobs:
           echo "🔍 Fetching latest Claude review comment..."
           gh pr view ${{ github.event.pull_request.number }} --comments --json comments \
             | jq -r '.comments[].body' > all_comments.txt
-
+          # Fetch issue comments
+          gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+            --paginate \
+            --jq '.[].body' > all_comments.txt
+      
+          # Fetch review comments
+          gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews \
+            --paginate \
+            --jq '.[].body' >> all_comments.txt
           echo "🍀 Searching for quality score pattern..."
           # Case-insensitive search for multiple variants (Final Score, Training Quality, etc.)
           SCORE=$(grep -Eoi '(final[[:space:]]*(score|quality):?|training[_[:space:]]*quality:?|quality[[:space:]]*score:?|score:)[[:space:]]*[0-9]+(\.[0-9]+)?' all_comments.txt \
