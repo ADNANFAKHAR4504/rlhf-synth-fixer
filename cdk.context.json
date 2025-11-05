@@ -69,5 +69,10 @@
     "ap-southeast-1a",
     "ap-southeast-1b",
     "ap-southeast-1c"
+  ],
+  "availability-zones:account=342597974367:region=ca-central-1": [
+    "ca-central-1a",
+    "ca-central-1b",
+    "ca-central-1d"
   ]
 }
