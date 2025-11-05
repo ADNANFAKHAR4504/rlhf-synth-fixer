@@ -37,11 +37,18 @@ class TapStack(TerraformStack):
         default_tags = kwargs.get('default_tags', {})
 
         # Configure AWS Provider
+        # default_tags from tap.py is already in format {"tags": {...}}, wrap in list for AwsProvider
+        provider_config = {
+            "region": aws_region,
+        }
+        if default_tags and isinstance(default_tags, dict) and default_tags.get("tags"):
+            # default_tags is already in correct format from tap.py: {"tags": {...}}
+            provider_config["default_tags"] = [default_tags]
+
         AwsProvider(
             self,
             "aws",
-            region=aws_region,
-            default_tags=[default_tags],
+            **provider_config
         )
 
         # Configure S3 Backend with native state locking
@@ -313,7 +320,7 @@ class TapStack(TerraformStack):
         )
 
         # Create VPC Flow Logs
-        FlowLog(
+        flow_log = FlowLog(
             self,
             f"vpc-flow-log-{environment_suffix}",
             vpc_id=vpc.id,
@@ -437,6 +444,13 @@ class TapStack(TerraformStack):
         TerraformOutput(
             self,
             "flow_log_id",
+            value=flow_log.id,
+            description="The ID of the VPC Flow Log"
+        )
+
+        TerraformOutput(
+            self,
+            "flow_log_group_name",
             value=log_group.name,
             description="The CloudWatch Log Group name for VPC Flow Logs"
         )
