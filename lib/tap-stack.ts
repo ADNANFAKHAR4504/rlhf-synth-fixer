@@ -64,7 +64,6 @@ export class TapStack extends TerraformStack {
       region: stateBucketRegion,
       encrypt: true,
     });
-    this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     // Payment API resources
     const commonTags = {
@@ -118,6 +117,7 @@ export class TapStack extends TerraformStack {
         {
           id: 'expire-old-logs',
           status: 'Enabled',
+          filter: [{ prefix: '' }],
           expiration: [
             {
               days:
@@ -175,6 +175,7 @@ export class TapStack extends TerraformStack {
         {
           id: 'expire-old-receipts',
           status: 'Enabled',
+          filter: [{ prefix: '' }],
           expiration: [
             {
               days:
