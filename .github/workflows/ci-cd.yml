@@ -126,6 +126,13 @@ jobs:
       - name: Build
         run: ./scripts/build.sh
 
+      - name: Upload build artifacts (dist/)
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-dist
+          path: dist
+          if-no-files-found: ignore
+
   synth:
     name: Synth
     runs-on: ubuntu-24.04
@@ -150,6 +157,13 @@ jobs:
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
+      - name: Download build artifacts (dist/)
+        if: ${{ needs.detect-metadata.outputs.language == 'ts' || needs.detect-metadata.outputs.language == 'js' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: build-dist
+          path: dist
+          if-no-files-found: ignore
 
       - name: Configure AWS
         if: ${{ needs.detect-metadata.outputs.platform == 'cdk' || needs.detect-metadata.outputs.platform == 'cdktf' }}
@@ -353,6 +367,13 @@ jobs:
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
+      - name: Download build artifacts (dist/)
+        if: ${{ needs.detect-metadata.outputs.language == 'ts' || needs.detect-metadata.outputs.language == 'js' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: build-dist
+          path: dist
+          if-no-files-found: ignore
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
         with:
