@@ -7,7 +7,10 @@ const app = new cdk.App();
 
 // Get environment configuration - use AWS_REGION override
 const environment =
-  app.node.tryGetContext('environment') || process.env.ENVIRONMENT || 'dev';
+  app.node.tryGetContext('environmentSuffix') ||
+  app.node.tryGetContext('environment') ||
+  process.env.ENVIRONMENT ||
+  'dev';
 const region =
   process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || 'us-east-1';
 const account = process.env.CDK_DEFAULT_ACCOUNT;
