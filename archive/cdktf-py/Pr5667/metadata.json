@@ -7,7 +7,7 @@
   "startedAt": "2025-11-03T19:29:48+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-  "Cloud Environment Setup"
+    "Cloud Environment Setup"
   ],
   "po_id": "hsmik9",
   "aws_services": [
@@ -19,6 +19,11 @@
     "IAM"
   ],
   "region": "ca-central-1",
-  "training_quality": 8,
-  "author": "rajendra-s-aws"
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
