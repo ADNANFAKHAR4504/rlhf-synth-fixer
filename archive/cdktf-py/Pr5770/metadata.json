@@ -11,14 +11,21 @@
   ],
   "po_id": "o19mi",
   "aws_services": [
-    "vpc",
-    "rds",
-    "secretsmanager",
-    "lambda",
-    "events",
-    "iam",
-    "ec2"
+    "VPC",
+    "RDS",
+    "Secrets Manager",
+    "Lambda",
+    "EventBridge",
+    "IAM",
+    "CloudWatch",
+    "EC2"
   ],
   "region": "ap-southeast-1",
-  "training_quality": 9
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
