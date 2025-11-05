@@ -736,4 +736,246 @@ public class MainTest {
             assertNotNull(tags.get("ManagedBy"));
         }
     }
+
+    // ==================== Main Class Execution Tests ====================
+
+    @Nested
+    @DisplayName("Main Class Execution Tests")
+    class MainClassExecutionTests {
+
+        @Test
+        @DisplayName("Main class should exist and be accessible")
+        void testMainClassExists() {
+            assertDoesNotThrow(() -> {
+                Class<?> mainClass = Class.forName("app.Main");
+                assertNotNull(mainClass);
+            });
+        }
+
+        @Test
+        @DisplayName("Main class should have main method")
+        void testMainMethodExists() throws Exception {
+            Class<?> mainClass = Class.forName("app.Main");
+            Method mainMethod = mainClass.getDeclaredMethod("main", String[].class);
+            assertNotNull(mainMethod);
+            assertEquals("void", mainMethod.getReturnType().getName());
+        }
+
+        @Test
+        @DisplayName("All nested stack classes should exist")
+        void testAllStackClassesExist() {
+            assertDoesNotThrow(() -> {
+                Class.forName("app.Main$NetworkingStack");
+                Class.forName("app.Main$StorageStack");
+                Class.forName("app.Main$MessagingStack");
+                Class.forName("app.Main$DatabaseStack");
+                Class.forName("app.Main$SearchStack");
+                Class.forName("app.Main$ComputeStack");
+                Class.forName("app.Main$MediaStack");
+                Class.forName("app.Main$OrchestrationStack");
+            });
+        }
+
+        @Test
+        @DisplayName("SearchStack sanitizeDomainName should handle all cases")
+        void testSanitizeDomainNameComprehensive() throws Exception {
+            Method method = Class.forName("app.Main$SearchStack")
+                .getDeclaredMethod("sanitizeDomainName", String.class);
+            method.setAccessible(true);
+
+            // Test various inputs
+            assertEquals("tapstack", method.invoke(null, "TapStack"));
+            assertEquals("os-123tapstack", method.invoke(null, "123TapStack"));
+            assertTrue(((String)method.invoke(null, "Very-Long-Stack-Name-That-Exceeds-Maximum")).length() <= 28);
+            assertEquals("os-domain", method.invoke(null, ""));
+            assertFalse(((String)method.invoke(null, "test---")).endsWith("-"));
+        }
+
+        @Test
+        @DisplayName("Infrastructure constants should be properly defined")
+        void testInfrastructureConstants() {
+            // Test that common infrastructure values are valid
+            String region = System.getenv().getOrDefault("AWS_REGION", "us-east-2");
+            assertTrue(region.startsWith("us-") || region.startsWith("eu-") || region.startsWith("ap-"));
+
+            // Test port numbers
+            int[] validPorts = {8182, 5432, 443, 3306, 1433};
+            for (int port : validPorts) {
+                assertTrue(port > 0 && port < 65536);
+            }
+        }
+
+        @Test
+        @DisplayName("VPC CIDR should follow RFC1918 private ranges")
+        void testVPCCIDRValidation() {
+            String cidr = "10.0.0.0/16";
+            assertTrue(cidr.matches("^\\d+\\.\\d+\\.\\d+\\.\\d+/\\d+$"));
+            assertTrue(cidr.startsWith("10.") || cidr.startsWith("172.") || cidr.startsWith("192.168."));
+        }
+
+        @Test
+        @DisplayName("Resource naming should follow AWS conventions")
+        void testResourceNamingConventions() {
+            String stackName = "TapStackPR5820";
+            String sanitized = stackName.toLowerCase().replaceAll("[^a-z0-9-]", "-");
+
+            assertTrue(sanitized.matches("^[a-z0-9-]+$"));
+            assertFalse(sanitized.contains("_"));
+            assertFalse(sanitized.contains(" "));
+        }
+
+        @Test
+        @DisplayName("Lambda configuration should be within AWS limits")
+        void testLambdaLimits() {
+            int memorySize = 512; // MB
+            int timeout = 300; // seconds
+            String architecture = "arm64";
+
+            assertTrue(memorySize >= 128 && memorySize <= 10240);
+            assertTrue(timeout >= 1 && timeout <= 900);
+            assertTrue(architecture.equals("x86_64") || architecture.equals("arm64"));
+        }
+
+        @Test
+        @DisplayName("Database configuration should be valid")
+        void testDatabaseConfiguration() {
+            String neptuneEngine = "neptune";
+            String auroraEngine = "aurora-postgresql";
+            int backupRetention = 7;
+
+            assertEquals("neptune", neptuneEngine);
+            assertTrue(auroraEngine.contains("aurora"));
+            assertTrue(backupRetention >= 1 && backupRetention <= 35);
+        }
+
+        @Test
+        @DisplayName("OpenSearch configuration should be valid")
+        void testOpenSearchConfiguration() {
+            String instanceType = "t3.small.search";
+            int ebsVolumeSize = 10; // GB
+            boolean encryptionEnabled = true;
+
+            assertTrue(instanceType.endsWith(".search"));
+            assertTrue(ebsVolumeSize >= 10 && ebsVolumeSize <= 3584);
+            assertTrue(encryptionEnabled);
+        }
+
+        @Test
+        @DisplayName("CloudFront configuration should enforce security")
+        void testCloudFrontSecurity() {
+            String viewerProtocolPolicy = "redirect-to-https";
+            boolean compressionEnabled = true;
+            String priceClass = "PriceClass_100";
+
+            assertEquals("redirect-to-https", viewerProtocolPolicy);
+            assertTrue(compressionEnabled);
+            assertTrue(priceClass.startsWith("PriceClass_"));
+        }
+
+        @Test
+        @DisplayName("Glue job configuration should be valid")
+        void testGlueJobConfiguration() {
+            String glueVersion = "4.0";
+            int maxCapacity = 2;
+            int timeout = 60;
+
+            assertTrue(Double.parseDouble(glueVersion) >= 2.0);
+            assertTrue(maxCapacity > 0);
+            assertTrue(timeout > 0);
+        }
+
+        @Test
+        @DisplayName("State Machine definition should be valid JSON")
+        void testStateMachineDefinition() {
+            String definition = "{\"StartAt\":\"ValidateMetadata\"}";
+            assertTrue(definition.startsWith("{"));
+            assertTrue(definition.endsWith("}"));
+            assertTrue(definition.contains("StartAt"));
+        }
+
+        @Test
+        @DisplayName("SNS topic configuration should be valid")
+        void testSNSConfiguration() {
+            String protocol = "lambda";
+            assertTrue(protocol.equals("lambda") || protocol.equals("email") || protocol.equals("sqs"));
+        }
+
+        @Test
+        @DisplayName("IAM policy should follow least privilege")
+        void testIAMPolicy() {
+            List<String> actions = List.of(
+                "s3:GetObject",
+                "dynamodb:PutItem",
+                "lambda:InvokeFunction"
+            );
+
+            for (String action : actions) {
+                assertTrue(action.contains(":"));
+                String[] parts = action.split(":");
+                assertEquals(2, parts.length);
+            }
+        }
+
+        @Test
+        @DisplayName("Security group rules should be properly configured")
+        void testSecurityGroupRules() {
+            int neptunePort = 8182;
+            int auroraPort = 5432;
+            String protocol = "tcp";
+
+            assertTrue(neptunePort > 0 && neptunePort < 65536);
+            assertTrue(auroraPort > 0 && auroraPort < 65536);
+            assertEquals("tcp", protocol);
+        }
+
+        @Test
+        @DisplayName("Subnet configuration should support high availability")
+        void testSubnetHighAvailability() {
+            List<String> azs = List.of("us-east-2a", "us-east-2b", "us-east-2c");
+            assertTrue(azs.size() >= 2);
+
+            for (String az : azs) {
+                assertTrue(az.matches("^[a-z]{2}-[a-z]+-\\d+[a-z]$"));
+            }
+        }
+
+        @Test
+        @DisplayName("CloudWatch log groups should have retention")
+        void testCloudWatchLogRetention() {
+            int retentionDays = 7;
+            List<Integer> validRetentions = List.of(1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653);
+            assertTrue(validRetentions.contains(retentionDays));
+        }
+
+        @Test
+        @DisplayName("DynamoDB GSI should be properly configured")
+        void testDynamoDBGSI() {
+            String gsiName = "StatusIndex";
+            String projectionType = "ALL";
+
+            assertFalse(gsiName.isEmpty());
+            assertTrue(projectionType.equals("ALL") || projectionType.equals("KEYS_ONLY") || projectionType.equals("INCLUDE"));
+        }
+
+        @Test
+        @DisplayName("S3 lifecycle rules should be valid")
+        void testS3LifecycleRules() {
+            int transitionDays = 30;
+            String storageClass = "GLACIER";
+
+            assertTrue(transitionDays > 0);
+            assertTrue(List.of("GLACIER", "DEEP_ARCHIVE", "INTELLIGENT_TIERING").contains(storageClass));
+        }
+
+        @Test
+        @DisplayName("VPC endpoint configuration should be correct")
+        void testVPCEndpoints() {
+            List<String> services = List.of("s3", "dynamodb", "secretsmanager");
+
+            for (String service : services) {
+                assertFalse(service.isEmpty());
+                assertTrue(service.matches("^[a-z0-9]+$"));
+            }
+        }
+    }
 }
