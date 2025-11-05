@@ -1,4 +1,6 @@
 ## tap-stack.ts
+
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,
