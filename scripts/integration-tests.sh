@@ -3,9 +3,7 @@
 # Exit on any error
 set -e
 
-# -------------------------------------------------------------------
-# Read platform and language metadata
-# -------------------------------------------------------------------
+# Read platform and language from metadata.json
 if [ ! -f "metadata.json" ]; then
   echo "❌ metadata.json not found, exiting with failure"
   exit 1
@@ -16,26 +14,14 @@ LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
 
 echo "Project: platform=$PLATFORM, language=$LANGUAGE"
 
-# -------------------------------------------------------------------
-# Default environment variables
-# -------------------------------------------------------------------
+# Set default environment variables if not provided
 export ENVIRONMENT_SUFFIX=${ENVIRONMENT_SUFFIX:-dev}
 export CI=${CI:-1}
 
 echo "Environment suffix: $ENVIRONMENT_SUFFIX"
 echo "CI mode: $CI"
 
-# -------------------------------------------------------------------
-# Jest configuration (stable pinned version)
-# -------------------------------------------------------------------
-TEST_PATTERN_FLAG="--testPathPattern"
-JEST_VERSION=$(npx jest --version 2>/dev/null || echo "28.1.3")
-echo "🧩 Using Jest v${JEST_VERSION} with flag: ${TEST_PATTERN_FLAG}"
-
-# -------------------------------------------------------------------
-# Run integration tests per platform/language
-# -------------------------------------------------------------------
-
+# Run integration tests based on language
 if [ "$LANGUAGE" = "java" ]; then
   echo "✅ Java project detected, running integration tests..."
   chmod +x ./gradlew
@@ -43,22 +29,30 @@ if [ "$LANGUAGE" = "java" ]; then
 
 elif [ "$LANGUAGE" = "py" ] || [ "$LANGUAGE" = "python" ]; then
   echo "✅ Python project detected, running integration tests..."
-  pipenv run test-py-integration || npx jest --coverage $TEST_PATTERN_FLAG ".*integration\\.test\\.ts$" --runInBand --ci --passWithNoTests
+  pipenv run test-py-integration
 
 elif [ "$LANGUAGE" = "go" ]; then
   echo "✅ Go project detected, running integration tests..."
   if [ "$PLATFORM" = "cdktf" ]; then
-    echo "🔧 Ensuring .gen exists for CDKTF Go integration tests..."
+    echo "🔧 Ensuring .gen exists for CDKTF Go integration tests"
+    # Ensure CDKTF Go deps and .gen are prepared (idempotent, uses cache)
     bash ./scripts/cdktf-go-prepare.sh
 
-    # Clean up legacy state
-    [ -f "terraform.tfstate" ] && rm -f terraform.tfstate
+    # --- FIX: remove legacy terraform.tfstate for clean CI runs ---
+    if [ -f "terraform.tfstate" ]; then
+      echo "⚠️ Found legacy terraform.tfstate. Removing for clean CI run..."
+      rm -f terraform.tfstate
+    fi
 
     if [ ! -d ".gen" ] || [ ! -d ".gen/aws" ]; then
       echo "Running cdktf get to generate .gen..."
       npm run cdktf:get || npx --yes cdktf get
     fi
-    [ ! -d ".gen/aws" ] && { echo "❌ .gen/aws missing after cdktf get; aborting"; exit 1; }
+    if [ ! -d ".gen/aws" ]; then
+      echo "❌ .gen/aws missing after cdktf get; aborting"
+      exit 1
+    fi
+
   fi
 
   if [ -d "lib" ]; then
@@ -77,19 +71,11 @@ elif [ "$LANGUAGE" = "go" ]; then
 
 elif [ "$LANGUAGE" = "js" ]; then
   echo "✅ JavaScript project detected, running integration tests..."
-  npm run test:integration-js || npx jest --coverage $TEST_PATTERN_FLAG ".*integration\\.test\\.js$" --runInBand --ci --passWithNoTests
-
-elif [ "$LANGUAGE" = "ts" ]; then
-  echo "✅ TypeScript project detected, running integration tests..."
-  npm run test:integration || npx jest --coverage $TEST_PATTERN_FLAG ".*integration\\.test\\.ts$" --runInBand --ci --passWithNoTests
-
-elif [ "$PLATFORM" = "tf" ] || [ "$PLATFORM" = "cfn" ]; then
-  echo "✅ $PLATFORM IaC project detected, running Jest-based integration validation..."
-  npx jest --coverage $TEST_PATTERN_FLAG ".*integration\\.test\\.ts$" --runInBand --ci --passWithNoTests
+  npm run test:integration-js
 
 else
-  echo "✅ Running default Jest-based integration tests..."
-  npx jest --coverage $TEST_PATTERN_FLAG ".*integration\\.test\\.ts$" --runInBand --ci --passWithNoTests
+  echo "✅ Running default integration tests..."
+  npm run test:integration
 fi
 
-echo "✅ Integration tests completed successfully"
+echo "Integration tests completed successfully"
