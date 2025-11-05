@@ -60,6 +60,7 @@ if [ -f "Pipfile" ]; then
 
   if [ -d ".venv" ]; then
     echo "✅ .venv exists — using cached environment"
+    pipenv sync --dev
   else
     echo "📦 Creating new pipenv environment..."
     pipenv install --dev
