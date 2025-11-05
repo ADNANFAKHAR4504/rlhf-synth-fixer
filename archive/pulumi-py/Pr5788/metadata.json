@@ -13,7 +13,6 @@
   ],
   "aws_services": [
     "Lambda",
-    "API Gateway",
     "DynamoDB",
     "S3",
     "SQS",
@@ -21,6 +20,14 @@
     "CloudWatch",
     "SNS",
     "IAM",
+    "API Gateway",
     "Application Auto Scaling"
-  ]
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
 }
