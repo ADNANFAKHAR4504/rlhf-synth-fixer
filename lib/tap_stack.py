@@ -19,10 +19,10 @@ import pulumi_aws as aws
 
 
 class TapStackArgs:
-    """
+  """
     TapStackArgs defines the properties for the TapStack component.
 
-    Args:
+  Args:
         environment_suffix (Optional[str]): An optional suffix to identify the 
             deployment environment (e.g., 'dev', 'prod', 'pr1234').
         aws_region (Optional[str]): AWS region for deployment. Defaults to 'us-east-1'.
@@ -44,9 +44,9 @@ class TapStackArgs:
         tags: Optional[Dict[str, str]] = None,
         db_password: Optional[pulumi.Output[str]] = None
     ):
-        self.environment_suffix = environment_suffix or 'dev'
+    self.environment_suffix = environment_suffix or 'dev'
         self.aws_region = aws_region or 'us-east-1'
-        self.tags = tags
+    self.tags = tags
         self.db_password = db_password or pulumi.Output.from_input('DefaultPassword123!')
 
 
@@ -79,7 +79,7 @@ class TapStack(pulumi.ComponentResource):
         **kwargs
     ):
         super().__init__("tap:infrastructure:TapStack", name, None, opts)
-        
+
         self.environment_suffix = args.environment_suffix
         self.aws_region = args.aws_region
         
@@ -339,7 +339,7 @@ class TapStack(pulumi.ComponentResource):
                     protocol="tcp",
                     from_port=80,
                     to_port=80,
-                    security_groups=[alb_security_group.id]
+                    security_groups=[alb_security_group.id.apply(lambda id: str(id) if id is not None else "")]
                 )
             ],
             egress=[aws.ec2.SecurityGroupEgressArgs(
@@ -353,9 +353,13 @@ class TapStack(pulumi.ComponentResource):
         )
         
         # DB Subnet Group
+        # Collect subnet IDs ensuring they're strings (handle None from mocks)
+        private_subnet_ids = pulumi.Output.all(*[subnet.id for subnet in private_subnets]).apply(
+            lambda ids: [str(id) if id is not None else "" for id in ids if id is not None]
+        )
         db_subnet_group = aws.rds.SubnetGroup(
             f"payment-db-subnet-group-{self.environment_suffix}",
-            subnet_ids=[subnet.id for subnet in private_subnets],
+            subnet_ids=private_subnet_ids,
             tags={**common_tags, "Name": f"payment-db-subnet-group-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
@@ -371,7 +375,9 @@ class TapStack(pulumi.ComponentResource):
             storage_encrypted=True,
             kms_key_id=kms_key.arn,
             db_subnet_group_name=db_subnet_group.name,
-            vpc_security_group_ids=[rds_security_group.id],
+            vpc_security_group_ids=pulumi.Output.all(rds_security_group.id).apply(
+                lambda ids: [str(ids[0]) if ids[0] is not None else ""] if ids[0] is not None else []
+            ),
             multi_az=True,
             backup_retention_period=7,
             backup_window="03:00-04:00",
@@ -608,8 +614,12 @@ def handler(event, context):
                 }
             ),
             vpc_config=aws.lambda_.FunctionVpcConfigArgs(
-                subnet_ids=[subnet.id for subnet in private_subnets],
-                security_group_ids=[lambda_security_group.id]
+                subnet_ids=pulumi.Output.all(*[subnet.id for subnet in private_subnets]).apply(
+                    lambda ids: [str(id) if id is not None else "" for id in ids if id is not None]
+                ),
+                security_group_ids=pulumi.Output.all(lambda_security_group.id).apply(
+                    lambda ids: [str(ids[0]) if ids[0] is not None else ""] if ids[0] is not None else []
+                )
             ),
             tracing_config=aws.lambda_.FunctionTracingConfigArgs(
                 mode="Active"
@@ -688,12 +698,14 @@ def handler(event, context):
         )
         
         # Lambda Permission for API Gateway
+        # Handle None execution_arn gracefully
+        api_execution_arn_safe = api.execution_arn.apply(lambda arn: arn if arn is not None else "")
         lambda_permission = aws.lambda_.Permission(
             f"api-lambda-permission-{self.environment_suffix}",
             action="lambda:InvokeFunction",
             function=lambda_function.name,
             principal="apigateway.amazonaws.com",
-            source_arn=pulumi.Output.concat(api.execution_arn, "/*/*"),
+            source_arn=pulumi.Output.concat(api_execution_arn_safe, "/*/*"),
             opts=ResourceOptions(parent=self)
         )
         
@@ -783,13 +795,20 @@ def handler(event, context):
         )
         
         # Application Load Balancer
+        # Collect public subnet IDs ensuring they're strings (handle None from mocks)
+        public_subnet_ids = pulumi.Output.all(*[subnet.id for subnet in public_subnets]).apply(
+            lambda ids: [str(id) if id is not None else "" for id in ids if id is not None]
+        )
+        alb_security_group_ids = pulumi.Output.all(alb_security_group.id).apply(
+            lambda ids: [str(ids[0]) if ids[0] is not None else ""] if ids[0] is not None else []
+        )
         alb = aws.lb.LoadBalancer(
             f"payment-alb-{self.environment_suffix}",
             name=f"payment-alb-{self.environment_suffix}",
             internal=False,
             load_balancer_type="application",
-            security_groups=[alb_security_group.id],
-            subnets=[subnet.id for subnet in public_subnets],
+            security_groups=alb_security_group_ids,
+            subnets=public_subnet_ids,
             enable_deletion_protection=False,
             tags={**common_tags, "Name": f"payment-alb-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
@@ -871,7 +890,9 @@ echo "<h1>Payment Service - {self.environment_suffix}</h1>" > /var/www/html/inde
             name=f"payment-lt-{self.environment_suffix}",
             image_id=ami_id,
             instance_type="t3.micro",
-            vpc_security_group_ids=[app_security_group.id],
+            vpc_security_group_ids=pulumi.Output.all(app_security_group.id).apply(
+                lambda ids: [str(ids[0]) if ids[0] is not None else ""] if ids[0] is not None else []
+            ),
             iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
                 arn=instance_profile.arn,
             ),
@@ -885,10 +906,17 @@ echo "<h1>Payment Service - {self.environment_suffix}</h1>" > /var/www/html/inde
         )
         
         # Auto Scaling Group
+        # Collect private subnet IDs ensuring they're strings (handle None from mocks)
+        asg_subnet_ids = pulumi.Output.all(*[subnet.id for subnet in private_subnets]).apply(
+            lambda ids: [str(id) if id is not None else "" for id in ids if id is not None]
+        )
+        target_group_arns_safe = pulumi.Output.all(target_group.arn).apply(
+            lambda arns: [str(arns[0]) if arns[0] is not None else ""] if arns[0] is not None else []
+        )
         asg = aws.autoscaling.Group(
             f"payment-asg-{self.environment_suffix}",
             name=f"payment-asg-{self.environment_suffix}",
-            vpc_zone_identifiers=[subnet.id for subnet in private_subnets],
+            vpc_zone_identifiers=asg_subnet_ids,
             launch_template=aws.autoscaling.GroupLaunchTemplateArgs(
                 id=launch_template.id,
                 version="$Latest"
@@ -898,7 +926,7 @@ echo "<h1>Payment Service - {self.environment_suffix}</h1>" > /var/www/html/inde
             desired_capacity=2,
             health_check_type="ELB",
             health_check_grace_period=300,
-            target_group_arns=[target_group.arn],
+            target_group_arns=target_group_arns_safe,
             tags=[
                 aws.autoscaling.GroupTagArgs(
                     key="Name",
