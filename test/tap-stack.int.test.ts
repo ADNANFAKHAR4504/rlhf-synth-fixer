@@ -1,12 +1,9 @@
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 
-const outputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-);
-
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const region = process.env.AWS_REGION || 'us-east-1';
+const stackName = `TapStack${environmentSuffix}`;
 
 // Helper function to execute AWS CLI commands
 function awsCli(command: string): any {
@@ -21,6 +18,33 @@ function awsCli(command: string): any {
     throw error;
   }
 }
+
+// Function to get stack outputs dynamically
+function getStackOutputs(): any {
+  try {
+    console.log(`Fetching outputs for stack: ${stackName}`);
+    const response = awsCli(`cloudformation describe-stacks --stack-name ${stackName}`);
+
+    if (!response.Stacks || response.Stacks.length === 0) {
+      throw new Error(`Stack ${stackName} not found`);
+    }
+
+    const outputs = response.Stacks[0].Outputs;
+    const flatOutputs: any = {};
+
+    outputs.forEach((output: any) => {
+      flatOutputs[output.OutputKey] = output.OutputValue;
+    });
+
+    return flatOutputs;
+  } catch (error: any) {
+    console.error(`Failed to fetch stack outputs: ${error.message}`);
+    throw error;
+  }
+}
+
+// Get outputs dynamically from CloudFormation stack
+const outputs = getStackOutputs();
 
 describe('VPC Infrastructure Integration Tests', () => {
   describe('VPC Configuration', () => {
