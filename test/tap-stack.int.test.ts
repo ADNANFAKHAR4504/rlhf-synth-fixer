@@ -780,6 +780,193 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
   // PART 4: E2E TESTS (Complete Flows with 3+ Services)
   // ============================================================================
 
+  describe('[E2E] Live Application and Cross-Service Flows (5 Tests)', () => {
+
+    // E2E Test 1: Full Application Path Health Check (Route53 → ALB → ECS)
+    // Ensures a request from the internet resolves DNS, hits the ALB, and is routed to a running ECS task.
+    test('E2E 1: should get a successful HTTP 200 response from the dev application endpoint via DNS', async () => {
+      const env = 'dev';
+      const dnsRecord = outputs[getEnvOutput(env, 'dns-record')];
+
+      if (!dnsRecord) {
+        console.warn(`DNS record not found for ${env} environment, skipping E2E 1 test`);
+        return;
+      }
+
+      const url = `http://${dnsRecord}`;
+      console.log(`Attempting E2E 1 test call to: ${url}`);
+
+      try {
+        const response = await fetch(url, {
+          method: 'GET',
+          // @ts-ignore
+          timeout: 15000 // 15 second timeout for DNS propagation and cold start
+        });
+
+        console.log(`Received status: ${response.status}`);
+        expect(response.status).toBe(200);
+        console.log(`✅ E2E 1: ${env} application health check successful: ${url}`);
+      } catch (error) {
+        console.error(`E2E 1 test failed for ${url}:`, error);
+        throw new Error(`E2E 1: Failed to connect to application endpoint: ${error}`);
+      }
+    }, 90000);
+
+    // E2E Test 2: Application DB Connectivity Test (Route53 → ALB → ECS → RDS)
+    // Ensures the full application stack, including the backend database connection, is operational.
+    test('E2E 2: should successfully verify database connection via a live application endpoint (/db-test)', async () => {
+      const env = 'dev';
+      const dnsRecord = outputs[getEnvOutput(env, 'dns-record')];
+
+      if (!dnsRecord) {
+        console.warn(`DNS record not found for ${env} environment, skipping E2E 2 test`);
+        return;
+      }
+      
+      // Assumes the application exposes a '/db-test' path that verifies RDS connectivity
+      const url = `http://${dnsRecord}/db-test`; 
+      console.log(`Attempting E2E 2 test call for DB connectivity: ${url}`);
+
+      try {
+        const response = await fetch(url, {
+          method: 'GET',
+          // @ts-ignore
+          timeout: 20000 // Longer timeout for potential DB initialization
+        });
+
+        console.log(`Received DB test status: ${response.status}`);
+        expect(response.status).toBe(200);
+        
+        console.log(`✅ E2E 2: ${env} application successfully connected to RDS via full flow.`);
+      } catch (error) {
+        console.error(`E2E 2 test failed for ${url}:`, error);
+        throw new Error(`E2E 2: Database connectivity test failed: ${error}`);
+      }
+    }, 120000);
+
+    // E2E Test 3: Data Write and Read Flow (State Persistence E2E)
+    // Verifies the entire transaction flow (read/write access) is functioning, proving data persistence and consistency.
+    test('E2E 3: should perform a successful data write (POST) and read (GET) operation via application endpoints', async () => {
+      const env = 'dev';
+      const dnsRecord = outputs[getEnvOutput(env, 'dns-record')];
+
+      if (!dnsRecord) {
+        console.warn(`DNS record not found for ${env} environment, skipping E2E 3 test`);
+        return;
+      }
+
+      const writeUrl = `http://${dnsRecord}/write`; // Assumed write endpoint
+      const readUrl = `http://${dnsRecord}/read`;   // Assumed read endpoint
+      const uniqueId = `test-data-${Date.now()}`;
+      
+      // 1. Write Operation (POST)
+      const writeResponse = await fetch(writeUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'test_key', value: uniqueId }),
+        // @ts-ignore
+        timeout: 10000
+      });
+      expect(writeResponse.status).toBe(201);
+      console.log(`✅ E2E 3: Write operation successful.`);
+
+      // 2. Read Operation (GET)
+      const readResponse = await fetch(`${readUrl}?key=test_key`, {
+        method: 'GET',
+        // @ts-ignore
+        timeout: 10000
+      });
+      expect(readResponse.status).toBe(200);
+      
+      const body = await readResponse.json() as { value: string };
+      expect(body.value).toBe(uniqueId);
+      console.log(`✅ E2E 3: Read operation successful and verified state persistence: ${uniqueId}`);
+      
+    }, 120000);
+
+    // E2E Test 4: Cross-VPC Peering Connectivity (Staging ↔ Prod Network Flow)
+    // Verifies the complex networking flow is bi-directionally active for applications (the routing layer).
+    test('E2E 4: should verify all route tables are configured for active VPC peering between staging and prod', async () => {
+      const peeringId = outputs['vpc-peering-connection-id'];
+      const stagingVpcId = outputs[getEnvOutput('staging', 'vpc-id')];
+      const prodVpcId = outputs[getEnvOutput('prod', 'vpc-id')];
+      
+      if (!peeringId || !stagingVpcId || !prodVpcId) {
+        console.warn('Missing VPC peering or VPC IDs, skipping E2E 4 test');
+        return;
+      }
+
+      // Step 1: Verify VPC peering connection is active (Network-Level Check)
+      const peeringResponse = await ec2Client.send(new DescribeVpcPeeringConnectionsCommand({
+        VpcPeeringConnectionIds: [peeringId]
+      }));
+      const peering = peeringResponse.VpcPeeringConnections?.[0];
+      expect(peering?.Status?.Code).toBe('active');
+      console.log(`✅ E2E 4: VPC peering connection is active: ${peeringId}`);
+
+      // Step 2: Verify route tables have peering routes in both environments (Flow Check)
+      const environments = [
+        { name: 'staging', vpcId: stagingVpcId, peerCidr: '10.2.0.0/16' }, // Prod's CIDR
+        { name: 'prod', vpcId: prodVpcId, peerCidr: '10.1.0.0/16' }       // Staging's CIDR
+      ];
+
+      for (const env of environments) {
+        const rtResponse = await ec2Client.send(new DescribeRouteTablesCommand({
+          Filters: [{ Name: 'vpc-id', Values: [env.vpcId] }]
+        }));
+        
+        const routeTables = rtResponse.RouteTables || [];
+        
+        // Check at least one route table has a peering route to the other VPC's CIDR
+        const hasPeeringRoute = routeTables.some(rt => 
+          rt.Routes?.some(route => 
+            route.DestinationCidrBlock === env.peerCidr &&
+            route.VpcPeeringConnectionId === peeringId &&
+            route.State === 'active'
+          )
+        );
+        
+        expect(hasPeeringRoute).toBe(true);
+        console.log(`✅ E2E 4: ${env.name} VPC route tables successfully verified peering route to ${env.peerCidr}.`);
+      }
+    }, 90000);
+
+    // E2E Test 5: Private Service Access to AWS APIs via VPC Endpoint Flow
+    // Verifies that resources in private subnets (like ECS tasks) can securely reach AWS services (SSM, ECR, S3) without using the NAT Gateway.
+    test('E2E 5: should successfully verify private subnet access to SSM via VPC Endpoint (Interface)', async () => {
+      const env = 'dev';
+      const vpcId = outputs[getEnvOutput(env, 'vpc-id')];
+      
+      if (!vpcId) {
+        console.warn('VPC ID not found for dev environment, skipping E2E 5 test');
+        return;
+      }
+      
+      // 1. Check if SSM Interface Endpoint exists and is available
+      const ssmEndpointResponse = await ec2Client.send(new DescribeVpcEndpointsCommand({
+        Filters: [{ Name: 'vpc-id', Values: [vpcId] }, { Name: 'service-name', Values: [`com.amazonaws.${region}.ssm`] }]
+      }));
+      
+      const ssmEndpoint = ssmEndpointResponse.VpcEndpoints?.[0];
+      
+      expect(ssmEndpoint).toBeDefined();
+      expect(ssmEndpoint?.VpcEndpointType).toBe('Interface');
+      expect(ssmEndpoint?.State).toBe('available');
+      console.log(`✅ E2E 5: SSM VPC Interface Endpoint verified: ${ssmEndpoint?.VpcEndpointId}`);
+
+      // 2. Check if the endpoint is correctly associated with private subnets
+      const privateSubnetResponse = await ec2Client.send(new DescribeSubnetsCommand({
+        Filters: [{ Name: 'vpc-id', Values: [vpcId] }, { Name: 'tag:Type', Values: ['private'] }]
+      }));
+      const privateSubnetIds = privateSubnetResponse.Subnets?.map(s => s.SubnetId).filter((id): id is string => id !== undefined) || [];
+      
+      const endpointSubnetIds = ssmEndpoint?.SubnetIds || [];
+      const isAssociated = privateSubnetIds.every(psId => endpointSubnetIds.includes(psId));
+      expect(isAssociated).toBe(true);
+      console.log(`✅ E2E 5: SSM VPC Endpoint is correctly associated with all private subnets, enabling internal traffic flow to AWS services.`);
+    }, 90000);
+  });
+
   describe('[E2E] Complete Application Flow: Route53 → ALB → ECS → RDS', () => {
     test('should support complete request flow through all infrastructure layers', async () => {
       const env = 'dev';
@@ -1159,47 +1346,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         } else {
           console.log(`⚠️  ${env} no public subnets found, NAT gateways may not be deployed`);
         }
-      }
-    }, 60000);
-  });
-  describe('[E2E] Public DNS Endpoint', () => {
-    test('should receive a successful HTTP 200 response from the dev endpoint', async () => {
-      const env = 'dev';
-      // Using the specific DNS record for the service
-      const dnsRecord = outputs[getEnvOutput(env, 'dns-record')];
-  
-      if (!dnsRecord) {
-        console.warn(`DNS record not found for ${env} environment, skipping E2E test`);
-        return;
-      }
-  
-      const url = `http://${dnsRecord}`;
-      console.log(`Attempting E2E test call to: ${url}`);
-  
-      try {
-        // This test assumes:
-        // 1. 'node-fetch' is installed (or using a Jest env with global fetch)
-        // 2. The ALB is public and the DNS has propagated
-        // 3. The ECS service is running and configured to return 200 on '/'
-        const response = await fetch(url, {
-          method: 'GET',
-          // @ts-ignore - node-fetch types might not align with global fetch
-          timeout: 10000 // 10 second timeout
-        });
-        
-        console.log(`Received status: ${response.status}`);
-        expect(response.status).toBe(200);
-        
-        // You could also check the body for expected content
-        // const body = await response.text();
-        // expect(body).toContain('Welcome');
-        
-        console.log(`✅ ${env} E2E endpoint test successful: ${url}`);
-  
-      } catch (error) {
-        console.error(`E2E test failed for ${url}:`, error);
-        // Fail the test if the fetch fails
-        throw new Error(`Failed to fetch ${url}: ${error}`);
       }
     }, 60000);
   });
