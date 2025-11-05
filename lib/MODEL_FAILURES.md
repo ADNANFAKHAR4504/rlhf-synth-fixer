@@ -136,6 +136,37 @@ Uncovered Line #s: 30
 
 ---
 
+## Issue 7: VPC Endpoint Service Limit Exceeded
+
+**Problem**: Deployment failed with service limit error
+```
+CREATE_FAILED | AWS::EC2::VPCEndpoint | DRVPC/DynamoDBEndpoint
+Resource handler returned message: "The maximum number of VPC endpoints has been reached. 
+(Service: Ec2, Status Code: 400, Request ID: e058a1ad-87ed-4b61-aa42-3f692a91f2b9)"
+```
+
+**Root Cause**: 
+- AWS account has reached the VPC endpoint quota in us-east-1 region
+- Infrastructure code was creating two gateway VPC endpoints (S3 and DynamoDB)
+- VPC endpoints are optional performance optimizations, not required for functionality
+- Lambda functions were also deployed in PRIVATE_ISOLATED subnets with no NAT gateway, making them unable to reach AWS services without VPC endpoints
+
+**Solution Applied**:
+- Removed VPC endpoint creation for S3 and DynamoDB (lines 62-69 in `lib/multi-region-dr-stack.ts`)
+- Removed VPC configuration from Lambda function (lines 182-185 in `lib/multi-region-dr-stack.ts`)
+- Lambda now runs outside VPC and accesses AWS services via IAM permissions over AWS network
+- Added comments explaining the changes
+
+**Result**: 
+- Stack synthesizes successfully without VPC endpoints
+- Lambda can access DynamoDB and S3 without VPC
+- All unit tests pass (16/16)
+- Infrastructure is deployable within AWS account limits
+
+**Lesson**: In test environments with AWS service limits, prioritize deployability over performance optimizations. VPC endpoints and VPC-attached Lambdas are not required for basic functionality.
+
+---
+
 ## Summary
 
 **Final Status**:

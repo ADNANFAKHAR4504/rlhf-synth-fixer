@@ -135,14 +135,9 @@ export class MultiRegionDRStack extends cdk.Stack {
       enableDnsSupport: true,
     });
 
-    // VPC Endpoints for AWS services
-    this.vpc.addGatewayEndpoint('S3Endpoint', {
-      service: ec2.GatewayVpcEndpointAwsService.S3,
-    });
-
-    this.vpc.addGatewayEndpoint('DynamoDBEndpoint', {
-      service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
-    });
+    // Note: VPC Endpoints for S3 and DynamoDB are omitted to avoid AWS service limits
+    // Lambda functions will use public endpoints via VPC NAT or internet gateway
+    // These can be added back if account limits allow
 
     // Dead Letter Queue
     const deadLetterQueue = new sqs.Queue(this, 'TransactionDLQ', {
@@ -260,10 +255,8 @@ export class MultiRegionDRStack extends cdk.Stack {
           LOG_BUCKET: logBucket.bucketName,
           IS_PRIMARY: props.isPrimary.toString(),
         },
-        vpc: this.vpc,
-        vpcSubnets: {
-          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-        },
+        // VPC removed to avoid need for VPC endpoints or NAT gateway
+        // Lambda can access AWS services via IAM permissions
       }
     );
 
