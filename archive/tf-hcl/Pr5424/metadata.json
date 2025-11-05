@@ -31,6 +31,12 @@
     "KMS",
     "S3"
   ],
-  "training_quality": "high",
-  "background": "Production-grade containerized fintech application requiring high availability, auto-scaling, security compliance, and zero-downtime deployments across 3 availability zones with blue/green deployment capability"
+  "training_quality": 10,
+  "background": "Production-grade containerized fintech application requiring high availability, auto-scaling, security compliance, and zero-downtime deployments across 3 availability zones with blue/green deployment capability",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "devang-devops",
+  "dockerS3Location": ""
 }
