@@ -378,39 +378,45 @@ class TestTapStackIntegration(unittest.TestCase):
         if 'DBParameterGroups' in db_instance and db_instance['DBParameterGroups']:
             param_group_name = db_instance['DBParameterGroups'][0]['DBParameterGroupName']
             
-            # Get all parameters (including defaults) - use Source='all' to get everything
-            # Use pagination to get all parameters
+            # Get all parameters by calling API with different Source values
+            # Valid Source values: 'engine-default', 'system', 'user'
             all_params = []
             custom_params = []
             param_dict = {}  # Store parameter names and values
-            next_token = None
             
-            while True:
-                if next_token:
-                    param_response = self.rds_client.describe_db_parameters(
-                        DBParameterGroupName=param_group_name,
-                        Source='all',  # Get all parameters including defaults
-                        NextToken=next_token
-                    )
-                else:
-                    param_response = self.rds_client.describe_db_parameters(
-                        DBParameterGroupName=param_group_name,
-                        Source='all'  # Get all parameters including defaults
-                    )
-                
-                # Collect all parameters
-                for param in param_response['Parameters']:
-                    param_name = param.get('ParameterName', '')
-                    all_params.append(param_name)
-                    param_dict[param_name] = param
+            # Get parameters from all sources
+            sources = ['user', 'system', 'engine-default']
+            
+            for source in sources:
+                next_token = None
+                while True:
+                    if next_token:
+                        param_response = self.rds_client.describe_db_parameters(
+                            DBParameterGroupName=param_group_name,
+                            Source=source,
+                            NextToken=next_token
+                        )
+                    else:
+                        param_response = self.rds_client.describe_db_parameters(
+                            DBParameterGroupName=param_group_name,
+                            Source=source
+                        )
                     
-                    # Parameters with Source='user' are custom parameters
-                    if param.get('Source') == 'user':
-                        custom_params.append(param_name)
-                
-                next_token = param_response.get('Marker')
-                if not next_token:
-                    break
+                    # Collect all parameters
+                    for param in param_response['Parameters']:
+                        param_name = param.get('ParameterName', '')
+                        # Only add if not already in dict (avoid duplicates)
+                        if param_name not in param_dict:
+                            all_params.append(param_name)
+                            param_dict[param_name] = param
+                            
+                            # Parameters with Source='user' are custom parameters
+                            if param.get('Source') == 'user':
+                                custom_params.append(param_name)
+                    
+                    next_token = param_response.get('Marker')
+                    if not next_token:
+                        break
             
             # Verify parameter group exists and has parameters
             self.assertGreater(
