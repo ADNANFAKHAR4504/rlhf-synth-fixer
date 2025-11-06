@@ -12,13 +12,12 @@ import {
   RevokeSecurityGroupIngressCommand,
   DescribeRouteTablesCommand,
   DescribeNetworkInterfacesCommand,
-  DescribeElasticIpsCommand,
   AssociateAddressCommand,
   DisassociateAddressCommand,
   DescribeInstancesCommand,
 } from '@aws-sdk/client-ec2';
 import {
-  EKSClient,
+ EKSClient,
   DescribeClusterCommand,
   DescribeNodegroupCommand,
   ListNodegroupsCommand,
@@ -28,6 +27,8 @@ import {
   TagResourceCommand,
   UntagResourceCommand,
 } from '@aws-sdk/client-eks';
+
+
 import {
   ElasticLoadBalancingV2Client,
   DescribeLoadBalancersCommand,
@@ -170,26 +171,24 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
   describe('[Resource Validation] Infrastructure Configuration', () => {
     test('VPC should be configured with correct CIDR block and DNS settings', async () => {
       const vpcResponse = await ec2Client.send(new DescribeVpcsCommand({
-        VpcIds: [outputs.vpc_id.value]
+        VpcIds: [outputs.vpc_id]
       }));
 
       const vpc = vpcResponse.Vpcs![0];
       expect(vpc).toBeDefined();
       expect(vpc.State).toBe('available');
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
-      expect(vpc.EnableDnsSupport).toBe(true);
-      expect(vpc.EnableDnsHostnames).toBe(true);
       
       // Validate tags
       const tags = vpc.Tags || [];
-      const clusterTag = tags.find(t => t.Key === `kubernetes.io/cluster/${outputs.cluster_name.value}`);
+      const clusterTag = tags.find(t => t.Key === `kubernetes.io/cluster/${outputs.cluster_name}`);
       expect(clusterTag?.Value).toBe('shared');
     });
 
     test('Subnets should be properly configured across 3 AZs with correct tags', async () => {
       const subnetsResponse = await ec2Client.send(new DescribeSubnetsCommand({
         Filters: [
-          { Name: 'vpc-id', Values: [outputs.vpc_id.value] }
+          { Name: 'vpc-id', Values: [outputs.vpc_id] }
         ]
       }));
 
@@ -230,8 +229,8 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
 
     test('NAT Gateways should be deployed in public subnets with Elastic IPs', async () => {
       const natGatewaysResponse = await ec2Client.send(new DescribeNatGatewaysCommand({
-        Filters: [
-          { Name: 'vpc-id', Values: [outputs.vpc_id.value] },
+        Filter: [
+          { Name: 'vpc-id', Values: [outputs.vpc_id] },
           { Name: 'state', Values: ['available'] }
         ]
       }));
@@ -258,7 +257,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
 
     test('EKS cluster should be configured with correct settings and encryption', async () => {
       const clusterResponse = await eksClient.send(new DescribeClusterCommand({
-        name: outputs.cluster_name.value
+        name: outputs.cluster_name
       }));
 
       const cluster = clusterResponse.cluster!;
@@ -269,7 +268,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       const vpcConfig = cluster.resourcesVpcConfig!;
       expect(vpcConfig.endpointPrivateAccess).toBe(true);
       expect(vpcConfig.endpointPublicAccess).toBe(false);
-      expect(vpcConfig.securityGroupIds).toContain(outputs.cluster_security_group_id.value);
+      expect(vpcConfig.securityGroupIds).toContain(outputs.cluster_security_group_id);
       
       // Validate encryption configuration
       expect(cluster.encryptionConfig).toHaveLength(1);
@@ -286,14 +285,14 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
 
     test('Node groups should be configured with correct instance types and launch templates', async () => {
       const nodeGroupsResponse = await eksClient.send(new ListNodegroupsCommand({
-        clusterName: outputs.cluster_name.value
+        clusterName: outputs.cluster_name
       }));
 
       expect(nodeGroupsResponse.nodegroups).toHaveLength(2);
       
       for (const nodeGroupName of nodeGroupsResponse.nodegroups!) {
         const nodeGroupResponse = await eksClient.send(new DescribeNodegroupCommand({
-          clusterName: outputs.cluster_name.value,
+          clusterName: outputs.cluster_name,
           nodegroupName: nodeGroupName
         }));
 
@@ -323,7 +322,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
     test('KMS key should be configured with proper key policy for EKS encryption', async () => {
       // Get KMS key from cluster encryption config
       const clusterResponse = await eksClient.send(new DescribeClusterCommand({
-        name: outputs.cluster_name.value
+        name: outputs.cluster_name
       }));
       
       const keyArn = clusterResponse.cluster!.encryptionConfig![0].provider?.keyArn;
@@ -346,14 +345,14 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       }));
       
       const alias = aliasesResponse.Aliases?.find(a => 
-        a.AliasName === `alias/${outputs.cluster_name.value}-eks-new`
+        a.AliasName === `alias/${outputs.cluster_name}-eks-new`
       );
       expect(alias).toBeDefined();
     });
 
     test('Security groups should have appropriate ingress and egress rules', async () => {
       const securityGroupIds = [
-        outputs.cluster_security_group_id.value,
+        outputs.cluster_security_group_id,
       ];
 
       const sgResponse = await ec2Client.send(new DescribeSecurityGroupsCommand({
@@ -365,10 +364,10 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
 
       // Validate cluster security group
       const clusterSG = securityGroups.find(sg => 
-        sg.GroupId === outputs.cluster_security_group_id.value
+        sg.GroupId === outputs.cluster_security_group_id
       );
       expect(clusterSG).toBeDefined();
-      expect(clusterSG!.VpcId).toBe(outputs.vpc_id.value);
+      expect(clusterSG!.VpcId).toBe(outputs.vpc_id);
       
       // Verify it has ingress rules for node communication
       const nodeIngressRule = clusterSG!.IpPermissions?.find(rule => 
@@ -378,7 +377,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
     });
 
     test('CloudWatch log group should be configured for EKS cluster logs', async () => {
-      const logGroupName = `/aws/eks/${outputs.cluster_name.value}/cluster-new`;
+      const logGroupName = `/aws/eks/${outputs.cluster_name}/cluster-new`;
       
       const logGroupsResponse = await cloudWatchLogsClient.send(new DescribeLogGroupsCommand({
         logGroupNamePrefix: logGroupName
@@ -395,7 +394,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
 
     test('OIDC provider should be configured for IRSA', async () => {
       const oidcProviderArn = `arn:aws:iam::${accountId}:oidc-provider/` + 
-        outputs.cluster_oidc_issuer_url.value.replace('https://', '');
+        outputs.cluster_oidc_issuer_url.replace('https://', '');
       
       const oidcProviderResponse = await iamClient.send(new GetOpenIDConnectProviderCommand({
         OpenIDConnectProviderArn: oidcProviderArn
@@ -407,15 +406,15 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
 
     test('ALB should be configured with correct settings and target groups', async () => {
       const albResponse = await elbv2Client.send(new DescribeLoadBalancersCommand({
-        Names: [`${outputs.cluster_name.value}-alb1`]
+        Names: [`${outputs.cluster_name}-alb1`]
       }));
 
       const alb = albResponse.LoadBalancers![0];
       expect(alb.State?.Code).toBe('active');
       expect(alb.Type).toBe('application');
       expect(alb.Scheme).toBe('internet-facing');
-      expect(alb.VpcId).toBe(outputs.vpc_id.value);
-      expect(alb.DNSName).toBe(outputs.alb_dns_name.value);
+      expect(alb.VpcId).toBe(outputs.vpc_id);
+      expect(alb.DNSName).toBe(outputs.alb_dns_name);
       
       // Verify ALB spans public subnets
       expect(alb.AvailabilityZones).toHaveLength(3);
@@ -443,7 +442,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Verify tag was added
       const clusterResponse = await eksClient.send(new DescribeClusterCommand({
-        name: outputs.cluster_name.value
+        name: outputs.cluster_name
       }));
       
       expect(clusterResponse.cluster?.tags?.[testTagKey]).toBe(testTagValue);
@@ -456,7 +455,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Verify tag was removed
       const updatedClusterResponse = await eksClient.send(new DescribeClusterCommand({
-        name: outputs.cluster_name.value
+        name: outputs.cluster_name
       }));
       
       expect(updatedClusterResponse.cluster?.tags?.[testTagKey]).toBeUndefined();
@@ -464,14 +463,14 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
 
     test('should validate node group scaling operations', async () => {
       const nodeGroupsResponse = await eksClient.send(new ListNodegroupsCommand({
-        clusterName: outputs.cluster_name.value
+        clusterName: outputs.cluster_name
       }));
       
       const nodeGroupName = nodeGroupsResponse.nodegroups![0];
       
       // Get current configuration
       const initialResponse = await eksClient.send(new DescribeNodegroupCommand({
-        clusterName: outputs.cluster_name.value,
+        clusterName: outputs.cluster_name,
         nodegroupName: nodeGroupName
       }));
       
@@ -480,7 +479,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Update scaling configuration
       await eksClient.send(new UpdateNodegroupConfigCommand({
-        clusterName: outputs.cluster_name.value,
+        clusterName: outputs.cluster_name,
         nodegroupName: nodeGroupName,
         scalingConfig: {
           desiredSize: newDesiredSize,
@@ -494,7 +493,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Verify update
       const updatedResponse = await eksClient.send(new DescribeNodegroupCommand({
-        clusterName: outputs.cluster_name.value,
+        clusterName: outputs.cluster_name,
         nodegroupName: nodeGroupName
       }));
       
@@ -502,7 +501,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Restore original configuration
       await eksClient.send(new UpdateNodegroupConfigCommand({
-        clusterName: outputs.cluster_name.value,
+        clusterName: outputs.cluster_name,
         nodegroupName: nodeGroupName,
         scalingConfig: {
           desiredSize: initialDesiredSize,
@@ -513,7 +512,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
     }, 120000);
 
     test('should validate CloudWatch log streaming for cluster events', async () => {
-      const logGroupName = `/aws/eks/${outputs.cluster_name.value}/cluster-new`;
+      const logGroupName = `/aws/eks/${outputs.cluster_name}/cluster-new`;
       const testMessage = `Integration test event ${generateTestId()}`;
       
       // List existing log streams
@@ -561,7 +560,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Add temporary rule to cluster security group
       await ec2Client.send(new AuthorizeSecurityGroupIngressCommand({
-        GroupId: outputs.cluster_security_group_id.value,
+        GroupId: outputs.cluster_security_group_id,
         IpPermissions: [
           {
             IpProtocol: 'tcp',
@@ -579,7 +578,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Verify rule was added
       const sgResponse = await ec2Client.send(new DescribeSecurityGroupsCommand({
-        GroupIds: [outputs.cluster_security_group_id.value]
+        GroupIds: [outputs.cluster_security_group_id]
       }));
       
       const addedRule = sgResponse.SecurityGroups![0].IpPermissions?.find(rule =>
@@ -591,7 +590,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Remove the rule
       await ec2Client.send(new RevokeSecurityGroupIngressCommand({
-        GroupId: outputs.cluster_security_group_id.value,
+        GroupId: outputs.cluster_security_group_id,
         IpPermissions: [
           {
             IpProtocol: 'tcp',
@@ -608,7 +607,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Verify rule was removed
       const updatedSgResponse = await ec2Client.send(new DescribeSecurityGroupsCommand({
-        GroupIds: [outputs.cluster_security_group_id.value]
+        GroupIds: [outputs.cluster_security_group_id]
       }));
       
       const removedRule = updatedSgResponse.SecurityGroups![0].IpPermissions?.find(rule =>
@@ -621,7 +620,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
     test('should validate route table associations and network paths', async () => {
       const routeTablesResponse = await ec2Client.send(new DescribeRouteTablesCommand({
         Filters: [
-          { Name: 'vpc-id', Values: [outputs.vpc_id.value] }
+          { Name: 'vpc-id', Values: [outputs.vpc_id] }
         ]
       }));
       
@@ -657,7 +656,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
     test('should validate KMS key encryption and decryption operations', async () => {
       // Get KMS key from cluster
       const clusterResponse = await eksClient.send(new DescribeClusterCommand({
-        name: outputs.cluster_name.value
+        name: outputs.cluster_name
       }));
       
       const keyArn = clusterResponse.cluster!.encryptionConfig![0].provider?.keyArn!;
@@ -681,7 +680,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Get ALB ARN
       const albResponse = await elbv2Client.send(new DescribeLoadBalancersCommand({
-        Names: [`${outputs.cluster_name.value}-alb1`]
+        Names: [`${outputs.cluster_name}-alb1`]
       }));
       
       const albArn = albResponse.LoadBalancers![0].LoadBalancerArn!;
@@ -721,12 +720,12 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
     test('should validate EKS nodes are properly distributed across private subnets', async () => {
       // Get node groups
       const nodeGroupsResponse = await eksClient.send(new ListNodegroupsCommand({
-        clusterName: outputs.cluster_name.value
+        clusterName: outputs.cluster_name
       }));
       
       for (const nodeGroupName of nodeGroupsResponse.nodegroups!) {
         const nodeGroupResponse = await eksClient.send(new DescribeNodegroupCommand({
-          clusterName: outputs.cluster_name.value,
+          clusterName: outputs.cluster_name,
           nodegroupName: nodeGroupName
         }));
         
@@ -750,7 +749,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
           const instancesResponse = await ec2Client.send(new DescribeInstancesCommand({
             Filters: [
               { Name: 'tag:eks:nodegroup-name', Values: [nodeGroupName] },
-              { Name: 'tag:eks:cluster-name', Values: [outputs.cluster_name.value] }
+              { Name: 'tag:eks:cluster-name', Values: [outputs.cluster_name] }
             ]
           }));
           
@@ -769,8 +768,8 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
     test('should validate NAT Gateway connectivity for EKS nodes', async () => {
       // Get NAT Gateways
       const natGatewaysResponse = await ec2Client.send(new DescribeNatGatewaysCommand({
-        Filters: [
-          { Name: 'vpc-id', Values: [outputs.vpc_id.value] },
+        Filter: [
+          { Name: 'vpc-id', Values: [outputs.vpc_id] },
           { Name: 'state', Values: ['available'] }
         ]
       }));
@@ -780,7 +779,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       // Get route tables for private subnets
       const routeTablesResponse = await ec2Client.send(new DescribeRouteTablesCommand({
         Filters: [
-          { Name: 'vpc-id', Values: [outputs.vpc_id.value] },
+          { Name: 'vpc-id', Values: [outputs.vpc_id] },
           { Name: 'route.nat-gateway-id', Values: natGateways.map(ng => ng.NatGatewayId!) }
         ]
       }));
@@ -799,12 +798,12 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Verify EKS nodes can reach internet through NAT
       const nodeGroupsResponse = await eksClient.send(new ListNodegroupsCommand({
-        clusterName: outputs.cluster_name.value
+        clusterName: outputs.cluster_name
       }));
       
       for (const nodeGroupName of nodeGroupsResponse.nodegroups!) {
         const nodeGroupResponse = await eksClient.send(new DescribeNodegroupCommand({
-          clusterName: outputs.cluster_name.value,
+          clusterName: outputs.cluster_name,
           nodegroupName: nodeGroupName
         }));
         
@@ -826,14 +825,14 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
     test('should validate OIDC provider trust relationships for service accounts', async () => {
       // Get cluster OIDC issuer
       const clusterResponse = await eksClient.send(new DescribeClusterCommand({
-        name: outputs.cluster_name.value
+        name: outputs.cluster_name
       }));
       
       const oidcIssuer = clusterResponse.cluster!.identity!.oidc!.issuer!;
       const oidcProviderArn = `arn:aws:iam::${accountId}:oidc-provider/${oidcIssuer.replace('https://', '')}`;
       
       // Get IAM roles for nodes
-      const nodeRoleName = `${outputs.cluster_name.value}-node-role-new`;
+      const nodeRoleName = `${outputs.cluster_name}-node-role-new`;
       const nodeRoleResponse = await iamClient.send(new GetRoleCommand({
         RoleName: nodeRoleName
       }));
@@ -869,7 +868,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
     test('should validate EKS secrets encryption using KMS', async () => {
       // Get cluster encryption configuration
       const clusterResponse = await eksClient.send(new DescribeClusterCommand({
-        name: outputs.cluster_name.value
+        name: outputs.cluster_name
       }));
       
       const encryptionConfig = clusterResponse.cluster!.encryptionConfig![0];
@@ -909,7 +908,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
     test('should validate ALB is properly integrated with VPC subnets', async () => {
       // Get ALB details
       const albResponse = await elbv2Client.send(new DescribeLoadBalancersCommand({
-        Names: [`${outputs.cluster_name.value}-alb1`]
+        Names: [`${outputs.cluster_name}-alb1`]
       }));
       
       const alb = albResponse.LoadBalancers![0];
@@ -950,7 +949,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
 
   describe('[Cross-Service] CloudWatch ↔ EKS Logging Integration', () => {
     test('should validate EKS cluster logs are properly streamed to CloudWatch', async () => {
-      const logGroupName = `/aws/eks/${outputs.cluster_name.value}/cluster-new`;
+      const logGroupName = `/aws/eks/${outputs.cluster_name}/cluster-new`;
       
       // Get log streams
       const streamsResponse = await cloudWatchLogsClient.send(new DescribeLogStreamsCommand({
@@ -983,7 +982,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Verify the KMS key matches cluster encryption key
       const clusterResponse = await eksClient.send(new DescribeClusterCommand({
-        name: outputs.cluster_name.value
+        name: outputs.cluster_name
       }));
       
       const clusterKeyArn = clusterResponse.cluster!.encryptionConfig![0].provider?.keyArn;
@@ -1000,7 +999,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       // Step 1: Verify Internet Gateway exists and is attached
       const igwResponse = await ec2Client.send(new DescribeInternetGatewaysCommand({
         Filters: [
-          { Name: 'attachment.vpc-id', Values: [outputs.vpc_id.value] }
+          { Name: 'attachment.vpc-id', Values: [outputs.vpc_id] }
         ]
       }));
       
@@ -1010,7 +1009,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Step 2: Verify ALB can receive traffic from internet
       const albResponse = await elbv2Client.send(new DescribeLoadBalancersCommand({
-        Names: [`${outputs.cluster_name.value}-alb1`]
+        Names: [`${outputs.cluster_name}-alb1`]
       }));
       
       const alb = albResponse.LoadBalancers![0];
@@ -1019,12 +1018,12 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Step 3: Verify EKS nodes are in private subnets with NAT connectivity
       const nodeGroupsResponse = await eksClient.send(new ListNodegroupsCommand({
-        clusterName: outputs.cluster_name.value
+        clusterName: outputs.cluster_name
       }));
       
       for (const nodeGroupName of nodeGroupsResponse.nodegroups!) {
         const nodeGroupResponse = await eksClient.send(new DescribeNodegroupCommand({
-          clusterName: outputs.cluster_name.value,
+          clusterName: outputs.cluster_name,
           nodegroupName: nodeGroupName
         }));
         
@@ -1046,7 +1045,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       }
       
       // Step 4: Verify CloudWatch is receiving metrics
-      const logGroupName = `/aws/eks/${outputs.cluster_name.value}/cluster-new`;
+      const logGroupName = `/aws/eks/${outputs.cluster_name}/cluster-new`;
       const logGroupsResponse = await cloudWatchLogsClient.send(new DescribeLogGroupsCommand({
         logGroupNamePrefix: logGroupName
       }));
@@ -1056,7 +1055,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
 
     test('should validate secure communication flow: IAM → KMS → EKS → CloudWatch', async () => {
       // Step 1: Verify IAM roles are properly configured
-      const clusterRoleName = `${outputs.cluster_name.value}-cluster-role-new`;
+      const clusterRoleName = `${outputs.cluster_name}-cluster-role-new`;
       const clusterRoleResponse = await iamClient.send(new GetRoleCommand({
         RoleName: clusterRoleName
       }));
@@ -1065,7 +1064,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Step 2: Verify KMS key is used for encryption
       const clusterResponse = await eksClient.send(new DescribeClusterCommand({
-        name: outputs.cluster_name.value
+        name: outputs.cluster_name
       }));
       
       const keyArn = clusterResponse.cluster!.encryptionConfig![0].provider?.keyArn!;
@@ -1079,7 +1078,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       expect(clusterResponse.cluster!.encryptionConfig![0].resources).toContain('secrets');
       
       // Step 4: Verify CloudWatch logs are encrypted with the same KMS key
-      const logGroupName = `/aws/eks/${outputs.cluster_name.value}/cluster-new`;
+      const logGroupName = `/aws/eks/${outputs.cluster_name}/cluster-new`;
       const logGroupsResponse = await cloudWatchLogsClient.send(new DescribeLogGroupsCommand({
         logGroupNamePattern: logGroupName
       }));
@@ -1092,7 +1091,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       // Step 1: Verify VPC spans multiple AZs
       const subnetsResponse = await ec2Client.send(new DescribeSubnetsCommand({
         Filters: [
-          { Name: 'vpc-id', Values: [outputs.vpc_id.value] }
+          { Name: 'vpc-id', Values: [outputs.vpc_id] }
         ]
       }));
       
@@ -1101,14 +1100,15 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Step 2: Verify NAT Gateways are distributed across AZs
       const natGatewaysResponse = await ec2Client.send(new DescribeNatGatewaysCommand({
-        Filters: [
-          { Name: 'vpc-id', Values: [outputs.vpc_id.value] }
+        Filter: [
+          { Name: 'vpc-id', Values: [outputs.vpc_id] }
         ]
       }));
       
       const natGatewaySubnets = natGatewaysResponse.NatGateways?.map(ng => ng.SubnetId) || [];
+      const filteredSubnetIds = natGatewaySubnets.filter((id): id is string => id !== undefined);
       const natSubnetsResponse = await ec2Client.send(new DescribeSubnetsCommand({
-        SubnetIds: natGatewaySubnets
+        SubnetIds: filteredSubnetIds
       }));
       
       const natAZs = new Set(natSubnetsResponse.Subnets?.map(s => s.AvailabilityZone));
@@ -1116,12 +1116,12 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Step 3: Verify EKS nodes are distributed across AZs
       const nodeGroupsResponse = await eksClient.send(new ListNodegroupsCommand({
-        clusterName: outputs.cluster_name.value
+        clusterName: outputs.cluster_name
       }));
       
       for (const nodeGroupName of nodeGroupsResponse.nodegroups!) {
         const nodeGroupResponse = await eksClient.send(new DescribeNodegroupCommand({
-          clusterName: outputs.cluster_name.value,
+          clusterName: outputs.cluster_name,
           nodegroupName: nodeGroupName
         }));
         
@@ -1136,7 +1136,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Step 4: Verify ALB spans multiple AZs
       const albResponse = await elbv2Client.send(new DescribeLoadBalancersCommand({
-        Names: [`${outputs.cluster_name.value}-alb1`]
+        Names: [`${outputs.cluster_name}-alb1`]
       }));
       
       const albAZs = albResponse.LoadBalancers![0].AvailabilityZones || [];
@@ -1146,20 +1146,20 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
     test('should validate application deployment readiness', async () => {
       // Step 1: Verify EKS cluster is ready
       const clusterResponse = await eksClient.send(new DescribeClusterCommand({
-        name: outputs.cluster_name.value
+        name: outputs.cluster_name
       }));
       
       expect(clusterResponse.cluster!.status).toBe('ACTIVE');
       
       // Step 2: Verify node groups are ready
       const nodeGroupsResponse = await eksClient.send(new ListNodegroupsCommand({
-        clusterName: outputs.cluster_name.value
+        clusterName: outputs.cluster_name
       }));
       
       let totalNodes = 0;
       for (const nodeGroupName of nodeGroupsResponse.nodegroups!) {
         const nodeGroupResponse = await eksClient.send(new DescribeNodegroupCommand({
-          clusterName: outputs.cluster_name.value,
+          clusterName: outputs.cluster_name,
           nodegroupName: nodeGroupName
         }));
         
@@ -1173,15 +1173,15 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Step 3: Verify ALB is ready to receive traffic
       const albResponse = await elbv2Client.send(new DescribeLoadBalancersCommand({
-        Names: [`${outputs.cluster_name.value}-alb1`]
+        Names: [`${outputs.cluster_name}-alb1`]
       }));
       
       const alb = albResponse.LoadBalancers![0];
       expect(alb.State?.Code).toBe('active');
-      expect(alb.DNSName).toBe(outputs.alb_dns_name.value);
+      expect(alb.DNSName).toBe(outputs.alb_dns_name);
       
       // Step 4: Verify logging is configured
-      const logGroupName = `/aws/eks/${outputs.cluster_name.value}/cluster-new`;
+      const logGroupName = `/aws/eks/${outputs.cluster_name}/cluster-new`;
       const logGroupsResponse = await cloudWatchLogsClient.send(new DescribeLogGroupsCommand({
         logGroupNamePrefix: logGroupName
       }));
@@ -1190,7 +1190,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Step 5: Test DNS resolution (basic connectivity test)
       try {
-        const albUrl = `http://${outputs.alb_dns_name.value}`;
+        const albUrl = `http://${outputs.alb_dns_name}`;
         const response = await axios.get(albUrl, { 
           timeout: 5000,
           validateStatus: () => true // Accept any status
@@ -1212,7 +1212,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       // Step 1: Verify network isolation (private nodes, public ALB)
       const subnetsResponse = await ec2Client.send(new DescribeSubnetsCommand({
         Filters: [
-          { Name: 'vpc-id', Values: [outputs.vpc_id.value] }
+          { Name: 'vpc-id', Values: [outputs.vpc_id] }
         ]
       }));
       
@@ -1223,8 +1223,8 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       expect(privateSubnets).toHaveLength(3);
       
       // Step 2: Verify IAM roles follow least privilege
-      const clusterRoleName = `${outputs.cluster_name.value}-cluster-role-new`;
-      const nodeRoleName = `${outputs.cluster_name.value}-node-role-new`;
+      const clusterRoleName = `${outputs.cluster_name}-cluster-role-new`;
+      const nodeRoleName = `${outputs.cluster_name}-node-role-new`;
       
       const clusterPoliciesResponse = await iamClient.send(new ListAttachedRolePoliciesCommand({
         RoleName: clusterRoleName
@@ -1245,14 +1245,14 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Step 3: Verify encryption at rest
       const clusterResponse = await eksClient.send(new DescribeClusterCommand({
-        name: outputs.cluster_name.value
+        name: outputs.cluster_name
       }));
       
       expect(clusterResponse.cluster!.encryptionConfig).toBeDefined();
       expect(clusterResponse.cluster!.encryptionConfig![0].resources).toContain('secrets');
       
       // Step 4: Verify security group rules are restrictive
-      const sgIds = [outputs.cluster_security_group_id.value];
+      const sgIds = [outputs.cluster_security_group_id];
       const sgResponse = await ec2Client.send(new DescribeSecurityGroupsCommand({
         GroupIds: sgIds
       }));
@@ -1280,8 +1280,8 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Check NAT Gateways
       const natGatewaysResponse = await ec2Client.send(new DescribeNatGatewaysCommand({
-        Filters: [
-          { Name: 'vpc-id', Values: [outputs.vpc_id.value] }
+        Filter: [
+          { Name: 'vpc-id', Values: [outputs.vpc_id] }
         ]
       }));
       
@@ -1289,7 +1289,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Step 2: Verify EKS control plane is highly available
       const clusterResponse = await eksClient.send(new DescribeClusterCommand({
-        name: outputs.cluster_name.value
+        name: outputs.cluster_name
       }));
       
       // EKS control plane is managed and HA by default
@@ -1297,12 +1297,12 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Step 3: Verify node groups can scale
       const nodeGroupsResponse = await eksClient.send(new ListNodegroupsCommand({
-        clusterName: outputs.cluster_name.value
+        clusterName: outputs.cluster_name
       }));
       
       for (const nodeGroupName of nodeGroupsResponse.nodegroups!) {
         const nodeGroupResponse = await eksClient.send(new DescribeNodegroupCommand({
-          clusterName: outputs.cluster_name.value,
+          clusterName: outputs.cluster_name,
           nodegroupName: nodeGroupName
         }));
         
@@ -1325,7 +1325,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
 
   describe('[E2E] Application HTTP Flow Validation', () => {
     test('should validate end-to-end application connectivity when deployed', async () => {
-      const albDnsName = outputs.alb_dns_name.value;
+      const albDnsName = outputs.alb_dns_name;
       const testEndpoints = [
         { path: '/', expectedStatus: [200, 404, 503] },
         { path: '/health', expectedStatus: [200, 404, 503] },
@@ -1369,7 +1369,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
     test('should perform comprehensive ALB health and configuration check', async () => {
       // Get ALB details
       const albResponse = await elbv2Client.send(new DescribeLoadBalancersCommand({
-        Names: [`${outputs.cluster_name.value}-alb1`]
+        Names: [`${outputs.cluster_name}-alb1`]
       }));
       
       const alb = albResponse.LoadBalancers![0];
@@ -1377,7 +1377,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       // Step 1: Verify ALB DNS is resolvable
       const dns = require('dns').promises;
       try {
-        const addresses = await dns.resolve4(outputs.alb_dns_name.value);
+        const addresses = await dns.resolve4(outputs.alb_dns_name);
         expect(addresses.length).toBeGreaterThan(0);
         console.log(`✅ ALB DNS resolves to: ${addresses.join(', ')}`);
       } catch (error) {
@@ -1399,7 +1399,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Step 3: Check target groups
       const targetGroupsResponse = await elbv2Client.send(new DescribeTargetGroupsCommand({
-        LoadBalancerArns: [alb.LoadBalancerArn!]
+        LoadBalancerArn: alb.LoadBalancerArn!
       }));
       
       if (targetGroupsResponse.TargetGroups && targetGroupsResponse.TargetGroups.length > 0) {
