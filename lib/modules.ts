@@ -730,32 +730,6 @@ export class ComputeModule extends Construct {
       }
     );
 
-    // Add ingress rule to allow traffic from ALB
-    new aws.securityGroupRule.SecurityGroupRule(
-      this,
-      'service-sg-ingress-alb',
-      {
-        type: 'ingress',
-        securityGroupId: serviceSecurityGroup.id,
-        fromPort: 80,
-        toPort: 80,
-        protocol: 'tcp',
-        sourceSecurityGroupId: albSecurityGroupId,
-        description: 'Allow traffic from ALB',
-      }
-    );
-
-    // Add egress rule for outbound traffic
-    new aws.securityGroupRule.SecurityGroupRule(this, 'service-sg-egress', {
-      type: 'egress',
-      securityGroupId: serviceSecurityGroup.id,
-      fromPort: 0,
-      toPort: 0,
-      protocol: '-1',
-      cidrBlocks: ['0.0.0.0/0'],
-      description: 'Allow all outbound traffic',
-    });
-
     // ECS Service
     this.service = new aws.ecsService.EcsService(this, 'service', {
       name: `${config.name}-app-service`,
