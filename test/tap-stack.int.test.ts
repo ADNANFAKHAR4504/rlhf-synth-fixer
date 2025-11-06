@@ -62,7 +62,6 @@ try {
   if (stackKeys.length > 0) {
     const actualStackKey = stackKeys[0]; // e.g., "TapStackpr5731"
     environmentSuffix = actualStackKey.replace('TapStack', ''); // Extract "pr5731"
-    console.log(`Detected environment suffix: ${environmentSuffix} from stack key: ${actualStackKey}`);
   }
 
   // Handle nested structure - CDKTF outputs are nested under TapStack{suffix}
@@ -75,7 +74,6 @@ try {
     outputs = rawOutputs;
   }
 } catch (error) {
-  console.warn('cfn-outputs/flat-outputs.json not found. Integration tests will be skipped.');
   outputs = {};
 }
 
@@ -144,11 +142,6 @@ async function runEcsTask(clusterName: string, taskDefinition: string, subnets: 
 const shouldSkipTests = Object.keys(outputs).length === 0;
 
 (shouldSkipTests ? describe.skip : describe)('CDKTF Multi-Environment Infrastructure Integration Tests', () => {
-  beforeAll(() => {
-    if (shouldSkipTests) {
-      console.warn('Skipping integration tests: cfn-outputs/flat-outputs.json not found');
-    }
-  });
 
   // ============================================================================
   // PART 1: RESOURCE VALIDATION (Non-Interactive Infrastructure Validation)
@@ -178,15 +171,7 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         'route53-name-servers'
       ];
 
-      // Debug output to help with troubleshooting
-      console.log('Available outputs:', Object.keys(outputs));
-      console.log('Environment suffix:', environmentSuffix);
-      console.log('Expected outputs:', requiredOutputs);
-
       requiredOutputs.forEach(output => {
-        if (outputs[output] === undefined) {
-          console.warn(`Missing output: ${output}`);
-        }
         expect(outputs[output]).toBeDefined();
         expect(outputs[output]).not.toBe('');
       });
@@ -203,7 +188,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         const vpcId = outputs[getEnvOutput(env.name, 'vpc-id')];
 
         if (!vpcId) {
-          console.warn(`VPC ID not found for ${env.name} environment, skipping VPC validation`);
           continue;
         }
 
@@ -214,8 +198,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         const vpc = response.Vpcs?.[0];
         expect(vpc?.CidrBlock).toBe(env.cidr);
         expect(vpc?.State).toBe('available');
-
-        console.log(`✅ ${env.name} VPC verified: ${vpcId} with CIDR ${vpc?.CidrBlock}`);
       }
     }, 60000);
 
@@ -226,7 +208,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         const vpcId = outputs[getEnvOutput(env, 'vpc-id')];
 
         if (!vpcId) {
-          console.warn(`VPC ID not found for ${env} environment, skipping subnet validation`);
           continue;
         }
 
@@ -235,7 +216,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         }));
 
         const subnets = response.Subnets || [];
-        console.log(`${env} environment has ${subnets.length} subnets`);
 
         // At minimum should have subnets (flexible count based on actual deployment)
         expect(subnets.length).toBeGreaterThan(0);
@@ -256,7 +236,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
           s.Tags?.some(t => t.Key?.toLowerCase().includes('name') && t.Value?.toLowerCase().includes('private'))
         );
 
-        console.log(`${env}: ${publicSubnets.length} public, ${privateSubnets.length} private subnets`);
 
         // Verify public subnets have MapPublicIpOnLaunch enabled if they exist
         publicSubnets.forEach(subnet => {
@@ -285,7 +264,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
           );
 
           if (!envCluster) {
-            console.warn(`No RDS cluster found for ${env} environment, skipping RDS validation`);
             continue;
           }
 
@@ -294,10 +272,7 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
           expect(envCluster.StorageEncrypted).toBe(true);
           expect(envCluster.DeletionProtection).toBe(false);
 
-          console.log(`✅ ${env} RDS cluster verified: ${envCluster.DBClusterIdentifier}`);
-
         } catch (error) {
-          console.warn(`RDS validation failed for ${env}:`, error);
           // If we can't access RDS, skip this validation but don't fail the test
         }
       }
@@ -310,7 +285,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         const clusterName = outputs[getEnvOutput(env, 'ecs-cluster')];
 
         if (!clusterName) {
-          console.warn(`ECS cluster name not found for ${env} environment, skipping ECS validation`);
           continue;
         }
 
@@ -330,7 +304,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
           expect(setting.value).toBe('enabled');
         }
 
-        console.log(`✅ ${env} ECS cluster verified: ${clusterName} (${cluster?.status})`);
       }
     }, 60000);
 
@@ -341,7 +314,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         const albDns = outputs[getEnvOutput(env, 'alb-dns')];
 
         if (!albDns) {
-          console.warn(`ALB DNS not found for ${env} environment, skipping ALB validation`);
           continue;
         }
 
@@ -355,7 +327,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         expect(alb?.Scheme).toBe('internet-facing');
 
         if (!alb?.LoadBalancerArn) {
-          console.warn(`ALB ARN not found for ${env} environment`);
           continue;
         }
 
@@ -375,7 +346,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         const httpsListeners = listeners.filter(l => l.Protocol === 'HTTPS');
         expect(httpsListeners.length).toBe(0);
 
-        console.log(`✅ ${env} ALB verified: ${albDns} with ${listeners.length} listeners`);
       }
     }, 90000);
 
@@ -385,7 +355,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
       const prodVpcId = outputs[getEnvOutput('prod', 'vpc-id')];
 
       if (!peeringId) {
-        console.warn('VPC peering connection ID not found, skipping peering validation');
         return;
       }
 
@@ -401,14 +370,12 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
       expect(vpcIds).toContain(stagingVpcId);
       expect(vpcIds).toContain(prodVpcId);
 
-      console.log(`✅ VPC peering verified: ${peeringId} between staging and prod`);
     }, 30000);
 
     test('should have Route53 hosted zone and DNS records for all environments', async () => {
       const hostedZoneId = outputs['route53-zone-id'];
 
       if (!hostedZoneId) {
-        console.warn('Route53 hosted zone ID not found, skipping Route53 validation');
         return;
       }
 
@@ -431,9 +398,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         if (record) {
           expect(record.Type).toBe('A');
           expect(record.AliasTarget).toBeDefined();
-          console.log(`✅ ${env} DNS record verified: ${expectedName}`);
-        } else {
-          console.warn(`DNS record not found for ${env}: ${expectedName}`);
         }
       }
     }, 60000);
@@ -449,7 +413,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
       const clusterName = outputs[getEnvOutput(env, 'ecs-cluster')];
 
       if (!clusterName) {
-        console.warn('ECS cluster name not found for dev environment, skipping ECS operations test');
         return;
       }
 
@@ -468,7 +431,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         }));
 
         const taskArns = listServicesResponse.taskArns || [];
-        console.log(`✅ ${env} ECS cluster operations verified: ${clusterName} with ${taskArns.length} tasks`);
 
         // If there are tasks, verify they can be described
         if (taskArns.length > 0) {
@@ -484,7 +446,7 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
           expect(['RUNNING', 'PENDING', 'STOPPED']).toContain(task.lastStatus);
         }
       } catch (error) {
-        console.log(`✅ ECS cluster verified but no services/tasks currently running: ${clusterName}`);
+        // No tasks/services currently running
       }
     }, 90000);
 
@@ -534,7 +496,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         const albDns = outputs[getEnvOutput(env, 'alb-dns')];
 
         if (!albDns) {
-          console.warn(`ALB DNS not found for ${env} environment, skipping load balancer validation`);
           continue;
         }
 
@@ -543,7 +504,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         const alb = albResponse.LoadBalancers?.find(lb => lb.DNSName === albDns);
 
         if (!alb?.LoadBalancerArn) {
-          console.warn(`ALB not found for ${env} environment: ${albDns}`);
           continue;
         }
 
@@ -561,7 +521,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         expect(['ip', 'instance']).toContain(targetGroup.TargetType);
         expect(targetGroup.HealthCheckPath).toBe('/');
 
-        console.log(`✅ ${env} target group verified: ${targetGroup.TargetGroupName} (${targetGroup.TargetType})`);
       }
     }, 60000);
   });
@@ -579,7 +538,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         const vpcId = outputs[getEnvOutput(env, 'vpc-id')];
 
         if (!clusterName || !vpcId) {
-          console.warn(`Missing cluster or VPC ID for ${env} environment, skipping ECS-RDS integration test`);
           continue;
         }
 
@@ -597,7 +555,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         }));
 
         const taskArns = tasksResponse.taskArns || [];
-        console.log(`✅ ${env} ECS cluster verified for RDS integration: ${clusterName} in VPC ${vpcId}`);
 
         // If there are tasks, verify their network configuration
         if (taskArns.length > 0) {
@@ -610,7 +567,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
           if (task?.attachments) {
             const eniAttachment = task.attachments.find(att => att.type === 'ElasticNetworkInterface');
             if (eniAttachment) {
-              console.log(`✅ ${env} ECS task has network interface configured for RDS access`);
             }
           }
         }
@@ -624,7 +580,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         const vpcId = outputs[getEnvOutput(env, 'vpc-id')];
 
         if (!vpcId) {
-          console.warn(`VPC ID not found for ${env} environment, skipping security group validation`);
           continue;
         }
 
@@ -634,7 +589,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         }));
 
         const securityGroups = sgResponse.SecurityGroups || [];
-        console.log(`${env} environment has ${securityGroups.length} security groups`);
 
         // Look for ECS and RDS related security groups (flexible naming)
         const ecsSecurityGroup = securityGroups.find(sg =>
@@ -647,10 +601,8 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         );
 
         if (ecsSecurityGroup) {
-          console.log(`✅ ${env} ECS security group found: ${ecsSecurityGroup.GroupId}`);
         }
         if (rdsSecurityGroup) {
-          console.log(`✅ ${env} RDS security group found: ${rdsSecurityGroup.GroupId}`);
 
           // Verify RDS security group allows PostgreSQL traffic (port 5432)
           const postgresRule = rdsSecurityGroup.IpPermissions?.find(rule =>
@@ -658,17 +610,14 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
           );
 
           if (postgresRule) {
-            console.log(`✅ ${env} PostgreSQL port 5432 is accessible`);
 
             if (ecsSecurityGroup) {
               const allowsEcsSg = postgresRule.UserIdGroupPairs?.some(pair =>
                 pair.GroupId === ecsSecurityGroup.GroupId
               );
-              console.log(`✅ ${env} RDS allows access from ECS security group`);
             }
           }
         } else {
-          console.warn(`No RDS security group found for ${env} environment`);
         }
       }
     }, 60000);
@@ -683,7 +632,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         const clusterName = outputs[getEnvOutput(env, 'ecs-cluster')];
 
         if (!albDns || !clusterName) {
-          console.warn(`Missing ALB DNS or cluster name for ${env} environment, skipping ALB-ECS integration test`);
           continue;
         }
 
@@ -692,7 +640,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         const alb = albResponse.LoadBalancers?.find(lb => lb.DNSName === albDns);
 
         if (!alb?.LoadBalancerArn) {
-          console.warn(`ALB not found for ${env} environment: ${albDns}`);
           continue;
         }
 
@@ -719,7 +666,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
           expect(healthResponse.TargetHealthDescriptions).toBeDefined();
 
           const targetCount = healthResponse.TargetHealthDescriptions!.length;
-          console.log(`✅ ${env} ALB-ECS integration verified: ${targetCount} targets in target group`);
         }
       }
     }, 90000);
@@ -738,12 +684,10 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
       const albDns = outputs[getEnvOutput(env, 'alb-dns')];
 
       if (!albDns) {
-        console.warn(`ALB DNS not found for ${env} environment, skipping E2E 1 test`);
         return;
       }
 
       const url = `http://${albDns}`;
-      console.log(`Attempting E2E 1 test call to: ${url}`);
 
       try {
         const response = await fetch(url, {
@@ -752,11 +696,8 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
           timeout: 15000 // 15 second timeout for DNS resolution and cold start
         });
 
-        console.log(`Received status: ${response.status}`);
         expect(response.status).toBe(200);
-        console.log(`✅ E2E 1: ${env} application health check successful via ALB: ${url}`);
       } catch (error) {
-        console.error(`E2E 1 test failed for ${url}:`, error);
         throw new Error(`E2E 1: Failed to connect to application endpoint: ${error}`);
       }
     }, 90000);
@@ -769,7 +710,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
       const prodVpcId = outputs[getEnvOutput('prod', 'vpc-id')];
 
       if (!peeringId || !stagingVpcId || !prodVpcId) {
-        console.warn('Missing VPC peering or VPC IDs, skipping E2E 4 test');
         return;
       }
 
@@ -779,7 +719,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
       }));
       const peering = peeringResponse.VpcPeeringConnections?.[0];
       expect(peering?.Status?.Code).toBe('active');
-      console.log(`✅ E2E 4: VPC peering connection is active: ${peeringId}`);
 
       // Step 2: Verify route tables have peering routes in both environments (Flow Check)
       const environments = [
@@ -804,7 +743,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         );
 
         expect(hasPeeringRoute).toBe(true);
-        console.log(`✅ E2E 4: ${env.name} VPC route tables successfully verified peering route to ${env.peerCidr}.`);
       }
     }, 90000);
 
@@ -815,7 +753,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
       const vpcId = outputs[getEnvOutput(env, 'vpc-id')];
 
       if (!vpcId) {
-        console.warn('VPC ID not found for dev environment, skipping E2E 5 test');
         return;
       }
 
@@ -829,7 +766,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
       expect(ssmEndpoint).toBeDefined();
       expect(ssmEndpoint?.VpcEndpointType).toBe('Interface');
       expect(ssmEndpoint?.State).toBe('available');
-      console.log(`✅ E2E 5: SSM VPC Interface Endpoint verified: ${ssmEndpoint?.VpcEndpointId}`);
 
       // 2. Check if the endpoint is correctly associated with private subnets
       const privateSubnetResponse = await ec2Client.send(new DescribeSubnetsCommand({
@@ -840,7 +776,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
       const endpointSubnetIds = ssmEndpoint?.SubnetIds || [];
       const isAssociated = privateSubnetIds.every(psId => endpointSubnetIds.includes(psId));
       expect(isAssociated).toBe(true);
-      console.log(`✅ E2E 5: SSM VPC Endpoint is correctly associated with all private subnets, enabling internal traffic flow to AWS services.`);
     }, 90000);
 
     test('E2E 6: should successfully access the Prod ALB from an ECS task in Staging via VPC Peering', async () => {
@@ -850,7 +785,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
       const prodAlbDns = outputs[getEnvOutput(targetEnv, 'alb-dns')];
 
       if (!stagingClusterArn || !prodAlbDns) {
-        console.warn(`Missing Staging Cluster ARN or Prod ALB DNS, skipping E2E 9 test.`);
         return;
       }
 
@@ -866,12 +800,10 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
       const taskArns = listTasksResponse.taskArns || [];
 
       if (taskArns.length === 0) {
-        console.warn(`No running ECS tasks found in Staging, skipping E2E 9 internal connectivity test.`);
         return;
       }
 
       const taskArn = taskArns[0];
-      console.log(`Using Staging ECS Task ${taskArn} for internal connectivity test.`);
 
       // 2. *** SIMULATED LIVE INTERACTIVE CHECK ***
       // In a real live interactive test with SSM/ECS Exec enabled, you would use 
@@ -902,7 +834,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
       ) ?? false;
 
       expect(hasPeeringRoute).toBe(true);
-      console.log(`✅ E2E 6: Staging Route Table correctly points to Prod CIDR ${prodVpcCidr} over Peering.`);
 
       // Final connectivity check (still external, but we've verified the *infrastructure* // required for the private path is in place).
       // If your test runner is connected via Direct Connect/VPN that has a route to Staging VPC,
@@ -914,9 +845,7 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
           timeout: 15000
         });
         expect(response.status).toBe(200);
-        console.log(`✅ E2E 6: Connection success (path confirmed via private routing table).`);
       } catch (error) {
-        console.error(`E2E 6: External fetch failed. Verify test runner has network path to ${targetUrl}.`, error);
         throw new Error(`E2E 6: Live connectivity check failed. Check Security Groups/Network ACLs.`);
       }
     }, 90000);
@@ -933,7 +862,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
       const peeringId = outputs['vpc-peering-connection-id'];
 
       if (!prodVpcCidrBlock || !devVpcId || !peeringId) {
-        console.warn(`Missing required outputs for isolation check (Prod CIDR, Dev VPC ID, or Peering ID), skipping E2E 10 check.`);
         return;
       }
 
@@ -952,19 +880,16 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
 
       // EXPECTATION: The route must NOT exist for isolation to be confirmed.
       expect(devHasPeeringRoute).toBe(false);
-      console.log(`✅ E2E 7: Dev VPC is confirmed isolated (No route to Prod CIDR Block: ${prodVpcCidrBlock}).`);
 
       // The interactive check (Step 2) for failure is also kept, as the expected outcome is a network failure (timeout/unreachable).
       const albDns = outputs[getEnvOutput(targetEnv, 'alb-dns')];
       if (!albDns) {
-        console.warn(`Missing Prod ALB DNS, skipping interactive failure check.`);
         return;
       }
 
       const url = `http://${albDns}`;
       let didFail = false;
       try {
-        console.log(`Attempting E2E 10 interactive check (Dev -> Prod ALB): ${url}. This must fail due to isolation.`);
         await fetch(url, {
           method: 'GET',
           // @ts-ignore
@@ -973,7 +898,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
       } catch (error) {
         // A network error (ETIMEOUT/EHOSTUNREACH) is the expected, successful outcome.
         didFail = true;
-        console.log(`✅ E2E 7: Connection failed as expected. Network isolation confirmed.`);
       }
 
       expect(didFail).toBe(true);
@@ -988,7 +912,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
       const hostedZoneId = outputs['route53-zone-id'];
 
       if (!albDns || !clusterName || !hostedZoneId) {
-        console.warn('Missing required outputs for complete application flow test, skipping');
         return;
       }
 
@@ -997,7 +920,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
       const alb = albResponse.LoadBalancers?.find(lb => lb.DNSName === albDns);
       expect(alb?.State?.Code).toBe('active');
       expect(alb?.Type).toBe('application');
-      console.log(`✅ Step 2: ALB verified as active: ${albDns}`);
 
       // Step 2: Verify ECS cluster is active
       const clusterResponse = await ecsClient.send(new DescribeClustersCommand({
@@ -1005,7 +927,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
       }));
       const cluster = clusterResponse.clusters?.[0];
       expect(cluster?.status).toBe('ACTIVE');
-      console.log(`✅ Step 3: ECS cluster verified as active: ${clusterName}`);
 
       // Step 3: Verify ALB listeners and target groups
       const listenersResponse = await elbv2Client.send(new DescribeListenersCommand({
@@ -1016,7 +937,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
 
       const httpListener = listeners.find(l => l.Port === 80);
       expect(httpListener).toBeDefined();
-      console.log(`✅ Step 4: ALB HTTP listener verified`);
 
       // Step 4: Verify target group configuration
       const defaultAction = httpListener?.DefaultActions?.[0];
@@ -1026,7 +946,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         }));
 
         expect(healthResponse.TargetHealthDescriptions).toBeDefined();
-        console.log(`✅ Step 5: Target group connectivity verified`);
       }
 
       // Step 5: Final Connectivity Check using ALB DNS directly
@@ -1039,12 +958,10 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         });
 
         expect(response.status).toBe(200);
-        console.log(`✅ Step 6: Final check successful (ALB to ECS task).`);
       } catch (error) {
         throw new Error(`Complete flow health check failed on ALB DNS (${url}): ${error}`);
       }
 
-      console.log(`✅ Complete E2E application flow verified: Route53 -> ALB -> ECS`);
     }, 120000);
   });
 
@@ -1056,7 +973,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
       const devVpcId = outputs[getEnvOutput('dev', 'vpc-id')];
 
       if (!peeringId || !stagingVpcId || !prodVpcId || !devVpcId) {
-        console.warn('Missing VPC peering or VPC IDs, skipping VPC peering flow test');
         return;
       }
 
@@ -1066,13 +982,11 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
       }));
       const peering = peeringResponse.VpcPeeringConnections?.[0];
       expect(peering?.Status?.Code).toBe('active');
-      console.log(`✅ Step 1: VPC peering connection is active: ${peeringId}`);
 
       // Step 2: Verify peering connects staging and prod VPCs
       const vpcIds = [peering?.AccepterVpcInfo?.VpcId, peering?.RequesterVpcInfo?.VpcId];
       expect(vpcIds).toContain(stagingVpcId);
       expect(vpcIds).toContain(prodVpcId);
-      console.log(`✅ Step 2: VPC peering connects staging (${stagingVpcId}) and prod (${prodVpcId})`);
 
       // Step 3: Verify route tables have peering routes in both environments
       const stagingRtResponse = await ec2Client.send(new DescribeRouteTablesCommand({
@@ -1084,7 +998,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         rt.Routes?.some(route => route.VpcPeeringConnectionId === peeringId)
       );
       expect(stagingHasPeeringRoute).toBe(true);
-      console.log(`✅ Step 3: Staging VPC has peering routes configured`);
 
       const prodRtResponse = await ec2Client.send(new DescribeRouteTablesCommand({
         Filters: [{ Name: 'vpc-id', Values: [prodVpcId] }]
@@ -1095,7 +1008,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         rt.Routes?.some(route => route.VpcPeeringConnectionId === peeringId)
       );
       expect(prodHasPeeringRoute).toBe(true);
-      console.log(`✅ Step 3: Prod VPC has peering routes configured`);
 
       // Step 4: Verify network isolation - dev should not have peering routes
       const devRtResponse = await ec2Client.send(new DescribeRouteTablesCommand({
@@ -1107,9 +1019,7 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         rt.Routes?.some(route => route.VpcPeeringConnectionId === peeringId)
       );
       expect(devHasPeeringRoute).toBe(false);
-      console.log(`✅ Step 4: Dev VPC is properly isolated (no peering routes)`);
 
-      console.log(`✅ Complete VPC peering flow verified for data migration between staging and prod`);
     }, 120000);
   });
 
@@ -1121,7 +1031,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         const clusterName = outputs[getEnvOutput(env, 'ecs-cluster')];
 
         if (!clusterName) {
-          console.warn(`ECS cluster name not found for ${env} environment, skipping auto-scaling test`);
           continue;
         }
 
@@ -1131,7 +1040,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         }));
         const cluster = clusterResponse.clusters?.[0];
         expect(cluster?.status).toBe('ACTIVE');
-        console.log(`✅ Step 1: ${env} ECS cluster is active for auto-scaling: ${clusterName}`);
 
         // Step 2: Verify cluster has capacity providers (needed for auto-scaling)
         const capacityProviders = cluster?.capacityProviders || [];
@@ -1142,7 +1050,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
           cp.includes('FARGATE') || cp.includes('FARGATE_SPOT')
         ) || defaultCapacityStrategy.length > 0;
 
-        console.log(`✅ Step 2: ${env} cluster auto-scaling capability verified`);
 
         // Step 3: Verify CloudWatch log group exists for monitoring
         const envPrefix = `${env}-${environmentSuffix}`;
@@ -1156,12 +1063,9 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
           const logGroup = logsResponse.logGroups?.find(lg => lg.logGroupName === logGroupName);
           if (logGroup) {
             expect(logGroup.logGroupName).toBe(logGroupName);
-            console.log(`✅ Step 3: ${env} CloudWatch log group verified: ${logGroupName}`);
           } else {
-            console.log(`✅ Step 3: ${env} CloudWatch logging configured (no active log group yet)`);
           }
         } catch (error) {
-          console.log(`✅ Step 3: ${env} CloudWatch monitoring configured (log group will be created on first task)`);
         }
 
         // Step 4: Verify cluster can handle scaling (check current task capacity)
@@ -1170,7 +1074,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         }));
 
         const currentTasks = tasksResponse.taskArns || [];
-        console.log(`✅ Step 4: ${env} cluster ready for auto-scaling (${currentTasks.length} current tasks)`);
       }
     }, 90000);
   });
@@ -1184,7 +1087,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         const clusterName = outputs[getEnvOutput(env, 'ecs-cluster')];
 
         if (!clusterName) {
-          console.warn(`ECS cluster name not found for ${env} environment, skipping security flow test`);
           continue;
         }
 
@@ -1194,7 +1096,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         }));
         const cluster = clusterResponse.clusters?.[0];
         expect(cluster?.status).toBe('ACTIVE');
-        console.log(`✅ Step 1: ${env} ECS cluster security foundation verified: ${clusterName}`);
 
         // Step 2: Verify SSM parameter for RDS credentials exists and is encrypted
         const parameterName = `/${envPrefix}/rds/password`;
@@ -1208,12 +1109,9 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
           const parameter = ssmResponse.Parameters?.[0];
           if (parameter) {
             expect(parameter.Type).toBe('SecureString');
-            console.log(`✅ Step 2: ${env} encrypted SSM parameter verified: ${parameterName}`);
           } else {
-            console.log(`⚠️  Step 2: ${env} SSM parameter not found (may be created during service deployment)`);
           }
         } catch (error) {
-          console.log(`⚠️  Step 2: ${env} SSM parameter access test completed (expected limitation)`);
         }
 
         // Step 3: Verify IAM roles exist (try common naming patterns)
@@ -1232,7 +1130,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
             }));
 
             if (roleResponse.Role) {
-              console.log(`✅ Step 3: ${env} IAM role verified: ${roleName}`);
               rolesFound++;
             }
           } catch (error) {
@@ -1254,10 +1151,8 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
             sg.Tags?.some(t => t.Value?.toLowerCase().includes('ecs'))
           );
 
-          console.log(`✅ Step 4: ${env} VPC security groups configured (${securityGroups.length} total)`);
         }
 
-        console.log(`✅ ${env} security flow verified: IAM → ECS → SSM infrastructure secured`);
       }
     }, 150000);
   });
@@ -1275,7 +1170,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         const vpcId = outputs[getEnvOutput(env, 'vpc-id')];
 
         if (!vpcId) {
-          console.warn(`VPC ID not found for ${env} environment, skipping VPC endpoints validation`);
           continue;
         }
 
@@ -1284,7 +1178,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         }));
 
         const endpoints = endpointsResponse.VpcEndpoints || [];
-        console.log(`${env} environment has ${endpoints.length} VPC endpoints`);
 
         // Check if we have any VPC endpoints deployed
         if (endpoints.length > 0) {
@@ -1296,13 +1189,10 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
 
             if (endpoint) {
               expect(endpoint.State).toBe('available');
-              console.log(`✅ ${env} VPC endpoint verified: ${expectedService} (${endpoint.State})`);
             } else {
-              console.log(`⚠️  ${env} VPC endpoint not deployed: ${expectedService}`);
             }
           });
         } else {
-          console.log(`⚠️  ${env} no VPC endpoints deployed (using NAT gateway for external access)`);
         }
       }
     }, 90000);
@@ -1316,7 +1206,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         const vpcId = outputs[getEnvOutput(env, 'vpc-id')];
 
         if (!vpcId) {
-          console.warn(`VPC ID not found for ${env} environment, skipping NAT gateway validation`);
           continue;
         }
 
@@ -1335,7 +1224,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
           )
         );
 
-        console.log(`${env} environment has ${publicSubnets.length} public subnets out of ${allSubnets.length} total`);
 
         if (publicSubnets.length > 0) {
           // Get NAT gateways
@@ -1344,7 +1232,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
           }));
           const natGateways = natResponse.NatGateways?.filter(nat => nat.State !== 'deleted') || [];
 
-          console.log(`${env} environment has ${natGateways.length} NAT gateways`);
 
           // Verify NAT gateways are available
           natGateways.forEach(nat => {
@@ -1355,9 +1242,7 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
             expect(isInPublicSubnet).toBe(true);
           });
 
-          console.log(`✅ ${env} NAT gateway high availability verified: ${natGateways.length} gateways in public subnets`);
         } else {
-          console.log(`⚠️  ${env} no public subnets found, NAT gateways may not be deployed`);
         }
       }
     }, 60000);
