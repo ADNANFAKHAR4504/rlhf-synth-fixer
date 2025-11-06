@@ -464,9 +464,13 @@ class TapStack:
         )
 
         # Create ECS Service with proper depends_on
+        # Generate a unique suffix to avoid idempotency issues
+        random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=4))
+        unique_suffix = f"{environment_suffix}-{random_suffix}"
+
         self.ecs_service = aws.ecs.Service(
             f"ecs-service-{environment_suffix}",
-            name=f"product-catalog-{environment_suffix}",
+            name=f"product-catalog-{unique_suffix}",
             cluster=self.ecs_cluster.arn,
             task_definition=self.task_definition.arn,
             desired_count=2,
