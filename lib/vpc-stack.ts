@@ -38,7 +38,7 @@ export class VpcStack extends Construct {
     super(scope, id);
 
     const { environmentSuffix } = props;
-    const awsRegion = 'ap-southeast-5';
+    const awsRegion = 'ca-central-1';
     // Common tags for all resources
     const commonTags = {
       Environment: 'Production',
