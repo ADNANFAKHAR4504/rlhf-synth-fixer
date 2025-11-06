@@ -99,12 +99,6 @@ src/main/resources/
 
 __pycache__/
 .pulumi/
-*.pyc
-*.pyo
-*.pyd
-venv/
-.venv/
-*.egg-info/
 
 tasks-status.md
 worktree/
