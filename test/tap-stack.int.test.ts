@@ -243,7 +243,7 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
     cloudWatchClient = new CloudWatchClient(clientConfig);
     cloudWatchLogsClient = new CloudWatchLogsClient(clientConfig);
     // CloudFront is a global service and must use us-east-1
-    cloudFrontClient = new CloudFrontClient({ 
+    cloudFrontClient = new CloudFrontClient({
       region: 'us-east-1' // Always use us-east-1 for CloudFront - it's a global service
     });
     route53Client = new Route53Client(clientConfig);
@@ -396,13 +396,13 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
         if (error.name === 'NoSuchDistribution' ||
           error.message?.includes('does not exist') ||
           error.message?.includes('NoSuchDistribution')) {
-          
+
           console.log(`CloudFront GetDistribution API failed, testing distribution functionality instead...`);
-          
+
           // Test if CloudFront distribution is actually functional by uploading and accessing content
           const testKey = 'distribution-validation-test.html';
           const testContent = `<html><body>CloudFront distribution ${distributionId} validation test</body></html>`;
-          
+
           try {
             // Upload test content to S3
             const putCommand = new PutObjectCommand({
@@ -422,24 +422,24 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
 
             if (cdnResponse.status === 200 && cdnResponse.data.includes(distributionId)) {
               console.log('CloudFront distribution is functional - content delivery verified');
-              
+
               // Cleanup
               await s3Client.send(new DeleteObjectCommand({
                 Bucket: mappedOutputs.S3BucketName,
                 Key: testKey,
               }));
-              
+
               // Pass the test - distribution is working
               return;
             } else {
               console.log(`CloudFront response status: ${cdnResponse.status} - distribution may be initializing`);
-              
+
               // Cleanup
               await s3Client.send(new DeleteObjectCommand({
                 Bucket: mappedOutputs.S3BucketName,
                 Key: testKey,
               }));
-              
+
               // If we can't verify functionality, that's still acceptable for CloudFront
               console.log('CloudFront distribution exists but may be in deployment state');
               return;
@@ -1781,11 +1781,11 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
       } catch (error: any) {
         if (error.name === 'NoSuchDistribution') {
           console.log(`  CloudFront GetDistribution API failed, testing functionality instead...`);
-          
+
           // Test CloudFront functionality by uploading and accessing content
           const testKey = 'workflow-validation-test.html';
           const testContent = `<html><body>Workflow validation for ${workflowTestId}</body></html>`;
-          
+
           const putCommand = new PutObjectCommand({
             Bucket: mappedOutputs.S3BucketName,
             Key: testKey,
@@ -1801,9 +1801,9 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
               timeout: 8000,
               validateStatus: (status) => status < 500
             });
-            
+
             console.log(`  CloudFront functionality verified via content delivery (status: ${cdnResponse.status})`);
-            
+
             // Cleanup
             await s3Client.send(new DeleteObjectCommand({
               Bucket: mappedOutputs.S3BucketName,
