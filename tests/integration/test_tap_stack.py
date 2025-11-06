@@ -7,40 +7,57 @@ import time
 import base64
 import unittest
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Tuple, Dict, Any, List
 
 import boto3
 import requests
 from botocore.exceptions import ClientError
 from pytest import mark
 
-# --- Load CloudFormation outputs if present (optional) ---
+# --- Optional flat outputs (we won't rely on them) ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FLAT_OUTPUTS_PATH = os.path.join(BASE_DIR, "..", "..", "cfn-outputs", "flat-outputs.json")
+FLAT = {}
 if os.path.exists(FLAT_OUTPUTS_PATH):
-    with open(FLAT_OUTPUTS_PATH, "r", encoding="utf-8") as f:
-        FLAT = json.load(f)
-else:
-    FLAT = {}
+    try:
+        with open(FLAT_OUTPUTS_PATH, "r", encoding="utf-8") as f:
+            FLAT = json.load(f) or {}
+    except Exception:
+        FLAT = {}
 
 DEFAULT_REGION = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "eu-central-1"
 
-
+# ----------------------------- helpers -----------------------------
 def _stage_from_url(url: Optional[str]) -> Optional[str]:
     if not url:
         return None
     m = re.match(r"^https?://[^/]+/([^/]+)/?", url)
     return m.group(1) if m else None
 
+def _utc_now_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+def _first(iterable, pred=lambda x: True):
+    for x in iterable:
+        if pred(x):
+            return x
+    return None
+
+
+class DiscoveryError(AssertionError):
+    pass
+
 
 class LiveResources:
     """
-    Discovers deployed resources using AWS SDK (boto3) so tests work even when flat-outputs.json is empty.
+    Robust discovery of deployed resources using AWS SDK.
+    No reliance on flat-outputs; falls back to scanning APIs/buses/tables/queues/buckets.
     """
 
     def __init__(self):
-        # --- Clients FIRST (fixes AttributeError) ---
+        # Clients first
         self.region = DEFAULT_REGION
+        self.sts = boto3.client("sts", region_name=self.region)
         self.events = boto3.client("events", region_name=self.region)
         self.apigw = boto3.client("apigateway", region_name=self.region)
         self.ddb_client = boto3.client("dynamodb", region_name=self.region)
@@ -49,19 +66,25 @@ class LiveResources:
         self.lambda_ = boto3.client("lambda", region_name=self.region)
         self.logs = boto3.client("logs", region_name=self.region)
         self.sqs = boto3.client("sqs", region_name=self.region)
-        self.sts = boto3.client("sts", region_name=self.region)
 
-        # Core outputs (optional)
-        self.api_base_url = FLAT.get("ApiBaseUrl") or FLAT.get("TransactionAPIEndpointF9B09F4E")
-        self.stage = _stage_from_url(self.api_base_url) or FLAT.get("Stage") or os.environ.get("ENV_SUFFIX") or "dev"
-
-        # AccountId for name-based discovery (if needed)
+        # Account for name templates
         try:
             self.account_id = self.sts.get_caller_identity()["Account"]
         except Exception:
             self.account_id = "000000000000"
 
-        # Names from stack conventions
+        # Try direct outputs first
+        self.api_base_url = FLAT.get("ApiBaseUrl") or FLAT.get("TransactionAPIEndpointF9B09F4E")
+        self.stage = (
+            _stage_from_url(self.api_base_url)
+            or FLAT.get("Stage")
+            or os.environ.get("ENV_SUFFIX")
+            or os.environ.get("ENVIRONMENT_SUFFIX")
+            or os.environ.get("STAGE")
+            or self._discover_stage()
+        )
+
+        # Now we can build names
         self.api_name = f"tap-{self.stage}-api"
         self.api_key_name = f"tap-{self.stage}-api-key"
         self.bus_txn_name = f"tap-{self.stage}-transaction"
@@ -76,43 +99,153 @@ class LiveResources:
         self.fn_fraud = FLAT.get("FraudFnName") or f"tap-{self.stage}-fraud_detector"
         self.fn_notifier = FLAT.get("NotifierFnName") or f"tap-{self.stage}-notifier"
 
-        # DLQs (try outputs first; fallback by name)
+        # DLQs: prefer outputs, fallback by name scan
         self.lambda_dlq_url = FLAT.get("LambdaDLQUrl") or self._queue_url(f"tap-{self.stage}-lambda-failures-dlq")
         self.eb_dlq_url = FLAT.get("EventBridgeDLQUrl") or self._queue_url(f"tap-{self.stage}-eventbridge-failures-dlq")
 
-        # API endpoint discovery if outputs missing
+        # API endpoint: compute if outputs missing
         if not self.api_base_url:
             rest_id = self._rest_api_id_by_name(self.api_name)
-            if rest_id:
-                self.api_base_url = f"https://{rest_id}.execute-api.{self.region}.amazonaws.com/{self.stage}/"
+            if not rest_id:
+                raise DiscoveryError(
+                    f"Could not discover API id for name '{self.api_name}'. "
+                    f"Available APIs: {self._debug_rest_api_names()}"
+                )
+            self.api_base_url = f"https://{rest_id}.execute-api.{self.region}.amazonaws.com/{self.stage}/"
 
         self.transactions_endpoint = (
-            FLAT.get("TransactionsEndpoint")
-            or (self.api_base_url.rstrip("/") + "/transactions" if self.api_base_url else None)
+            FLAT.get("TransactionsEndpoint") or (self.api_base_url.rstrip("/") + "/transactions")
         )
 
-    # ---------- discovery helpers ----------
-    def _queue_url(self, name: str) -> Optional[str]:
-        try:
-            return self.sqs.get_queue_url(QueueName=name)["QueueUrl"]
-        except ClientError:
-            return None
+        # Sanity checks early to fail fast with context
+        self._assert_bus_exists(self.bus_txn_name)
+        self._assert_table_exists(self.tbl_txn)
+        self._assert_lambda_exists(self.fn_ingest)
 
-    def _rest_api_id_by_name(self, name: str) -> Optional[str]:
+    # -------- stage discovery without outputs --------
+    def _discover_stage(self) -> str:
+        # 1) From API names tap-<stage>-api
+        try:
+            apis = self._list_rest_apis()
+            name = _first((a["name"] for a in apis if a.get("name", "").startswith("tap-") and a["name"].endswith("-api")))
+            if name:
+                m = re.match(r"^tap-(?P<stage>[^-]+)-api$", name)
+                if m:
+                    return m.group("stage")
+        except Exception:
+            pass
+
+        # 2) From EventBridge bus names tap-<stage>-transaction
+        try:
+            buses = self.events.list_event_buses()["EventBuses"]
+            name = _first((b["Name"] for b in buses if re.match(r"^tap-[^-]+-transaction$", b["Name"])))
+            if name:
+                return name.split("-")[1]
+        except Exception:
+            pass
+
+        # 3) From DynamoDB table tap-<stage>-transactions
+        try:
+            for tbl in self._list_all_tables():
+                m = re.match(r"^tap-([^-]+)-transactions$", tbl)
+                if m:
+                    return m.group(1)
+        except Exception:
+            pass
+
+        # 4) From SQS queue names tap-<stage>-buffer-queue
+        try:
+            urls = self.sqs.list_queues(QueueNamePrefix="tap-").get("QueueUrls", [])
+            for url in urls:
+                name = url.rsplit("/", 1)[-1]
+                m = re.match(r"^tap-([^-]+)-buffer-queue$", name)
+                if m:
+                    return m.group(1)
+        except Exception:
+            pass
+
+        raise DiscoveryError(
+            "Failed to discover stage from APIs/EventBridge/DynamoDB/SQS and no ENV/outputs available."
+        )
+
+    # -------- AWS queries & asserts --------
+    def _list_rest_apis(self) -> List[Dict[str, Any]]:
+        apis = []
         position = None
         while True:
             kwargs = {"limit": 500}
             if position:
                 kwargs["position"] = position
             page = self.apigw.get_rest_apis(**kwargs)
-            for item in page.get("items", []):
-                if item.get("name") == name:
-                    return item.get("id")
+            apis.extend(page.get("items", []))
             position = page.get("position")
             if not position:
-                return None
+                break
+        return apis
 
-    def get_api_key_value(self) -> Optional[str]:
+    def _debug_rest_api_names(self) -> List[str]:
+        try:
+            return [a.get("name") for a in self._list_rest_apis()]
+        except Exception:
+            return []
+
+    def _rest_api_id_by_name(self, name: str) -> Optional[str]:
+        for item in self._list_rest_apis():
+            if item.get("name") == name:
+                return item.get("id")
+        return None
+
+    def _queue_url(self, name: str) -> Optional[str]:
+        try:
+            return self.sqs.get_queue_url(QueueName=name)["QueueUrl"]
+        except ClientError:
+            # attempt prefix scan
+            urls = self.sqs.list_queues(QueueNamePrefix=name).get("QueueUrls", [])
+            return _first(urls, lambda u: u.rsplit("/", 1)[-1] == name)
+
+    def _list_all_tables(self) -> List[str]:
+        tables = []
+        last = None
+        while True:
+            if last:
+                page = self.ddb_client.list_tables(ExclusiveStartTableName=last)
+            else:
+                page = self.ddb_client.list_tables()
+            tables.extend(page.get("TableNames", []))
+            last = page.get("LastEvaluatedTableName")
+            if not last:
+                break
+        return tables
+
+    def _assert_bus_exists(self, name: str):
+        try:
+            self.events.describe_event_bus(Name=name)
+        except ClientError as e:
+            raise DiscoveryError(f"Event bus '{name}' not found. Buses: {self._debug_buses()} | {e}")
+
+    def _debug_buses(self) -> List[str]:
+        try:
+            return [b["Name"] for b in self.events.list_event_buses().get("EventBuses", [])]
+        except Exception:
+            return []
+
+    def _assert_table_exists(self, name: str):
+        try:
+            self.ddb_client.describe_table(TableName=name)
+        except ClientError as e:
+            raise DiscoveryError(f"DynamoDB table '{name}' not found. Tables: {self._list_all_tables()} | {e}")
+
+    def _assert_lambda_exists(self, name: str):
+        try:
+            self.lambda_.get_function(FunctionName=name)
+        except ClientError as e:
+            raise DiscoveryError(f"Lambda '{name}' not found. {self._debug_lambdas_hint()} | {e}")
+
+    def _debug_lambdas_hint(self) -> str:
+        # avoid listing all; just hint the prefix
+        return f"Expected a function starting with 'tap-{self.stage}-' in region {self.region}."
+
+    def get_api_key_value(self) -> str:
         position = None
         while True:
             kwargs = {"includeValues": False, "limit": 500}
@@ -123,10 +256,16 @@ class LiveResources:
                 if item.get("name") == self.api_key_name:
                     key_id = item.get("id")
                     key = self.apigw.get_api_key(apiKey=key_id, includeValue=True)
-                    return key.get("value")
+                    val = key.get("value")
+                    if not val:
+                        raise AssertionError(f"API key '{self.api_key_name}' has no value")
+                    return val
             position = page.get("position")
             if not position:
-                return None
+                raise AssertionError(
+                    f"API key '{self.api_key_name}' not found. Existing keys: "
+                    f"{[k.get('name') for k in page.get('items', [])]}"
+                )
 
     def wait_ddb_item(self, table_name: str, key_name: str, key_value: str, timeout_s: int = 240) -> bool:
         table = self.ddb_resource.Table(table_name)
@@ -144,10 +283,28 @@ class LiveResources:
             time.sleep(3)
         return False
 
+    def diag_lambda_tail(self, function_name: str, max_events: int = 10) -> str:
+        lg = f"/aws/lambda/{function_name}"
+        try:
+            groups = self.logs.describe_log_groups(logGroupNamePrefix=lg, limit=1).get("logGroups", [])
+            if not groups:
+                return "No log group yet."
+            streams = self.logs.describe_log_streams(
+                logGroupName=lg, orderBy="LastEventTime", descending=True, limit=1
+            ).get("logStreams", [])
+            if not streams:
+                return "No log streams yet."
+            stream = streams[0]["logStreamName"]
+            events = self.logs.get_log_events(logGroupName=lg, logStreamName=stream, limit=max_events).get("events", [])
+            lines = [e.get("message", "").strip() for e in events if "message" in e]
+            return "\n".join(lines[-max_events:])
+        except Exception as e:
+            return f"Log diagnostic error: {e}"
+
 
 @mark.describe("TapStack Integration Tests")
 class TestTapStackIntegration(unittest.TestCase):
-    """Integration tests using AWS SDK against live resources."""
+    """Integration tests using AWS SDK against live resources. No skips; fail with diagnostics."""
 
     @classmethod
     def setUpClass(cls):
@@ -158,16 +315,30 @@ class TestTapStackIntegration(unittest.TestCase):
     def test_lambda_config(self):
         for fn_name in (self.res.fn_ingest, self.res.fn_fraud, self.res.fn_notifier):
             conf = self.res.lambda_.get_function(FunctionName=fn_name)["Configuration"]
-            self.assertEqual(conf["Runtime"], "nodejs18.x")
-            self.assertIn(conf["MemorySize"], (512, 3008))
+            self.assertEqual(
+                conf["Runtime"],
+                "nodejs18.x",
+                f"{fn_name} runtime mismatch: {conf['Runtime']}"
+            )
+            self.assertIn(
+                conf["MemorySize"], (512, 3008),
+                f"{fn_name} memory unexpected: {conf['MemorySize']}"
+            )
             rce = conf.get("ReservedConcurrentExecutions")
-            self.assertTrue(rce is None or rce >= 1)
+            self.assertTrue(
+                rce is None or rce >= 1,
+                f"{fn_name} ReservedConcurrentExecutions invalid: {rce}"
+            )
 
     # ---------------------- S3 ----------------------
     @mark.it("S3: versioning enabled and unencrypted PUT is denied; SSE-S3 PUT succeeds")
     def test_s3_bucket_versioning_and_encryption(self):
-        ver = self.res.s3.get_bucket_versioning(Bucket=self.res.bucket)
-        self.assertEqual(ver.get("Status"), "Enabled", "S3 versioning must be enabled")
+        try:
+            ver = self.res.s3.get_bucket_versioning(Bucket=self.res.bucket)
+        except ClientError as e:
+            self.fail(f"S3 bucket '{self.res.bucket}' not reachable: {e}")
+
+        self.assertEqual(ver.get("Status"), "Enabled", f"S3 versioning must be enabled on {self.res.bucket}")
 
         # Unencrypted PUT must be denied by bucket policy
         key_plain = f"it-tests/plain-{int(time.time())}.json"
@@ -177,7 +348,7 @@ class TestTapStackIntegration(unittest.TestCase):
         except ClientError as err:
             code = err.response.get("Error", {}).get("Code")
             denied = code in ("AccessDenied", "AccessDeniedException")
-        self.assertTrue(denied, "Expected AccessDenied for unencrypted PUT")
+        self.assertTrue(denied, f"Expected AccessDenied for unencrypted PUT to {self.res.bucket}")
 
         # Encrypted PUT succeeds
         key_sse = f"it-tests/sse-{int(time.time())}.json"
@@ -188,17 +359,16 @@ class TestTapStackIntegration(unittest.TestCase):
             ContentType="application/json",
             ServerSideEncryption="AES256",
         )
-        # cleanup (best effort)
+        # cleanup best effort
         try:
             self.res.s3.delete_object(Bucket=self.res.bucket, Key=key_sse)
         except ClientError:
             pass
 
     # ---------------------- API Gateway ----------------------
-    @mark.it("API: POST /transactions without API key returns 401/403")
+    @mark.it("API: POST /transactions requires API key (401/403 without key)")
     def test_api_requires_api_key(self):
-        if not self.res.transactions_endpoint:
-            self.skipTest("API endpoint not discovered; skipping")
+        self.assertIsNotNone(self.res.transactions_endpoint, "API endpoint discovery failed.")
         body = {
             "transactionId": f"it-no-key-{int(time.time())}",
             "accountId": "acc-403",
@@ -206,15 +376,12 @@ class TestTapStackIntegration(unittest.TestCase):
             "currency": "USD",
         }
         resp = requests.post(self.res.transactions_endpoint, json=body, timeout=30)
-        self.assertIn(resp.status_code, (401, 403))
+        self.assertIn(resp.status_code, (401, 403), f"Expected 401/403, got {resp.status_code}: {resp.text}")
 
-    @mark.it("API: POST /transactions with API key persists to DynamoDB")
+    @mark.it("API: POST /transactions with key persists to DynamoDB (diagnose 5xx with Lambda logs)")
     def test_api_with_key_persists_to_dynamodb(self):
-        if not self.res.transactions_endpoint:
-            self.skipTest("API endpoint not discovered; skipping API tests")
+        self.assertIsNotNone(self.res.transactions_endpoint, "API endpoint discovery failed.")
         api_key_val = self.res.get_api_key_value()
-        if not api_key_val:
-            self.skipTest(f"API key '{self.res.api_key_name}' not found")
 
         txn_id = f"it-api-{int(time.time())}"
         body = {
@@ -228,20 +395,24 @@ class TestTapStackIntegration(unittest.TestCase):
             "localHour": 12,
         }
         resp = requests.post(self.res.transactions_endpoint, json=body, headers={"x-api-key": api_key_val}, timeout=30)
+        if resp.status_code != 200:
+            tail = self.res.diag_lambda_tail(self.res.fn_ingest)
+            self.fail(
+                f"API call failed {resp.status_code}: {resp.text}\n"
+                f"Lambda '{self.res.fn_ingest}' recent logs:\n{tail}"
+            )
 
-        if resp.status_code >= 500:
-            self.skipTest(f"API returned {resp.status_code}; likely Lambda runtime/SDK issue upstream: {resp.text}")
-        self.assertEqual(resp.status_code, 200, f"API failed: {resp.status_code} {resp.text}")
-        self.assertTrue(self.res.wait_ddb_item(self.res.tbl_txn, "transactionId", txn_id), "DynamoDB write not found")
+        ok = self.res.wait_ddb_item(self.res.tbl_txn, "transactionId", txn_id)
+        self.assertTrue(ok, f"DynamoDB write not found in '{self.res.tbl_txn}' for transactionId={txn_id}")
 
     # ---------------------- EventBridge ----------------------
     @mark.it("EventBridge: three buses exist and archive is present")
     def test_event_buses_and_archive_exist(self):
         for name in (self.res.bus_txn_name, self.res.bus_audit_name, self.res.bus_system_name):
-            resp = self.res.events.describe_event_bus(Name=name)
-            self.assertEqual(resp.get("Name"), name)
+            info = self.res.events.describe_event_bus(Name=name)
+            self.assertEqual(info.get("Name"), name, f"Event bus '{name}' not found (got: {info})")
         arc = self.res.events.describe_archive(ArchiveName=self.res.archive_name)
-        self.assertTrue(arc.get("ArchiveArn"))
+        self.assertTrue(arc.get("ArchiveArn"), f"Archive '{self.res.archive_name}' missing or not described")
 
     @mark.it("EventBridge rule → Lambda → DynamoDB audit path works (high-risk MCC)")
     def test_eventbridge_rule_and_audit(self):
@@ -257,30 +428,33 @@ class TestTapStackIntegration(unittest.TestCase):
             "cardNotPresent": False,
             "localHour": 14,
         }
-        self.res.events.put_events(
-            Entries=[
-                {"Source": "tap.transactions", "DetailType": "Transaction", "Detail": json.dumps(detail), "EventBusName": bus_name}
-            ]
+        put = self.res.events.put_events(
+            Entries=[{"Source": "tap.transactions", "DetailType": "Transaction", "Detail": json.dumps(detail), "EventBusName": bus_name}]
         )
+        self.assertGreaterEqual(put.get("FailedEntryCount", 0), 0, "PutEvents returned failure")
 
-        # Buffer queue receives a message via SQS target
+        # Expect an SQS message on buffer queue
         q_name = f"tap-{self.res.stage}-buffer-queue"
-        q_url = self.res.sqs.get_queue_url(QueueName=q_name)["QueueUrl"]
+        q_url = self.res._queue_url(q_name)
+        self.assertIsNotNone(q_url, f"Buffer queue '{q_name}' not found")
 
         found_msg = False
-        deadline = time.time() + 120
+        deadline = time.time() + 150
         while time.time() < deadline and not found_msg:
-            msgs = self.res.sqs.receive_message(QueueUrl=q_url, MaxNumberOfMessages=1, WaitTimeSeconds=5)
+            msgs = self.res.sqs.receive_message(QueueUrl=q_url, MaxNumberOfMessages=1, WaitTimeSeconds=10)
             if msgs.get("Messages"):
                 found_msg = True
                 break
-
         if not found_msg:
-            self.skipTest("No message on SQS buffer queue from EventBridge rule (skipping until lambdas are healthy)")
-        self.assertTrue(
-            self.res.wait_ddb_item(self.res.tbl_audit, "transactionId", txn_id),
-            "Audit log record not found in DynamoDB",
-        )
+            tail = self.res.diag_lambda_tail(self.res.fn_fraud)
+            self.fail(
+                "No message received on SQS buffer queue from EventBridge rule within timeout.\n"
+                f"Fraud Lambda '{self.res.fn_fraud}' recent logs:\n{tail}"
+            )
+
+        # Fraud detector should write into audit table
+        ok = self.res.wait_ddb_item(self.res.tbl_audit, "transactionId", txn_id)
+        self.assertTrue(ok, f"Audit log not found in '{self.res.tbl_audit}' for transactionId={txn_id}")
 
     # ---------------------- CloudWatch Logs ----------------------
     @mark.it("CloudWatch Logs: ingest function has ≥30 day retention and receives log events")
@@ -292,31 +466,37 @@ class TestTapStackIntegration(unittest.TestCase):
             "currency": "USD",
         }
         invoke = self.res.lambda_.invoke(FunctionName=self.res.fn_ingest, Payload=json.dumps(payload).encode("utf-8"))
-        self.assertEqual(invoke.get("StatusCode"), 200)
+        self.assertEqual(invoke.get("StatusCode"), 200, f"Lambda invoke failed: {invoke}")
 
         lg_name = f"/aws/lambda/{self.res.fn_ingest}"
         have_events = False
         deadline = time.time() + 180
+        retention_ok = False
+        last_err = None
+
         while time.time() < deadline and not have_events:
-            groups = self.res.logs.describe_log_groups(logGroupNamePrefix=lg_name, limit=1).get("logGroups", [])
-            if not groups:
+            try:
+                groups = self.res.logs.describe_log_groups(logGroupNamePrefix=lg_name, limit=1).get("logGroups", [])
+                if not groups:
+                    time.sleep(3); continue
+                retention = groups[0].get("retentionInDays")
+                retention_ok = (retention is None) or (retention >= 30)  # org policy may set 731
+                streams = self.res.logs.describe_log_streams(
+                    logGroupName=lg_name, orderBy="LastEventTime", descending=True, limit=1
+                ).get("logStreams", [])
+                if not streams:
+                    time.sleep(3); continue
+                stream = streams[0]["logStreamName"]
+                events = self.res.logs.get_log_events(logGroupName=lg_name, logStreamName=stream, limit=5).get("events", [])
+                have_events = len(events) > 0
+                if not have_events:
+                    time.sleep(3)
+            except ClientError as e:
+                last_err = e
                 time.sleep(3)
-                continue
-            # Accept org-pinned policies like 731 days
-            retention = groups[0].get("retentionInDays")
-            self.assertTrue(retention is None or retention >= 30, f"Unexpected retention: {retention}")
-            streams = self.res.logs.describe_log_streams(
-                logGroupName=lg_name, orderBy="LastEventTime", descending=True, limit=1
-            ).get("logStreams", [])
-            if not streams:
-                time.sleep(3)
-                continue
-            stream = streams[0]["logStreamName"]
-            events = self.res.logs.get_log_events(logGroupName=lg_name, logStreamName=stream, limit=5).get("events", [])
-            have_events = len(events) > 0
-            if not have_events:
-                time.sleep(3)
-        self.assertTrue(have_events, "No log events observed for ingest function")
+
+        self.assertTrue(retention_ok, f"Unexpected retention policy for {lg_name}")
+        self.assertTrue(have_events, f"No log events observed for ingest function; last error: {last_err}")
 
     # ---------------------- DynamoDB & SQS basics ----------------------
     @mark.it("DynamoDB: three PAY_PER_REQUEST tables with PITR enabled")
@@ -324,24 +504,20 @@ class TestTapStackIntegration(unittest.TestCase):
         for tbl in (self.res.tbl_txn, self.res.tbl_rules, self.res.tbl_audit):
             desc = self.res.ddb_client.describe_table(TableName=tbl)["Table"]
             mode = desc.get("BillingModeSummary", {}).get("BillingMode")
-            self.assertEqual(mode, "PAY_PER_REQUEST")
+            self.assertEqual(mode, "PAY_PER_REQUEST", f"{tbl} billing mode is {mode}")
             pitr = self.res.ddb_client.describe_continuous_backups(TableName=tbl)
             status = (
                 pitr.get("ContinuousBackupsDescription", {})
                 .get("PointInTimeRecoveryDescription", {})
                 .get("PointInTimeRecoveryStatus")
             )
-            self.assertEqual(status, "ENABLED")
+            self.assertEqual(status, "ENABLED", f"{tbl} PITR status is {status}")
 
     @mark.it("SQS: DLQs exist with expected defaults")
     def test_sqs_dlqs(self):
-        for url in (self.res.lambda_dlq_url, self.res.eb_dlq_url):
-            self.assertIsNotNone(url, "Expected DLQ URL to be present")
+        for name in (f"tap-{self.res.stage}-lambda-failures-dlq", f"tap-{self.res.stage}-eventbridge-failures-dlq"):
+            url = self.res._queue_url(name)
+            self.assertIsNotNone(url, f"Expected DLQ '{name}' to exist")
             attrs = self.res.sqs.get_queue_attributes(QueueUrl=url, AttributeNames=["All"]).get("Attributes", {})
-            self.assertEqual(attrs.get("VisibilityTimeout"), "300")
-            self.assertIn("ApproximateNumberOfMessages", attrs)
-
-
-# Helper to avoid utcnow() deprecation noise
-def _utc_now_iso():
-    return datetime.now(timezone.utc).isoformat()
+            self.assertEqual(attrs.get("VisibilityTimeout"), "300", f"{name} visibility timeout mismatch")
+            self.assertIn("ApproximateNumberOfMessages", attrs, f"{name} missing ApproximateNumberOfMessages")
