@@ -19,7 +19,11 @@
       "Type": "String",
       "Default": "production",
       "Description": "Environment name for resource tagging",
-      "AllowedValues": ["development", "staging", "production"]
+      "AllowedValues": [
+        "development",
+        "staging",
+        "production"
+      ]
     },
     "Project": {
       "Type": "String",
@@ -28,6 +32,7 @@
     },
     "Owner": {
       "Type": "String",
+      "Default": "unknown",
       "Description": "Team or individual responsible for these resources"
     }
   },
