@@ -43,7 +43,7 @@ import {
   GetParametersCommand,
   SSMClient
 } from '@aws-sdk/client-ssm';
-import fs from 'fs';
+import * as fs from 'fs';
 import fetch from 'node-fetch';
 
 // Configuration - These come from CDKTF outputs after deployment

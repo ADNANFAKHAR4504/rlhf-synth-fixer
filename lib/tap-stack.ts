@@ -204,6 +204,21 @@ export class TapStack extends TerraformStack {
         description: `ECS cluster name for ${envConfig.name}`,
       });
 
+      new TerraformOutput(this, `${envConfig.name}-ecs-cluster-arn`, {
+        value: compute.cluster.arn,
+        description: `ECS cluster ARN for ${envConfig.name}`,
+      });
+
+      new TerraformOutput(this, `${envConfig.name}-ecs-service-name`, {
+        value: compute.service.name,
+        description: `ECS service name for ${envConfig.name}`,
+      });
+
+      new TerraformOutput(this, `${envConfig.name}-vpc-cidr`, {
+        value: networking.vpc.cidrBlock,
+        description: `VPC CIDR block for ${envConfig.name}`,
+      });
+
       new TerraformOutput(this, `${envConfig.name}-dns-record`, {
         value: dns.record.fqdn,
         description: `DNS FQDN for ${envConfig.name}`,
