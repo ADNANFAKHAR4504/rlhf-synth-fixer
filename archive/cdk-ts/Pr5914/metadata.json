@@ -13,15 +13,21 @@
   ],
   "po_id": "swv9a",
   "aws_services": [
-    "RDS Aurora PostgreSQL",
-    "AWS Secrets Manager",
-    "AWS DMS",
+    "RDS",
     "VPC",
-    "Security Groups",
+    "DMS",
+    "Secrets Manager",
     "IAM",
-    "CloudWatch"
+    "CloudWatch",
+    "Security Groups"
   ],
   "region": "ap-southeast-1",
-  "training_quality": 8,
-  "completedAt": "2025-11-06T13:01:52+05:30"
+  "training_quality": 10,
+  "completedAt": "2025-11-06T13:01:52+05:30",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
