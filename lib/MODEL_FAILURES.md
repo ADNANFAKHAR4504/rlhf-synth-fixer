@@ -343,6 +343,35 @@ Resource handler returned message: "CloudWatch Logs role ARN must be set in acco
 
 ---
 
+## Issue 13: ESLint Unused Imports
+
+**Problem**: Lint check failed with unused import errors
+```
+/lib/global-resources-stack.ts
+Error:   3:13  error  'sns' is defined but never used               @typescript-eslint/no-unused-vars
+Error:   4:13  error  'snsSubscriptions' is defined but never used  @typescript-eslint/no-unused-vars
+```
+
+**Root Cause**:
+- SNS topic was moved from `GlobalResourcesStack` to `MultiRegionDRStack` (Issue 11 fix)
+- Import statements for `sns` and `snsSubscriptions` were left in `global-resources-stack.ts`
+- ESLint detected unused imports and failed the lint check
+
+**Solution Applied**:
+- Removed unused imports from `global-resources-stack.ts` (lines 3-4)
+- Updated `IDEAL_RESPONSE.md` to reflect correct imports and implementation
+- Kept only necessary imports: `cdk`, `dynamodb`, and `Construct`
+
+**Result**:
+- ✅ Lint checks pass with 0 errors
+- ✅ All unit tests pass (16/16)
+- ✅ 100% code coverage maintained
+- ✅ CDK synthesis successful
+
+**Lesson**: After refactoring code and moving functionality between files, always run linting to catch orphaned imports and ensure code cleanliness.
+
+---
+
 ## Summary
 
 **Final Status**:
