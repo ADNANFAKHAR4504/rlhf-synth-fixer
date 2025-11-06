@@ -2,6 +2,7 @@ import {
   DynamoDBClient,
   DescribeTableCommand,
   GetItemCommand,
+  DescribeTimeToLiveCommand,
 } from '@aws-sdk/client-dynamodb';
 import { SNSClient, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
 import {
@@ -72,11 +73,16 @@ describe('Transaction Processing Pipeline - Integration Tests', () => {
       expect(keySchema?.[0].AttributeName).toBe('transactionId');
       expect(keySchema?.[0].KeyType).toBe('HASH');
 
-      // Verify TTL is enabled
-      expect(response.Table?.TimeToLiveDescription?.TimeToLiveStatus).toBe(
+      // Verify TTL is enabled using dedicated API
+      const ttlCommand = new DescribeTimeToLiveCommand({
+        TableName: outputs.TransactionTableName,
+      });
+      const ttlResponse = await dynamoClient.send(ttlCommand);
+
+      expect(ttlResponse.TimeToLiveDescription?.TimeToLiveStatus).toBe(
         'ENABLED',
       );
-      expect(response.Table?.TimeToLiveDescription?.AttributeName).toBe('ttl');
+      expect(ttlResponse.TimeToLiveDescription?.AttributeName).toBe('ttl');
     }, 30000);
 
     test('table has encryption enabled', async () => {
