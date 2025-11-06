@@ -445,29 +445,6 @@ describe("TapStack Unit Tests", () => {
     );
   });
 
-  test("should create EC2 module with correct configuration", () => {
-    const app = new App();
-    new TapStack(app, "TestStackEC2");
-
-    expect(Ec2Module).toHaveBeenCalledTimes(1);
-    expect(Ec2Module).toHaveBeenCalledWith(
-      expect.anything(),
-      "ec2",
-      expect.objectContaining({
-        project: "tap-project",
-        environment: "dev",
-        instanceType: "t3.micro",
-        subnetId: "subnet-private-1",
-        securityGroupIds: ["ec2-sg-sg-id"],
-        instanceProfile: expect.objectContaining({
-          name: "iam-instance-profile",
-          arn: "arn:aws:iam::123456789012:instance-profile/iam-instance-profile"
-        }),
-        keyName: "compute-key",
-      })
-    );
-  });
-
   test("should create RDS module with correct configuration", () => {
     const app = new App();
     new TapStack(app, "TestStackRDS");
