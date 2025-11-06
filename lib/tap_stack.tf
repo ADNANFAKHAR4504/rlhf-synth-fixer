@@ -672,10 +672,11 @@ resource "aws_db_instance" "secondary" {
   # Storage Configuration
   storage_encrypted = true
   kms_key_id        = aws_kms_key.secondary.arn
-
+  
   # Network Configuration
   publicly_accessible = false
-
+  db_subnet_group_name = aws_db_subnet_group.secondary.name
+  vpc_security_group_ids = [aws_security_group.rds_secondary.id]
   # Monitoring
   enabled_cloudwatch_logs_exports = ["postgresql"]
   monitoring_interval             = 60
@@ -1567,7 +1568,7 @@ resource "aws_route53_health_check" "primary" {
   fqdn              = aws_db_instance.primary.address
   port              = 5432
   type              = "TCP"
-  request_interval          = 30
+  request_interval  = 30
   failure_threshold = 2
 
   tags = merge(local.common_tags, {
