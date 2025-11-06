@@ -368,6 +368,125 @@ describe("Service-Level Integration Tests - Deployed Infrastructure", () => {
   // SERVICE TESTS: Individual AWS Service Health
   // ========================================================================
 
+  describe("Critical Infrastructure Validation", () => {
+    test(
+      "outputs file contains expected infrastructure references",
+      async () => {
+        if (!outputs) return;
+
+        // Categorize outputs as critical vs optional based on what runner provides
+        const availableOutputs = Object.keys(outputs);
+        console.log(`Available outputs from runner: ${availableOutputs.join(", ")}`);
+
+        // These are the full set we expect when infrastructure is complete
+        const expectedOutputs = [
+          "vpc_id", "alb_arn", "alb_dns_name", "rds_arn", "rds_endpoint",
+          "asg_name", "target_group_arn", "alb_security_group_id",
+          "app_security_group_id", "db_security_group_id",
+          "public_subnet_ids", "private_subnet_ids"
+        ];
+
+        // Identify which critical components are missing
+        const missingCritical = [];
+        if (!outputs.vpc_id?.value) missingCritical.push("VPC");
+        if (!outputs.alb_arn?.value && !outputs.alb_dns_name?.value) missingCritical.push("ALB");
+        if (!outputs.rds_arn?.value && !outputs.rds_endpoint?.value) missingCritical.push("RDS");
+        if (!outputs.asg_name?.value) missingCritical.push("ASG");
+
+        if (missingCritical.length > 0) {
+          console.warn(`⚠️  Runner outputs indicate missing infrastructure: ${missingCritical.join(", ")}`);
+          console.warn(`   This may be expected in certain test scenarios`);
+        }
+
+        // Always validate VPC exists as it's fundamental
+        if (!outputs.vpc_id?.value) {
+          throw new Error("CRITICAL: VPC ID not found in outputs - cannot proceed with infrastructure tests");
+        }
+
+        console.log(`✓ Found ${availableOutputs.length} outputs from runner`);
+      },
+      SERVICE_TEST_TIMEOUT
+    );
+
+    test(
+      "available resources are in the same VPC (no infrastructure drift)",
+      async () => {
+        if (!outputs) return;
+
+        const vpcId = outputs.vpc_id?.value;
+        if (!vpcId) {
+          console.warn("⚠️  VPC ID not found in outputs - skipping drift detection");
+          return;
+        }
+        
+        console.log(`Checking infrastructure drift for resources in VPC ${vpcId}...`);
+
+        const ec2Client = new EC2Client({ region: AWS_REGION });
+        const elbClient = new ElasticLoadBalancingV2Client({ region: AWS_REGION });
+        const rdsClient = new RDSClient({ region: AWS_REGION });
+
+        // Check ALB VPC
+        if (outputs.alb_arn?.value) {
+          const albCommand = new DescribeLoadBalancersCommand({
+            LoadBalancerArns: [outputs.alb_arn.value],
+          });
+          const albResponse = await elbClient.send(albCommand);
+          const albVpc = albResponse.LoadBalancers?.[0]?.VpcId;
+          
+          if (albVpc !== vpcId) {
+            throw new Error(
+              `CRITICAL: Infrastructure drift detected!\n` +
+              `ALB is in VPC ${albVpc} but outputs show VPC ${vpcId}\n` +
+              `This indicates multiple deployments or incomplete cleanup!`
+            );
+          }
+        }
+
+        // Check RDS VPC
+        if (outputs.rds_arn?.value) {
+          const dbIdentifier = outputs.rds_arn.value.split(":db:")[1];
+          const rdsCommand = new DescribeDBInstancesCommand({
+            DBInstanceIdentifier: dbIdentifier,
+          });
+          const rdsResponse = await rdsClient.send(rdsCommand);
+          const rdsVpc = rdsResponse.DBInstances?.[0]?.DBSubnetGroup?.VpcId;
+          
+          if (rdsVpc !== vpcId) {
+            throw new Error(
+              `CRITICAL: Infrastructure drift detected!\n` +
+              `RDS is in VPC ${rdsVpc} but outputs show VPC ${vpcId}\n` +
+              `This indicates multiple deployments or incomplete cleanup!`
+            );
+          }
+        }
+
+        // Check subnets belong to the VPC
+        const subnetIds = [
+          ...(outputs.public_subnet_ids?.value || []),
+          ...(outputs.private_subnet_ids?.value || []),
+        ];
+        
+        if (subnetIds.length > 0) {
+          const subnetCommand = new DescribeSubnetsCommand({
+            SubnetIds: subnetIds,
+          });
+          const subnetResponse = await ec2Client.send(subnetCommand);
+          
+          subnetResponse.Subnets?.forEach(subnet => {
+            if (subnet.VpcId !== vpcId) {
+              throw new Error(
+                `CRITICAL: Subnet ${subnet.SubnetId} is in VPC ${subnet.VpcId} but outputs show VPC ${vpcId}`
+              );
+            }
+          });
+        }
+
+        console.log(`✓ All resources confirmed in VPC ${vpcId} - no drift detected`);
+      },
+      SERVICE_TEST_TIMEOUT
+    );
+  });
+
   describe("Service: VPC and Networking", () => {
     test(
       "VPC exists and has correct configuration",
@@ -501,9 +620,29 @@ describe("Service-Level Integration Tests - Deployed Infrastructure", () => {
         const albDns = outputs.alb_dns_name?.value;
 
         if (!albArn) {
-          console.warn(`⚠️  ${envName}: ALB ARN not found in outputs - skipping test`);
-          console.warn(`    Available outputs: ${Object.keys(outputs).join(', ')}`);
-          return;
+          console.warn(`⚠️  ALB ARN not found in outputs, checking if ALB exists in AWS...`);
+          
+          // Try to find ALB by name pattern
+          const listCommand = new DescribeLoadBalancersCommand({});
+          const listResponse = await elbClient.send(listCommand);
+          const gameAlbs = listResponse.LoadBalancers?.filter(alb => 
+            alb.LoadBalancerName?.includes('gaming-platform-' + envName)
+          ) || [];
+          
+          if (gameAlbs.length > 0) {
+            throw new Error(
+              `CRITICAL: ALB exists in AWS but not in outputs!\n` +
+              `Found ALB: ${gameAlbs[0].LoadBalancerName} (${gameAlbs[0].LoadBalancerArn})\n` +
+              `But outputs file is missing alb_arn and alb_dns_name\n` +
+              `This indicates the runner's output generation is incomplete!`
+            );
+          } else {
+            throw new Error(
+              `CRITICAL: No ALB found in AWS or outputs!\n` +
+              `Expected ALB name pattern: gaming-platform-${envName}-alb\n` +
+              `Available outputs: ${Object.keys(outputs).join(', ')}`
+            );
+          }
         }
 
         const command = new DescribeLoadBalancersCommand({
@@ -615,9 +754,23 @@ describe("Service-Level Integration Tests - Deployed Infrastructure", () => {
         });
         const ec2Response = await ec2Client.send(ec2Command);
 
+        let runningCount = 0;
+        let terminatingCount = 0;
+        
         ec2Response.Reservations?.forEach((reservation) => {
           reservation.Instances?.forEach((instance) => {
-            expect(instance.State?.Name).toMatch(/running|pending/);
+            // Count instance states
+            if (instance.State?.Name === 'running') runningCount++;
+            else if (instance.State?.Name?.includes('shutting-down') || 
+                     instance.State?.Name?.includes('stopping') || 
+                     instance.State?.Name?.includes('terminating')) {
+              terminatingCount++;
+              console.warn(`⚠️  Instance ${instance.InstanceId} is ${instance.State?.Name} - ASG may be scaling`);
+            }
+            
+            // Accept various states that can occur during ASG operations
+            expect(instance.State?.Name).toMatch(/running|pending|shutting-down|stopping|terminating/);
+            
             if (!privateSubnetIds.includes(instance.SubnetId)) {
               console.warn(`⚠️  Instance ${instance.InstanceId} in subnet ${instance.SubnetId} not in expected private subnets`);
               console.warn(`    Expected subnets: ${privateSubnetIds.join(', ')}`);
@@ -627,6 +780,11 @@ describe("Service-Level Integration Tests - Deployed Infrastructure", () => {
             }
           });
         });
+        
+        // Warn if ASG appears to be in transition
+        if (terminatingCount > 0) {
+          console.warn(`⚠️  ASG appears to be scaling: ${runningCount} running, ${terminatingCount} terminating`);
+        }
 
         console.log(`✓ ${env}: ${instances.length} instances running in private subnets`);
       },
@@ -647,8 +805,28 @@ describe("Service-Level Integration Tests - Deployed Infrastructure", () => {
         const rdsEndpoint = outputs.rds_endpoint?.value;
 
         if (!rdsArn) {
-          console.warn(`⚠️  ${envName}: RDS ARN not found in outputs - skipping test`);
-          return;
+          console.warn(`⚠️  RDS ARN not found in outputs, checking if RDS exists in AWS...`);
+          
+          // Try to find RDS by name pattern
+          const listCommand = new DescribeDBInstancesCommand({});
+          const listResponse = await rdsClient.send(listCommand);
+          const gameRds = listResponse.DBInstances?.filter(db => 
+            db.DBInstanceIdentifier?.includes('gaming-platform-' + envName)
+          ) || [];
+          
+          if (gameRds.length > 0) {
+            throw new Error(
+              `CRITICAL: RDS exists in AWS but not in outputs!\n` +
+              `Found RDS: ${gameRds[0].DBInstanceIdentifier} (${gameRds[0].DBInstanceArn})\n` +
+              `Endpoint: ${gameRds[0].Endpoint?.Address}\n` +
+              `But outputs file is missing rds_arn and rds_endpoint\n` +
+              `This indicates the runner's output generation is incomplete!`
+            );
+          } else {
+            console.warn(`⚠️  No RDS found in AWS - skipping RDS test`);
+            console.warn(`   Expected RDS name pattern: gaming-platform-${envName}-db`);
+            return;
+          }
         }
 
         // Extract DB instance identifier from ARN
@@ -691,8 +869,28 @@ describe("Service-Level Integration Tests - Deployed Infrastructure", () => {
         const rdsArn = outputs.rds_arn?.value;
 
         if (!rdsArn) {
-          console.warn(`⚠️  ${envName}: RDS ARN not found in outputs - skipping test`);
-          return;
+          console.warn(`⚠️  RDS ARN not found in outputs, checking if RDS exists in AWS...`);
+          
+          // Try to find RDS by name pattern
+          const listCommand = new DescribeDBInstancesCommand({});
+          const listResponse = await rdsClient.send(listCommand);
+          const gameRds = listResponse.DBInstances?.filter(db => 
+            db.DBInstanceIdentifier?.includes('gaming-platform-' + envName)
+          ) || [];
+          
+          if (gameRds.length > 0) {
+            throw new Error(
+              `CRITICAL: RDS exists in AWS but not in outputs!\n` +
+              `Found RDS: ${gameRds[0].DBInstanceIdentifier} (${gameRds[0].DBInstanceArn})\n` +
+              `Endpoint: ${gameRds[0].Endpoint?.Address}\n` +
+              `But outputs file is missing rds_arn and rds_endpoint\n` +
+              `This indicates the runner's output generation is incomplete!`
+            );
+          } else {
+            console.warn(`⚠️  No RDS found in AWS - skipping RDS test`);
+            console.warn(`   Expected RDS name pattern: gaming-platform-${envName}-db`);
+            return;
+          }
         }
 
         const dbIdentifier = rdsArn.split(":db:")[1];
@@ -788,8 +986,28 @@ describe("Service-Level Integration Tests - Deployed Infrastructure", () => {
 
         // Get RDS instance
         if (!rdsArn) {
-          console.warn(`⚠️  ${envName}: RDS ARN not found in outputs - skipping test`);
-          return;
+          console.warn(`⚠️  RDS ARN not found in outputs, checking if RDS exists in AWS...`);
+          
+          // Try to find RDS by name pattern
+          const listCommand = new DescribeDBInstancesCommand({});
+          const listResponse = await rdsClient.send(listCommand);
+          const gameRds = listResponse.DBInstances?.filter(db => 
+            db.DBInstanceIdentifier?.includes('gaming-platform-' + envName)
+          ) || [];
+          
+          if (gameRds.length > 0) {
+            throw new Error(
+              `CRITICAL: RDS exists in AWS but not in outputs!\n` +
+              `Found RDS: ${gameRds[0].DBInstanceIdentifier} (${gameRds[0].DBInstanceArn})\n` +
+              `Endpoint: ${gameRds[0].Endpoint?.Address}\n` +
+              `But outputs file is missing rds_arn and rds_endpoint\n` +
+              `This indicates the runner's output generation is incomplete!`
+            );
+          } else {
+            console.warn(`⚠️  No RDS found in AWS - skipping RDS test`);
+            console.warn(`   Expected RDS name pattern: gaming-platform-${envName}-db`);
+            return;
+          }
         }
 
         const dbIdentifier = rdsArn.split(":db:")[1];
@@ -862,13 +1080,38 @@ describe("Service-Level Integration Tests - Deployed Infrastructure", () => {
         const env = envName;
 
         // Verify all components exist
-        if (!outputs.alb_dns_name?.value || !outputs.target_group_arn?.value || 
-            !outputs.asg_name?.value || !outputs.rds_endpoint?.value) {
-          console.warn(`⚠️  ${envName}: Missing required outputs for E2E test - skipping`);
-          console.warn(`    ALB DNS: ${outputs.alb_dns_name?.value ? '✓' : '✗'}`);
-          console.warn(`    Target Group: ${outputs.target_group_arn?.value ? '✓' : '✗'}`);
-          console.warn(`    ASG: ${outputs.asg_name?.value ? '✓' : '✗'}`);
-          console.warn(`    RDS: ${outputs.rds_endpoint?.value ? '✓' : '✗'}`);
+        const components = {
+          "ALB DNS": outputs.alb_dns_name?.value,
+          "Target Group": outputs.target_group_arn?.value,
+          "ASG": outputs.asg_name?.value,
+          "RDS Endpoint": outputs.rds_endpoint?.value
+        };
+        
+        const missingComponents = Object.entries(components)
+          .filter(([key, value]) => !value)
+          .map(([key]) => key);
+        
+        if (missingComponents.length > 0) {
+          console.warn(`⚠️  E2E test - missing components in outputs: ${missingComponents.join(', ')}`);
+          
+          // Check if these resources actually exist in AWS
+          if (!outputs.alb_dns_name?.value) {
+            const listCommand = new DescribeLoadBalancersCommand({});
+            const listResponse = await new ElasticLoadBalancingV2Client({ region: AWS_REGION }).send(listCommand);
+            const albs = listResponse.LoadBalancers?.filter(alb => 
+              alb.LoadBalancerName?.includes('gaming-platform-' + envName)
+            ) || [];
+            
+            if (albs.length > 0) {
+              throw new Error(
+                `CRITICAL: ALB exists but outputs are incomplete!\n` +
+                `Found ALB: ${albs[0].DNSName}\n` +
+                `Runner must export alb_dns_name for E2E tests to function`
+              );
+            }
+          }
+          
+          console.warn(`   Skipping E2E test due to incomplete outputs from runner`);
           return;
         }
 
