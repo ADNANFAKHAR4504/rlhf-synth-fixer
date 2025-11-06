@@ -273,40 +273,85 @@ The following outputs are provided for easy cluster access:
 | Output | Description |
 |--------|-------------|
 | `cluster_name` | EKS cluster name |
-| `cluster_endpoint` | Cluster API endpoint URL |
-| `cluster_version` | Kubernetes version |
-| `cluster_certificate_authority_data` | CA certificate (base64) |
-| `cluster_oidc_issuer_url` | OIDC provider URL |
-| `oidc_provider_arn` | OIDC provider ARN for IRSA |
-| `cluster_autoscaler_role_arn` | Cluster autoscaler IAM role ARN |
-| `node_group_id` | Managed node group ID |
-| `node_role_arn` | Node IAM role ARN |
-| `vpc_id` | VPC ID |
-| `private_subnet_ids` | Private subnet IDs |
-| `public_subnet_ids` | Public subnet IDs |
-| `kubectl_config_command` | Command to configure kubectl |
+| `cluster_endpoint` | Cluster API endpoint URL (HTTPS) |
+| `cluster_version` | Kubernetes version deployed |
+| `cluster_certificate_authority_data` | Base64-encoded CA certificate for cluster authentication |
+| `cluster_security_group_id` | Security group ID attached to the EKS cluster |
+| `cluster_oidc_issuer_url` | OIDC issuer URL for the EKS cluster |
+| `oidc_provider_url` | OIDC provider URL for IRSA (alias for cluster_oidc_issuer_url) |
+| `oidc_provider_arn` | ARN of the OIDC provider for IAM Roles for Service Accounts |
+| `cluster_autoscaler_role_arn` | IAM role ARN for cluster autoscaler with IRSA |
+| `cluster_autoscaler_policy_arn` | IAM policy reference for cluster autoscaler permissions |
+| `node_group_id` | Managed node group unique identifier |
+| `node_group_name` | Managed node group name |
+| `node_group_arn` | ARN of the EKS managed node group |
+| `node_group_status` | Current status of the node group (ACTIVE, etc.) |
+| `node_role_arn` | IAM role ARN for EKS worker nodes |
+| `vpc_id` | VPC ID where EKS cluster is deployed |
+| `private_subnet_ids` | List of private subnet IDs (JSON array) |
+| `public_subnet_ids` | List of public subnet IDs (JSON array) |
+| `kubectl_config_command` | Command to configure kubectl for this cluster |
+| `cloudwatch_log_group_name` | CloudWatch log group name for EKS control plane logs |
 
 ## Testing
 
 ### Unit Tests
-- 138 comprehensive tests validating Terraform configuration
-- File structure validation
+Run comprehensive validation of Terraform configuration files:
+```bash
+npm test -- terraform.unit.test.ts
+```
+
+**Test Coverage**:
+- 134 comprehensive tests validating Terraform configuration
+- File structure validation (all required .tf files and documentation)
 - Provider and variable configuration checks
-- Resource naming conventions
-- Security best practices validation
-- Cost optimization verification
+- VPC and networking configuration validation
+- IAM roles and policies verification (cluster, nodes, autoscaler)
+- EKS cluster configuration validation (version, logging, encryption)
+- Node group configuration (Graviton2, scaling, storage)
+- VPC CNI addon with prefix delegation
+- Security best practices validation (encryption, IRSA, least privilege)
+- Cost optimization verification (Graviton2, gp3, selective logging)
+- High availability checks (multi-AZ, NAT gateways)
+- Resource tagging and naming conventions
+- README documentation completeness
 
 ### Integration Tests
-- 24 tests validating deployed infrastructure
-- Output validation
-- Resource ARN format verification
-- Multi-AZ deployment confirmation
-- Security configuration validation
+Validate deployed infrastructure using actual AWS resources:
+```bash
+npm test -- terraform.int.test.ts
+```
 
-### Test Coverage
-- **Unit Tests**: 138/138 passing (100%)
+**Test Coverage**:
+- 24 tests validating deployed infrastructure
+- Infrastructure outputs validation (all critical outputs present)
+- EKS cluster endpoint and certificate authority verification
+- OIDC provider configuration for IRSA
+- VPC and subnet deployment across 3 AZs
+- Node group configuration (name, ARN, status)
+- IAM role ARNs validation (cluster autoscaler, nodes)
+- Region verification (us-east-2)
+- Graviton2 ARM architecture validation
+- Security configuration checks
+- Output data type validation
+
+### Running All Tests
+```bash
+# Run all tests with coverage
+npm test
+
+# Run specific test suite
+npm test -- terraform.unit.test.ts
+npm test -- terraform.int.test.ts
+
+# Run with verbose output
+npm test -- --verbose
+```
+
+### Test Results
+- **Unit Tests**: 134/134 passing (100%)
 - **Integration Tests**: 24/24 passing (100%)
-- **Total**: 162/162 tests passing (100%)
+- **Total**: 158/158 tests passing (100%)
 
 ## Maintenance & Operations
 
@@ -427,21 +472,89 @@ kubectl logs -n kube-system -l k8s-app=aws-node
 4. Use Fargate for intermittent workloads
 5. Enable S3 VPC endpoints to reduce data transfer costs
 
+## Best Practices Implemented
+
+### Infrastructure as Code Standards
+- **Modularity**: Separate files for each logical component (VPC, IAM, EKS)
+- **Variables**: All values parameterized for reusability across environments
+- **Outputs**: Comprehensive outputs for integration with other systems
+- **Documentation**: Inline comments and comprehensive external documentation
+- **Version Control**: Compatible with Git workflows and CI/CD pipelines
+
+### AWS Well-Architected Framework Alignment
+
+#### Operational Excellence
+- Infrastructure defined as code for reproducibility
+- CloudWatch logging for operational insights
+- Automated testing (unit and integration)
+- Clear deployment and maintenance procedures
+
+#### Security
+- Encryption at rest (KMS) and in transit (TLS)
+- IAM roles with least privilege principle
+- Network isolation with private subnets
+- Security groups with explicit allow rules only
+- No hardcoded credentials or secrets
+- IRSA for fine-grained pod permissions
+
+#### Reliability
+- Multi-AZ deployment for high availability
+- Auto-scaling for handling load variations
+- Managed services reduce operational burden
+- Automatic backups of control plane
+
+#### Performance Efficiency
+- Graviton2 processors for optimal price-performance
+- VPC CNI prefix delegation for increased pod density
+- gp3 volumes with optimized IOPS and throughput
+- Right-sized instances and storage
+
+#### Cost Optimization
+- Graviton2 ARM instances (20% better price-performance)
+- Auto-scaling to match demand
+- Selective control plane logging
+- gp3 volumes for better cost-efficiency
+- Configurable instance types and counts
+
+### Terraform Best Practices
+- **State Management**: Remote state recommended (S3 + DynamoDB)
+- **Resource Dependencies**: Explicit `depends_on` where needed
+- **Resource Naming**: Consistent naming with environment suffixes
+- **Tags**: Comprehensive tagging for cost allocation
+- **No Hardcoding**: All environment-specific values parameterized
+- **Idempotency**: Safe to run multiple times
+
+### Kubernetes Best Practices
+- **IRSA**: Service accounts mapped to IAM roles
+- **Network Policies**: VPC CNI supports network policies
+- **Resource Limits**: Launch template ready for resource constraints
+- **Logging**: Control plane logs in CloudWatch
+- **Monitoring**: Compatible with CloudWatch Container Insights
+
 ## Additional Resources
 
 ### AWS Documentation
 - [Amazon EKS User Guide](https://docs.aws.amazon.com/eks/)
 - [EKS Best Practices Guide](https://aws.github.io/aws-eks-best-practices/)
 - [Graviton Performance](https://aws.amazon.com/ec2/graviton/)
+- [VPC CNI Plugin](https://docs.aws.amazon.com/eks/latest/userguide/pod-networking.html)
+- [IRSA Documentation](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html)
 
 ### Kubernetes Resources
 - [Kubernetes Documentation](https://kubernetes.io/docs/)
 - [kubectl Cheat Sheet](https://kubernetes.io/docs/reference/kubectl/cheatsheet/)
 - [Cluster Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler)
+- [Kubernetes RBAC](https://kubernetes.io/docs/reference/access-authn-authz/rbac/)
 
 ### Terraform Resources
 - [Terraform AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
-- [Terraform EKS Module](https://registry.terraform.io/modules/terraform-aws-modules/eks/aws/latest)
+- [Terraform EKS Resources](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/eks_cluster)
+- [Terraform Best Practices](https://www.terraform.io/docs/cloud/guides/recommended-practices/)
+
+### Security Resources
+- [CIS Amazon EKS Benchmark](https://www.cisecurity.org/benchmark/amazon_eks)
+- [AWS Security Best Practices](https://docs.aws.amazon.com/security/)
+- [Kubernetes Security](https://kubernetes.io/docs/concepts/security/)
 
 ## Support
 

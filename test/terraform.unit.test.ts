@@ -426,26 +426,6 @@ describe('Terraform EKS Infrastructure with Graviton2 - Unit Tests', () => {
       expect(nodeGroupBlock).toBeTruthy();
       expect(hasEnvironmentSuffix(nodeGroupBlock![0])).toBe(true);
     });
-    test('node group name uses environment_suffix', () => {
-      const nodeGroupBlock = content.match(/node_group_name\s*=\s*"[^"]*"/);
-      expect(nodeGroupBlock).toBeTruthy();
-      expect(hasEnvironmentSuffix(nodeGroupBlock![0])).toBe(true);
-    });
-    test('node group name uses environment_suffix', () => {
-      const nodeGroupBlock = content.match(/node_group_name\s*=\s*"[^"]*"/);
-      expect(nodeGroupBlock).toBeTruthy();
-      expect(hasEnvironmentSuffix(nodeGroupBlock![0])).toBe(true);
-    });
-    test('node group name uses environment_suffix', () => {
-      const nodeGroupBlock = content.match(/node_group_name\s*=\s*"[^"]*"/);
-      expect(nodeGroupBlock).toBeTruthy();
-      expect(hasEnvironmentSuffix(nodeGroupBlock![0])).toBe(true);
-    });
-    test('node group name uses environment_suffix', () => {
-      const nodeGroupBlock = content.match(/node_group_name\s*=\s*"[^"]*"/);
-      expect(nodeGroupBlock).toBeTruthy();
-      expect(hasEnvironmentSuffix(nodeGroupBlock![0])).toBe(true);
-    });
 
     test('uses Graviton2 ARM instance types (t4g.medium)', () => {
       expect(content).toMatch(/instance_types\s*=\s*\[.*var\.node_instance_type.*\]/);

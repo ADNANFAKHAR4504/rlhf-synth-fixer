@@ -23,6 +23,11 @@ output "cluster_oidc_issuer_url" {
   value       = aws_eks_cluster.main.identity[0].oidc[0].issuer
 }
 
+output "oidc_provider_url" {
+  description = "OIDC provider URL for IRSA (alias for cluster_oidc_issuer_url)"
+  value       = aws_eks_cluster.main.identity[0].oidc[0].issuer
+}
+
 output "oidc_provider_arn" {
   description = "ARN of the OIDC provider for IRSA"
   value       = aws_iam_openid_connect_provider.cluster.arn
@@ -31,7 +36,6 @@ output "oidc_provider_arn" {
 output "cluster_certificate_authority_data" {
   description = "Base64 encoded certificate data for cluster authentication"
   value       = aws_eks_cluster.main.certificate_authority[0].data
-  sensitive   = true
 }
 
 output "cluster_autoscaler_role_arn" {
@@ -39,9 +43,24 @@ output "cluster_autoscaler_role_arn" {
   value       = aws_iam_role.cluster_autoscaler.arn
 }
 
+output "cluster_autoscaler_policy_arn" {
+  description = "IAM policy ARN for cluster autoscaler (inline policy reference)"
+  value       = "${aws_iam_role.cluster_autoscaler.arn}/policy/${aws_iam_role_policy.cluster_autoscaler.name}"
+}
+
 output "node_group_id" {
   description = "EKS managed node group ID"
   value       = aws_eks_node_group.main.id
+}
+
+output "node_group_name" {
+  description = "EKS managed node group name"
+  value       = aws_eks_node_group.main.node_group_name
+}
+
+output "node_group_arn" {
+  description = "ARN of the EKS node group"
+  value       = aws_eks_node_group.main.arn
 }
 
 output "node_group_status" {
