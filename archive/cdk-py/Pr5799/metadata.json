@@ -17,10 +17,16 @@
     "API Gateway",
     "S3",
     "SQS",
-    "CloudWatch Logs",
+    "CloudWatch",
     "X-Ray",
     "IAM",
-    "CloudWatch",
     "SNS"
-  ]
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "misra-s-turing",
+  "dockerS3Location": ""
 }
