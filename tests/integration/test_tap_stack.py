@@ -105,10 +105,6 @@ def get_recent_lambda_logs(function_name: str, minutes: int = 3, test_marker: Op
         log_messages = []
         for stream in streams_response.get('logStreams', []):
             stream_name = stream['logStreamName']
-            
-            if 'lastEventTime' not in stream:
-                print(f"[INFO] Skipping stream {stream_name} - no events yet")
-                continue
 
             events_response = logs_client.get_log_events(
                 logGroupName=log_group_name,
