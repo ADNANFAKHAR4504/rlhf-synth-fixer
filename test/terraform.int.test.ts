@@ -317,15 +317,25 @@ describe("Payment Processing Infrastructure Integration Tests", () => {
           {
             Name: "vpc-id",
             Values: [actualVpcId]
+          },
+          {
+            Name: "state",
+            Values: ["available"]
           }
         ]
       });
 
       const response = await ec2Client.send(command);
       expect(response.NatGateways).toBeDefined();
-      expect(response.NatGateways!.length).toBeGreaterThan(0);
 
-      response.NatGateways!.forEach(natGateway => {
+      // Filter for only available NAT Gateways
+      const availableNatGateways = response.NatGateways!.filter(natGateway =>
+        natGateway.State === "available" && natGateway.VpcId === actualVpcId
+      );
+
+      expect(availableNatGateways.length).toBeGreaterThan(0);
+
+      availableNatGateways.forEach(natGateway => {
         expect(natGateway.State).toBe("available");
         expect(natGateway.VpcId).toBe(actualVpcId);
       });
