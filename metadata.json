@@ -10,5 +10,8 @@
   "subject_labels": [
     "Environment Migration"
   ],
-  "aws_services": "s3, lambda, neptune, dynamo db, aws glue, aurora, eventbridge"
+  "aws_services": "s3, lambda, neptune, dynamo db, aws glue, aurora, eventbridge",
+  "training_quality": 10,
+  "dockerS3Location": ""
+
 }
