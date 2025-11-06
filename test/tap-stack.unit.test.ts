@@ -17,7 +17,7 @@ describe('TapStack - EKS Infrastructure Unit Tests', () => {
       environmentSuffix,
       env: {
         account: '123456789012',
-        region: 'eu-west-1',
+        region: 'us-east-1',
       },
     });
     template = Template.fromStack(stack);
@@ -759,7 +759,7 @@ describe('TapStack - Integration Tests', () => {
       environmentSuffix: 'synthtest',
       env: {
         account: '123456789012',
-        region: 'eu-west-1',
+        region: 'us-east-1',
       },
     });
 
@@ -774,7 +774,7 @@ describe('TapStack - Integration Tests', () => {
       environmentSuffix: 'cfntest',
       env: {
         account: '123456789012',
-        region: 'eu-west-1',
+        region: 'us-east-1',
       },
     });
 
@@ -796,7 +796,7 @@ describe('TapStack - Integration Tests', () => {
       environmentSuffix: 'iamtest',
       env: {
         account: '123456789012',
-        region: 'eu-west-1',
+        region: 'us-east-1',
       },
     });
 
@@ -817,7 +817,7 @@ describe('TapStack - Integration Tests', () => {
       environmentSuffix: 'tagtest',
       env: {
         account: '123456789012',
-        region: 'eu-west-1',
+        region: 'us-east-1',
       },
     });
 
