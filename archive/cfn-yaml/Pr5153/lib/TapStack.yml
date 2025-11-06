@@ -1,0 +1,623 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'FedRAMP-Compliant API Infrastructure for Government Data Distribution'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - EnvironmentSuffix
+      - Label:
+          default: 'Network Configuration'
+        Parameters:
+          - VpcCIDR
+          - PrivateSubnet1CIDR
+          - PrivateSubnet2CIDR
+      - Label:
+          default: 'Cache Configuration'
+        Parameters:
+          - CacheNodeType
+          - CacheTTL
+      - Label:
+          default: 'API Configuration'
+        Parameters:
+          - ThrottleBurstLimit
+          - ThrottleRateLimit
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod123)'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+  
+  VpcCIDR:
+    Type: String
+    Default: '10.0.0.0/16'
+    Description: 'CIDR block for VPC'
+    AllowedPattern: '^(10|172|192)\.([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])/([0-9]|[12][0-9]|3[0-2])$'
+  
+  PrivateSubnet1CIDR:
+    Type: String
+    Default: '10.0.1.0/24'
+    Description: 'CIDR block for private subnet 1'
+  
+  PrivateSubnet2CIDR:
+    Type: String
+    Default: '10.0.2.0/24'
+    Description: 'CIDR block for private subnet 2'
+  
+  CacheNodeType:
+    Type: String
+    Default: 'cache.t3.micro'
+    Description: 'ElastiCache node type'
+    AllowedValues:
+      - cache.t3.micro
+      - cache.t3.small
+      - cache.t3.medium
+      - cache.m6g.large
+      - cache.m6g.xlarge
+  
+  CacheTTL:
+    Type: Number
+    Default: 3600
+    Description: 'Cache TTL in seconds (3600 = 1 hour)'
+    MinValue: 0
+    MaxValue: 86400
+  
+  ThrottleBurstLimit:
+    Type: Number
+    Default: 1000
+    Description: 'API Gateway burst limit (requests)'
+    MinValue: 1
+    MaxValue: 5000
+  
+  ThrottleRateLimit:
+    Type: Number
+    Default: 1000
+    Description: 'API Gateway rate limit (requests per minute)'
+    MinValue: 1
+    MaxValue: 10000
+
+Resources:
+  # ========================================
+  # VPC and Networking
+  # ========================================
+  
+  FedRAMPVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'fedramp-vpc-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+  
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref FedRAMPVPC
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'fedramp-private-subnet-1-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+  
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref FedRAMPVPC
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'fedramp-private-subnet-2-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+  
+  # ========================================
+  # Encryption - KMS
+  # ========================================
+  
+  EncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub 'KMS key for FedRAMP compliance - ${EnvironmentSuffix}'
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow CloudWatch Logs
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+            Resource: '*'
+            Condition:
+              ArnLike:
+                'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*'
+          - Sid: Allow Kinesis
+            Effect: Allow
+            Principal:
+              Service: kinesis.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+            Resource: '*'
+          - Sid: Allow Secrets Manager
+            Effect: Allow
+            Principal:
+              Service: secretsmanager.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub 'fedramp-kms-key-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+  
+  EncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/fedramp-key-${EnvironmentSuffix}'
+      TargetKeyId: !Ref EncryptionKey
+  
+  # ========================================
+  # ElastiCache Redis - Caching Layer
+  # ========================================
+  
+  CacheSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: !Sub 'Subnet group for Redis cluster - ${EnvironmentSuffix}'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      CacheSubnetGroupName: !Sub 'redis-subnet-group-${EnvironmentSuffix}'
+      Tags:
+        - Key: Name
+          Value: !Sub 'redis-subnet-group-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+  
+  CacheSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'redis-sg-${EnvironmentSuffix}'
+      GroupDescription: 'Security group for ElastiCache Redis cluster'
+      VpcId: !Ref FedRAMPVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 6379
+          ToPort: 6379
+          SourceSecurityGroupId: !Ref APIGatewaySecurityGroup
+          Description: 'Allow Redis traffic from API Gateway'
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow all outbound traffic'
+      Tags:
+        - Key: Name
+          Value: !Sub 'redis-sg-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+  
+  RedisReplicationGroup:
+    Type: AWS::ElastiCache::ReplicationGroup
+    Properties:
+      ReplicationGroupId: !Sub 'redis-cluster-${EnvironmentSuffix}'
+      ReplicationGroupDescription: !Sub 'Redis cluster for API caching - ${EnvironmentSuffix}'
+      Engine: redis
+      EngineVersion: '7.0'
+      CacheNodeType: !Ref CacheNodeType
+      NumCacheClusters: 2
+      MultiAZEnabled: true
+      AutomaticFailoverEnabled: true
+      AtRestEncryptionEnabled: true
+      TransitEncryptionEnabled: true
+      KmsKeyId: !Ref EncryptionKey
+      CacheSubnetGroupName: !Ref CacheSubnetGroup
+      SecurityGroupIds:
+        - !Ref CacheSecurityGroup
+      SnapshotRetentionLimit: 5
+      SnapshotWindow: '03:00-05:00'
+      PreferredMaintenanceWindow: 'sun:05:00-sun:07:00'
+      Tags:
+        - Key: Name
+          Value: !Sub 'redis-cluster-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+  
+  # ========================================
+  # Kinesis Data Streams - Audit Logging
+  # ========================================
+  
+  AuditLogStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: !Sub 'audit-log-stream-${EnvironmentSuffix}'
+      ShardCount: 1
+      RetentionPeriodHours: 168
+      StreamEncryption:
+        EncryptionType: KMS
+        KeyId: !Ref EncryptionKey
+      StreamModeDetails:
+        StreamMode: PROVISIONED
+      Tags:
+        - Key: Name
+          Value: !Sub 'audit-log-stream-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+  
+  # ========================================
+  # Secrets Manager
+  # ========================================
+  
+  APIKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'fedramp-api-key-${EnvironmentSuffix}'
+      Description: !Sub 'API keys for FedRAMP infrastructure - ${EnvironmentSuffix}'
+      KmsKeyId: !Ref EncryptionKey
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "api-admin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Name
+          Value: !Sub 'fedramp-api-key-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+  
+  # ========================================
+  # API Gateway - REST API
+  # ========================================
+  
+  APIGatewaySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'api-gateway-sg-${EnvironmentSuffix}'
+      GroupDescription: 'Security group for API Gateway VPC Link'
+      VpcId: !Ref FedRAMPVPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow all outbound traffic'
+      Tags:
+        - Key: Name
+          Value: !Sub 'api-gateway-sg-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+  
+  FedRAMPRestAPI:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub 'fedramp-api-${EnvironmentSuffix}'
+      Description: !Sub 'FedRAMP-compliant REST API for government data distribution - ${EnvironmentSuffix}'
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Policy:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: 'execute-api:Invoke'
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub 'fedramp-api-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+  
+  DataResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref FedRAMPRestAPI
+      ParentId: !GetAtt FedRAMPRestAPI.RootResourceId
+      PathPart: 'data'
+  
+  DataMethodGet:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref FedRAMPRestAPI
+      ResourceId: !Ref DataResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      RequestParameters:
+        method.request.header.x-api-key: true
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseTemplates:
+              application/json: '{"message": "Government data response", "timestamp": "$context.requestTime", "requestId": "$context.requestId"}'
+            ResponseParameters:
+              method.response.header.Content-Type: "'application/json'"
+              method.response.header.X-Request-Id: "context.requestId"
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Content-Type: true
+            method.response.header.X-Request-Id: true
+          ResponseModels:
+            application/json: 'Empty'
+  
+  APIDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - DataMethodGet
+    Properties:
+      RestApiId: !Ref FedRAMPRestAPI
+      Description: !Sub 'Deployment for FedRAMP API - ${EnvironmentSuffix}'
+  
+  APIStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref FedRAMPRestAPI
+      DeploymentId: !Ref APIDeployment
+      StageName: 'v1'
+      Description: !Sub 'Production stage for FedRAMP API - ${EnvironmentSuffix}'
+      CacheClusterEnabled: true
+      CacheClusterSize: '0.5'
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          CachingEnabled: true
+          CacheTtlInSeconds: !Ref CacheTTL
+          CacheDataEncrypted: true
+          DataTraceEnabled: true
+          LoggingLevel: INFO
+          MetricsEnabled: true
+          ThrottlingBurstLimit: !Ref ThrottleBurstLimit
+          ThrottlingRateLimit: !Ref ThrottleRateLimit
+      AccessLogSetting:
+        DestinationArn: !GetAtt APILogGroup.Arn
+        Format: '$context.requestId $context.extendedRequestId $context.identity.sourceIp $context.requestTime $context.httpMethod $context.routeKey $context.status $context.protocol $context.responseLength'
+      TracingEnabled: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'fedramp-api-stage-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+  
+  APIUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    Properties:
+      UsagePlanName: !Sub 'fedramp-usage-plan-${EnvironmentSuffix}'
+      Description: !Sub 'Usage plan with throttling for FedRAMP API - ${EnvironmentSuffix}'
+      ApiStages:
+        - ApiId: !Ref FedRAMPRestAPI
+          Stage: !Ref APIStage
+      Throttle:
+        BurstLimit: !Ref ThrottleBurstLimit
+        RateLimit: !Ref ThrottleRateLimit
+      Tags:
+        - Key: Name
+          Value: !Sub 'fedramp-usage-plan-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+  
+  APIKey:
+    Type: AWS::ApiGateway::ApiKey
+    Properties:
+      Name: !Sub 'fedramp-api-key-${EnvironmentSuffix}'
+      Description: !Sub 'API key for FedRAMP API - ${EnvironmentSuffix}'
+      Enabled: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'fedramp-api-key-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+  
+  APIUsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref APIKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref APIUsagePlan
+  
+  # ========================================
+  # CloudWatch - Monitoring and Logging
+  # ========================================
+  
+  APILogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/apigateway/fedramp-api-${EnvironmentSuffix}'
+      RetentionInDays: 90
+      KmsKeyId: !GetAtt EncryptionKey.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub 'fedramp-api-logs-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+  
+  APIGatewayCloudWatchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'api-gateway-cloudwatch-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs'
+      Tags:
+        - Key: Name
+          Value: !Sub 'api-gateway-cloudwatch-role-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+  
+  APIGatewayAccount:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt APIGatewayCloudWatchRole.Arn
+  
+  ThrottlingAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'fedramp-api-throttling-${EnvironmentSuffix}'
+      AlarmDescription: 'Alert when API requests are being throttled'
+      MetricName: Count
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: !Sub 'fedramp-api-${EnvironmentSuffix}'
+      TreatMissingData: notBreaching
+  
+  CacheHitRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'fedramp-api-cache-hit-rate-${EnvironmentSuffix}'
+      AlarmDescription: 'Alert when cache hit rate is low'
+      MetricName: CacheHitCount
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 50
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: !Sub 'fedramp-api-${EnvironmentSuffix}'
+        - Name: Stage
+          Value: !Ref APIStage
+      TreatMissingData: notBreaching
+
+# ========================================
+# Outputs
+# ========================================
+
+Outputs:
+  VPCId:
+    Description: 'VPC ID for FedRAMP infrastructure'
+    Value: !Ref FedRAMPVPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCId'
+  
+  PrivateSubnet1Id:
+    Description: 'Private Subnet 1 ID'
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet1Id'
+  
+  PrivateSubnet2Id:
+    Description: 'Private Subnet 2 ID'
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet2Id'
+  
+  KMSKeyId:
+    Description: 'KMS Key ID for encryption'
+    Value: !Ref EncryptionKey
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyId'
+  
+  KMSKeyArn:
+    Description: 'KMS Key ARN for encryption'
+    Value: !GetAtt EncryptionKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyArn'
+  
+  RedisEndpoint:
+    Description: 'Redis cluster primary endpoint'
+    Value: !GetAtt RedisReplicationGroup.PrimaryEndPoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-RedisEndpoint'
+  
+  RedisPort:
+    Description: 'Redis cluster port'
+    Value: !GetAtt RedisReplicationGroup.PrimaryEndPoint.Port
+    Export:
+      Name: !Sub '${AWS::StackName}-RedisPort'
+  
+  KinesisStreamName:
+    Description: 'Kinesis Data Stream name for audit logs'
+    Value: !Ref AuditLogStream
+    Export:
+      Name: !Sub '${AWS::StackName}-KinesisStreamName'
+  
+  KinesisStreamArn:
+    Description: 'Kinesis Data Stream ARN'
+    Value: !GetAtt AuditLogStream.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-KinesisStreamArn'
+  
+  SecretsManagerArn:
+    Description: 'Secrets Manager ARN for API keys'
+    Value: !Ref APIKeySecret
+    Export:
+      Name: !Sub '${AWS::StackName}-SecretsManagerArn'
+  
+  RestAPIId:
+    Description: 'API Gateway REST API ID'
+    Value: !Ref FedRAMPRestAPI
+    Export:
+      Name: !Sub '${AWS::StackName}-RestAPIId'
+  
+  RestAPIEndpoint:
+    Description: 'API Gateway endpoint URL'
+    Value: !Sub 'https://${FedRAMPRestAPI}.execute-api.${AWS::Region}.amazonaws.com/v1'
+    Export:
+      Name: !Sub '${AWS::StackName}-RestAPIEndpoint'
+  
+  APIKeyId:
+    Description: 'API Gateway API Key ID'
+    Value: !Ref APIKey
+    Export:
+      Name: !Sub '${AWS::StackName}-APIKeyId'
+  
+  UsagePlanId:
+    Description: 'API Gateway Usage Plan ID'
+    Value: !Ref APIUsagePlan
+    Export:
+      Name: !Sub '${AWS::StackName}-UsagePlanId'
+  
+  CloudWatchLogGroupName:
+    Description: 'CloudWatch Log Group name for API Gateway'
+    Value: !Ref APILogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudWatchLogGroupName'
+  
+  EnvironmentSuffix:
+    Description: 'Environment suffix used for this deployment'
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'

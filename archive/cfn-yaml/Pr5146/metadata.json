@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "6858197826",
+  "team": "synth",
+  "startedAt": "2025-10-27T22:54:22+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "Kinesis Data Streams",
+    "ECS Fargate",
+    "RDS Aurora PostgreSQL",
+    "ElastiCache Redis",
+    "Secrets Manager",
+    "API Gateway"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

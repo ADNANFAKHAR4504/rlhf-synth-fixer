@@ -1,0 +1,22 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000201",
+  "team": "6",
+  "startedAt": "2025-10-29T15:05:27.898Z",
+  "subtask": "Application Deployment",
+  "background": "A financial analytics startup needs a serverless data processing pipeline that can handle real time market data ingestion The system must process incoming CSV files perform calculations and provide REST API access to aggregated results while maintaining strict performance requirements",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": "API Gateway, Lambda, DynamoDB, S3, SQS, IAM, CloudWatch, X-Ray",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}

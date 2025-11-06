@@ -9,12 +9,12 @@ This document contains common patterns, failures, and solutions discovered durin
 
 ### CSV File Corruption Prevention (CRITICAL)
 
-**Symptom**: tasks.csv file gets corrupted with only current task's data, all other task rows are lost/overwritten
+**Symptom**: .claude/tasks.csv file gets corrupted with only current task's data, all other task rows are lost/overwritten
 
 **Root Cause**: Not preserving all rows when updating CSV file, or not validating write operations
 
 **Prevention Rules** (MANDATORY for ALL CSV operations):
-1. **ALWAYS create backup before ANY modification**: `shutil.copy2('tasks.csv', 'tasks.csv.backup')`
+1. **ALWAYS create backup before ANY modification**: `shutil.copy2('.claude/tasks.csv', '.claude/tasks.csv.backup')`
 2. **ALWAYS read ALL rows into memory** before modifying any single row
 3. **ALWAYS validate row count** before and after write operations
 4. **ALWAYS verify fieldnames** are present and non-empty
@@ -28,12 +28,12 @@ import shutil
 import sys
 
 # 1. BACKUP
-shutil.copy2('tasks.csv', 'tasks.csv.backup')
+shutil.copy2('.claude/tasks.csv', '.claude/tasks.csv.backup')
 
 # 2. READ ALL ROWS
 rows = []
 original_count = 0
-with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
+with open('.claude/tasks.csv', 'r', newline='', encoding='utf-8') as f:
     reader = csv.DictReader(f)
     fieldnames = reader.fieldnames
     for row in reader:
@@ -46,29 +46,29 @@ with open('tasks.csv', 'r', newline='', encoding='utf-8') as f:
 # 3. VALIDATE BEFORE WRITE
 if len(rows) != original_count or not fieldnames:
     print("ERROR: Data validation failed")
-    shutil.copy2('tasks.csv.backup', 'tasks.csv')
+    shutil.copy2('.claude/tasks.csv.backup', '.claude/tasks.csv')
     sys.exit(1)
 
 # 4. WRITE ALL ROWS
-with open('tasks.csv', 'w', newline='', encoding='utf-8') as f:
+with open('.claude/tasks.csv', 'w', newline='', encoding='utf-8') as f:
     writer = csv.DictWriter(f, fieldnames=fieldnames)
     writer.writeheader()
     writer.writerows(rows)  # Write ALL rows
 
 # 5. VERIFY WRITE
-verify_count = sum(1 for _ in csv.DictReader(open('tasks.csv', 'r')))
+verify_count = sum(1 for _ in csv.DictReader(open('.claude/tasks.csv', 'r')))
 if verify_count != original_count:
     print("ERROR: Write verification failed")
-    shutil.copy2('tasks.csv.backup', 'tasks.csv')
+    shutil.copy2('.claude/tasks.csv.backup', '.claude/tasks.csv')
     sys.exit(1)
 ```
 
-**Applies to**: ALL agents that modify tasks.csv (task-selector, task-coordinator)
+**Applies to**: ALL agents that modify .claude/tasks.csv (task-selector, task-coordinator)
 
 **Recovery**: If corruption occurs:
 1. Use the validation tool: `python3 .claude/scripts/validate-tasks-csv.py --restore`
-2. Or manually restore: `cp tasks.csv.backup tasks.csv`
-3. Or use git: `git checkout tasks.csv` (if committed)
+2. Or manually restore: `cp .claude/tasks.csv.backup .claude/tasks.csv`
+3. Or use git: `git checkout .claude/tasks.csv` (if committed)
 
 **Validation Tool**: Use `python3 .claude/scripts/validate-tasks-csv.py` to:
 - Validate CSV structure and integrity
@@ -84,7 +84,7 @@ if verify_count != original_count:
 
 **Symptom**: Task requires Pulumi+Go but generated code is CDK+TypeScript, or task requires Terraform but code is in Pulumi
 
-**Root Cause**: Not reading or honoring the platform/language constraints from metadata.json or tasks.csv
+**Root Cause**: Not reading or honoring the platform/language constraints from metadata.json or .claude/tasks.csv
 
 **Quick Fix**:
 - **ALWAYS read metadata.json FIRST** before generating any code
@@ -202,7 +202,55 @@ cat metadata.json | jq -r '"\(.platform) - \(.language)"'
 
 ## Common Deployment Failures & Quick Fixes
 
-### 1. Lambda Reserved Concurrency Issues
+### 1. AWS GuardDuty - Account-Level Resource Constraint
+
+**Symptom**: `The request is rejected because a detector already exists for the current account`
+
+**Root Cause**: GuardDuty allows only ONE detector per AWS account/region. It's an account-level service, not a stack-level resource.
+
+**Quick Fix**:
+- Remove GuardDuty from infrastructure code entirely
+- Document that GuardDuty should be enabled manually at account level
+- Alternative: Use CloudFormation custom resource to check if detector exists before creating
+
+**Applies to**: All platforms when deploying GuardDuty
+
+**Note**: If task explicitly requires GuardDuty in requirements, add comment in code explaining account-level limitation and manual setup requirement.
+
+---
+
+### 2. AWS Config IAM Role - Managed Policy Name
+
+**Symptom**: `Policy arn:aws:iam::aws:policy/service-role/ConfigRole does not exist` or `Policy arn:aws:iam::aws:policy/AWS_ConfigRole does not exist`
+
+**Root Cause**: Model hallucinates incorrect AWS Config managed policy names
+
+**Quick Fix**:
+- **Correct managed policy**: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole` (note `service-role/AWS_` prefix)
+- **Alternative**: Use AWS Config service-linked role `AWSServiceRoleForConfig` (recommended, auto-created)
+- **Last resort**: Create custom inline policy with Config permissions
+
+**Example (CDK Python)**:
+```python
+# CORRECT - Use actual managed policy
+config_role = iam.Role(
+    self, "ConfigRole",
+    assumed_by=iam.ServicePrincipal("config.amazonaws.com"),
+    managed_policies=[
+        iam.ManagedPolicy.from_aws_managed_policy_name(
+            "service-role/AWS_ConfigRole"  # Note: service-role/ prefix
+        )
+    ]
+)
+```
+
+**Applies to**: CDK, CloudFormation, Terraform, Pulumi when using AWS Config
+
+**Reference**: AWS Docs - [AWS_ConfigRole Managed Policy](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AWS_ConfigRole.html)
+
+---
+
+### 3. Lambda Reserved Concurrency Issues
 
 **Symptom**: `Specified ReservedConcurrentExecutions for function decreases account's UnreservedConcurrentExecution below its minimum value of [10]`
 
@@ -216,7 +264,7 @@ cat metadata.json | jq -r '"\(.platform) - \(.language)"'
 
 ---
 
-### 2. Lambda Runtime - AWS SDK Missing
+### 4. Lambda Runtime - AWS SDK Missing
 
 **Symptom**: `Runtime.ImportModuleError: Error: Cannot find module 'aws-sdk'`
 
@@ -240,7 +288,7 @@ const key = event.Records[0].s3.object.key;
 
 ---
 
-### 3. Hardcoded Environment Suffixes
+### 5. Hardcoded Environment Suffixes
 
 **Symptom**: Resource conflicts, deployment failures in CI/CD with "already exists" errors
 
@@ -254,13 +302,13 @@ const key = event.Records[0].s3.object.key;
 
 ---
 
-### 4. S3 Bucket Considerations
+### 6. S3 Bucket Considerations
 
 **Note**: Resource cleanup (including S3 bucket deletion) is handled after manual PR review. The infrastructure code does not need special deletion configurations for synthetic tasks.
 
 ---
 
-### 5. RDS Multi-AZ Deployment Time
+### 7. RDS Multi-AZ Deployment Time
 
 **Symptom**: Deployments take 20-30+ minutes, often timeout
 
@@ -274,7 +322,7 @@ const key = event.Records[0].s3.object.key;
 
 ---
 
-### 6. NAT Gateway Costs
+### 8. NAT Gateway Costs
 
 **Symptom**: High AWS costs from synthetic tasks
 
@@ -586,6 +634,6 @@ grep -rni "RETAIN\|DeletionPolicy.*Retain\|deletion_protection.*true" lib/
 
 ---
 
-*Last Updated: 2025-10-13*
+*Last Updated: 2025-11-06*
 *This document is maintained by the task-coordinator and updated after each task completion.*
 

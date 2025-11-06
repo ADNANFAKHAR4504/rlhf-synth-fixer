@@ -19,18 +19,46 @@ All file operations are relative to this directory.
 
 **Before Starting**:
 - Review `.claude/lessons_learnt.md` for common patterns and pitfalls
+- Review `.claude/docs/references/metadata-requirements.md` for strict metadata validation rules
+- Review `.claude/docs/references/cicd-file-restrictions.md` for CRITICAL file location requirements
 - Review `.claude/validation_and_testing_guide.md` Phase 1 for quality requirements
 
 ### PHASE 0: Pre-Generation Validation (CRITICAL)
 
-**FIRST**: Verify worktree location
+**⚠️ MANDATORY FIRST STEP**: Verify worktree location with automated script
+```bash
+# REQUIRED: Run this before ANY file operations
+bash .claude/scripts/verify-worktree.sh || exit 1
+
+# This automatically verifies:
+# - You're in worktree directory (not main repo)
+# - Branch matches directory name (synth-{task_id})
+# - metadata.json exists
+# - Not on main/master branch
+# - Exports $WORKTREE_DIR, $TASK_ID, $TASK_BRANCH
+```
+
+**If verification fails**: STOP immediately, report error, do NOT proceed.
+
+**Manual verification (fallback only)**:
 ```bash
 pwd  # MUST end with: /worktree/synth-{task_id}
 ```
 If not in worktree, STOP and report error.
 
 **Validation**: Run Checkpoint A: Metadata Completeness
-- See `docs/references/validation-checkpoints.md` for field requirements
+```bash
+# REQUIRED: Validate metadata.json before proceeding
+./.claude/scripts/validate-metadata.sh metadata.json || {
+  echo "❌ BLOCKED: Metadata validation failed"
+  echo "📖 Review: .claude/docs/references/metadata-requirements.md"
+  exit 1
+}
+```
+- **CRITICAL**: Read `.claude/docs/references/metadata-requirements.md` for strict field requirements
+- Verify all required fields: platform, language, complexity, turn_type, po_id, team, startedAt, subtask
+- Verify aws_services is string[] (array), NOT string
+- Verify subject_labels is string[] (array), NOT string
 - On failure, see `docs/references/error-handling.md` Standard Error Response
 
 **Validation**: Run Checkpoint B: Platform-Language Compatibility
@@ -73,6 +101,10 @@ echo "Target region: $REGION"
 ### PHASE 2: Generate Requirements (lib/PROMPT.md)
 
 **Target**: Create `./lib/PROMPT.md` in current worktree
+
+**⚠️ CRITICAL FILE LOCATION**: PROMPT.md MUST be in `lib/PROMPT.md`, NOT at root level.
+- See `.claude/docs/references/cicd-file-restrictions.md` for file location rules
+- Files in wrong locations will FAIL CI/CD pipeline immediately
 
 **Goal**: Human-like, conversational prompt following CLI tool patterns.
 
@@ -232,6 +264,13 @@ echo "✅ Configuration validated. Generating code..."
 **Output**: Create `./lib/MODEL_RESPONSE.md`
 **Extract Code To**: `./lib/` directory
 
+**⚠️ CRITICAL FILE LOCATIONS**: ALL files must follow CI/CD restrictions:
+- MODEL_RESPONSE.md → `lib/MODEL_RESPONSE.md` (NOT at root)
+- Infrastructure code → `lib/` directory
+- Lambda functions → `lib/lambda/` or `lib/functions/`
+- README.md → `lib/README.md` (NOT at root)
+- See `.claude/docs/references/cicd-file-restrictions.md` for complete rules
+
 1. **Use PROMPT.md to get LLM response**:
    - Send PROMPT.md to LLM for code generation
    - LLM returns complete implementation
@@ -280,6 +319,8 @@ If WRONG platform/language:
    - Do NOT create code outside bin/, lib/, test/, tests/
    - Lambda code: create in lib/lambda/ or lib/functions/
    - Never remove templates/ folder
+   - **CRITICAL**: All documentation files (PROMPT.md, MODEL_RESPONSE.md, README.md) MUST be in `lib/`, NOT at root
+   - See `.claude/docs/references/cicd-file-restrictions.md` for violations that fail CI/CD
 
 ---
 

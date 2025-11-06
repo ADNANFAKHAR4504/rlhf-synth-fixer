@@ -14,7 +14,7 @@ interface TaskMetadata {
   startedAt: string;
   subtask: string;
   subject_labels?: string[];
-  aws_services?: string;
+  aws_services?: string[];
   task_config?: {
     deploy_env: string;
   };
@@ -29,6 +29,23 @@ async function generateMetadataFile(metadata: TaskMetadata): Promise<void> {
     console.log('✓ Generated metadata.json');
   } catch (err: unknown) {
     console.error('Error generating metadata.json:', err);
+  }
+}
+
+async function createTfvarsFiles(): Promise<void> {
+  const libDir = path.join(__dirname, '..', 'lib');
+  const tfvarsFiles = ['dev.tfvars', 'staging.tfvars', 'prod.tfvars'];
+
+  try {
+    await fs.ensureDir(libDir);
+
+    for (const filename of tfvarsFiles) {
+      const filePath = path.join(libDir, filename);
+      await fs.writeFile(filePath, '', 'utf8');
+      console.log(`✓ Created ${filename}`);
+    }
+  } catch (err: unknown) {
+    console.error('Error creating tfvars files:', err);
   }
 }
 
@@ -146,8 +163,7 @@ const SUBTASK_CHOICES = [
 const subjectLabelsBySubtask: Record<string, string> = {
   'Environment Migration': 'Provisioning of Infrastructure Environments',
   'Cloud Environment Setup': 'Provisioning of Infrastructure Environments',
-  'Multi-Environment Consistency':
-    'Provisioning of Infrastructure Environments',
+  'Multi-Environment Consistency': 'IaC-Multi-Environment-Management',
   'Web Application Deployment': 'Provisioning of Infrastructure Environments',
 
   'Serverless Infrastructure (Functions as Code)': 'Application Deployment',
@@ -170,6 +186,8 @@ const ANALYSIS_SUBTASKS = new Set<string>([
   'General Infrastructure Tooling QA',
 ]);
 
+const CICD_PIPELINE_SUBTASKS = new Set<string>(['CI/CD Pipeline']);
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
@@ -190,6 +208,7 @@ async function main(): Promise<void> {
     });
 
     const isAnalysis = ANALYSIS_SUBTASKS.has(taskSubCategory);
+    const isCICDPipeline = CICD_PIPELINE_SUBTASKS.has(taskSubCategory);
 
     let platform = '';
     let language = '';
@@ -199,11 +218,14 @@ async function main(): Promise<void> {
       const analysisChoice = await select({
         message: 'Select analysis template type:',
         choices: [
-          { name: 'Shell', value: 'shell' },
-          { name: 'Python', value: 'python' },
+          { name: 'Shell', value: 'sh' },
+          { name: 'Python', value: 'py' },
         ],
       });
       language = analysisChoice;
+    } else if (isCICDPipeline) {
+      platform = 'cicd';
+      language = 'yml';
     } else {
       platform = await select({
         message: 'Select the platform:',
@@ -264,7 +286,7 @@ async function main(): Promise<void> {
     });
 
     let resourcesText: string | undefined = undefined;
-    if (!isAnalysis) {
+    if (!isAnalysis && !isCICDPipeline) {
       resourcesText = await input({
         message:
           'Enter aws_services to provision (comma-separated). e.g., S3 Bucket, CloudFormation, Lambda, Fargate, VPC',
@@ -275,9 +297,11 @@ async function main(): Promise<void> {
 
     const templateName = isAnalysis
       ? `analysis-${language}`
-      : `${platform}-${language}`;
+      : isCICDPipeline
+        ? 'cicd-yml'
+        : `${platform}-${language}`;
 
-    if (!isAnalysis) {
+    if (!isAnalysis && !isCICDPipeline) {
       const templatesDir = path.join(__dirname, '..', 'templates');
       const templatePath = path.join(templatesDir, templateName);
       if (!(await fs.pathExists(templatePath))) {
@@ -295,16 +319,13 @@ async function main(): Promise<void> {
       taskSubCategory === 'Multi-Environment Consistency' &&
       platform === 'tf'
     ) {
-      deployEnv = await input({
-        message:
-          'Enter the deployment environment tfvars (e.g., dev.tfvars, staging.tfvars, prod.tfvars):',
-        validate: value => {
-          if (!value || !value.trim()) {
-            return 'Deployment environment is required';
-          }
-          return true;
-        },
-        default: 'dev.tfvars',
+      deployEnv = await select({
+        message: 'Select the deployment environment tfvars:',
+        choices: [
+          { name: 'dev.tfvars', value: 'dev.tfvars' },
+          { name: 'staging.tfvars', value: 'staging.tfvars' },
+          { name: 'prod.tfvars', value: 'prod.tfvars' },
+        ],
       });
     }
 
@@ -319,7 +340,12 @@ async function main(): Promise<void> {
       subtask: label ? label : taskSubCategory,
       ...(taskSubCategory ? { subject_labels: [taskSubCategory] } : {}),
       ...(resourcesText && resourcesText.trim().length > 0
-        ? { aws_services: resourcesText.trim() }
+        ? {
+            aws_services: resourcesText
+              .split(',')
+              .map(s => s.trim())
+              .filter(s => s.length > 0),
+          }
         : {}),
       ...(deployEnv
         ? {
@@ -356,6 +382,15 @@ async function main(): Promise<void> {
     if (confirmApply) {
       await copyTemplate(templateName);
       await generateMetadataFile(metadata);
+
+      // Create tfvars files for Multi-Environment Consistency with Terraform
+      if (
+        taskSubCategory === 'Multi-Environment Consistency' &&
+        platform === 'tf'
+      ) {
+        await createTfvarsFiles();
+      }
+
       console.log('\n🎉 RLHF task created successfully!');
     } else {
       console.log('Operation cancelled');
