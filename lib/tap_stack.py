@@ -23,13 +23,10 @@ class TapStack:
         """
         self.environment_suffix = environment_suffix
 
-        # Configuration
+        # Configuration - require VPC and subnet IDs to be provided
         config = pulumi.Config()
-        self.vpc_id = config.get("vpc_id") or "vpc-0123456789abcdef"
-        self.private_subnet_ids = config.get_object("private_subnet_ids") or [
-            "subnet-private-1a",
-            "subnet-private-1b"
-        ]
+        self.vpc_id = config.require("vpc_id")
+        self.private_subnet_ids = config.require_object("private_subnet_ids")
         self.app_security_group_id = config.get("app_security_group_id") or "sg-app-servers"
         self.onprem_db_host = config.get("onprem_db_host") or "10.0.1.50"
         self.onprem_db_port = config.get_int("onprem_db_port") or 5432

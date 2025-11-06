@@ -9,6 +9,17 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pulumi
 
+# Mock Pulumi config before setting mocks
+mock_config = Mock()
+mock_config.require.return_value = "vpc-12345678"
+mock_config.require_object.return_value = ["subnet-12345", "subnet-67890"]
+mock_config.get.return_value = None
+mock_config.get_secret.return_value = None
+mock_config.get_int.return_value = None
+
+# Apply patch at module level
+config_patch = patch('pulumi.Config', return_value=mock_config)
+config_patch.start()
 
 # Set up Pulumi mocks
 class MyMocks(pulumi.runtime.Mocks):
@@ -146,7 +157,7 @@ class MyMocks(pulumi.runtime.Mocks):
         elif args.typ == "aws:cloudwatch/metricAlarm:MetricAlarm":
             outputs["id"] = "alarm-12345"
 
-        return outputs
+        return [outputs.get("id", "id-12345"), outputs]
 
     async def serialize_property(self, value, deps, typ):
         """Serialize property values for protobuf."""
@@ -171,6 +182,121 @@ class TestTapStack(unittest.TestCase):
         # Import after mocks are set
         from lib.tap_stack import TapStack
         cls.TapStack = TapStack
+
+    def call(self, args: pulumi.runtime.MockCallArgs):
+        """Mock Pulumi function calls."""
+        if args.token == "aws:secretsmanager/getRandomPassword:getRandomPassword":
+            return {
+                "random_password": "TestPassword123456789012345678901234"
+            }
+        elif args.token == "aws:secretsmanager/getSecretVersion:GetSecretVersion":
+            return {
+                "secret_string": json.dumps({
+                    "username": "masteruser",
+                    "password": "TestPassword123456789012345678901234",
+                    "engine": "postgres",
+                    "port": 5432
+                })
+            }
+        elif args.token == "aws:iam/getPolicyDocument:getPolicyDocument":
+            return {
+                "json": json.dumps({
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                        "Action": "sts:AssumeRole",
+                        "Principal": {"Service": "dms.amazonaws.com"},
+                        "Effect": "Allow"
+                    }]
+                })
+            }
+        return {}
+
+    def read_resource(self, args: pulumi.runtime.MockResourceArgs):
+        """Mock reading resources."""
+        outputs = {}
+        if args.typ == "aws:kms/key:Key":
+            outputs["id"] = "key-12345"
+            outputs["arn"] = f"arn:aws:kms:us-east-1:123456789012:key/key-12345"
+            outputs["key_id"] = "key-12345"
+            outputs["enable_key_rotation"] = True
+        elif args.typ == "aws:kms/alias:Alias":
+            outputs["id"] = "alias/test"
+        elif args.typ == "aws:secretsmanager/secret:Secret":
+            outputs["id"] = "secret-12345"
+            outputs["arn"] = f"arn:aws:secretsmanager:us-east-1:123456789012:secret:test-secret"
+        elif args.typ == "aws:secretsmanager/secretVersion:SecretVersion":
+            outputs["id"] = "secret-version-12345"
+        elif args.typ == "aws:rds/subnetGroup:SubnetGroup":
+            outputs["id"] = "subnet-group-test"
+        elif args.typ == "aws:ec2/securityGroup:SecurityGroup":
+            outputs["id"] = "sg-12345"
+        elif args.typ == "aws:ec2/securityGroupRule:SecurityGroupRule":
+            outputs["id"] = "sgr-12345"
+        elif args.typ == "aws:rds/instance:Instance":
+            outputs["id"] = "rds-instance-12345"
+            outputs["endpoint"] = "test-db.abc123.us-east-1.rds.amazonaws.com:5432"
+            outputs["address"] = "test-db.abc123.us-east-1.rds.amazonaws.com"
+            outputs["port"] = 5432
+            outputs["arn"] = "arn:aws:rds:us-east-1:123456789012:db:test-db"
+            outputs["storage_encrypted"] = True
+            outputs["kms_key_id"] = "key-12345"
+        elif args.typ == "aws:dms/replicationSubnetGroup:ReplicationSubnetGroup":
+            outputs["id"] = "dms-subnet-group-test"
+        elif args.typ == "aws:iam/role:Role":
+            outputs["id"] = "role-12345"
+            outputs["arn"] = "arn:aws:iam::123456789012:role/test-role"
+        elif args.typ == "aws:iam/rolePolicyAttachment:RolePolicyAttachment":
+            outputs["id"] = "attach-12345"
+        elif args.typ == "aws:dms/replicationInstance:ReplicationInstance":
+            outputs["id"] = "replication-instance-12345"
+            outputs["replication_instance_arn"] = "arn:aws:dms:us-east-1:123456789012:rep:test"
+        elif args.typ == "aws:dms/endpoint:Endpoint":
+            outputs["id"] = "endpoint-12345"
+            outputs["endpoint_arn"] = "arn:aws:dms:us-east-1:123456789012:endpoint:test"
+        elif args.typ == "aws:dms/replicationTask:ReplicationTask":
+            outputs["id"] = "task-12345"
+            outputs["replication_task_arn"] = "arn:aws:dms:us-east-1:123456789012:task:test"
+        elif args.typ == "aws:sns/topic:Topic":
+            outputs["id"] = "topic-12345"
+            outputs["arn"] = "arn:aws:sns:us-east-1:123456789012:test-topic"
+        elif args.typ == "aws:cloudwatch/metricAlarm:MetricAlarm":
+            outputs["id"] = "alarm-12345"
+
+        return outputs
+
+    async def serialize_property(self, value, deps, typ):
+        """Serialize property values for protobuf."""
+        if isinstance(value, dict):
+            return json.dumps(value)
+        if isinstance(value, list):
+            return json.dumps(value)
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        return str(value)
+
+
+pulumi.runtime.set_mocks(MyMocks())
+
+
+class TestTapStack(unittest.TestCase):
+    """Test cases for TapStack infrastructure."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up test class."""
+        # Mock Pulumi config to provide required values
+        with patch('pulumi.Config') as mock_config:
+            mock_config_instance = Mock()
+            mock_config_instance.require.return_value = "vpc-12345678"
+            mock_config_instance.require_object.return_value = ["subnet-12345", "subnet-67890"]
+            mock_config_instance.get.return_value = None
+            mock_config_instance.get_secret.return_value = None
+            mock_config_instance.get_int.return_value = None
+            mock_config.return_value = mock_config_instance
+            
+            # Import after mocks are set
+            from lib.tap_stack import TapStack
+            cls.TapStack = TapStack
 
     def test_stack_initialization(self):
         """Test that TapStack initializes successfully."""
