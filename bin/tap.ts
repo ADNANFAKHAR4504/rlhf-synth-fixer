@@ -1,3 +1,20 @@
+declare module '@aws-sdk/client-iot-data-plane' {
+  export interface IoTDataPlaneClientConfig {
+    region?: string;
+    endpoint?: string;
+  }
+
+  export class IoTDataPlaneClient {
+    constructor(config?: IoTDataPlaneClientConfig);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    send(command: any): Promise<any>;
+  }
+
+  export class PublishCommand {
+    constructor(params?: Record<string, unknown>);
+  }
+}
+
 /**
  * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
  *
