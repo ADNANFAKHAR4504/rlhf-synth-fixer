@@ -336,16 +336,16 @@ public class MainIntegrationTest {
 
         @Test
         @Order(5)
-        @DisplayName("Test S3 transformed output bucket exists")
-        void testS3TransformedBucketExists() {
+        @DisplayName("Test S3 media output bucket exists")
+        void testS3MediaOutputBucketExists() {
             ListBucketsResponse response = s3Client.listBuckets();
 
-            Optional<Bucket> transformedBucket = response.buckets().stream()
-                    .filter(b -> b.name().contains("transformed-output"))
+            Optional<Bucket> mediaBucket = response.buckets().stream()
+                    .filter(b -> b.name().contains("media-output"))
                     .findFirst();
 
-            assertTrue(transformedBucket.isPresent(),
-                    "Transformed output bucket should exist (looking for pattern: *transformed-output*)");
+            assertTrue(mediaBucket.isPresent(),
+                    "Media output bucket should exist (looking for pattern: *media-output*)");
         }
 
         @Test
@@ -498,10 +498,10 @@ public class MainIntegrationTest {
             DescribeTableResponse tableResponse = dynamoDbClient.describeTable(request);
             List<AttributeDefinition> attributes = tableResponse.table().attributeDefinitions();
 
-            boolean hasMetadataId = attributes.stream()
-                    .anyMatch(attr -> "metadataId".equals(attr.attributeName()));
+            boolean hasAssetId = attributes.stream()
+                    .anyMatch(attr -> "assetId".equals(attr.attributeName()));
 
-            assertTrue(hasMetadataId, "Table should have metadataId attribute");
+            assertTrue(hasAssetId, "Table should have assetId attribute");
         }
 
         @Test
@@ -517,11 +517,13 @@ public class MainIntegrationTest {
 
             String tableName = metadataTable.get();
             String testId = "test-" + System.currentTimeMillis();
+            long timestamp = System.currentTimeMillis();
 
             Map<String, AttributeValue> item = new HashMap<>();
-            item.put("metadataId", AttributeValue.builder().s(testId).build());
+            item.put("assetId", AttributeValue.builder().s(testId).build());
+            item.put("timestamp", AttributeValue.builder().n(String.valueOf(timestamp)).build());
             item.put("status", AttributeValue.builder().s("test").build());
-            item.put("timestamp", AttributeValue.builder().n(String.valueOf(System.currentTimeMillis())).build());
+            item.put("type", AttributeValue.builder().s("integration-test").build());
 
             PutItemRequest request = PutItemRequest.builder()
                     .tableName(tableName)
@@ -533,7 +535,8 @@ public class MainIntegrationTest {
 
             // Cleanup
             Map<String, AttributeValue> key = new HashMap<>();
-            key.put("metadataId", AttributeValue.builder().s(testId).build());
+            key.put("assetId", AttributeValue.builder().s(testId).build());
+            key.put("timestamp", AttributeValue.builder().n(String.valueOf(timestamp)).build());
 
             DeleteItemRequest deleteRequest = DeleteItemRequest.builder()
                     .tableName(tableName)
@@ -555,11 +558,14 @@ public class MainIntegrationTest {
 
             String tableName = metadataTable.get();
             String testId = "test-get-" + System.currentTimeMillis();
+            long timestamp = System.currentTimeMillis();
 
             // Put item first
             Map<String, AttributeValue> item = new HashMap<>();
-            item.put("metadataId", AttributeValue.builder().s(testId).build());
+            item.put("assetId", AttributeValue.builder().s(testId).build());
+            item.put("timestamp", AttributeValue.builder().n(String.valueOf(timestamp)).build());
             item.put("data", AttributeValue.builder().s("test-data").build());
+            item.put("type", AttributeValue.builder().s("test-type").build());
 
             PutItemRequest putRequest = PutItemRequest.builder()
                     .tableName(tableName)
@@ -569,7 +575,8 @@ public class MainIntegrationTest {
 
             // Get item
             Map<String, AttributeValue> key = new HashMap<>();
-            key.put("metadataId", AttributeValue.builder().s(testId).build());
+            key.put("assetId", AttributeValue.builder().s(testId).build());
+            key.put("timestamp", AttributeValue.builder().n(String.valueOf(timestamp)).build());
 
             GetItemRequest getRequest = GetItemRequest.builder()
                     .tableName(tableName)
@@ -578,7 +585,7 @@ public class MainIntegrationTest {
 
             GetItemResponse getResponse = dynamoDbClient.getItem(getRequest);
             assertTrue(getResponse.hasItem(), "Item should exist");
-            assertEquals(testId, getResponse.item().get("metadataId").s(),
+            assertEquals(testId, getResponse.item().get("assetId").s(),
                     "Retrieved item should match");
 
             // Cleanup
@@ -596,11 +603,11 @@ public class MainIntegrationTest {
             ListFunctionsResponse response = lambdaClient.listFunctions();
 
             Optional<FunctionConfiguration> metadataLambda = response.functions().stream()
-                    .filter(f -> f.functionName().contains("metadata"))
+                    .filter(f -> f.functionName().contains("processor") || f.functionName().contains("indexer"))
                     .findFirst();
 
             assertTrue(metadataLambda.isPresent(),
-                    "Metadata Lambda function should exist (looking for pattern: *metadata*)");
+                    "Lambda function should exist (looking for pattern: *processor* or *indexer*)");
 
             FunctionConfiguration lambda = metadataLambda.get();
             assertEquals("Active", lambda.state().toString(),
@@ -613,10 +620,10 @@ public class MainIntegrationTest {
         void testLambdaEnvironmentVariables() {
             ListFunctionsResponse response = lambdaClient.listFunctions();
             Optional<FunctionConfiguration> metadataLambda = response.functions().stream()
-                    .filter(f -> f.functionName().contains("metadata"))
+                    .filter(f -> f.functionName().contains("processor") || f.functionName().contains("indexer"))
                     .findFirst();
 
-            Assumptions.assumeTrue(metadataLambda.isPresent(), "Metadata Lambda should exist");
+            Assumptions.assumeTrue(metadataLambda.isPresent(), "Lambda should exist");
 
             FunctionConfiguration lambda = metadataLambda.get();
             Map<String, String> envVars = lambda.environment().variables();
@@ -631,10 +638,10 @@ public class MainIntegrationTest {
         void testLambdaInvocation() {
             ListFunctionsResponse response = lambdaClient.listFunctions();
             Optional<FunctionConfiguration> metadataLambda = response.functions().stream()
-                    .filter(f -> f.functionName().contains("metadata"))
+                    .filter(f -> f.functionName().contains("processor") || f.functionName().contains("indexer"))
                     .findFirst();
 
-            Assumptions.assumeTrue(metadataLambda.isPresent(), "Metadata Lambda should exist");
+            Assumptions.assumeTrue(metadataLambda.isPresent(), "Lambda should exist");
 
             String functionName = metadataLambda.get().functionName();
             String testPayload = "{\"test\":\"event\",\"timestamp\":" + System.currentTimeMillis() + "}";
