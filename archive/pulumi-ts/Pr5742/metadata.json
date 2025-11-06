@@ -11,10 +11,21 @@
     "Cloud Environment Setup"
   ],
   "aws_services": [
-    "Route53",
+    "KMS",
     "IAM",
     "SNS",
     "S3",
-    "Dynamo"
-  ]
+    "Lambda",
+    "SecretsManager",
+    "CloudWatch",
+    "CloudTrail",
+    "VPC"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
 }
