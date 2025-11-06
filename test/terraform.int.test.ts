@@ -71,23 +71,25 @@ import axios from 'axios';
 // DEPLOYMENT OUTPUT MANAGEMENT
 // ============================================================================
 
+const OUTPUT_FILE = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+
 interface DeploymentOutputs {
-  alb_dns_name: { value: string };
-  cluster_certificate_authority_data: { value: string };
-  cluster_endpoint: { value: string };
-  cluster_name: { value: string };
-  cluster_oidc_issuer_url: { value: string };
-  cluster_security_group_id: { value: string };
-  vpc_id: { value: string };
+  alb_dns_name: string;
+  cluster_certificate_authority_data: string;
+  cluster_endpoint: string;
+  cluster_name: string;
+  cluster_oidc_issuer_url: string;
+  cluster_security_group_id: string;
+  vpc_id: string;
 }
 
 // Load deployment outputs dynamically
 function loadDeploymentOutputs(): DeploymentOutputs {
   const outputPaths = [
+    path.resolve(process.cwd(), 'cfn-outputs', 'flat-outputs.json'),
     path.resolve(process.cwd(), 'terraform-outputs.json'),
     path.resolve(process.cwd(), 'outputs.json'),
     path.resolve(process.cwd(), 'deployment-outputs.json'),
-    path.resolve(process.cwd(), 'cfn-outputs'),
   ];
 
   for (const outputPath of outputPaths) {
@@ -152,7 +154,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
     for (const tag of testTags) {
       try {
         await eksClient.send(new UntagResourceCommand({
-          resourceArn: `arn:aws:eks:${region}:${accountId}:cluster/${outputs.cluster_name.value}`,
+          resourceArn: `arn:aws:eks:${region}:${accountId}:cluster/${outputs.cluster_name}`,
           tagKeys: [tag.key]
         }));
       } catch (error) {
@@ -431,7 +433,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Add tag to cluster
       await eksClient.send(new TagResourceCommand({
-        resourceArn: `arn:aws:eks:${region}:${accountId}:cluster/${outputs.cluster_name.value}`,
+        resourceArn: `arn:aws:eks:${region}:${accountId}:cluster/${outputs.cluster_name}`,
         tags: {
           [testTagKey]: testTagValue
         }
@@ -448,7 +450,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       
       // Remove tag
       await eksClient.send(new UntagResourceCommand({
-        resourceArn: `arn:aws:eks:${region}:${accountId}:cluster/${outputs.cluster_name.value}`,
+        resourceArn: `arn:aws:eks:${region}:${accountId}:cluster/${outputs.cluster_name}`,
         tagKeys: [testTagKey]
       }));
       
