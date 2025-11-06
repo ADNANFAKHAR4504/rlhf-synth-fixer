@@ -43,6 +43,7 @@ class TestTapStackIntegration(unittest.TestCase):
         cls.lambda_client = boto3.client('lambda', region_name=cls.region)
         cls.apigateway_client = boto3.client('apigateway', region_name=cls.region)
         cls.cloudwatch_client = boto3.client('cloudwatch', region_name=cls.region)
+        cls.logs_client = boto3.client('logs', region_name=cls.region)
         cls.ssm_client = boto3.client('ssm', region_name=cls.region)
         cls.iam_client = boto3.client('iam', region_name=cls.region)
         
@@ -553,7 +554,7 @@ class TestTapStackIntegration(unittest.TestCase):
             # Check for transaction processor log group
             log_group_name = f"/aws/lambda/transaction-processor-{self.environment_suffix}"
             try:
-                response = self.cloudwatch_client.describe_log_groups(
+                response = self.logs_client.describe_log_groups(
                     logGroupNamePrefix=log_group_name
                 )
                 log_groups = response.get('logGroups', [])
@@ -566,7 +567,7 @@ class TestTapStackIntegration(unittest.TestCase):
             # Check for fraud handler log group
             log_group_name = f"/aws/lambda/fraud-handler-{self.environment_suffix}"
             try:
-                response = self.cloudwatch_client.describe_log_groups(
+                response = self.logs_client.describe_log_groups(
                     logGroupNamePrefix=log_group_name
                 )
                 log_groups = response.get('logGroups', [])
@@ -579,7 +580,7 @@ class TestTapStackIntegration(unittest.TestCase):
             # Check for notification sender log group
             log_group_name = f"/aws/lambda/notification-sender-{self.environment_suffix}"
             try:
-                response = self.cloudwatch_client.describe_log_groups(
+                response = self.logs_client.describe_log_groups(
                     logGroupNamePrefix=log_group_name
                 )
                 log_groups = response.get('logGroups', [])
