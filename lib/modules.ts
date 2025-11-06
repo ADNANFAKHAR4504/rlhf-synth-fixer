@@ -730,14 +730,6 @@ export class ComputeModule extends Construct {
       }
     );
 
-    // Add this rule to allow health checks from ALB
-    new aws.securityGroup.SecurityGroup(this, 'service-sg', {
-      name: `${config.name}-ecs-service-sg`,
-      description: 'Security group for ECS service',
-      vpcId: network.vpc.id,
-      tags: config.tags,
-    });
-
     // Add ingress rule to allow traffic from ALB
     new aws.securityGroupRule.SecurityGroupRule(
       this,

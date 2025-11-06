@@ -30,6 +30,7 @@ jest.mock('@cdktf/provider-aws', () => ({
   ssmParameter: { SsmParameter: jest.fn() },
   dbSubnetGroup: { DbSubnetGroup: jest.fn() },
   securityGroup: { SecurityGroup: jest.fn() },
+  securityGroupRule: { SecurityGroupRule: jest.fn() }, // Add this mock
   rdsCluster: { RdsCluster: jest.fn() },
   rdsClusterInstance: { RdsClusterInstance: jest.fn() },
   iamRolePolicyAttachment: { IamRolePolicyAttachment: jest.fn() },
@@ -474,6 +475,34 @@ describe('TapStack Unit Tests', () => {
 
       const listener = loadBalancer.createListener(mockTargetGroup as any);
       expect(listener).toBeDefined();
+    });
+
+    test('DNSModule with hostedZoneId parameter', () => {
+      const mockAlb = {
+        dnsName: 'test-alb-123456.us-east-1.elb.amazonaws.com',
+        zoneId: 'Z123456789'
+      };
+
+      const config: modules.EnvironmentConfig = {
+        name: 'test-dns',
+        cidrBlock: '10.0.0.0/16',
+        dbInstanceClass: 'db.t3.micro',
+        flowLogRetentionDays: 7,
+        tags: { Test: 'true' }
+      };
+
+      const hostedZoneId = 'Z1234567890ABC';
+
+      const dns = new modules.DNSModule(
+        app,
+        'test-dns',
+        config,
+        mockAlb as any,
+        hostedZoneId
+      );
+
+      expect(dns).toBeDefined();
+      expect(dns.record).toBeDefined();
     });
   });
 
