@@ -13,10 +13,20 @@
   "aws_services": [
     "VPC",
     "Subnet",
-    "NAT",
-    "Security Groups"
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Table",
+    "Security Groups",
+    "Elastic IP"
   ],
   "task_config": {
     "deploy_env": "prod.tfvars"
-  }
+  },
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
 }
