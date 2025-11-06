@@ -27,7 +27,7 @@ const email = config.get('email') || process.env.SNS_EMAIL;
 
 // Get replica region for multi-region replication
 const replicaRegion =
-  config.get('replicaRegion') || process.env.REPLICA_REGION || 'us-west-2';
+  config.get('replicaRegion') || process.env.REPLICA_REGION || 'us-east-1';
 
 // Get metadata from environment variables for tagging purposes.
 // These are often injected by CI/CD systems.
