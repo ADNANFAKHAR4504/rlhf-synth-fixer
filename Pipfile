@@ -20,6 +20,7 @@ constructs = "*"
 cfn-lint = "*"
 cfn-flip = "*"
 tabulate = "*"
+python-hcl2 = "*"
 
 [dev-packages]
 boto3 = "*"
