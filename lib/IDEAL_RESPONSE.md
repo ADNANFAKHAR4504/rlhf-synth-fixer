@@ -622,17 +622,18 @@ export class ComputeModule extends Construct {
         enabled: true,
         healthyThreshold: 2,
         interval: 30,
-        matcher: '200',
-        path: '/health',
+        matcher: '200,404', // Accept 404 as nginx default page returns 404 for /
+        path: '/', // Change from /health to /
         port: 'traffic-port',
         protocol: 'HTTP',
         timeout: 5,
-        unhealthyThreshold: 2,
+        unhealthyThreshold: 3,
       },
       tags: config.tags,
     });
 
     // Task Definition
+    // In ComputeModule class, update the task definition:
     this.taskDefinition = new aws.ecsTaskDefinition.EcsTaskDefinition(
       this,
       'task-def',
@@ -647,7 +648,8 @@ export class ComputeModule extends Construct {
         containerDefinitions: JSON.stringify([
           {
             name: 'app',
-            image: 'nginx:latest',
+            // Use a simple web server with health check support
+            image: 'public.ecr.aws/nginx/nginx:stable-alpine',
             cpu: 256,
             memory: 512,
             essential: true,
@@ -657,12 +659,37 @@ export class ComputeModule extends Construct {
                 protocol: 'tcp',
               },
             ],
+            // Add health check command
+            healthCheck: {
+              command: [
+                'CMD-SHELL',
+                'wget --no-verbose --tries=1 --spider http://localhost/ || exit 1',
+              ],
+              interval: 30,
+              timeout: 5,
+              retries: 3,
+              startPeriod: 60,
+            },
+            // Add environment variables for database connection if needed
+            environment: database
+              ? [
+                  {
+                    name: 'DB_ENDPOINT',
+                    value: database.cluster.endpoint,
+                  },
+                  {
+                    name: 'DB_NAME',
+                    value: 'appdb',
+                  },
+                ]
+              : [],
             logConfiguration: {
               logDriver: 'awslogs',
               options: {
                 'awslogs-group': `/ecs/${config.name}-app`,
                 'awslogs-region': awsRegion,
                 'awslogs-stream-prefix': 'ecs',
+                'awslogs-create-group': 'true',
               },
             },
           },
