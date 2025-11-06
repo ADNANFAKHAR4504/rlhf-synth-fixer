@@ -1,7 +1,6 @@
 import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
-import * as fs from 'fs';
-import * as archiver from 'archiver';
+import { Fn } from 'cdktf';
 
 // VPC Module with optimized networking for serverless
 export class VpcModule extends Construct {
@@ -61,11 +60,12 @@ export class VpcModule extends Construct {
 
     // Create subnets across multiple AZs for high availability
     for (let i = 0; i < config.azCount; i++) {
+      const availabilityZone = Fn.element(azs.names, i);
       // Public subnets
       const publicSubnet = new aws.subnet.Subnet(this, `public-subnet-${i}`, {
         vpcId: this.vpc.id,
         cidrBlock: `10.0.${i}.0/24`,
-        availabilityZone: azs.names[i],
+        availabilityZone: availabilityZone,
         mapPublicIpOnLaunch: true,
         tags: {
           Name: `${config.environment}-public-subnet-${i}`,

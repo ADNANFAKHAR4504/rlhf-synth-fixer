@@ -1,4 +1,3 @@
-
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -48,16 +47,18 @@ export class TapStack extends TerraformStack {
       : props?.awsRegion || 'us-east-1';
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
-    const defaultTags = props?.defaultTags ? [props.defaultTags] : [
-      {
-        tags: {
-          Environment: environmentSuffix,
-          ManagedBy: 'CDKTF',
-          Stack: id,
-          Project: 'ServerlessApp',
-        },
-      },
-    ];
+    const defaultTags = props?.defaultTags
+      ? [props.defaultTags]
+      : [
+          {
+            tags: {
+              Environment: environmentSuffix,
+              ManagedBy: 'CDKTF',
+              Stack: id,
+              Project: 'ServerlessApp',
+            },
+          },
+        ];
 
     // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
     new AwsProvider(this, 'aws', {
@@ -176,9 +177,8 @@ export class TapStack extends TerraformStack {
       s3BucketDomainName: this.storage.bucket.bucketRegionalDomainName,
       s3BucketId: this.storage.bucket.id,
       environment: environmentSuffix,
-      priceClass: environmentSuffix === 'prod' 
-        ? 'PriceClass_All' 
-        : 'PriceClass_100',
+      priceClass:
+        environmentSuffix === 'prod' ? 'PriceClass_All' : 'PriceClass_100',
       // Uncomment if you have a custom domain and certificate
       // customDomain: 'app.example.com',
       // certificateArn: 'arn:aws:acm:us-east-1:...',
@@ -221,10 +221,7 @@ export class TapStack extends TerraformStack {
               's3:DeleteObject',
               's3:ListBucket',
             ],
-            Resource: [
-              this.storage.bucket.arn,
-              `${this.storage.bucket.arn}/*`,
-            ],
+            Resource: [this.storage.bucket.arn, `${this.storage.bucket.arn}/*`],
           },
         ],
       }),
@@ -258,10 +255,7 @@ export class TapStack extends TerraformStack {
         Statement: [
           {
             Effect: 'Allow',
-            Action: [
-              'xray:PutTraceSegments',
-              'xray:PutTelemetryRecords',
-            ],
+            Action: ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'],
             Resource: '*',
           },
         ],
@@ -273,32 +267,28 @@ export class TapStack extends TerraformStack {
    * Update S3 bucket policy to allow CloudFront OAC access
    */
   private updateS3BucketPolicyForCloudFront(): void {
-    new aws.s3BucketPolicy.S3BucketPolicy(
-      this,
-      's3-cloudfront-policy',
-      {
-        bucket: this.storage.bucket.id,
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Sid: 'AllowCloudFrontOAC',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'cloudfront.amazonaws.com',
-              },
-              Action: 's3:GetObject',
-              Resource: `${this.storage.bucket.arn}/*`,
-              Condition: {
-                StringEquals: {
-                  'AWS:SourceArn': this.cdn.distribution.arn,
-                },
+    new aws.s3BucketPolicy.S3BucketPolicy(this, 's3-cloudfront-policy', {
+      bucket: this.storage.bucket.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'AllowCloudFrontOAC',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudfront.amazonaws.com',
+            },
+            Action: 's3:GetObject',
+            Resource: `${this.storage.bucket.arn}/*`,
+            Condition: {
+              StringEquals: {
+                'AWS:SourceArn': this.cdn.distribution.arn,
               },
             },
-          ],
-        }),
-      }
-    );
+          },
+        ],
+      }),
+    });
   }
 
   /**
