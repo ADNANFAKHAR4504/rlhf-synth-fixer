@@ -332,6 +332,67 @@ exports.handler = async (event) => {
           replicationRegions: [targetRegion],
         }
       );
+
+      const tableName = transactionsTable.tableName;
+      cdk.Aspects.of(this).add(
+        new (class implements cdk.IAspect {
+          visit(node: Construct): void {
+            if (node instanceof iam.Role) {
+              const role = node as iam.Role;
+              const nodePath = node.node.path;
+              if (
+                nodePath.includes('ReplicaProvider') ||
+                nodePath.includes('OnEventHandler') ||
+                (role.roleName && role.roleName.includes('ReplicaProvider'))
+              ) {
+                role.addToPolicy(
+                  new iam.PolicyStatement({
+                    sid: 'AllowCrossRegionReplicaDeletion',
+                    actions: [
+                      'dynamodb:DeleteTableReplica',
+                      'dynamodb:UpdateTable',
+                      'dynamodb:DescribeTable',
+                      'dynamodb:DescribeGlobalTable',
+                      'dynamodb:DescribeGlobalTableSettings',
+                      'dynamodb:UpdateGlobalTable',
+                      'dynamodb:UpdateGlobalTableSettings',
+                    ],
+                    resources: [
+                      `arn:aws:dynamodb:*:${cdk.Stack.of(node).account}:table/${tableName}`,
+                    ],
+                  })
+                );
+              }
+            }
+            if (node instanceof iam.Policy) {
+              const policy = node as iam.Policy;
+              const policyPath = node.node.path;
+              if (
+                policyPath.includes('ReplicaProvider') ||
+                policyPath.includes('OnEventHandler')
+              ) {
+                policy.addStatements(
+                  new iam.PolicyStatement({
+                    sid: 'AllowCrossRegionReplicaDeletion',
+                    actions: [
+                      'dynamodb:DeleteTableReplica',
+                      'dynamodb:UpdateTable',
+                      'dynamodb:DescribeTable',
+                      'dynamodb:DescribeGlobalTable',
+                      'dynamodb:DescribeGlobalTableSettings',
+                      'dynamodb:UpdateGlobalTable',
+                      'dynamodb:UpdateGlobalTableSettings',
+                    ],
+                    resources: [
+                      `arn:aws:dynamodb:*:${cdk.Stack.of(node).account}:table/${tableName}`,
+                    ],
+                  })
+                );
+              }
+            }
+          }
+        })()
+      );
     } else {
       const sourceTableName = cdk.Fn.importValue(
         `tap-ddb-name-${environmentSuffix}`
