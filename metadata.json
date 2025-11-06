@@ -1,0 +1,30 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-06T11:29:51+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
+  ],
+  "po_id": "9d4wp",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "DMS",
+    "ELB",
+    "WAF",
+    "Secrets Manager",
+    "Systems Manager",
+    "CloudWatch",
+    "IAM"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 9,
+  "training_notes": "Highly complex multi-tier architecture (10 AWS services, Multi-AZ HA, KMS encryption, Secrets Manager rotation, WAF, DMS migration). Model needed moderate refinements: Lambda VPC permissions (significant), PostgreSQL/DMS versions, NAT optimization. Strong production-ready patterns."
+}
