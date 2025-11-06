@@ -158,10 +158,12 @@ jobs:
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
       - name: Download build artifacts (dist/)
+        if: ${{ needs.detect-metadata.outputs.language == 'ts' || needs.detect-metadata.outputs.language == 'js' }}
         uses: actions/download-artifact@v4
         with:
           name: build-dist
           path: dist
+          if-no-files-found: ignore
 
       - name: Configure AWS
         if: ${{ needs.detect-metadata.outputs.platform == 'cdk' || needs.detect-metadata.outputs.platform == 'cdktf' }}
@@ -366,6 +368,7 @@ jobs:
           language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Download build artifacts (dist/)
+        if: ${{ needs.detect-metadata.outputs.language == 'ts' || needs.detect-metadata.outputs.language == 'js' }}
         uses: actions/download-artifact@v4
         with:
           name: build-dist
