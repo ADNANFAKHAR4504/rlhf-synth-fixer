@@ -1,9 +1,0 @@
-config:
-  aws:region: us-east-1
-  payment-processing-multi-env:environment: dev
-  payment-processing-multi-env:environmentSuffix: synth101000819
-  payment-processing-multi-env:awsRegion: us-east-1
-  payment-processing-multi-env:deploymentDate: "2025-11-04"
-  payment-processing-multi-env:dbPassword:
-    secure: v1:UN2VVVtwc9tKUu2U:Rn7CdpgzZ90r8BdZxZoAukFSR7u8jcXIxKCz84+QiRU=
-encryptionsalt: v1:l5Tvw3FSucQ=:v1:QsQUkXXedMeJ4OfC:9Ddg+Hu5JWxobpqOqyXRCBW2Vc3xjA==
