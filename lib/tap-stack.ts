@@ -645,26 +645,141 @@ exports.handler = async (event) => {
         }
       );
       const sourceVpcId = vpcIdResource.getAttString('Value');
-      const vpcPeering = new ec2.CfnVPCPeeringConnection(
+
+      const peeringLambda = new lambda.Function(
         this,
-        `tap-vpc-peering-${environmentSuffix}`,
+        `tap-vpc-peering-manager-${environmentSuffix}`,
         {
-          vpcId: vpc.vpcId,
-          peerVpcId: sourceVpcId,
-          peerRegion: sourceRegion,
+          runtime: lambda.Runtime.NODEJS_16_X,
+          architecture: lambda.Architecture.ARM_64,
+          handler: 'index.handler',
+          code: lambda.Code.fromInline(`
+const AWS = require('aws-sdk');
+const ec2Source = new AWS.EC2({ region: '${sourceRegion}' });
+const ec2Target = new AWS.EC2({ region: '${currentRegion}' });
+
+exports.handler = async (event) => {
+  const { RequestType, ResourceProperties } = event;
+  const { SourceVpcId, TargetVpcId } = ResourceProperties;
+  
+  if (RequestType === 'Delete') {
+    const peeringId = event.PhysicalResourceId;
+    if (peeringId && peeringId !== 'none') {
+      try {
+        await ec2Source.deleteVpcPeeringConnection({
+          VpcPeeringConnectionId: peeringId,
+        }).promise();
+      } catch (err) {
+        if (err.code !== 'InvalidVpcPeeringConnectionID.NotFound') {
+          console.error('Error deleting peering:', err);
+        }
+      }
+    }
+    return { PhysicalResourceId: peeringId || 'none' };
+  }
+  
+  try {
+    if (RequestType === 'Create' || RequestType === 'Update') {
+      let peeringId = event.PhysicalResourceId;
+      
+      if (RequestType === 'Create') {
+        const createResponse = await ec2Source.createVpcPeeringConnection({
+          VpcId: SourceVpcId,
+          PeerVpcId: TargetVpcId,
+          PeerRegion: '${currentRegion}',
+        }).promise();
+        
+        peeringId = createResponse.VpcPeeringConnection.VpcPeeringConnectionId;
+        
+        await ec2Target.acceptVpcPeeringConnection({
+          VpcPeeringConnectionId: peeringId,
+        }).promise();
+        
+        let attempts = 0;
+        while (attempts < 30) {
+          const describeResponse = await ec2Source.describeVpcPeeringConnections({
+            VpcPeeringConnectionIds: [peeringId],
+          }).promise();
+          
+          const status = describeResponse.VpcPeeringConnections[0].Status.Code;
+          if (status === 'active') {
+            break;
+          }
+          if (status === 'failed') {
+            throw new Error('VPC peering connection failed');
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          attempts++;
+        }
+        
+        if (attempts >= 30) {
+          throw new Error('VPC peering connection did not become active');
+        }
+      }
+      
+      return {
+        PhysicalResourceId: peeringId,
+        Data: { VpcPeeringConnectionId: peeringId },
+      };
+    }
+    
+    return { PhysicalResourceId: event.PhysicalResourceId || 'none' };
+  } catch (error) {
+    console.error('Error managing VPC peering:', error);
+    throw error;
+  }
+};
+          `),
+          timeout: cdk.Duration.minutes(5),
         }
       );
 
+      peeringLambda.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: [
+            'ec2:CreateVpcPeeringConnection',
+            'ec2:DescribeVpcPeeringConnections',
+            'ec2:DeleteVpcPeeringConnection',
+            'ec2:AcceptVpcPeeringConnection',
+          ],
+          resources: ['*'],
+        })
+      );
+
+      const peeringProvider = new custom_resources.Provider(
+        this,
+        `tap-vpc-peering-provider-${environmentSuffix}`,
+        {
+          onEventHandler: peeringLambda,
+        }
+      );
+
+      const peeringResource = new cdk.CustomResource(
+        this,
+        `tap-vpc-peering-resource-${environmentSuffix}`,
+        {
+          serviceToken: peeringProvider.serviceToken,
+          properties: {
+            SourceVpcId: sourceVpcId,
+            TargetVpcId: vpc.vpcId,
+          },
+        }
+      );
+
+      const peeringConnectionId = peeringResource.getAttString('VpcPeeringConnectionId');
+
       vpc.privateSubnets.forEach((subnet, index) => {
-        new ec2.CfnRoute(
+        const route = new ec2.CfnRoute(
           this,
           `tap-peering-route-${index}-${environmentSuffix}`,
           {
             routeTableId: subnet.routeTable.routeTableId,
             destinationCidrBlock: '10.0.0.0/16',
-            vpcPeeringConnectionId: vpcPeering.ref,
+            vpcPeeringConnectionId: peeringConnectionId,
           }
         );
+        route.node.addDependency(peeringResource);
       });
     }
 
