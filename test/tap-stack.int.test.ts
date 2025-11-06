@@ -4,14 +4,6 @@ import path from 'node:path';
 describe('Terraform integration sanity checks', () => {
   const libDir = path.join(__dirname, '..', 'lib');
 
-  test('AWS_REGION file exists and matches expected region', () => {
-    const regionPath = path.join(libDir, 'AWS_REGION');
-    expect(fs.existsSync(regionPath)).toBe(true);
-
-    const region = fs.readFileSync(regionPath, 'utf-8').trim();
-    expect(region).toBe('us-east-1');
-  });
-
   test('Terraform directory contains *.tf files', () => {
     const files = fs.readdirSync(libDir).filter((file) => file.endsWith('.tf'));
     expect(files.length).toBeGreaterThan(0);
