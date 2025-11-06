@@ -215,9 +215,9 @@ class TapStack(pulumi.ComponentResource):
 
         # NAT Gateway for private subnets
         eip = aws.ec2.Eip(
-            f"payment-nat-eip-{self.environment_suffix}",
+            f"tap-payment-nat-eip-{self.environment_suffix}",
             domain="vpc",
-            tags={**common_tags, "Name": f"payment-nat-eip-{self.environment_suffix}"},
+            tags={**common_tags, "Name": f"tap-payment-nat-eip-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self),
         )
 
@@ -420,8 +420,8 @@ class TapStack(pulumi.ComponentResource):
 
         # S3 Bucket for transaction logs
         s3_bucket = aws.s3.Bucket(
-            f"payment-logs-{self.environment_suffix}",
-            bucket=f"payment-logs-{self.environment_suffix}",
+            f"tap-payment-logs-{self.environment_suffix}",
+            bucket=f"tap-payment-logs-{self.environment_suffix}",
             versioning=aws.s3.BucketVersioningArgs(
                 enabled=True,
             ),
@@ -448,7 +448,7 @@ class TapStack(pulumi.ComponentResource):
 
         # Block public access to S3 bucket
         s3_public_access_block = aws.s3.BucketPublicAccessBlock(
-            f"payment-logs-pab-{self.environment_suffix}",
+            f"tap-payment-logs-pab-{self.environment_suffix}",
             bucket=s3_bucket.id,
             block_public_acls=True,
             block_public_policy=True,
@@ -473,8 +473,8 @@ class TapStack(pulumi.ComponentResource):
 
         # Target Group
         target_group = aws.lb.TargetGroup(
-            f"payment-tg-{self.environment_suffix}",
-            name=f"payment-tg-{self.environment_suffix}",
+            f"tap-payment-tg-{self.environment_suffix}",
+            name=f"tap-payment-tg-{self.environment_suffix}",
             port=80,
             protocol="HTTP",
             vpc_id=vpc.id,
@@ -491,7 +491,7 @@ class TapStack(pulumi.ComponentResource):
                 matcher="200",
             ),
             deregistration_delay=30,
-            tags={**common_tags, "Name": f"payment-tg-{self.environment_suffix}"},
+            tags={**common_tags, "Name": f"tap-payment-tg-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self),
         )
 
@@ -568,8 +568,8 @@ class TapStack(pulumi.ComponentResource):
 
         # Instance Profile
         instance_profile = aws.iam.InstanceProfile(
-            f"payment-instance-profile-{self.environment_suffix}",
-            name=f"payment-instance-profile-{self.environment_suffix}",
+            f"tap-payment-instance-profile-{self.environment_suffix}",
+            name=f"tap-payment-instance-profile-{self.environment_suffix}",
             role=ec2_role.name,
             opts=ResourceOptions(parent=self),
         )
