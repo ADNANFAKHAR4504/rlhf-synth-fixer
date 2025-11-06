@@ -696,20 +696,20 @@ exports.handler = async (event) => {
                 Data: { VpcPeeringConnectionId: peeringId },
               };
             } else if (status === 'failed' || status === 'rejected' || status === 'expired') {
-              console.log(\`Existing connection is \${status}, deleting and creating new one\`);
+              console.log('Existing connection is ' + status + ', deleting and creating new one');
               try {
                 await ec2Source.deleteVpcPeeringConnection({
                   VpcPeeringConnectionId: peeringId,
                 }).promise();
                 await new Promise(resolve => setTimeout(resolve, 5000));
               } catch (deleteErr) {
-                console.log(\`Error deleting \${status} connection: \${deleteErr.code}\`);
+                console.log('Error deleting ' + status + ' connection: ' + deleteErr.code);
               }
               peeringId = null;
             }
           }
         } catch (checkErr) {
-          console.log(\`Could not check existing connection: \${checkErr.code}\`);
+          console.log('Could not check existing connection: ' + checkErr.code);
           peeringId = null;
         }
       }
@@ -729,7 +729,7 @@ exports.handler = async (event) => {
           for (const existing of existingPeerings.VpcPeeringConnections) {
             const status = existing.Status.Code;
             if (status === 'failed' || status === 'rejected' || status === 'expired') {
-              console.log(\`Deleting existing \${status} peering connection: \${existing.VpcPeeringConnectionId}\`);
+              console.log('Deleting existing ' + status + ' peering connection: ' + existing.VpcPeeringConnectionId);
               try {
                 await ec2Source.deleteVpcPeeringConnection({
                   VpcPeeringConnectionId: existing.VpcPeeringConnectionId,
@@ -737,24 +737,24 @@ exports.handler = async (event) => {
                 // Wait a bit for deletion to complete
                 await new Promise(resolve => setTimeout(resolve, 5000));
               } catch (deleteErr) {
-                console.log(\`Error deleting \${status} connection: \${deleteErr.code}\`);
+                console.log('Error deleting ' + status + ' connection: ' + deleteErr.code);
               }
             } else if (status === 'active') {
-              console.log(\`Found existing active peering connection: \${existing.VpcPeeringConnectionId}\`);
+              console.log('Found existing active peering connection: ' + existing.VpcPeeringConnectionId);
               peeringId = existing.VpcPeeringConnectionId;
               return {
                 PhysicalResourceId: peeringId,
                 Data: { VpcPeeringConnectionId: peeringId },
               };
             } else if (status === 'pending-acceptance') {
-              console.log(\`Found existing pending peering connection: \${existing.VpcPeeringConnectionId}, accepting...\`);
+              console.log('Found existing pending peering connection: ' + existing.VpcPeeringConnectionId + ', accepting...');
               peeringId = existing.VpcPeeringConnectionId;
               try {
                 await ec2Target.acceptVpcPeeringConnection({
                   VpcPeeringConnectionId: peeringId,
                 }).promise();
               } catch (acceptErr) {
-                console.log(\`Error accepting existing connection: \${acceptErr.code}\`);
+                console.log('Error accepting existing connection: ' + acceptErr.code);
                 // Continue to create new one if accept fails
                 peeringId = null;
               }
@@ -788,7 +788,7 @@ exports.handler = async (event) => {
             } else if (status === 'pending-acceptance') {
               console.log('Peering connection pending acceptance');
             } else {
-              console.log(\`Peering connection status: \${status}\`);
+              console.log('Peering connection status: ' + status);
             }
           }
         } catch (checkErr) {
@@ -822,7 +822,7 @@ exports.handler = async (event) => {
                       console.log('Connection is already active');
                       break;
                     } else if (status === 'failed' || status === 'rejected') {
-                      throw new Error(\`Peering connection is \${status}\`);
+                      throw new Error('Peering connection is ' + status);
                     }
                   }
                 } catch (statusErr) {
@@ -854,7 +854,7 @@ exports.handler = async (event) => {
                 break;
               }
               if (status === 'failed' || status === 'rejected') {
-                throw new Error(\`VPC peering connection \${status}\`);
+                throw new Error('VPC peering connection ' + status);
               }
             }
           } catch (describeErr) {
