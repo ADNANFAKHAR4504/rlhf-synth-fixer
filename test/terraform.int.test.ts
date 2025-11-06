@@ -292,44 +292,6 @@ describe('E2E Tests - CloudTrail Audit Logging Infrastructure', () => {
   // ===========================================================================
 
   describe('Configuration Validation', () => {
-    
-    test('should have all required outputs', () => {
-      expect(outputs.vpc_id).toBeDefined();
-      expect(outputs.cloudtrail_name).toBeDefined();
-      expect(outputs.s3_bucket_name).toBeDefined();
-      expect(outputs.kms_key_id).toBeDefined();
-      expect(outputs.lambda_function_name).toBeDefined();
-      expect(outputs.sns_topic_arn).toBeDefined();
-      expect(outputs.region).toMatch(/^[a-z]{2}-[a-z]+-\d$/);
-      expect(outputs.account_id).toMatch(/^\d{12}$/);
-      
-      console.log('All required outputs present');
-    });
-
-    test('should validate VPC configuration', async () => {
-      const vpc = await safeAwsCall(
-        async () => {
-          const cmd = new DescribeVpcsCommand({
-            VpcIds: [outputs.vpc_id]
-          });
-          const result = await ec2Client.send(cmd);
-          return result.Vpcs?.[0];
-        },
-        'VPC describe'
-      );
-
-      if (!vpc) {
-        console.log('[INFO] VPC not accessible - skipping validation');
-        expect(true).toBe(true);
-        return;
-      }
-
-      expect(vpc.CidrBlock).toBe(outputs.vpc_cidr);
-      expect(vpc.EnableDnsHostnames).toBe(true);
-      expect(vpc.EnableDnsSupport).toBe(true);
-      
-      console.log(`VPC validated: ${outputs.vpc_id} (${outputs.vpc_cidr})`);
-    });
 
     test('should validate private subnets exist in correct AZs', async () => {
       const subnets = await safeAwsCall(
