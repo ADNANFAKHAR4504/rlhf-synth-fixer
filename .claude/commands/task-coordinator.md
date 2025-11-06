@@ -248,7 +248,7 @@ Task ID: ${TASK_ID}"
 6. **Create PR**:
    ```bash
    AWS_SERVICES_COUNT=$(jq -r '.aws_services | length' metadata.json)
-   SYNTH_GROUP=$(jq -r '.synth_group // "Synth-1"' ../../.claude/settings.local.json)
+   SYNTH_GROUP=$(jq -r '.synth_group' ../../.claude/settings.local.json)
 
    gh pr create \
      --title "synth-${TASK_ID} {SUBTASK}" \

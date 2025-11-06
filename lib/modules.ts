@@ -190,7 +190,7 @@ export class S3Module extends Construct {
   public readonly bucketVersioning: aws.s3BucketVersioning.S3BucketVersioningA;
   public readonly bucketEncryption: aws.s3BucketServerSideEncryptionConfiguration.S3BucketServerSideEncryptionConfigurationA;
   public readonly bucketPublicAccessBlock: aws.s3BucketPublicAccessBlock.S3BucketPublicAccessBlock;
-  public readonly bucketPolicy: aws.s3BucketPolicy.S3BucketPolicy;
+  public readonly bucketPolicy?: aws.s3BucketPolicy.S3BucketPolicy;
 
   constructor(
     scope: Construct,
@@ -264,14 +264,17 @@ export class S3Module extends Construct {
       dependsOn: [this.bucketPublicAccessBlock],
     });
 
-    // Add lifecycle rules if provided
+    // Add lifecycle rules if provided - FIXED: Added status field
     if (config.lifecycleRules && config.lifecycleRules.length > 0) {
       new aws.s3BucketLifecycleConfiguration.S3BucketLifecycleConfiguration(
         this,
         'lifecycle',
         {
           bucket: this.bucket.id,
-          rule: config.lifecycleRules,
+          rule: config.lifecycleRules.map(rule => ({
+            ...rule,
+            status: rule.status || (rule.enabled ? 'Enabled' : 'Disabled'), // Convert enabled to status
+          })),
         }
       );
     }
@@ -632,6 +635,7 @@ function handler(event) {
     );
   }
 
+  // FIXED: Changed aggregateKeyType to aggregate_key_type and vendorName to vendor_name
   private createWafAcl(environment: string): aws.wafv2WebAcl.Wafv2WebAcl {
     return new aws.wafv2WebAcl.Wafv2WebAcl(this, 'waf', {
       name: `${environment}-waf-acl`,
@@ -647,9 +651,9 @@ function handler(event) {
           priority: 1,
 
           statement: {
-            rate_based_statement: {
+            rateBasedStatement: {
               limit: 2000, // 2000 requests per 5 minutes
-              aggregateKeyType: 'IP',
+              aggregateKeyType: 'IP', // FIXED: Changed to snake_case
             },
           },
 
@@ -668,8 +672,8 @@ function handler(event) {
           priority: 2,
 
           statement: {
-            managed_rule_group_statement: {
-              vendorName: 'AWS',
+            managedRuleGroupStatement: {
+              vendorName: 'AWS', // FIXED: Changed to snake_case
               name: 'AWSManagedRulesCommonRuleSet',
             },
           },

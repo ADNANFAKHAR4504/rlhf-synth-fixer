@@ -103,6 +103,7 @@ export class TapStack extends TerraformStack {
     });
 
     // 3. S3 Module - Content storage bucket
+    // FIXED: Changed lifecycle rule format to use 'status' field
     this.storage = new S3Module(this, 'content-storage', {
       bucketName: `${environmentSuffix}-serverless-content-${Date.now()}`,
       environment: environmentSuffix,
@@ -110,7 +111,7 @@ export class TapStack extends TerraformStack {
       lifecycleRules: [
         {
           id: 'delete-old-logs',
-          enabled: true,
+          status: 'Enabled', // FIXED: Changed from 'enabled: true' to 'status: "Enabled"'
           prefix: 'logs/',
           expiration: {
             days: 30,
@@ -118,7 +119,7 @@ export class TapStack extends TerraformStack {
         },
         {
           id: 'transition-to-ia',
-          enabled: true,
+          status: 'Enabled', // FIXED: Changed from 'enabled: true' to 'status: "Enabled"'
           prefix: 'archives/',
           transition: [
             {
