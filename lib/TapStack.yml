@@ -146,22 +146,14 @@ Parameters:
     AllowedPattern: '^[a-z0-9-]{0,10}$'
     Description: Optional short suffix to avoid name collisions (e.g., a1, x3)
 
-Mappings:
-  EnvCode:
-    dev:     { code: d }
-    staging: { code: s }
-    prod:    { code: p }
-    default: { code: d }
-
 Conditions:
   CreateAccessLogs: !Equals [ !Ref S3AccessLoggingToggle, 'Enabled' ]
   CreateBastion: !Equals [ !Ref CreateBastionEC2, 'true' ]
   HasKeyPair: !Not [ !Equals [ !Ref EC2KeyPairName, '' ] ]
   HasUniqueSuffix: !Not [ !Equals [ !Ref UniqueSuffix, '' ] ]
-  IsDev: !Equals [ !Ref EnvironmentSuffix, dev ]
+  #IsDev: !Equals [ !Ref EnvironmentSuffix, dev ]
   IsStaging: !Equals [ !Ref EnvironmentSuffix, staging ]
   IsProd: !Equals [ !Ref EnvironmentSuffix, prod ]
-  IsKnownEnv: !Or [ !Condition IsDev, !Condition IsStaging, !Condition IsProd ]
 
 Rules:
   RegionRestriction:
@@ -180,15 +172,12 @@ Resources:
         Version: '2012-10-17'
         Id: key-policy-1
         Statement:
-          # 1) Account root full control
           - Sid: EnableRoot
             Effect: Allow
             Principal:
               AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
             Resource: '*'
-
-          # 2) CloudWatch Logs use of key (for your log groups)
           - Sid: AllowCloudWatchLogsUseOfKey
             Effect: Allow
             Principal:
@@ -204,8 +193,6 @@ Resources:
             Condition:
               ArnLike:
                 kms:EncryptionContext:aws:logs:arn: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/*/tapstack-${EnvironmentSuffix}'
-
-          # 3) S3 / RDS / ElastiCache via service integration
           - Sid: AllowS3RDSAndElastiCacheViaService
             Effect: Allow
             Principal:
@@ -228,8 +215,6 @@ Resources:
                   - !Sub 's3.${AWS::Region}.amazonaws.com'
                   - !Sub 'rds.${AWS::Region}.amazonaws.com'
                   - !Sub 'elasticache.${AWS::Region}.amazonaws.com'
-
-          # 4) Allow CloudTrail to describe key
           - Sid: AllowCloudTrailDescribeKey
             Effect: Allow
             Principal:
@@ -239,8 +224,6 @@ Resources:
             Condition:
               StringEquals:
                 aws:SourceArn: !Sub 'arn:${AWS::Partition}:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/tapstack-trail-${EnvironmentSuffix}'
-
-          # 5) Allow CloudTrail to encrypt logs
           - Sid: AllowCloudTrailEncryptLogs
             Effect: Allow
             Principal:
@@ -252,8 +235,6 @@ Resources:
                 aws:SourceArn: !Sub 'arn:${AWS::Partition}:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/tapstack-trail-${EnvironmentSuffix}'
               StringLike:
                 kms:EncryptionContext:aws:cloudtrail:arn: !Sub 'arn:${AWS::Partition}:cloudtrail:*:${AWS::AccountId}:trail/*'
-
-          # 6) Allow CloudTrail to decrypt logs
           - Sid: AllowCloudTrailDecryptLogs
             Effect: Allow
             Principal:
@@ -708,7 +689,6 @@ Resources:
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
-
           - Sid: AWSCloudTrailAclCheck
             Effect: Allow
             Principal:
@@ -719,7 +699,6 @@ Resources:
               StringEquals:
                 aws:SourceArn: !Sub 'arn:${AWS::Partition}:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/tapstack-trail-${EnvironmentSuffix}'
                 aws:SourceAccount: !Ref 'AWS::AccountId'
-
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
@@ -731,7 +710,6 @@ Resources:
                 's3:x-amz-acl': 'bucket-owner-full-control'
                 aws:SourceArn: !Sub 'arn:${AWS::Partition}:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/tapstack-trail-${EnvironmentSuffix}'
                 aws:SourceAccount: !Ref 'AWS::AccountId'
-
           - Sid: AWSCloudTrailGetBucketLocation
             Effect: Allow
             Principal:
@@ -742,7 +720,6 @@ Resources:
               StringEquals:
                 aws:SourceArn: !Sub 'arn:${AWS::Partition}:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/tapstack-trail-${EnvironmentSuffix}'
                 aws:SourceAccount: !Ref 'AWS::AccountId'
-
           - Sid: AWSConfigBucketPermissionsCheck
             Effect: Allow
             Principal:
@@ -752,7 +729,6 @@ Resources:
             Condition:
               StringEquals:
                 aws:SourceAccount: !Ref 'AWS::AccountId'
-
           - Sid: AWSConfigBucketExistenceCheck
             Effect: Allow
             Principal:
@@ -762,7 +738,6 @@ Resources:
             Condition:
               StringEquals:
                 aws:SourceAccount: !Ref 'AWS::AccountId'
-
           - Sid: AWSConfigBucketDelivery
             Effect: Allow
             Principal:
@@ -1268,21 +1243,15 @@ Resources:
           - HasUniqueSuffix
           - !Join
             - '-'
-            - 
+            -
               - !Ref CacheReplicationGroupIdBase
-              - !If
-                - IsKnownEnv
-                - !FindInMap [ EnvCode, !Ref EnvironmentSuffix, code ]
-                - !FindInMap [ EnvCode, default, code ]
+              - !If [ IsProd, 'p', !If [ IsStaging, 's', 'd' ] ]
               - !Ref UniqueSuffix
           - !Join
             - '-'
-            - 
+            -
               - !Ref CacheReplicationGroupIdBase
-              - !If
-                - IsKnownEnv
-                - !FindInMap [ EnvCode, !Ref EnvironmentSuffix, code ]
-                - !FindInMap [ EnvCode, default, code ]
+              - !If [ IsProd, 'p', !If [ IsStaging, 's', 'd' ] ]
               - !Select
                 - 0
                 - !Split
