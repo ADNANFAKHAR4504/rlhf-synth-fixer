@@ -404,7 +404,7 @@ exports.handler = async (event) => {
   }
 };
           `),
-          timeout: cdk.Duration.seconds(30),
+          timeout: cdk.Duration.minutes(3),
         }
       );
 
