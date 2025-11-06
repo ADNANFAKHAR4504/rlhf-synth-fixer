@@ -1,0 +1,22 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000028",
+  "team": "4",
+  "startedAt": "2025-11-06T04:35:47.373Z",
+  "subtask": "IaC-Multi-Environment-Management",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "NAT",
+    "Security Groups"
+  ],
+  "task_config": {
+    "deploy_env": "prod.tfvars"
+  }
+}
