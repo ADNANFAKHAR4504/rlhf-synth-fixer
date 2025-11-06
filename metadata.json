@@ -26,6 +26,5 @@
   ],
   "region": "ap-southeast-1",
   "training_quality": 9,
-  "training_notes": "Highly complex multi-tier architecture (10 AWS services, Multi-AZ HA, KMS encryption, Secrets Manager rotation, WAF, DMS migration). Model needed moderate refinements: Lambda VPC permissions (significant), PostgreSQL/DMS versions, NAT optimization. Strong production-ready patterns.",
   "author": "rajendra-s-aws"
 }
