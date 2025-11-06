@@ -9,16 +9,8 @@ module.exports = {
     '^.+\\.mjs$': 'babel-jest',
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(aws-cdk-lib|@aws-cdk|constructs|@aws-sdk|@smithy)/)',
+    'node_modules/(?!(aws-cdk-lib|@aws-cdk|constructs)/)',
   ],
-  globals: {
-    'ts-jest': {
-      tsconfig: {
-        allowSyntheticDefaultImports: true,
-        esModuleInterop: true,
-      },
-    },
-  },
   collectCoverageFrom: [
     '<rootDir>/lib/**/*.ts',
     '<rootDir>/lib/**/*.mjs',
