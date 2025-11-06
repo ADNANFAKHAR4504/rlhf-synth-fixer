@@ -75,6 +75,17 @@ variable "db_username" {
   default     = "dbadmin"
 }
 
+variable "db_instance_class" {
+  description = "RDS instance class for Aurora cluster instances"
+  type        = string
+  default     = "db.t4g.medium"
+  
+  validation {
+    condition = can(regex("^db\\.(t4g|r6g|r5|r4)\\.", var.db_instance_class))
+    error_message = "DB instance class must be a valid Aurora PostgreSQL instance class (e.g., db.t4g.medium, db.r6g.large)."
+  }
+}
+
 # ECS Configuration
 variable "container_image" {
   description = "Docker image for the payment processing application"

@@ -36,9 +36,10 @@ database_subnet_cidrs = [
 ]
 
 # Database Configuration
-postgres_engine_version = "14.9"
+postgres_engine_version = "15.6"
 database_name          = "payments"
 db_username           = "dbadmin"
+db_instance_class      = "db.t4g.medium"  # Minimum supported for Aurora PostgreSQL 15.6
 
 # Application Configuration
 # Replace with your actual container image
