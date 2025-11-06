@@ -21,8 +21,11 @@ class TestConfig(unittest.TestCase):
         """Test config initializes with correct defaults."""
         config = CICDConfig()
         
+        # Get actual environment suffix from environment variable
+        expected_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
+        
         self.assertEqual(config.environment, 'Production')
-        self.assertEqual(config.environment_suffix, 'dev')
+        self.assertEqual(config.environment_suffix, expected_suffix)
         self.assertEqual(config.project_name, 'cicd-lambda')
         self.assertEqual(config.primary_region, 'us-east-1')
         self.assertEqual(config.lambda_runtime, 'python3.8')
@@ -39,10 +42,13 @@ class TestConfig(unittest.TestCase):
         """Test resource name generation includes all components."""
         config = CICDConfig()
         
+        # Get actual environment suffix from environment variable
+        expected_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
+        
         name = config.get_resource_name('lambda')
         self.assertIn('cicd-lambda', name)
         self.assertIn('useast1', name)
-        self.assertIn('dev', name)
+        self.assertIn(expected_suffix, name)
 
     def test_get_normalized_resource_name(self):
         """Test normalized names are lowercase."""
