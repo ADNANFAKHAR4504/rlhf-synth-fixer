@@ -4,6 +4,8 @@
 
 This document presents a production-ready AWS CDK (Python) implementation for creating a secure, highly available VPC with comprehensive VPC endpoints for private AWS service connectivity. The infrastructure eliminates the need for NAT gateways by leveraging VPC endpoints, reducing costs while maintaining secure access to AWS services.
 
+**Platform**: AWS CDK
+**Language**: Python
 **Status**: All tests passing, 100% unit test coverage, fully deployable and destroyable.
 
 ## Architecture Overview
@@ -19,7 +21,7 @@ This document presents a production-ready AWS CDK (Python) implementation for cr
 - **Amazon S3**: Gateway endpoint with route table associations for all private subnets
 - **Amazon DynamoDB**: Gateway endpoint with custom policy restricting S3 logs/* access
 
-#### Interface Endpoints (PrivateLink)
+#### VPC Interface Endpoints (AWS PrivateLink)
 - **Amazon EC2**: Private API access for EC2 operations
 - **AWS Systems Manager (SSM)**: Multi-AZ deployment for Session Manager and Parameter Store
 - **SSM Messages**: Required for Session Manager functionality (Multi-AZ)
@@ -240,7 +242,7 @@ class TapStack(Stack):
 
     Creates VPC with private subnets and VPC endpoints for:
     - Gateway endpoints: S3, DynamoDB
-    - Interface endpoints: EC2, SSM, SSM Messages, EC2 Messages, CloudWatch Logs, Secrets Manager
+    - VPC Interface endpoints: EC2, SSM, SSM Messages, EC2 Messages, CloudWatch Logs, Secrets Manager
     """
 
     def __init__(
@@ -265,7 +267,7 @@ class TapStack(Stack):
         # Create VPC with private subnets
         self.vpc = self._create_vpc()
 
-        # Create security group for interface endpoints
+        # Create security group for VPC Interface endpoints
         self.endpoint_security_group = self._create_endpoint_security_group()
 
         # Create endpoint policy restricting access to specific account
@@ -275,7 +277,7 @@ class TapStack(Stack):
         self.s3_endpoint = self._create_s3_gateway_endpoint()
         self.dynamodb_endpoint = self._create_dynamodb_gateway_endpoint()
 
-        # Create interface endpoints
+        # Create VPC Interface endpoints
         self.ec2_endpoint = self._create_ec2_interface_endpoint()
         self.ssm_endpoint = self._create_ssm_interface_endpoint()
         self.ssm_messages_endpoint = self._create_ssm_messages_interface_endpoint()
@@ -351,13 +353,13 @@ class TapStack(Stack):
 
     def _create_endpoint_security_group(self) -> ec2.SecurityGroup:
         """
-        Create security group for interface endpoints allowing only HTTPS traffic (port 443).
+        Create security group for VPC Interface endpoints allowing only HTTPS traffic (port 443).
         """
         sg = ec2.SecurityGroup(
             self,
             f"EndpointSecurityGroup-{self.environment_suffix}",
             vpc=self.vpc,
-            description=f"Security group for VPC interface endpoints - {self.environment_suffix}",
+            description=f"Security group for VPC Interface endpoints - {self.environment_suffix}",
             security_group_name=f"endpoint-sg-{self.environment_suffix}",
             allow_all_outbound=True,
         )
@@ -445,7 +447,7 @@ class TapStack(Stack):
         return endpoint
 
     def _create_ec2_interface_endpoint(self) -> ec2.InterfaceVpcEndpoint:
-        """Create EC2 interface endpoint."""
+        """Create EC2 Interface endpoint."""
         endpoint = ec2.InterfaceVpcEndpoint(
             self,
             f"EC2InterfaceEndpoint-{self.environment_suffix}",
@@ -464,7 +466,7 @@ class TapStack(Stack):
 
     def _create_ssm_interface_endpoint(self) -> ec2.InterfaceVpcEndpoint:
         """
-        Create SSM interface endpoint in at least 2 availability zones.
+        Create SSM Interface endpoint in at least 2 availability zones.
 
         CRITICAL FIX: Using one_per_az=True instead of availability_zones parameter
         to avoid token list issues and ensure deployment across all available AZs.
@@ -488,7 +490,7 @@ class TapStack(Stack):
 
     def _create_ssm_messages_interface_endpoint(self) -> ec2.InterfaceVpcEndpoint:
         """
-        Create SSM Messages interface endpoint in at least 2 availability zones.
+        Create SSM Messages Interface endpoint in at least 2 availability zones.
         """
         endpoint = ec2.InterfaceVpcEndpoint(
             self,
@@ -508,7 +510,7 @@ class TapStack(Stack):
         return endpoint
 
     def _create_ec2_messages_interface_endpoint(self) -> ec2.InterfaceVpcEndpoint:
-        """Create EC2 Messages interface endpoint."""
+        """Create EC2 Messages Interface endpoint."""
         endpoint = ec2.InterfaceVpcEndpoint(
             self,
             f"EC2MessagesInterfaceEndpoint-{self.environment_suffix}",
@@ -527,7 +529,7 @@ class TapStack(Stack):
 
     def _create_cloudwatch_logs_interface_endpoint(self) -> ec2.InterfaceVpcEndpoint:
         """
-        Create CloudWatch Logs interface endpoint with access logging enabled.
+        Create CloudWatch Logs Interface endpoint with access logging enabled.
         """
         endpoint = ec2.InterfaceVpcEndpoint(
             self,
@@ -546,7 +548,7 @@ class TapStack(Stack):
         return endpoint
 
     def _create_secrets_manager_interface_endpoint(self) -> ec2.InterfaceVpcEndpoint:
-        """Create Secrets Manager interface endpoint for credential retrieval."""
+        """Create Secrets Manager Interface endpoint for credential retrieval."""
         endpoint = ec2.InterfaceVpcEndpoint(
             self,
             f"SecretsManagerInterfaceEndpoint-{self.environment_suffix}",
@@ -634,7 +636,7 @@ class TapStack(Stack):
                 export_name=f"{name}InterfaceEndpointId-{self.environment_suffix}",
             )
 
-            # DNS names for interface endpoints
+            # DNS names for Interface endpoints
             # Use Fn.select to get first DNS entry from token list
             CfnOutput(
                 self,
@@ -724,7 +726,7 @@ pipenv run pytest tests/unit/ --cov=lib --cov-report=html --cov-report=term
 2. **Security Groups** (3 tests): Security group creation, ingress/egress rules validation
 3. **KMS Keys** (3 tests): Key existence, rotation status, ARN validation
 4. **Gateway Endpoints** (4 tests): S3/DynamoDB endpoint existence, VPC associations, route table attachments
-5. **Interface Endpoints** (9 tests): All 6 interface endpoints, private DNS validation, security group attachments, subnet placement
+5. **Interface Endpoints** (9 tests): All 6 Interface endpoints, private DNS validation, security group attachments, subnet placement
 6. **DNS Resolution** (1 test): Endpoint DNS entry validation
 7. **Resource Tagging** (2 tests): VPC and subnet tags verification
 8. **End-to-End Workflows** (2 tests): Cross-resource VPC validation, complete infrastructure deployment check
@@ -892,7 +894,7 @@ The deployed stack exports comprehensive outputs for integration and cross-stack
 
 ### Security
 - **Network Isolation**: No internet gateway or NAT gateway, all traffic within AWS network
-- **HTTPS Enforcement**: Security groups allow only port 443 (HTTPS) for interface endpoints
+- **HTTPS Enforcement**: Security groups allow only port 443 (HTTPS) for Interface endpoints
 - **Encryption at Rest**: KMS CMK with automatic key rotation enabled
 - **Encryption in Transit**: All endpoint connections use TLS 1.2+
 - **Least Privilege**: Endpoint policies restrict access to specific AWS account
@@ -900,7 +902,7 @@ The deployed stack exports comprehensive outputs for integration and cross-stack
 ### Cost Optimization
 - **Gateway Endpoints**: S3 and DynamoDB use gateway endpoints (no hourly charges)
 - **No NAT Gateways**: Eliminated $0.045/hour NAT gateway costs (~$32/month savings per AZ)
-- **Interface Endpoint Consolidation**: Minimal interface endpoints for required services only
+- **Interface Endpoint Consolidation**: Minimal Interface endpoints for required services only
 - **Cost Allocation Tags**: Environment and CostCenter tags for granular cost tracking
 
 ### Operational Excellence
