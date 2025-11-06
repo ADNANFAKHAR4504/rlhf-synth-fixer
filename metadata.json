@@ -11,5 +11,6 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": ["VPC","EC2 (Security Groups, Subnets)", "CloudTrail", "S3", "KMS", "CloudWatch", "CloudWatch Logs", "Lambda", "SNS","IAM"]
+  "aws_services": ["VPC","EC2 (Security Groups, Subnets)", "CloudTrail", "S3", "KMS", "CloudWatch", "CloudWatch Logs", "Lambda", "SNS","IAM"],
+  "training_quality": 9.5
 }
