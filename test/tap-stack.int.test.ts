@@ -50,12 +50,11 @@ import {
 } from '@aws-sdk/client-sns';
 
 describe('TapStack Security Infrastructure - Integration Tests', () => {
-  const region = process.env.AWS_REGION || 'us-west-2';
+  const region = process.env.AWS_REGION || 'us-east-1';
   const stackName = process.env.PULUMI_STACK || 'dev';
   const serviceName =
     process.env.SERVICE_NAME || 'financial-security';
-  const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
+  let environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
   // AWS SDK Clients
   const kmsClient = new KMSClient({ region });
   const s3Client = new S3Client({ region });

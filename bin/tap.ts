@@ -15,7 +15,7 @@ import { TapStack } from '../lib/tap-stack';
 const config = new pulumi.Config();
 
 // Get the environment suffix from the CI, Pulumi config, defaulting to 'dev'.
-let environmentSuffix =
+const environmentSuffix =
   process.env.ENVIRONMENT_SUFFIX || config.get('env') || 'dev';
 
 // Get service name from config or environment variable
@@ -35,7 +35,7 @@ const repository =
   config.get('repository') || process.env.REPOSITORY || 'unknown';
 const commitAuthor =
   config.get('commitAuthor') || process.env.COMMIT_AUTHOR || 'unknown';
-environmentSuffix = `${environmentSuffix}res`;
+
 // Define a set of default tags to apply to all resources.
 const defaultTags = {
   Environment: environmentSuffix,
