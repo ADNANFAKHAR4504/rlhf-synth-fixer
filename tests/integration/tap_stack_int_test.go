@@ -26,12 +26,12 @@ import (
 )
 
 type StackOutputs struct {
-	AlbDnsName          string `json:"albDnsName"`
-	DlqUrl              string `json:"dlqUrl"`
-	RdsClusterEndpoint  string `json:"rdsClusterEndpoint"`
-	SnsTopicArn         string `json:"snsTopicArn"`
-	SqsQueueUrl         string `json:"sqsQueueUrl"`
-	VpcId               string `json:"vpcId"`
+	AlbDnsName         string `json:"albDnsName"`
+	DlqUrl             string `json:"dlqUrl"`
+	RdsClusterEndpoint string `json:"rdsClusterEndpoint"`
+	SnsTopicArn        string `json:"snsTopicArn"`
+	SqsQueueUrl        string `json:"sqsQueueUrl"`
+	VpcId              string `json:"vpcId"`
 }
 
 func loadStackOutputs(t *testing.T) *StackOutputs {

@@ -24,34 +24,34 @@ func createInfrastructure(ctx *pulumi.Context) error {
 	cfg := config.New(ctx, "")
 	environmentSuffix := cfg.Get("environmentSuffix")
 	if environmentSuffix == "" {
-	environmentSuffix = "test"
+		environmentSuffix = "test"
 	}
 	region := "us-east-1"
 
 	// Common tags
 	tags := pulumi.StringMap{
-	"Environment":    pulumi.String("production"),
-	"MigrationBatch": pulumi.String("phase-1"),
+		"Environment":    pulumi.String("production"),
+		"MigrationBatch": pulumi.String("phase-1"),
 	}
 
 	// Create VPC
 	vpc, err := ec2.NewVpc(ctx, fmt.Sprintf("payment-vpc-%s", environmentSuffix), &ec2.VpcArgs{
-	CidrBlock:          pulumi.String("10.0.0.0/16"),
-	EnableDnsHostnames: pulumi.Bool(true),
-	EnableDnsSupport:   pulumi.Bool(true),
-	Tags:               tags,
+		CidrBlock:          pulumi.String("10.0.0.0/16"),
+		EnableDnsHostnames: pulumi.Bool(true),
+		EnableDnsSupport:   pulumi.Bool(true),
+		Tags:               tags,
 	})
 	if err != nil {
-	return err
+		return err
 	}
 
 	// Create Internet Gateway
 	igw, err := ec2.NewInternetGateway(ctx, fmt.Sprintf("payment-igw-%s", environmentSuffix), &ec2.InternetGatewayArgs{
-	VpcId: vpc.ID(),
-	Tags:  tags,
+		VpcId: vpc.ID(),
+		Tags:  tags,
 	})
 	if err != nil {
-	return err
+		return err
 	}
 
 	// Get availability zones
@@ -60,7 +60,7 @@ func createInfrastructure(ctx *pulumi.Context) error {
 	// Create public subnets
 	var publicSubnets []*ec2.Subnet
 	for i, az := range azs {
-	subnet, err := ec2.NewSubnet(ctx, fmt.Sprintf("public-subnet-%d-%s", i, environmentSuffix), &ec2.SubnetArgs{
+		subnet, err := ec2.NewSubnet(ctx, fmt.Sprintf("public-subnet-%d-%s", i, environmentSuffix), &ec2.SubnetArgs{
 			VpcId:               vpc.ID(),
 			CidrBlock:           pulumi.String(fmt.Sprintf("10.0.%d.0/24", i)),
 			AvailabilityZone:    pulumi.String(az),
@@ -259,8 +259,8 @@ func createInfrastructure(ctx *pulumi.Context) error {
 
 	// Generate random password for RDS
 	dbPassword, err := random.NewRandomPassword(ctx, fmt.Sprintf("db-password-%s", environmentSuffix), &random.RandomPasswordArgs{
-		Length:         pulumi.Int(32),
-		Special:        pulumi.Bool(true),
+		Length:          pulumi.Int(32),
+		Special:         pulumi.Bool(true),
 		OverrideSpecial: pulumi.String("!#$%&*()-_=+[]{}|:;<>,.?"),
 	})
 	if err != nil {
