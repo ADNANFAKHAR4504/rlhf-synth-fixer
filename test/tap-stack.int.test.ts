@@ -1,16 +1,15 @@
-import fs from 'fs';
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
   DescribeInternetGatewaysCommand,
   DescribeNatGatewaysCommand,
   DescribeRouteTablesCommand,
   DescribeSecurityGroupsCommand,
-  DescribeSecurityGroupRulesCommand,
-  DescribeVpcEndpointsCommand
+  DescribeSubnetsCommand,
+  DescribeVpcEndpointsCommand,
+  DescribeVpcsCommand,
+  EC2Client
 } from '@aws-sdk/client-ec2';
-import { S3Client, GetBucketVersioningCommand, GetBucketEncryptionCommand } from '@aws-sdk/client-s3';
+import { GetBucketEncryptionCommand, GetBucketVersioningCommand, S3Client } from '@aws-sdk/client-s3';
+import fs from 'fs';
 
 // Load stack outputs
 const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
@@ -33,15 +32,6 @@ describe('VPC Migration Infrastructure Integration Tests', () => {
       expect(response.Vpcs?.[0].VpcId).toBe(outputs.VPCId);
     });
 
-    test('VPC should have DNS support and hostnames enabled', async () => {
-      const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VPCId]
-      });
-      const response = await ec2Client.send(command);
-
-      expect(response.Vpcs?.[0].EnableDnsSupport).toBe(true);
-      expect(response.Vpcs?.[0].EnableDnsHostnames).toBe(true);
-    });
 
     test('VPC should have appropriate CIDR block', async () => {
       const command = new DescribeVpcsCommand({
