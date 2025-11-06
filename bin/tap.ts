@@ -11,7 +11,9 @@ const stackName = `TapStack${environmentSuffix}`;
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
-// Apply tags to all stacks in this app (optional - you can do this at stack level instead)
+// Apply tags to all stacks in this app
+Tags.of(app).add('iac-rlhf-amazon', environmentSuffix);
+Tags.of(app).add('project', 'cloud-setup');
 Tags.of(app).add('Environment', environmentSuffix);
 Tags.of(app).add('Repository', repositoryName);
 Tags.of(app).add('Author', commitAuthor);
