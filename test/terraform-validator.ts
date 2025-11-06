@@ -34,7 +34,7 @@ export class TerraformValidator {
       'ecs.tf',
       'rds.tf',
       's3.tf',
-      'outputs.tf'
+      'outputs.tf',
     ];
 
     tfFiles.forEach(file => {
@@ -70,10 +70,16 @@ export class TerraformValidator {
   } {
     const providerContent = this.getFile('provider.tf');
     return {
-      hasTerraformVersion: providerContent.includes('required_version') && providerContent.includes('terraform'),
-      hasAwsProvider: providerContent.includes('provider "aws"') && providerContent.includes('hashicorp/aws'),
-      hasAliasProvider: providerContent.includes('alias') && providerContent.includes('us-east-2'),
-      usesVariable: providerContent.includes('var.aws_region')
+      hasTerraformVersion:
+        providerContent.includes('required_version') &&
+        providerContent.includes('terraform'),
+      hasAwsProvider:
+        providerContent.includes('provider "aws"') &&
+        providerContent.includes('hashicorp/aws'),
+      hasAliasProvider:
+        providerContent.includes('alias') &&
+        providerContent.includes('us-east-2'),
+      usesVariable: providerContent.includes('var.aws_region'),
     };
   }
 
@@ -93,10 +99,13 @@ export class TerraformValidator {
 
     return {
       hasRequiredVars: hasAllVars,
-      hasEnvironmentSuffix: variablesContent.includes('variable "environment_suffix"'),
-      hasAwsRegionWithDefault: variablesContent.includes('variable "aws_region"') &&
-                                variablesContent.includes('default') &&
-                                variablesContent.includes('us-east-1')
+      hasEnvironmentSuffix: variablesContent.includes(
+        'variable "environment_suffix"'
+      ),
+      hasAwsRegionWithDefault:
+        variablesContent.includes('variable "aws_region"') &&
+        variablesContent.includes('default') &&
+        variablesContent.includes('us-east-1'),
     };
   }
 
@@ -112,12 +121,15 @@ export class TerraformValidator {
     const localsContent = this.getFile('locals.tf');
     return {
       hasLocalsBlock: localsContent.includes('locals {'),
-      hasCommonTags: localsContent.includes('common_tags') &&
-                     localsContent.includes('Environment') &&
-                     localsContent.includes('Project') &&
-                     localsContent.includes('CostCenter'),
-      hasCidrCalculations: localsContent.includes('cidr') || localsContent.includes('subnet'),
-      hasPortConfig: localsContent.includes('443') || localsContent.includes('8443')
+      hasCommonTags:
+        localsContent.includes('common_tags') &&
+        localsContent.includes('Environment') &&
+        localsContent.includes('Project') &&
+        localsContent.includes('CostCenter'),
+      hasCidrCalculations:
+        localsContent.includes('cidr') || localsContent.includes('subnet'),
+      hasPortConfig:
+        localsContent.includes('443') || localsContent.includes('8443'),
     };
   }
 
@@ -133,7 +145,6 @@ export class TerraformValidator {
     hasSubnets: boolean;
   } {
     const vpcContent = this.getFile('vpc.tf');
-    const localsContent = this.getFile('locals.tf');
 
     return {
       hasProductionVpc: vpcContent.includes('resource "aws_vpc"'),
@@ -141,7 +152,9 @@ export class TerraformValidator {
       hasPeeringConnection: false, // This infrastructure doesn't use VPC peering
       hasDnsResolution: vpcContent.includes('enable_dns'),
       usesEnvironmentSuffix: vpcContent.includes('var.environment_suffix'),
-      hasSubnets: vpcContent.includes('resource "aws_subnet"') && vpcContent.includes('availability_zone')
+      hasSubnets:
+        vpcContent.includes('resource "aws_subnet"') &&
+        vpcContent.includes('availability_zone'),
     };
   }
 
@@ -158,10 +171,11 @@ export class TerraformValidator {
     return {
       hasRouteTables: vpcContent.includes('resource "aws_route_table"'),
       hasPeeringRoutes: false, // This infrastructure doesn't use peering routes
-      hasRouteTableAssociations: vpcContent.includes('resource "aws_route_table_association"') &&
-                                vpcContent.includes('subnet_id') &&
-                                vpcContent.includes('route_table_id'),
-      usesEnvironmentSuffix: vpcContent.includes('var.environment_suffix')
+      hasRouteTableAssociations:
+        vpcContent.includes('resource "aws_route_table_association"') &&
+        vpcContent.includes('subnet_id') &&
+        vpcContent.includes('route_table_id'),
+      usesEnvironmentSuffix: vpcContent.includes('var.environment_suffix'),
     };
   }
 
@@ -180,13 +194,19 @@ export class TerraformValidator {
     const albContent = this.getFile('alb.tf');
     const allSecurityContent = securityContent + albContent;
     return {
-      hasSecurityGroups: allSecurityContent.includes('resource "aws_security_group"'),
+      hasSecurityGroups: allSecurityContent.includes(
+        'resource "aws_security_group"'
+      ),
       allowsPort443: allSecurityContent.includes('443'),
       allowsPort8443: allSecurityContent.includes('8443'),
       restrictsToSpecificCidrs: allSecurityContent.includes('cidr_blocks'),
-      usesEnvironmentSuffix: allSecurityContent.includes('var.environment_suffix'),
-      hasRules: allSecurityContent.includes('ingress') || allSecurityContent.includes('egress') ||
-                allSecurityContent.includes('aws_security_group_rule')
+      usesEnvironmentSuffix: allSecurityContent.includes(
+        'var.environment_suffix'
+      ),
+      hasRules:
+        allSecurityContent.includes('ingress') ||
+        allSecurityContent.includes('egress') ||
+        allSecurityContent.includes('aws_security_group_rule'),
     };
   }
 
@@ -210,12 +230,17 @@ export class TerraformValidator {
       has60SecondAggregation: false,
       storesInS3: s3Content.includes('s3') || s3Content.includes('S3'),
       hasS3Bucket: s3Content.includes('resource "aws_s3_bucket"'),
-      hasEncryption: s3Content.includes('aws_s3_bucket_server_side_encryption_configuration') ||
-                     s3Content.includes('server_side_encryption_configuration'),
-      blocksPublicAccess: s3Content.includes('aws_s3_bucket_public_access_block') &&
-                         s3Content.includes('block_public_acls') &&
-                         s3Content.includes('block_public_policy'),
-      usesEnvironmentSuffix: s3Content.includes('var.environment_suffix') || vpcContent.includes('var.environment_suffix')
+      hasEncryption:
+        s3Content.includes(
+          'aws_s3_bucket_server_side_encryption_configuration'
+        ) || s3Content.includes('server_side_encryption_configuration'),
+      blocksPublicAccess:
+        s3Content.includes('aws_s3_bucket_public_access_block') &&
+        s3Content.includes('block_public_acls') &&
+        s3Content.includes('block_public_policy'),
+      usesEnvironmentSuffix:
+        s3Content.includes('var.environment_suffix') ||
+        vpcContent.includes('var.environment_suffix'),
     };
   }
 
@@ -237,7 +262,7 @@ export class TerraformValidator {
       hasTrafficAlarms: false,
       hasSnsTopic: false,
       hasAlarmActions: false,
-      usesEnvironmentSuffix: ecsContent.includes('var.environment_suffix')
+      usesEnvironmentSuffix: ecsContent.includes('var.environment_suffix'),
     };
   }
 
@@ -259,11 +284,13 @@ export class TerraformValidator {
       hasRoles: allContent.includes('resource "aws_iam_role"'),
       hasCrossAccountRole: false,
       hasFlowLogsRole: false,
-      hasLeastPrivilege: allContent.includes('resource "aws_iam_policy"') ||
-                        allContent.includes('policy_document') || allContent.includes('policy =') ||
-                        allContent.includes('aws_iam_role_policy'),
+      hasLeastPrivilege:
+        allContent.includes('resource "aws_iam_policy"') ||
+        allContent.includes('policy_document') ||
+        allContent.includes('policy =') ||
+        allContent.includes('aws_iam_role_policy'),
       hasExplicitDeny: false,
-      usesEnvironmentSuffix: allContent.includes('var.environment_suffix')
+      usesEnvironmentSuffix: allContent.includes('var.environment_suffix'),
     };
   }
 
@@ -281,13 +308,14 @@ export class TerraformValidator {
     const outputMatches = outputsContent.match(/output "/g);
 
     return {
-      hasRequiredOutputs: outputsContent.includes('vpc_id') &&
-                         outputsContent.includes('alb_dns_name') &&
-                         outputsContent.includes('ecs_cluster'),
+      hasRequiredOutputs:
+        outputsContent.includes('vpc_id') &&
+        outputsContent.includes('alb_dns_name') &&
+        outputsContent.includes('ecs_cluster'),
       hasPeeringConnectionId: false, // Not applicable for this infrastructure
       hasDnsResolution: false,
       hasRouteCount: false,
-      hasMinimumOutputs: outputMatches !== null && outputMatches.length >= 10
+      hasMinimumOutputs: outputMatches !== null && outputMatches.length >= 10,
     };
   }
 
@@ -304,10 +332,11 @@ export class TerraformValidator {
     const localsContent = this.getFile('locals.tf');
 
     return {
-      hasCommonTags: allContent.includes('tags') && allContent.includes('local.common_tags'),
+      hasCommonTags:
+        allContent.includes('tags') && allContent.includes('local.common_tags'),
       hasEnvironmentTag: localsContent.includes('Environment'),
       hasProjectTag: localsContent.includes('Project'),
-      hasCostCenterTag: localsContent.includes('CostCenter')
+      hasCostCenterTag: localsContent.includes('CostCenter'),
     };
   }
 
@@ -327,10 +356,11 @@ export class TerraformValidator {
 
     return {
       allFilesExist: Object.keys(this.terraformFiles).length >= 8,
-      noHardcodedEnvironments: !allContent.includes('prod-') &&
-                              !allContent.includes('dev-') &&
-                              !allContent.includes('stage-'),
-      usesEnvironmentSuffix: allHaveSuffix
+      noHardcodedEnvironments:
+        !allContent.includes('prod-') &&
+        !allContent.includes('dev-') &&
+        !allContent.includes('stage-'),
+      usesEnvironmentSuffix: allHaveSuffix,
     };
   }
 
@@ -350,7 +380,7 @@ export class TerraformValidator {
       iam: this.validateIam(),
       outputs: this.validateOutputs(),
       tagging: this.validateTagging(),
-      codeQuality: this.validateCodeQuality()
+      codeQuality: this.validateCodeQuality(),
     };
   }
 }

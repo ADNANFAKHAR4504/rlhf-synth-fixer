@@ -155,7 +155,7 @@ describe('Terraform Infrastructure - Integration Tests', () => {
       if (skipIfNoOutputs()) return;
 
       const command = new DescribeNatGatewaysCommand({
-        Filters: [
+        Filter: [
           { Name: 'vpc-id', Values: [outputs.vpc_id] },
           { Name: 'state', Values: ['available'] }
         ]
