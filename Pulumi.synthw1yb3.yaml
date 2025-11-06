@@ -1,0 +1,4 @@
+encryptionsalt: v1:OKE6lB6Zi98=:v1:hg9TqCLEOWgiMGRA:DsFMuMyRkDqT+znoA3Cnllk6qdHr5g==
+config:
+  TapStack:environmentSuffix: synthw1yb3
+  aws:region: us-east-1
