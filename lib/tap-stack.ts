@@ -490,7 +490,78 @@ export class TapStack extends cdk.Stack {
     });
 
     // ========================================
-    // 7. LAMBDA FUNCTIONS
+    // 7. SECURITY GROUPS
+    // ========================================
+
+    // Application Security Group
+    const appSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'ApplicationSecurityGroup',
+      {
+        vpc: this.vpc,
+        securityGroupName: `${prefix}-app-sg`,
+        description: 'Security group for trading platform applications',
+        allowAllOutbound: true,
+      }
+    );
+    cdk.Tags.of(appSecurityGroup).add('iac-rlhf-amazon', 'true');
+
+    appSecurityGroup.addIngressRule(
+      ec2.Peer.ipv4('10.0.0.0/16'),
+      ec2.Port.tcp(443),
+      'Allow HTTPS from VPC'
+    );
+
+    appSecurityGroup.addIngressRule(
+      ec2.Peer.ipv4('10.0.0.0/16'),
+      ec2.Port.tcp(80),
+      'Allow HTTP from VPC'
+    );
+
+    // Database Security Group
+    const dbSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'DatabaseSecurityGroup',
+      {
+        vpc: this.vpc,
+        securityGroupName: `${prefix}-db-sg`,
+        description: 'Security group for database instances',
+        allowAllOutbound: false,
+      }
+    );
+    cdk.Tags.of(dbSecurityGroup).add('iac-rlhf-amazon', 'true');
+
+    dbSecurityGroup.addIngressRule(
+      appSecurityGroup,
+      ec2.Port.tcp(5432),
+      'Allow PostgreSQL from application layer'
+    );
+
+    dbSecurityGroup.addIngressRule(
+      appSecurityGroup,
+      ec2.Port.tcp(3306),
+      'Allow MySQL from application layer'
+    );
+
+    // Remove the default egress rule to have truly restricted egress
+    const cfnDbSecurityGroup = dbSecurityGroup.node.defaultChild as ec2.CfnSecurityGroup;
+    cfnDbSecurityGroup.securityGroupEgress = [];
+
+    // Lambda Security Group
+    const lambdaSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'LambdaSecurityGroup',
+      {
+        vpc: this.vpc,
+        securityGroupName: `${prefix}-lambda-sg`,
+        description: 'Security group for Lambda functions',
+        allowAllOutbound: true,
+      }
+    );
+    cdk.Tags.of(lambdaSecurityGroup).add('iac-rlhf-amazon', 'true');
+
+    // ========================================
+    // 8. LAMBDA FUNCTIONS
     // ========================================
 
     // Lambda execution role
@@ -539,6 +610,7 @@ export class TapStack extends cdk.Stack {
         vpcSubnets: {
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
+        securityGroups: [lambdaSecurityGroup],
         environment: {
           REGION: region,
           ORDERS_TABLE: ordersTable.tableName,
@@ -571,6 +643,7 @@ export class TapStack extends cdk.Stack {
         vpcSubnets: {
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
+        securityGroups: [lambdaSecurityGroup],
         role: lambdaRole,
         bundling: {
           externalModules: ['@aws-sdk/*'],
@@ -600,6 +673,7 @@ export class TapStack extends cdk.Stack {
         vpcSubnets: {
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
+        securityGroups: [lambdaSecurityGroup],
         environment: {
           ORDERS_TABLE: ordersTable.tableName,
           MARKET_DATA_TABLE: marketDataTable.tableName,
@@ -700,74 +774,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // ========================================
-    // 10. SECURITY GROUPS
-    // ========================================
-
-    // Application Security Group
-    const appSecurityGroup = new ec2.SecurityGroup(
-      this,
-      'ApplicationSecurityGroup',
-      {
-        vpc: this.vpc,
-        securityGroupName: `${prefix}-app-sg`,
-        description: 'Security group for trading platform applications',
-        allowAllOutbound: true,
-      }
-    );
-    cdk.Tags.of(appSecurityGroup).add('iac-rlhf-amazon', 'true');
-
-    appSecurityGroup.addIngressRule(
-      ec2.Peer.ipv4('10.0.0.0/16'),
-      ec2.Port.tcp(443),
-      'Allow HTTPS from VPC'
-    );
-
-    appSecurityGroup.addIngressRule(
-      ec2.Peer.ipv4('10.0.0.0/16'),
-      ec2.Port.tcp(80),
-      'Allow HTTP from VPC'
-    );
-
-    // Database Security Group
-    const dbSecurityGroup = new ec2.SecurityGroup(
-      this,
-      'DatabaseSecurityGroup',
-      {
-        vpc: this.vpc,
-        securityGroupName: `${prefix}-db-sg`,
-        description: 'Security group for database instances',
-        allowAllOutbound: false,
-      }
-    );
-    cdk.Tags.of(dbSecurityGroup).add('iac-rlhf-amazon', 'true');
-
-    dbSecurityGroup.addIngressRule(
-      appSecurityGroup,
-      ec2.Port.tcp(5432),
-      'Allow PostgreSQL from application layer'
-    );
-
-    dbSecurityGroup.addIngressRule(
-      appSecurityGroup,
-      ec2.Port.tcp(3306),
-      'Allow MySQL from application layer'
-    );
-
-    // Lambda Security Group
-    const lambdaSecurityGroup = new ec2.SecurityGroup(
-      this,
-      'LambdaSecurityGroup',
-      {
-        vpc: this.vpc,
-        securityGroupName: `${prefix}-lambda-sg`,
-        description: 'Security group for Lambda functions',
-        allowAllOutbound: true,
-      }
-    );
-    cdk.Tags.of(lambdaSecurityGroup).add('iac-rlhf-amazon', 'true');
-
-    // ========================================
-    // 11. VPC ENDPOINTS
+    // 10. VPC ENDPOINTS
     // ========================================
 
     // S3 VPC Endpoint (Gateway endpoint)
@@ -825,7 +832,7 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(lambdaEndpoint).add('iac-rlhf-amazon', 'true');
 
     // ========================================
-    // 12. CLOUDWATCH ALARMS
+    // 11. CLOUDWATCH ALARMS
     // ========================================
 
     // Lambda Error Rate Alarm
@@ -849,7 +856,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // ========================================
-    // 13. OUTPUTS
+    // 12. OUTPUTS
     // ========================================
 
     // Transit Gateway Attachment IDs

@@ -379,8 +379,14 @@ describe('TapStack Unit Tests', () => {
 
     test('should create Lambda execution role', () => {
       template.hasResourceProperties('AWS::IAM::Role', {
-        AssumedBy: Match.objectLike({
-          Service: 'lambda.amazonaws.com',
+        AssumeRolePolicyDocument: Match.objectLike({
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Principal: Match.objectLike({
+                Service: 'lambda.amazonaws.com',
+              }),
+            }),
+          ]),
         }),
         ManagedPolicyArns: Match.arrayWith([
           Match.objectLike({
@@ -527,24 +533,46 @@ describe('TapStack Unit Tests', () => {
 
     test('should create SSM VPC endpoint', () => {
       template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-        ServiceName: Match.objectLike({
-          'Fn::Join': Match.arrayWith([
-            Match.arrayWith([Match.stringLikeRegexp('ssm')]),
-          ]),
-        }),
+        ServiceName: Match.anyValue(),
         VpcEndpointType: 'Interface',
       });
+      // Verify the SSM endpoint exists by checking for 'ssm' in service name
+      const endpoints = template.findResources('AWS::EC2::VPCEndpoint', {
+        Properties: {
+          VpcEndpointType: 'Interface',
+        },
+      });
+      const ssmEndpoint = Object.values(endpoints).find((endpoint: any) => {
+        const serviceName = endpoint.Properties.ServiceName;
+        return typeof serviceName === 'string'
+          ? serviceName.includes('ssm')
+          : JSON.stringify(serviceName).includes('ssm');
+      });
+      expect(ssmEndpoint).toBeDefined();
     });
 
     test('should create Lambda VPC endpoint', () => {
       template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-        ServiceName: Match.objectLike({
-          'Fn::Join': Match.arrayWith([
-            Match.arrayWith([Match.stringLikeRegexp('lambda')]),
-          ]),
-        }),
+        ServiceName: Match.anyValue(),
         VpcEndpointType: 'Interface',
       });
+      // Verify the Lambda endpoint exists by checking for 'lambda' in service name
+      const endpoints = template.findResources('AWS::EC2::VPCEndpoint', {
+        Properties: {
+          VpcEndpointType: 'Interface',
+        },
+      });
+      const lambdaEndpoint = Object.values(endpoints).find((endpoint: any) => {
+        const serviceName = endpoint.Properties.ServiceName;
+        // Check if it's lambda service (not lambda-related services like logs)
+        if (typeof serviceName === 'string') {
+          return serviceName.match(/\.lambda$/) !== null;
+        } else {
+          const str = JSON.stringify(serviceName);
+          return str.includes('lambda') && !str.includes('logs');
+        }
+      });
+      expect(lambdaEndpoint).toBeDefined();
     });
   });
 
@@ -602,16 +630,16 @@ describe('TapStack Unit Tests', () => {
     });
 
     test('should grant EC2 describe permissions for Transit Gateway checks', () => {
-      template.hasResourceProperties('AWS::IAM::Policy', {
-        PolicyDocument: Match.objectLike({
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Action: ['ec2:DescribeTransitGateways'],
-              Effect: 'Allow',
-            }),
-          ]),
-        }),
+      // Verify EC2 permissions exist in the Lambda execution role policy
+      const policies = template.findResources('AWS::IAM::Policy');
+      const hasEc2Permission = Object.values(policies).some((policy: any) => {
+        const statements = policy.Properties?.PolicyDocument?.Statement || [];
+        return statements.some((stmt: any) => {
+          const actions = Array.isArray(stmt.Action) ? stmt.Action : [stmt.Action];
+          return actions.includes('ec2:DescribeTransitGateways') && stmt.Effect === 'Allow';
+        });
       });
+      expect(hasEc2Permission).toBe(true);
     });
 
     test('should grant SSM read permissions to auto-response Lambda', () => {
@@ -717,7 +745,10 @@ describe('TapStack Unit Tests', () => {
 
   describe('High Availability Configuration', () => {
     test('should deploy resources across 3 availability zones', () => {
-      template.resourceCountIs('AWS::EC2::Subnet', 9);
+      // Main VPC: 3 AZs × 3 subnet types (public, private, database) = 9 subnets
+      // Dev VPC: 2 AZs × 1 subnet type (private isolated) = 2 subnets
+      // Total: 11 subnets
+      template.resourceCountIs('AWS::EC2::Subnet', 11);
     });
 
     test('should create NAT Gateway per availability zone', () => {
