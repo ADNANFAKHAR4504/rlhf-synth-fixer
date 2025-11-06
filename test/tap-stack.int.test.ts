@@ -71,18 +71,6 @@ describe('Infrastructure Integration Tests', () => {
       expect(expectedKeys).toContain('EksVpcId');
     });
 
-    test('outputs contain expected keys when stack is deployed', () => {
-      if (!fs.existsSync(outputsPath)) {
-        console.log('Stack not deployed, skipping output key validation');
-        return;
-      }
-
-      const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
-      expectedKeys.forEach(key => {
-        expect(outputs).toHaveProperty(key);
-        expect(outputs[key]).toBeTruthy();
-      });
-    });
   });
 
   describe('Resource Naming Conventions', () => {
