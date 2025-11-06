@@ -688,31 +688,62 @@ exports.handler = async (event) => {
         }).promise();
         
         peeringId = createResponse.VpcPeeringConnection.VpcPeeringConnectionId;
+        console.log('Created VPC peering connection:', peeringId);
         
-        await ec2Target.acceptVpcPeeringConnection({
-          VpcPeeringConnectionId: peeringId,
-        }).promise();
-        
-        let attempts = 0;
-        while (attempts < 30) {
-          const describeResponse = await ec2Source.describeVpcPeeringConnections({
-            VpcPeeringConnectionIds: [peeringId],
-          }).promise();
-          
-          const status = describeResponse.VpcPeeringConnections[0].Status.Code;
-          if (status === 'active') {
+        let acceptAttempts = 0;
+        while (acceptAttempts < 10) {
+          try {
+            await ec2Target.acceptVpcPeeringConnection({
+              VpcPeeringConnectionId: peeringId,
+            }).promise();
+            console.log('Accepted VPC peering connection:', peeringId);
             break;
+          } catch (acceptErr) {
+            if (acceptErr.code === 'InvalidVpcPeeringConnectionID.NotFound') {
+              console.log('Peering connection not yet available, waiting...');
+              await new Promise(resolve => setTimeout(resolve, 3000));
+              acceptAttempts++;
+            } else {
+              throw acceptErr;
+            }
           }
-          if (status === 'failed') {
-            throw new Error('VPC peering connection failed');
-          }
-          
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          attempts++;
         }
         
-        if (attempts >= 30) {
-          throw new Error('VPC peering connection did not become active');
+        if (acceptAttempts >= 10) {
+          throw new Error('Failed to accept VPC peering connection after retries');
+        }
+        
+        let describeAttempts = 0;
+        while (describeAttempts < 30) {
+          try {
+            const describeResponse = await ec2Source.describeVpcPeeringConnections({
+              VpcPeeringConnectionIds: [peeringId],
+            }).promise();
+            
+            if (describeResponse.VpcPeeringConnections && describeResponse.VpcPeeringConnections.length > 0) {
+              const status = describeResponse.VpcPeeringConnections[0].Status.Code;
+              console.log('Peering connection status:', status);
+              if (status === 'active') {
+                break;
+              }
+              if (status === 'failed' || status === 'rejected') {
+                throw new Error(\`VPC peering connection \${status}\`);
+              }
+            }
+          } catch (describeErr) {
+            if (describeErr.code === 'InvalidVpcPeeringConnectionID.NotFound') {
+              console.log('Peering connection not yet visible, waiting...');
+            } else {
+              throw describeErr;
+            }
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          describeAttempts++;
+        }
+        
+        if (describeAttempts >= 30) {
+          throw new Error('VPC peering connection did not become active within timeout');
         }
       }
       
