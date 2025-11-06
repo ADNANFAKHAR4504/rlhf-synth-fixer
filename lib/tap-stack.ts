@@ -680,37 +680,164 @@ exports.handler = async (event) => {
     if (RequestType === 'Create' || RequestType === 'Update') {
       let peeringId = event.PhysicalResourceId;
       
-      if (RequestType === 'Create') {
-        const createResponse = await ec2Source.createVpcPeeringConnection({
-          VpcId: SourceVpcId,
-          PeerVpcId: TargetVpcId,
-          PeerRegion: '${currentRegion}',
+      // For Update, check if the existing connection is still valid
+      if (RequestType === 'Update' && peeringId && peeringId !== 'none') {
+        try {
+          const existingCheck = await ec2Source.describeVpcPeeringConnections({
+            VpcPeeringConnectionIds: [peeringId],
+          }).promise();
+          
+          if (existingCheck.VpcPeeringConnections && existingCheck.VpcPeeringConnections.length > 0) {
+            const status = existingCheck.VpcPeeringConnections[0].Status.Code;
+            if (status === 'active') {
+              console.log('Existing peering connection is active, no update needed');
+              return {
+                PhysicalResourceId: peeringId,
+                Data: { VpcPeeringConnectionId: peeringId },
+              };
+            } else if (status === 'failed' || status === 'rejected' || status === 'expired') {
+              console.log(\`Existing connection is \${status}, deleting and creating new one\`);
+              try {
+                await ec2Source.deleteVpcPeeringConnection({
+                  VpcPeeringConnectionId: peeringId,
+                }).promise();
+                await new Promise(resolve => setTimeout(resolve, 5000));
+              } catch (deleteErr) {
+                console.log(\`Error deleting \${status} connection: \${deleteErr.code}\`);
+              }
+              peeringId = null;
+            }
+          }
+        } catch (checkErr) {
+          console.log(\`Could not check existing connection: \${checkErr.code}\`);
+          peeringId = null;
+        }
+      }
+      
+      if (RequestType === 'Create' || !peeringId || peeringId === 'none') {
+        // Check for existing peering connections between these VPCs
+        const existingPeerings = await ec2Source.describeVpcPeeringConnections({
+          Filters: [
+            { Name: 'requester-vpc-info.vpc-id', Values: [SourceVpcId] },
+            { Name: 'accepter-vpc-info.vpc-id', Values: [TargetVpcId] },
+            { Name: 'status-code', Values: ['pending-acceptance', 'provisioning', 'active', 'failed', 'rejected', 'expired', 'deleted'] },
+          ],
         }).promise();
         
-        peeringId = createResponse.VpcPeeringConnection.VpcPeeringConnectionId;
-        console.log('Created VPC peering connection:', peeringId);
-        
-        let acceptAttempts = 0;
-        while (acceptAttempts < 10) {
-          try {
-            await ec2Target.acceptVpcPeeringConnection({
-              VpcPeeringConnectionId: peeringId,
-            }).promise();
-            console.log('Accepted VPC peering connection:', peeringId);
-            break;
-          } catch (acceptErr) {
-            if (acceptErr.code === 'InvalidVpcPeeringConnectionID.NotFound') {
-              console.log('Peering connection not yet available, waiting...');
-              await new Promise(resolve => setTimeout(resolve, 3000));
-              acceptAttempts++;
-            } else {
-              throw acceptErr;
+        // Clean up any failed, rejected, expired, or deleted connections
+        if (existingPeerings.VpcPeeringConnections) {
+          for (const existing of existingPeerings.VpcPeeringConnections) {
+            const status = existing.Status.Code;
+            if (status === 'failed' || status === 'rejected' || status === 'expired') {
+              console.log(\`Deleting existing \${status} peering connection: \${existing.VpcPeeringConnectionId}\`);
+              try {
+                await ec2Source.deleteVpcPeeringConnection({
+                  VpcPeeringConnectionId: existing.VpcPeeringConnectionId,
+                }).promise();
+                // Wait a bit for deletion to complete
+                await new Promise(resolve => setTimeout(resolve, 5000));
+              } catch (deleteErr) {
+                console.log(\`Error deleting \${status} connection: \${deleteErr.code}\`);
+              }
+            } else if (status === 'active') {
+              console.log(\`Found existing active peering connection: \${existing.VpcPeeringConnectionId}\`);
+              peeringId = existing.VpcPeeringConnectionId;
+              return {
+                PhysicalResourceId: peeringId,
+                Data: { VpcPeeringConnectionId: peeringId },
+              };
+            } else if (status === 'pending-acceptance') {
+              console.log(\`Found existing pending peering connection: \${existing.VpcPeeringConnectionId}, accepting...\`);
+              peeringId = existing.VpcPeeringConnectionId;
+              try {
+                await ec2Target.acceptVpcPeeringConnection({
+                  VpcPeeringConnectionId: peeringId,
+                }).promise();
+              } catch (acceptErr) {
+                console.log(\`Error accepting existing connection: \${acceptErr.code}\`);
+                // Continue to create new one if accept fails
+                peeringId = null;
+              }
             }
           }
         }
         
-        if (acceptAttempts >= 10) {
-          throw new Error('Failed to accept VPC peering connection after retries');
+        // Only create new connection if we don't have an active one
+        if (!peeringId) {
+          const createResponse = await ec2Source.createVpcPeeringConnection({
+            VpcId: SourceVpcId,
+            PeerVpcId: TargetVpcId,
+            PeerRegion: '${currentRegion}',
+          }).promise();
+          
+          peeringId = createResponse.VpcPeeringConnection.VpcPeeringConnectionId;
+          console.log('Created new VPC peering connection:', peeringId);
+        
+        // Check if already accepted before trying to accept
+        let needsAcceptance = true;
+        try {
+          const currentStatus = await ec2Source.describeVpcPeeringConnections({
+            VpcPeeringConnectionIds: [peeringId],
+          }).promise();
+          
+          if (currentStatus.VpcPeeringConnections && currentStatus.VpcPeeringConnections.length > 0) {
+            const status = currentStatus.VpcPeeringConnections[0].Status.Code;
+            if (status === 'active') {
+              console.log('Peering connection already active');
+              needsAcceptance = false;
+            } else if (status === 'pending-acceptance') {
+              console.log('Peering connection pending acceptance');
+            } else {
+              console.log(\`Peering connection status: \${status}\`);
+            }
+          }
+        } catch (checkErr) {
+          console.log('Could not check status, will attempt acceptance');
+        }
+        
+        if (needsAcceptance) {
+          let acceptAttempts = 0;
+          while (acceptAttempts < 10) {
+            try {
+              await ec2Target.acceptVpcPeeringConnection({
+                VpcPeeringConnectionId: peeringId,
+              }).promise();
+              console.log('Accepted VPC peering connection:', peeringId);
+              break;
+            } catch (acceptErr) {
+              if (acceptErr.code === 'InvalidVpcPeeringConnectionID.NotFound') {
+                console.log('Peering connection not yet available, waiting...');
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                acceptAttempts++;
+              } else if (acceptErr.code === 'InvalidStateTransition') {
+                console.log('Invalid state transition, connection may already be accepted or failed');
+                // Check status to see if it's actually active
+                try {
+                  const statusCheck = await ec2Source.describeVpcPeeringConnections({
+                    VpcPeeringConnectionIds: [peeringId],
+                  }).promise();
+                  if (statusCheck.VpcPeeringConnections && statusCheck.VpcPeeringConnections.length > 0) {
+                    const status = statusCheck.VpcPeeringConnections[0].Status.Code;
+                    if (status === 'active') {
+                      console.log('Connection is already active');
+                      break;
+                    } else if (status === 'failed' || status === 'rejected') {
+                      throw new Error(\`Peering connection is \${status}\`);
+                    }
+                  }
+                } catch (statusErr) {
+                  throw acceptErr;
+                }
+                break;
+              } else {
+                throw acceptErr;
+              }
+            }
+          }
+          
+          if (acceptAttempts >= 10) {
+            throw new Error('Failed to accept VPC peering connection after retries');
+          }
         }
         
         let describeAttempts = 0;
