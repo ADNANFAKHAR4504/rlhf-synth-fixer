@@ -522,26 +522,37 @@ describe('Secure Production Application Infrastructure Integration Tests', () =>
         }
       }, 60000);
 
-      test('should verify public and private subnets exist with correct configuration', async () => {
+      test('should verify all subnets exist and are configured correctly for Multi-AZ availability', async () => {
         const publicSubnetId = outputs.PublicSubnetId;
         const privateSubnetId = outputs.PrivateSubnetId;
+        const privateSubnet2Id = outputs.PrivateSubnet2Id;
 
         try {
-          // ACTION: Describe Subnets
+          // ACTION: Describe all subnets
           const response = await ec2Client.send(
             new DescribeSubnetsCommand({
-              SubnetIds: [publicSubnetId, privateSubnetId],
+              SubnetIds: [publicSubnetId, privateSubnetId, privateSubnet2Id],
             })
           );
 
           expect(response.Subnets).toBeDefined();
-          expect(response.Subnets!.length).toBe(2);
+          expect(response.Subnets!.length).toBe(3);
+
+          // Verify all subnets are available
+          response.Subnets!.forEach((subnet) => {
+            expect(subnet.State).toBe('available');
+            expect(subnet.AvailabilityZone).toBeDefined();
+            expect(subnet.CidrBlock).toBeDefined();
+          });
 
           const publicSubnet = response.Subnets!.find(
             (subnet) => subnet.SubnetId === publicSubnetId
           );
           const privateSubnet = response.Subnets!.find(
             (subnet) => subnet.SubnetId === privateSubnetId
+          );
+          const privateSubnet2 = response.Subnets!.find(
+            (subnet) => subnet.SubnetId === privateSubnet2Id
           );
 
           expect(publicSubnet).toBeDefined();
@@ -551,6 +562,15 @@ describe('Secure Production Application Infrastructure Integration Tests', () =>
           expect(privateSubnet).toBeDefined();
           expect(privateSubnet!.CidrBlock).toBe('10.0.2.0/24');
           expect(privateSubnet!.MapPublicIpOnLaunch).toBe(false);
+
+          expect(privateSubnet2).toBeDefined();
+          expect(privateSubnet2!.CidrBlock).toBe('10.0.3.0/24');
+          expect(privateSubnet2!.MapPublicIpOnLaunch).toBe(false);
+
+          // Verify private subnets are in different AZs (high availability for RDS)
+          expect(privateSubnet!.AvailabilityZone).not.toBe(
+            privateSubnet2!.AvailabilityZone
+          );
         } catch (error: any) {
           console.error('Subnets test failed:', error);
           throw error;

@@ -509,11 +509,12 @@ describe('TapStack CloudFormation Template - Secure Production Infrastructure', 
   });
 
   describe('RDS Configuration', () => {
-    test('should create RDS DB subnet group using private subnet only', () => {
+    test('should create RDS DB subnet group using both private subnets for Multi-AZ', () => {
       const subnetGroup = template.Resources.DBSubnetGroup;
       expect(subnetGroup.Type).toBe('AWS::RDS::DBSubnetGroup');
-      expect(subnetGroup.Properties.SubnetIds).toHaveLength(1);
+      expect(subnetGroup.Properties.SubnetIds).toHaveLength(2);
       expect(subnetGroup.Properties.SubnetIds[0]).toEqual({ Ref: 'PrivateSubnet' });
+      expect(subnetGroup.Properties.SubnetIds[1]).toEqual({ Ref: 'PrivateSubnet2' });
       expect(subnetGroup.Properties.DBSubnetGroupDescription).toBe('Subnet group for RDS instance');
     });
 

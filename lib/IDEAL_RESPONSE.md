@@ -2,11 +2,11 @@
 
 ## Architecture Overview
 
-This CloudFormation template creates a production-ready AWS cloud environment designed for hosting secure applications with high availability, auto-scaling capabilities, and strict security controls. The infrastructure implements proper network segmentation using a VPC with one public subnet and one private subnet, featuring EC2-based compute with Auto Scaling, managed database services, object storage, NoSQL capabilities, and comprehensive monitoring following AWS best practices and the Well-Architected Framework.
+This CloudFormation template creates a production-ready AWS cloud environment designed for hosting secure applications with high availability, auto-scaling capabilities, and strict security controls. The infrastructure implements proper network segmentation using a VPC with one public subnet and two private subnets across different Availability Zones, featuring EC2-based compute with Auto Scaling, managed database services, object storage, NoSQL capabilities, and comprehensive monitoring following AWS best practices and the Well-Architected Framework.
 
 ### Network Architecture
 
-The infrastructure implements a two-tier VPC architecture with clear network isolation between internet-facing and internal resources. The VPC uses a 10.0.0.0/16 CIDR block providing 65,536 IP addresses for future scalability. The public subnet (10.0.1.0/24) hosts Auto Scaling Group EC2 instances that handle incoming web traffic, while the private subnet (10.0.2.0/24) contains the RDS database instance ensuring the database has no direct internet exposure. An Internet Gateway provides public subnet connectivity, enabling external access to web servers and outbound internet access for the application. The Internet Gateway attaches to the VPC with proper dependency management through DependsOn attributes ensuring correct resource creation order. Public subnet instances receive public IP addresses automatically through MapPublicIpOnLaunch configuration, enabling direct internet communication. The private subnet route table has no internet gateway route, completely isolating database resources from direct internet access following security best practices for data tier protection.
+The infrastructure implements a two-tier VPC architecture with clear network isolation between internet-facing and internal resources. The VPC uses a 10.0.0.0/16 CIDR block providing 65,536 IP addresses for future scalability. The public subnet (10.0.1.0/24) hosts Auto Scaling Group EC2 instances that handle incoming web traffic, while two private subnets (10.0.2.0/24 and 10.0.3.0/24) across different Availability Zones contain the RDS database instance ensuring the database has no direct internet exposure. An Internet Gateway provides public subnet connectivity, enabling external access to web servers and outbound internet access for the application. The Internet Gateway attaches to the VPC with proper dependency management through DependsOn attributes ensuring correct resource creation order. Public subnet instances receive public IP addresses automatically through MapPublicIpOnLaunch configuration, enabling direct internet communication. The private subnet route table has no internet gateway route, completely isolating database resources from direct internet access following security best practices for data tier protection.
 
 ### Auto Scaling Compute Layer
 
@@ -14,7 +14,7 @@ The compute layer uses an Auto Scaling Group that dynamically adjusts capacity b
 
 ### Database Layer
 
-Amazon RDS provides a managed database with flexible engine selection supporting MySQL 8.0.43, PostgreSQL 16.4, or MariaDB 10.11.9 based on the DBEngine parameter. The RDS instance uses a configurable instance class (default db.t3.micro, supporting db.t3.micro through db.t3.large) with 20GB of gp3 storage providing improved performance and cost efficiency compared to gp2. The database is deployed within the private subnet using a DB Subnet Group, ensuring the database is not directly accessible from the internet and implementing network-level security. The RDS instance is not publicly accessible (PubliclyAccessible: false), with connectivity restricted to EC2 instances through a dedicated security group allowing MySQL (port 3306) and PostgreSQL (port 5432) traffic only from the EC2SecurityGroup using SourceSecurityGroupId. Database credentials are managed securely using AWS Secrets Manager with automatic password generation (32 characters with complexity requirements), completely eliminating hardcoded credentials in the template. CloudFormation uses dynamic secret resolution {{resolve:secretsmanager}} to retrieve credentials during stack creation, ensuring credentials never appear in logs or console outputs. CloudWatch Logs exports are configured for error, general, and slow query logs, providing comprehensive database visibility for troubleshooting and performance analysis. Automated backups run daily during a maintenance window (03:00-04:00 UTC) with 7-day retention, and storage encryption is enabled at rest using AWS-managed keys. The RDS instance uses DeletionPolicy: Snapshot ensuring a final snapshot is created before deletion, protecting against accidental data loss and enabling recovery if needed.
+Amazon RDS provides a managed database with flexible engine selection supporting MySQL 8.0.43, PostgreSQL 16.4, or MariaDB 10.11.9 based on the DBEngine parameter. The RDS instance uses a configurable instance class (default db.t3.micro, supporting db.t3.micro through db.t3.large) with 20GB of gp3 storage providing improved performance and cost efficiency compared to gp2. The database is deployed within the private subnets using a DB Subnet Group spanning two Availability Zones, ensuring the database is not directly accessible from the internet and meeting AWS RDS requirements for high availability. The RDS instance is not publicly accessible (PubliclyAccessible: false), with connectivity restricted to EC2 instances through a dedicated security group allowing MySQL (port 3306) and PostgreSQL (port 5432) traffic only from the EC2SecurityGroup using SourceSecurityGroupId. Database credentials are managed securely using AWS Secrets Manager with automatic password generation (32 characters with complexity requirements), completely eliminating hardcoded credentials in the template. CloudFormation uses dynamic secret resolution {{resolve:secretsmanager}} to retrieve credentials during stack creation, ensuring credentials never appear in logs or console outputs. CloudWatch Logs exports are configured for error, general, and slow query logs, providing comprehensive database visibility for troubleshooting and performance analysis. Automated backups run daily during a maintenance window (03:00-04:00 UTC) with 7-day retention, and storage encryption is enabled at rest using AWS-managed keys. The RDS instance uses DeletionPolicy: Snapshot ensuring a final snapshot is created before deletion, protecting against accidental data loss and enabling recovery if needed.
 
 ### Storage Layer
 
@@ -73,6 +73,7 @@ The infrastructure design balances cost optimization with reliability by deployi
             "VpcCIDR",
             "PublicSubnetCIDR",
             "PrivateSubnetCIDR",
+            "PrivateSubnet2CIDR",
             "SSHAllowedCIDR"
           ]
         },
@@ -133,7 +134,13 @@ The infrastructure design balances cost optimization with reliability by deployi
     "PrivateSubnetCIDR": {
       "Type": "String",
       "Default": "10.0.2.0/24",
-      "Description": "CIDR block for Private Subnet",
+      "Description": "CIDR block for Private Subnet 1",
+      "AllowedPattern": "^(10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}/24)$"
+    },
+    "PrivateSubnet2CIDR": {
+      "Type": "String",
+      "Default": "10.0.3.0/24",
+      "Description": "CIDR block for Private Subnet 2",
       "AllowedPattern": "^(10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}/24)$"
     },
     "SSHAllowedCIDR": {
@@ -367,6 +374,38 @@ The infrastructure design balances cost optimization with reliability by deployi
         ]
       }
     },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Ref": "PrivateSubnet2CIDR"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "PrivateSubnet2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
     "PublicRouteTable": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
@@ -436,6 +475,17 @@ The infrastructure design balances cost optimization with reliability by deployi
       "Properties": {
         "SubnetId": {
           "Ref": "PrivateSubnet"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "PrivateSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
         },
         "RouteTableId": {
           "Ref": "PrivateRouteTable"
@@ -917,6 +967,9 @@ The infrastructure design balances cost optimization with reliability by deployi
         "SubnetIds": [
           {
             "Ref": "PrivateSubnet"
+          },
+          {
+            "Ref": "PrivateSubnet2"
           }
         ],
         "Tags": [
@@ -1121,6 +1174,17 @@ The infrastructure design balances cost optimization with reliability by deployi
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-PrivateSubnetId"
+        }
+      }
+    },
+    "PrivateSubnet2Id": {
+      "Description": "Private Subnet 2 ID",
+      "Value": {
+        "Ref": "PrivateSubnet2"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrivateSubnet2Id"
         }
       }
     },
