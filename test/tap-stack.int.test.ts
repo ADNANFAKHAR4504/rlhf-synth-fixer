@@ -284,7 +284,7 @@ describe('TapStack Integration Tests (Serverless Transaction Processing)', () =>
 
     test('Full transaction flow: API -> State Machine -> Lambdas (simulation)', async () => {
       console.log('\n=== Transaction Processing Flow ===');
-      console.log('Flow: API Gateway → Step Functions → Parallel Processing');
+      console.log('Flow: API Gateway > Step Functions > Parallel Processing');
       console.log('  ├─ ValidateTransaction Lambda');
       console.log('  ├─ ParallelProcessing:');
       console.log('  │   ├─ FraudDetector Lambda');
@@ -730,23 +730,23 @@ describe('TapStack Integration Tests (Serverless Transaction Processing)', () =>
 
     test('Complete transaction processing path verification', async () => {
       console.log('\n=== Complete Transaction Processing Path ===');
-      console.log('1. Client → API Gateway (POST /transactions)');
+      console.log('1. Client > API Gateway (POST /transactions)');
       console.log('   [x] Regional endpoint with IAM authentication');
       console.log('   [x] Request validation using JSON schema');
       console.log('   [x] CORS headers configured');
       console.log('');
-      console.log('2. API Gateway → Step Functions');
+      console.log('2. API Gateway > Step Functions');
       console.log('   [x] Direct integration (no Lambda proxy)');
       console.log('   [x] StartExecution action');
       console.log('   [x] X-Ray tracing enabled');
       console.log('');
-      console.log('3. Step Functions → ValidateTransaction Lambda');
+      console.log('3. Step Functions > ValidateTransaction Lambda');
       console.log('   [x] Validates required fields');
       console.log('   [x] Checks amount > 0');
       console.log('   [x] Stores validated transaction in DynamoDB');
       console.log('   [x] DLQ configured for failures');
       console.log('');
-      console.log('4. Step Functions → ParallelProcessing');
+      console.log('4. Step Functions > ParallelProcessing');
       console.log('   ├─ FraudDetector Lambda');
       console.log('   │  [x] Queries fraud patterns from DynamoDB');
       console.log('   │  [x] Calculates risk score');
@@ -757,7 +757,7 @@ describe('TapStack Integration Tests (Serverless Transaction Processing)', () =>
       console.log('      [x] Updates transaction with audit info');
       console.log('      [x] Memory: 128MB, Timeout: 30s');
       console.log('');
-      console.log('5. EventBridge → AuditLogger (on completion)');
+      console.log('5. EventBridge > AuditLogger (on completion)');
       console.log('   [x] Triggers on SUCCEEDED state');
       console.log('   [x] Final audit log entry');
       console.log('   [x] Retry policy: 2 attempts');
