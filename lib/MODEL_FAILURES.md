@@ -9,7 +9,7 @@ This document details the issues found in the original model-generated code and 
 **Description**: When using a custom launch template with an EKS managed node group in AWS CDK, the disk size must be specified within the launch template's `blockDeviceMappings`, not as a `diskSize` property on the node group configuration.
 
 **Original Code (INCORRECT)**:
-```typescript
+```ts
 const launchTemplate = new ec2.CfnLaunchTemplate(this, `NodeLaunchTemplate-${environmentSuffix}`, {
   launchTemplateName: `eks-node-lt-${environmentSuffix}`,
   launchTemplateData: {
@@ -41,7 +41,7 @@ ValidationError: diskSize must be specified within the launch template
 ```
 
 **Fixed Code (CORRECT)**:
-```typescript
+```ts
 const launchTemplate = new ec2.CfnLaunchTemplate(this, `NodeLaunchTemplate-${environmentSuffix}`, {
   launchTemplateName: `eks-node-lt-${environmentSuffix}`,
   launchTemplateData: {
@@ -94,7 +94,7 @@ const nodeGroup = cluster.addNodegroupCapacity(`ManagedNodeGroup-${environmentSu
 **Description**: When using OIDC provider issuer URLs as keys in IAM policy conditions, CDK tokens cannot be used directly as map keys. They must be wrapped in `CfnJson` to delay resolution until deployment time.
 
 **Original Code (INCORRECT)**:
-```typescript
+```ts
 const ebsCsiRole = new iam.Role(this, `EbsCsiRole-${environmentSuffix}`, {
   assumedBy: new iam.FederatedPrincipal(
     cluster.openIdConnectProvider.openIdConnectProviderArn,
@@ -115,7 +115,7 @@ ValidationError: "${Token[TOKEN.30148]}:sub" is used as the key in a map so must
 ```
 
 **Fixed Code (CORRECT)**:
-```typescript
+```ts
 const ebsCsiRole = new iam.Role(this, `EbsCsiRole-${environmentSuffix}`, {
   assumedBy: new iam.FederatedPrincipal(
     cluster.openIdConnectProvider.openIdConnectProviderArn,
