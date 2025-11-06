@@ -65,8 +65,8 @@ function loadTerraformOutputs(): TerraformOutputs {
 describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", () => {
   let outputs: TerraformOutputs;
   let usEast1Client: EC2Client;
-  let usWest2Client: EC2Client;
-  let saEast1Client: EC2Client;
+  let euWest1Client: EC2Client;
+  let apSoutheast1Client: EC2Client;
   let route53Client: Route53Client;
   let s3Client: S3Client;
   let ssmClient: SSMClient;
@@ -77,8 +77,8 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
     outputs = loadTerraformOutputs();
     
     usEast1Client = new EC2Client({ region: "us-east-1" });
-    usWest2Client = new EC2Client({ region: "us-west-2" });
-    saEast1Client = new EC2Client({ region: "sa-east-1" });
+    euWest1Client = new EC2Client({ region: "eu-west-1" });
+    apSoutheast1Client = new EC2Client({ region: "ap-southeast-1" });
     route53Client = new Route53Client({ region: "us-east-1" });
     s3Client = new S3Client({ region: "us-east-1" });
     ssmClient = new SSMClient({ region: "us-east-1" });
@@ -106,23 +106,23 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       expect(hubVpcAssociated).toBe(true);
     });
 
-    test("Application in us-west-2 spoke can resolve dev.internal DNS queries", async () => {
+    test("Application in eu-west-1 spoke can resolve dev.internal DNS queries", async () => {
       const devZoneId = outputs.dev_route53_zone_id?.value as string;
-      const usWest2VpcId = outputs.us_west_2_vpc_id?.value as string;
+      const euWest1VpcId = outputs.eu_west_1_vpc_id?.value as string;
       
       const zoneCommand = new GetHostedZoneCommand({ Id: devZoneId });
       const zoneResponse = await route53Client.send(zoneCommand);
       
       const vpcAssociations = zoneResponse.VPCs || [];
-      const usWest2VpcAssociated = vpcAssociations.some(
-        vpc => vpc.VPCId === usWest2VpcId && vpc.VPCRegion === "us-west-2"
+      const euWest1VpcAssociated = vpcAssociations.some(
+        vpc => vpc.VPCId === euWest1VpcId && vpc.VPCRegion === "eu-west-1"
       );
-      expect(usWest2VpcAssociated).toBe(true);
+      expect(euWest1VpcAssociated).toBe(true);
     });
 
-    test("Application in sa-east-1 spoke can resolve prod.internal DNS queries", async () => {
+    test("Application in ap-southeast-1 spoke can resolve prod.internal DNS queries", async () => {
       const prodZoneId = outputs.prod_route53_zone_id?.value as string;
-      const saEast1VpcId = outputs.sa_east_1_vpc_id?.value as string;
+      const apSoutheast1VpcId = outputs.ap_southeast_1_vpc_id?.value as string;
       
       const zoneCommand = new GetHostedZoneCommand({ Id: prodZoneId });
       const zoneResponse = await route53Client.send(zoneCommand);
@@ -130,15 +130,15 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       expect(zoneResponse.HostedZone?.Name).toBe("prod.internal.");
       
       const vpcAssociations = zoneResponse.VPCs || [];
-      const saEast1VpcAssociated = vpcAssociations.some(
-        vpc => vpc.VPCId === saEast1VpcId && vpc.VPCRegion === "sa-east-1"
+      const apSoutheast1VpcAssociated = vpcAssociations.some(
+        vpc => vpc.VPCId === apSoutheast1VpcId && vpc.VPCRegion === "ap-southeast-1"
       );
-      expect(saEast1VpcAssociated).toBe(true);
+      expect(apSoutheast1VpcAssociated).toBe(true);
     });
   });
 
   describe("Cross-Region Connectivity Flow - Applications communicating across regions via Transit Gateway", () => {
-    test("Dev application in us-west-2 can reach dev resources in us-east-1 via Transit Gateway", async () => {
+    test("Dev application in eu-west-1 can reach dev resources in us-east-1 via Transit Gateway", async () => {
       const devRtId = outputs.dev_transit_gateway_route_table_id?.value as string;
       const hubTgwId = outputs.hub_transit_gateway_id?.value as string;
       
@@ -157,12 +157,12 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       expect(hubVpcRoute).toBeDefined();
       expect(hubVpcRoute?.State).toBe("active");
       
-      const usWest2Route = routes.find(r => r.DestinationCidrBlock === "10.1.0.0/16");
-      expect(usWest2Route).toBeDefined();
-      expect(usWest2Route?.State).toBe("active");
+      const euWest1Route = routes.find(r => r.DestinationCidrBlock === "10.1.0.0/16");
+      expect(euWest1Route).toBeDefined();
+      expect(euWest1Route?.State).toBe("active");
     });
 
-    test("Prod application in sa-east-1 can reach prod resources in us-east-1 via Transit Gateway", async () => {
+    test("Prod application in ap-southeast-1 can reach prod resources in us-east-1 via Transit Gateway", async () => {
       const prodRtId = outputs.prod_transit_gateway_route_table_id?.value as string;
       
       const command = new DescribeTransitGatewayRouteTablesCommand({
@@ -178,9 +178,9 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       expect(hubVpcRoute).toBeDefined();
       expect(hubVpcRoute?.State).toBe("active");
       
-      const saEast1Route = routes.find(r => r.DestinationCidrBlock === "10.2.0.0/16");
-      expect(saEast1Route).toBeDefined();
-      expect(saEast1Route?.State).toBe("active");
+      const apSoutheast1Route = routes.find(r => r.DestinationCidrBlock === "10.2.0.0/16");
+      expect(apSoutheast1Route).toBeDefined();
+      expect(apSoutheast1Route?.State).toBe("active");
     });
 
     test("Transit Gateway routes allow bidirectional communication between hub and spokes", async () => {
@@ -374,15 +374,15 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
     });
 
     test("SSM endpoints are available in spoke VPCs for cross-region management", async () => {
-      const usWest2VpcId = outputs.us_west_2_vpc_id?.value as string;
+      const euWest1VpcId = outputs.eu_west_1_vpc_id?.value as string;
       
       const command = new DescribeVpcEndpointsCommand({
         Filters: [
-          { Name: "vpc-id", Values: [usWest2VpcId] },
-          { Name: "service-name", Values: ["com.amazonaws.us-west-2.ssm"] },
+          { Name: "vpc-id", Values: [euWest1VpcId] },
+          { Name: "service-name", Values: ["com.amazonaws.eu-west-1.ssm"] },
         ],
       });
-      const response = await usWest2Client.send(command);
+      const response = await euWest1Client.send(command);
       
       const endpoints = response.VpcEndpoints || [];
       expect(endpoints.length).toBeGreaterThan(0);
@@ -409,8 +409,8 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
 
     test("Flow logs from all VPCs are delivered to the same S3 bucket", async () => {
       const hubVpcId = outputs.hub_vpc_id?.value as string;
-      const usWest2VpcId = outputs.us_west_2_vpc_id?.value as string;
-      const saEast1VpcId = outputs.sa_east_1_vpc_id?.value as string;
+      const euWest1VpcId = outputs.eu_west_1_vpc_id?.value as string;
+      const apSoutheast1VpcId = outputs.ap_southeast_1_vpc_id?.value as string;
       const bucketName = outputs.flow_logs_bucket_name?.value as string;
       
       const hubCommand = new DescribeFlowLogsCommand({
@@ -419,17 +419,17 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       const hubResponse = await usEast1Client.send(hubCommand);
       expect(hubResponse.FlowLogs?.[0].LogDestination).toContain(bucketName);
       
-      const usWest2Command = new DescribeFlowLogsCommand({
-        Filters: [{ Name: "resource-id", Values: [usWest2VpcId] }],
+      const euWest1Command = new DescribeFlowLogsCommand({
+        Filters: [{ Name: "resource-id", Values: [euWest1VpcId] }],
       });
-      const usWest2Response = await usWest2Client.send(usWest2Command);
-      expect(usWest2Response.FlowLogs?.[0].LogDestination).toContain(bucketName);
+      const euWest1Response = await euWest1Client.send(euWest1Command);
+      expect(euWest1Response.FlowLogs?.[0].LogDestination).toContain(bucketName);
       
-      const saEast1Command = new DescribeFlowLogsCommand({
-        Filters: [{ Name: "resource-id", Values: [saEast1VpcId] }],
+      const apSoutheast1Command = new DescribeFlowLogsCommand({
+        Filters: [{ Name: "resource-id", Values: [apSoutheast1VpcId] }],
       });
-      const saEast1Response = await saEast1Client.send(saEast1Command);
-      expect(saEast1Response.FlowLogs?.[0].LogDestination).toContain(bucketName);
+      const apSoutheast1Response = await apSoutheast1Client.send(apSoutheast1Command);
+      expect(apSoutheast1Response.FlowLogs?.[0].LogDestination).toContain(bucketName);
     });
 
     test("Flow logs use Parquet format for efficient querying", async () => {

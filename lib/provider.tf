@@ -25,11 +25,11 @@ provider "aws" {
 }
 
 provider "aws" {
-  region = "us-west-2"
-  alias  = "us_west_2"
+  region = "eu-west-1"
+  alias  = "eu_west_1"
 }
 
 provider "aws" {
-  region = "sa-east-1"
-  alias  = "sa_east_1"
+  region = "ap-southeast-1"
+  alias  = "ap_southeast_1"
 }
