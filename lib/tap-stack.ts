@@ -15,6 +15,7 @@ import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as custom_resources from 'aws-cdk-lib/custom-resources';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -275,6 +276,8 @@ exports.handler = async (event) => {
     }
 
     let transactionsTable: dynamodb.ITable;
+    let ssmProvider: custom_resources.Provider | undefined;
+    let tableNameResource: cdk.CustomResource | undefined;
     if (isSourceRegion) {
       transactionsTable = new dynamodb.Table(
         this,
@@ -352,13 +355,74 @@ exports.handler = async (event) => {
         })()
       );
     } else {
-      const sourceTableName = cdk.Fn.importValue(
-        `tap-ddb-name-${environmentSuffix}`
+      const getSsmParamLambda = new lambda.Function(
+        this,
+        `tap-ssm-reader-${environmentSuffix}`,
+        {
+          runtime: lambda.Runtime.NODEJS_16_X,
+          architecture: lambda.Architecture.ARM_64,
+          handler: 'index.handler',
+          code: lambda.Code.fromInline(`
+const AWS = require('aws-sdk');
+const ssm = new AWS.SSM({ region: '${sourceRegion}' });
+
+exports.handler = async (event) => {
+  const { RequestType, ResourceProperties } = event;
+  const { ParameterName } = ResourceProperties;
+  
+  if (RequestType === 'Delete') {
+    return { PhysicalResourceId: ParameterName };
+  }
+  
+  try {
+    const response = await ssm.getParameter({ Name: ParameterName }).promise();
+    
+    return {
+      PhysicalResourceId: ParameterName,
+      Data: { Value: response.Parameter.Value },
+    };
+  } catch (error) {
+    console.error('Error reading SSM parameter:', error);
+    throw error;
+  }
+};
+          `),
+          timeout: cdk.Duration.seconds(30),
+        }
       );
+
+      getSsmParamLambda.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['ssm:GetParameter'],
+          resources: [
+            `arn:aws:ssm:${sourceRegion}:${this.account}:parameter/tap/${environmentSuffix}/*`,
+          ],
+        })
+      );
+
+      ssmProvider = new custom_resources.Provider(
+        this,
+        `tap-ssm-provider-${environmentSuffix}`,
+        {
+          onEventHandler: getSsmParamLambda,
+        }
+      );
+
+      tableNameResource = new cdk.CustomResource(
+        this,
+        `tap-ddb-name-resource-${environmentSuffix}`,
+        {
+          serviceToken: ssmProvider.serviceToken,
+          properties: {
+            ParameterName: `/tap/${environmentSuffix}/dynamodb/table-name`,
+          },
+        }
+      );
+
       transactionsTable = dynamodb.Table.fromTableName(
         this,
         `tap-ddb-${environmentSuffix}`,
-        sourceTableName
+        tableNameResource.getAttString('Value')
       );
     }
 
@@ -381,6 +445,17 @@ exports.handler = async (event) => {
     logsBucket.grantReadWrite(lambdaRole);
     dataKmsKey.grantEncryptDecrypt(lambdaRole);
 
+    if (!isSourceRegion) {
+      lambdaRole.addToPolicy(
+        new iam.PolicyStatement({
+          actions: ['ssm:GetParameter', 'ssm:GetParameters'],
+          resources: [
+            `arn:aws:ssm:${sourceRegion}:${this.account}:parameter/tap/${environmentSuffix}/*`,
+          ],
+        })
+      );
+    }
+
     const processorFn = new lambda.Function(
       this,
       `tap-processor-${environmentSuffix}`,
@@ -400,7 +475,7 @@ exports.handler = async (event) => {
           ENV: environmentSuffix,
           TABLE_NAME: isSourceRegion
             ? transactionsTable.tableName
-            : cdk.Fn.importValue(`tap-ddb-name-${environmentSuffix}`),
+            : tableNameResource?.getAttString('Value') || '',
           LOGS_BUCKET: logsBucket.bucketName,
           SOURCE_REGION: sourceRegion,
           TARGET_REGION: targetRegion,
@@ -428,7 +503,7 @@ exports.handler = async (event) => {
           ENV: environmentSuffix,
           TABLE_NAME: isSourceRegion
             ? transactionsTable.tableName
-            : cdk.Fn.importValue(`tap-ddb-name-${environmentSuffix}`),
+            : tableNameResource?.getAttString('Value') || '',
           SOURCE_REGION: sourceRegion,
           TARGET_REGION: targetRegion,
         },
@@ -537,6 +612,16 @@ exports.handler = async (event) => {
     });
 
     if (isSourceRegion) {
+      new ssm.StringParameter(this, `tap-ddb-name-param-${environmentSuffix}`, {
+        parameterName: `/tap/${environmentSuffix}/dynamodb/table-name`,
+        stringValue: transactionsTable.tableName,
+        description: `DynamoDB table name for ${environmentSuffix} environment`,
+      });
+      new ssm.StringParameter(this, `tap-vpc-id-param-${environmentSuffix}`, {
+        parameterName: `/tap/${environmentSuffix}/vpc/id`,
+        stringValue: vpc.vpcId,
+        description: `VPC ID for ${environmentSuffix} environment`,
+      });
       new cdk.CfnOutput(this, `tap-ddb-name-${environmentSuffix}`, {
         value: transactionsTable.tableName,
         exportName: `tap-ddb-name-${environmentSuffix}`,
@@ -546,7 +631,20 @@ exports.handler = async (event) => {
         exportName: `tap-vpc-id-${environmentSuffix}`,
       });
     } else {
-      const sourceVpcId = cdk.Fn.importValue(`tap-vpc-id-${environmentSuffix}`);
+      if (!ssmProvider) {
+        throw new Error('SSM provider must be defined for target region');
+      }
+      const vpcIdResource = new cdk.CustomResource(
+        this,
+        `tap-vpc-id-resource-${environmentSuffix}`,
+        {
+          serviceToken: ssmProvider.serviceToken,
+          properties: {
+            ParameterName: `/tap/${environmentSuffix}/vpc/id`,
+          },
+        }
+      );
+      const sourceVpcId = vpcIdResource.getAttString('Value');
       const vpcPeering = new ec2.CfnVPCPeeringConnection(
         this,
         `tap-vpc-peering-${environmentSuffix}`,
