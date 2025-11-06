@@ -1,6 +1,6 @@
 # Overview
 
-Please find solution files below.
+Please find solution files below
 
 ## ./bin/tap.ts
 
