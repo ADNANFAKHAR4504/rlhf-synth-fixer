@@ -768,6 +768,7 @@ exports.handler = async (event) => {
                   VpcPeeringConnectionId: peeringId,
                 }).promise();
                 console.log('Accepted existing pending connection, will wait for active status');
+                // Don't break here - continue to wait for active status below
               } catch (acceptErr) {
                 console.log('Error accepting existing connection: ' + acceptErr.code);
                 // Continue to create new one if accept fails
