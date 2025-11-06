@@ -1,6 +1,6 @@
 Hey team,
 
-We're in the middle of a critical account consolidation project. Our company is migrating production workloads from a legacy AWS account into our new organizational structure, and I need your help with the networking foundation. The existing VPC is running live microservices across three availability zones in us-east-1, and we absolutely cannot have any downtime during this transition.
+We're in the middle of a critical account consolidation project. Our company is migrating production workloads from a legacy AWS account into our new organizational structure, and I need your help with the networking foundation. The existing VPC is running live microservices across three availability zones in us-east-1, and we absolutely cannot have any downtime during this transition
 
 The challenge is that we need to stand up a completely new VPC environment in the target account while keeping the old one running. Once the new VPC is ready, we'll migrate workloads incrementally using VPC peering between the old and new environments. The business has given us a tight window to execute this, so everything needs to be right the first time.
 
