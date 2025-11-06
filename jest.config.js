@@ -14,10 +14,11 @@ module.exports = {
   collectCoverageFrom: [
     '<rootDir>/lib/**/*.ts',
     '<rootDir>/lib/**/*.mjs',
+    '<rootDir>/lib/**/*.js',
     '!<rootDir>/bin/**/*.ts',
     '!<rootDir>/**/*.d.ts',
-    '!<rootDir>/**/*.js',
     '!<rootDir>/**/*.test.ts',
+    '!<rootDir>/**/*.test.js',
     '!<rootDir>/node_modules/**',
   ],
   coverageReporters: ['text', 'lcov', 'json-summary'],
