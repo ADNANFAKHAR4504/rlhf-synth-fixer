@@ -195,7 +195,13 @@ class TestGatewayEndpoints:
         """Test that S3 gateway endpoint exists."""
         endpoint_id = outputs["S3GatewayEndpointId"]
 
-        response = ec2_client.describe_vpc_endpoints(VpcEndpointIds=[endpoint_id])
+        try:
+            response = ec2_client.describe_vpc_endpoints(VpcEndpointIds=[endpoint_id])
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'InvalidVpcEndpointId.NotFound':
+                pytest.fail(f"S3 Gateway Endpoint {endpoint_id} not found. Infrastructure may not be deployed or outputs are stale.")
+            raise
+
         assert len(response["VpcEndpoints"]) == 1
 
         endpoint = response["VpcEndpoints"][0]
@@ -208,7 +214,13 @@ class TestGatewayEndpoints:
         endpoint_id = outputs["S3GatewayEndpointId"]
         vpc_id = outputs["VPCId"]
 
-        response = ec2_client.describe_vpc_endpoints(VpcEndpointIds=[endpoint_id])
+        try:
+            response = ec2_client.describe_vpc_endpoints(VpcEndpointIds=[endpoint_id])
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'InvalidVpcEndpointId.NotFound':
+                pytest.fail(f"S3 Gateway Endpoint {endpoint_id} not found. Infrastructure may not be deployed or outputs are stale.")
+            raise
+
         endpoint = response["VpcEndpoints"][0]
 
         assert endpoint["VpcId"] == vpc_id
@@ -229,7 +241,13 @@ class TestGatewayEndpoints:
         """Test that gateway endpoints are associated with route tables."""
         s3_endpoint_id = outputs["S3GatewayEndpointId"]
 
-        response = ec2_client.describe_vpc_endpoints(VpcEndpointIds=[s3_endpoint_id])
+        try:
+            response = ec2_client.describe_vpc_endpoints(VpcEndpointIds=[s3_endpoint_id])
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'InvalidVpcEndpointId.NotFound':
+                pytest.fail(f"S3 Gateway Endpoint {s3_endpoint_id} not found. Infrastructure may not be deployed or outputs are stale.")
+            raise
+
         endpoint = response["VpcEndpoints"][0]
 
         # Should have route table associations
@@ -438,7 +456,13 @@ class TestEndToEndWorkflow:
             outputs["DynamoDBGatewayEndpointId"],
             outputs["EC2InterfaceEndpointId"]
         ]
-        response = ec2_client.describe_vpc_endpoints(VpcEndpointIds=endpoint_ids)
+        try:
+            response = ec2_client.describe_vpc_endpoints(VpcEndpointIds=endpoint_ids)
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'InvalidVpcEndpointId.NotFound':
+                pytest.fail(f"One or more VPC endpoints not found. Infrastructure may not be deployed or outputs are stale. Endpoint IDs: {endpoint_ids}")
+            raise
+
         for endpoint in response["VpcEndpoints"]:
             assert endpoint["VpcId"] == vpc_id
 
