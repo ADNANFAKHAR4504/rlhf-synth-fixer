@@ -1,26 +1,28 @@
 {
-  "platform": "tf",
+  "platform": "terraform",
   "language": "hcl",
   "complexity": "hard",
   "turn_type": "single",
   "team": "synth",
-  "startedAt": "2025-11-06T00:00:00+00:00",
+  "startedAt": "2025-11-06T13:48:06+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
     "Environment Migration",
     "Cloud Environment Setup",
     "Multi-Environment Consistency and Replication"
   ],
-  "po_id": "7ivau",
+  "po_id": "wxj0z",
   "aws_services": [
     "VPC",
-    "VPC Peering",
-    "VPC Flow Logs",
+    "EC2",
+    "ECS",
+    "RDS",
+    "ALB",
     "S3",
     "IAM",
     "CloudWatch",
-    "SNS"
+    "NAT Gateway"
   ],
-  "region": "us-east-1",
+  "region": "ap-southeast-1",
   "training_quality": 10
 }

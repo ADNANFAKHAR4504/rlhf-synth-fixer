@@ -1,48 +1,43 @@
-# variables.tf
-
 variable "environment_suffix" {
   description = "Unique suffix for resource naming to avoid collisions"
   type        = string
 }
 
 variable "aws_region" {
-  description = "Primary AWS region for deployment"
+  description = "AWS region for deployment"
   type        = string
-  default     = "us-east-1"
+  default     = "ap-southeast-1"
 }
 
-variable "partner_region" {
-  description = "Partner VPC region for cross-region peering"
+variable "vpc_cidr" {
+  description = "CIDR block for VPC"
   type        = string
-  default     = "us-east-2"
 }
 
-variable "partner_account_id" {
-  description = "AWS Account ID of the partner (for cross-account peering)"
+variable "project_name" {
+  description = "Project name for resource naming"
   type        = string
-  default     = "" # Empty for same-account peering
+  default     = "payment-platform"
 }
 
-variable "partner_vpc_id" {
-  description = "VPC ID of the partner VPC (optional, will be looked up via data source if not provided)"
-  type        = string
-  default     = ""
-}
-
-variable "enable_dns_resolution" {
-  description = "Enable DNS resolution across the VPC peering connection"
-  type        = bool
-  default     = true
-}
-
-variable "flow_log_retention_days" {
-  description = "Retention period for VPC Flow Logs"
+variable "ecs_task_count" {
+  description = "Number of ECS tasks to run"
   type        = number
-  default     = 7
 }
 
-variable "alarm_email_endpoint" {
-  description = "Email address for CloudWatch alarm notifications"
+variable "rds_instance_class" {
+  description = "RDS instance class"
   type        = string
-  default     = "ops-team@example.com"
+}
+
+variable "alb_health_check_interval" {
+  description = "ALB health check interval in seconds"
+  type        = number
+  default     = 30
+}
+
+variable "s3_lifecycle_days" {
+  description = "Days before transitioning S3 objects to IA"
+  type        = number
+  default     = 90
 }

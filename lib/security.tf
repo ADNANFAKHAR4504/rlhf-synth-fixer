@@ -1,145 +1,100 @@
-# security.tf - Security groups for VPC peering traffic
+# ALB Security Group
+resource "aws_security_group" "alb" {
+  name_prefix = "alb-sg-${var.environment_suffix}-"
+  description = "Security group for Application Load Balancer"
+  vpc_id      = aws_vpc.main.id
 
-# -----------------------------------------------------------------------------
-# PRODUCTION VPC SECURITY GROUPS
-# -----------------------------------------------------------------------------
+  ingress {
+    description = "HTTP from internet"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-# Security group for production application servers
-resource "aws_security_group" "production_app" {
-  provider    = aws.primary
-  name        = "production-app-sg-${var.environment_suffix}"
-  description = "Security group for production application servers allowing peered VPC traffic"
-  vpc_id      = aws_vpc.production.id
+  ingress {
+    description = "HTTPS from internet"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-  tags = merge(local.common_tags, {
-    Name = "production-app-sg-${var.environment_suffix}"
-  })
-}
-
-# Allow HTTPS (443) from partner VPC application subnets
-resource "aws_security_group_rule" "production_app_https_from_partner" {
-  provider = aws.primary
-  count    = length(local.partner_app_subnet_cidrs)
-
-  type              = "ingress"
-  from_port         = local.allowed_ports.https
-  to_port           = local.allowed_ports.https
-  protocol          = "tcp"
-  cidr_blocks       = [local.partner_app_subnet_cidrs[count.index]]
-  description       = "Allow HTTPS from partner app subnet ${count.index + 1}"
-  security_group_id = aws_security_group.production_app.id
-}
-
-# Allow custom API (8443) from partner VPC application subnets
-resource "aws_security_group_rule" "production_app_api_from_partner" {
-  provider = aws.primary
-  count    = length(local.partner_app_subnet_cidrs)
-
-  type              = "ingress"
-  from_port         = local.allowed_ports.custom_api
-  to_port           = local.allowed_ports.custom_api
-  protocol          = "tcp"
-  cidr_blocks       = [local.partner_app_subnet_cidrs[count.index]]
-  description       = "Allow custom API traffic from partner app subnet ${count.index + 1}"
-  security_group_id = aws_security_group.production_app.id
-}
-
-# Egress to partner VPC - HTTPS
-resource "aws_security_group_rule" "production_app_https_to_partner" {
-  provider = aws.primary
-  count    = length(local.partner_app_subnet_cidrs)
-
-  type              = "egress"
-  from_port         = local.allowed_ports.https
-  to_port           = local.allowed_ports.https
-  protocol          = "tcp"
-  cidr_blocks       = [local.partner_app_subnet_cidrs[count.index]]
-  description       = "Allow HTTPS to partner app subnet ${count.index + 1}"
-  security_group_id = aws_security_group.production_app.id
-}
-
-# Egress to partner VPC - custom API
-resource "aws_security_group_rule" "production_app_api_to_partner" {
-  provider = aws.primary
-  count    = length(local.partner_app_subnet_cidrs)
-
-  type              = "egress"
-  from_port         = local.allowed_ports.custom_api
-  to_port           = local.allowed_ports.custom_api
-  protocol          = "tcp"
-  cidr_blocks       = [local.partner_app_subnet_cidrs[count.index]]
-  description       = "Allow custom API traffic to partner app subnet ${count.index + 1}"
-  security_group_id = aws_security_group.production_app.id
-}
-
-# -----------------------------------------------------------------------------
-# PARTNER VPC SECURITY GROUPS
-# -----------------------------------------------------------------------------
-
-# Security group for partner application servers
-resource "aws_security_group" "partner_app" {
-  provider    = aws.partner
-  name        = "partner-app-sg-${var.environment_suffix}"
-  description = "Security group for partner application servers allowing peered VPC traffic"
-  vpc_id      = aws_vpc.partner.id
+  egress {
+    description = "All traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
   tags = merge(local.common_tags, {
-    Name = "partner-app-sg-${var.environment_suffix}"
+    Name = "alb-sg-${var.environment_suffix}"
   })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
-# Allow HTTPS (443) from production VPC application subnets
-resource "aws_security_group_rule" "partner_app_https_from_production" {
-  provider = aws.partner
-  count    = length(local.production_app_subnet_cidrs)
+# ECS Security Group
+resource "aws_security_group" "ecs" {
+  name_prefix = "ecs-sg-${var.environment_suffix}-"
+  description = "Security group for ECS tasks"
+  vpc_id      = aws_vpc.main.id
 
-  type              = "ingress"
-  from_port         = local.allowed_ports.https
-  to_port           = local.allowed_ports.https
-  protocol          = "tcp"
-  cidr_blocks       = [local.production_app_subnet_cidrs[count.index]]
-  description       = "Allow HTTPS from production app subnet ${count.index + 1}"
-  security_group_id = aws_security_group.partner_app.id
+  ingress {
+    description     = "HTTP from ALB"
+    from_port       = 8080
+    to_port         = 8080
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  egress {
+    description = "All traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "ecs-sg-${var.environment_suffix}"
+  })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
-# Allow custom API (8443) from production VPC application subnets
-resource "aws_security_group_rule" "partner_app_api_from_production" {
-  provider = aws.partner
-  count    = length(local.production_app_subnet_cidrs)
+# RDS Security Group
+resource "aws_security_group" "rds" {
+  name_prefix = "rds-sg-${var.environment_suffix}-"
+  description = "Security group for RDS Aurora cluster"
+  vpc_id      = aws_vpc.main.id
 
-  type              = "ingress"
-  from_port         = local.allowed_ports.custom_api
-  to_port           = local.allowed_ports.custom_api
-  protocol          = "tcp"
-  cidr_blocks       = [local.production_app_subnet_cidrs[count.index]]
-  description       = "Allow custom API traffic from production app subnet ${count.index + 1}"
-  security_group_id = aws_security_group.partner_app.id
-}
+  ingress {
+    description     = "PostgreSQL from ECS"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ecs.id]
+  }
 
-# Egress to production VPC - HTTPS
-resource "aws_security_group_rule" "partner_app_https_to_production" {
-  provider = aws.partner
-  count    = length(local.production_app_subnet_cidrs)
+  egress {
+    description = "All traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-  type              = "egress"
-  from_port         = local.allowed_ports.https
-  to_port           = local.allowed_ports.https
-  protocol          = "tcp"
-  cidr_blocks       = [local.production_app_subnet_cidrs[count.index]]
-  description       = "Allow HTTPS to production app subnet ${count.index + 1}"
-  security_group_id = aws_security_group.partner_app.id
-}
+  tags = merge(local.common_tags, {
+    Name = "rds-sg-${var.environment_suffix}"
+  })
 
-# Egress to production VPC - custom API
-resource "aws_security_group_rule" "partner_app_api_to_production" {
-  provider = aws.partner
-  count    = length(local.production_app_subnet_cidrs)
-
-  type              = "egress"
-  from_port         = local.allowed_ports.custom_api
-  to_port           = local.allowed_ports.custom_api
-  protocol          = "tcp"
-  cidr_blocks       = [local.production_app_subnet_cidrs[count.index]]
-  description       = "Allow custom API traffic to production app subnet ${count.index + 1}"
-  security_group_id = aws_security_group.partner_app.id
+  lifecycle {
+    create_before_destroy = true
+  }
 }

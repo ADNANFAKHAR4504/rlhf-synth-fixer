@@ -1,82 +1,50 @@
 # Provisioning of Infrastructure Environments
 
-> **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using Terraform with HCL**
->
-> Platform: **terraform**
-> Language: **HCL**
-> Region: **us-east-1**
+> **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using terraform with hcl**
+> 
+> Platform: **terraform**  
+> Language: **hcl**  
+> Region: **ap-southeast-1**
 >
 > **Do not substitute or change the platform or language.** All infrastructure code must be written using the specified platform and language combination.
 
 ---
 
-## Background
-A fintech startup needs to establish secure communication between their production environment and a partner's AWS account for real-time payment processing. The partner has strict security requirements including encrypted transit, restricted access patterns, and comprehensive audit logging.
-
-## Problem Statement
-Create a Terraform configuration to establish a cross-region VPC peering connection between your production VPC and a partner's VPC. The configuration must:
-
-1. Create a VPC peering connection with appropriate requester and accepter configurations.
-2. Configure DNS resolution options for both VPCs to enable hostname resolution across the peering connection.
-3. Update route tables in both VPCs to enable traffic flow only between specific application subnets.
-4. Create security group rules that allow HTTPS (443) and custom API traffic (8443) between peered VPCs.
-5. Set up VPC Flow Logs for both VPCs with S3 bucket storage and 1-minute aggregation intervals.
-6. Implement IAM roles and policies for cross-account access with explicit deny for unauthorized actions.
-7. Use Terraform data sources to dynamically fetch accepter VPC details and validate CIDR compatibility.
-8. Configure monitoring alarms for peering connection state changes and traffic anomalies.
-9. Create a locals block to manage CIDR calculations and tag mappings.
-10. Output the peering connection ID, DNS resolution status, and configured route counts.
-
-Expected output: A complete Terraform configuration with modules for VPC peering, security, monitoring, and IAM that establishes secure cross-region connectivity while maintaining strict access controls and comprehensive logging.
-
-## Environment Setup
-Multi-account AWS deployment spanning us-east-1 and us-east-2 regions. Production VPC (10.0.0.0/16) in us-east-1 needs to peer with partner VPC (172.16.0.0/16) in us-east-2. Both VPCs have existing 3-tier architecture with public, private, and database subnets across 3 availability zones. Requires Terraform 1.5+ with AWS provider 5.x. Each VPC has NAT gateways, Internet gateways, and existing EC2 instances running application services. S3 VPC endpoints already configured.
-
-## Constraints and Requirements
-- VPC peering connection must use DNS resolution for cross-account resource discovery
-- Route tables must only allow traffic to specific CIDR blocks, not entire VPCs
-- Security groups must restrict traffic to ports 443 and 8443 only
-- All resources must be tagged with Environment, Project, and CostCenter tags
-- Use data sources to reference the accepter VPC instead of hardcoding values
-- Implement CloudWatch VPC Flow Logs for both VPCs with 1-minute capture intervals
-- Create separate route tables for public and private subnets with appropriate peering routes
-- Use locals blocks for repeated values and complex expressions
-- All IAM roles must follow principle of least privilege with explicit deny statements
-- Configure VPC peering options to prevent overlapping CIDR blocks from being accepted
+Create a Terraform configuration to deploy identical infrastructure across development, staging, and production environments using workspace-based configuration. The configuration must: 1. Define a VPC module that creates non-overlapping CIDR blocks (10.1.0.0/16 for dev, 10.2.0.0/16 for staging, 10.3.0.0/16 for prod). 2. Deploy an ECS Fargate cluster with environment-appropriate resource allocations. 3. Create RDS Aurora PostgreSQL clusters with automated backups enabled for all environments. 4. Configure ALB with path-based routing to ECS services. 5. Set up S3 buckets with versioning and lifecycle policies for audit logs. 6. Use tfvars files for each workspace to manage environment-specific configurations. 7. Implement consistent resource naming using ${terraform.workspace}-${resource_type}-${name} pattern. 8. Configure remote state backend with workspace-aware state file paths. 9. Create outputs that display environment-specific endpoints and resource identifiers. 10. Use count or for_each to create environment-appropriate number of ECS tasks (1 for dev, 2 for staging, 3 for prod). Expected output: A modular Terraform configuration with main.tf, variables.tf, outputs.tf, and separate tfvars files for each environment. The configuration should allow seamless switching between environments using terraform workspace select commands while maintaining complete infrastructure parity with only size and scale differences.
 
 ---
 
-## Implementation Guidelines
+## Additional Context
 
-### Platform Requirements
-- Use Terraform as the IaC framework
-- All code must be written in HCL
-- Follow Terraform best practices for resource organization
-- Ensure all resources use the `environment_suffix` variable for naming
+### Background
+A fintech startup needs to maintain identical infrastructure across development, staging, and production environments for their payment processing platform. They've experienced configuration drift between environments causing testing failures and production incidents.
 
-### Security and Compliance
-- Implement encryption at rest for all data stores using AWS KMS
-- Enable encryption in transit using TLS/SSL
-- Follow the principle of least privilege for IAM roles and policies
-- Enable logging and monitoring using CloudWatch
-- Tag all resources appropriately
+### Constraints and Requirements
+- [Use Terraform workspaces to manage the three environments, All environment-specific values must use workspace-aware variables, RDS instance classes must differ by environment (t3.micro for dev, t3.small for staging, t3.medium for prod), Use consistent naming conventions with environment prefixes for all resources, Implement remote state storage with environment-specific state files, VPC CIDR blocks must not overlap between environments, Apply identical security group rules across all environments, Use data sources to reference existing Route53 hosted zones, Tag all resources with Environment, ManagedBy, and Project tags, ALB target group health check intervals must scale with environment criticality]
 
-### Testing
-- Write unit tests with good coverage
-- Integration tests must validate end-to-end workflows using deployed resources
-- Load test outputs from `cfn-outputs/flat-outputs.json`
+### Environment Setup
+Multi-environment AWS infrastructure spanning three separate but architecturally identical environments in us-east-1. Each environment consists of a VPC with public and private subnets across 2 AZs, Application Load Balancer, ECS Fargate cluster running containerized payment processing services, RDS Aurora PostgreSQL for transaction data, and S3 buckets for audit logs. Requires Terraform 1.5+ with HCL, AWS provider 5.x, configured AWS credentials with permissions for VPC, ECS, RDS, ALB, and S3. Remote state backend using S3 with DynamoDB table for state locking.
+
+## Project-Specific Conventions
+
+### Resource Naming
+- All resources must use the `environmentSuffix` variable in their names to support multiple PR environments
+- Example: `myresource-${environmentSuffix}` or tagging with EnvironmentSuffix
+
+### Testing Integration  
+- Integration tests should load stack outputs from `cfn-outputs/flat-outputs.json`
+- Tests should validate actual deployed resources
 
 ### Resource Management
 - Infrastructure should be fully destroyable for CI/CD workflows
-- **Important**: Secrets should be fetched from existing Secrets Manager entries, not created
-- Avoid DeletionPolicy: Retain unless required
+- **Exception**: Secrets should be fetched from existing AWS Secrets Manager entries, not created by the stack
+- Avoid using DeletionPolicy: Retain unless absolutely necessary
+
+### Security Baseline
+- Implement encryption at rest and in transit
+- Follow principle of least privilege for IAM roles
+- Use AWS Secrets Manager for credential management where applicable
+- Enable appropriate logging and monitoring
 
 ## Target Region
-Deploy all resources to: **us-east-1**
-
-## Success Criteria
-- Infrastructure deploys successfully
-- All security and compliance constraints are met
-- Tests pass successfully
-- Resources are properly tagged and named with environment_suffix
-- Infrastructure can be cleanly destroyed
+All resources should be deployed to: **ap-southeast-1**
