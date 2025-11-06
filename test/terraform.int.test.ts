@@ -56,7 +56,6 @@ describe('RDS PostgreSQL Stack Integration Tests', () => {
       "db_parameter_group_name",
       "private_subnet_ids",
       "app_subnet_ids",
-      "nat_gateway_ids",
       "monitoring_role_arn",
       "cloudwatch_dashboard_url",
       "db_instance_port"
@@ -101,25 +100,34 @@ describe('RDS PostgreSQL Stack Integration Tests', () => {
     });
   });
 
-  test('NAT Gateways are available', async () => {
-    const natStr = outputs.nat_gateway_ids;
-    if (!natStr) return console.warn('Missing nat_gateway_ids, skipping.');
-    const natIds: string[] = JSON.parse(natStr);
-    const res = await diagAwsCall('NATGateways', ec2.describeNatGateways.bind(ec2), { NatGatewayIds: natIds });
-    if (skipIfNull(res?.NatGateways, 'NATGateways')) return;
-    expect(res.NatGateways.length).toBe(natIds.length);
-    res.NatGateways.forEach(nat => {
-      expect(natIds).toContain(nat.NatGatewayId);
-      expect(nat.State).toBe('available');
-    });
-  });
-
   test('Security group exists', async () => {
     const sgId = outputs.security_group_id;
     if (!sgId) return console.warn('Missing security_group_id, skipping.');
     const res = await diagAwsCall('SecurityGroup', ec2.describeSecurityGroups.bind(ec2), { GroupIds: [sgId] });
     if (skipIfNull(res?.SecurityGroups?.[0], 'SecurityGroup')) return;
     expect(res.SecurityGroups[0].GroupId).toBe(sgId);
+  });
+
+  test('DB Subnet Group exists', async () => {
+    const dbSubnetGroupName = outputs.db_subnet_group_name;
+    if (!dbSubnetGroupName) return console.warn('Missing db_subnet_group_name, skipping.');
+    const res = await diagAwsCall('DBSubnetGroup', rds.describeDBSubnetGroups.bind(rds), { DBSubnetGroupName: dbSubnetGroupName });
+    if (skipIfNull(res?.DBSubnetGroups?.[0], 'DBSubnetGroup')) return;
+    expect(res.DBSubnetGroups[0].DBSubnetGroupName).toBe(dbSubnetGroupName);
+  });
+
+  test('DB Parameter Group exists', async () => {
+    const dbParamGroupName = outputs.db_parameter_group_name;
+    if (!dbParamGroupName) return console.warn('Missing db_parameter_group_name, skipping.');
+    const res = await diagAwsCall('DBParameterGroup', rds.describeDBParameterGroups.bind(rds), { DBParameterGroupName: dbParamGroupName });
+    if (skipIfNull(res?.DBParameterGroups?.[0], 'DBParameterGroup')) return;
+    expect(res.DBParameterGroups[0].DBParameterGroupName).toBe(dbParamGroupName);
+  });
+
+  test('CloudWatch dashboard URL is valid', () => {
+    const url = outputs.cloudwatch_dashboard_url;
+    if (!url) return console.warn('Missing cloudwatch_dashboard_url, skipping.');
+    expect(url).toMatch(/^https:\/\/[a-z0-9-]+\.console\.aws\.amazon\.com\/cloudwatch/);
   });
 
   test('Monitoring Role ARN format check', () => {

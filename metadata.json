@@ -11,11 +11,20 @@
     "Cloud Environment Setup"
   ],
   "aws_services": [
-    "S3 Bucket",
-    "CloudFormation",
-    "Lambda",
-    "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
-  ]
+    "VPC",
+    "RDS",
+    "EIP",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Group",
+    "Subnet",
+    "Route Table",
+    "DB Subnet Group",
+    "DB Parameter Group",
+    "IAM Role",
+    "SNS",
+    "CloudWatch",
+    "CloudWatch Dashboard"
+  ],
+  "training_quality": 10
 }

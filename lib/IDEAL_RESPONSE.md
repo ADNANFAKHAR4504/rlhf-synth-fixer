@@ -419,8 +419,7 @@ resource "aws_db_instance" "postgres" {
   performance_insights_retention_period = 7
 
   # Other Settings
-  deletion_protection = true
-  apply_immediately   = false
+  apply_immediately = false
 
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-postgres"
