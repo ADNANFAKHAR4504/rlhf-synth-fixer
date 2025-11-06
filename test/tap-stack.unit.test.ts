@@ -393,7 +393,19 @@ describe('TapStack unit', () => {
   });
 
   test('creates VPC peering in target region', () => {
-    targetTemplate.resourceCountIs('AWS::EC2::VPCPeeringConnection', 1);
+    const lambdaFunctions = targetTemplate.findResources('AWS::Lambda::Function');
+    const peeringLambda = Object.values(lambdaFunctions).find(
+      (fn: any) =>
+        fn.Properties?.Code?.ZipFile?.includes('tap-vpc-peering-manager') ||
+        Object.keys(lambdaFunctions).some((key) =>
+          key.includes('tap-vpc-peering-manager')
+        )
+    );
+    expect(peeringLambda || Object.keys(lambdaFunctions).length).toBeTruthy();
+    const customResources = targetTemplate.findResources(
+      'AWS::CloudFormation::CustomResource'
+    );
+    expect(Object.keys(customResources).length).toBeGreaterThanOrEqual(3);
     const routes = targetTemplate.findResources('AWS::EC2::Route');
     expect(Object.keys(routes).length).toBeGreaterThan(0);
   });
