@@ -25,8 +25,13 @@
     "CertificateManager",
     "DynamoDB",
     "AutoScaling",
-    "VPC",
-    "CloudFormation"
+    "Config"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Olatunjym",
+  "dockerS3Location": ""
 }
