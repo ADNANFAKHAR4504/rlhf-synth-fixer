@@ -400,19 +400,20 @@ exports.handler = async (event) => {
         })
       );
 
-      ssmProvider = new custom_resources.Provider(
+      const ssmProviderLocal = new custom_resources.Provider(
         this,
         `tap-ssm-provider-${environmentSuffix}`,
         {
           onEventHandler: getSsmParamLambda,
         }
       );
+      ssmProvider = ssmProviderLocal;
 
       tableNameResource = new cdk.CustomResource(
         this,
         `tap-ddb-name-resource-${environmentSuffix}`,
         {
-          serviceToken: ssmProvider.serviceToken,
+          serviceToken: ssmProviderLocal.serviceToken,
           properties: {
             ParameterName: `/tap/${environmentSuffix}/dynamodb/table-name`,
           },
@@ -631,14 +632,11 @@ exports.handler = async (event) => {
         exportName: `tap-vpc-id-${environmentSuffix}`,
       });
     } else {
-      if (!ssmProvider) {
-        throw new Error('SSM provider must be defined for target region');
-      }
       const vpcIdResource = new cdk.CustomResource(
         this,
         `tap-vpc-id-resource-${environmentSuffix}`,
         {
-          serviceToken: ssmProvider.serviceToken,
+          serviceToken: ssmProvider!.serviceToken,
           properties: {
             ParameterName: `/tap/${environmentSuffix}/vpc/id`,
           },
