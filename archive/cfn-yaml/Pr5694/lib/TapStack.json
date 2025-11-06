@@ -1,0 +1,2069 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Production-ready scalable and secure AWS cloud environment with VPC, ALB, ASG, RDS, and CloudWatch monitoring",
+    "Parameters": {
+        "Environment": {
+            "Type": "String",
+            "Description": "Deployment environment (development or production)",
+            "AllowedValues": [
+                "dev",
+                "prod"
+            ],
+            "Default": "dev"
+        },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Description": "Suffix for resource names to support multiple parallel deployments (e.g., PR number from CI/CD)",
+            "Default": "pr4056",
+            "AllowedPattern": "^[a-zA-Z0-9\\-]*$",
+            "ConstraintDescription": "Must contain only alphanumeric characters and hyphens"
+        },
+        "VPCCidrBlock": {
+            "Type": "String",
+            "Description": "CIDR block for VPC",
+            "Default": "10.0.0.0/16",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/([0-9]|[1-2][0-9]|3[0-2]))$"
+        },
+        "PublicSubnet1CIDR": {
+            "Type": "String",
+            "Description": "CIDR block for Public Subnet 1",
+            "Default": "10.0.1.0/24"
+        },
+        "PublicSubnet2CIDR": {
+            "Type": "String",
+            "Description": "CIDR block for Public Subnet 2",
+            "Default": "10.0.2.0/24"
+        },
+        "PrivateSubnet1CIDR": {
+            "Type": "String",
+            "Description": "CIDR block for Private Subnet 1",
+            "Default": "10.0.11.0/24"
+        },
+        "PrivateSubnet2CIDR": {
+            "Type": "String",
+            "Description": "CIDR block for Private Subnet 2",
+            "Default": "10.0.12.0/24"
+        },
+        "DBEngine": {
+            "Type": "String",
+            "Description": "RDS database engine",
+            "Default": "mysql",
+            "AllowedValues": [
+                "mysql",
+                "postgres"
+            ]
+        },
+        "DBEngineVersion": {
+            "Type": "String",
+            "Description": "Database engine version",
+            "Default": "8.0"
+        },
+        "DBMasterUsername": {
+            "Type": "String",
+            "Description": "Master username for database",
+            "Default": "dbadmin",
+            "NoEcho": true
+        },
+        "HTTPSCertificateArn": {
+            "Type": "String",
+            "Description": "ARN of the SSL certificate for HTTPS (leave empty to skip HTTPS listener)",
+            "Default": ""
+        },
+        "AllowedCIDRBlock": {
+            "Type": "String",
+            "Description": "CIDR block allowed to access the ALB",
+            "Default": "0.0.0.0/0"
+        },
+        "ProjectName": {
+            "Type": "String",
+            "Description": "Project name for tagging",
+            "Default": "CloudProject"
+        },
+        "OwnerEmail": {
+            "Type": "String",
+            "Description": "Owner email for tagging",
+            "Default": "owner@example.com"
+        },
+        "CostCenter": {
+            "Type": "String",
+            "Description": "Cost center for tagging",
+            "Default": "IT-001"
+        },
+        "LatestAmiId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+            "Description": "Latest Amazon Linux 2 AMI ID"
+        }
+    },
+    "Mappings": {
+        "EnvironmentConfig": {
+            "dev": {
+                "InstanceType": "t3.micro",
+                "DBInstanceClass": "db.t3.micro",
+                "DBAllocatedStorage": 20,
+                "DBBackupRetentionPeriod": 1,
+                "MultiAZ": false,
+                "AlarmThreshold": 75,
+                "MinSize": 1,
+                "MaxSize": 2,
+                "DesiredCapacity": 1,
+                "S3LifecycleDays": 30
+            },
+            "prod": {
+                "InstanceType": "t3.medium",
+                "DBInstanceClass": "db.m5.large",
+                "DBAllocatedStorage": 100,
+                "DBBackupRetentionPeriod": 7,
+                "MultiAZ": true,
+                "AlarmThreshold": 85,
+                "MinSize": 2,
+                "MaxSize": 6,
+                "DesiredCapacity": 3,
+                "S3LifecycleDays": 365
+            }
+        }
+    },
+    "Conditions": {
+        "IsProduction": {
+            "Fn::Equals": [
+                {
+                    "Ref": "Environment"
+                },
+                "prod"
+            ]
+        },
+        "CreateHTTPSListener": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "HTTPSCertificateArn"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "UseMySQL": {
+            "Fn::Equals": [
+                {
+                    "Ref": "DBEngine"
+                },
+                "mysql"
+            ]
+        }
+    },
+    "Resources": {
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VPCCidrBlock"
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-vpc"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-igw"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "AttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Ref": "PublicSubnet1CIDR"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-subnet-1"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Ref": "PublicSubnet2CIDR"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-subnet-2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Ref": "PrivateSubnet1CIDR"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-private-subnet-1"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Ref": "PrivateSubnet2CIDR"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-private-subnet-2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-public-rt"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "ALBSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for Application Load Balancer",
+                "GroupName": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-alb-sg"
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": {
+                            "Ref": "AllowedCIDRBlock"
+                        },
+                        "Description": "Allow HTTP traffic"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": {
+                            "Ref": "AllowedCIDRBlock"
+                        },
+                        "Description": "Allow HTTPS traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-alb-sg"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "WebServerSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for web servers",
+                "GroupName": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-webserver-sg"
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "SourceSecurityGroupId": {
+                            "Ref": "ALBSecurityGroup"
+                        },
+                        "Description": "Allow HTTP traffic from ALB"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow SSH access from anywhere"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-webserver-sg"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "DatabaseSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for RDS database",
+                "GroupName": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db-sg"
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": {
+                            "Fn::If": [
+                                "UseMySQL",
+                                3306,
+                                5432
+                            ]
+                        },
+                        "ToPort": {
+                            "Fn::If": [
+                                "UseMySQL",
+                                3306,
+                                5432
+                            ]
+                        },
+                        "SourceSecurityGroupId": {
+                            "Ref": "WebServerSecurityGroup"
+                        },
+                        "Description": {
+                            "Fn::Sub": "Allow ${DBEngine} traffic from web servers"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db-sg"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "EC2KeyPair": {
+            "Type": "AWS::EC2::KeyPair",
+            "Properties": {
+                "KeyName": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-keypair"
+                },
+                "KeyType": "rsa",
+                "KeyFormat": "pem",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-keypair"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "DBPasswordSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-db-password"
+                },
+                "Description": "Database password for RDS instance",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": {
+                        "Fn::Sub": "{\"username\": \"${DBMasterUsername}\"}"
+                    },
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 16,
+                    "ExcludeCharacters": "\"@/\\"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-db-password"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "EC2InstanceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ec2-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    {
+                        "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/CloudWatchAgentServerPolicy"
+                    }
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ec2-policy"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudwatch:PutMetricData",
+                                        "cloudwatch:GetMetricStatistics",
+                                        "cloudwatch:ListMetrics"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "logs:DescribeLogStreams"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "EC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Path": "/",
+                "Roles": [
+                    {
+                        "Ref": "EC2InstanceRole"
+                    }
+                ]
+            }
+        },
+        "ApplicationLoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-alb"
+                },
+                "Type": "application",
+                "Scheme": "internet-facing",
+                "IpAddressType": "ipv4",
+                "SecurityGroups": [
+                    {
+                        "Ref": "ALBSecurityGroup"
+                    }
+                ],
+                "Subnets": [
+                    {
+                        "Ref": "PublicSubnet1"
+                    },
+                    {
+                        "Ref": "PublicSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-alb"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "TargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-tg"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "TargetType": "instance",
+                "HealthCheckEnabled": true,
+                "HealthCheckIntervalSeconds": 30,
+                "HealthCheckPath": "/",
+                "HealthCheckProtocol": "HTTP",
+                "HealthCheckTimeoutSeconds": 5,
+                "HealthyThresholdCount": 2,
+                "UnhealthyThresholdCount": 3,
+                "Matcher": {
+                    "HttpCode": "200"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-tg"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "HTTPListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "LoadBalancerArn": {
+                    "Ref": "ApplicationLoadBalancer"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "TargetGroup"
+                        }
+                    }
+                ]
+            }
+        },
+        "HTTPSListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Condition": "CreateHTTPSListener",
+            "Properties": {
+                "LoadBalancerArn": {
+                    "Ref": "ApplicationLoadBalancer"
+                },
+                "Port": 443,
+                "Protocol": "HTTPS",
+                "Certificates": [
+                    {
+                        "CertificateArn": {
+                            "Ref": "HTTPSCertificateArn"
+                        }
+                    }
+                ],
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "TargetGroup"
+                        }
+                    }
+                ]
+            }
+        },
+        "LaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Properties": {
+                "LaunchTemplateName": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-lt"
+                },
+                "LaunchTemplateData": {
+                    "ImageId": {
+                        "Ref": "LatestAmiId"
+                    },
+                    "InstanceType": {
+                        "Fn::FindInMap": [
+                            "EnvironmentConfig",
+                            {
+                                "Ref": "Environment"
+                            },
+                            "InstanceType"
+                        ]
+                    },
+                    "KeyName": {
+                        "Ref": "EC2KeyPair"
+                    },
+                    "IamInstanceProfile": {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "EC2InstanceProfile",
+                                "Arn"
+                            ]
+                        }
+                    },
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "WebServerSecurityGroup"
+                        }
+                    ],
+                    "UserData": {
+                        "Fn::Base64": {
+                            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\necho \"<h1>Hello from ${AWS::StackName} in ${AWS::Region}</h1>\" > /var/www/html/index.html\n\n# Install CloudWatch Agent\nwget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm\nrpm -U ./amazon-cloudwatch-agent.rpm\n\n# Configure CloudWatch Logs\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF\n{\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/httpd/access_log\",\n            \"log_group_name\": \"/aws/ec2/${AWS::StackName}\",\n            \"log_stream_name\": \"{instance_id}/apache/access\"\n          },\n          {\n            \"file_path\": \"/var/log/httpd/error_log\",\n            \"log_group_name\": \"/aws/ec2/${AWS::StackName}\",\n            \"log_stream_name\": \"{instance_id}/apache/error\"\n          }\n        ]\n      }\n    }\n  },\n  \"metrics\": {\n    \"namespace\": \"${AWS::StackName}\",\n    \"metrics_collected\": {\n      \"cpu\": {\n        \"measurement\": [\n          {\n            \"name\": \"cpu_usage_idle\",\n            \"rename\": \"CPU_USAGE_IDLE\",\n            \"unit\": \"Percent\"\n          },\n          {\n            \"name\": \"cpu_usage_iowait\",\n            \"rename\": \"CPU_USAGE_IOWAIT\",\n            \"unit\": \"Percent\"\n          }\n        ]\n      },\n      \"disk\": {\n        \"measurement\": [\n          {\n            \"name\": \"used_percent\",\n            \"rename\": \"DISK_USED_PERCENT\",\n            \"unit\": \"Percent\"\n          }\n        ],\n        \"resources\": [\n          \"*\"\n        ]\n      },\n      \"mem\": {\n        \"measurement\": [\n          {\n            \"name\": \"mem_used_percent\",\n            \"rename\": \"MEM_USED_PERCENT\",\n            \"unit\": \"Percent\"\n          }\n        ]\n      }\n    }\n  }\n}\nEOF\n\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json\n"
+                        }
+                    },
+                    "TagSpecifications": [
+                        {
+                            "ResourceType": "instance",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": {
+                                        "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-instance"
+                                    }
+                                },
+                                {
+                                    "Key": "Environment",
+                                    "Value": {
+                                        "Ref": "Environment"
+                                    }
+                                },
+                                {
+                                    "Key": "Project",
+                                    "Value": {
+                                        "Ref": "ProjectName"
+                                    }
+                                },
+                                {
+                                    "Key": "Owner",
+                                    "Value": {
+                                        "Ref": "OwnerEmail"
+                                    }
+                                },
+                                {
+                                    "Key": "CostCenter",
+                                    "Value": {
+                                        "Ref": "CostCenter"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "AutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "DependsOn": [
+                "AttachGateway"
+            ],
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-asg"
+                },
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "LaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
+                },
+                "MinSize": {
+                    "Fn::FindInMap": [
+                        "EnvironmentConfig",
+                        {
+                            "Ref": "Environment"
+                        },
+                        "MinSize"
+                    ]
+                },
+                "MaxSize": {
+                    "Fn::FindInMap": [
+                        "EnvironmentConfig",
+                        {
+                            "Ref": "Environment"
+                        },
+                        "MaxSize"
+                    ]
+                },
+                "DesiredCapacity": {
+                    "Fn::FindInMap": [
+                        "EnvironmentConfig",
+                        {
+                            "Ref": "Environment"
+                        },
+                        "DesiredCapacity"
+                    ]
+                },
+                "TargetGroupARNs": [
+                    {
+                        "Ref": "TargetGroup"
+                    }
+                ],
+                "VPCZoneIdentifier": [
+                    {
+                        "Ref": "PublicSubnet1"
+                    },
+                    {
+                        "Ref": "PublicSubnet2"
+                    }
+                ],
+                "HealthCheckType": "ELB",
+                "HealthCheckGracePeriod": 300,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-asg"
+                        },
+                        "PropagateAtLaunch": false
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        },
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        },
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        },
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        },
+                        "PropagateAtLaunch": true
+                    }
+                ]
+            }
+        },
+        "DBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupName": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db-subnet-group"
+                },
+                "DBSubnetGroupDescription": "Subnet group for RDS database",
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db-subnet-group"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "RDSDatabase": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db"
+                },
+                "Engine": {
+                    "Ref": "DBEngine"
+                },
+                "EngineVersion": {
+                    "Ref": "DBEngineVersion"
+                },
+                "DBInstanceClass": {
+                    "Fn::FindInMap": [
+                        "EnvironmentConfig",
+                        {
+                            "Ref": "Environment"
+                        },
+                        "DBInstanceClass"
+                    ]
+                },
+                "AllocatedStorage": {
+                    "Fn::FindInMap": [
+                        "EnvironmentConfig",
+                        {
+                            "Ref": "Environment"
+                        },
+                        "DBAllocatedStorage"
+                    ]
+                },
+                "MasterUsername": {
+                    "Ref": "DBMasterUsername"
+                },
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${AWS::StackName}-${EnvironmentSuffix}-db-password:SecretString:password}}"
+                },
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "DatabaseSecurityGroup"
+                    }
+                ],
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroup"
+                },
+                "MultiAZ": {
+                    "Fn::FindInMap": [
+                        "EnvironmentConfig",
+                        {
+                            "Ref": "Environment"
+                        },
+                        "MultiAZ"
+                    ]
+                },
+                "BackupRetentionPeriod": {
+                    "Fn::FindInMap": [
+                        "EnvironmentConfig",
+                        {
+                            "Ref": "Environment"
+                        },
+                        "DBBackupRetentionPeriod"
+                    ]
+                },
+                "PreferredBackupWindow": "03:00-04:00",
+                "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+                "StorageEncrypted": true,
+                "EnableCloudwatchLogsExports": {
+                    "Fn::If": [
+                        "UseMySQL",
+                        [
+                            "error",
+                            "general",
+                            "slowquery"
+                        ],
+                        [
+                            "postgresql"
+                        ]
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerEmail"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "EC2CPUAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-cpu-alarm"
+                },
+                "AlarmDescription": "Alarm when CPU exceeds threshold",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": {
+                    "Fn::FindInMap": [
+                        "EnvironmentConfig",
+                        {
+                            "Ref": "Environment"
+                        },
+                        "AlarmThreshold"
+                    ]
+                },
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "AutoScalingGroup"
+                        }
+                    }
+                ],
+                "TreatMissingData": "breaching"
+            }
+        },
+        "RDSStorageAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-rds-storage-alarm"
+                },
+                "AlarmDescription": "Alarm when RDS free storage space is low",
+                "MetricName": "FreeStorageSpace",
+                "Namespace": "AWS/RDS",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 2147483648,
+                "ComparisonOperator": "LessThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "DBInstanceIdentifier",
+                        "Value": {
+                            "Ref": "RDSDatabase"
+                        }
+                    }
+                ],
+                "TreatMissingData": "breaching"
+            }
+        },
+        "ALBTargetHealthAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-alb-health-alarm"
+                },
+                "AlarmDescription": "Alarm when healthy target count is low",
+                "MetricName": "HealthyHostCount",
+                "Namespace": "AWS/ApplicationELB",
+                "Statistic": "Minimum",
+                "Period": 60,
+                "EvaluationPeriods": 2,
+                "Threshold": 1,
+                "ComparisonOperator": "LessThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "TargetGroup",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "TargetGroup",
+                                "TargetGroupFullName"
+                            ]
+                        }
+                    },
+                    {
+                        "Name": "LoadBalancer",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "ApplicationLoadBalancer",
+                                "LoadBalancerFullName"
+                            ]
+                        }
+                    }
+                ],
+                "TreatMissingData": "breaching"
+            }
+        },
+        "CloudWatchLogsGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/ec2/${AWS::StackName}"
+                },
+                "RetentionInDays": {
+                    "Fn::If": [
+                        "IsProduction",
+                        30,
+                        7
+                    ]
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "VPCId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-VPC-ID"
+                }
+            }
+        },
+        "VPCCidr": {
+            "Description": "VPC CIDR Block",
+            "Value": {
+                "Fn::GetAtt": [
+                    "VPC",
+                    "CidrBlock"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-VPC-CIDR"
+                }
+            }
+        },
+        "InternetGatewayId": {
+            "Description": "Internet Gateway ID",
+            "Value": {
+                "Ref": "InternetGateway"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Internet-Gateway-ID"
+                }
+            }
+        },
+        "PublicSubnet1Id": {
+            "Description": "Public Subnet 1 ID",
+            "Value": {
+                "Ref": "PublicSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Public-Subnet-1-ID"
+                }
+            }
+        },
+        "PublicSubnet1AvailabilityZone": {
+            "Description": "Public Subnet 1 Availability Zone",
+            "Value": {
+                "Fn::GetAtt": [
+                    "PublicSubnet1",
+                    "AvailabilityZone"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Public-Subnet-1-AZ"
+                }
+            }
+        },
+        "PublicSubnet2Id": {
+            "Description": "Public Subnet 2 ID",
+            "Value": {
+                "Ref": "PublicSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Public-Subnet-2-ID"
+                }
+            }
+        },
+        "PublicSubnet2AvailabilityZone": {
+            "Description": "Public Subnet 2 Availability Zone",
+            "Value": {
+                "Fn::GetAtt": [
+                    "PublicSubnet2",
+                    "AvailabilityZone"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Public-Subnet-2-AZ"
+                }
+            }
+        },
+        "PrivateSubnet1Id": {
+            "Description": "Private Subnet 1 ID",
+            "Value": {
+                "Ref": "PrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Private-Subnet-1-ID"
+                }
+            }
+        },
+        "PrivateSubnet1AvailabilityZone": {
+            "Description": "Private Subnet 1 Availability Zone",
+            "Value": {
+                "Fn::GetAtt": [
+                    "PrivateSubnet1",
+                    "AvailabilityZone"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Private-Subnet-1-AZ"
+                }
+            }
+        },
+        "PrivateSubnet2Id": {
+            "Description": "Private Subnet 2 ID",
+            "Value": {
+                "Ref": "PrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Private-Subnet-2-ID"
+                }
+            }
+        },
+        "PrivateSubnet2AvailabilityZone": {
+            "Description": "Private Subnet 2 Availability Zone",
+            "Value": {
+                "Fn::GetAtt": [
+                    "PrivateSubnet2",
+                    "AvailabilityZone"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Private-Subnet-2-AZ"
+                }
+            }
+        },
+        "PublicRouteTableId": {
+            "Description": "Public Route Table ID",
+            "Value": {
+                "Ref": "PublicRouteTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Public-Route-Table-ID"
+                }
+            }
+        },
+        "ALBSecurityGroupId": {
+            "Description": "Application Load Balancer Security Group ID",
+            "Value": {
+                "Ref": "ALBSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ALB-SG-ID"
+                }
+            }
+        },
+        "WebServerSecurityGroupId": {
+            "Description": "Web Server Security Group ID",
+            "Value": {
+                "Ref": "WebServerSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-WebServer-SG-ID"
+                }
+            }
+        },
+        "DatabaseSecurityGroupId": {
+            "Description": "Database Security Group ID",
+            "Value": {
+                "Ref": "DatabaseSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Database-SG-ID"
+                }
+            }
+        },
+        "EC2KeyPairId": {
+            "Description": "EC2 Key Pair ID",
+            "Value": {
+                "Ref": "EC2KeyPair"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-EC2-KeyPair-ID"
+                }
+            }
+        },
+        "DBPasswordSecretArn": {
+            "Description": "Database Password Secret ARN",
+            "Value": {
+                "Ref": "DBPasswordSecret"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-DB-Password-Secret-ARN"
+                }
+            }
+        },
+        "EC2InstanceRoleArn": {
+            "Description": "EC2 Instance IAM Role ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EC2InstanceRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-EC2-Role-ARN"
+                }
+            }
+        },
+        "EC2InstanceRoleName": {
+            "Description": "EC2 Instance IAM Role Name",
+            "Value": {
+                "Ref": "EC2InstanceRole"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-EC2-Role-Name"
+                }
+            }
+        },
+        "EC2InstanceProfileArn": {
+            "Description": "EC2 Instance Profile ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EC2InstanceProfile",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-EC2-Instance-Profile-ARN"
+                }
+            }
+        },
+        "ApplicationLoadBalancerArn": {
+            "Description": "Application Load Balancer ARN",
+            "Value": {
+                "Ref": "ApplicationLoadBalancer"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ALB-ARN"
+                }
+            }
+        },
+        "ALBDNSName": {
+            "Description": "Application Load Balancer DNS Name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ApplicationLoadBalancer",
+                    "DNSName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ALB-DNS"
+                }
+            }
+        },
+        "ALBHostedZoneId": {
+            "Description": "Application Load Balancer Hosted Zone ID",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ApplicationLoadBalancer",
+                    "CanonicalHostedZoneID"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ALB-HostedZoneID"
+                }
+            }
+        },
+        "ALBSecurityGroups": {
+            "Description": "Application Load Balancer Security Groups",
+            "Value": {
+                "Fn::Join": [
+                    ",",
+                    {
+                        "Fn::GetAtt": [
+                            "ApplicationLoadBalancer",
+                            "SecurityGroups"
+                        ]
+                    }
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ALB-Security-Groups"
+                }
+            }
+        },
+        "TargetGroupArn": {
+            "Description": "Target Group ARN",
+            "Value": {
+                "Ref": "TargetGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Target-Group-ARN"
+                }
+            }
+        },
+        "TargetGroupName": {
+            "Description": "Target Group Name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "TargetGroup",
+                    "TargetGroupName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Target-Group-Name"
+                }
+            }
+        },
+        "TargetGroupFullName": {
+            "Description": "Target Group Full Name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "TargetGroup",
+                    "TargetGroupFullName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Target-Group-Full-Name"
+                }
+            }
+        },
+        "HTTPListenerArn": {
+            "Description": "HTTP Listener ARN",
+            "Value": {
+                "Ref": "HTTPListener"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-HTTP-Listener-ARN"
+                }
+            }
+        },
+        "HTTPSListenerArn": {
+            "Description": "HTTPS Listener ARN",
+            "Condition": "CreateHTTPSListener",
+            "Value": {
+                "Ref": "HTTPSListener"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-HTTPS-Listener-ARN"
+                }
+            }
+        },
+        "LaunchTemplateId": {
+            "Description": "Launch Template ID",
+            "Value": {
+                "Ref": "LaunchTemplate"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Launch-Template-ID"
+                }
+            }
+        },
+        "LaunchTemplateLatestVersionNumber": {
+            "Description": "Launch Template Latest Version Number",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LaunchTemplate",
+                    "LatestVersionNumber"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-Launch-Template-Version"
+                }
+            }
+        },
+        "AutoScalingGroupName": {
+            "Description": "Auto Scaling Group Name",
+            "Value": {
+                "Ref": "AutoScalingGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ASG-Name"
+                }
+            }
+        },
+        "AutoScalingGroupArn": {
+            "Description": "Auto Scaling Group ARN",
+            "Value": {
+                "Fn::Sub": "arn:${AWS::Partition}:autoscaling:${AWS::Region}:${AWS::AccountId}:autoScalingGroup:*:autoScalingGroupName/${AutoScalingGroup}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ASG-ARN"
+                }
+            }
+        },
+        "DBSubnetGroupName": {
+            "Description": "Database Subnet Group Name",
+            "Value": {
+                "Ref": "DBSubnetGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-DB-Subnet-Group-Name"
+                }
+            }
+        },
+        "RDSInstanceId": {
+            "Description": "RDS Database Instance ID",
+            "Value": {
+                "Ref": "RDSDatabase"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-RDS-Instance-ID"
+                }
+            }
+        },
+        "RDSEndpoint": {
+            "Description": "RDS Database Endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "RDSDatabase",
+                    "Endpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-RDS-Endpoint"
+                }
+            }
+        },
+        "RDSPort": {
+            "Description": "RDS Database Port",
+            "Value": {
+                "Fn::GetAtt": [
+                    "RDSDatabase",
+                    "Endpoint.Port"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-RDS-Port"
+                }
+            }
+        },
+        "RDSInstanceArn": {
+            "Description": "RDS Database Instance ARN",
+            "Value": {
+                "Fn::Sub": "arn:${AWS::Partition}:rds:${AWS::Region}:${AWS::AccountId}:db:${RDSDatabase}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-RDS-ARN"
+                }
+            }
+        },
+        "RDSEngine": {
+            "Description": "RDS Database Engine",
+            "Value": {
+                "Ref": "DBEngine"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-RDS-Engine"
+                }
+            }
+        },
+        "RDSEngineVersion": {
+            "Description": "RDS Database Engine Version",
+            "Value": {
+                "Ref": "DBEngineVersion"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-RDS-Engine-Version"
+                }
+            }
+        },
+        "EC2CPUAlarmName": {
+            "Description": "EC2 CPU Alarm Name",
+            "Value": {
+                "Ref": "EC2CPUAlarm"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-EC2-CPU-Alarm-Name"
+                }
+            }
+        },
+        "RDSStorageAlarmName": {
+            "Description": "RDS Storage Alarm Name",
+            "Value": {
+                "Ref": "RDSStorageAlarm"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-RDS-Storage-Alarm-Name"
+                }
+            }
+        },
+        "ALBTargetHealthAlarmName": {
+            "Description": "ALB Target Health Alarm Name",
+            "Value": {
+                "Ref": "ALBTargetHealthAlarm"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ALB-Health-Alarm-Name"
+                }
+            }
+        },
+        "CloudWatchLogsGroupName": {
+            "Description": "CloudWatch Logs Group Name",
+            "Value": {
+                "Ref": "CloudWatchLogsGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-LogsGroup-Name"
+                }
+            }
+        },
+        "CloudWatchLogsGroupArn": {
+            "Description": "CloudWatch Logs Group ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "CloudWatchLogsGroup",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-LogsGroup-ARN"
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "python",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000310",
+  "team": "1",
+  "startedAt": "2025-10-31T14:05:54.097Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "Cognito",
+    "S3",
+    "IAM",
+    "CloudWatch",
+    "X-Ray"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,46 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-03T19:00:45+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Use CDK v2 with TypeScript - no JavaScript or other languages allowed",
+    "All EC2 instances must use Amazon Linux 2023 AMI",
+    "Instance type must be t3.micro for cost optimization",
+    "No SSH keys or key pairs - access only via Session Manager",
+    "VPC Flow Logs must capture ALL traffic (accepted and rejected)",
+    "Each subnet must have explicit route table associations",
+    "Security groups must follow least privilege principle with no 0.0.0.0/0 inbound rules",
+    "All resources must be created in a single CDK stack",
+    "Use CDK L2 constructs where available, avoid L1 constructs",
+    "NAT Gateways must have Elastic IPs with deletion protection enabled"
+  ],
+  "po_id": "vxpub",
+  "aws_services": [
+    "CloudWatch",
+    "CloudWatch Logs",
+    "DynamoDB",
+    "EC2",
+    "Elastic IP",
+    "IAM",
+    "Internet Gateway",
+    "NAT Gateway",
+    "S3",
+    "Systems Manager",
+    "VPC",
+    "VPC Endpoints",
+    "VPC Flow Logs"
+  ],
+  "region": "ca-central-1",
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
