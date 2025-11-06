@@ -31,12 +31,42 @@ class TapStack:
             self.vpc_id = vpc_id_config
             self.private_subnet_ids = config.require_object("private_subnet_ids")
         else:
-            # Use default VPC if no vpc_id provided
-            default_vpc = aws.ec2.get_vpc(default=True)
-            self.vpc_id = default_vpc.id
-            # Get all subnets in the default VPC
-            subnets = aws.ec2.get_subnets(vpc_id=self.vpc_id)
-            self.private_subnet_ids = subnets.ids
+            # Create a default VPC if no vpc_id provided
+            vpc = aws.ec2.Vpc(
+                f"tap-vpc-{self.environment_suffix}",
+                cidr_block="10.0.0.0/16",
+                enable_dns_hostnames=True,
+                enable_dns_support=True,
+                tags={
+                    "Name": f"tap-vpc-{self.environment_suffix}",
+                    "Environment": self.environment_suffix,
+                    "Purpose": "Test-Automation"
+                }
+            )
+            self.vpc_id = vpc.id
+            
+            # Create subnets in the VPC
+            subnet1 = aws.ec2.Subnet(
+                f"tap-subnet-1-{self.environment_suffix}",
+                vpc_id=self.vpc_id,
+                cidr_block="10.0.1.0/24",
+                availability_zone="us-east-1a",
+                tags={
+                    "Name": f"tap-subnet-1-{self.environment_suffix}",
+                    "Environment": self.environment_suffix
+                }
+            )
+            subnet2 = aws.ec2.Subnet(
+                f"tap-subnet-2-{self.environment_suffix}",
+                vpc_id=self.vpc_id,
+                cidr_block="10.0.2.0/24",
+                availability_zone="us-east-1b",
+                tags={
+                    "Name": f"tap-subnet-2-{self.environment_suffix}",
+                    "Environment": self.environment_suffix
+                }
+            )
+            self.private_subnet_ids = [subnet1.id, subnet2.id]
         self.app_security_group_id = config.get("app_security_group_id") or "sg-app-servers"
         self.onprem_db_host = config.get("onprem_db_host") or "10.0.1.50"
         self.onprem_db_port = config.get_int("onprem_db_port") or 5432
