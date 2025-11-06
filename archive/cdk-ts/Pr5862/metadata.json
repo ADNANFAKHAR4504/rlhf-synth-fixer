@@ -12,7 +12,8 @@
   ],
   "aws_services": [
     "CDK",
-    "ECS Fargate",
+    "ECS",
+    "Fargate",
     "Application Load Balancer",
     "Aurora PostgreSQL",
     "S3",
@@ -21,11 +22,18 @@
     "CloudWatch",
     "IAM",
     "KMS",
-    "X-Ray",
     "VPC",
     "NAT Gateway",
     "ACM",
-    "Route53"
+    "Route53",
+    "Backup",
+    "SNS"
   ],
-  "training_quality": 9
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
 }
