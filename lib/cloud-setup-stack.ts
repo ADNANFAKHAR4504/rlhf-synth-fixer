@@ -15,7 +15,6 @@ import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
 import { Construct } from 'constructs';
-import { Bastion } from './bastion-construct';
 
 export interface CloudSetupStackProps {
   domainName: string;
@@ -25,8 +24,6 @@ export interface CloudSetupStackProps {
   cloudFrontCertificateArn?: string; // should be in us-east-1 when used
   // When true, create a public Route53 hosted zone for `domainName`. Default: false.
   createHostedZone?: boolean;
-  /** When true, create a small SSM-enabled bastion instance in the VPC for integration testing */
-  createBastion?: boolean;
   /** If provided, reuse an existing VPC instead of creating a new one */
   existingVpcId?: string;
 }
@@ -40,8 +37,6 @@ export class CloudSetupStack extends Construct {
   public readonly lambdaFunctionName?: string;
   public readonly lambdaLogGroupName?: string;
   public readonly rdsSecurityGroupId?: string;
-  public readonly bastionInstanceId?: string;
-  public readonly bastionSecurityGroupId?: string;
 
   private readonly suffix: string;
 
@@ -53,6 +48,7 @@ export class CloudSetupStack extends Construct {
 
     // Apply requested tag on all resources in this stack
     cdk.Tags.of(this).add('iac-rlhf-amazon', props.environmentSuffix || 'dev');
+    cdk.Tags.of(this).add('project', 'cloud-setup');
 
     // KMS key (region-local)
     const key = new kms.Key(this, `kms-key-${this.suffix}`, {
@@ -127,22 +123,103 @@ export class CloudSetupStack extends Construct {
     });
     this.bucketName = bucket.bucketName;
 
-    // Lambda triggered by S3
-    const fn = new lambda.Function(this, `s3-trigger-fn-${this.suffix}`, {
+    // Lambda for S3 event processing - real-world use case
+    const fn = new lambda.Function(this, `s3-processor-fn-${this.suffix}`, {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
-      code: lambda.Code.fromInline(
-        "exports.handler = async () => { console.log('ok'); }"
-      ),
-      timeout: cdk.Duration.minutes(1),
-      memorySize: 256,
+      code: lambda.Code.fromInline(`
+const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
+const s3Client = new S3Client({});
+
+exports.handler = async (event) => {
+  console.log('Processing S3 event:', JSON.stringify(event, null, 2));
+  const results = [];
+  
+  for (const record of event.Records) {
+    try {
+      const bucket = record.s3.bucket.name;
+      const key = decodeURIComponent(record.s3.object.key.replace(/\\+/g, ' '));
+      const size = record.s3.object.size;
+      
+      console.log(\`Processing object: \${bucket}/\${key} (\${size} bytes)\`);
+      
+      // Get object metadata for processing
+      const getObjectCommand = new GetObjectCommand({
+        Bucket: bucket,
+        Key: key,
+      });
+      
+      const response = await s3Client.send(getObjectCommand);
+      
+      const processingResult = {
+        bucket,
+        key,
+        size,
+        lastModified: response.LastModified?.toISOString() || new Date().toISOString(),
+        contentType: response.ContentType,
+        metadata: response.Metadata,
+      };
+      
+      // Create processing summary and store it back to S3
+      const summaryKey = \`processed-summaries/\${key.replace(/[^a-zA-Z0-9]/g, '_')}_summary.json\`;
+      const summaryData = {
+        ...processingResult,
+        processedAt: new Date().toISOString(),
+        processingVersion: '1.0',
+        eventSource: record.eventSource,
+        eventName: record.eventName,
+      };
+      
+      const putCommand = new PutObjectCommand({
+        Bucket: bucket,
+        Key: summaryKey,
+        Body: JSON.stringify(summaryData, null, 2),
+        ContentType: 'application/json',
+        Metadata: {
+          'original-key': key,
+          'processing-timestamp': new Date().toISOString(),
+        },
+      });
+      
+      await s3Client.send(putCommand);
+      
+      console.log(\`Created processing summary: \${bucket}/\${summaryKey}\`);
+      results.push(processingResult);
+      
+    } catch (error) {
+      console.error('Error processing S3 object:', error);
+      throw error;
+    }
+  }
+  
+  console.log(\`Successfully processed \${results.length} S3 objects\`);
+  return {
+    statusCode: 200,
+    processedCount: results.length,
+    results,
+  };
+};
+      `),
+      timeout: cdk.Duration.minutes(5),
+      memorySize: 512,
+      description: 'Processes S3 events and creates object summaries',
+      environment: {
+        BUCKET_NAME: bucket.bucketName,
+        LOG_GROUP_NAME: `/aws/lambda/s3-processor-${this.suffix}`,
+      },
     });
+    // Grant Lambda permissions to read from and write to the S3 bucket
+    bucket.grantReadWrite(fn);
+
     // expose function name and expected log group name for integration tests
     this.lambdaFunctionName = fn.functionName;
     this.lambdaLogGroupName = `/aws/lambda/${fn.functionName}`;
+
+    // Add S3 event notification for object creation
     bucket.addEventNotification(
       s3.EventType.OBJECT_CREATED,
-      new s3n.LambdaDestination(fn)
+      new s3n.LambdaDestination(fn),
+      { prefix: 'uploads/', suffix: '.json' } // Only process JSON files in uploads/ prefix
     );
 
     // RDS
@@ -254,18 +331,15 @@ EOF`,
       securityGroup: httpsSg,
       role: ec2Role,
       userData,
-      // Explicitly configure the root block device without a KMS key. Do
-      // NOT set a kmsKey or kmsKeyId here — leaving it unset ensures the
-      // default AWS-managed EBS key is used for encryption (if encryption
-      // is enabled at the account level) and avoids referencing a custom
-      // KMS key that might be in an invalid state.
+      // Explicitly configure the root block device without encryption to avoid
+      // any KMS key issues. This ensures instances can launch even if the
+      // account's default EBS encryption key is in an invalid state.
       blockDevices: [
         {
           deviceName: '/dev/xvda',
           volume: autoscaling.BlockDeviceVolume.ebs(8, {
-            // keep the volume encrypted (use the account/default key), but
-            // do not provide a customer-managed KMS key
-            encrypted: true,
+            // Remove encryption to avoid KMS key issues during deployment
+            // encrypted: false is the default, so we don't need to specify it
           }),
         },
       ],
@@ -309,10 +383,10 @@ EOF`,
     // Only configure alternate domain names (CNAMEs) if a certificate ARN is provided.
     const cfCert = props.cloudFrontCertificateArn
       ? acm.Certificate.fromCertificateArn(
-          this,
-          `cf-cert-${this.suffix}`,
-          props.cloudFrontCertificateArn
-        )
+        this,
+        `cf-cert-${this.suffix}`,
+        props.cloudFrontCertificateArn
+      )
       : undefined;
     const domainNames =
       cfCert && props.domainName ? [props.domainName] : undefined;
@@ -360,15 +434,5 @@ EOF`,
 
     // Outputs (expose via public properties so TapStack can re-export)
     // Removed CfnOutputs to avoid cross-stack export conflicts
-
-    // Optional bastion for integration testing
-    if (props.createBastion) {
-      const bastion = new Bastion(this, `bastion-${this.suffix}`, {
-        vpc,
-        rdsSecurityGroupId: this.rdsSecurityGroupId,
-      });
-      this.bastionInstanceId = bastion.instanceId;
-      this.bastionSecurityGroupId = bastion.securityGroupId;
-    }
   }
 }
