@@ -87,7 +87,7 @@ export class DmsConstruct extends Construct {
           dmsSubnetGroup.replicationSubnetGroupIdentifier,
         publiclyAccessible: false,
         multiAz: false,
-        engineVersion: '3.4.7',
+        // Remove engineVersion to use the default latest version available in the region
         tags: [
           { key: 'Environment', value: 'production' },
           { key: 'MigrationProject', value: '2024Q1' },
