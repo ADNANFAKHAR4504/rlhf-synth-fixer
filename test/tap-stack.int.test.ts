@@ -94,15 +94,15 @@ describe('Terraform Blue-Green Deployment Integration Tests', () => {
 
   describe('Blue-Green Traffic Distribution', () => {
     test('Blue environment should have 100% traffic initially', () => {
-      expect(outputs.blue_traffic_weight).toBe(100);
+      expect(Number(outputs.blue_traffic_weight)).toBe(100);
     });
 
     test('Green environment should have 0% traffic initially', () => {
-      expect(outputs.green_traffic_weight).toBe(0);
+      expect(Number(outputs.green_traffic_weight)).toBe(0);
     });
 
     test('Traffic weights should sum to 100', () => {
-      const totalWeight = outputs.blue_traffic_weight + outputs.green_traffic_weight;
+      const totalWeight = Number(outputs.blue_traffic_weight) + Number(outputs.green_traffic_weight);
       expect(totalWeight).toBe(100);
     });
 
