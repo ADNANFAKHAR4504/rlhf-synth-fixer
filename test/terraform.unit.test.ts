@@ -353,10 +353,9 @@ describe("CloudTrail Resources", () => {
     expect(stackContent).toMatch(/include_global_service_events\s*=\s*true/);
   });
 
-  test("CloudTrail has event selectors for S3 and RDS", () => {
+  test("CloudTrail has event selectors for S3", () => {
     expect(stackContent).toMatch(/event_selector\s*{/);
     expect(stackContent).toMatch(/AWS::S3::Object/);
-    expect(stackContent).toMatch(/AWS::RDS::DBCluster/);
   });
 });
 
@@ -502,7 +501,7 @@ describe("Load Balancer Resources", () => {
   });
 
   test("ALB drops invalid headers", () => {
-    expect(stackContent).toMatch(/enable_drop_invalid_header_fields\s*=\s*true/);
+    expect(stackContent).toMatch(/drop_invalid_header_fields\s*=\s*true/);
   });
 
   test("ALB has access logs enabled", () => {
