@@ -2,15 +2,604 @@
 
 This document presents the corrected, production-ready CloudFormation template that successfully deploys RDS PostgreSQL 14 infrastructure with Multi-AZ, enterprise security, and comprehensive monitoring.
 
-## Critical Fix Applied
-
-**Original Issue**: MODEL_RESPONSE included `server_encoding` parameter which is not modifiable in Amazon RDS PostgreSQL.
-
 **Correction**: Removed `server_encoding` from DBParameterGroup parameters.
 
 ## Complete Implementation
 
 The corrected `lib/TapStack.json` contains the full CloudFormation template. Key highlights:
+
+## File - lib/TapStack.json
+
+```json
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "RDS PostgreSQL Migration - Production Database Infrastructure",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Environment Configuration"
+          },
+          "Parameters": [
+            "EnvironmentSuffix"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Network Configuration"
+          },
+          "Parameters": [
+            "VpcId",
+            "DatabaseSubnet1Id",
+            "DatabaseSubnet2Id",
+            "DatabaseSubnet3Id",
+            "AppSubnet1Cidr",
+            "AppSubnet2Cidr",
+            "AppSubnet3Cidr"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Database Configuration"
+          },
+          "Parameters": [
+            "DatabaseName",
+            "DatabaseUsername",
+            "DatabaseInstanceClass",
+            "DatabaseAllocatedStorage"
+          ]
+        }
+      ]
+    }
+  },
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "prod",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
+    "VpcId": {
+      "Type": "String",
+      "Default": "vpc-1234567890abcdef0",
+      "Description": "VPC ID for the RDS deployment"
+    },
+    "DatabaseSubnet1Id": {
+      "Type": "String",
+      "Default": "subnet-1a2b3c4d",
+      "Description": "First database subnet ID"
+    },
+    "DatabaseSubnet2Id": {
+      "Type": "String",
+      "Default": "subnet-2a3b4c5d",
+      "Description": "Second database subnet ID"
+    },
+    "DatabaseSubnet3Id": {
+      "Type": "String",
+      "Default": "subnet-3a4b5c6d",
+      "Description": "Third database subnet ID"
+    },
+    "AppSubnet1Cidr": {
+      "Type": "String",
+      "Default": "10.0.1.0/24",
+      "Description": "Application subnet 1 CIDR block"
+    },
+    "AppSubnet2Cidr": {
+      "Type": "String",
+      "Default": "10.0.2.0/24",
+      "Description": "Application subnet 2 CIDR block"
+    },
+    "AppSubnet3Cidr": {
+      "Type": "String",
+      "Default": "10.0.3.0/24",
+      "Description": "Application subnet 3 CIDR block"
+    },
+    "DatabaseName": {
+      "Type": "String",
+      "Default": "productiondb",
+      "Description": "Name of the PostgreSQL database",
+      "MinLength": 1,
+      "MaxLength": 64,
+      "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$"
+    },
+    "DatabaseUsername": {
+      "Type": "String",
+      "Default": "dbadmin",
+      "Description": "Master username for database access",
+      "MinLength": 1,
+      "MaxLength": 16,
+      "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$"
+    },
+    "DatabaseInstanceClass": {
+      "Type": "String",
+      "Default": "db.r6g.xlarge",
+      "Description": "Database instance class"
+    },
+    "DatabaseAllocatedStorage": {
+      "Type": "Number",
+      "Default": 100,
+      "Description": "Database storage size in GB",
+      "MinValue": 100,
+      "MaxValue": 65536
+    }
+  },
+  "Resources": {
+    "DatabaseEncryptionKey": {
+      "Type": "AWS::KMS::Key",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for RDS encryption - ${EnvironmentSuffix}"
+        },
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow RDS to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "rds.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey",
+                "kms:CreateGrant"
+              ],
+              "Resource": "*"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "rds-encryption-key-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "DatabaseMigration"
+          }
+        ]
+      }
+    },
+    "DatabaseEncryptionKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/rds-postgres-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "DatabaseEncryptionKey"
+        }
+      }
+    },
+    "DatabaseSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "rds-postgres-credentials-${EnvironmentSuffix}"
+        },
+        "Description": "RDS PostgreSQL database credentials",
+        "GenerateSecretString": {
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\": \"${DatabaseUsername}\"}"
+          },
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/'",
+          "RequireEachIncludedType": true
+        },
+        "KmsKeyId": {
+          "Ref": "DatabaseEncryptionKey"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "rds-postgres-secret-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "DatabaseMigration"
+          }
+        ]
+      }
+    },
+    "DatabaseSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupName": {
+          "Fn::Sub": "rds-postgres-subnet-group-${EnvironmentSuffix}"
+        },
+        "DBSubnetGroupDescription": "Subnet group for RDS PostgreSQL instance",
+        "SubnetIds": [
+          {
+            "Ref": "DatabaseSubnet1Id"
+          },
+          {
+            "Ref": "DatabaseSubnet2Id"
+          },
+          {
+            "Ref": "DatabaseSubnet3Id"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "rds-postgres-subnet-group-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "DatabaseMigration"
+          }
+        ]
+      }
+    },
+    "DatabaseSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "rds-postgres-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for RDS PostgreSQL instance",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "CidrIp": {
+              "Ref": "AppSubnet1Cidr"
+            },
+            "Description": "PostgreSQL access from application subnet 1"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "CidrIp": {
+              "Ref": "AppSubnet2Cidr"
+            },
+            "Description": "PostgreSQL access from application subnet 2"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "CidrIp": {
+              "Ref": "AppSubnet3Cidr"
+            },
+            "Description": "PostgreSQL access from application subnet 3"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "127.0.0.1/32",
+            "Description": "No outbound traffic allowed"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "rds-postgres-sg-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "DatabaseMigration"
+          }
+        ]
+      }
+    },
+    "DatabaseParameterGroup": {
+      "Type": "AWS::RDS::DBParameterGroup",
+      "Properties": {
+        "DBParameterGroupName": {
+          "Fn::Sub": "rds-postgres14-params-${EnvironmentSuffix}"
+        },
+        "Description": "Custom parameter group for PostgreSQL 14",
+        "Family": "postgres14",
+        "Parameters": {
+          "max_connections": "1000",
+          "client_encoding": "UTF8",
+          "timezone": "UTC",
+          "shared_buffers": "{DBInstanceClassMemory/32768}"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "rds-postgres14-params-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "DatabaseMigration"
+          }
+        ]
+      }
+    },
+    "DatabaseInstance": {
+      "Type": "AWS::RDS::DBInstance",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "rds-postgres-${EnvironmentSuffix}"
+        },
+        "Engine": "postgres",
+        "EngineVersion": "14.13",
+        "DBInstanceClass": {
+          "Ref": "DatabaseInstanceClass"
+        },
+        "AllocatedStorage": {
+          "Ref": "DatabaseAllocatedStorage"
+        },
+        "StorageType": "gp3",
+        "StorageEncrypted": true,
+        "KmsKeyId": {
+          "Ref": "DatabaseEncryptionKey"
+        },
+        "DBName": {
+          "Ref": "DatabaseName"
+        },
+        "MasterUsername": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}"
+        },
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"
+        },
+        "DBSubnetGroupName": {
+          "Ref": "DatabaseSubnetGroup"
+        },
+        "VPCSecurityGroups": [
+          {
+            "Ref": "DatabaseSecurityGroup"
+          }
+        ],
+        "DBParameterGroupName": {
+          "Ref": "DatabaseParameterGroup"
+        },
+        "MultiAZ": true,
+        "PubliclyAccessible": false,
+        "BackupRetentionPeriod": 7,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+        "EnablePerformanceInsights": true,
+        "PerformanceInsightsRetentionPeriod": 7,
+        "PerformanceInsightsKMSKeyId": {
+          "Ref": "DatabaseEncryptionKey"
+        },
+        "EnableCloudwatchLogsExports": [
+          "postgresql",
+          "upgrade"
+        ],
+        "DeletionProtection": false,
+        "CopyTagsToSnapshot": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "rds-postgres-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "DatabaseMigration"
+          }
+        ]
+      }
+    },
+    "SecretRDSAttachment": {
+      "Type": "AWS::SecretsManager::SecretTargetAttachment",
+      "Properties": {
+        "SecretId": {
+          "Ref": "DatabaseSecret"
+        },
+        "TargetId": {
+          "Ref": "DatabaseInstance"
+        },
+        "TargetType": "AWS::RDS::DBInstance"
+      }
+    },
+    "DatabaseCPUAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "rds-postgres-cpu-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when RDS CPU exceeds 80%",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": {
+              "Ref": "DatabaseInstance"
+            }
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "DatabaseStorageAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "rds-postgres-storage-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when RDS free storage is below 10GB",
+        "MetricName": "FreeStorageSpace",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 10737418240,
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": {
+              "Ref": "DatabaseInstance"
+            }
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    }
+  },
+  "Outputs": {
+    "DatabaseEndpoint": {
+      "Description": "RDS PostgreSQL database endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "DatabaseInstance",
+          "Endpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DatabaseEndpoint"
+        }
+      }
+    },
+    "DatabasePort": {
+      "Description": "RDS PostgreSQL database port",
+      "Value": {
+        "Fn::GetAtt": [
+          "DatabaseInstance",
+          "Endpoint.Port"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DatabasePort"
+        }
+      }
+    },
+    "DatabaseSecretArn": {
+      "Description": "ARN of the Secrets Manager secret containing database credentials",
+      "Value": {
+        "Ref": "DatabaseSecret"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DatabaseSecretArn"
+        }
+      }
+    },
+    "DatabaseInstanceIdentifier": {
+      "Description": "RDS instance identifier",
+      "Value": {
+        "Ref": "DatabaseInstance"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DatabaseInstanceIdentifier"
+        }
+      }
+    },
+    "DatabaseSecurityGroupId": {
+      "Description": "Security group ID for RDS instance",
+      "Value": {
+        "Ref": "DatabaseSecurityGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DatabaseSecurityGroupId"
+        }
+      }
+    },
+    "DatabaseEncryptionKeyId": {
+      "Description": "KMS key ID used for encryption",
+      "Value": {
+        "Ref": "DatabaseEncryptionKey"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DatabaseEncryptionKeyId"
+        }
+      }
+    },
+    "StackName": {
+      "Description": "Name of this CloudFormation stack",
+      "Value": {
+        "Ref": "AWS::StackName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StackName"
+        }
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    }
+  }
+}
+```
 
 ### Resource Structure (10 Resources)
 1. DatabaseEncryptionKey - KMS key with rotation enabled
@@ -23,120 +612,3 @@ The corrected `lib/TapStack.json` contains the full CloudFormation template. Key
 8. DatabaseInstance - Multi-AZ PostgreSQL 14.13 (db.r6g.xlarge)
 9. DatabaseCPUAlarm - CPU > 80% monitoring
 10. DatabaseStorageAlarm - Storage < 10GB monitoring
-
-### Corrected Parameter Group
-
-```json
-"DatabaseParameterGroup": {
-  "Type": "AWS::RDS::DBParameterGroup",
-  "Properties": {
-    "DBParameterGroupName": {"Fn::Sub": "rds-postgres14-params-${EnvironmentSuffix}"},
-    "Family": "postgres14",
-    "Parameters": {
-      "max_connections": "1000",
-      "client_encoding": "UTF8",
-      "timezone": "UTC",
-      "shared_buffers": "{DBInstanceClassMemory/32768}"
-    }
-  }
-}
-```
-
-**Note**: `server_encoding` removed as it's not modifiable in RDS PostgreSQL.
-
-### Database Configuration
-
-```json
-"DatabaseInstance": {
-  "Type": "AWS::RDS::DBInstance",
-  "Properties": {
-    "Engine": "postgres",
-    "EngineVersion": "14.13",
-    "DBInstanceClass": "db.r6g.xlarge",
-    "AllocatedStorage": 100,
-    "StorageType": "gp3",
-    "MultiAZ": true,
-    "StorageEncrypted": true,
-    "BackupRetentionPeriod": 7,
-    "PreferredBackupWindow": "03:00-04:00",
-    "EnablePerformanceInsights": true,
-    "PerformanceInsightsRetentionPeriod": 7,
-    "PubliclyAccessible": false,
-    "DeletionProtection": false
-  }
-}
-```
-
-## Deployment Success
-
-**Stack**: TapStackqa805
-**Status**: CREATE_COMPLETE
-**Region**: us-east-1
-**Resources**: 10/10 created successfully
-**Time**: ~12 minutes
-
-### Outputs
-- DatabaseEndpoint: rds-postgres-qa805.covy6ema0nuv.us-east-1.rds.amazonaws.com
-- DatabasePort: 5432
-- DatabaseSecretArn: arn:aws:secretsmanager:...
-- DatabaseInstanceIdentifier: rds-postgres-qa805
-- Plus 4 more outputs for security, encryption, and stack info
-
-## Testing Results
-
-**Unit Tests**: 54/54 PASSED (100% coverage)
-- All parameters validated
-- All resources verified
-- Naming conventions confirmed
-- Deletion policies checked
-
-**Integration Tests**: 42 Tests (Live AWS Validation)
-- RDS Multi-AZ verified
-- Performance Insights active
-- KMS rotation enabled
-- Security groups properly configured
-- CloudWatch alarms functioning
-- Secrets Manager encryption validated
-
-## Best Practices Implemented
-
-- ✓ Multi-AZ for high availability
-- ✓ KMS encryption with rotation
-- ✓ Secrets Manager for credentials
-- ✓ Private subnet deployment only
-- ✓ Performance Insights enabled
-- ✓ CloudWatch monitoring active
-- ✓ 7-day backup retention
-- ✓ EnvironmentSuffix in all resource names
-- ✓ Proper tagging strategy
-- ✓ gp3 storage for performance
-- ✓ db.r6g.xlarge (Graviton2) for efficiency
-
-## What Changed from MODEL_RESPONSE
-
-**Single Line Fix**: Removed `"server_encoding": "UTF8"` from line 337 of the parameter group.
-
-**Everything Else**: Identical to MODEL_RESPONSE - demonstrating 95%+ accuracy.
-
-## Deployment Command
-
-```bash
-aws cloudformation deploy \
-  --template-file lib/TapStack.json \
-  --stack-name TapStack${ENVIRONMENT_SUFFIX} \
-  --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX} \
-  --capabilities CAPABILITY_IAM \
-  --region us-east-1
-```
-
-## Conclusion
-
-This IDEAL_RESPONSE represents production-ready infrastructure that:
-- ✓ Deploys successfully in AWS
-- ✓ Passes all unit and integration tests
-- ✓ Follows AWS best practices
-- ✓ Meets all security requirements
-- ✓ Provides complete monitoring
-- ✓ Is fully destroyable for QA environments
-
-**Training Value**: HIGH - Captures AWS-specific constraint that is non-obvious but critical for deployment success.
