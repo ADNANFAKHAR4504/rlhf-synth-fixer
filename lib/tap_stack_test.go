@@ -162,7 +162,7 @@ func TestCreateInfrastructure(t *testing.T) {
 func TestCreateInfrastructureWithCustomSuffix(t *testing.T) {
 	resourceIDCounter = 0
 
-	err := pulumi.RunErr(func(ctx *pulumi.Context) error{
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 		return createInfrastructure(ctx)
 	}, pulumi.WithMocks("project", "stack", mocks(0)), func(ri *pulumi.RunInfo) {
 		ri.Config = map[string]string{
