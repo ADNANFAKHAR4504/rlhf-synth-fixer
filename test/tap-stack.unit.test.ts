@@ -755,4 +755,50 @@ describe('TapStack Unit Tests', () => {
       template.resourceCountIs('AWS::EC2::NatGateway', 3);
     });
   });
+
+  describe('Environment Suffix Configuration', () => {
+    test('should use context environmentSuffix when provided', () => {
+      const appWithContext = new cdk.App({
+        context: {
+          environmentSuffix: 'test-context',
+        },
+      });
+      const stackWithContext = new TapStack(appWithContext, 'TestContextStack', {
+        env: {
+          account: '123456789012',
+          region: 'ap-northeast-1',
+        },
+      });
+      const templateWithContext = Template.fromStack(stackWithContext);
+
+      // Verify resources are created with the context suffix
+      templateWithContext.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: 'tap-test-context-lambda-execution-role',
+      });
+    });
+
+    test('should default to dev when no context or env var is set', () => {
+      const originalEnv = process.env.ENVIRONMENT_SUFFIX;
+      delete process.env.ENVIRONMENT_SUFFIX;
+
+      const appNoEnv = new cdk.App();
+      const stackNoEnv = new TapStack(appNoEnv, 'TestDefaultStack', {
+        env: {
+          account: '123456789012',
+          region: 'ap-northeast-1',
+        },
+      });
+      const templateNoEnv = Template.fromStack(stackNoEnv);
+
+      // Verify resources are created with default 'dev' suffix
+      templateNoEnv.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: 'tap-dev-lambda-execution-role',
+      });
+
+      // Restore original env
+      if (originalEnv) {
+        process.env.ENVIRONMENT_SUFFIX = originalEnv;
+      }
+    });
+  });
 });

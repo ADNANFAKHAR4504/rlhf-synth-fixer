@@ -68,7 +68,10 @@ describe('TapStack Integration Tests - Live AWS Resources', () => {
 
       expect(response.Stacks).toBeDefined();
       expect(response.Stacks?.length).toBe(1);
-      expect(response.Stacks?.[0].StackStatus).toBe('CREATE_COMPLETE');
+      // Stack can be in CREATE_COMPLETE or UPDATE_COMPLETE state
+      expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(
+        response.Stacks?.[0].StackStatus
+      );
     }, 30000);
 
     test('should verify stack has required outputs', async () => {
