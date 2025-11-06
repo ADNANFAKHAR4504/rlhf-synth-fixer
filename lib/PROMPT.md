@@ -1,6 +1,6 @@
 Hey team,
 
-We need to build a database migration solution for a fintech company that's moving their PostgreSQL database from on-premises to AWS RDS Aurora. This is a production migration that needs to maintain data integrity while minimizing downtime. I've been asked to create this using **AWS CDK with TypeScript** and deploy it to the ap-southeast-1 region.
+We need to build a database migration solution for a fintech company that's moving their PostgreSQL database from on-premises to AWS RDS Aurora. This is a production migration that needs to maintain data integrity while minimizing downtime. I've been asked to create this using **AWS CDK with TypeScript** and deploy it to the us-east-1 region.
 
 The business has strict requirements around security and performance, and they need continuous data replication during the migration to ensure we can cut over with minimal impact. The existing on-premises setup has specific performance characteristics we need to match, particularly around connection handling with their current max_connections configuration.
 
@@ -13,7 +13,7 @@ Create a database migration infrastructure using **AWS CDK with TypeScript** tha
 ### Core Requirements
 
 1. **RDS Aurora PostgreSQL Cluster**
-   - Use PostgreSQL version 14.7 compatibility
+   - Use PostgreSQL version 14.13 compatibility
    - Deploy one writer instance and two reader instances
    - Place all instances in private subnets across multiple availability zones
    - Configure for high availability and read scalability
@@ -67,7 +67,7 @@ Create a database migration infrastructure using **AWS CDK with TypeScript** tha
 ### Technical Requirements
 
 - All infrastructure defined using **AWS CDK with TypeScript**
-- Deploy to **ap-southeast-1** region
+- Deploy to **us-east-1** region
 - Use **RDS Aurora PostgreSQL** for the database cluster
 - Use **AWS Secrets Manager** for credential storage
 - Use **AWS DMS** for replication instance, endpoints, and migration tasks
@@ -80,7 +80,7 @@ Create a database migration infrastructure using **AWS CDK with TypeScript** tha
 
 ### Constraints
 
-- The RDS Aurora cluster MUST use PostgreSQL 14.7 compatibility
+- The RDS Aurora cluster MUST use PostgreSQL 14.13 compatibility
 - Database credentials MUST be stored in AWS Secrets Manager with rotation disabled
 - The migration MUST use AWS DMS with CDC enabled for minimal downtime
 - All database connections MUST go through security groups allowing only port 5432
@@ -96,7 +96,7 @@ Create a database migration infrastructure using **AWS CDK with TypeScript** tha
 ## Success Criteria
 
 - **Functionality**: Complete migration infrastructure provisioned with all components working together
-- **Database Cluster**: Aurora PostgreSQL 14.7 cluster with 1 writer and 2 readers in private subnets
+- **Database Cluster**: Aurora PostgreSQL 14.13 cluster with 1 writer and 2 readers in private subnets
 - **Security**: Credentials in Secrets Manager, security groups properly configured for port 5432 only
 - **Migration Path**: DMS replication instance, endpoints, and task configured for full load + CDC
 - **Performance**: Parameter group with max_connections=1000, proper instance sizing

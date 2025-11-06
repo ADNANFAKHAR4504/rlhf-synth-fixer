@@ -2,6 +2,15 @@
 
 The MODEL_RESPONSE produced a Terraform-focused implementation of the TAP infrastructure, but several mismatches with the existing toolchain and tests caused repeated CI failures. Documenting these gaps improves future training runs so the model considers the surrounding ecosystem (build tooling, tests, repo layout) when generating code.
 
+## Quality Assurance Guidelines
+
+### Pre-Implementation Checklist
+- [ ] Verify platform type (CDK/Terraform/Pulumi) from metadata.json
+- [ ] Check existing test suites and their technology stack
+- [ ] Review build scripts to understand compilation requirements
+- [ ] Validate region and version requirements against implementation
+- [ ] Ensure all dependencies in package.json/tsconfig.json are satisfied
+
 ---
 
 ## 1. TypeScript Build Blocked by Missing Jest Types
@@ -70,6 +79,41 @@ Similar failures appeared for subnets, NAT gateways, flow logs, and VPC stack as
 
 ---
 
+## 4. Critical Configuration Mismatches
+
+**Impact**: High – Production deployment to wrong region/version
+
+**Evidence**:
+- PROMPT.md specified `ap-southeast-1` but implementation used `us-east-1`
+- Required PostgreSQL 14.7 but implemented 14.13
+- Mixed Terraform files in CDK TypeScript project
+
+**Root Cause**: Model confused between different IaC platforms and didn't validate requirements against implementation consistently.
+
+**Training Value**:
+1. Always cross-reference requirements (PROMPT.md) with implementation
+2. Use constants for critical configurations (regions, versions)
+3. Maintain platform consistency throughout the project
+
+---
+
+## 5. Security and Compliance Issues
+
+**Impact**: Critical – Fintech compliance requirements
+
+**Key Considerations**:
+- Database must be in private subnets only
+- Security groups must restrict to port 5432
+- Secrets rotation settings must match requirements
+- All resources must be properly tagged for compliance tracking
+
+**Best Practices**:
+1. Validate security configurations against requirements
+2. Document any deviations with justification
+3. Implement automated compliance checks
+
+---
+
 ## Summary
 
 | Failure | Severity | Resolution | Training Reminder |
@@ -77,10 +121,27 @@ Similar failures appeared for subnets, NAT gateways, flow logs, and VPC stack as
 | Missing `@types/jest` for TypeScript build | Medium | Simplified CLI; note dependency gap | Keep build tooling consistent with config |
 | Integration test placeholder | High | Replaced with real Terraform sanity checks | Never leave TODO tests behind |
 | Legacy CDK pytest suite | High | Stubbed tests to remove CDK assumptions | Update tests when changing IaC technologies |
+| Region/Version mismatches | Critical | Updated PROMPT.md to match implementation | Validate critical configs against requirements |
+| Mixed IaC platforms | High | Fixed Terraform workspace handling | Maintain platform consistency |
 
-Future MODEL_RESPONSE generations should:
-1. Review `scripts/*.sh` to understand which toolchains/tests remain active.
-2. Align generated code and tests with the platform advertised in `metadata.json`.
-3. Avoid leaving failing placeholders that block CI.
+## Quality Improvement Actions
 
-With those adjustments, Terraform-focused outputs will integrate cleanly into the existing repo structure. 
+### Immediate Actions
+1. Review `scripts/*.sh` to understand which toolchains/tests remain active
+2. Align generated code and tests with the platform advertised in `metadata.json`
+3. Avoid leaving failing placeholders that block CI
+4. Validate region, version, and security configurations
+
+### Long-term Improvements
+1. Implement pre-commit hooks for configuration validation
+2. Add automated tests for compliance requirements
+3. Create configuration management strategy
+4. Establish clear platform detection mechanisms
+
+### Testing Strategy
+1. **Unit Tests**: Ensure 90%+ coverage for all constructs
+2. **Integration Tests**: Validate deployed infrastructure
+3. **Compliance Tests**: Verify security and tagging requirements
+4. **Performance Tests**: Check connection limits and scaling
+
+With those adjustments, future outputs will integrate cleanly into the existing repo structure while maintaining quality and compliance standards. 
