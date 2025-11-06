@@ -58,9 +58,5 @@ export function getEnvironmentConfig(env: string): EnvironmentConfig {
       `Invalid environment: ${env}. Valid values: ${validEnvironments.join(', ')}`
     );
   }
-  const config = configs[env];
-  if (!config) {
-    throw new Error(`Configuration not found for environment: ${env}`);
-  }
-  return config;
+  return configs[env];
 }

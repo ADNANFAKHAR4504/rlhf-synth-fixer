@@ -93,7 +93,7 @@ def handler(event, context):
         timeout: cdk.Duration.seconds(30),
         vpc: props.vpc,
         vpcSubnets: {
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
         },
         securityGroups: [props.securityGroup],
         role: lambdaRole,

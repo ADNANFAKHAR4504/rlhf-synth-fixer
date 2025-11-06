@@ -385,8 +385,11 @@ describe('TapStack Unit Tests - 100% Coverage', () => {
       template.resourceCountIs('AWS::EC2::Subnet', 4); // 2 public + 2 private (2 AZs)
     });
 
-    test('VPC should have NAT Gateway', () => {
-      template.resourceCountIs('AWS::EC2::NatGateway', 1);
+    test('VPC should have VPC endpoints for AWS services (no NAT Gateway)', () => {
+      // Should have 0 NAT Gateways to avoid AWS account limits
+      template.resourceCountIs('AWS::EC2::NatGateway', 0);
+      // Should have VPC endpoints instead
+      template.resourceCountIs('AWS::EC2::VPCEndpoint', 3); // Secrets Manager, S3, DynamoDB
     });
 
     test('VPC should have Internet Gateway', () => {

@@ -16,11 +16,11 @@ export class VpcConstruct extends Construct {
   constructor(scope: Construct, id: string, props: VpcConstructProps) {
     super(scope, id);
 
-    // Create VPC with public and private subnets
+    // Create VPC with public and isolated subnets (no NAT Gateway to avoid limits)
     this.vpc = new ec2.Vpc(this, `Vpc-${props.environmentSuffix}`, {
       ipAddresses: ec2.IpAddresses.cidr(props.config.vpcCidr),
       maxAzs: props.config.maxAzs,
-      natGateways: 1,
+      natGateways: 0, // No NAT Gateway to avoid hitting AWS account limits
       subnetConfiguration: [
         {
           cidrMask: 24,
@@ -30,9 +30,28 @@ export class VpcConstruct extends Construct {
         {
           cidrMask: 24,
           name: 'Private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED, // Use isolated subnets
         },
       ],
+    });
+
+    // Add VPC Endpoints for AWS services to allow private subnet access without NAT Gateway
+    // Secrets Manager endpoint
+    this.vpc.addInterfaceEndpoint(`SecretsManagerEndpoint-${props.environmentSuffix}`, {
+      service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
+      subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+    });
+
+    // S3 endpoint (Gateway endpoint - free)
+    this.vpc.addGatewayEndpoint(`S3Endpoint-${props.environmentSuffix}`, {
+      service: ec2.GatewayVpcEndpointAwsService.S3,
+      subnets: [{ subnetType: ec2.SubnetType.PRIVATE_ISOLATED }],
+    });
+
+    // DynamoDB endpoint (Gateway endpoint - free)
+    this.vpc.addGatewayEndpoint(`DynamoDBEndpoint-${props.environmentSuffix}`, {
+      service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
+      subnets: [{ subnetType: ec2.SubnetType.PRIVATE_ISOLATED }],
     });
 
     // Security group for Lambda functions

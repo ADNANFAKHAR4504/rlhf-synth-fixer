@@ -51,7 +51,7 @@ export class DatabaseConstruct extends Construct {
         credentials: rds.Credentials.fromSecret(this.credentials),
         vpc: props.vpc,
         vpcSubnets: {
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
         },
         securityGroups: [props.securityGroup],
         multiAz: props.config.rdsMultiAz,
