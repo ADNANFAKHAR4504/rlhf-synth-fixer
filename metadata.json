@@ -1,46 +1,21 @@
 {
-  "po_id": "7855388917",
-  "team": "synth",
   "platform": "cdk",
   "language": "ts",
-  "complexity": "medium",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "infra-optimization",
+  "team": "stf",
+  "startedAt": "2025-11-06T10:51:04.047Z",
   "subtask": "IaC Program Optimization",
   "subject_labels": [
     "IaC Optimization"
   ],
-  "startedAt": "2025-10-13T18:28:11+05:30",
-  "task_description": "Create a scalable content delivery API infrastructure for a media streaming platform that needs to handle metadata requests for movies and TV shows. The system should implement caching and maintain streaming content metadata in a reliable database.",
-  "background": "StreamFlix, a growing media streaming company, needs to build an API infrastructure to serve metadata about their content catalog. They need a solution that can handle high-volume requests for content information while maintaining low latency and ensuring data consistency.",
-  "aws_region": "eu-west-1",
-  "constraints": [
-    "All infrastructure must be deployed in eu-west-1 region with multi-AZ configuration for high availability",
-    "The Redis cache must be configured with encryption at rest and in-transit"
-  ],
-  "environment": {
-    "required_services": [
-      "API Gateway for handling content metadata requests",
-      "ElastiCache Redis cluster for caching frequently accessed content metadata",
-      "RDS PostgreSQL instance for storing content catalog",
-      "ECS Fargate cluster running the API service",
-      "Necessary networking components"
-    ]
-  },
-  "training_quality": 8,
   "aws_services": [
-    "Amazon VPC",
-    "Amazon ECS",
-    "Amazon RDS",
-    "Amazon ElastiCache",
-    "Amazon API Gateway",
-    "AWS Secrets Manager",
-    "Amazon CloudWatch",
-    "Elastic Load Balancing",
-    "AWS IAM"
-  ],
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "mayanksethi-turing",
-  "dockerS3Location": ""
+    "S3 Bucket",
+    "CloudFormation",
+    "Lambda",
+    "EventBridge",
+    "CloudWatch LogGroup",
+    "VPC"
+  ]
 }
