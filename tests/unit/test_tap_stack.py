@@ -104,6 +104,16 @@ class MyMocks(pulumi.runtime.Mocks):
                     }]
                 })
             }
+        elif args.token == "aws:ec2/getVpc:getVpc":
+            return {
+                "id": "vpc-12345678",
+                "cidr_block": "10.0.0.0/16",
+                "default": True
+            }
+        elif args.token == "aws:ec2/getSubnets:getSubnets":
+            return {
+                "ids": ["subnet-12345", "subnet-67890"]
+            }
         return {}
 
     def read_resource(self, args: pulumi.runtime.MockResourceArgs):
@@ -179,7 +189,6 @@ class TestTapStack(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up test class."""
-        # Import after mocks are set
         from lib.tap_stack import TapStack
         cls.TapStack = TapStack
 
@@ -208,6 +217,16 @@ class TestTapStack(unittest.TestCase):
                         "Effect": "Allow"
                     }]
                 })
+            }
+        elif args.token == "aws:ec2/getVpc:getVpc":
+            return {
+                "id": "vpc-12345678",
+                "cidr_block": "10.0.0.0/16",
+                "default": True
+            }
+        elif args.token == "aws:ec2/getSubnets:getSubnets":
+            return {
+                "ids": ["subnet-12345", "subnet-67890"]
             }
         return {}
 

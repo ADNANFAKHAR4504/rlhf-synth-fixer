@@ -12,6 +12,7 @@ import pulumi_aws as aws
 class TapStack:
     """
     Infrastructure stack for database migration using AWS RDS and DMS.
+    If vpc_id is not provided in config, uses the default VPC.
     """
 
     def __init__(self, environment_suffix: str = "prod"):
@@ -23,10 +24,19 @@ class TapStack:
         """
         self.environment_suffix = environment_suffix
 
-        # Configuration - require VPC and subnet IDs to be provided
+        # Configuration - VPC and subnet IDs can be provided or default VPC will be used
         config = pulumi.Config()
-        self.vpc_id = config.require("vpc_id")
-        self.private_subnet_ids = config.require_object("private_subnet_ids")
+        vpc_id_config = config.get("vpc_id")
+        if vpc_id_config:
+            self.vpc_id = vpc_id_config
+            self.private_subnet_ids = config.require_object("private_subnet_ids")
+        else:
+            # Use default VPC if no vpc_id provided
+            default_vpc = aws.ec2.get_vpc(default=True)
+            self.vpc_id = default_vpc.id
+            # Get all subnets in the default VPC
+            subnets = aws.ec2.get_subnets(vpc_id=self.vpc_id)
+            self.private_subnet_ids = subnets.ids
         self.app_security_group_id = config.get("app_security_group_id") or "sg-app-servers"
         self.onprem_db_host = config.get("onprem_db_host") or "10.0.1.50"
         self.onprem_db_port = config.get_int("onprem_db_port") or 5432
