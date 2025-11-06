@@ -13,13 +13,19 @@
   "po_id": "2rdie",
   "aws_services": [
     "EKS",
-    "EC2",
     "VPC",
+    "EC2",
     "IAM",
     "EBS",
     "CloudWatch",
     "Systems Manager"
   ],
   "region": "eu-west-1",
-  "training_quality": 9
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
