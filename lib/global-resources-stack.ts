@@ -10,21 +10,9 @@ export interface GlobalResourcesStackProps extends cdk.StackProps {
 
 export class GlobalResourcesStack extends cdk.Stack {
   public readonly globalTableName: string;
-  public readonly alertTopic: sns.Topic;
 
   constructor(scope: Construct, id: string, props: GlobalResourcesStackProps) {
     super(scope, id, props);
-
-    // SNS Topic for alerts
-    this.alertTopic = new sns.Topic(this, 'DRAlertTopic', {
-      topicName: `dr-alerts-${props.environment}`,
-      displayName: 'Disaster Recovery Alerts',
-    });
-
-    // Add email subscription (replace with your email)
-    this.alertTopic.addSubscription(
-      new snsSubscriptions.EmailSubscription('alerts@example.com')
-    );
 
     // DynamoDB Global Table
     const globalTable = new dynamodb.Table(this, 'TransactionGlobalTable', {
@@ -56,10 +44,6 @@ export class GlobalResourcesStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'GlobalTableName', {
       value: this.globalTableName,
       exportName: `GlobalTableName-${props.environment}`,
-    });
-
-    new cdk.CfnOutput(this, 'AlertTopicArn', {
-      value: this.alertTopic.topicArn,
     });
   }
 }

@@ -184,7 +184,6 @@ export class MultiRegionDRStack extends cdk.Stack {
         handler: 'index.handler',
         code: lambda.Code.fromInline(this.getLambdaCode()),
         timeout: cdk.Duration.seconds(60),
-        reservedConcurrentExecutions: 100,
         environment: {
           REGION: region,
           TABLE_NAME: props.globalTableName,

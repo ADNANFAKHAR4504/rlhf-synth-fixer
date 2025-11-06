@@ -44,7 +44,6 @@ const primaryStack = new MultiRegionDRStack(
     isPrimary: true,
     environment: environmentSuffix,
     globalTableName: globalStack.globalTableName,
-    alertTopic: globalStack.alertTopic,
   }
 );
 
@@ -61,7 +60,6 @@ const secondaryStack = new MultiRegionDRStack(
     isPrimary: false,
     environment: environmentSuffix,
     globalTableName: globalStack.globalTableName,
-    alertTopic: globalStack.alertTopic,
   }
 );
 

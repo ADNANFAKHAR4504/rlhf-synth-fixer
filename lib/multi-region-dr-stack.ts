@@ -7,6 +7,7 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as sns from 'aws-cdk-lib/aws-sns';
+import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
@@ -16,7 +17,6 @@ export interface MultiRegionDRStackProps extends cdk.StackProps {
   isPrimary: boolean;
   environment: string;
   globalTableName: string;
-  alertTopic: sns.ITopic;
 }
 
 export class MultiRegionDRStack extends cdk.Stack {
@@ -31,8 +31,16 @@ export class MultiRegionDRStack extends cdk.Stack {
     const region = props.env?.region || 'us-east-1';
     const drRole = props.isPrimary ? 'primary' : 'secondary';
 
-    // Use alert topic passed from global stack
-    const alertTopic = props.alertTopic;
+    // Create regional SNS topic for CloudWatch alarms
+    const alertTopic = new sns.Topic(this, 'AlertTopic', {
+      topicName: `dr-alerts-${region}-${props.environment}`,
+      displayName: `DR Alerts - ${region}`,
+    });
+
+    // Add email subscription
+    alertTopic.addSubscription(
+      new snsSubscriptions.EmailSubscription('alerts@example.com')
+    );
 
     // VPC Configuration
     this.vpc = new ec2.Vpc(this, 'DRVPC', {
@@ -109,7 +117,6 @@ export class MultiRegionDRStack extends cdk.Stack {
         handler: 'index.handler',
         code: lambda.Code.fromInline(this.getLambdaCode()),
         timeout: cdk.Duration.seconds(60),
-        reservedConcurrentExecutions: 100,
         environment: {
           REGION: region,
           TABLE_NAME: props.globalTableName,
@@ -156,8 +163,7 @@ export class MultiRegionDRStack extends cdk.Stack {
       description: `Transaction API for ${drRole} region`,
       deployOptions: {
         stageName: props.environment,
-        loggingLevel: apigateway.MethodLoggingLevel.INFO,
-        dataTraceEnabled: true,
+        // CloudWatch logging disabled to avoid account-level CloudWatch Logs role requirement
         metricsEnabled: true,
       },
       defaultCorsPreflightOptions: {

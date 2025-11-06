@@ -39,24 +39,6 @@ describe('Multi-Region DR Architecture', () => {
       expect(Object.keys(resources).length).toBeGreaterThan(0);
     });
 
-    test('should create SNS topic for alerts', () => {
-      const stack = new GlobalResourcesStack(app, 'TestGlobalStack', {
-        environment: environmentSuffix,
-        env: {
-          account: '123456789012',
-          region: 'us-east-1',
-        },
-      });
-
-      const template = Template.fromStack(stack);
-
-      template.resourceCountIs('AWS::SNS::Topic', 1);
-      template.hasResourceProperties('AWS::SNS::Topic', {
-        TopicName: `dr-alerts-${environmentSuffix}`,
-        DisplayName: 'Disaster Recovery Alerts',
-      });
-    });
-
     test('should create outputs for global resources', () => {
       const stack = new GlobalResourcesStack(app, 'TestGlobalStack', {
         environment: environmentSuffix,
@@ -69,7 +51,6 @@ describe('Multi-Region DR Architecture', () => {
       const template = Template.fromStack(stack);
 
       template.hasOutput('GlobalTableName', {});
-      template.hasOutput('AlertTopicArn', {});
     });
   });
 
@@ -94,7 +75,6 @@ describe('Multi-Region DR Architecture', () => {
         },
         isPrimary: true,
         globalTableName: globalStack.globalTableName,
-        alertTopic: globalStack.alertTopic,
       });
     });
 
@@ -104,6 +84,16 @@ describe('Multi-Region DR Architecture', () => {
       template.resourceCountIs('AWS::EC2::VPC', 1);
       template.hasResourceProperties('AWS::EC2::VPC', {
         CidrBlock: '10.0.0.0/16',
+      });
+    });
+
+    test('should create regional SNS topic', () => {
+      const template = Template.fromStack(primaryStack);
+
+      template.resourceCountIs('AWS::SNS::Topic', 1);
+      template.hasResourceProperties('AWS::SNS::Topic', {
+        TopicName: 'dr-alerts-us-east-1-dev',
+        DisplayName: 'DR Alerts - us-east-1',
       });
     });
 
@@ -126,7 +116,6 @@ describe('Multi-Region DR Architecture', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
         FunctionName: 'transaction-processor-us-east-1',
         Runtime: 'nodejs18.x',
-        ReservedConcurrentExecutions: 100,
       });
     });
 
@@ -210,7 +199,6 @@ describe('Multi-Region DR Architecture', () => {
         },
         isPrimary: false,
         globalTableName: globalStack.globalTableName,
-        alertTopic: globalStack.alertTopic,
       });
     });
 
@@ -264,7 +252,6 @@ describe('Multi-Region DR Architecture', () => {
         environment: environmentSuffix,
         isPrimary: false,
         globalTableName: globalStack3.globalTableName,
-        alertTopic: globalStack3.alertTopic,
       });
 
       const template = Template.fromStack(stackNoRegion);

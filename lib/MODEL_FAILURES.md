@@ -241,6 +241,108 @@ No export named AlertTopicArn-pr5822 found.
 
 ---
 
+## Issue 10: Lambda Reserved Concurrency Limit Exceeded
+
+**Problem**: Primary stack deployment failed with Lambda concurrency error
+```
+DRStackPrimary-dev | CREATE_FAILED | AWS::Lambda::Function | TransactionProcessor
+Resource handler returned message: "Specified ReservedConcurrentExecutions for function 
+decreases account's UnreservedConcurrentExecution below its minimum value of [10]."
+```
+
+**Root Cause**:
+- Lambda function was configured with `reservedConcurrentExecutions: 100`
+- AWS accounts have a default concurrent execution limit (typically 1000)
+- Reserving 100 executions left insufficient unreserved capacity
+- AWS requires minimum 10 unreserved concurrent executions for account safety
+- Test environments don't need aggressive concurrency reservations
+
+**Solution Applied**:
+- Removed `reservedConcurrentExecutions: 100` property from Lambda function (line 112 in `multi-region-dr-stack.ts`)
+- Lambda now uses the default unreserved concurrency pool
+- Updated unit test to remove the `ReservedConcurrentExecutions` expectation (line 129 in `tap-stack.unit.test.ts`)
+
+**Result**:
+- All unit tests pass (16/16)
+- 100% code coverage maintained
+- Lambda function deploys successfully
+- Function can still scale based on demand using unreserved pool
+
+**Lesson**: For test environments, avoid reserving Lambda concurrent executions unless absolutely necessary. Reserved concurrency is useful for production workloads that need guaranteed capacity, but test environments benefit from the flexibility of the unreserved pool.
+
+**Production Note**: If production workloads require guaranteed Lambda capacity, calculate available concurrency first: `(Account Limit - Other Reserved) - 10 >= Desired Reservation`.
+
+---
+
+## Issue 11: Cross-Region SNS Topic for CloudWatch Alarms
+
+**Problem**: Secondary stack deployment failed with region mismatch error
+```
+DRStackSecondary-dev | CREATE_FAILED | AWS::CloudWatch::Alarm | API4xxAlarm
+Resource handler returned message: "Invalid region us-east-1 specified. Only us-west-2 is supported."
+```
+
+**Root Cause**:
+- SNS topic was created in `GlobalResourcesStack` in `us-east-1`
+- CloudWatch alarms in `DRStackSecondary` (`us-west-2`) tried to use this topic as alarm action
+- AWS CloudWatch alarms cannot send notifications to SNS topics in different regions
+- SNS topic ARNs contain the region identifier and must match the alarm's region
+
+**Solution Applied**:
+- Moved SNS topic creation from `GlobalResourcesStack` to `MultiRegionDRStack` (lines 34-43)
+- Each regional stack now creates its own SNS topic in its own region
+- Topic naming: `dr-alerts-${region}-${environment}` (e.g., `dr-alerts-us-east-1-dev`)
+- Removed `alertTopic` property from `GlobalResourcesStack` class
+- Removed `alertTopic` from `MultiRegionDRStackProps` interface
+- Updated `bin/tap.ts` to not pass `alertTopic` between stacks (lines 46, 62)
+- Updated all unit tests to remove SNS topic from global stack tests
+- Added SNS topic test to regional stack tests
+
+**Result**:
+- All unit tests pass (16/16)
+- 100% code coverage maintained
+- CloudWatch alarms can now successfully send notifications to regional SNS topics
+- Each region has its own independent alert topic
+
+**Lesson**: AWS services with regional constraints (like CloudWatch → SNS) require resources to be in the same region. Don't try to centralize cross-region notification topics. Instead, create regional topics and optionally fan out to a central aggregation point if needed.
+
+**Production Note**: For centralized alerting, consider using EventBridge to forward events from regional SNS topics to a central monitoring system, or use SNS topic subscriptions to forward to a central topic.
+
+---
+
+## Issue 12: API Gateway CloudWatch Logs Role Not Configured
+
+**Problem**: Primary stack deployment failed with API Gateway stage creation error
+```
+DRStackPrimary-dev | CREATE_FAILED | AWS::ApiGateway::Stage | TransactionAPI/DeploymentStage.dev
+Resource handler returned message: "CloudWatch Logs role ARN must be set in account settings to enable logging"
+```
+
+**Root Cause**:
+- API Gateway was configured with `loggingLevel: apigateway.MethodLoggingLevel.INFO`
+- API Gateway requires a CloudWatch Logs role to be configured at the AWS account level for logging
+- This is a one-time account-level setup: `aws apigateway put-account --cloudwatch-role-arn <ROLE_ARN>`
+- Test environments don't have this role configured
+- Logging configuration in deployment options triggers this requirement
+
+**Solution Applied**:
+- Removed `loggingLevel` from API Gateway `deployOptions` (line 166)
+- Removed `dataTraceEnabled` configuration
+- Kept `metricsEnabled: true` (doesn't require CloudWatch Logs role)
+- Added comment explaining why logging is disabled
+
+**Result**:
+- All unit tests pass (16/16)
+- 100% code coverage maintained
+- API Gateway deploys successfully without CloudWatch Logs role
+- CloudWatch metrics still enabled for monitoring
+
+**Lesson**: AWS services may require account-level configurations before certain features work. For test environments, disable features that require administrative setup unless absolutely necessary. API Gateway metrics provide sufficient observability without detailed logging.
+
+**Production Note**: For production environments, configure the CloudWatch Logs role once at the account level using: `aws apigateway put-account --cloudwatch-role-arn arn:aws:iam::ACCOUNT_ID:role/APIGatewayCloudWatchLogsRole`
+
+---
+
 ## Summary
 
 **Final Status**:
