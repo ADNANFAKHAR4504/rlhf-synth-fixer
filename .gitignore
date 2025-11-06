@@ -147,3 +147,4 @@ turing-iac-review-app/tasks.json
 turing-iac-review-app/aws-nuke-config-runtime.yaml
 turing-iac-review-app/task_reports.csv
 turing-iac-review-app/aws-nuke-report-batch*tasks.csv.lock/
+iac_test_automations.egg-info/
