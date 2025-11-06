@@ -1045,8 +1045,10 @@ def handler(event, context):
         self.api_key = api_key
 
         # Export outputs using pulumi.export
+        # Ensure region is not None for API Gateway URL
+        api_region = region or "us-east-2"
         pulumi.export("api_gateway_url", pulumi.Output.all(api.id, stage.stage_name).apply(
-            lambda args: f"https://{args[0]}.execute-api.{region}.amazonaws.com/{args[1]}"
+            lambda args: f"https://{args[0] or 'api-id'}.execute-api.{api_region}.amazonaws.com/{args[1] or 'default'}"
         ))
         pulumi.export("api_key_id", api_key.id)
         pulumi.export("transaction_processor_arn", transaction_processor.arn)
