@@ -6,7 +6,7 @@
   "team": "synth",
   "startedAt": "2025-11-06T19:29:30+05:30",
   "subtask": "Application Deployment",
-  "subject_labels": [],
+  "subject_labels": ["Web Application Deployment"],
   "po_id": "harn4",
   "aws_services": [
     "VPC",
