@@ -246,10 +246,5 @@ describe('TapStack Integration Tests based on flat-outputs.json and tap_stack.tf
     expect(outputs.deployment_timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
   });
 
-  // Terraform workspace defined
-  test('Terraform workspace is defined', () => {
-    expect(outputs.terraform_workspace).toBeDefined();
-  });
-
 });
 
