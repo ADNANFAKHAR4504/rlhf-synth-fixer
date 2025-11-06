@@ -1,82 +1,77 @@
-# Provisioning of Infrastructure Environments
+# Payment Processing Application Migration to AWS
 
-> **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using Terraform with HCL**
->
-> Platform: **terraform**
-> Language: **HCL**
-> Region: **us-east-1**
->
-> **Do not substitute or change the platform or language.** All infrastructure code must be written using the specified platform and language combination.
+Hey team,
 
----
+We've got a new project that needs our attention. One of our clients - a financial services company - is looking to migrate their payment processing system from their on-prem setup to AWS. This is pretty critical since we're dealing with actual payment transactions, so we need to make sure we don't break anything during the migration and keep everything compliant.
 
-## Background
-A fintech startup needs to establish secure communication between their production environment and a partner's AWS account for real-time payment processing. The partner has strict security requirements including encrypted transit, restricted access patterns, and comprehensive audit logging.
+They've been running this thing on physical servers with PostgreSQL for a while now, and they're finally ready to move to the cloud. The goal is to build out a solid AWS environment that keeps their PCI DSS compliance intact while giving them the benefits of cloud infrastructure. We'll need to do this migration carefully - they want a blue-green deployment approach so they can cut over without any downtime.
 
-## Problem Statement
-Create a Terraform configuration to establish a cross-region VPC peering connection between your production VPC and a partner's VPC. The configuration must:
+I'm going to build this out using Terraform. They want to use AWS managed services where it makes sense to keep ops overhead down, but they also need tight control over security and networking for compliance reasons.
 
-1. Create a VPC peering connection with appropriate requester and accepter configurations.
-2. Configure DNS resolution options for both VPCs to enable hostname resolution across the peering connection.
-3. Update route tables in both VPCs to enable traffic flow only between specific application subnets.
-4. Create security group rules that allow HTTPS (443) and custom API traffic (8443) between peered VPCs.
-5. Set up VPC Flow Logs for both VPCs with S3 bucket storage and 1-minute aggregation intervals.
-6. Implement IAM roles and policies for cross-account access with explicit deny for unauthorized actions.
-7. Use Terraform data sources to dynamically fetch accepter VPC details and validate CIDR compatibility.
-8. Configure monitoring alarms for peering connection state changes and traffic anomalies.
-9. Create a locals block to manage CIDR calculations and tag mappings.
-10. Output the peering connection ID, DNS resolution status, and configured route counts.
+## What we're building
 
-Expected output: A complete Terraform configuration with modules for VPC peering, security, monitoring, and IAM that establishes secure cross-region connectivity while maintaining strict access controls and comprehensive logging.
+Basically, we need to create a production-ready infrastructure in AWS that can handle migrating their payment processing app with zero downtime. The whole thing needs to be defined in Terraform.
 
-## Environment Setup
-Multi-account AWS deployment spanning us-east-1 and us-east-2 regions. Production VPC (10.0.0.0/16) in us-east-1 needs to peer with partner VPC (172.16.0.0/16) in us-east-2. Both VPCs have existing 3-tier architecture with public, private, and database subnets across 3 availability zones. Requires Terraform 1.5+ with AWS provider 5.x. Each VPC has NAT gateways, Internet gateways, and existing EC2 instances running application services. S3 VPC endpoints already configured.
+Here's what needs to be in place:
 
-## Constraints and Requirements
-- VPC peering connection must use DNS resolution for cross-account resource discovery
-- Route tables must only allow traffic to specific CIDR blocks, not entire VPCs
-- Security groups must restrict traffic to ports 443 and 8443 only
-- All resources must be tagged with Environment, Project, and CostCenter tags
-- Use data sources to reference the accepter VPC instead of hardcoding values
-- Implement CloudWatch VPC Flow Logs for both VPCs with 1-minute capture intervals
-- Create separate route tables for public and private subnets with appropriate peering routes
-- Use locals blocks for repeated values and complex expressions
-- All IAM roles must follow principle of least privilege with explicit deny statements
-- Configure VPC peering options to prevent overlapping CIDR blocks from being accepted
+**Networking**
+We'll need a VPC with 2 public subnets and 4 private subnets spread across 2 availability zones. NAT Gateways for outbound internet from the private subnets, and an Internet Gateway for the public ones. Make sure the route tables and subnet associations are set up correctly.
 
----
+**Database**
+They're using PostgreSQL, so we'll set up an RDS PostgreSQL instance - db.r6g.large with Multi-AZ. We need automated backups with 7 days of retention, and everything encrypted at rest using KMS. Since they're migrating from on-prem, we'll need AWS DMS set up with a replication instance and both source and target endpoints configured for PostgreSQL.
 
-## Implementation Guidelines
+**Compute**
+Auto Scaling Group with a launch template using Amazon Linux 2023 AMI. EC2 instances go in the private subnets. We need blue-green deployment tags on the ASG so they can shift traffic when ready. Don't forget the IAM instance profile with the right permissions.
 
-### Platform Requirements
-- Use Terraform as the IaC framework
-- All code must be written in HCL
-- Follow Terraform best practices for resource organization
-- Ensure all resources use the `environment_suffix` variable for naming
+**Load Balancing**
+Application Load Balancer in the public subnets, target group with health checks, and listener rules to route traffic to the app.
 
-### Security and Compliance
-- Implement encryption at rest for all data stores using AWS KMS
-- Enable encryption in transit using TLS/SSL
-- Follow the principle of least privilege for IAM roles and policies
-- Enable logging and monitoring using CloudWatch
-- Tag all resources appropriately
+**Security**
+WAF rules attached to the ALB with rate limiting - 2000 requests per 5 minutes per IP. We need separate security groups for the web tier, app tier, and database tier. Everything needs to be encrypted in transit and at rest.
 
-### Testing
-- Write unit tests with good coverage
-- Integration tests must validate end-to-end workflows using deployed resources
-- Load test outputs from `cfn-outputs/flat-outputs.json`
+**Secrets and Config**
+Use Secrets Manager for database credentials with automatic rotation every 30 days. Systems Manager Parameter Store for app config values. Make sure the IAM permissions are set up so the applications can actually retrieve the secrets.
 
-### Resource Management
-- Infrastructure should be fully destroyable for CI/CD workflows
-- **Important**: Secrets should be fetched from existing Secrets Manager entries, not created
-- Avoid DeletionPolicy: Retain unless required
+**Monitoring**
+CloudWatch Log Groups for app logs with 30-day retention. Set up CloudWatch alarms for the important metrics. We need to make sure logs from the EC2 instances are getting aggregated properly.
 
-## Target Region
-Deploy all resources to: **us-east-1**
+## Technical stuff
 
-## Success Criteria
-- Infrastructure deploys successfully
-- All security and compliance constraints are met
-- Tests pass successfully
-- Resources are properly tagged and named with environment_suffix
-- Infrastructure can be cleanly destroyed
+- Everything in Terraform HCL
+- VPC for network isolation and multi-tier setup
+- RDS PostgreSQL Multi-AZ for the database
+- AWS DMS for the migration
+- Auto Scaling Groups with blue-green capability
+- Application Load Balancer for traffic distribution
+- AWS WAF for protection
+- Secrets Manager for credentials
+- Systems Manager for config
+- CloudWatch for logging and monitoring
+- All resource names need to include environment_suffix for uniqueness
+- Naming convention: payment-{resource-type}-${var.environment_suffix}
+- Deploy to ap-southeast-1
+
+## Constraints and requirements
+
+We have to maintain PCI DSS compliance through the whole migration. All database connections need encryption in transit. No hardcoded credentials or plain text storage - everything goes through Secrets Manager. Use separate security groups with least privilege. All resources should be destroyable (no Retain policies) since we'll be testing this. Blue-green deployment is a must for zero-downtime cutover. Automated backups need to be on for DR. Multi-AZ deployment for HA. Make sure there's proper error handling and logging throughout.
+
+## Success criteria
+
+The infrastructure needs to be fully functional and able to host the payment processing application. DMS should be configured and ready to replicate from on-prem. We need high availability with Multi-AZ across 2 availability zones. Security-wise, everything encrypted, secrets managed properly, WAF rules active. The architecture needs to support PCI DSS requirements. Blue-green deployment tags should allow traffic shifting without downtime. All resources need the environment_suffix variable. CloudWatch logs and alarms should be set up for observability. The code should be clean, well-organized, and documented.
+
+## Deliverables
+
+- Complete Terraform HCL implementation with proper file structure
+- VPC with public and private subnets, NAT Gateways, routing
+- RDS PostgreSQL Multi-AZ instance with encryption
+- AWS DMS replication instance and endpoints
+- Auto Scaling Group with launch template
+- Application Load Balancer with target groups
+- AWS WAF with rate limiting rules
+- Secrets Manager with rotation configured
+- Systems Manager Parameter Store resources
+- CloudWatch Log Groups with retention policies
+- Security groups for each tier (web, app, database)
+- IAM roles and policies with least privilege
+- Unit tests for infrastructure validation
+- Documentation and deployment instructions
