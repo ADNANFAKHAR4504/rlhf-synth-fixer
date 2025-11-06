@@ -233,7 +233,7 @@ class TapStack(cdk.Stack):
             deletion_protection=False,
             backup_retention=Duration.days(7),
             preferred_backup_window="03:00-05:00",  # 3-5 AM EST
-            preferred_maintenance_window="sun:03:00-sun:05:00",  # Sunday 3-5 AM EST
+            preferred_maintenance_window="sun:06:00-sun:08:00",  # Sunday 6-8 AM EST (non-overlapping with backup window)
             auto_minor_version_upgrade=True,
             parameter_group=parameter_group,
             subnet_group=subnet_group,
