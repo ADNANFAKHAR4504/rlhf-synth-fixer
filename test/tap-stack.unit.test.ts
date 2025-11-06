@@ -92,7 +92,7 @@ describe('Multi-Region DR Architecture', () => {
 
       template.resourceCountIs('AWS::SNS::Topic', 1);
       template.hasResourceProperties('AWS::SNS::Topic', {
-        TopicName: 'dr-alerts-us-east-1-dev',
+        TopicName: `dr-alerts-us-east-1-${environmentSuffix}`,
         DisplayName: 'DR Alerts - us-east-1',
       });
     });
