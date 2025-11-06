@@ -6,7 +6,10 @@
   "team": "synth",
   "startedAt": "2025-11-06T11:29:31+05:30",
   "subtask": "Application Deployment",
-  "subject_labels": [],
+  "subject_labels": [
+    "Web Application Deployment", 
+    "Serverless Infrastructure (Functions as Code)"
+  ],
   "po_id": "vs00a",
   "aws_services": [
     "ALB",
