@@ -1,7 +1,7 @@
 import {
   CloudTrailClient,
-  GetTrailStatusCommand,
   DescribeTrailsCommand,
+  GetTrailStatusCommand,
 } from '@aws-sdk/client-cloudtrail';
 import {
   CloudWatchLogsClient,
@@ -9,55 +9,48 @@ import {
 } from '@aws-sdk/client-cloudwatch-logs';
 import {
   ConfigServiceClient,
-  DescribeConfigurationRecordersCommand,
   DescribeConfigRulesCommand,
+  DescribeConfigurationRecordersCommand,
   DescribeDeliveryChannelsCommand,
 } from '@aws-sdk/client-config-service';
 import {
-  EC2Client,
-  DescribeVpcsCommand,
   DescribeSubnetsCommand,
   DescribeVpcEndpointsCommand,
-  DescribeSecurityGroupsCommand,
+  DescribeVpcsCommand,
+  EC2Client
 } from '@aws-sdk/client-ec2';
 import {
-  IAMClient,
-  GetRoleCommand,
-  GetPolicyCommand,
-  ListAttachedRolePoliciesCommand,
+  IAMClient
 } from '@aws-sdk/client-iam';
 import {
-  KMSClient,
   DescribeKeyCommand,
   GetKeyRotationStatusCommand,
+  KMSClient,
   ListAliasesCommand,
 } from '@aws-sdk/client-kms';
 import {
-  LambdaClient,
   GetFunctionCommand,
   GetFunctionConfigurationCommand,
+  LambdaClient,
 } from '@aws-sdk/client-lambda';
 import {
-  S3Client,
-  HeadBucketCommand,
-  GetBucketVersioningCommand,
   GetBucketEncryptionCommand,
   GetBucketPolicyCommand,
+  GetBucketVersioningCommand,
   GetPublicAccessBlockCommand,
+  HeadBucketCommand,
+  S3Client,
 } from '@aws-sdk/client-s3';
 import {
-  SecretsManagerClient,
   DescribeSecretCommand,
+  SecretsManagerClient,
 } from '@aws-sdk/client-secrets-manager';
 import {
-  SNSClient,
-  GetTopicAttributesCommand,
-  ListSubscriptionsByTopicCommand,
+  SNSClient
 } from '@aws-sdk/client-sns';
-import * as pulumi from '@pulumi/pulumi';
 
 describe('TapStack Security Infrastructure - Integration Tests', () => {
-  const region = process.env.AWS_REGION || 'us-east-1';
+  const region = process.env.AWS_REGION || 'us-west-2';
   const stackName = process.env.PULUMI_STACK || 'dev';
   const serviceName =
     process.env.SERVICE_NAME || 'financial-security';
@@ -89,10 +82,10 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
     // In real integration tests, these would be fetched from pulumi stack outputs
     // For now, we'll construct expected names
     const accountId = process.env.AWS_ACCOUNT_ID || '123456789012';
-    
+
     financialBucketName = `${serviceName}-financial-${accountId}-${region}-${environmentSuffix}`;
     piiBucketName = `${serviceName}-pii-${accountId}-${region}-${environmentSuffix}`;
-    
+
     // Note: In actual integration tests, you would run:
     // const outputs = await runCommand('pulumi stack output --json');
     // Then parse the outputs to get actual ARNs
@@ -105,16 +98,16 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
           const aliases = await kmsClient.send(
             new ListAliasesCommand({ Limit: 100 })
           );
-          
+
           const piiAlias = aliases.Aliases?.find(a =>
             a.AliasName?.includes(`${serviceName}-pii`)
           );
-          
+
           if (piiAlias && piiAlias.TargetKeyId) {
             const rotationStatus = await kmsClient.send(
               new GetKeyRotationStatusCommand({ KeyId: piiAlias.TargetKeyId })
             );
-            
+
             expect(rotationStatus.KeyRotationEnabled).toBe(true);
           }
         } catch (error) {
@@ -128,16 +121,16 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
           const aliases = await kmsClient.send(
             new ListAliasesCommand({ Limit: 100 })
           );
-          
+
           const piiAlias = aliases.Aliases?.find(a =>
             a.AliasName?.includes(`${serviceName}-pii`)
           );
-          
+
           if (piiAlias && piiAlias.TargetKeyId) {
             const keyDetails = await kmsClient.send(
               new DescribeKeyCommand({ KeyId: piiAlias.TargetKeyId })
             );
-            
+
             expect(keyDetails.KeyMetadata?.Description).toContain('PII');
           }
         } catch (error) {
@@ -152,18 +145,18 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
           const aliases = await kmsClient.send(
             new ListAliasesCommand({ Limit: 100 })
           );
-          
+
           const financialAlias = aliases.Aliases?.find(a =>
             a.AliasName?.includes(`${serviceName}-financial`)
           );
-          
+
           if (financialAlias && financialAlias.TargetKeyId) {
             const rotationStatus = await kmsClient.send(
               new GetKeyRotationStatusCommand({
                 KeyId: financialAlias.TargetKeyId,
               })
             );
-            
+
             expect(rotationStatus.KeyRotationEnabled).toBe(true);
           }
         } catch (error) {
@@ -178,18 +171,18 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
           const aliases = await kmsClient.send(
             new ListAliasesCommand({ Limit: 100 })
           );
-          
+
           const generalAlias = aliases.Aliases?.find(a =>
             a.AliasName?.includes(`${serviceName}-general`)
           );
-          
+
           if (generalAlias && generalAlias.TargetKeyId) {
             const rotationStatus = await kmsClient.send(
               new GetKeyRotationStatusCommand({
                 KeyId: generalAlias.TargetKeyId,
               })
             );
-            
+
             expect(rotationStatus.KeyRotationEnabled).toBe(true);
           }
         } catch (error) {
@@ -202,16 +195,16 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
           const aliases = await kmsClient.send(
             new ListAliasesCommand({ Limit: 100 })
           );
-          
+
           const generalAlias = aliases.Aliases?.find(a =>
             a.AliasName?.includes(`${serviceName}-general`)
           );
-          
+
           if (generalAlias && generalAlias.TargetKeyId) {
             const keyDetails = await kmsClient.send(
               new DescribeKeyCommand({ KeyId: generalAlias.TargetKeyId })
             );
-            
+
             expect(keyDetails.KeyMetadata?.KeyState).toBe('Enabled');
           }
         } catch (error) {
@@ -221,20 +214,6 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
     });
   });
 
-  describe('2. IAM Permission Boundaries - Integration', () => {
-    it('should have permission boundary policy created', async () => {
-      try {
-        const policies = await iamClient.send(
-          new IAMClient({}).config.listPoliciesCommand?.() as any
-        );
-        // Permission boundary policy should exist
-        expect(true).toBe(true); // Placeholder
-      } catch (error) {
-        console.log('Skipping - resources not deployed');
-      }
-    }, 30000);
-  });
-
   describe('3. Secrets Manager - Integration', () => {
     it('should have database secret with rotation configured', async () => {
       try {
@@ -242,7 +221,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
         const secret = await secretsClient.send(
           new DescribeSecretCommand({ SecretId: secretName })
         );
-        
+
         expect(secret.RotationEnabled).toBe(true);
         expect(secret.RotationRules?.AutomaticallyAfterDays).toBe(30);
       } catch (error) {
@@ -256,7 +235,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
         const secret = await secretsClient.send(
           new DescribeSecretCommand({ SecretId: secretName })
         );
-        
+
         expect(secret.RotationEnabled).toBe(true);
         expect(secret.RotationRules?.AutomaticallyAfterDays).toBe(30);
       } catch (error) {
@@ -283,7 +262,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
           const versioning = await s3Client.send(
             new GetBucketVersioningCommand({ Bucket: financialBucketName })
           );
-          
+
           expect(versioning.Status).toBe('Enabled');
         } catch (error) {
           console.log('Skipping - bucket not deployed');
@@ -295,7 +274,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
           const encryption = await s3Client.send(
             new GetBucketEncryptionCommand({ Bucket: financialBucketName })
           );
-          
+
           const rule =
             encryption.ServerSideEncryptionConfiguration?.Rules?.[0];
           expect(
@@ -311,7 +290,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
           const publicAccess = await s3Client.send(
             new GetPublicAccessBlockCommand({ Bucket: financialBucketName })
           );
-          
+
           expect(publicAccess.PublicAccessBlockConfiguration).toEqual({
             BlockPublicAcls: true,
             IgnorePublicAcls: true,
@@ -328,12 +307,12 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
           const policy = await s3Client.send(
             new GetBucketPolicyCommand({ Bucket: financialBucketName })
           );
-          
+
           const policyDoc = JSON.parse(policy.Policy || '{}');
           const tlsStatement = policyDoc.Statement?.find(
             (s: any) => s.Condition?.NumericLessThan?.['s3:TlsVersion']
           );
-          
+
           expect(tlsStatement).toBeDefined();
           expect(tlsStatement.Effect).toBe('Deny');
         } catch (error) {
@@ -357,7 +336,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
           const versioning = await s3Client.send(
             new GetBucketVersioningCommand({ Bucket: piiBucketName })
           );
-          
+
           expect(versioning.Status).toBe('Enabled');
         } catch (error) {
           console.log('Skipping - bucket not deployed');
@@ -369,7 +348,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
           const encryption = await s3Client.send(
             new GetBucketEncryptionCommand({ Bucket: piiBucketName })
           );
-          
+
           const rule =
             encryption.ServerSideEncryptionConfiguration?.Rules?.[0];
           expect(
@@ -385,7 +364,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
           const publicAccess = await s3Client.send(
             new GetPublicAccessBlockCommand({ Bucket: piiBucketName })
           );
-          
+
           expect(publicAccess.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(
             true
           );
@@ -420,11 +399,11 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
             logGroupNamePrefix: logGroupName,
           })
         );
-        
+
         const logGroup = response.logGroups?.find(
           lg => lg.logGroupName === logGroupName
         );
-        
+
         expect(logGroup).toBeDefined();
         expect(logGroup?.retentionInDays).toBe(365);
       } catch (error) {
@@ -440,11 +419,11 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
             logGroupNamePrefix: logGroupName,
           })
         );
-        
+
         const logGroup = response.logGroups?.find(
           lg => lg.logGroupName === logGroupName
         );
-        
+
         expect(logGroup).toBeDefined();
         expect(logGroup?.retentionInDays).toBe(365);
       } catch (error) {
@@ -460,7 +439,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
         const status = await cloudtrailClient.send(
           new GetTrailStatusCommand({ Name: trailName })
         );
-        
+
         expect(status.IsLogging).toBe(true);
       } catch (error) {
         console.log('Skipping - CloudTrail not deployed');
@@ -473,7 +452,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
         const trails = await cloudtrailClient.send(
           new DescribeTrailsCommand({ trailNameList: [trailName] })
         );
-        
+
         const trail = trails.trailList?.[0];
         expect(trail?.IsMultiRegionTrail).toBe(true);
         expect(trail?.LogFileValidationEnabled).toBe(true);
@@ -488,7 +467,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
         const trails = await cloudtrailClient.send(
           new DescribeTrailsCommand({ trailNameList: [trailName] })
         );
-        
+
         const trail = trails.trailList?.[0];
         expect(trail?.S3BucketName).toBeDefined();
         expect(trail?.CloudWatchLogsLogGroupArn).toBeDefined();
@@ -507,7 +486,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
             ConfigurationRecorderNames: [recorderName],
           })
         );
-        
+
         expect(recorders.ConfigurationRecorders).toBeDefined();
         expect(recorders.ConfigurationRecorders?.[0]?.recordingGroup?.allSupported).toBe(
           true
@@ -525,7 +504,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
             DeliveryChannelNames: [deliveryChannelName],
           })
         );
-        
+
         expect(channels.DeliveryChannels).toBeDefined();
         expect(channels.DeliveryChannels?.[0]?.s3BucketName).toBeDefined();
       } catch (error) {
@@ -541,7 +520,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
             ConfigRuleNames: [ruleName],
           })
         );
-        
+
         expect(rules.ConfigRules).toBeDefined();
         expect(rules.ConfigRules?.[0]?.Source?.SourceIdentifier).toBe(
           'S3_BUCKET_PUBLIC_READ_PROHIBITED'
@@ -559,7 +538,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
             ConfigRuleNames: [ruleName],
           })
         );
-        
+
         expect(rules.ConfigRules).toBeDefined();
         expect(rules.ConfigRules?.[0]?.Source?.SourceIdentifier).toBe(
           'S3_BUCKET_SSL_REQUESTS_ONLY'
@@ -577,7 +556,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
             ConfigRuleNames: [ruleName],
           })
         );
-        
+
         expect(rules.ConfigRules).toBeDefined();
         const inputParams = JSON.parse(rules.ConfigRules?.[0]?.InputParameters || '{}');
         expect(inputParams.RequireUppercaseCharacters).toBe('true');
@@ -595,7 +574,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
             ConfigRuleNames: [ruleName],
           })
         );
-        
+
         expect(rules.ConfigRules).toBeDefined();
         expect(rules.ConfigRules?.[0]?.Source?.SourceIdentifier).toBe(
           'CLOUD_TRAIL_ENABLED'
@@ -613,7 +592,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
             ConfigRuleNames: [ruleName],
           })
         );
-        
+
         expect(rules.ConfigRules).toBeDefined();
         expect(rules.ConfigRules?.[0]?.Source?.SourceIdentifier).toBe(
           'CMK_BACKING_KEY_ROTATION_ENABLED'
@@ -638,7 +617,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
               ],
             })
           );
-          
+
           expect(vpcs.Vpcs).toBeDefined();
           expect(vpcs.Vpcs?.length).toBeGreaterThan(0);
         } catch (error) {
@@ -658,7 +637,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
               ],
             })
           );
-          
+
           if (vpcs.Vpcs && vpcs.Vpcs[0]) {
             const subnets = await ec2Client.send(
               new DescribeSubnetsCommand({
@@ -667,7 +646,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
                 ],
               })
             );
-            
+
             expect(subnets.Subnets?.length).toBeGreaterThanOrEqual(2);
           }
         } catch (error) {
@@ -687,7 +666,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
               ],
             })
           );
-          
+
           if (vpcs.Vpcs && vpcs.Vpcs[0]) {
             const endpoints = await ec2Client.send(
               new DescribeVpcEndpointsCommand({
@@ -696,9 +675,9 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
                 ],
               })
             );
-            
+
             expect(endpoints.VpcEndpoints?.length).toBeGreaterThan(0);
-            
+
             // Should have endpoints for S3, KMS, Secrets Manager, CloudWatch Logs
             const serviceNames = endpoints.VpcEndpoints?.map(
               e => e.ServiceName
@@ -720,7 +699,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
           const func = await lambdaClient.send(
             new GetFunctionCommand({ FunctionName: functionName })
           );
-          
+
           expect(func.Configuration).toBeDefined();
           expect(func.Configuration?.Runtime).toContain('python');
         } catch (error) {
@@ -734,7 +713,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
           const config = await lambdaClient.send(
             new GetFunctionConfigurationCommand({ FunctionName: functionName })
           );
-          
+
           expect(config.VpcConfig).toBeDefined();
           expect(config.VpcConfig?.SubnetIds?.length).toBeGreaterThan(0);
           expect(config.VpcConfig?.SecurityGroupIds?.length).toBeGreaterThan(0);
@@ -749,7 +728,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
           const config = await lambdaClient.send(
             new GetFunctionConfigurationCommand({ FunctionName: functionName })
           );
-          
+
           expect(config.Timeout).toBe(300);
           expect(config.MemorySize).toBe(512);
         } catch (error) {
@@ -763,7 +742,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
           const config = await lambdaClient.send(
             new GetFunctionConfigurationCommand({ FunctionName: functionName })
           );
-          
+
           expect(config.Environment?.Variables).toBeDefined();
           expect(config.Environment?.Variables?.ENVIRONMENT).toBe(
             environmentSuffix
@@ -804,7 +783,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
         const aliases = await kmsClient.send(
           new ListAliasesCommand({ Limit: 100 })
         );
-        
+
         const piiKey = aliases.Aliases?.find(a =>
           a.AliasName?.includes(`${serviceName}-pii`)
         );
@@ -814,7 +793,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
         const generalKey = aliases.Aliases?.find(a =>
           a.AliasName?.includes(`${serviceName}-general`)
         );
-        
+
         // At least one key should exist if stack is deployed
         const hasKeys = piiKey || financialKey || generalKey;
         if (hasKeys) {
@@ -831,17 +810,17 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
         const financialEncryption = await s3Client.send(
           new GetBucketEncryptionCommand({ Bucket: financialBucketName })
         );
-        
+
         expect(
           financialEncryption.ServerSideEncryptionConfiguration?.Rules?.[0]
             ?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm
         ).toBe('aws:kms');
-        
+
         // Verify PII bucket uses PII key
         const piiEncryption = await s3Client.send(
           new GetBucketEncryptionCommand({ Bucket: piiBucketName })
         );
-        
+
         expect(
           piiEncryption.ServerSideEncryptionConfiguration?.Rules?.[0]
             ?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm
@@ -856,11 +835,11 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
         const rules = await configClient.send(
           new DescribeConfigRulesCommand({})
         );
-        
+
         const ourRules = rules.ConfigRules?.filter(r =>
           r.ConfigRuleName?.includes(serviceName)
         );
-        
+
         // Should have at least 6 CIS benchmark rules
         expect(ourRules?.length).toBeGreaterThanOrEqual(6);
       } catch (error) {
@@ -874,7 +853,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
         const func = await lambdaClient.send(
           new GetFunctionCommand({ FunctionName: functionName })
         );
-        
+
         // Lambda should be ready to invoke
         expect(func.Configuration?.State).toBe('Active');
         expect(func.Configuration?.LastUpdateStatus).toBe('Successful');
@@ -889,7 +868,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
         const trails = await cloudtrailClient.send(
           new DescribeTrailsCommand({ trailNameList: [trailName] })
         );
-        
+
         const trail = trails.trailList?.[0];
         if (trail?.CloudWatchLogsLogGroupArn) {
           const logGroupName = trail.CloudWatchLogsLogGroupArn.split(':')[6];
@@ -898,7 +877,7 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
               logGroupNamePrefix: logGroupName,
             })
           );
-          
+
           expect(logs.logGroups?.[0]).toBeDefined();
         }
       } catch (error) {
@@ -911,13 +890,13 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
     it('should have all S3 buckets blocking public access', async () => {
       try {
         const bucketsToTest = [financialBucketName, piiBucketName];
-        
+
         for (const bucket of bucketsToTest) {
           try {
             const publicAccess = await s3Client.send(
               new GetPublicAccessBlockCommand({ Bucket: bucket })
             );
-            
+
             expect(publicAccess.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(
               true
             );
@@ -942,20 +921,20 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
     it('should enforce TLS 1.2+ on all S3 buckets', async () => {
       try {
         const bucketsToTest = [financialBucketName, piiBucketName];
-        
+
         for (const bucket of bucketsToTest) {
           try {
             const policy = await s3Client.send(
               new GetBucketPolicyCommand({ Bucket: bucket })
             );
-            
+
             const policyDoc = JSON.parse(policy.Policy || '{}');
             const hasTlsEnforcement = policyDoc.Statement?.some(
               (s: any) =>
                 s.Effect === 'Deny' &&
                 s.Condition?.NumericLessThan?.['s3:TlsVersion'] === '1.2'
             );
-            
+
             expect(hasTlsEnforcement).toBe(true);
           } catch (err) {
             console.log(`Skipping bucket ${bucket} - not deployed`);
@@ -971,17 +950,17 @@ describe('TapStack Security Infrastructure - Integration Tests', () => {
         const aliases = await kmsClient.send(
           new ListAliasesCommand({ Limit: 100 })
         );
-        
+
         const ourAliases = aliases.Aliases?.filter(a =>
           a.AliasName?.includes(serviceName)
         );
-        
+
         for (const alias of ourAliases || []) {
           if (alias.TargetKeyId) {
             const rotation = await kmsClient.send(
               new GetKeyRotationStatusCommand({ KeyId: alias.TargetKeyId })
             );
-            
+
             expect(rotation.KeyRotationEnabled).toBe(true);
           }
         }
