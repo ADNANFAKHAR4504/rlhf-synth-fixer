@@ -55,7 +55,7 @@ output "vpc_id" {
 
 output "private_subnet_ids" {
   description = "IDs of the private subnets"
-  value       = aws_subnet.private[*].id
+  value       = jsonencode(aws_subnet.private[*].id)
 }
 
 output "ecs_security_group_id" {
@@ -65,9 +65,9 @@ output "ecs_security_group_id" {
 
 output "cloudwatch_log_groups" {
   description = "CloudWatch log group names for each service"
-  value = {
+  value = jsonencode({
     payment_service   = aws_cloudwatch_log_group.payment_service.name
     auth_service      = aws_cloudwatch_log_group.auth_service.name
     analytics_service = aws_cloudwatch_log_group.analytics_service.name
-  }
+  })
 }
