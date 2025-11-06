@@ -21,6 +21,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/rds"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	sqstypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -163,7 +164,7 @@ func TestSQSQueuesExist(t *testing.T) {
 	// Test main queue
 	queueAttrs, err := sqsClient.GetQueueAttributes(context.TODO(), &sqs.GetQueueAttributesInput{
 		QueueUrl:       aws.String(outputs.SqsQueueUrl),
-		AttributeNames: []string{"All"},
+		AttributeNames: []sqstypes.QueueAttributeName{sqstypes.QueueAttributeNameAll},
 	})
 	require.NoError(t, err, "Failed to get main queue attributes")
 	assert.NotEmpty(t, queueAttrs.Attributes, "Main queue attributes should not be empty")
@@ -175,7 +176,7 @@ func TestSQSQueuesExist(t *testing.T) {
 	// Test DLQ
 	dlqAttrs, err := sqsClient.GetQueueAttributes(context.TODO(), &sqs.GetQueueAttributesInput{
 		QueueUrl:       aws.String(outputs.DlqUrl),
-		AttributeNames: []string{"All"},
+		AttributeNames: []sqstypes.QueueAttributeName{sqstypes.QueueAttributeNameAll},
 	})
 	require.NoError(t, err, "Failed to get DLQ attributes")
 	assert.NotEmpty(t, dlqAttrs.Attributes, "DLQ attributes should not be empty")
