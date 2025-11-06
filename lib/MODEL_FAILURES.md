@@ -112,3 +112,96 @@ vpc_config {
 - **Deployment impact**: The K8s version issue blocked deployment entirely (critical). The endpoint configuration would create operational difficulties requiring infrastructure changes.
 
 - **Code quality overall**: The MODEL_RESPONSE was comprehensive and well-structured. The failures were specific configuration values rather than architectural or code quality issues. With just 2 fixes (version number and boolean flag), the entire infrastructure deployed successfully.
+
+---
+
+## Additional Failures to Improve Training Quality
+
+### 3. Missing Provider Default Tags
+
+**Impact Level**: Medium
+
+**MODEL_RESPONSE Issue**:
+```hcl
+provider "aws" {
+  region = var.aws_region
+}
+```
+
+**IDEAL_RESPONSE Fix**:
+```hcl
+provider "aws" {
+  region = var.aws_region
+
+  default_tags {
+    tags = var.common_tags
+  }
+}
+```
+
+**Root Cause**: The model omitted the `default_tags` block in the primary AWS provider configuration. Without it, shared metadata such as `Environment`, `Project`, and `ManagedBy` had to be re-declared on every resource, and any omission would lead to untagged infrastructure.
+
+**Impact**: Tagging drift across resources, inconsistent cost allocation, and weaker governance controls (many security/cost policies depend on mandatory tags).
+
+**Training Value**: Reinforces the pattern that whenever `common_tags` (or similar maps) are defined, the provider-level `default_tags` block should be configured to ensure uniform tagging with minimal duplication.
+
+---
+
+### 4. Hard-Coded AWS Commercial Partition in IAM Policies
+
+**Impact Level**: Medium
+
+**MODEL_RESPONSE Issue**:
+```hcl
+resource "aws_iam_role_policy_attachment" "cluster_AmazonEKSClusterPolicy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+  role       = aws_iam_role.cluster.name
+}
+```
+
+**IDEAL_RESPONSE Fix**:
+```hcl
+data "aws_partition" "current" {}
+
+resource "aws_iam_role_policy_attachment" "cluster_AmazonEKSClusterPolicy" {
+  policy_arn = format("arn:%s:iam::aws:policy/AmazonEKSClusterPolicy", data.aws_partition.current.partition)
+  role       = aws_iam_role.cluster.name
+}
+```
+
+**Root Cause**: The model assumed the commercial partition (`arn:aws`) instead of deriving it dynamically. This breaks deployments targeting GovCloud or other AWS partitions supported in the templates directory.
+
+**Impact**: Deployment would fail or attach the wrong policy ARN whenever the stack is synthesized for a non-commercial region.
+
+**Training Value**: Highlights the importance of using `data "aws_partition"` (or `data "aws_region"`) to construct ARNs dynamically so that Terraform templates remain portable across partitions and regions.
+
+---
+
+### 5. CloudWatch Log Group Without Retention Guardrail
+
+**Impact Level**: Low
+
+**MODEL_RESPONSE Issue**:
+```hcl
+resource "aws_cloudwatch_log_group" "eks" {
+  name = "/aws/eks/${var.cluster_name}-${var.environment_suffix}/cluster"
+}
+```
+
+**IDEAL_RESPONSE Fix**:
+```hcl
+resource "aws_cloudwatch_log_group" "eks" {
+  name              = "/aws/eks/${var.cluster_name}-${var.environment_suffix}/cluster"
+  retention_in_days = 7
+
+  tags = merge(var.common_tags, {
+    Name = "eks-cluster-logs-${var.environment_suffix}"
+  })
+}
+```
+
+**Root Cause**: The model created a log group without `retention_in_days`, causing logs to be stored indefinitely. FinOps and compliance policies typically require explicit retention to avoid runaway costs and meet data minimization mandates.
+
+**Impact**: Unbounded CloudWatch storage costs and potential compliance violations for data retention limits.
+
+**Training Value**: Encourages the model to always set a retention period (based on PROMPT or defaults) when provisioning CloudWatch log groups, especially for high-volume services like EKS control plane logs.
