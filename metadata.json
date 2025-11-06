@@ -25,7 +25,7 @@
     "lines": 100,
     "branches": 100
   },
-  "training_quality": 10,
+  "training_quality": 8,
   "author": "kanishkah-turing",
   "dockerS3Location": ""
 }
