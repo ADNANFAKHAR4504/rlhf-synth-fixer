@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
-
 // Mock Pulumi runtime
 pulumi.runtime.setMocks({
   newResource: (
@@ -9,10 +8,10 @@ pulumi.runtime.setMocks({
   ): { id: string; state: any } => {
     const resourceType = args.type.split(':')[1]?.split('/')[0] || 'resource';
     const resourceSubType = args.type.split(':')[1]?.split('/')[1] || 'item';
-    
+
     // Generate proper ARN format based on resource type
     let arn = `arn:aws:${resourceType}:us-east-1:123456789012:${resourceSubType}/${args.name}`;
-    
+
     // Fix ARN format for specific services
     if (resourceType === 'kms') {
       arn = `arn:aws:kms:us-east-1:123456789012:key/${args.name}`;
@@ -23,10 +22,10 @@ pulumi.runtime.setMocks({
     } else if (resourceType === 'lambda') {
       arn = `arn:aws:lambda:us-east-1:123456789012:function:${args.name}`;
     }
-    
+
     // Handle bucket names with interpolated values
     let bucketName = args.inputs.bucket || args.inputs.name || `${args.name}-id`;
-    
+
     // For S3 buckets, include account ID and region if it's a bucket input
     if (args.type.includes('s3/bucket') && args.inputs.bucket) {
       // Extract service name from the bucket pattern
@@ -37,7 +36,7 @@ pulumi.runtime.setMocks({
         bucketName = `${serviceName}-${bucketType}-123456789012-us-east-1-test`;
       }
     }
-    
+
     return {
       id: bucketName,
       state: {
