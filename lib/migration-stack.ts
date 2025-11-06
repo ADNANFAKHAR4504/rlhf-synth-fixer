@@ -438,7 +438,7 @@ export class MigrationStack extends cdk.Stack {
         protocol: elbv2.ApplicationProtocol.HTTP,
         targetType: elbv2.TargetType.IP,
         healthCheck: {
-          path: '/health',
+          path: '/',
           interval: cdk.Duration.seconds(30),
           timeout: cdk.Duration.seconds(5),
           healthyThresholdCount: 2,

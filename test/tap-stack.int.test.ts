@@ -1,57 +1,57 @@
 import {
+  BackupClient,
+  ListBackupVaultsCommand
+} from '@aws-sdk/client-backup';
+import {
   CloudFormationClient,
   DescribeStacksCommand,
   ListStackResourcesCommand
 } from '@aws-sdk/client-cloudformation';
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeNatGatewaysCommand,
-  DescribeSecurityGroupsCommand
-} from '@aws-sdk/client-ec2';
-import {
-  RDSClient,
-  DescribeDBInstancesCommand
-} from '@aws-sdk/client-rds';
-import {
-  ECSClient,
-  DescribeServicesCommand,
-  DescribeClustersCommand,
-  DescribeTaskDefinitionCommand
-} from '@aws-sdk/client-ecs';
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-  DescribeTargetHealthCommand
-} from '@aws-sdk/client-elastic-load-balancing-v2';
-import {
-  ElastiCacheClient,
-  DescribeReplicationGroupsCommand
-} from '@aws-sdk/client-elasticache';
-import {
   CloudWatchClient,
   DescribeAlarmsCommand
 } from '@aws-sdk/client-cloudwatch';
 import {
-  S3Client,
-  GetBucketEncryptionCommand,
-  GetBucketVersioningCommand,
-  GetBucketLifecycleConfigurationCommand
-} from '@aws-sdk/client-s3';
-import {
-  LambdaClient,
-  GetFunctionCommand
-} from '@aws-sdk/client-lambda';
-import {
-  BackupClient,
-  ListBackupVaultsCommand
-} from '@aws-sdk/client-backup';
-import {
   DatabaseMigrationServiceClient,
   DescribeReplicationInstancesCommand
 } from '@aws-sdk/client-database-migration-service';
+import {
+  DescribeNatGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeClustersCommand,
+  DescribeServicesCommand,
+  DescribeTaskDefinitionCommand,
+  ECSClient
+} from '@aws-sdk/client-ecs';
+import {
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  DescribeTargetHealthCommand,
+  ElasticLoadBalancingV2Client
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  DescribeReplicationGroupsCommand,
+  ElastiCacheClient
+} from '@aws-sdk/client-elasticache';
+import {
+  GetFunctionCommand,
+  LambdaClient
+} from '@aws-sdk/client-lambda';
+import {
+  DescribeDBInstancesCommand,
+  RDSClient
+} from '@aws-sdk/client-rds';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketLifecycleConfigurationCommand,
+  GetBucketVersioningCommand,
+  S3Client
+} from '@aws-sdk/client-s3';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -461,7 +461,7 @@ describe('Migration Infrastructure Integration Tests', () => {
       const tg = response.TargetGroups![0];
       expect(tg.Port).toBe(80);
       expect(tg.Protocol).toBe('HTTP');
-      expect(tg.HealthCheckPath).toBe('/health');
+      expect(tg.HealthCheckPath).toBe('/');
       expect(tg.HealthCheckIntervalSeconds).toBe(30);
     });
 
@@ -485,8 +485,8 @@ describe('Migration Infrastructure Integration Tests', () => {
       // At least some targets should be healthy or initializing
       const healthyOrInitializing = healthResponse.TargetHealthDescriptions!.filter(
         t => t.TargetHealth?.State === 'healthy' ||
-             t.TargetHealth?.State === 'initial' ||
-             t.TargetHealth?.State === 'unhealthy'
+          t.TargetHealth?.State === 'initial' ||
+          t.TargetHealth?.State === 'unhealthy'
       );
       expect(healthyOrInitializing.length).toBeGreaterThan(0);
     });

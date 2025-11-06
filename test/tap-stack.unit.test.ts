@@ -79,7 +79,7 @@ describe('MigrationStack Unit Tests', () => {
       template.resourceCountIs('AWS::RDS::DBInstance', 2); // Primary + Read Replica
       template.hasResourceProperties('AWS::RDS::DBInstance', {
         Engine: 'postgres',
-        EngineVersion: '15.3',
+        EngineVersion: '15.7',
         MultiAZ: true,
         StorageEncrypted: true,
       });
