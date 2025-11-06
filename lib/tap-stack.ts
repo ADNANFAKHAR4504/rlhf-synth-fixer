@@ -291,8 +291,7 @@ exports.handler = async (event) => {
       );
 
       const tableName = transactionsTable.tableName;
-      const tableArn = transactionsTable.tableArn;
-      
+
       cdk.Aspects.of(this).add(
         new (class implements cdk.IAspect {
           visit(node: Construct): void {
