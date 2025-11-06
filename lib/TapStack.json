@@ -340,7 +340,7 @@
             }
         },
         "NATGateway1": {
-            "Type": "AWS::EC2::NATGateway",
+            "Type": "AWS::EC2::NatGateway",
             "Properties": {
                 "AllocationId": {
                     "Fn::GetAtt": [
@@ -368,7 +368,7 @@
             }
         },
         "NATGateway2": {
-            "Type": "AWS::EC2::NATGateway",
+            "Type": "AWS::EC2::NatGateway",
             "Properties": {
                 "AllocationId": {
                     "Fn::GetAtt": [
@@ -396,7 +396,7 @@
             }
         },
         "NATGateway3": {
-            "Type": "AWS::EC2::NATGateway",
+            "Type": "AWS::EC2::NatGateway",
             "Properties": {
                 "AllocationId": {
                     "Fn::GetAtt": [
@@ -1086,11 +1086,9 @@
             "Type": "AWS::EC2::FlowLog",
             "Properties": {
                 "ResourceType": "VPC",
-                "ResourceIds": [
-                    {
-                        "Ref": "VPC"
-                    }
-                ],
+                "ResourceId": {
+                    "Ref": "VPC"
+                },
                 "TrafficType": "ALL",
                 "LogDestinationType": "s3",
                 "LogDestination": {

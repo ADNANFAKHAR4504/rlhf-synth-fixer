@@ -164,7 +164,7 @@ Resources:
 
   # NAT Gateways
   NATGateway1:
-    Type: AWS::EC2::NATGateway
+    Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt NATGatewayEIP1.AllocationId
       SubnetId: !Ref PublicSubnet1
@@ -175,7 +175,7 @@ Resources:
           Value: !Ref EnvironmentSuffix
 
   NATGateway2:
-    Type: AWS::EC2::NATGateway
+    Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt NATGatewayEIP2.AllocationId
       SubnetId: !Ref PublicSubnet2
@@ -186,7 +186,7 @@ Resources:
           Value: !Ref EnvironmentSuffix
 
   NATGateway3:
-    Type: AWS::EC2::NATGateway
+    Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt NATGatewayEIP3.AllocationId
       SubnetId: !Ref PublicSubnet3
@@ -584,8 +584,7 @@ Resources:
     Type: AWS::EC2::FlowLog
     Properties:
       ResourceType: VPC
-      ResourceIds:
-        - !Ref VPC
+      ResourceId: !Ref VPC
       TrafficType: ALL
       LogDestinationType: s3
       LogDestination: !GetAtt FlowLogsBucket.Arn

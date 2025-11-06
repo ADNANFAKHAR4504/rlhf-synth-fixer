@@ -171,7 +171,7 @@ Resources:
 
   # NAT Gateways
   NATGateway1:
-    Type: AWS::EC2::NATGateway
+    Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt NATGatewayEIP1.AllocationId
       SubnetId: !Ref PublicSubnet1
@@ -182,7 +182,7 @@ Resources:
           Value: !Ref EnvironmentSuffix
 
   NATGateway2:
-    Type: AWS::EC2::NATGateway
+    Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt NATGatewayEIP2.AllocationId
       SubnetId: !Ref PublicSubnet2
@@ -193,7 +193,7 @@ Resources:
           Value: !Ref EnvironmentSuffix
 
   NATGateway3:
-    Type: AWS::EC2::NATGateway
+    Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt NATGatewayEIP3.AllocationId
       SubnetId: !Ref PublicSubnet3
@@ -591,8 +591,7 @@ Resources:
     Type: AWS::EC2::FlowLog
     Properties:
       ResourceType: VPC
-      ResourceIds:
-        - !Ref VPC
+      ResourceId: !Ref VPC
       TrafficType: ALL
       LogDestinationType: s3
       LogDestination: !GetAtt FlowLogsBucket.Arn
@@ -730,4 +729,44 @@ Outputs:
       Name: !Sub ${EnvironmentSuffix}-DynamoDBEndpointId
 ```
 
-This production-ready template includes all required resources with proper dependencies, high availability across 3 AZs, comprehensive security configurations, and complete outputs for downstream stack integration.
+## Implementation Details
+
+### Core VPC Infrastructure
+- **VPC**: 10.1.0.0/16 CIDR block with DNS support enabled
+- **Subnets**: 3 public (10.1.1-3.0/24) and 3 private (10.1.11-13.0/24) across 3 AZs
+- **Internet Gateway**: Provides internet access for public subnets
+- **NAT Gateways**: 3 NAT Gateways (one per AZ) for high availability
+
+### Routing Configuration
+- **Public Route Table**: Single table routing all public subnets to Internet Gateway
+- **Private Route Tables**: 3 separate route tables (one per AZ), each routing to its respective NAT Gateway
+- This design ensures high availability and eliminates cross-AZ data transfer charges
+
+### VPC Endpoints
+- **S3 Gateway Endpoint**: Private S3 access without NAT Gateway
+- **DynamoDB Gateway Endpoint**: Private DynamoDB access without NAT Gateway
+- Both endpoints associated with all 3 private route tables
+
+### Security Configuration
+- **Web Security Group**: Allows inbound HTTP (80) and HTTPS (443) from anywhere
+- **Database Security Group**: Allows inbound PostgreSQL (5432) only from Web Security Group
+- **Network ACLs**: Configured with proper rule numbers for HTTP, HTTPS, PostgreSQL, and ephemeral ports
+
+### VPC Flow Logs
+- **S3 Bucket**: Encrypted bucket with 90-day retention policy
+- **Bucket Policy**: Grants AWS Log Delivery service necessary permissions
+- **Flow Log**: Captures ALL traffic (ACCEPT and REJECT) for compliance
+
+### Resource Naming
+- All resources use `!Sub` with `${EnvironmentSuffix}` parameter for environment isolation
+- Naming convention: `{resource-type}-{environment-suffix}`
+- Environment tags applied consistently across all resources
+
+### Key Technical Decisions
+1. **NAT Gateway per AZ**: Ensures high availability and redundancy
+2. **Separate Private Route Tables**: Each AZ routes to its own NAT Gateway
+3. **Gateway Endpoints**: Reduces costs and latency for S3 and DynamoDB access
+4. **Parameter Constraints**: MinLength and MaxLength enforce valid environmentSuffix values
+5. **Proper Dependencies**: DependsOn ensures EIPs created after Internet Gateway attachment
+6. **Correct Resource Type**: `AWS::EC2::NatGateway` (lowercase 'nat') is critical for CloudFormation validation
+7. **VPC Flow Log Property**: Uses `ResourceId` (singular) not `ResourceIds` (array) for single VPC resource
