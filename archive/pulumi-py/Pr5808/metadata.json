@@ -16,8 +16,8 @@
     "VPC",
     "Subnet",
     "InternetGateway",
-    "NATGateway",
-    "EIP",
+    "NatGateway",
+    "Eip",
     "RouteTable",
     "Route",
     "RouteTableAssociation",
@@ -34,5 +34,10 @@
   "region": "eu-west-3",
   "author": "iamarpit-turing",
   "reviewer": "chriscrsov",
-  "training_quality": 10
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
