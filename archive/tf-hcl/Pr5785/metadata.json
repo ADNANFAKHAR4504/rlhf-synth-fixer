@@ -11,13 +11,20 @@
     "Cloud Environment Setup"
   ],
   "aws_services": [
-    "Terraform (S3 backend",
-    "DynamoDB state locking)",
     "VPC",
-    "EC2 Auto Scaling",
-    "RDS PostgreSQL Multi-AZ",
+    "EC2",
+    "RDS",
     "S3",
     "CloudWatch",
-    "IAM"
-  ]
+    "KMS",
+    "IAM",
+    "Auto Scaling"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sivakumar-turing",
+  "dockerS3Location": ""
 }
