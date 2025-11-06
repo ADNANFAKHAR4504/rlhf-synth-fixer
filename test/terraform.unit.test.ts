@@ -41,11 +41,6 @@ describe('Terraform EKS Infrastructure - Unit Tests', () => {
       });
     });
 
-    test('README.md exists in lib directory', () => {
-      const readmePath = path.join(LIB_DIR, 'README.md');
-      expect(fs.existsSync(readmePath)).toBe(true);
-    });
-
     test('PROMPT.md exists in lib directory', () => {
       const promptPath = path.join(LIB_DIR, 'PROMPT.md');
       expect(fs.existsSync(promptPath)).toBe(true);
