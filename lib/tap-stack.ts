@@ -767,7 +767,9 @@ exports.handler = async (event) => {
         }
       );
 
-      const peeringConnectionId = peeringResource.getAttString('VpcPeeringConnectionId');
+      const peeringConnectionId = peeringResource.getAttString(
+        'VpcPeeringConnectionId'
+      );
 
       vpc.privateSubnets.forEach((subnet, index) => {
         const route = new ec2.CfnRoute(
