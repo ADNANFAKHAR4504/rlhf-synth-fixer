@@ -31,12 +31,12 @@ describe("Terraform single-file stack: tap-stack.tf", () => {
     expect(providerContent).toMatch(/alias\s*=\s*"us_east_1"/);
   });
 
-  test("provider.tf declares eu_west_1 provider alias", () => {
-    expect(providerContent).toMatch(/alias\s*=\s*"eu_west_1"/);
+  test("provider.tf declares us_west_2 provider alias", () => {
+    expect(providerContent).toMatch(/alias\s*=\s*"us_west_2"/);
   });
 
-  test("provider.tf declares ap_southeast_1 provider alias", () => {
-    expect(providerContent).toMatch(/alias\s*=\s*"ap_southeast_1"/);
+  test("provider.tf declares sa_east_1 provider alias", () => {
+    expect(providerContent).toMatch(/alias\s*=\s*"sa_east_1"/);
   });
 
   test("provider.tf requires random provider", () => {
@@ -55,12 +55,12 @@ describe("Terraform single-file stack: tap-stack.tf", () => {
     expect(stackContent).toMatch(/resource\s+"aws_vpc"\s+"us_east_1"\s*{/);
   });
 
-  test("declares aws_vpc eu_west_1 resource", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_vpc"\s+"eu_west_1"\s*{/);
+  test("declares aws_vpc us_west_2 resource", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_vpc"\s+"us_west_2"\s*{/);
   });
 
-  test("declares aws_vpc ap_southeast_1 resource", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_vpc"\s+"ap_southeast_1"\s*{/);
+  test("declares aws_vpc sa_east_1 resource", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_vpc"\s+"sa_east_1"\s*{/);
   });
 
   test("VPCs have non-overlapping CIDR blocks", () => {
@@ -79,8 +79,8 @@ describe("Terraform single-file stack: tap-stack.tf", () => {
 
   test("declares data aws_availability_zones for all regions", () => {
     expect(stackContent).toMatch(/data\s+"aws_availability_zones"\s+"us_east_1"\s*{/);
-    expect(stackContent).toMatch(/data\s+"aws_availability_zones"\s+"eu_west_1"\s*{/);
-    expect(stackContent).toMatch(/data\s+"aws_availability_zones"\s+"ap_southeast_1"\s*{/);
+    expect(stackContent).toMatch(/data\s+"aws_availability_zones"\s+"us_west_2"\s*{/);
+    expect(stackContent).toMatch(/data\s+"aws_availability_zones"\s+"sa_east_1"\s*{/);
   });
 
   test("declares dev private subnets for us-east-1", () => {
@@ -108,34 +108,34 @@ describe("Terraform single-file stack: tap-stack.tf", () => {
     expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"us_east_1_tgw_2"\s*{/);
   });
 
-  test("declares dev private subnets for eu-west-1", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"eu_west_1_dev_private_1"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"eu_west_1_dev_private_2"\s*{/);
+  test("declares dev private subnets for us-west-2", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"us_west_2_dev_private_1"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"us_west_2_dev_private_2"\s*{/);
   });
 
-  test("declares prod private subnets for eu-west-1", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"eu_west_1_prod_private_1"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"eu_west_1_prod_private_2"\s*{/);
+  test("declares prod private subnets for us-west-2", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"us_west_2_prod_private_1"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"us_west_2_prod_private_2"\s*{/);
   });
 
-  test("declares TGW subnets for eu-west-1", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"eu_west_1_tgw_1"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"eu_west_1_tgw_2"\s*{/);
+  test("declares TGW subnets for us-west-2", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"us_west_2_tgw_1"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"us_west_2_tgw_2"\s*{/);
   });
 
-  test("declares dev private subnets for ap-southeast-1", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"ap_southeast_1_dev_private_1"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"ap_southeast_1_dev_private_2"\s*{/);
+  test("declares dev private subnets for sa-east-1", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"sa_east_1_dev_private_1"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"sa_east_1_dev_private_2"\s*{/);
   });
 
-  test("declares prod private subnets for ap-southeast-1", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"ap_southeast_1_prod_private_1"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"ap_southeast_1_prod_private_2"\s*{/);
+  test("declares prod private subnets for sa-east-1", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"sa_east_1_prod_private_1"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"sa_east_1_prod_private_2"\s*{/);
   });
 
-  test("declares TGW subnets for ap-southeast-1", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"ap_southeast_1_tgw_1"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"ap_southeast_1_tgw_2"\s*{/);
+  test("declares TGW subnets for sa-east-1", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"sa_east_1_tgw_1"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"sa_east_1_tgw_2"\s*{/);
   });
 
   test("declares internet gateway for us-east-1", () => {
@@ -187,8 +187,8 @@ describe("Terraform single-file stack: tap-stack.tf", () => {
   });
 
   test("declares spoke Transit Gateways", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway"\s+"eu_west_1"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway"\s+"ap_southeast_1"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway"\s+"us_west_2"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway"\s+"sa_east_1"\s*{/);
   });
 
   test("Transit Gateway has default_route_table_association disabled", () => {
@@ -209,36 +209,32 @@ describe("Terraform single-file stack: tap-stack.tf", () => {
 
   test("declares Transit Gateway VPC attachments", () => {
     expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_vpc_attachment"\s+"us_east_1"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_vpc_attachment"\s+"eu_west_1"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_vpc_attachment"\s+"ap_southeast_1"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_vpc_attachment"\s+"us_west_2"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_vpc_attachment"\s+"sa_east_1"\s*{/);
   });
 
   test("declares Transit Gateway peering attachments", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_peering_attachment"\s+"hub_to_eu_west_1"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_peering_attachment"\s+"hub_to_ap_southeast_1"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_peering_attachment"\s+"hub_to_us_west_2"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_peering_attachment"\s+"hub_to_sa_east_1"\s*{/);
   });
 
   test("declares Transit Gateway peering attachment accepters", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_peering_attachment_accepter"\s+"eu_west_1"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_peering_attachment_accepter"\s+"ap_southeast_1"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_peering_attachment_accepter"\s+"us_west_2"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_peering_attachment_accepter"\s+"sa_east_1"\s*{/);
   });
 
   test("declares Transit Gateway route table associations", () => {
     expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_route_table_association"\s+"us_east_1_dev"\s*{/);
     expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_route_table_association"\s+"us_east_1_prod"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_route_table_association"\s+"eu_west_1_peering_dev"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_route_table_association"\s+"eu_west_1_peering_prod"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_route_table_association"\s+"ap_southeast_1_peering_dev"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_route_table_association"\s+"ap_southeast_1_peering_prod"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_route_table_association"\s+"us_west_2_peering_dev"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_route_table_association"\s+"us_west_2_peering_prod"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_route_table_association"\s+"sa_east_1_peering_dev"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_route_table_association"\s+"sa_east_1_peering_prod"\s*{/);
   });
 
   test("declares Transit Gateway route table propagations", () => {
     expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_route_table_propagation"\s+"us_east_1_dev"\s*{/);
     expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_route_table_propagation"\s+"us_east_1_prod"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_route_table_propagation"\s+"eu_west_1_peering_dev"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_route_table_propagation"\s+"eu_west_1_peering_prod"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_route_table_propagation"\s+"ap_southeast_1_peering_dev"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_route_table_propagation"\s+"ap_southeast_1_peering_prod"\s*{/);
   });
 
   test("declares Transit Gateway blackhole routes", () => {
@@ -261,16 +257,16 @@ describe("Terraform single-file stack: tap-stack.tf", () => {
   });
 
   test("declares Route 53 zone associations", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_route53_zone_association"\s+"dev_eu_west_1"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_route53_zone_association"\s+"dev_ap_southeast_1"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_route53_zone_association"\s+"prod_eu_west_1"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_route53_zone_association"\s+"prod_ap_southeast_1"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_route53_zone_association"\s+"dev_us_west_2"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_route53_zone_association"\s+"dev_sa_east_1"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_route53_zone_association"\s+"prod_us_west_2"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_route53_zone_association"\s+"prod_sa_east_1"\s*{/);
   });
 
   test("declares SSM VPC endpoint security groups", () => {
     expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"ssm_endpoint_us_east_1"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"ssm_endpoint_eu_west_1"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"ssm_endpoint_ap_southeast_1"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"ssm_endpoint_us_west_2"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"ssm_endpoint_sa_east_1"\s*{/);
   });
 
   test("declares SSM VPC endpoints for us-east-1", () => {
@@ -279,16 +275,16 @@ describe("Terraform single-file stack: tap-stack.tf", () => {
     expect(stackContent).toMatch(/resource\s+"aws_vpc_endpoint"\s+"ec2messages_us_east_1"\s*{/);
   });
 
-  test("declares SSM VPC endpoints for eu-west-1", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_vpc_endpoint"\s+"ssm_eu_west_1"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_vpc_endpoint"\s+"ssmmessages_eu_west_1"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_vpc_endpoint"\s+"ec2messages_eu_west_1"\s*{/);
+  test("declares SSM VPC endpoints for us-west-2", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_vpc_endpoint"\s+"ssm_us_west_2"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_vpc_endpoint"\s+"ssmmessages_us_west_2"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_vpc_endpoint"\s+"ec2messages_us_west_2"\s*{/);
   });
 
-  test("declares SSM VPC endpoints for ap-southeast-1", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_vpc_endpoint"\s+"ssm_ap_southeast_1"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_vpc_endpoint"\s+"ssmmessages_ap_southeast_1"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_vpc_endpoint"\s+"ec2messages_ap_southeast_1"\s*{/);
+  test("declares SSM VPC endpoints for sa-east-1", () => {
+    expect(stackContent).toMatch(/resource\s+"aws_vpc_endpoint"\s+"ssm_sa_east_1"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_vpc_endpoint"\s+"ssmmessages_sa_east_1"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_vpc_endpoint"\s+"ec2messages_sa_east_1"\s*{/);
   });
 
   test("VPC endpoints have private_dns_enabled", () => {
@@ -317,8 +313,8 @@ describe("Terraform single-file stack: tap-stack.tf", () => {
 
   test("declares VPC Flow Logs for all VPCs", () => {
     expect(stackContent).toMatch(/resource\s+"aws_flow_log"\s+"us_east_1"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_flow_log"\s+"eu_west_1"\s*{/);
-    expect(stackContent).toMatch(/resource\s+"aws_flow_log"\s+"ap_southeast_1"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_flow_log"\s+"us_west_2"\s*{/);
+    expect(stackContent).toMatch(/resource\s+"aws_flow_log"\s+"sa_east_1"\s*{/);
   });
 
   test("Flow logs use Parquet format", () => {
@@ -374,12 +370,12 @@ describe("Terraform single-file stack: tap-stack.tf", () => {
     expect(stackContent).toMatch(/output\s+"hub_vpc_id"\s*{/);
   });
 
-  test("declares eu_west_1_vpc_id output", () => {
-    expect(stackContent).toMatch(/output\s+"eu_west_1_vpc_id"\s*{/);
+  test("declares us_west_2_vpc_id output", () => {
+    expect(stackContent).toMatch(/output\s+"us_west_2_vpc_id"\s*{/);
   });
 
-  test("declares ap_southeast_1_vpc_id output", () => {
-    expect(stackContent).toMatch(/output\s+"ap_southeast_1_vpc_id"\s*{/);
+  test("declares sa_east_1_vpc_id output", () => {
+    expect(stackContent).toMatch(/output\s+"sa_east_1_vpc_id"\s*{/);
   });
 
   test("declares hub_transit_gateway_id output", () => {

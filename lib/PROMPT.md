@@ -4,7 +4,7 @@ A multinational corporation is establishing a global AWS infrastructure to suppo
 Requirements
 The network architecture should consist of:
 
-Three VPCs in distinct AWS regions — us-east-1 (hub), eu-west-1, and ap-southeast-1 (spokes) — using non-overlapping CIDR blocks.
+Three VPCs in distinct AWS regions — us-east-1 (hub), us-west-2, and sa-east-1 (spokes) — using non-overlapping CIDR blocks.
 
 An AWS Transit Gateway in the hub region to enable cross-region communication with separate route tables for development (10.1.0.0/16) and production (10.2.0.0/16) environments.
 

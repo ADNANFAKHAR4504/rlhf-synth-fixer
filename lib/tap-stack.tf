@@ -18,30 +18,30 @@ resource "aws_vpc" "us_east_1" {
   }
 }
 
-resource "aws_vpc" "eu_west_1" {
-  provider             = aws.eu_west_1
+resource "aws_vpc" "us_west_2" {
+  provider             = aws.us_west_2
   cidr_block           = "10.1.0.0/16"
   enable_dns_support   = true
   enable_dns_hostnames = true
 
   tags = {
-    Name        = "eu-west-1-spoke-vpc-${random_string.suffix.result}"
+    Name        = "us-west-2-spoke-vpc-${random_string.suffix.result}"
     Environment = "all"
-    Region      = "eu-west-1"
+    Region      = "us-west-2"
     Purpose     = "spoke"
   }
 }
 
-resource "aws_vpc" "ap_southeast_1" {
-  provider             = aws.ap_southeast_1
+resource "aws_vpc" "sa_east_1" {
+  provider             = aws.sa_east_1
   cidr_block           = "10.2.0.0/16"
   enable_dns_support   = true
   enable_dns_hostnames = true
 
   tags = {
-    Name        = "ap-southeast-1-spoke-vpc-${random_string.suffix.result}"
+    Name        = "sa-east-1-spoke-vpc-${random_string.suffix.result}"
     Environment = "all"
-    Region      = "ap-southeast-1"
+    Region      = "sa-east-1"
     Purpose     = "spoke"
   }
 }
@@ -51,13 +51,13 @@ data "aws_availability_zones" "us_east_1" {
   state    = "available"
 }
 
-data "aws_availability_zones" "eu_west_1" {
-  provider = aws.eu_west_1
+data "aws_availability_zones" "us_west_2" {
+  provider = aws.us_west_2
   state    = "available"
 }
 
-data "aws_availability_zones" "ap_southeast_1" {
-  provider = aws.ap_southeast_1
+data "aws_availability_zones" "sa_east_1" {
+  provider = aws.sa_east_1
   state    = "available"
 }
 
@@ -205,170 +205,170 @@ resource "aws_subnet" "us_east_1_tgw_2" {
   }
 }
 
-resource "aws_subnet" "eu_west_1_dev_private_1" {
-  provider          = aws.eu_west_1
-  vpc_id            = aws_vpc.eu_west_1.id
+resource "aws_subnet" "us_west_2_dev_private_1" {
+  provider          = aws.us_west_2
+  vpc_id            = aws_vpc.us_west_2.id
   cidr_block        = "10.1.1.0/24"
-  availability_zone = data.aws_availability_zones.eu_west_1.names[0]
+  availability_zone = data.aws_availability_zones.us_west_2.names[0]
 
   tags = {
-    Name        = "eu-west-1-dev-private-subnet-1-${random_string.suffix.result}"
+    Name        = "us-west-2-dev-private-subnet-1-${random_string.suffix.result}"
     Environment = "dev"
-    Region      = "eu-west-1"
+    Region      = "us-west-2"
     Purpose     = "workload"
   }
 }
 
-resource "aws_subnet" "eu_west_1_dev_private_2" {
-  provider          = aws.eu_west_1
-  vpc_id            = aws_vpc.eu_west_1.id
+resource "aws_subnet" "us_west_2_dev_private_2" {
+  provider          = aws.us_west_2
+  vpc_id            = aws_vpc.us_west_2.id
   cidr_block        = "10.1.2.0/24"
-  availability_zone = data.aws_availability_zones.eu_west_1.names[1]
+  availability_zone = data.aws_availability_zones.us_west_2.names[1]
 
   tags = {
-    Name        = "eu-west-1-dev-private-subnet-2-${random_string.suffix.result}"
+    Name        = "us-west-2-dev-private-subnet-2-${random_string.suffix.result}"
     Environment = "dev"
-    Region      = "eu-west-1"
+    Region      = "us-west-2"
     Purpose     = "workload"
   }
 }
 
-resource "aws_subnet" "eu_west_1_prod_private_1" {
-  provider          = aws.eu_west_1
-  vpc_id            = aws_vpc.eu_west_1.id
+resource "aws_subnet" "us_west_2_prod_private_1" {
+  provider          = aws.us_west_2
+  vpc_id            = aws_vpc.us_west_2.id
   cidr_block        = "10.1.11.0/24"
-  availability_zone = data.aws_availability_zones.eu_west_1.names[0]
+  availability_zone = data.aws_availability_zones.us_west_2.names[0]
 
   tags = {
-    Name        = "eu-west-1-prod-private-subnet-1-${random_string.suffix.result}"
+    Name        = "us-west-2-prod-private-subnet-1-${random_string.suffix.result}"
     Environment = "prod"
-    Region      = "eu-west-1"
+    Region      = "us-west-2"
     Purpose     = "workload"
   }
 }
 
-resource "aws_subnet" "eu_west_1_prod_private_2" {
-  provider          = aws.eu_west_1
-  vpc_id            = aws_vpc.eu_west_1.id
+resource "aws_subnet" "us_west_2_prod_private_2" {
+  provider          = aws.us_west_2
+  vpc_id            = aws_vpc.us_west_2.id
   cidr_block        = "10.1.12.0/24"
-  availability_zone = data.aws_availability_zones.eu_west_1.names[1]
+  availability_zone = data.aws_availability_zones.us_west_2.names[1]
 
   tags = {
-    Name        = "eu-west-1-prod-private-subnet-2-${random_string.suffix.result}"
+    Name        = "us-west-2-prod-private-subnet-2-${random_string.suffix.result}"
     Environment = "prod"
-    Region      = "eu-west-1"
+    Region      = "us-west-2"
     Purpose     = "workload"
   }
 }
 
-resource "aws_subnet" "eu_west_1_tgw_1" {
-  provider          = aws.eu_west_1
-  vpc_id            = aws_vpc.eu_west_1.id
+resource "aws_subnet" "us_west_2_tgw_1" {
+  provider          = aws.us_west_2
+  vpc_id            = aws_vpc.us_west_2.id
   cidr_block        = "10.1.200.0/28"
-  availability_zone = data.aws_availability_zones.eu_west_1.names[0]
+  availability_zone = data.aws_availability_zones.us_west_2.names[0]
 
   tags = {
-    Name        = "eu-west-1-tgw-subnet-1-${random_string.suffix.result}"
+    Name        = "us-west-2-tgw-subnet-1-${random_string.suffix.result}"
     Environment = "all"
-    Region      = "eu-west-1"
+    Region      = "us-west-2"
     Purpose     = "transit"
   }
 }
 
-resource "aws_subnet" "eu_west_1_tgw_2" {
-  provider          = aws.eu_west_1
-  vpc_id            = aws_vpc.eu_west_1.id
+resource "aws_subnet" "us_west_2_tgw_2" {
+  provider          = aws.us_west_2
+  vpc_id            = aws_vpc.us_west_2.id
   cidr_block        = "10.1.201.0/28"
-  availability_zone = data.aws_availability_zones.eu_west_1.names[1]
+  availability_zone = data.aws_availability_zones.us_west_2.names[1]
 
   tags = {
-    Name        = "eu-west-1-tgw-subnet-2-${random_string.suffix.result}"
+    Name        = "us-west-2-tgw-subnet-2-${random_string.suffix.result}"
     Environment = "all"
-    Region      = "eu-west-1"
+    Region      = "us-west-2"
     Purpose     = "transit"
   }
 }
 
-resource "aws_subnet" "ap_southeast_1_dev_private_1" {
-  provider          = aws.ap_southeast_1
-  vpc_id            = aws_vpc.ap_southeast_1.id
+resource "aws_subnet" "sa_east_1_dev_private_1" {
+  provider          = aws.sa_east_1
+  vpc_id            = aws_vpc.sa_east_1.id
   cidr_block        = "10.2.1.0/24"
-  availability_zone = data.aws_availability_zones.ap_southeast_1.names[0]
+  availability_zone = data.aws_availability_zones.sa_east_1.names[0]
 
   tags = {
-    Name        = "ap-southeast-1-dev-private-subnet-1-${random_string.suffix.result}"
+    Name        = "sa-east-1-dev-private-subnet-1-${random_string.suffix.result}"
     Environment = "dev"
-    Region      = "ap-southeast-1"
+    Region      = "sa-east-1"
     Purpose     = "workload"
   }
 }
 
-resource "aws_subnet" "ap_southeast_1_dev_private_2" {
-  provider          = aws.ap_southeast_1
-  vpc_id            = aws_vpc.ap_southeast_1.id
+resource "aws_subnet" "sa_east_1_dev_private_2" {
+  provider          = aws.sa_east_1
+  vpc_id            = aws_vpc.sa_east_1.id
   cidr_block        = "10.2.2.0/24"
-  availability_zone = data.aws_availability_zones.ap_southeast_1.names[1]
+  availability_zone = data.aws_availability_zones.sa_east_1.names[1]
 
   tags = {
-    Name        = "ap-southeast-1-dev-private-subnet-2-${random_string.suffix.result}"
+    Name        = "sa-east-1-dev-private-subnet-2-${random_string.suffix.result}"
     Environment = "dev"
-    Region      = "ap-southeast-1"
+    Region      = "sa-east-1"
     Purpose     = "workload"
   }
 }
 
-resource "aws_subnet" "ap_southeast_1_prod_private_1" {
-  provider          = aws.ap_southeast_1
-  vpc_id            = aws_vpc.ap_southeast_1.id
+resource "aws_subnet" "sa_east_1_prod_private_1" {
+  provider          = aws.sa_east_1
+  vpc_id            = aws_vpc.sa_east_1.id
   cidr_block        = "10.2.11.0/24"
-  availability_zone = data.aws_availability_zones.ap_southeast_1.names[0]
+  availability_zone = data.aws_availability_zones.sa_east_1.names[0]
 
   tags = {
-    Name        = "ap-southeast-1-prod-private-subnet-1-${random_string.suffix.result}"
+    Name        = "sa-east-1-prod-private-subnet-1-${random_string.suffix.result}"
     Environment = "prod"
-    Region      = "ap-southeast-1"
+    Region      = "sa-east-1"
     Purpose     = "workload"
   }
 }
 
-resource "aws_subnet" "ap_southeast_1_prod_private_2" {
-  provider          = aws.ap_southeast_1
-  vpc_id            = aws_vpc.ap_southeast_1.id
+resource "aws_subnet" "sa_east_1_prod_private_2" {
+  provider          = aws.sa_east_1
+  vpc_id            = aws_vpc.sa_east_1.id
   cidr_block        = "10.2.12.0/24"
-  availability_zone = data.aws_availability_zones.ap_southeast_1.names[1]
+  availability_zone = data.aws_availability_zones.sa_east_1.names[1]
 
   tags = {
-    Name        = "ap-southeast-1-prod-private-subnet-2-${random_string.suffix.result}"
+    Name        = "sa-east-1-prod-private-subnet-2-${random_string.suffix.result}"
     Environment = "prod"
-    Region      = "ap-southeast-1"
+    Region      = "sa-east-1"
     Purpose     = "workload"
   }
 }
 
-resource "aws_subnet" "ap_southeast_1_tgw_1" {
-  provider          = aws.ap_southeast_1
-  vpc_id            = aws_vpc.ap_southeast_1.id
+resource "aws_subnet" "sa_east_1_tgw_1" {
+  provider          = aws.sa_east_1
+  vpc_id            = aws_vpc.sa_east_1.id
   cidr_block        = "10.2.200.0/28"
-  availability_zone = data.aws_availability_zones.ap_southeast_1.names[0]
+  availability_zone = data.aws_availability_zones.sa_east_1.names[0]
 
   tags = {
-    Name        = "ap-southeast-1-tgw-subnet-1-${random_string.suffix.result}"
+    Name        = "sa-east-1-tgw-subnet-1-${random_string.suffix.result}"
     Environment = "all"
-    Region      = "ap-southeast-1"
+    Region      = "sa-east-1"
     Purpose     = "transit"
   }
 }
 
-resource "aws_subnet" "ap_southeast_1_tgw_2" {
-  provider          = aws.ap_southeast_1
-  vpc_id            = aws_vpc.ap_southeast_1.id
+resource "aws_subnet" "sa_east_1_tgw_2" {
+  provider          = aws.sa_east_1
+  vpc_id            = aws_vpc.sa_east_1.id
   cidr_block        = "10.2.201.0/28"
-  availability_zone = data.aws_availability_zones.ap_southeast_1.names[1]
+  availability_zone = data.aws_availability_zones.sa_east_1.names[1]
 
   tags = {
-    Name        = "ap-southeast-1-tgw-subnet-2-${random_string.suffix.result}"
+    Name        = "sa-east-1-tgw-subnet-2-${random_string.suffix.result}"
     Environment = "all"
-    Region      = "ap-southeast-1"
+    Region      = "sa-east-1"
     Purpose     = "transit"
   }
 }
@@ -902,30 +902,30 @@ resource "aws_ec2_transit_gateway_route_table" "prod" {
   }
 }
 
-resource "aws_ec2_transit_gateway" "eu_west_1" {
-  provider                        = aws.eu_west_1
-  description                     = "Spoke Transit Gateway eu-west-1"
+resource "aws_ec2_transit_gateway" "us_west_2" {
+  provider                        = aws.us_west_2
+  description                     = "Spoke Transit Gateway us-west-2"
   default_route_table_association = "disable"
   default_route_table_propagation = "disable"
 
   tags = {
-    Name        = "eu-west-1-spoke-tgw-${random_string.suffix.result}"
+    Name        = "us-west-2-spoke-tgw-${random_string.suffix.result}"
     Environment = "all"
-    Region      = "eu-west-1"
+    Region      = "us-west-2"
     Purpose     = "transit"
   }
 }
 
-resource "aws_ec2_transit_gateway" "ap_southeast_1" {
-  provider                        = aws.ap_southeast_1
-  description                     = "Spoke Transit Gateway ap-southeast-1"
+resource "aws_ec2_transit_gateway" "sa_east_1" {
+  provider                        = aws.sa_east_1
+  description                     = "Spoke Transit Gateway sa-east-1"
   default_route_table_association = "disable"
   default_route_table_propagation = "disable"
 
   tags = {
-    Name        = "ap-southeast-1-spoke-tgw-${random_string.suffix.result}"
+    Name        = "sa-east-1-spoke-tgw-${random_string.suffix.result}"
     Environment = "all"
-    Region      = "ap-southeast-1"
+    Region      = "sa-east-1"
     Purpose     = "transit"
   }
 }
@@ -946,86 +946,86 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "us_east_1" {
   }
 }
 
-resource "aws_ec2_transit_gateway_vpc_attachment" "eu_west_1" {
-  provider                                        = aws.eu_west_1
-  subnet_ids                                      = [aws_subnet.eu_west_1_tgw_1.id, aws_subnet.eu_west_1_tgw_2.id]
-  transit_gateway_id                              = aws_ec2_transit_gateway.eu_west_1.id
-  vpc_id                                          = aws_vpc.eu_west_1.id
+resource "aws_ec2_transit_gateway_vpc_attachment" "us_west_2" {
+  provider                                        = aws.us_west_2
+  subnet_ids                                      = [aws_subnet.us_west_2_tgw_1.id, aws_subnet.us_west_2_tgw_2.id]
+  transit_gateway_id                              = aws_ec2_transit_gateway.us_west_2.id
+  vpc_id                                          = aws_vpc.us_west_2.id
   transit_gateway_default_route_table_association = false
   transit_gateway_default_route_table_propagation = false
 
   tags = {
-    Name        = "eu-west-1-vpc-tgw-attachment-${random_string.suffix.result}"
+    Name        = "us-west-2-vpc-tgw-attachment-${random_string.suffix.result}"
     Environment = "all"
-    Region      = "eu-west-1"
+    Region      = "us-west-2"
     Purpose     = "transit"
   }
 }
 
-resource "aws_ec2_transit_gateway_vpc_attachment" "ap_southeast_1" {
-  provider                                        = aws.ap_southeast_1
-  subnet_ids                                      = [aws_subnet.ap_southeast_1_tgw_1.id, aws_subnet.ap_southeast_1_tgw_2.id]
-  transit_gateway_id                              = aws_ec2_transit_gateway.ap_southeast_1.id
-  vpc_id                                          = aws_vpc.ap_southeast_1.id
+resource "aws_ec2_transit_gateway_vpc_attachment" "sa_east_1" {
+  provider                                        = aws.sa_east_1
+  subnet_ids                                      = [aws_subnet.sa_east_1_tgw_1.id, aws_subnet.sa_east_1_tgw_2.id]
+  transit_gateway_id                              = aws_ec2_transit_gateway.sa_east_1.id
+  vpc_id                                          = aws_vpc.sa_east_1.id
   transit_gateway_default_route_table_association = false
   transit_gateway_default_route_table_propagation = false
 
   tags = {
-    Name        = "ap-southeast-1-vpc-tgw-attachment-${random_string.suffix.result}"
+    Name        = "sa-east-1-vpc-tgw-attachment-${random_string.suffix.result}"
     Environment = "all"
-    Region      = "ap-southeast-1"
+    Region      = "sa-east-1"
     Purpose     = "transit"
   }
 }
 
-resource "aws_ec2_transit_gateway_peering_attachment" "hub_to_eu_west_1" {
+resource "aws_ec2_transit_gateway_peering_attachment" "hub_to_us_west_2" {
   provider                = aws.us_east_1
-  peer_region             = "eu-west-1"
-  peer_transit_gateway_id = aws_ec2_transit_gateway.eu_west_1.id
+  peer_region             = "us-west-2"
+  peer_transit_gateway_id = aws_ec2_transit_gateway.us_west_2.id
   transit_gateway_id      = aws_ec2_transit_gateway.hub.id
 
   tags = {
-    Name        = "us-east-1-to-eu-west-1-tgw-peering-${random_string.suffix.result}"
+    Name        = "us-east-1-to-us-west-2-tgw-peering-${random_string.suffix.result}"
     Environment = "all"
     Region      = "us-east-1"
     Purpose     = "transit"
   }
 }
 
-resource "aws_ec2_transit_gateway_peering_attachment" "hub_to_ap_southeast_1" {
+resource "aws_ec2_transit_gateway_peering_attachment" "hub_to_sa_east_1" {
   provider                = aws.us_east_1
-  peer_region             = "ap-southeast-1"
-  peer_transit_gateway_id = aws_ec2_transit_gateway.ap_southeast_1.id
+  peer_region             = "sa-east-1"
+  peer_transit_gateway_id = aws_ec2_transit_gateway.sa_east_1.id
   transit_gateway_id      = aws_ec2_transit_gateway.hub.id
 
   tags = {
-    Name        = "us-east-1-to-ap-southeast-1-tgw-peering-${random_string.suffix.result}"
+    Name        = "us-east-1-to-sa-east-1-tgw-peering-${random_string.suffix.result}"
     Environment = "all"
     Region      = "us-east-1"
     Purpose     = "transit"
   }
 }
 
-resource "aws_ec2_transit_gateway_peering_attachment_accepter" "eu_west_1" {
-  provider                      = aws.eu_west_1
-  transit_gateway_attachment_id = aws_ec2_transit_gateway_peering_attachment.hub_to_eu_west_1.id
+resource "aws_ec2_transit_gateway_peering_attachment_accepter" "us_west_2" {
+  provider                      = aws.us_west_2
+  transit_gateway_attachment_id = aws_ec2_transit_gateway_peering_attachment.hub_to_us_west_2.id
 
   tags = {
-    Name        = "eu-west-1-tgw-peering-accepter-${random_string.suffix.result}"
+    Name        = "us-west-2-tgw-peering-accepter-${random_string.suffix.result}"
     Environment = "all"
-    Region      = "eu-west-1"
+    Region      = "us-west-2"
     Purpose     = "transit"
   }
 }
 
-resource "aws_ec2_transit_gateway_peering_attachment_accepter" "ap_southeast_1" {
-  provider                      = aws.ap_southeast_1
-  transit_gateway_attachment_id = aws_ec2_transit_gateway_peering_attachment.hub_to_ap_southeast_1.id
+resource "aws_ec2_transit_gateway_peering_attachment_accepter" "sa_east_1" {
+  provider                      = aws.sa_east_1
+  transit_gateway_attachment_id = aws_ec2_transit_gateway_peering_attachment.hub_to_sa_east_1.id
 
   tags = {
-    Name        = "ap-southeast-1-tgw-peering-accepter-${random_string.suffix.result}"
+    Name        = "sa-east-1-tgw-peering-accepter-${random_string.suffix.result}"
     Environment = "all"
-    Region      = "ap-southeast-1"
+    Region      = "sa-east-1"
     Purpose     = "transit"
   }
 }
@@ -1034,35 +1034,37 @@ resource "aws_ec2_transit_gateway_route_table_association" "us_east_1_dev" {
   provider                       = aws.us_east_1
   transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.us_east_1.id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.dev.id
+  replace_existing_association   = true
 }
 
 resource "aws_ec2_transit_gateway_route_table_association" "us_east_1_prod" {
   provider                       = aws.us_east_1
   transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.us_east_1.id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.prod.id
+  replace_existing_association   = true
 }
 
-resource "aws_ec2_transit_gateway_route_table_association" "eu_west_1_peering_dev" {
+resource "aws_ec2_transit_gateway_route_table_association" "us_west_2_peering_dev" {
   provider                       = aws.us_east_1
-  transit_gateway_attachment_id  = aws_ec2_transit_gateway_peering_attachment.hub_to_eu_west_1.id
+  transit_gateway_attachment_id  = aws_ec2_transit_gateway_peering_attachment.hub_to_us_west_2.id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.dev.id
 }
 
-resource "aws_ec2_transit_gateway_route_table_association" "eu_west_1_peering_prod" {
+resource "aws_ec2_transit_gateway_route_table_association" "us_west_2_peering_prod" {
   provider                       = aws.us_east_1
-  transit_gateway_attachment_id  = aws_ec2_transit_gateway_peering_attachment.hub_to_eu_west_1.id
+  transit_gateway_attachment_id  = aws_ec2_transit_gateway_peering_attachment.hub_to_us_west_2.id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.prod.id
 }
 
-resource "aws_ec2_transit_gateway_route_table_association" "ap_southeast_1_peering_dev" {
+resource "aws_ec2_transit_gateway_route_table_association" "sa_east_1_peering_dev" {
   provider                       = aws.us_east_1
-  transit_gateway_attachment_id  = aws_ec2_transit_gateway_peering_attachment.hub_to_ap_southeast_1.id
+  transit_gateway_attachment_id  = aws_ec2_transit_gateway_peering_attachment.hub_to_sa_east_1.id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.dev.id
 }
 
-resource "aws_ec2_transit_gateway_route_table_association" "ap_southeast_1_peering_prod" {
+resource "aws_ec2_transit_gateway_route_table_association" "sa_east_1_peering_prod" {
   provider                       = aws.us_east_1
-  transit_gateway_attachment_id  = aws_ec2_transit_gateway_peering_attachment.hub_to_ap_southeast_1.id
+  transit_gateway_attachment_id  = aws_ec2_transit_gateway_peering_attachment.hub_to_sa_east_1.id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.prod.id
 }
 
@@ -1078,29 +1080,6 @@ resource "aws_ec2_transit_gateway_route_table_propagation" "us_east_1_prod" {
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.prod.id
 }
 
-resource "aws_ec2_transit_gateway_route_table_propagation" "eu_west_1_peering_dev" {
-  provider                       = aws.us_east_1
-  transit_gateway_attachment_id  = aws_ec2_transit_gateway_peering_attachment.hub_to_eu_west_1.id
-  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.dev.id
-}
-
-resource "aws_ec2_transit_gateway_route_table_propagation" "eu_west_1_peering_prod" {
-  provider                       = aws.us_east_1
-  transit_gateway_attachment_id  = aws_ec2_transit_gateway_peering_attachment.hub_to_eu_west_1.id
-  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.prod.id
-}
-
-resource "aws_ec2_transit_gateway_route_table_propagation" "ap_southeast_1_peering_dev" {
-  provider                       = aws.us_east_1
-  transit_gateway_attachment_id  = aws_ec2_transit_gateway_peering_attachment.hub_to_ap_southeast_1.id
-  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.dev.id
-}
-
-resource "aws_ec2_transit_gateway_route_table_propagation" "ap_southeast_1_peering_prod" {
-  provider                       = aws.us_east_1
-  transit_gateway_attachment_id  = aws_ec2_transit_gateway_peering_attachment.hub_to_ap_southeast_1.id
-  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.prod.id
-}
 
 resource "aws_ec2_transit_gateway_route" "dev_to_prod_blackhole" {
   provider                       = aws.us_east_1
@@ -1150,32 +1129,32 @@ resource "aws_route53_zone" "prod_internal" {
   }
 }
 
-resource "aws_route53_zone_association" "dev_eu_west_1" {
+resource "aws_route53_zone_association" "dev_us_west_2" {
   provider   = aws.us_east_1
   zone_id    = aws_route53_zone.dev_internal.zone_id
-  vpc_id     = aws_vpc.eu_west_1.id
-  vpc_region = "eu-west-1"
+  vpc_id     = aws_vpc.us_west_2.id
+  vpc_region = "us-west-2"
 }
 
-resource "aws_route53_zone_association" "dev_ap_southeast_1" {
+resource "aws_route53_zone_association" "dev_sa_east_1" {
   provider   = aws.us_east_1
   zone_id    = aws_route53_zone.dev_internal.zone_id
-  vpc_id     = aws_vpc.ap_southeast_1.id
-  vpc_region = "ap-southeast-1"
+  vpc_id     = aws_vpc.sa_east_1.id
+  vpc_region = "sa-east-1"
 }
 
-resource "aws_route53_zone_association" "prod_eu_west_1" {
+resource "aws_route53_zone_association" "prod_us_west_2" {
   provider   = aws.us_east_1
   zone_id    = aws_route53_zone.prod_internal.zone_id
-  vpc_id     = aws_vpc.eu_west_1.id
-  vpc_region = "eu-west-1"
+  vpc_id     = aws_vpc.us_west_2.id
+  vpc_region = "us-west-2"
 }
 
-resource "aws_route53_zone_association" "prod_ap_southeast_1" {
+resource "aws_route53_zone_association" "prod_sa_east_1" {
   provider   = aws.us_east_1
   zone_id    = aws_route53_zone.prod_internal.zone_id
-  vpc_id     = aws_vpc.ap_southeast_1.id
-  vpc_region = "ap-southeast-1"
+  vpc_id     = aws_vpc.sa_east_1.id
+  vpc_region = "sa-east-1"
 }
 
 resource "aws_security_group" "ssm_endpoint_us_east_1" {
@@ -1204,7 +1183,7 @@ resource "aws_vpc_endpoint" "ssm_us_east_1" {
   vpc_id              = aws_vpc.us_east_1.id
   service_name        = "com.amazonaws.us-east-1.ssm"
   vpc_endpoint_type   = "Interface"
-  subnet_ids          = [aws_subnet.us_east_1_dev_private_1.id, aws_subnet.us_east_1_prod_private_1.id]
+  subnet_ids          = [aws_subnet.us_east_1_dev_private_1.id, aws_subnet.us_east_1_dev_private_2.id]
   security_group_ids  = [aws_security_group.ssm_endpoint_us_east_1.id]
   private_dns_enabled = true
 
@@ -1221,7 +1200,7 @@ resource "aws_vpc_endpoint" "ssmmessages_us_east_1" {
   vpc_id              = aws_vpc.us_east_1.id
   service_name        = "com.amazonaws.us-east-1.ssmmessages"
   vpc_endpoint_type   = "Interface"
-  subnet_ids          = [aws_subnet.us_east_1_dev_private_1.id, aws_subnet.us_east_1_prod_private_1.id]
+  subnet_ids          = [aws_subnet.us_east_1_dev_private_1.id, aws_subnet.us_east_1_dev_private_2.id]
   security_group_ids  = [aws_security_group.ssm_endpoint_us_east_1.id]
   private_dns_enabled = true
 
@@ -1238,7 +1217,7 @@ resource "aws_vpc_endpoint" "ec2messages_us_east_1" {
   vpc_id              = aws_vpc.us_east_1.id
   service_name        = "com.amazonaws.us-east-1.ec2messages"
   vpc_endpoint_type   = "Interface"
-  subnet_ids          = [aws_subnet.us_east_1_dev_private_1.id, aws_subnet.us_east_1_prod_private_1.id]
+  subnet_ids          = [aws_subnet.us_east_1_dev_private_1.id, aws_subnet.us_east_1_dev_private_2.id]
   security_group_ids  = [aws_security_group.ssm_endpoint_us_east_1.id]
   private_dns_enabled = true
 
@@ -1250,146 +1229,146 @@ resource "aws_vpc_endpoint" "ec2messages_us_east_1" {
   }
 }
 
-resource "aws_security_group" "ssm_endpoint_eu_west_1" {
-  provider    = aws.eu_west_1
-  name        = "eu-west-1-ssm-endpoint-sg-${random_string.suffix.result}"
+resource "aws_security_group" "ssm_endpoint_us_west_2" {
+  provider    = aws.us_west_2
+  name        = "us-west-2-ssm-endpoint-sg-${random_string.suffix.result}"
   description = "Security group for SSM VPC endpoints"
-  vpc_id      = aws_vpc.eu_west_1.id
+  vpc_id      = aws_vpc.us_west_2.id
 
   ingress {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = [aws_vpc.eu_west_1.cidr_block]
+    cidr_blocks = [aws_vpc.us_west_2.cidr_block]
   }
 
   tags = {
-    Name        = "eu-west-1-ssm-endpoint-sg-${random_string.suffix.result}"
+    Name        = "us-west-2-ssm-endpoint-sg-${random_string.suffix.result}"
     Environment = "all"
-    Region      = "eu-west-1"
+    Region      = "us-west-2"
     Purpose     = "vpc-endpoint"
   }
 }
 
-resource "aws_vpc_endpoint" "ssm_eu_west_1" {
-  provider            = aws.eu_west_1
-  vpc_id              = aws_vpc.eu_west_1.id
-  service_name        = "com.amazonaws.eu-west-1.ssm"
+resource "aws_vpc_endpoint" "ssm_us_west_2" {
+  provider            = aws.us_west_2
+  vpc_id              = aws_vpc.us_west_2.id
+  service_name        = "com.amazonaws.us-west-2.ssm"
   vpc_endpoint_type   = "Interface"
-  subnet_ids          = [aws_subnet.eu_west_1_dev_private_1.id, aws_subnet.eu_west_1_prod_private_1.id]
-  security_group_ids  = [aws_security_group.ssm_endpoint_eu_west_1.id]
+  subnet_ids          = [aws_subnet.us_west_2_dev_private_1.id, aws_subnet.us_west_2_dev_private_2.id]
+  security_group_ids  = [aws_security_group.ssm_endpoint_us_west_2.id]
   private_dns_enabled = true
 
   tags = {
-    Name        = "eu-west-1-ssm-endpoint-${random_string.suffix.result}"
+    Name        = "us-west-2-ssm-endpoint-${random_string.suffix.result}"
     Environment = "all"
-    Region      = "eu-west-1"
+    Region      = "us-west-2"
     Purpose     = "vpc-endpoint"
   }
 }
 
-resource "aws_vpc_endpoint" "ssmmessages_eu_west_1" {
-  provider            = aws.eu_west_1
-  vpc_id              = aws_vpc.eu_west_1.id
-  service_name        = "com.amazonaws.eu-west-1.ssmmessages"
+resource "aws_vpc_endpoint" "ssmmessages_us_west_2" {
+  provider            = aws.us_west_2
+  vpc_id              = aws_vpc.us_west_2.id
+  service_name        = "com.amazonaws.us-west-2.ssmmessages"
   vpc_endpoint_type   = "Interface"
-  subnet_ids          = [aws_subnet.eu_west_1_dev_private_1.id, aws_subnet.eu_west_1_prod_private_1.id]
-  security_group_ids  = [aws_security_group.ssm_endpoint_eu_west_1.id]
+  subnet_ids          = [aws_subnet.us_west_2_dev_private_1.id, aws_subnet.us_west_2_dev_private_2.id]
+  security_group_ids  = [aws_security_group.ssm_endpoint_us_west_2.id]
   private_dns_enabled = true
 
   tags = {
-    Name        = "eu-west-1-ssmmessages-endpoint-${random_string.suffix.result}"
+    Name        = "us-west-2-ssmmessages-endpoint-${random_string.suffix.result}"
     Environment = "all"
-    Region      = "eu-west-1"
+    Region      = "us-west-2"
     Purpose     = "vpc-endpoint"
   }
 }
 
-resource "aws_vpc_endpoint" "ec2messages_eu_west_1" {
-  provider            = aws.eu_west_1
-  vpc_id              = aws_vpc.eu_west_1.id
-  service_name        = "com.amazonaws.eu-west-1.ec2messages"
+resource "aws_vpc_endpoint" "ec2messages_us_west_2" {
+  provider            = aws.us_west_2
+  vpc_id              = aws_vpc.us_west_2.id
+  service_name        = "com.amazonaws.us-west-2.ec2messages"
   vpc_endpoint_type   = "Interface"
-  subnet_ids          = [aws_subnet.eu_west_1_dev_private_1.id, aws_subnet.eu_west_1_prod_private_1.id]
-  security_group_ids  = [aws_security_group.ssm_endpoint_eu_west_1.id]
+  subnet_ids          = [aws_subnet.us_west_2_dev_private_1.id, aws_subnet.us_west_2_dev_private_2.id]
+  security_group_ids  = [aws_security_group.ssm_endpoint_us_west_2.id]
   private_dns_enabled = true
 
   tags = {
-    Name        = "eu-west-1-ec2messages-endpoint-${random_string.suffix.result}"
+    Name        = "us-west-2-ec2messages-endpoint-${random_string.suffix.result}"
     Environment = "all"
-    Region      = "eu-west-1"
+    Region      = "us-west-2"
     Purpose     = "vpc-endpoint"
   }
 }
 
-resource "aws_security_group" "ssm_endpoint_ap_southeast_1" {
-  provider    = aws.ap_southeast_1
-  name        = "ap-southeast-1-ssm-endpoint-sg-${random_string.suffix.result}"
+resource "aws_security_group" "ssm_endpoint_sa_east_1" {
+  provider    = aws.sa_east_1
+  name        = "sa-east-1-ssm-endpoint-sg-${random_string.suffix.result}"
   description = "Security group for SSM VPC endpoints"
-  vpc_id      = aws_vpc.ap_southeast_1.id
+  vpc_id      = aws_vpc.sa_east_1.id
 
   ingress {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = [aws_vpc.ap_southeast_1.cidr_block]
+    cidr_blocks = [aws_vpc.sa_east_1.cidr_block]
   }
 
   tags = {
-    Name        = "ap-southeast-1-ssm-endpoint-sg-${random_string.suffix.result}"
+    Name        = "sa-east-1-ssm-endpoint-sg-${random_string.suffix.result}"
     Environment = "all"
-    Region      = "ap-southeast-1"
+    Region      = "sa-east-1"
     Purpose     = "vpc-endpoint"
   }
 }
 
-resource "aws_vpc_endpoint" "ssm_ap_southeast_1" {
-  provider            = aws.ap_southeast_1
-  vpc_id              = aws_vpc.ap_southeast_1.id
-  service_name        = "com.amazonaws.ap-southeast-1.ssm"
+resource "aws_vpc_endpoint" "ssm_sa_east_1" {
+  provider            = aws.sa_east_1
+  vpc_id              = aws_vpc.sa_east_1.id
+  service_name        = "com.amazonaws.sa-east-1.ssm"
   vpc_endpoint_type   = "Interface"
-  subnet_ids          = [aws_subnet.ap_southeast_1_dev_private_1.id, aws_subnet.ap_southeast_1_prod_private_1.id]
-  security_group_ids  = [aws_security_group.ssm_endpoint_ap_southeast_1.id]
+  subnet_ids          = [aws_subnet.sa_east_1_dev_private_1.id, aws_subnet.sa_east_1_dev_private_2.id]
+  security_group_ids  = [aws_security_group.ssm_endpoint_sa_east_1.id]
   private_dns_enabled = true
 
   tags = {
-    Name        = "ap-southeast-1-ssm-endpoint-${random_string.suffix.result}"
+    Name        = "sa-east-1-ssm-endpoint-${random_string.suffix.result}"
     Environment = "all"
-    Region      = "ap-southeast-1"
+    Region      = "sa-east-1"
     Purpose     = "vpc-endpoint"
   }
 }
 
-resource "aws_vpc_endpoint" "ssmmessages_ap_southeast_1" {
-  provider            = aws.ap_southeast_1
-  vpc_id              = aws_vpc.ap_southeast_1.id
-  service_name        = "com.amazonaws.ap-southeast-1.ssmmessages"
+resource "aws_vpc_endpoint" "ssmmessages_sa_east_1" {
+  provider            = aws.sa_east_1
+  vpc_id              = aws_vpc.sa_east_1.id
+  service_name        = "com.amazonaws.sa-east-1.ssmmessages"
   vpc_endpoint_type   = "Interface"
-  subnet_ids          = [aws_subnet.ap_southeast_1_dev_private_1.id, aws_subnet.ap_southeast_1_prod_private_1.id]
-  security_group_ids  = [aws_security_group.ssm_endpoint_ap_southeast_1.id]
+  subnet_ids          = [aws_subnet.sa_east_1_dev_private_1.id, aws_subnet.sa_east_1_dev_private_2.id]
+  security_group_ids  = [aws_security_group.ssm_endpoint_sa_east_1.id]
   private_dns_enabled = true
 
   tags = {
-    Name        = "ap-southeast-1-ssmmessages-endpoint-${random_string.suffix.result}"
+    Name        = "sa-east-1-ssmmessages-endpoint-${random_string.suffix.result}"
     Environment = "all"
-    Region      = "ap-southeast-1"
+    Region      = "sa-east-1"
     Purpose     = "vpc-endpoint"
   }
 }
 
-resource "aws_vpc_endpoint" "ec2messages_ap_southeast_1" {
-  provider            = aws.ap_southeast_1
-  vpc_id              = aws_vpc.ap_southeast_1.id
-  service_name        = "com.amazonaws.ap-southeast-1.ec2messages"
+resource "aws_vpc_endpoint" "ec2messages_sa_east_1" {
+  provider            = aws.sa_east_1
+  vpc_id              = aws_vpc.sa_east_1.id
+  service_name        = "com.amazonaws.sa-east-1.ec2messages"
   vpc_endpoint_type   = "Interface"
-  subnet_ids          = [aws_subnet.ap_southeast_1_dev_private_1.id, aws_subnet.ap_southeast_1_prod_private_1.id]
-  security_group_ids  = [aws_security_group.ssm_endpoint_ap_southeast_1.id]
+  subnet_ids          = [aws_subnet.sa_east_1_dev_private_1.id, aws_subnet.sa_east_1_dev_private_2.id]
+  security_group_ids  = [aws_security_group.ssm_endpoint_sa_east_1.id]
   private_dns_enabled = true
 
   tags = {
-    Name        = "ap-southeast-1-ec2messages-endpoint-${random_string.suffix.result}"
+    Name        = "sa-east-1-ec2messages-endpoint-${random_string.suffix.result}"
     Environment = "all"
-    Region      = "ap-southeast-1"
+    Region      = "sa-east-1"
     Purpose     = "vpc-endpoint"
   }
 }
@@ -1458,7 +1437,6 @@ resource "aws_s3_bucket_policy" "flow_logs" {
 
 resource "aws_flow_log" "us_east_1" {
   provider             = aws.us_east_1
-  iam_role_arn         = aws_iam_role.flow_logs.arn
   log_destination      = aws_s3_bucket.flow_logs.arn
   log_destination_type = "s3"
   traffic_type         = "ALL"
@@ -1480,13 +1458,12 @@ resource "aws_flow_log" "us_east_1" {
   }
 }
 
-resource "aws_flow_log" "eu_west_1" {
-  provider             = aws.eu_west_1
-  iam_role_arn         = aws_iam_role.flow_logs.arn
+resource "aws_flow_log" "us_west_2" {
+  provider             = aws.us_west_2
   log_destination      = aws_s3_bucket.flow_logs.arn
   log_destination_type = "s3"
   traffic_type         = "ALL"
-  vpc_id               = aws_vpc.eu_west_1.id
+  vpc_id               = aws_vpc.us_west_2.id
 
   destination_options {
     file_format                = "parquet"
@@ -1497,20 +1474,19 @@ resource "aws_flow_log" "eu_west_1" {
   max_aggregation_interval = 60
 
   tags = {
-    Name        = "eu-west-1-vpc-flow-log-${random_string.suffix.result}"
+    Name        = "us-west-2-vpc-flow-log-${random_string.suffix.result}"
     Environment = "all"
-    Region      = "eu-west-1"
+    Region      = "us-west-2"
     Purpose     = "flow-log"
   }
 }
 
-resource "aws_flow_log" "ap_southeast_1" {
-  provider             = aws.ap_southeast_1
-  iam_role_arn         = aws_iam_role.flow_logs.arn
+resource "aws_flow_log" "sa_east_1" {
+  provider             = aws.sa_east_1
   log_destination      = aws_s3_bucket.flow_logs.arn
   log_destination_type = "s3"
   traffic_type         = "ALL"
-  vpc_id               = aws_vpc.ap_southeast_1.id
+  vpc_id               = aws_vpc.sa_east_1.id
 
   destination_options {
     file_format                = "parquet"
@@ -1521,9 +1497,9 @@ resource "aws_flow_log" "ap_southeast_1" {
   max_aggregation_interval = 60
 
   tags = {
-    Name        = "ap-southeast-1-vpc-flow-log-${random_string.suffix.result}"
+    Name        = "sa-east-1-vpc-flow-log-${random_string.suffix.result}"
     Environment = "all"
-    Region      = "ap-southeast-1"
+    Region      = "sa-east-1"
     Purpose     = "flow-log"
   }
 }
@@ -1582,14 +1558,14 @@ output "hub_vpc_id" {
   value       = aws_vpc.us_east_1.id
 }
 
-output "eu_west_1_vpc_id" {
-  description = "Spoke VPC ID in eu-west-1"
-  value       = aws_vpc.eu_west_1.id
+output "us_west_2_vpc_id" {
+  description = "Spoke VPC ID in us-west-2"
+  value       = aws_vpc.us_west_2.id
 }
 
-output "ap_southeast_1_vpc_id" {
-  description = "Spoke VPC ID in ap-southeast-1"
-  value       = aws_vpc.ap_southeast_1.id
+output "sa_east_1_vpc_id" {
+  description = "Spoke VPC ID in sa-east-1"
+  value       = aws_vpc.sa_east_1.id
 }
 
 output "hub_transit_gateway_id" {
