@@ -11,11 +11,20 @@
     "Web Application Deployment"
   ],
   "aws_services": [
-    "S3 Bucket",
-    "CloudFormation",
-    "Lambda",
-    "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
-  ]
+    "VPC",
+    "EC2",
+    "Application Load Balancer",
+    "Auto Scaling",
+    "RDS",
+    "Route 53",
+    "S3",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "KMS",
+    "Systems Manager",
+    "Secrets Manager",
+    "Certificate Manager"
+  ],
+  "training_quality": 10
 }
