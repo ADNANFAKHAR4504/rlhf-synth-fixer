@@ -12,17 +12,26 @@
   ],
   "po_id": "l9l1q",
   "aws_services": [
-    "ECS",
-    "ECR",
-    "VPC",
+    "ACM",
     "ALB",
-    "CloudWatch",
-    "IAM",
-    "Secrets Manager",
     "App Mesh",
     "Auto Scaling",
-    "Service Discovery"
+    "CloudWatch",
+    "ECR",
+    "ECS",
+    "IAM",
+    "KMS",
+    "Lambda",
+    "Secrets Manager",
+    "Service Discovery",
+    "VPC"
   ],
   "region": "us-east-1",
-  "training_quality": 10
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
