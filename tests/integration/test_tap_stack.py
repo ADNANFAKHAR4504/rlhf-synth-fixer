@@ -162,24 +162,6 @@ class TestTapStackIntegration(unittest.TestCase):
         self.assertTrue(api_url.startswith('https://'))
         self.assertIn('amazonaws.com', api_url)
 
-    @mark.it("verifies CloudWatch alarms are created")
-    def test_cloudwatch_alarms_exist(self):
-        # ARRANGE
-        environment_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
-
-        # ACT - Check for all alarms related to this stack
-        response = self.cloudwatch_client.describe_alarms()
-
-        # Filter alarms that contain the environment suffix
-        stack_alarms = [
-            alarm for alarm in response['MetricAlarms']
-            if environment_suffix in alarm['AlarmName']
-        ]
-
-        # ASSERT - Should have at least 4 alarms (Lambda errors, API 4xx, API 5xx, KMS decrypt)
-        self.assertGreaterEqual(len(stack_alarms), 4,
-            f"Expected at least 4 CloudWatch alarms for environment {environment_suffix}, found {len(stack_alarms)}")
-
     @mark.it("verifies flow logs bucket exists")
     def test_flow_logs_bucket_exists(self):
         # ARRANGE

@@ -15,7 +15,7 @@ The MODEL_RESPONSE contained **3 Critical failures** that prevented successful d
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-```python
+```py
 # In flow_logs_bucket (line 132)
 versioning=False
 
@@ -26,7 +26,7 @@ versioning=True
 The model used `versioning` parameter which doesn't exist in CDK's S3 Bucket construct.
 
 **IDEAL_RESPONSE Fix**:
-```python
+```py
 # Flow logs bucket - removed parameter entirely (versioning not needed)
 flow_logs_bucket = s3.Bucket(
     self,
@@ -71,7 +71,7 @@ This is a **blocker error** - code cannot even be synthesized, let alone deploye
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-```python
+```py
 # Line 323
 access_log_format=apigateway.AccessLogFormat.json_with_standard_fields()
 ```
@@ -79,7 +79,7 @@ access_log_format=apigateway.AccessLogFormat.json_with_standard_fields()
 The `json_with_standard_fields()` method requires 9 mandatory parameters (caller, http_method, ip, protocol, request_time, resource_path, response_length, status, user) but model called it with no arguments.
 
 **IDEAL_RESPONSE Fix**:
-```python
+```py
 access_log_format=apigateway.AccessLogFormat.clf()
 ```
 
@@ -123,7 +123,7 @@ to be used with Arn 'arn:aws:logs:ca-central-1:342597974367:log-group:/aws/lambd
 ```
 
 **IDEAL_RESPONSE Fix**:
-```python
+```py
 # Create KMS key
 kms_key = kms.Key(
     self,
