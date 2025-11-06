@@ -1,16 +1,51 @@
 # Ideal Response - TypeScript Source Reference
 
-This document captures every TypeScript file under the `lib/` directory. Each section embeds the exact source within `ts` code fences for quick reference.
+This document captures every TypeScript file under the `lib/` and `bin/` directories. Each section embeds the exact source within `ts` code fences for quick reference.
 
 ## Table of Contents
-1. [constructs/database-construct.ts](#constructs-database-construct-ts)
-2. [constructs/dms-construct.ts](#constructs-dms-construct-ts)
-3. [constructs/network-construct.ts](#constructs-network-construct-ts)
-4. [tap-stack.ts](#tap-stack-ts)
+1. [bin/tap.ts](#bin-tap-ts)
+2. [lib/constructs/database-construct.ts](#lib-constructs-database-construct-ts)
+3. [lib/constructs/dms-construct.ts](#lib-constructs-dms-construct-ts)
+4. [lib/constructs/network-construct.ts](#lib-constructs-network-construct-ts)
+5. [lib/tap-stack.ts](#lib-tap-stack-ts)
 
 ---
 
-## constructs/database-construct.ts
+## bin/tap.ts
+**Path:** `bin/tap.ts`
+
+```ts
+#!/usr/bin/env node
+import * as cdk from 'aws-cdk-lib';
+import { Tags } from 'aws-cdk-lib';
+import { TapStack } from '../lib/tap-stack';
+
+const app = new cdk.App();
+
+// Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
+const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
+const stackName = `TapStack${environmentSuffix}`;
+const repositoryName = process.env.REPOSITORY || 'unknown';
+const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
+
+// Apply tags to all stacks in this app (optional - you can do this at stack level instead)
+Tags.of(app).add('Environment', environmentSuffix);
+Tags.of(app).add('Repository', repositoryName);
+Tags.of(app).add('Author', commitAuthor);
+
+new TapStack(app, stackName, {
+  stackName: stackName, // This ensures CloudFormation stack name includes the suffix
+  environmentSuffix: environmentSuffix, // Pass the suffix to the stack
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: 'us-east-1',
+  },
+});
+```
+
+---
+
+## lib/constructs/database-construct.ts
 **Path:** `lib/constructs/database-construct.ts`
 
 ```ts
@@ -150,7 +185,7 @@ export class DatabaseConstruct extends Construct {
 
 ---
 
-## constructs/dms-construct.ts
+## lib/constructs/dms-construct.ts
 **Path:** `lib/constructs/dms-construct.ts`
 
 ```ts
@@ -426,7 +461,7 @@ export class DmsConstruct extends Construct {
 
 ---
 
-## constructs/network-construct.ts
+## lib/constructs/network-construct.ts
 **Path:** `lib/constructs/network-construct.ts`
 
 ```ts
@@ -518,7 +553,7 @@ export class NetworkConstruct extends Construct {
 
 ---
 
-## tap-stack.ts
+## lib/tap-stack.ts
 **Path:** `lib/tap-stack.ts`
 
 ```ts
