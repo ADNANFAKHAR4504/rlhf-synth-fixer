@@ -53,7 +53,7 @@ variable "database_allocated_storage" {
 variable "database_engine_version" {
   description = "PostgreSQL engine version"
   type        = string
-  default     = "15.4"
+  default     = "15.8"
 }
 
 variable "database_name" {
@@ -73,6 +73,10 @@ variable "database_password" {
   type        = string
   sensitive   = true
   default     = ""
+}
+
+resource "random_id" "suffix" {
+  byte_length = 4
 }
 
 resource "random_password" "db_password" {
@@ -146,6 +150,7 @@ locals {
   region      = var.aws_region
 
   name_prefix = "${local.environment}-${local.region}-${var.service_name}"
+  random_suffix = random_id.suffix.hex
 
   database_password = var.database_password != "" ? var.database_password : random_password.db_password.result
 
@@ -566,7 +571,7 @@ resource "aws_db_instance" "main" {
 resource "aws_s3_bucket" "storage" {
   for_each = var.storage_buckets
 
-  bucket = "${local.name_prefix}-${each.key}-${data.aws_caller_identity.current.account_id}"
+  bucket = "${local.name_prefix}-${each.key}-${local.random_suffix}"
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-${each.key}"
@@ -723,7 +728,7 @@ resource "aws_autoscaling_group" "compute" {
 
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
   count             = var.enable_flow_logs ? 1 : 0
-  name              = "/aws/vpc/${local.name_prefix}"
+  name              = "/aws/vpc/${local.name_prefix}-${local.random_suffix}"
   retention_in_days = 7
 
   tags = merge(local.common_tags, {
@@ -737,7 +742,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
 
 resource "aws_iam_role" "vpc_flow_logs" {
   count = var.enable_flow_logs ? 1 : 0
-  name  = "${local.name_prefix}-vpc-flow-logs-role"
+  name  = "${local.name_prefix}-vpc-flow-logs-role-${local.random_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -757,7 +762,7 @@ resource "aws_iam_role" "vpc_flow_logs" {
 
 resource "aws_iam_role_policy" "vpc_flow_logs" {
   count = var.enable_flow_logs ? 1 : 0
-  name  = "${local.name_prefix}-vpc-flow-logs-policy"
+  name  = "${local.name_prefix}-vpc-flow-logs-policy-${local.random_suffix}"
   role  = aws_iam_role.vpc_flow_logs[0].id
 
   policy = jsonencode({
