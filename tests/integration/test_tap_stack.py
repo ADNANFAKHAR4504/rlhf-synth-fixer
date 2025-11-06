@@ -49,6 +49,26 @@ class TestTapStackIntegration(unittest.TestCase):
     @classmethod
     def _discover_stack_name(cls) -> str:
         """Dynamically discover the active Pulumi stack name."""
+        # First, check if PULUMI_STACK environment variable is set (CI/CD)
+        env_stack = os.getenv('PULUMI_STACK')
+        if env_stack:
+            print(f"Using stack from PULUMI_STACK env var: {env_stack}")
+            return env_stack
+        
+        # Check for ENVIRONMENT_SUFFIX to construct stack name (CI/CD pattern)
+        env_suffix = os.getenv('ENVIRONMENT_SUFFIX')
+        if env_suffix:
+            # In CI/CD, stack pattern might be like: TapStack<suffix>
+            import glob
+            stack_files = glob.glob(os.path.join(cls.project_dir, 'Pulumi.*.yaml'))
+            for stack_file in stack_files:
+                stack_name = os.path.basename(stack_file).replace('Pulumi.', '').replace('.yaml', '')
+                # Match stack files that contain the environment suffix
+                if env_suffix.lower() in stack_name.lower() or stack_name.startswith('TapStack'):
+                    print(f"Using stack matching environment suffix {env_suffix}: {stack_name}")
+                    return stack_name
+        
+        # Try to get currently selected stack
         try:
             result = subprocess.run(
                 ['pulumi', 'stack', '--show-name'],
@@ -58,30 +78,55 @@ class TestTapStackIntegration(unittest.TestCase):
                 check=True
             )
             stack_name = result.stdout.strip()
+            print(f"Using currently selected stack: {stack_name}")
             return stack_name
-        except subprocess.CalledProcessError as e:
-            # Fallback: read from Pulumi.yaml or environment
-            env_stack = os.getenv('PULUMI_STACK')
-            if env_stack:
-                return env_stack
-            
-            # Try to find the stack from files
-            import glob
-            stack_files = glob.glob(os.path.join(cls.project_dir, 'Pulumi.*.yaml'))
-            if stack_files:
-                # Extract stack name from filename (Pulumi.<stack_name>.yaml)
-                stack_file = os.path.basename(stack_files[0])
+        except subprocess.CalledProcessError:
+            pass
+        
+        # Final fallback: use any available stack file
+        import glob
+        stack_files = glob.glob(os.path.join(cls.project_dir, 'Pulumi.*.yaml'))
+        if stack_files:
+            # Exclude the base Pulumi.yaml and prefer numbered stacks
+            config_stacks = [f for f in stack_files if not f.endswith('Pulumi.yaml')]
+            if config_stacks:
+                # Sort to get consistent results, prefer ones with numbers
+                config_stacks.sort()
+                stack_file = os.path.basename(config_stacks[0])
                 stack_name = stack_file.replace('Pulumi.', '').replace('.yaml', '')
+                print(f"Using first available stack: {stack_name}")
                 return stack_name
-            
-            raise RuntimeError(f"Could not discover stack name: {e.stderr}")
+        
+        raise RuntimeError("Could not discover stack name. Please set PULUMI_STACK environment variable or select a stack with 'pulumi stack select'")
 
     @classmethod
     def _discover_region(cls) -> str:
         """Dynamically discover the AWS region from Pulumi config."""
+        # Check environment variables first (CI/CD)
+        region = os.getenv('AWS_REGION') or os.getenv('AWS_DEFAULT_REGION')
+        if region:
+            print(f"Using region from environment: {region}")
+            return region
+        
+        # Try to read from Pulumi stack config file
+        try:
+            stack_config_file = os.path.join(cls.project_dir, f'Pulumi.{cls.stack_name}.yaml')
+            if os.path.exists(stack_config_file):
+                with open(stack_config_file, 'r') as f:
+                    # Simple parsing to avoid yaml dependency
+                    for line in f:
+                        if 'aws:region:' in line:
+                            region = line.split(':', 2)[-1].strip().strip('"').strip("'")
+                            if region:
+                                print(f"Using region from stack config file: {region}")
+                                return region
+        except Exception as e:
+            print(f"Could not read region from stack config file: {e}")
+        
+        # Try pulumi config command
         try:
             result = subprocess.run(
-                ['pulumi', 'config', 'get', 'aws:region'],
+                ['pulumi', 'config', 'get', 'aws:region', '--stack', cls.stack_name],
                 cwd=cls.project_dir,
                 capture_output=True,
                 text=True,
@@ -89,12 +134,14 @@ class TestTapStackIntegration(unittest.TestCase):
             )
             region = result.stdout.strip()
             if region:
+                print(f"Using region from pulumi config: {region}")
                 return region
         except subprocess.CalledProcessError:
             pass
         
-        # Fallback to environment variable or default
-        return os.getenv('AWS_REGION', os.getenv('AWS_DEFAULT_REGION', 'us-east-1'))
+        # Final fallback
+        print("Using default region: us-east-1")
+        return 'us-east-1'
 
     @classmethod
     def _get_stack_outputs(cls) -> Dict[str, str]:
@@ -106,7 +153,7 @@ class TestTapStackIntegration(unittest.TestCase):
                 env['PULUMI_CONFIG_PASSPHRASE'] = ''
             
             result = subprocess.run(
-                ['pulumi', 'stack', 'output', '--json'],
+                ['pulumi', 'stack', 'output', '--json', '--stack', cls.stack_name],
                 cwd=cls.project_dir,
                 capture_output=True,
                 text=True,
