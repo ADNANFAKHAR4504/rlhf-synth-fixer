@@ -139,6 +139,7 @@ export class VpcModule extends Construct {
           allocationId: eips[i].id,
           subnetId: subnet.id,
           tags: { ...config.tags, Name: `${config.name}-nat-${i + 1}` },
+          dependsOn: [eips[i], subnet],
         })
     );
 
@@ -373,7 +374,6 @@ export class RdsModule extends Construct {
     this.instance = new aws.dbInstance.DbInstance(this, 'instance', {
       identifier: config.identifier,
       engine: config.engine,
-      engineVersion: '8.0.35',
       instanceClass: config.instanceClass,
       allocatedStorage: config.allocatedStorage,
       storageType: 'gp3',
@@ -449,13 +449,11 @@ export class AlbModule extends Construct {
       );
     });
 
-    // Create HTTPS listener
+    // Create HTTP listener (no certificate needed)
     this.listener = new aws.lbListener.LbListener(this, 'listener', {
       loadBalancerArn: this.alb.arn,
-      port: 443,
-      protocol: 'HTTPS',
-      sslPolicy: 'ELBSecurityPolicy-TLS-1-2-2017-01',
-      certificateArn: this.createSelfSignedCertificate(config.name),
+      port: 80,
+      protocol: 'HTTP',
       defaultAction: [
         {
           type: 'forward',
@@ -464,16 +462,6 @@ export class AlbModule extends Construct {
       ],
       tags: config.tags,
     });
-  }
-
-  private createSelfSignedCertificate(name: string): string {
-    // In production, use ACM certificate
-    const cert = new aws.acmCertificate.AcmCertificate(this, 'cert', {
-      domainName: `${name}.example.com`,
-      validationMethod: 'DNS',
-      tags: { Name: `${name}-cert` },
-    });
-    return cert.arn;
   }
 }
 
@@ -630,7 +618,7 @@ export class SecurityServicesModule extends Construct {
       'aws-foundational',
       {
         standardsArn:
-          'arn:aws:securityhub:::ruleset/aws-foundational-security-best-practices/v/1.0.0',
+          'arn:aws:securityhub:us-east-1::standards/aws-foundational-security-best-practices/v/1.0.0',
         dependsOn: [this.securityHub],
       }
     );
@@ -698,7 +686,7 @@ export class SecurityServicesModule extends Construct {
       'config-policy',
       {
         role: configRole.name,
-        policyArn: 'arn:aws:iam::aws:policy/service-role/ConfigRole',
+        policyArn: 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole',
       }
     );
 
@@ -743,6 +731,7 @@ export class SecurityServicesModule extends Construct {
         sourceIdentifier: 'MFA_ENABLED_FOR_IAM_CONSOLE_ACCESS',
       },
       tags,
+      dependsOn: [this.config],
     });
 
     new aws.configConfigRule.ConfigConfigRule(this, 'encrypted-volumes', {
@@ -840,6 +829,48 @@ export class SecurityServicesModule extends Construct {
       }),
     });
 
+    // Add bucket policy for Config
+    new aws.s3BucketPolicy.S3BucketPolicy(this, 'config-bucket-policy', {
+      bucket: bucket.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'AWSConfigBucketPermissionsCheck',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'config.amazonaws.com',
+            },
+            Action: 's3:GetBucketAcl',
+            Resource: bucket.arn,
+          },
+          {
+            Sid: 'AWSConfigBucketExistenceCheck',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'config.amazonaws.com',
+            },
+            Action: 's3:ListBucket',
+            Resource: bucket.arn,
+          },
+          {
+            Sid: 'AWSConfigBucketDelivery',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'config.amazonaws.com',
+            },
+            Action: 's3:PutObject',
+            Resource: `${bucket.arn}/*`,
+            Condition: {
+              StringEquals: {
+                's3:x-amz-acl': 'bucket-owner-full-control',
+              },
+            },
+          },
+        ],
+      }),
+    });
+
     this.cloudTrail = new aws.cloudtrail.Cloudtrail(this, 'trail', {
       name: 'security-trail',
       s3BucketName: bucket.id,
@@ -855,7 +886,7 @@ export class SecurityServicesModule extends Construct {
           dataResource: [
             {
               type: 'AWS::S3::Object',
-              values: ['arn:aws:s3:::*/*'],
+              values: ['arn:aws:s3'],
             },
           ],
         },

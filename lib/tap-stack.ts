@@ -200,8 +200,8 @@ systemctl enable nginx
       vpcId: vpcModule.vpc.id,
       subnetIds: vpcModule.publicSubnets.map(s => s.id),
       securityGroupIds: [albSecurityGroup.securityGroup.id],
-      targetGroupPort: 443,
-      targetGroupProtocol: 'HTTPS',
+      targetGroupPort: 80,
+      targetGroupProtocol: 'HTTP',
       targetInstances: ec2Module.instances.map(i => i.id),
       tags: commonTags,
     });
@@ -365,6 +365,7 @@ systemctl enable nginx
           namespace: 'CloudTrailMetrics',
           value: '1',
         },
+        dependsOn: [securityServices.cloudTrail],
       }
     );
 
@@ -436,7 +437,7 @@ systemctl enable nginx
     });
 
     new TerraformOutput(this, 'dashboard-url', {
-      value: `https://console.aws.amazon.com/cloudwatch/home?region=${currentRegion.name}#dashboards:name=${monitoring.dashboard.dashboardName}`,
+      value: `https://console.aws.amazon.com/cloudwatch/home?region=${currentRegion.id}#dashboards:name=${monitoring.dashboard.dashboardName}`,
       description: 'CloudWatch Dashboard URL',
     });
     // ! Do NOT create resources directly in this stack.
