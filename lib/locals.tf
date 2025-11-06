@@ -16,7 +16,7 @@ locals {
     }
   }
 
-  config = local.workspace_config[terraform.workspace]
+  config = lookup(local.workspace_config, terraform.workspace != "" ? terraform.workspace : "production", local.workspace_config["production"])
 
   common_tags = {
     Workspace = terraform.workspace
