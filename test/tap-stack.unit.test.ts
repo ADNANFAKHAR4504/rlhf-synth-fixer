@@ -33,6 +33,82 @@ describe('TapStack Unit Tests', () => {
     );
     expect(nestedStacks.length).toBeGreaterThan(0);
   });
+
+  test('TapStack uses environment suffix from context when props is undefined', () => {
+    const appWithContext = new cdk.App();
+    appWithContext.node.setContext('environmentSuffix', 'context-test');
+
+    const stackWithContext = new TapStack(appWithContext, 'ContextTestStack');
+
+    const vpcStack = stackWithContext.node.children.find(
+      (child) => child instanceof VpcStack
+    );
+    expect(vpcStack).toBeDefined();
+    expect(vpcStack?.node.id).toContain('context-test');
+  });
+
+  test('TapStack uses default environment suffix when no props or context', () => {
+    const appNoContext = new cdk.App();
+
+    const stackNoContext = new TapStack(appNoContext, 'DefaultTestStack');
+
+    const vpcStack = stackNoContext.node.children.find(
+      (child) => child instanceof VpcStack
+    );
+    expect(vpcStack).toBeDefined();
+    expect(vpcStack?.node.id).toContain('dev');
+  });
+
+  test('TapStack prefers props over context for environment suffix', () => {
+    const appWithContext = new cdk.App();
+    appWithContext.node.setContext('environmentSuffix', 'context-test');
+
+    const stackWithProps = new TapStack(appWithContext, 'PropsTestStack', {
+      environmentSuffix: 'props-test',
+    });
+
+    const vpcStack = stackWithProps.node.children.find(
+      (child) => child instanceof VpcStack
+    );
+    expect(vpcStack).toBeDefined();
+    expect(vpcStack?.node.id).toContain('props-test');
+  });
+
+  test('TapStack passes environment configuration to VpcStack', () => {
+    const testEnv = { region: 'eu-west-1', account: '999888777666' };
+    const stackWithEnv = new TapStack(app, 'EnvTestStack', {
+      environmentSuffix: 'env-test',
+      env: testEnv,
+    });
+
+    const vpcStack = stackWithEnv.node.children.find(
+      (child) => child instanceof VpcStack
+    ) as VpcStack;
+
+    expect(vpcStack).toBeDefined();
+    expect(vpcStack.region).toBe('eu-west-1');
+    expect(vpcStack.account).toBe('999888777666');
+  });
+
+  test('TapStack handles undefined props gracefully', () => {
+    const stackNullProps = new TapStack(app, 'NullPropsStack', undefined);
+
+    expect(stackNullProps).toBeDefined();
+    const vpcStack = stackNullProps.node.children.find(
+      (child) => child instanceof VpcStack
+    );
+    expect(vpcStack).toBeDefined();
+  });
+
+  test('TapStack handles empty props object', () => {
+    const stackEmptyProps = new TapStack(app, 'EmptyPropsStack', {});
+
+    expect(stackEmptyProps).toBeDefined();
+    const vpcStack = stackEmptyProps.node.children.find(
+      (child) => child instanceof VpcStack
+    );
+    expect(vpcStack).toBeDefined();
+  });
 });
 
 describe('VpcStack Unit Tests', () => {
