@@ -6,7 +6,7 @@
   "po_id": "999000",
   "team": "1",
   "startedAt": "2025-10-22T08:52:45.291Z",
-  "subtask": "Provisioning of Infrastructure Environments",
+  "subtask": "IaC-Multi-Environment-Management",
   "subject_labels": [
     "Multi-Environment Consistency"
   ],
