@@ -1,11 +1,5 @@
-name: payment-processing
-runtime: python
+name: TapStack
+runtime:
+  name: python
 description: Serverless payment processing infrastructure with API Gateway, Lambda, DynamoDB, and SQS
-
-config:
-  aws:region:
-    description: AWS region for deployment
-    value: us-east-2
-  environmentSuffix:
-    description: Environment suffix for resource naming
-    default: dev
+main: tap.py
