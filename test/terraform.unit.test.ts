@@ -192,7 +192,7 @@ describe('EKS Infrastructure Terraform Tests', () => {
   describe('IAM Roles and Policies', () => {
     it('should create IAM role for EKS cluster', () => {
       expect(has(/resource\s+"aws_iam_role"\s+"eks_cluster"\s*{/)).toBe(true);
-      expect(has(/name\s*=\s*"\$\{var\.cluster_name\}-cluster-role"/)).toBe(true);
+      expect(has(/name\s*=\s*"\$\{var\.cluster_name\}-cluster-role-new"/)).toBe(true);
       expect(has(/Service\s*=\s*"eks\.amazonaws\.com"/)).toBe(true);
     });
 
@@ -203,7 +203,7 @@ describe('EKS Infrastructure Terraform Tests', () => {
 
     it('should create IAM role for EKS node groups', () => {
       expect(has(/resource\s+"aws_iam_role"\s+"eks_nodes"\s*{/)).toBe(true);
-      expect(has(/name\s*=\s*"\$\{var\.cluster_name\}-node-role"/)).toBe(true);
+      expect(has(/name\s*=\s*"\$\{var\.cluster_name\}-node-role-new"/)).toBe(true);
       expect(has(/Service\s*=\s*"ec2\.amazonaws\.com"/)).toBe(true);
     });
 
@@ -240,7 +240,7 @@ describe('EKS Infrastructure Terraform Tests', () => {
 
     it('should create KMS key alias', () => {
       expect(has(/resource\s+"aws_kms_alias"\s+"eks"\s*{/)).toBe(true);
-      expect(has(/name\s*=\s*"alias\/\$\{var\.cluster_name\}-eks"/)).toBe(true);
+      expect(has(/name\s*=\s*"alias\/\$\{var\.cluster_name\}-eks-new"/)).toBe(true);
       expect(has(/target_key_id\s*=\s*aws_kms_key\.eks\.key_id/)).toBe(true);
     });
   });
@@ -248,7 +248,7 @@ describe('EKS Infrastructure Terraform Tests', () => {
   describe('CloudWatch Logging', () => {
     it('should create CloudWatch log group for EKS cluster', () => {
       expect(has(/resource\s+"aws_cloudwatch_log_group"\s+"eks"\s*{/)).toBe(true);
-      expect(has(/name\s*=\s*"\/aws\/eks\/\$\{var\.cluster_name\}\/cluster"/)).toBe(true);
+      expect(has(/name\s*=\s*"\/aws\/eks\/\$\{var\.cluster_name\}\/cluster-new"/)).toBe(true);
       expect(has(/retention_in_days\s*=\s*30/)).toBe(true);
       expect(has(/kms_key_id\s*=\s*aws_kms_key\.eks\.arn/)).toBe(true);
     });
@@ -374,7 +374,7 @@ describe('EKS Infrastructure Terraform Tests', () => {
   describe('Application Load Balancer', () => {
     it('should create Application Load Balancer', () => {
       expect(has(/resource\s+"aws_lb"\s+"main"\s*{/)).toBe(true);
-      expect(has(/name\s*=\s*"\$\{var\.cluster_name\}-alb"/)).toBe(true);
+      expect(has(/name\s*=\s*"\$\{var\.cluster_name\}-alb-new"/)).toBe(true);
       expect(has(/internal\s*=\s*false/)).toBe(true);
       expect(has(/load_balancer_type\s*=\s*"application"/)).toBe(true);
     });
