@@ -970,4 +970,3 @@ echo "<h1>Payment Service - {self.environment_suffix}</h1>" > /var/www/html/inde
         pulumi.export("environment", self.environment)
         pulumi.export("environment_suffix", self.environment_suffix)
         pulumi.export("region", self.aws_region)
-        
