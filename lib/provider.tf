@@ -21,7 +21,7 @@ provider "aws" {
 }
 
 provider "aws" {
-  alias  = "eu_west_2"
+  alias  = "us_west_2"
   region = var.secondary_region
 }
 

@@ -94,7 +94,7 @@ Let’s make the recovery pipeline both autonomous and resilient — fully AWS-n
 5. Define provider block with each resource to avoid region conflicts
 Eg
 provider      = aws.us_east_1
-provider      = aws.eu_west_2
+provider      = aws.us_west_2
 provider      = aws.ap_southeast_2
 
 My provider.tf looks like this
@@ -105,7 +105,7 @@ provider "aws" {
 }
 
 provider "aws" {
-  alias  = "eu_west_2"
+  alias  = "us_west_2"
   region = var.secondary_region
 }
 

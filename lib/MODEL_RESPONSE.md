@@ -18,7 +18,7 @@ The user wants a comprehensive Terraform configuration file (`tap_stack.tf`) tha
 
 3. Must work across three regions using provider aliases:
    - aws.us_east_1
-   - aws.eu_west_2
+   - aws.us_west_2
    - aws.ap_southeast_2
 
 4. Consistent naming with "mult" suffix
@@ -57,7 +57,7 @@ variable "primary_region" {
 variable "secondary_region" {
   description = "Secondary AWS region for deployment"
   type        = string
-  default     = "eu-west-2"
+  default     = "us-west-2"
 }
 
 variable "third_region" {
@@ -100,8 +100,8 @@ data "aws_availability_zones" "us_east_1" {
   state    = "available"
 }
 
-data "aws_availability_zones" "eu_west_2" {
-  provider = aws.eu_west_2
+data "aws_availability_zones" "us_west_2" {
+  provider = aws.us_west_2
   state    = "available"
 }
 
@@ -166,14 +166,14 @@ locals {
   # Region mapping for iteration
   regions = {
     us_east_1      = var.primary_region
-    eu_west_2      = var.secondary_region
+    us_west_2      = var.secondary_region
     ap_southeast_2 = var.third_region
   }
   
   # AZ data mapping
   az_data = {
     us_east_1      = data.aws_availability_zones.us_east_1
-    eu_west_2      = data.aws_availability_zones.eu_west_2
+    us_west_2      = data.aws_availability_zones.us_west_2
     ap_southeast_2 = data.aws_availability_zones.ap_southeast_2
   }
   
@@ -481,8 +481,8 @@ resource "aws_security_group" "database_us_east_1" {
 # VPC - EU-WEST-2
 # ----------------------------------------------------------------------------
 
-resource "aws_vpc" "eu_west_2" {
-  provider             = aws.eu_west_2
+resource "aws_vpc" "us_west_2" {
+  provider             = aws.us_west_2
   cidr_block           = local.current_config.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
@@ -490,7 +490,7 @@ resource "aws_vpc" "eu_west_2" {
   tags = merge(
     local.common_tags,
     {
-      Name   = "${local.current_env}-vpc-eu-west-2-${local.resource_suffix}"
+      Name   = "${local.current_env}-vpc-us-west-2-${local.resource_suffix}"
       Region = var.secondary_region
     }
   )
@@ -500,14 +500,14 @@ resource "aws_vpc" "eu_west_2" {
 # INTERNET GATEWAY - EU-WEST-2
 # ----------------------------------------------------------------------------
 
-resource "aws_internet_gateway" "eu_west_2" {
-  provider = aws.eu_west_2
-  vpc_id   = aws_vpc.eu_west_2.id
+resource "aws_internet_gateway" "us_west_2" {
+  provider = aws.us_west_2
+  vpc_id   = aws_vpc.us_west_2.id
   
   tags = merge(
     local.common_tags,
     {
-      Name   = "${local.current_env}-igw-eu-west-2-${local.resource_suffix}"
+      Name   = "${local.current_env}-igw-us-west-2-${local.resource_suffix}"
       Region = var.secondary_region
     }
   )
@@ -517,20 +517,20 @@ resource "aws_internet_gateway" "eu_west_2" {
 # PUBLIC SUBNETS - EU-WEST-2
 # ----------------------------------------------------------------------------
 
-resource "aws_subnet" "public_eu_west_2" {
+resource "aws_subnet" "public_us_west_2" {
   count                   = 3
-  provider                = aws.eu_west_2
-  vpc_id                  = aws_vpc.eu_west_2.id
+  provider                = aws.us_west_2
+  vpc_id                  = aws_vpc.us_west_2.id
   cidr_block              = local.subnet_cidrs.public[count.index]
-  availability_zone       = local.az_data.eu_west_2.names[count.index]
+  availability_zone       = local.az_data.us_west_2.names[count.index]
   map_public_ip_on_launch = true
   
   tags = merge(
     local.common_tags,
     {
-      Name   = "${local.current_env}-public-subnet-az${count.index + 1}-eu-west-2-${local.resource_suffix}"
+      Name   = "${local.current_env}-public-subnet-az${count.index + 1}-us-west-2-${local.resource_suffix}"
       Type   = "Public"
-      AZ     = local.az_data.eu_west_2.names[count.index]
+      AZ     = local.az_data.us_west_2.names[count.index]
       Region = var.secondary_region
     }
   )
@@ -540,19 +540,19 @@ resource "aws_subnet" "public_eu_west_2" {
 # PRIVATE SUBNETS - EU-WEST-2
 # ----------------------------------------------------------------------------
 
-resource "aws_subnet" "private_eu_west_2" {
+resource "aws_subnet" "private_us_west_2" {
   count             = 3
-  provider          = aws.eu_west_2
-  vpc_id            = aws_vpc.eu_west_2.id
+  provider          = aws.us_west_2
+  vpc_id            = aws_vpc.us_west_2.id
   cidr_block        = local.subnet_cidrs.private[count.index]
-  availability_zone = local.az_data.eu_west_2.names[count.index]
+  availability_zone = local.az_data.us_west_2.names[count.index]
   
   tags = merge(
     local.common_tags,
     {
-      Name   = "${local.current_env}-private-subnet-az${count.index + 1}-eu-west-2-${local.resource_suffix}"
+      Name   = "${local.current_env}-private-subnet-az${count.index + 1}-us-west-2-${local.resource_suffix}"
       Type   = "Private"
-      AZ     = local.az_data.eu_west_2.names[count.index]
+      AZ     = local.az_data.us_west_2.names[count.index]
       Region = var.secondary_region
     }
   )
@@ -562,41 +562,41 @@ resource "aws_subnet" "private_eu_west_2" {
 # ELASTIC IPs FOR NAT - EU-WEST-2
 # ----------------------------------------------------------------------------
 
-resource "aws_eip" "nat_eu_west_2" {
+resource "aws_eip" "nat_us_west_2" {
   count    = local.current_config.enable_ha_nat ? 3 : 1
-  provider = aws.eu_west_2
+  provider = aws.us_west_2
   domain   = "vpc"
   
   tags = merge(
     local.common_tags,
     {
-      Name   = "${local.current_env}-nat-eip-az${count.index + 1}-eu-west-2-${local.resource_suffix}"
+      Name   = "${local.current_env}-nat-eip-az${count.index + 1}-us-west-2-${local.resource_suffix}"
       Region = var.secondary_region
     }
   )
   
-  depends_on = [aws_internet_gateway.eu_west_2]
+  depends_on = [aws_internet_gateway.us_west_2]
 }
 
 # ----------------------------------------------------------------------------
 # NAT GATEWAYS - EU-WEST-2
 # ----------------------------------------------------------------------------
 
-resource "aws_nat_gateway" "eu_west_2" {
+resource "aws_nat_gateway" "us_west_2" {
   count         = local.current_config.enable_ha_nat ? 3 : 1
-  provider      = aws.eu_west_2
-  allocation_id = aws_eip.nat_eu_west_2[count.index].id
-  subnet_id     = aws_subnet.public_eu_west_2[count.index].id
+  provider      = aws.us_west_2
+  allocation_id = aws_eip.nat_us_west_2[count.index].id
+  subnet_id     = aws_subnet.public_us_west_2[count.index].id
   
   tags = merge(
     local.common_tags,
     {
-      Name   = "${local.current_env}-nat-gateway-az${count.index + 1}-eu-west-2-${local.resource_suffix}"
+      Name   = "${local.current_env}-nat-gateway-az${count.index + 1}-us-west-2-${local.resource_suffix}"
       Region = var.secondary_region
     }
   )
   
-  depends_on = [aws_internet_gateway.eu_west_2]
+  depends_on = [aws_internet_gateway.us_west_2]
 }
 
 # ----------------------------------------------------------------------------
@@ -604,19 +604,19 @@ resource "aws_nat_gateway" "eu_west_2" {
 # ----------------------------------------------------------------------------
 
 # Public Route Table
-resource "aws_route_table" "public_eu_west_2" {
-  provider = aws.eu_west_2
-  vpc_id   = aws_vpc.eu_west_2.id
+resource "aws_route_table" "public_us_west_2" {
+  provider = aws.us_west_2
+  vpc_id   = aws_vpc.us_west_2.id
   
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.eu_west_2.id
+    gateway_id = aws_internet_gateway.us_west_2.id
   }
   
   tags = merge(
     local.common_tags,
     {
-      Name   = "${local.current_env}-public-rtb-eu-west-2-${local.resource_suffix}"
+      Name   = "${local.current_env}-public-rtb-us-west-2-${local.resource_suffix}"
       Type   = "Public"
       Region = var.secondary_region
     }
@@ -624,20 +624,20 @@ resource "aws_route_table" "public_eu_west_2" {
 }
 
 # Private Route Tables
-resource "aws_route_table" "private_eu_west_2" {
+resource "aws_route_table" "private_us_west_2" {
   count    = local.current_config.enable_ha_nat ? 3 : 1
-  provider = aws.eu_west_2
-  vpc_id   = aws_vpc.eu_west_2.id
+  provider = aws.us_west_2
+  vpc_id   = aws_vpc.us_west_2.id
   
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.eu_west_2[local.current_config.enable_ha_nat ? count.index : 0].id
+    nat_gateway_id = aws_nat_gateway.us_west_2[local.current_config.enable_ha_nat ? count.index : 0].id
   }
   
   tags = merge(
     local.common_tags,
     {
-      Name   = "${local.current_env}-private-rtb-az${count.index + 1}-eu-west-2-${local.resource_suffix}"
+      Name   = "${local.current_env}-private-rtb-az${count.index + 1}-us-west-2-${local.resource_suffix}"
       Type   = "Private"
       Region = var.secondary_region
     }
@@ -645,30 +645,30 @@ resource "aws_route_table" "private_eu_west_2" {
 }
 
 # Public Route Table Associations
-resource "aws_route_table_association" "public_eu_west_2" {
+resource "aws_route_table_association" "public_us_west_2" {
   count          = 3
-  provider       = aws.eu_west_2
-  subnet_id      = aws_subnet.public_eu_west_2[count.index].id
-  route_table_id = aws_route_table.public_eu_west_2.id
+  provider       = aws.us_west_2
+  subnet_id      = aws_subnet.public_us_west_2[count.index].id
+  route_table_id = aws_route_table.public_us_west_2.id
 }
 
 # Private Route Table Associations
-resource "aws_route_table_association" "private_eu_west_2" {
+resource "aws_route_table_association" "private_us_west_2" {
   count          = 3
-  provider       = aws.eu_west_2
-  subnet_id      = aws_subnet.private_eu_west_2[count.index].id
-  route_table_id = aws_route_table.private_eu_west_2[local.current_config.enable_ha_nat ? count.index : 0].id
+  provider       = aws.us_west_2
+  subnet_id      = aws_subnet.private_us_west_2[count.index].id
+  route_table_id = aws_route_table.private_us_west_2[local.current_config.enable_ha_nat ? count.index : 0].id
 }
 
 # ----------------------------------------------------------------------------
 # SECURITY GROUPS - EU-WEST-2
 # ----------------------------------------------------------------------------
 
-resource "aws_security_group" "app_eu_west_2" {
-  provider    = aws.eu_west_2
-  name        = "${local.current_env}-app-sg-eu-west-2-${local.resource_suffix}"
+resource "aws_security_group" "app_us_west_2" {
+  provider    = aws.us_west_2
+  name        = "${local.current_env}-app-sg-us-west-2-${local.resource_suffix}"
   description = "Security group for ${local.current_env} application tier"
-  vpc_id      = aws_vpc.eu_west_2.id
+  vpc_id      = aws_vpc.us_west_2.id
   
   ingress {
     description = "Environment-specific application ports"
@@ -705,25 +705,25 @@ resource "aws_security_group" "app_eu_west_2" {
   tags = merge(
     local.common_tags,
     {
-      Name   = "${local.current_env}-app-sg-eu-west-2-${local.resource_suffix}"
+      Name   = "${local.current_env}-app-sg-us-west-2-${local.resource_suffix}"
       Type   = "Application"
       Region = var.secondary_region
     }
   )
 }
 
-resource "aws_security_group" "database_eu_west_2" {
-  provider    = aws.eu_west_2
-  name        = "${local.current_env}-db-sg-eu-west-2-${local.resource_suffix}"
+resource "aws_security_group" "database_us_west_2" {
+  provider    = aws.us_west_2
+  name        = "${local.current_env}-db-sg-us-west-2-${local.resource_suffix}"
   description = "Security group for ${local.current_env} database tier"
-  vpc_id      = aws_vpc.eu_west_2.id
+  vpc_id      = aws_vpc.us_west_2.id
   
   ingress {
     description     = "PostgreSQL from app tier"
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
-    security_groups = [aws_security_group.app_eu_west_2.id]
+    security_groups = [aws_security_group.app_us_west_2.id]
   }
   
   ingress {
@@ -731,7 +731,7 @@ resource "aws_security_group" "database_eu_west_2" {
     from_port       = 3306
     to_port         = 3306
     protocol        = "tcp"
-    security_groups = [aws_security_group.app_eu_west_2.id]
+    security_groups = [aws_security_group.app_us_west_2.id]
   }
   
   egress {
@@ -745,7 +745,7 @@ resource "aws_security_group" "database_eu_west_2" {
   tags = merge(
     local.common_tags,
     {
-      Name   = "${local.current_env}-db-sg-eu-west-2-${local.resource_suffix}"
+      Name   = "${local.current_env}-db-sg-us-west-2-${local.resource_suffix}"
       Type   = "Database"
       Region = var.secondary_region
     }
@@ -1098,59 +1098,59 @@ output "us_east_1_database_security_group_id" {
 # EU-WEST-2 OUTPUTS
 # ----------------------------------------------------------------------------
 
-output "eu_west_2_vpc_id" {
+output "us_west_2_vpc_id" {
   description = "VPC ID for EU-WEST-2 region"
-  value       = aws_vpc.eu_west_2.id
+  value       = aws_vpc.us_west_2.id
 }
 
-output "eu_west_2_vpc_cidr" {
+output "us_west_2_vpc_cidr" {
   description = "VPC CIDR block for EU-WEST-2 region"
-  value       = aws_vpc.eu_west_2.cidr_block
+  value       = aws_vpc.us_west_2.cidr_block
 }
 
-output "eu_west_2_public_subnet_ids" {
+output "us_west_2_public_subnet_ids" {
   description = "Public subnet IDs for EU-WEST-2 region"
-  value       = aws_subnet.public_eu_west_2[*].id
+  value       = aws_subnet.public_us_west_2[*].id
 }
 
-output "eu_west_2_private_subnet_ids" {
+output "us_west_2_private_subnet_ids" {
   description = "Private subnet IDs for EU-WEST-2 region"
-  value       = aws_subnet.private_eu_west_2[*].id
+  value       = aws_subnet.private_us_west_2[*].id
 }
 
-output "eu_west_2_nat_gateway_ids" {
+output "us_west_2_nat_gateway_ids" {
   description = "NAT Gateway IDs for EU-WEST-2 region"
-  value       = aws_nat_gateway.eu_west_2[*].id
+  value       = aws_nat_gateway.us_west_2[*].id
 }
 
-output "eu_west_2_nat_eip_addresses" {
+output "us_west_2_nat_eip_addresses" {
   description = "NAT Gateway Elastic IP addresses for EU-WEST-2 region"
-  value       = aws_eip.nat_eu_west_2[*].public_ip
+  value       = aws_eip.nat_us_west_2[*].public_ip
 }
 
-output "eu_west_2_internet_gateway_id" {
+output "us_west_2_internet_gateway_id" {
   description = "Internet Gateway ID for EU-WEST-2 region"
-  value       = aws_internet_gateway.eu_west_2.id
+  value       = aws_internet_gateway.us_west_2.id
 }
 
-output "eu_west_2_public_route_table_id" {
+output "us_west_2_public_route_table_id" {
   description = "Public route table ID for EU-WEST-2 region"
-  value       = aws_route_table.public_eu_west_2.id
+  value       = aws_route_table.public_us_west_2.id
 }
 
-output "eu_west_2_private_route_table_ids" {
+output "us_west_2_private_route_table_ids" {
   description = "Private route table IDs for EU-WEST-2 region"
-  value       = aws_route_table.private_eu_west_2[*].id
+  value       = aws_route_table.private_us_west_2[*].id
 }
 
-output "eu_west_2_app_security_group_id" {
+output "us_west_2_app_security_group_id" {
   description = "Application security group ID for EU-WEST-2 region"
-  value       = aws_security_group.app_eu_west_2.id
+  value       = aws_security_group.app_us_west_2.id
 }
 
-output "eu_west_2_database_security_group_id" {
+output "us_west_2_database_security_group_id" {
   description = "Database security group ID for EU-WEST-2 region"
-  value       = aws_security_group.database_eu_west_2.id
+  value       = aws_security_group.database_us_west_2.id
 }
 
 # ----------------------------------------------------------------------------
