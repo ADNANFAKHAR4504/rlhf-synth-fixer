@@ -15,23 +15,29 @@ Parameters:
   
   ProjectName:
     Type: String
-    Default: SecureServerlessApp
-    Description: Project name for resource naming and tagging
+    Default: secureserverlessapp
+    AllowedPattern: '^[a-z0-9-]+$'
+    ConstraintDescription: Must contain only lowercase letters, numbers, and hyphens
+    Description: Project name for resource naming and tagging (lowercase only)
   
+  GitHubOwner:
+    Type: String
+    Default: your-github-username
+    Description: GitHub username or organization name
+
   GitHubRepo:
     Type: String
     Default: your-github-repo
     Description: GitHub repository name for CI/CD
-  
+
   GitHubBranch:
     Type: String
     Default: main
     Description: GitHub branch for CI/CD
-  
-  GitHubToken:
+
+  CodeStarConnectionArn:
     Type: String
-    NoEcho: true
-    Description: GitHub personal access token for CodePipeline
+    Description: ARN of the CodeStar Connection for GitHub (create this manually in AWS Console first)
 
 # Global Configuration for Lambda Functions
 Globals:
@@ -45,6 +51,12 @@ Globals:
         PROJECT_NAME: !Ref ProjectName
         TABLE_NAME: !Ref UserDataTable
     Tracing: Active  # Enable X-Ray tracing
+    VpcConfig:
+      SecurityGroupIds:
+        - !Ref LambdaSecurityGroup
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
     Tags:
       Environment: !Ref Environment
       ProjectName: !Ref ProjectName
@@ -166,9 +178,9 @@ Resources:
     Type: AWS::SSM::Parameter
     Properties:
       Name: !Sub '/${ProjectName}/${Environment}/api/key'
-      Type: SecureString
+      Type: String
       Value: !Sub '${AWS::StackName}-api-key-${AWS::AccountId}'
-      Description: API Key for authentication
+      Description: API Key for authentication (use AWS Secrets Manager for production secrets)
       Tags:
         Environment: !Ref Environment
         ProjectName: !Ref ProjectName
@@ -177,7 +189,6 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ProjectName}-${Environment}-LambdaRole'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -187,6 +198,7 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
         - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
       Policies:
         - PolicyName: DynamoDBAccess
@@ -239,8 +251,40 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub '${ProjectName}-${Environment}-GetUser'
-      CodeUri: ./src/get_user/
-      Handler: app.lambda_handler
+      InlineCode: |
+        import json
+        import boto3
+        import os
+        from decimal import Decimal
+
+        dynamodb = boto3.resource('dynamodb')
+        table_name = os.environ['TABLE_NAME']
+        table = dynamodb.Table(table_name)
+
+        def lambda_handler(event, context):
+            try:
+                user_id = event['pathParameters']['userId']
+                response = table.get_item(Key={'userId': user_id})
+
+                if 'Item' in response:
+                    return {
+                        'statusCode': 200,
+                        'body': json.dumps(response['Item'], default=str),
+                        'headers': {'Content-Type': 'application/json'}
+                    }
+                else:
+                    return {
+                        'statusCode': 404,
+                        'body': json.dumps({'message': 'User not found'}),
+                        'headers': {'Content-Type': 'application/json'}
+                    }
+            except Exception as e:
+                return {
+                    'statusCode': 500,
+                    'body': json.dumps({'error': str(e)}),
+                    'headers': {'Content-Type': 'application/json'}
+                }
+      Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Events:
         GetUserApi:
@@ -257,8 +301,48 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub '${ProjectName}-${Environment}-CreateUser'
-      CodeUri: ./src/create_user/
-      Handler: app.lambda_handler
+      InlineCode: |
+        import json
+        import boto3
+        import os
+        from datetime import datetime
+
+        dynamodb = boto3.resource('dynamodb')
+        table_name = os.environ['TABLE_NAME']
+        table = dynamodb.Table(table_name)
+
+        def lambda_handler(event, context):
+            try:
+                body = json.loads(event['body'])
+                user_id = body.get('userId')
+
+                if not user_id:
+                    return {
+                        'statusCode': 400,
+                        'body': json.dumps({'error': 'userId is required'}),
+                        'headers': {'Content-Type': 'application/json'}
+                    }
+
+                item = {
+                    'userId': user_id,
+                    'timestamp': int(datetime.now().timestamp()),
+                    **body
+                }
+
+                table.put_item(Item=item)
+
+                return {
+                    'statusCode': 201,
+                    'body': json.dumps({'message': 'User created successfully', 'userId': user_id}),
+                    'headers': {'Content-Type': 'application/json'}
+                }
+            except Exception as e:
+                return {
+                    'statusCode': 500,
+                    'body': json.dumps({'error': str(e)}),
+                    'headers': {'Content-Type': 'application/json'}
+                }
+      Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Events:
         CreateUserApi:
@@ -272,8 +356,38 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub '${ProjectName}-${Environment}-ProcessData'
-      CodeUri: ./src/process_data/
-      Handler: app.lambda_handler
+      InlineCode: |
+        import json
+        import boto3
+        import os
+
+        dynamodb = boto3.resource('dynamodb')
+        table_name = os.environ['TABLE_NAME']
+        table = dynamodb.Table(table_name)
+
+        def lambda_handler(event, context):
+            try:
+                body = json.loads(event['body'])
+
+                # Process data logic here
+                processed_result = {
+                    'status': 'processed',
+                    'data': body,
+                    'message': 'Data processed successfully'
+                }
+
+                return {
+                    'statusCode': 200,
+                    'body': json.dumps(processed_result),
+                    'headers': {'Content-Type': 'application/json'}
+                }
+            except Exception as e:
+                return {
+                    'statusCode': 500,
+                    'body': json.dumps({'error': str(e)}),
+                    'headers': {'Content-Type': 'application/json'}
+                }
+      Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Events:
         ProcessDataApi:
@@ -291,19 +405,15 @@ Resources:
       Name: !Sub '${ProjectName}-${Environment}-PublicAPI'
       StageName: !Ref Environment
       TracingEnabled: true
+      AccessLogSetting:
+        DestinationArn: !GetAtt ApiLogGroup.Arn
+        Format: '$context.requestId $context.extendedRequestId $context.identity.sourceIp $context.requestTime $context.httpMethod $context.resourcePath $context.status'
       Cors:
         AllowMethods: "'GET, POST, PUT, DELETE, OPTIONS'"
         AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
         AllowOrigin: "'*'"
       Auth:
         ApiKeyRequired: true
-        UsagePlan:
-          CreateUsagePlan: PER_API
-          UsagePlanData:
-            UsagePlanName: !Sub '${ProjectName}-${Environment}-UsagePlan'
-            Throttle:
-              BurstLimit: 100
-              RateLimit: 50
       MethodSettings:
         - ResourcePath: /*
           HttpMethod: '*'
@@ -313,6 +423,41 @@ Resources:
       Tags:
         Environment: !Ref Environment
         ProjectName: !Ref ProjectName
+
+  # API Key for Public API (SAM creates the stage automatically)
+  PublicApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    Properties:
+      Name: !Sub '${ProjectName}-${Environment}-ApiKey'
+      Description: API Key for Public API access
+      Enabled: true
+      StageKeys:
+        - RestApiId: !Ref PublicApi
+          StageName: !Ref Environment
+
+  # Usage Plan
+  PublicApiUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    Properties:
+      UsagePlanName: !Sub '${ProjectName}-${Environment}-UsagePlan'
+      Description: Usage plan for Public API
+      ApiStages:
+        - ApiId: !Ref PublicApi
+          Stage: !Ref Environment
+      Throttle:
+        BurstLimit: 100
+        RateLimit: 50
+      Quota:
+        Limit: 10000
+        Period: DAY
+
+  # Link API Key to Usage Plan
+  PublicApiUsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref PublicApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref PublicApiUsagePlan
 
   # Private API
   PrivateApi:
@@ -340,7 +485,7 @@ Resources:
         Environment: !Ref Environment
         ProjectName: !Ref ProjectName
 
-  # VPC Endpoint for Private API (simplified for example)
+  # VPC Endpoint for Private API
   VPCEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
@@ -348,7 +493,8 @@ Resources:
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.execute-api'
       VpcId: !Ref VPC
       SubnetIds:
-        - !Ref PrivateSubnet
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
       SecurityGroupIds:
         - !Ref VPCEndpointSecurityGroup
 
@@ -367,7 +513,7 @@ Resources:
         - Key: ProjectName
           Value: !Ref ProjectName
 
-  PrivateSubnet:
+  PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
@@ -375,7 +521,64 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-PrivateSubnet'
+          Value: !Sub '${ProjectName}-${Environment}-PrivateSubnet1'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ProjectName
+          Value: !Ref ProjectName
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-PrivateSubnet2'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ProjectName
+          Value: !Ref ProjectName
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-PrivateRouteTable'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ProjectName
+          Value: !Ref ProjectName
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Lambda functions
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: Allow HTTPS outbound for AWS service access
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-LambdaSG'
         - Key: Environment
           Value: !Ref Environment
         - Key: ProjectName
@@ -390,7 +593,8 @@ Resources:
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          CidrIp: 10.0.0.0/16
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+          Description: Allow HTTPS from Lambda functions
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -522,6 +726,8 @@ Resources:
             Value: !Ref Environment
           - Name: PROJECT_NAME
             Value: !Ref ProjectName
+          - Name: BUCKET_NAME
+            Value: !Ref PipelineArtifactStore
       Source:
         Type: CODEPIPELINE
         BuildSpec: |
@@ -595,14 +801,14 @@ Resources:
             - Name: SourceAction
               ActionTypeId:
                 Category: Source
-                Owner: ThirdParty
-                Provider: GitHub
+                Owner: AWS
+                Provider: CodeStarSourceConnection
                 Version: '1'
               Configuration:
-                Owner: !Ref AWS::AccountId
-                Repo: !Ref GitHubRepo
-                Branch: !Ref GitHubBranch
-                OAuthToken: !Ref GitHubToken
+                ConnectionArn: !Ref CodeStarConnectionArn
+                FullRepositoryId: !Sub '${GitHubOwner}/${GitHubRepo}'
+                BranchName: !Ref GitHubBranch
+                OutputArtifactFormat: CODE_ZIP
               OutputArtifacts:
                 - Name: SourceOutput
         - Name: Build
