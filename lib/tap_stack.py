@@ -465,7 +465,6 @@ class TapStack:
 
         # Create ECS Service with proper depends_on
         self.ecs_service = aws.ecs.Service(
-            f"ecs-service-{environment_suffix}",
             name=f"product-catalog-{environment_suffix}",
             cluster=self.ecs_cluster.arn,
             task_definition=self.task_definition.arn,
@@ -483,7 +482,6 @@ class TapStack:
                 container_port=5000
             )],
             health_check_grace_period_seconds=60,
-            tags={"Name": f"ecs-service-{environment_suffix}"},
             opts=pulumi.ResourceOptions(
                 delete_before_replace=True,
                 depends_on=[self.alb_listener, self.rds_instance]
