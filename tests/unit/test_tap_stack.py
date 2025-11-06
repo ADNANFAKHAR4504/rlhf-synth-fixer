@@ -154,7 +154,7 @@ def test_backup_configuration():
         {
             "BackupRetentionPeriod": 7,
             "PreferredBackupWindow": "03:00-05:00",
-            "PreferredMaintenanceWindow": "sun:03:00-sun:05:00",
+            "PreferredMaintenanceWindow": "sun:06:00-sun:08:00",  # Updated to avoid overlap with backup window
         },
     )
 
