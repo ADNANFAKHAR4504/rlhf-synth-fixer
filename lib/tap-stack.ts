@@ -544,7 +544,8 @@ export class TapStack extends cdk.Stack {
     );
 
     // Remove the default egress rule to have truly restricted egress
-    const cfnDbSecurityGroup = dbSecurityGroup.node.defaultChild as ec2.CfnSecurityGroup;
+    const cfnDbSecurityGroup = dbSecurityGroup.node
+      .defaultChild as ec2.CfnSecurityGroup;
     cfnDbSecurityGroup.securityGroupEgress = [];
 
     // Lambda Security Group
