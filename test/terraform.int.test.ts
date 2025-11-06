@@ -87,6 +87,7 @@ function loadDeploymentOutputs(): DeploymentOutputs {
     path.resolve(process.cwd(), 'terraform-outputs.json'),
     path.resolve(process.cwd(), 'outputs.json'),
     path.resolve(process.cwd(), 'deployment-outputs.json'),
+    path.resolve(process.cwd(), 'cfn-outputs.json'),
   ];
 
   for (const outputPath of outputPaths) {
