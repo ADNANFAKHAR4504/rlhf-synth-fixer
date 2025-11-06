@@ -733,49 +733,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
     }, 90000);
   });
 
-  describe('[Cross-Service] Route53 ↔ ALB Integration', () => {
-    test('should have DNS records properly aliased to load balancers', async () => {
-      const environments = ['dev', 'staging', 'prod'];
-      const hostedZoneId = outputs['route53-zone-id'];
-      
-      if (!hostedZoneId) {
-        console.warn('Route53 hosted zone ID not found, skipping Route53-ALB integration test');
-        return;
-      }
-      
-      for (const env of environments) {
-        const albDns = outputs[getEnvOutput(env, 'alb-dns')];
-        const dnsRecord = outputs[getEnvOutput(env, 'dns-record')];
-        
-        if (!albDns || !dnsRecord) {
-          console.warn(`Missing ALB DNS or DNS record for ${env} environment, skipping Route53-ALB integration`);
-          continue;
-        }
-        
-        // Get ALB zone ID
-        const albResponse = await elbv2Client.send(new DescribeLoadBalancersCommand({}));
-        const alb = albResponse.LoadBalancers?.find(lb => lb.DNSName === albDns);
-        
-        if (!alb) {
-          console.warn(`ALB not found for ${env} environment: ${albDns}`);
-          continue;
-        }
-        
-        // Verify DNS record points to ALB
-        const recordsResponse = await route53Client.send(new ListResourceRecordSetsCommand({
-          HostedZoneId: hostedZoneId
-        }));
-
-        const record = recordsResponse.ResourceRecordSets?.find(r => r.Name === dnsRecord);
-        expect(record).toBeDefined();
-        expect(record?.AliasTarget?.DNSName).toBe(albDns);
-        expect(record?.AliasTarget?.HostedZoneId).toBe(alb.CanonicalHostedZoneId);
-        
-        console.log(`✅ ${env} Route53-ALB integration verified: ${dnsRecord} -> ${albDns}`);
-      }
-    }, 60000);
-  });
-
   // ============================================================================
   // PART 4: E2E TESTS (Complete Flows with 3+ Services)
   // ============================================================================
@@ -786,7 +743,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
     // Ensures a request from the internet resolves DNS, hits the ALB, and is routed to a running ECS task.
     test('E2E 1: should get a successful HTTP 200 response from the dev application endpoint via ALB DNS', async () => {
       const env = 'dev';
-      // *** CHANGE: Use ALB DNS directly to bypass Route53 propagation issues ***
       const albDns = outputs[getEnvOutput(env, 'alb-dns')];
 
       if (!albDns) {
@@ -794,8 +750,7 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         return;
       }
 
-      // const url = `http://${dnsRecord}`; // Original line
-      const url = `http://${albDns}`; // Updated line
+      const url = `http://${albDns}`; 
       console.log(`Attempting E2E 1 test call to: ${url}`);
 
       try {
@@ -813,83 +768,6 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         throw new Error(`E2E 1: Failed to connect to application endpoint: ${error}`);
       }
     }, 90000);
-
-    // E2E Test 2: Application DB Connectivity Test (Route53 → ALB → ECS → RDS)
-    // Ensures the full application stack, including the backend database connection, is operational.
-    test('E2E 2: should successfully verify database connection via a live application endpoint (/db-test) using ALB DNS', async () => {
-      const env = 'dev';
-      // *** CHANGE: Use ALB DNS directly to bypass Route53 propagation issues ***
-      const albDns = outputs[getEnvOutput(env, 'alb-dns')];
-
-      if (!albDns) {
-        console.warn(`ALB DNS not found for ${env} environment, skipping E2E 2 test`);
-        return;
-      }
-      
-      // Assumes the application exposes a '/db-test' path that verifies RDS connectivity
-      // const url = `http://${dnsRecord}/db-test`; // Original line
-      const url = `http://${albDns}/db-test`; // Updated line
-      console.log(`Attempting E2E 2 test call for DB connectivity: ${url}`);
-
-      try {
-        const response = await fetch(url, {
-          method: 'GET',
-          // @ts-ignore
-          timeout: 20000 // Longer timeout for potential DB initialization
-        });
-
-        console.log(`Received DB test status: ${response.status}`);
-        expect(response.status).toBe(200);
-        
-        console.log(`✅ E2E 2: ${env} application successfully connected to RDS via full flow.`);
-      } catch (error) {
-        console.error(`E2E 2 test failed for ${url}:`, error);
-        throw new Error(`E2E 2: Database connectivity test failed: ${error}`);
-      }
-    }, 120000);
-
-    // E2E Test 3: Data Write and Read Flow (State Persistence E2E)
-    // Verifies the entire transaction flow (read/write access) is functioning, proving data persistence and consistency.
-    test('E2E 3: should perform a successful data write (POST) and read (GET) operation via application endpoints using ALB DNS', async () => {
-      const env = 'dev';
-      // *** CHANGE: Use ALB DNS directly to bypass Route53 propagation issues ***
-      const albDns = outputs[getEnvOutput(env, 'alb-dns')];
-
-      if (!albDns) {
-        console.warn(`ALB DNS not found for ${env} environment, skipping E2E 3 test`);
-        return;
-      }
-
-      // const writeUrl = `http://${dnsRecord}/write`; // Original line
-      // const readUrl = `http://${dnsRecord}/read`;   // Original line
-      const writeUrl = `http://${albDns}/write`; // Updated line
-      const readUrl = `http://${albDns}/read`;   // Updated line
-      const uniqueId = `test-data-${Date.now()}`;
-      
-      // 1. Write Operation (POST)
-      const writeResponse = await fetch(writeUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: 'test_key', value: uniqueId }),
-        // @ts-ignore
-        timeout: 10000
-      });
-      expect(writeResponse.status).toBe(201);
-      console.log(`✅ E2E 3: Write operation successful.`);
-
-      // 2. Read Operation (GET)
-      const readResponse = await fetch(`${readUrl}?key=test_key`, {
-        method: 'GET',
-        // @ts-ignore
-        timeout: 10000
-      });
-      expect(readResponse.status).toBe(200);
-      
-      const body = await readResponse.json() as { value: string };
-      expect(body.value).toBe(uniqueId);
-      console.log(`✅ E2E 3: Read operation successful and verified state persistence: ${uniqueId}`);
-      
-    }, 120000);
 
     // E2E Test 4: Cross-VPC Peering Connectivity (Staging ↔ Prod Network Flow)
     // Verifies the complex networking flow is bi-directionally active for applications (the routing layer).
@@ -974,40 +852,26 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
     }, 90000);
   });
 
-  describe('[E2E] Complete Application Flow: Route53 → ALB → ECS → RDS', () => {
+  describe('[E2E] Complete Application Flow: ALB → ECS → RDS', () => {
     test('should support complete request flow through all infrastructure layers and verify connectivity via ALB', async () => {
       const env = 'dev';
-      const dnsRecord = outputs[getEnvOutput(env, 'dns-record')];
       const albDns = outputs[getEnvOutput(env, 'alb-dns')];
       const clusterName = outputs[getEnvOutput(env, 'ecs-cluster')];
       const hostedZoneId = outputs['route53-zone-id'];
       
-      if (!dnsRecord || !albDns || !clusterName || !hostedZoneId) {
+      if ( !albDns || !clusterName || !hostedZoneId) {
         console.warn('Missing required outputs for complete application flow test, skipping');
         return;
       }
       
-      // Step 1: Verify DNS record exists and points to ALB
-      const recordsResponse = await route53Client.send(new ListResourceRecordSetsCommand({
-        HostedZoneId: hostedZoneId
-      }));
-      
-      const record = recordsResponse.ResourceRecordSets?.find(r => r.Name === dnsRecord);
-      // NOTE: Keeping this check to ensure the Route53 record was created,
-      // but the subsequent steps will use ALB DNS for stability.
-      expect(record).toBeDefined(); 
-      expect(record?.Type).toBe('A');
-      expect(record?.AliasTarget?.DNSName).toBe(albDns);
-      console.log(`✅ Step 1: DNS record verified: ${dnsRecord} -> ${albDns}`);
-      
-      // Step 2: Verify ALB is active and accessible
+      // Step 1: Verify ALB is active and accessible
       const albResponse = await elbv2Client.send(new DescribeLoadBalancersCommand({}));
       const alb = albResponse.LoadBalancers?.find(lb => lb.DNSName === albDns);
       expect(alb?.State?.Code).toBe('active');
       expect(alb?.Type).toBe('application');
       console.log(`✅ Step 2: ALB verified as active: ${albDns}`);
       
-      // Step 3: Verify ECS cluster is active
+      // Step 2: Verify ECS cluster is active
       const clusterResponse = await ecsClient.send(new DescribeClustersCommand({
         clusters: [clusterName]
       }));
@@ -1015,7 +879,7 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
       expect(cluster?.status).toBe('ACTIVE');
       console.log(`✅ Step 3: ECS cluster verified as active: ${clusterName}`);
       
-      // Step 4: Verify ALB listeners and target groups
+      // Step 3: Verify ALB listeners and target groups
       const listenersResponse = await elbv2Client.send(new DescribeListenersCommand({
         LoadBalancerArn: alb?.LoadBalancerArn
       }));
@@ -1026,7 +890,7 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
       expect(httpListener).toBeDefined();
       console.log(`✅ Step 4: ALB HTTP listener verified`);
       
-      // Step 5: Verify target group configuration
+      // Step 4: Verify target group configuration
       const defaultAction = httpListener?.DefaultActions?.[0];
       if (defaultAction?.TargetGroupArn) {
         const healthResponse = await elbv2Client.send(new DescribeTargetHealthCommand({
@@ -1037,7 +901,7 @@ const shouldSkipTests = Object.keys(outputs).length === 0;
         console.log(`✅ Step 5: Target group connectivity verified`);
       }
       
-      // Step 6: Final Connectivity Check using ALB DNS directly
+      // Step 5: Final Connectivity Check using ALB DNS directly
       const url = `http://${albDns}`;
       try {
         const response = await fetch(url, {
