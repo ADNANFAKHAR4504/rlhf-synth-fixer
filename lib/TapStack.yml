@@ -157,6 +157,10 @@ Conditions:
   CreateBastion: !Equals [ !Ref CreateBastionEC2, 'true' ]
   HasKeyPair: !Not [ !Equals [ !Ref EC2KeyPairName, '' ] ]
   HasUniqueSuffix: !Not [ !Equals [ !Ref UniqueSuffix, '' ] ]
+  IsDev: !Equals [ !Ref EnvironmentSuffix, dev ]
+  IsStaging: !Equals [ !Ref EnvironmentSuffix, staging ]
+  IsProd: !Equals [ !Ref EnvironmentSuffix, prod ]
+  IsKnownEnv: !Or [ !Condition IsDev, !Condition IsStaging, !Condition IsProd ]
 
 Rules:
   RegionRestriction:
@@ -1265,19 +1269,19 @@ Resources:
             - '-'
             - 
               - !Ref CacheReplicationGroupIdBase
-              - !FindInMap 
-                - EnvCode
-                - !Ref EnvironmentSuffix
-                - code
+              - !If
+                - IsKnownEnv
+                - !FindInMap [ EnvCode, !Ref EnvironmentSuffix, code ]
+                - d
               - !Ref UniqueSuffix
           - !Join
             - '-'
             - 
               - !Ref CacheReplicationGroupIdBase
-              - !FindInMap 
-                - EnvCode
-                - !Ref EnvironmentSuffix
-                - code
+              - !If
+                - IsKnownEnv
+                - !FindInMap [ EnvCode, !Ref EnvironmentSuffix, code ]
+                - d
               - !Select
                 - 0
                 - !Split
