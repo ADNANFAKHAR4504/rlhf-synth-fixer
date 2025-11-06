@@ -48,7 +48,7 @@ describe('EKS Infrastructure Terraform Tests', () => {
     });
 
     it('should define cluster_name variable with proper defaults', () => {
-      expect(has(/variable\s+"cluster_name"\s*{[\s\S]*?default\s*=\s*"platform-migration-eks"/)).toBe(true);
+      expect(has(/variable\s+"cluster_name"\s*{[\s\S]*?default\s*=\s*"platform-migration-eks-new"/)).toBe(true);
       expect(has(/variable\s+"cluster_name"\s*{[\s\S]*?type\s*=\s*string/)).toBe(true);
     });
 
