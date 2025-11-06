@@ -1,29 +1,29 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-  DescribeDBParameterGroupsCommand,
-  DescribeDBSubnetGroupsCommand
-} from '@aws-sdk/client-rds';
-import {
-  SecretsManagerClient,
-  GetSecretValueCommand,
-  DescribeSecretCommand
-} from '@aws-sdk/client-secrets-manager';
-import {
-  KMSClient,
-  DescribeKeyCommand,
-  GetKeyRotationStatusCommand
-} from '@aws-sdk/client-kms';
-import {
-  EC2Client,
-  DescribeSecurityGroupsCommand
-} from '@aws-sdk/client-ec2';
 import {
   CloudWatchClient,
   DescribeAlarmsCommand
 } from '@aws-sdk/client-cloudwatch';
+import {
+  DescribeSecurityGroupsCommand,
+  EC2Client
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeKeyCommand,
+  GetKeyRotationStatusCommand,
+  KMSClient
+} from '@aws-sdk/client-kms';
+import {
+  DescribeDBInstancesCommand,
+  DescribeDBParameterGroupsCommand,
+  DescribeDBSubnetGroupsCommand,
+  RDSClient
+} from '@aws-sdk/client-rds';
+import {
+  DescribeSecretCommand,
+  GetSecretValueCommand,
+  SecretsManagerClient
+} from '@aws-sdk/client-secrets-manager';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Read deployment outputs
 const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');

@@ -39,7 +39,7 @@ describe('TapStack CloudFormation RDS Template', () => {
     test('should have VpcId parameter', () => {
       expect(template.Parameters.VpcId).toBeDefined();
       expect(template.Parameters.VpcId.Type).toBe('String');
-      expect(template.Parameters.VpcId.Default).toBe('vpc-0a1b2c3d4e5f');
+      expect(template.Parameters.VpcId.Default).toBe('vpc-05b5a7c91cdf3ab25');
     });
 
     test('should have DatabaseSubnet1Id parameter', () => {

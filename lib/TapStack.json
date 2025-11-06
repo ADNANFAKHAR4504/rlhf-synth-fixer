@@ -50,24 +50,24 @@
     },
     "VpcId": {
       "Type": "String",
-      "Default": "vpc-12345678",
+      "Default": "vpc-05b5a7c91cdf3ab25",
       "Description": "VPC ID for the RDS deployment",
-      "AllowedPattern": "^vpc-[0-9a-f]{8}$",
+      "AllowedPattern": "^vpc-([0-9a-f]{8}|[0-9a-f]{17})$",
       "ConstraintDescription": "Must be a valid VPC ID format: vpc-xxxxxxxx"
     },
     "DatabaseSubnet1Id": {
       "Type": "String",
-      "Default": "subnet-1a2b3c4d",
+      "Default": "subnet-0bad1e99b4fe24ed1",
       "Description": "First database subnet ID"
     },
     "DatabaseSubnet2Id": {
       "Type": "String",
-      "Default": "subnet-2a3b4c5d",
+      "Default": "subnet-021faf5af80d4c586",
       "Description": "Second database subnet ID"
     },
     "DatabaseSubnet3Id": {
       "Type": "String",
-      "Default": "subnet-3a4b5c6d",
+      "Default": "subnet-0067c6ad2073030c2",
       "Description": "Third database subnet ID"
     },
     "AppSubnet1Cidr": {
@@ -362,7 +362,7 @@
           "Fn::Sub": "rds-postgres-${EnvironmentSuffix}"
         },
         "Engine": "postgres",
-        "EngineVersion": "14.13",
+        "EngineVersion": "14.15",
         "DBInstanceClass": {
           "Ref": "DatabaseInstanceClass"
         },
