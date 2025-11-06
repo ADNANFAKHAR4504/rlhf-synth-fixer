@@ -1,0 +1,21 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "356255",
+  "team": "3",
+  "startedAt": "2025-11-06T13:10:52.182Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "S3 Bucket",
+    "CloudFormation",
+    "Lambda",
+    "EventBridge",
+    "CloudWatch LogGroup",
+    "VPC"
+  ]
+}
