@@ -906,6 +906,7 @@ export class SecurityServicesModule extends Construct {
     );
 
     // WAF Web ACL
+    // WAF Web ACL
     this.wafWebAcl = new aws.wafv2WebAcl.Wafv2WebAcl(this, 'waf', {
       name: 'application-waf',
       scope: 'REGIONAL',
@@ -920,9 +921,9 @@ export class SecurityServicesModule extends Construct {
             block: {},
           },
           statement: {
-            rateBasedStatement: {
+            rate_based_statement: {
               limit: 1000,
-              aggregateKeyType: 'IP',
+              aggregate_key_type: 'IP',
             },
           },
           visibilityConfig: {
@@ -938,8 +939,8 @@ export class SecurityServicesModule extends Construct {
             none: {},
           },
           statement: {
-            managedRuleGroupStatement: {
-              vendorName: 'AWS',
+            managed_rule_group_statement: {
+              vendor_name: 'AWS',
               name: 'AWSManagedRulesCommonRuleSet',
             },
           },
@@ -956,8 +957,8 @@ export class SecurityServicesModule extends Construct {
             none: {},
           },
           statement: {
-            managedRuleGroupStatement: {
-              vendorName: 'AWS',
+            managed_rule_group_statement: {
+              vendor_name: 'AWS',
               name: 'AWSManagedRulesKnownBadInputsRuleSet',
             },
           },
