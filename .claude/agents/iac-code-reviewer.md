@@ -82,9 +82,50 @@ If FAIL:
 - Training quality penalty: -2 points
 - Note: "PROMPT.md appears AI-generated rather than human-written"
 
+#### Step 3.5: Check if IaC Optimization Task
+
+**⚠️ SPECIAL HANDLING FOR IAC OPTIMIZATION TASKS**
+
+Check if this is an optimization task:
+```bash
+SUBJECT_LABELS=$(jq -r '.subject_labels[]? // empty' metadata.json)
+if echo "$SUBJECT_LABELS" | grep -q "IaC Optimization"; then
+  IS_OPTIMIZATION_TASK=true
+else
+  IS_OPTIMIZATION_TASK=false
+fi
+```
+
+If `IS_OPTIMIZATION_TASK=true`:
+- **SKIP Step 4** (Platform/Language Compliance on stack files)
+- **PRIMARY FOCUS**: Evaluate `lib/optimize.py` quality
+- **EXPECTED**: Stack files contain BASELINE (non-optimized) values
+
+**What to Validate for Optimization Tasks**:
+1. ✅ `lib/optimize.py` exists and uses boto3/AWS SDK
+2. ✅ Script reads `ENVIRONMENT_SUFFIX` from environment
+3. ✅ Script finds resources using correct naming patterns
+4. ✅ Script modifies resources via AWS APIs (not file editing)
+5. ✅ Integration tests verify optimizations on actual AWS resources
+6. ✅ `lib/IDEAL_RESPONSE.md` shows the corrected `optimize.py` script
+
+**What NOT to Validate**:
+- ❌ Don't check if stack files have optimized values
+- ❌ Don't expect IDEAL_RESPONSE.md to show optimized infrastructure code
+- ❌ Don't penalize baseline (high) resource allocations in stack files
+
+**Training Quality Focus**:
+- Evaluate quality of `lib/optimize.py` script (boto3 usage, error handling, resource discovery)
+- Check fixes in MODEL_FAILURES.md related to optimization logic
+- Stack files are intentionally non-optimized to establish baseline
+
+If optimization task detected, **SKIP to Step 5** (AWS Services Enhancement).
+
 #### Step 4: Platform/Language Compliance Validation
 
 **CRITICAL** - Catches major training data quality issues.
+
+**⚠️ SKIP THIS STEP if IaC Optimization task (Step 3.5 determines this)**
 
 **IMPORTANT FILE CONTEXT**:
 - `lib/MODEL_RESPONSE.md` = Initial model output (MAY contain errors - that's the point!)
