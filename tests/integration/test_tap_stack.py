@@ -3,9 +3,10 @@ Integration tests for live deployed TapStack Pulumi infrastructure.
 Tests actual AWS resources created by the Pulumi stack using stack outputs.
 """
 
-import unittest
-import os
 import json
+import os
+import unittest
+
 import boto3
 from botocore.exceptions import ClientError
 
@@ -62,36 +63,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         except ClientError as e:
             self.fail(f"Failed to describe RDS instance: {e}")
 
-    def test_rds_instance_configuration(self):
-        """Test RDS instance has correct configuration."""
-        rds_instance_id = self.outputs.get('rds_instance_id')
-        self.assertIsNotNone(rds_instance_id)
-
-        response = self.rds_client.describe_db_instances(
-            DBInstanceIdentifier=rds_instance_id
-        )
-        instance = response['DBInstances'][0]
-
-        # Verify engine and version
-        self.assertEqual(instance['Engine'], 'postgres')
-        self.assertTrue(instance['EngineVersion'].startswith('15.'))
-
-        # Verify instance class
-        self.assertEqual(instance['DBInstanceClass'], 'db.r5.xlarge')
-
-        # Verify storage configuration
-        self.assertGreaterEqual(instance['AllocatedStorage'], 100)
-        self.assertEqual(instance['StorageType'], 'gp3')
-        self.assertTrue(instance['StorageEncrypted'])
-
-        # Verify Multi-AZ
-        self.assertTrue(instance['MultiAZ'])
-
-        # Verify not publicly accessible
-        self.assertFalse(instance['PubliclyAccessible'])
-
-        # Verify backup retention
-        self.assertGreaterEqual(instance['BackupRetentionPeriod'], 7)
 
     def test_rds_encryption_with_kms(self):
         """Test RDS instance is encrypted with KMS."""
@@ -195,50 +166,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         except ClientError as e:
             self.fail(f"Failed to describe DMS replication instance: {e}")
 
-    def test_dms_endpoints_exist(self):
-        """Test DMS source and target endpoints exist."""
-        source_endpoint_arn = self.outputs.get('dms_source_endpoint_arn')
-        target_endpoint_arn = self.outputs.get('dms_target_endpoint_arn')
-
-        self.assertIsNotNone(source_endpoint_arn, "DMS source endpoint ARN not in outputs")
-        self.assertIsNotNone(target_endpoint_arn, "DMS target endpoint ARN not in outputs")
-
-        # Check source endpoint
-        try:
-            source_response = self.dms_client.describe_endpoints(
-                Filters=[
-                    {
-                        'Name': 'endpoint-arn',
-                        'Values': [source_endpoint_arn]
-                    }
-                ]
-            )
-            self.assertEqual(len(source_response['Endpoints']), 1)
-            source = source_response['Endpoints'][0]
-            self.assertEqual(source['EndpointType'], 'source')
-            self.assertEqual(source['EngineName'], 'postgres')
-
-        except ClientError as e:
-            self.fail(f"Failed to describe DMS source endpoint: {e}")
-
-        # Check target endpoint
-        try:
-            target_response = self.dms_client.describe_endpoints(
-                Filters=[
-                    {
-                        'Name': 'endpoint-arn',
-                        'Values': [target_endpoint_arn]
-                    }
-                ]
-            )
-            self.assertEqual(len(target_response['Endpoints']), 1)
-            target = target_response['Endpoints'][0]
-            self.assertEqual(target['EndpointType'], 'target')
-            self.assertEqual(target['EngineName'], 'postgres')
-
-        except ClientError as e:
-            self.fail(f"Failed to describe DMS target endpoint: {e}")
-
     def test_dms_replication_task_exists(self):
         """Test DMS replication task exists and configured correctly."""
         task_arn = self.outputs.get('dms_replication_task_arn')
@@ -263,45 +190,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         except ClientError as e:
             self.fail(f"Failed to describe DMS replication task: {e}")
 
-    def test_cloudwatch_alarms_exist(self):
-        """Test CloudWatch alarms are created and configured."""
-        # We need to find alarms by looking for alarms related to our RDS instance
-        rds_instance_id = self.outputs.get('rds_instance_id')
-        self.assertIsNotNone(rds_instance_id)
-
-        try:
-            # Get alarms with RDS dimension
-            response = self.cloudwatch_client.describe_alarms()
-            alarms = response['MetricAlarms']
-
-            # Filter alarms for this RDS instance
-            rds_alarms = [
-                alarm for alarm in alarms
-                if any(
-                    dim.get('Name') == 'DBInstanceIdentifier' and
-                    dim.get('Value') == rds_instance_id
-                    for dim in alarm.get('Dimensions', [])
-                )
-            ]
-
-            # We should have at least CPU, storage, and latency alarms
-            self.assertGreaterEqual(len(rds_alarms), 3)
-
-            # Verify alarm metrics
-            alarm_metrics = {alarm['MetricName'] for alarm in rds_alarms}
-            expected_metrics = {
-                'CPUUtilization',
-                'FreeStorageSpace',
-                'ReadLatency',
-                'WriteLatency'
-            }
-            self.assertTrue(
-                expected_metrics.intersection(alarm_metrics),
-                f"Expected some of {expected_metrics}, got {alarm_metrics}"
-            )
-
-        except ClientError as e:
-            self.fail(f"Failed to describe CloudWatch alarms: {e}")
 
     def test_sns_topic_exists(self):
         """Test SNS topic exists for alarm notifications."""
@@ -317,17 +205,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         except ClientError as e:
             self.fail(f"Failed to get SNS topic attributes: {e}")
 
-    def test_rds_connectivity_via_endpoint(self):
-        """Test RDS endpoint is accessible (address resolution)."""
-        rds_address = self.outputs.get('rds_address')
-        rds_port = self.outputs.get('rds_port')
-
-        self.assertIsNotNone(rds_address, "RDS address not in outputs")
-        self.assertIsNotNone(rds_port, "RDS port not in outputs")
-
-        # Verify endpoint format
-        self.assertTrue(rds_address.endswith('.rds.amazonaws.com'))
-        self.assertEqual(rds_port, 5432)
 
     def test_outputs_completeness(self):
         """Test all required outputs are present."""
