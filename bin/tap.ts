@@ -15,7 +15,7 @@ new TapStack(app, `TapStack-${environmentSuffix}`, {
   environmentSuffix,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'ap-southeast-1',
+    region: 'eu-west-1',
   },
   description: `EKS cluster with managed node groups for environment ${environmentSuffix}`,
   tags: {

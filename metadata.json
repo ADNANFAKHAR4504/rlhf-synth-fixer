@@ -20,6 +20,6 @@
     "CloudWatch",
     "Systems Manager"
   ],
-  "region": "ap-southeast-1",
+  "region": "eu-west-1",
   "training_quality": 9
 }
