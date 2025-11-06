@@ -6,17 +6,30 @@ import { TapStack } from '../lib/tap-stack';
 const app = new cdk.App();
 
 // Get configuration from context or environment variables
-const environmentSuffix = app.node.tryGetContext('environmentSuffix') || process.env.ENVIRONMENT || 'dev';
-const serviceName = app.node.tryGetContext('serviceName') || process.env.SERVICE_NAME || 'financial-platform';
+const environmentSuffix =
+  app.node.tryGetContext('environmentSuffix') ||
+  process.env.ENVIRONMENT ||
+  'dev';
+const serviceName =
+  app.node.tryGetContext('serviceName') ||
+  process.env.SERVICE_NAME ||
+  'financial-platform';
 
 // Primary region is ALWAYS the current region (from CDK_DEFAULT_REGION or --region flag)
 const primaryRegion = process.env.CDK_DEFAULT_REGION || 'us-east-1';
-const secondaryRegion = app.node.tryGetContext('secondaryRegion') || process.env.SECONDARY_REGION || 'us-west-2';
+const secondaryRegion =
+  app.node.tryGetContext('secondaryRegion') ||
+  process.env.SECONDARY_REGION ||
+  'us-west-2';
 
-const notificationEmail = app.node.tryGetContext('notificationEmail') || process.env.NOTIFICATION_EMAIL;
-const domainName = app.node.tryGetContext('domainName') || process.env.DOMAIN_NAME;
-const hostedZoneId = app.node.tryGetContext('hostedZoneId') || process.env.HOSTED_ZONE_ID;
-const deployBothRegions = app.node.tryGetContext('deployBothRegions') !== 'false'; // Default to true
+const notificationEmail =
+  app.node.tryGetContext('notificationEmail') || process.env.NOTIFICATION_EMAIL;
+const domainName =
+  app.node.tryGetContext('domainName') || process.env.DOMAIN_NAME;
+const hostedZoneId =
+  app.node.tryGetContext('hostedZoneId') || process.env.HOSTED_ZONE_ID;
+const deployBothRegions =
+  app.node.tryGetContext('deployBothRegions') !== 'false'; // Default to true
 
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';

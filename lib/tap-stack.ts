@@ -81,7 +81,7 @@ interface TapStackProps extends cdk.StackProps {
 
 /**
  * TapStack: Multi-region active-passive disaster recovery stack for financial services platform
- * 
+ *
  * This stack implements:
  * - ECS Fargate services behind ALB
  * - RDS Aurora MySQL with cross-region replica
@@ -122,7 +122,11 @@ export class TapStack extends cdk.Stack {
      * {serviceName}-{resourceType}-{region}-{environmentSuffix}
      * For length-constrained resources (maxLength), shortens the name appropriately
      */
-    const createResourceName = (resourceType: string, includeAccountId = false, maxLength?: number): string => {
+    const createResourceName = (
+      resourceType: string,
+      includeAccountId = false,
+      maxLength?: number
+    ): string => {
       let parts = [serviceName, resourceType, primaryRegion, environmentSuffix];
       if (includeAccountId) {
         parts.splice(2, 0, accountId); // Insert account ID before region
@@ -132,7 +136,9 @@ export class TapStack extends cdk.Stack {
       // If maxLength is specified and name exceeds it, apply shortening strategy
       if (maxLength && name.length > maxLength) {
         // Use shorter region code (e.g., "use1" for "us-east-1")
-        const shortRegion = primaryRegion.replace(/([a-z]+)-([a-z]+)-(\d+)/, '$1$2$3').substring(0, 6);
+        const shortRegion = primaryRegion
+          .replace(/([a-z]+)-([a-z]+)-(\d+)/, '$1$2$3')
+          .substring(0, 6);
         parts = [serviceName, resourceType, shortRegion, environmentSuffix];
         if (includeAccountId) {
           parts.splice(2, 0, accountId);
@@ -141,7 +147,10 @@ export class TapStack extends cdk.Stack {
 
         // If still too long, truncate service name
         if (name.length > maxLength) {
-          const serviceNameMaxLen = Math.max(3, serviceName.length - (name.length - maxLength));
+          const serviceNameMaxLen = Math.max(
+            3,
+            serviceName.length - (name.length - maxLength)
+          );
           const shortServiceName = serviceName.substring(0, serviceNameMaxLen);
           parts[0] = shortServiceName;
           name = parts.join('-');
@@ -175,7 +184,9 @@ export class TapStack extends cdk.Stack {
     const vpc = new ec2.Vpc(this, 'Vpc', {
       vpcName: createResourceName('vpc'),
       // Set CIDR only for secondary region to use non-overlapping range
-      ...(!isPrimaryRegion ? { ipAddresses: ec2.IpAddresses.cidr('10.1.0.0/16') } : {}),
+      ...(!isPrimaryRegion
+        ? { ipAddresses: ec2.IpAddresses.cidr('10.1.0.0/16') }
+        : {}),
       maxAzs: 3,
       natGateways: 2, // High availability for NAT
       subnetConfiguration: [
@@ -256,17 +267,22 @@ export class TapStack extends cdk.Stack {
 
     // DB Cluster Parameter Group to enable binary logging for cross-region replication
     // Binary logging is required for cross-region read replicas
-    const dbClusterParameterGroup = new rds.ParameterGroup(this, 'DbClusterParameterGroup', {
-      engine: rds.DatabaseClusterEngine.auroraMysql({
-        version: rds.AuroraMysqlEngineVersion.VER_3_04_0,
-      }),
-      description: 'Parameter group for Aurora MySQL with binary logging enabled for cross-region replication',
-      parameters: {
-        // Enable binary logging in ROW format for cross-region replication
-        // This is required for Aurora MySQL cross-region read replicas
-        binlog_format: 'ROW',
-      },
-    });
+    const dbClusterParameterGroup = new rds.ParameterGroup(
+      this,
+      'DbClusterParameterGroup',
+      {
+        engine: rds.DatabaseClusterEngine.auroraMysql({
+          version: rds.AuroraMysqlEngineVersion.VER_3_04_0,
+        }),
+        description:
+          'Parameter group for Aurora MySQL with binary logging enabled for cross-region replication',
+        parameters: {
+          // Enable binary logging in ROW format for cross-region replication
+          // This is required for Aurora MySQL cross-region read replicas
+          binlog_format: 'ROW',
+        },
+      }
+    );
 
     // Aurora MySQL cluster with cross-region read replica capability
     const dbCluster = new rds.DatabaseCluster(this, 'AuroraCluster', {
@@ -275,12 +291,18 @@ export class TapStack extends cdk.Stack {
         version: rds.AuroraMysqlEngineVersion.VER_3_04_0,
       }),
       writer: rds.ClusterInstance.provisioned('Writer', {
-        instanceType: ec2.InstanceType.of(ec2.InstanceClass.R6G, ec2.InstanceSize.LARGE),
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.R6G,
+          ec2.InstanceSize.LARGE
+        ),
         publiclyAccessible: false,
       }),
       readers: [
         rds.ClusterInstance.provisioned('Reader1', {
-          instanceType: ec2.InstanceType.of(ec2.InstanceClass.R6G, ec2.InstanceSize.LARGE),
+          instanceType: ec2.InstanceType.of(
+            ec2.InstanceClass.R6G,
+            ec2.InstanceSize.LARGE
+          ),
           publiclyAccessible: false,
         }),
       ],
@@ -315,7 +337,10 @@ export class TapStack extends cdk.Stack {
     if (isPrimaryRegion) {
       const table = new dynamodb.TableV2(this, 'SessionTable', {
         tableName: createResourceName('sessions'),
-        partitionKey: { name: 'sessionId', type: dynamodb.AttributeType.STRING },
+        partitionKey: {
+          name: 'sessionId',
+          type: dynamodb.AttributeType.STRING,
+        },
         sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
         billing: dynamodb.Billing.onDemand(),
         encryption: dynamodb.TableEncryptionV2.dynamoOwnedKey(),
@@ -393,34 +418,37 @@ export class TapStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('s3.amazonaws.com'),
     });
 
-    replicationRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        's3:GetReplicationConfiguration',
-        's3:ListBucket',
-      ],
-      resources: [primaryBucket.bucketArn],
-    }));
+    replicationRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['s3:GetReplicationConfiguration', 's3:ListBucket'],
+        resources: [primaryBucket.bucketArn],
+      })
+    );
 
-    replicationRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        's3:GetObjectVersionForReplication',
-        's3:GetObjectVersionAcl',
-        's3:GetObjectVersionTagging',
-      ],
-      resources: [`${primaryBucket.bucketArn}/*`],
-    }));
+    replicationRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          's3:GetObjectVersionForReplication',
+          's3:GetObjectVersionAcl',
+          's3:GetObjectVersionTagging',
+        ],
+        resources: [`${primaryBucket.bucketArn}/*`],
+      })
+    );
 
-    replicationRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        's3:ReplicateObject',
-        's3:ReplicateDelete',
-        's3:ReplicateTags',
-      ],
-      resources: [`${replicaBucket.bucketArn}/*`],
-    }));
+    replicationRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          's3:ReplicateObject',
+          's3:ReplicateDelete',
+          's3:ReplicateTags',
+        ],
+        resources: [`${replicaBucket.bucketArn}/*`],
+      })
+    );
 
     // Configure S3 Replication Time Control (RTC) - 15 minute RPO
     const cfnBucket = primaryBucket.node.defaultChild as s3.CfnBucket;
@@ -543,7 +571,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // ALB Listener
-    const listener = alb.addListener('HttpListener', {
+    alb.addListener('HttpListener', {
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
       defaultTargetGroups: [targetGroup],
@@ -603,9 +631,13 @@ export class TapStack extends cdk.Stack {
     // ============================================================================
 
     // CloudFront Origin Access Identity for S3
-    const originAccessIdentity = new cloudfront.OriginAccessIdentity(this, 'OAI', {
-      comment: `OAI for ${serviceName}`,
-    });
+    const originAccessIdentity = new cloudfront.OriginAccessIdentity(
+      this,
+      'OAI',
+      {
+        comment: `OAI for ${serviceName}`,
+      }
+    );
 
     primaryBucket.grantRead(originAccessIdentity);
 
@@ -620,9 +652,12 @@ export class TapStack extends cdk.Stack {
               'X-Custom-Header': serviceName,
             },
           }),
-          fallbackOrigin: origins.S3BucketOrigin.withOriginAccessIdentity(primaryBucket, {
-            originAccessIdentity,
-          }),
+          fallbackOrigin: origins.S3BucketOrigin.withOriginAccessIdentity(
+            primaryBucket,
+            {
+              originAccessIdentity,
+            }
+          ),
           fallbackStatusCodes: [500, 502, 503, 504],
         }),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -660,11 +695,15 @@ export class TapStack extends cdk.Stack {
     // ============================================================================
 
     // Health monitoring Lambda function
-    const healthMonitorLogGroup = new logs.LogGroup(this, 'HealthMonitorLogGroup', {
-      logGroupName: `/aws/lambda/${serviceName}-health-monitor-${primaryRegion}-${environmentSuffix}`,
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
+    const healthMonitorLogGroup = new logs.LogGroup(
+      this,
+      'HealthMonitorLogGroup',
+      {
+        logGroupName: `/aws/lambda/${serviceName}-health-monitor-${primaryRegion}-${environmentSuffix}`,
+        retention: logs.RetentionDays.ONE_WEEK,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
 
     const healthMonitorFunction = new lambda.Function(this, 'HealthMonitor', {
       functionName: createResourceName('health-monitor'),
@@ -740,11 +779,13 @@ def handler(event, context):
     });
 
     // Grant CloudWatch permissions
-    healthMonitorFunction.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ['cloudwatch:PutMetricData'],
-      resources: ['*'],
-    }));
+    healthMonitorFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['cloudwatch:PutMetricData'],
+        resources: ['*'],
+      })
+    );
 
     // Failover trigger Lambda with circuit breaker pattern
     const failoverLogGroup = new logs.LogGroup(this, 'FailoverLogGroup', {
@@ -827,41 +868,53 @@ def handler(event, context):
 
     // Grant permissions to failover function
     alarmTopic.grantPublish(failoverFunction);
-    failoverFunction.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ['route53:ChangeResourceRecordSets', 'route53:GetChange'],
-      resources: ['*'],
-    }));
+    failoverFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['route53:ChangeResourceRecordSets', 'route53:GetChange'],
+        resources: ['*'],
+      })
+    );
 
     // Subscribe failover function to alarm topic
-    alarmTopic.addSubscription(new subscriptions.LambdaSubscription(failoverFunction));
+    alarmTopic.addSubscription(
+      new subscriptions.LambdaSubscription(failoverFunction)
+    );
 
     // ============================================================================
     // CLOUDWATCH ALARMS
     // ============================================================================
 
     // ALB Target Unhealthy Hosts Alarm
-    const unhealthyHostAlarm = new cloudwatch.Alarm(this, 'UnhealthyHostAlarm', {
-      alarmName: createResourceName('unhealthy-hosts'),
-      metric: targetGroup.metrics.unhealthyHostCount({
-        statistic: 'Average',
-        period: cdk.Duration.minutes(1),
-      }),
-      threshold: 1,
-      evaluationPeriods: 2,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-      treatMissingData: cloudwatch.TreatMissingData.BREACHING,
-    });
+    const unhealthyHostAlarm = new cloudwatch.Alarm(
+      this,
+      'UnhealthyHostAlarm',
+      {
+        alarmName: createResourceName('unhealthy-hosts'),
+        metric: targetGroup.metrics.unhealthyHostCount({
+          statistic: 'Average',
+          period: cdk.Duration.minutes(1),
+        }),
+        threshold: 1,
+        evaluationPeriods: 2,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+      }
+    );
 
     unhealthyHostAlarm.addAlarmAction(new cw_actions.SnsAction(alarmTopic));
 
     // ALB 5XX Error Alarm
     const alb5xxAlarm = new cloudwatch.Alarm(this, 'Alb5xxAlarm', {
       alarmName: createResourceName('alb-5xx-errors'),
-      metric: alb.metrics.httpCodeTarget(elbv2.HttpCodeTarget.TARGET_5XX_COUNT, {
-        statistic: 'Sum',
-        period: cdk.Duration.minutes(1),
-      }),
+      metric: alb.metrics.httpCodeTarget(
+        elbv2.HttpCodeTarget.TARGET_5XX_COUNT,
+        {
+          statistic: 'Sum',
+          period: cdk.Duration.minutes(1),
+        }
+      ),
       threshold: 10,
       evaluationPeriods: 2,
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
@@ -912,39 +965,42 @@ def handler(event, context):
       description: `DR role for ${serviceName} with cross-region access in ${primaryRegion}-${environmentSuffix}`,
       assumedBy: new iam.CompositePrincipal(
         new iam.ServicePrincipal('lambda.amazonaws.com'),
-        new iam.AccountPrincipal(accountId),
+        new iam.AccountPrincipal(accountId)
       ),
     });
 
     // Add policies for DR operations
-    drRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'rds:FailoverDBCluster',
-        'rds:DescribeDBClusters',
-        'rds:ModifyDBCluster',
-      ],
-      resources: [dbCluster.clusterArn],
-    }));
+    drRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'rds:FailoverDBCluster',
+          'rds:DescribeDBClusters',
+          'rds:ModifyDBCluster',
+        ],
+        resources: [dbCluster.clusterArn],
+      })
+    );
 
-    drRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'route53:ChangeResourceRecordSets',
-        'route53:GetChange',
-        'route53:GetHealthCheckStatus',
-      ],
-      resources: ['*'],
-    }));
+    drRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'route53:ChangeResourceRecordSets',
+          'route53:GetChange',
+          'route53:GetHealthCheckStatus',
+        ],
+        resources: ['*'],
+      })
+    );
 
-    drRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'dynamodb:DescribeTable',
-        'dynamodb:UpdateTable',
-      ],
-      resources: [sessionTable.tableArn],
-    }));
+    drRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['dynamodb:DescribeTable', 'dynamodb:UpdateTable'],
+        resources: [sessionTable.tableArn],
+      })
+    );
 
     // ============================================================================
     // ROUTE53 HEALTH CHECKS
@@ -986,22 +1042,20 @@ def handler(event, context):
     });
 
     // Grant primary region's RDS service permission to use secondary KMS key for replication
-    secondaryKmsKey.addToResourcePolicy(new iam.PolicyStatement({
-      sid: 'Allow RDS to use KMS key for cross-region replication',
-      effect: iam.Effect.ALLOW,
-      principals: [new iam.ServicePrincipal('rds.amazonaws.com')],
-      actions: [
-        'kms:Decrypt',
-        'kms:DescribeKey',
-        'kms:CreateGrant',
-      ],
-      resources: ['*'],
-      conditions: {
-        StringEquals: {
-          'kms:ViaService': `rds.${secondaryRegion}.amazonaws.com`,
+    secondaryKmsKey.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'Allow RDS to use KMS key for cross-region replication',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('rds.amazonaws.com')],
+        actions: ['kms:Decrypt', 'kms:DescribeKey', 'kms:CreateGrant'],
+        resources: ['*'],
+        conditions: {
+          StringEquals: {
+            'kms:ViaService': `rds.${secondaryRegion}.amazonaws.com`,
+          },
         },
-      },
-    }));
+      })
+    );
 
     // ============================================================================
     // VPC PEERING (if peer VPC provided)
@@ -1014,22 +1068,26 @@ def handler(event, context):
       const peerVpcCidr = isPrimaryRegion ? '10.1.0.0/16' : '10.0.0.0/16'; // Opposite region's CIDR
 
       // VPC Peering Connection Request (cross-region)
-      vpcPeeringConnection = new ec2.CfnVPCPeeringConnection(this, 'VpcPeering', {
-        vpcId: vpc.vpcId,
-        peerVpcId: peerVpcId,
-        peerRegion: secondaryRegion,
-        peerOwnerId: accountId,
-        tags: [
-          {
-            key: 'Name',
-            value: createResourceName('vpc-peering'),
-          },
-          {
-            key: 'Environment',
-            value: environmentSuffix,
-          },
-        ],
-      });
+      vpcPeeringConnection = new ec2.CfnVPCPeeringConnection(
+        this,
+        'VpcPeering',
+        {
+          vpcId: vpc.vpcId,
+          peerVpcId: peerVpcId,
+          peerRegion: secondaryRegion,
+          peerOwnerId: accountId,
+          tags: [
+            {
+              key: 'Name',
+              value: createResourceName('vpc-peering'),
+            },
+            {
+              key: 'Environment',
+              value: environmentSuffix,
+            },
+          ],
+        }
+      );
 
       // Add route to peer VPC through peering connection (for private subnets)
       vpc.privateSubnets.forEach((subnet, index) => {
@@ -1042,7 +1100,8 @@ def handler(event, context):
     } else {
       // Log that VPC peering is skipped
       new cdk.CfnOutput(this, 'VpcPeeringStatus', {
-        value: 'VPC Peering not configured - will be created when both regions are deployed',
+        value:
+          'VPC Peering not configured - will be created when both regions are deployed',
         description: 'VPC Peering Configuration Status',
       });
     }
@@ -1066,7 +1125,7 @@ import boto3
 import cfnresponse
 import time
 
-rds = boto3.client('rds')
+rds = boto3.client('rds')  574:11  error  'listener' is assigned a value but never used  @typescript-eslint/no-unused-vars
 
 def handler(event, context):
     """
@@ -1138,25 +1197,35 @@ def handler(event, context):
       });
 
       // Grant RDS describe permissions
-      clusterWaiter.addToRolePolicy(new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ['rds:DescribeDBClusters'],
-        resources: ['*'],
-      }));
+      clusterWaiter.addToRolePolicy(
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: ['rds:DescribeDBClusters'],
+          resources: ['*'],
+        })
+      );
 
       // Custom resource that uses the waiter Lambda
-      const provider = new custom_resources.Provider(this, 'ClusterWaiterProvider', {
-        onEventHandler: clusterWaiter,
-      });
+      const provider = new custom_resources.Provider(
+        this,
+        'ClusterWaiterProvider',
+        {
+          onEventHandler: clusterWaiter,
+        }
+      );
 
-      clusterWaiterCustomResource = new cdk.CustomResource(this, 'ClusterWaiterResource', {
-        serviceToken: provider.serviceToken,
-        properties: {
-          ClusterIdentifier: dbCluster.clusterIdentifier,
-          // Add a timestamp to force update on each deployment
-          Timestamp: Date.now().toString(),
-        },
-      });
+      clusterWaiterCustomResource = new cdk.CustomResource(
+        this,
+        'ClusterWaiterResource',
+        {
+          serviceToken: provider.serviceToken,
+          properties: {
+            ClusterIdentifier: dbCluster.clusterIdentifier,
+            // Add a timestamp to force update on each deployment
+            Timestamp: Date.now().toString(),
+          },
+        }
+      );
 
       // Make sure the custom resource depends on the cluster
       clusterWaiterCustomResource.node.addDependency(dbCluster);
@@ -1194,10 +1263,14 @@ def handler(event, context):
     if (domainName) {
       // Only primary region creates or manages the hosted zone
       if (hostedZoneId) {
-        hostedZone = route53.HostedZone.fromHostedZoneAttributes(this, 'HostedZone', {
-          hostedZoneId: hostedZoneId,
-          zoneName: domainName,
-        });
+        hostedZone = route53.HostedZone.fromHostedZoneAttributes(
+          this,
+          'HostedZone',
+          {
+            hostedZoneId: hostedZoneId,
+            zoneName: domainName,
+          }
+        );
       } else if (isPrimaryRegion) {
         // Primary region creates the hosted zone
         hostedZone = new route53.PublicHostedZone(this, 'HostedZone', {
@@ -1207,7 +1280,9 @@ def handler(event, context):
       } else {
         // Secondary region imports the hosted zone (it must already exist)
         // In a real deployment, you'd pass the hosted zone ID from primary stack
-        throw new Error('Secondary region requires hostedZoneId to be provided. Deploy primary region first.');
+        throw new Error(
+          'Secondary region requires hostedZoneId to be provided. Deploy primary region first.'
+        );
       }
 
       // Create failover record for this region
@@ -1220,7 +1295,9 @@ def handler(event, context):
         type: 'A',
         setIdentifier: recordSetId,
         failover: failoverType,
-        healthCheckId: isPrimaryRegion ? healthCheck.attrHealthCheckId : undefined,
+        healthCheckId: isPrimaryRegion
+          ? healthCheck.attrHealthCheckId
+          : undefined,
         aliasTarget: {
           hostedZoneId: alb.loadBalancerCanonicalHostedZoneId,
           dnsName: alb.loadBalancerDnsName,
@@ -1229,23 +1306,27 @@ def handler(event, context):
       });
 
       // CloudWatch alarm for Route53 health check
-      const route53HealthAlarm = new cloudwatch.Alarm(this, 'Route53HealthAlarm', {
-        alarmName: createResourceName('route53-health'),
-        metric: new cloudwatch.Metric({
-          namespace: 'AWS/Route53',
-          metricName: 'HealthCheckStatus',
-          dimensionsMap: {
-            HealthCheckId: healthCheck.attrHealthCheckId,
-          },
-          statistic: 'Minimum',
-          period: cdk.Duration.minutes(1),
-        }),
-        threshold: 1,
-        evaluationPeriods: 2,
-        comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
-        treatMissingData: cloudwatch.TreatMissingData.BREACHING,
-        actionsEnabled: true,
-      });
+      const route53HealthAlarm = new cloudwatch.Alarm(
+        this,
+        'Route53HealthAlarm',
+        {
+          alarmName: createResourceName('route53-health'),
+          metric: new cloudwatch.Metric({
+            namespace: 'AWS/Route53',
+            metricName: 'HealthCheckStatus',
+            dimensionsMap: {
+              HealthCheckId: healthCheck.attrHealthCheckId,
+            },
+            statistic: 'Minimum',
+            period: cdk.Duration.minutes(1),
+          }),
+          threshold: 1,
+          evaluationPeriods: 2,
+          comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+          treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+          actionsEnabled: true,
+        }
+      );
 
       route53HealthAlarm.addAlarmAction(new cw_actions.SnsAction(alarmTopic));
     }
@@ -1255,11 +1336,14 @@ def handler(event, context):
     // ============================================================================
 
     // Monitor this region's resources (all regions get monitoring Lambda)
-    const regionHealthMonitor = new lambda.Function(this, 'RegionHealthMonitor', {
-      functionName: `${serviceName}-region-monitor-${primaryRegion}-${environmentSuffix}`,
-      runtime: lambda.Runtime.PYTHON_3_11,
-      handler: 'index.handler',
-      code: lambda.Code.fromInline(`
+    const regionHealthMonitor = new lambda.Function(
+      this,
+      'RegionHealthMonitor',
+      {
+        functionName: `${serviceName}-region-monitor-${primaryRegion}-${environmentSuffix}`,
+        runtime: lambda.Runtime.PYTHON_3_11,
+        handler: 'index.handler',
+        code: lambda.Code.fromInline(`
 import json
 import boto3
 import os
@@ -1318,34 +1402,36 @@ def handler(event, context):
             'body': json.dumps({'error': str(e)})
         }
 `),
-      environment: {
-        METRIC_NAMESPACE: `${serviceName}/${environmentSuffix}`,
-        DB_CLUSTER_ID: dbCluster.clusterIdentifier,
-      },
-      timeout: cdk.Duration.seconds(10),
-      memorySize: 256,
-    });
+        environment: {
+          METRIC_NAMESPACE: `${serviceName}/${environmentSuffix}`,
+          DB_CLUSTER_ID: dbCluster.clusterIdentifier,
+        },
+        timeout: cdk.Duration.seconds(10),
+        memorySize: 256,
+      }
+    );
 
     // Grant permissions for monitoring
-    regionHealthMonitor.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'rds:DescribeDBClusters',
-        'cloudwatch:PutMetricData',
-      ],
-      resources: ['*'],
-    }));
+    regionHealthMonitor.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['rds:DescribeDBClusters', 'cloudwatch:PutMetricData'],
+        resources: ['*'],
+      })
+    );
 
     // Grant DR role access to secondary resources (only if replica exists)
     if (replicaCluster) {
-      drRole.addToPolicy(new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'rds:PromoteReadReplica',
-          'rds:PromoteReadReplicaDBCluster',
-        ],
-        resources: [replicaCluster.attrDbClusterArn],
-      }));
+      drRole.addToPolicy(
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'rds:PromoteReadReplica',
+            'rds:PromoteReadReplicaDBCluster',
+          ],
+          resources: [replicaCluster.attrDbClusterArn],
+        })
+      );
     }
 
     // ============================================================================
