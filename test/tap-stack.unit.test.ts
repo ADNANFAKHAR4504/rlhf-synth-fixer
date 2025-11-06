@@ -197,7 +197,9 @@ describe('TapStack', () => {
       // Lifecycle configuration should exist with delete-old-artifacts rule
       expect(bucketStr).toContain('delete-old-artifacts');
       // Verify lifecycle rules are configured
-      expect(bucketResource?.Properties?.LifecycleConfiguration?.Rules || []).toBeDefined();
+      expect(
+        bucketResource?.Properties?.LifecycleConfiguration?.Rules || []
+      ).toBeDefined();
     });
 
     test('should include environment suffix in bucket name', () => {
@@ -212,7 +214,11 @@ describe('TapStack', () => {
         PolicyDocument: {
           Statement: Match.arrayWith([
             Match.objectLike({
-              Action: Match.arrayWith(['s3:GetObject', 's3:PutObject', 's3:ListBucket']),
+              Action: Match.arrayWith([
+                's3:GetObject',
+                's3:PutObject',
+                's3:ListBucket',
+              ]),
             }),
           ]),
         },
@@ -243,7 +249,8 @@ describe('TapStack', () => {
       const lifecyclePolicy = repoResource?.Properties?.LifecyclePolicy;
       expect(lifecyclePolicy).toBeDefined();
       // ECR lifecycle policy is a JSON string with rules
-      const lifecycleText = lifecyclePolicy?.LifecyclePolicyText || JSON.stringify(lifecyclePolicy);
+      const lifecycleText =
+        lifecyclePolicy?.LifecyclePolicyText || JSON.stringify(lifecyclePolicy);
       expect(lifecycleText).toContain('10'); // maxImageCount: 10
       expect(lifecycleText).toContain('Keep only last 10 images');
     });
@@ -432,7 +439,9 @@ describe('TapStack', () => {
     test('should create deployment alarms for staging and production', () => {
       template.resourceCountIs('AWS::CloudWatch::Alarm', 2);
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: Match.stringLikeRegexp('.*-test-staging-deployment-failures'),
+        AlarmName: Match.stringLikeRegexp(
+          '.*-test-staging-deployment-failures'
+        ),
         MetricName: 'Deployments',
         Namespace: 'AWS/CodeDeploy',
         Threshold: 1,
@@ -466,27 +475,47 @@ describe('TapStack', () => {
 
     test('should create pipeline role with correct properties', () => {
       const roles = template.findResources('AWS::IAM::Role');
-      const pipelineRole = Object.values(roles).find((role: any) => 
+      const pipelineRole = Object.values(roles).find((role: any) =>
         role.Properties?.RoleName?.includes('test-pipeline-role')
       );
       expect(pipelineRole).toBeDefined();
-      expect(pipelineRole?.Properties?.AssumeRolePolicyDocument?.Statement?.[0]?.Principal?.Service).toBe('codepipeline.amazonaws.com');
-      expect(JSON.stringify(pipelineRole)).toContain('AWSCodePipelineFullAccess');
+      expect(
+        pipelineRole?.Properties?.AssumeRolePolicyDocument?.Statement?.[0]
+          ?.Principal?.Service
+      ).toBe('codepipeline.amazonaws.com');
+      // Verify inline policy exists with CodePipeline permissions
+      expect(pipelineRole?.Properties?.Policies).toBeDefined();
+      const policies = pipelineRole?.Properties?.Policies || [];
+      const codePipelinePolicy = policies.find(
+        (p: any) => p.PolicyName === 'CodePipelinePolicy'
+      );
+      expect(codePipelinePolicy).toBeDefined();
+      expect(JSON.stringify(codePipelinePolicy)).toContain('codepipeline');
     });
 
     test('should create CodeDeploy role with correct properties', () => {
       const roles = template.findResources('AWS::IAM::Role');
-      const codeDeployRole = Object.values(roles).find((role: any) => 
+      const codeDeployRole = Object.values(roles).find((role: any) =>
         role.Properties?.RoleName?.includes('test-codedeploy-role')
       );
       expect(codeDeployRole).toBeDefined();
-      expect(codeDeployRole?.Properties?.AssumeRolePolicyDocument?.Statement?.[0]?.Principal?.Service).toBe('codedeploy.amazonaws.com');
-      expect(JSON.stringify(codeDeployRole)).toContain('AWSCodeDeployRoleForECS');
+      expect(
+        codeDeployRole?.Properties?.AssumeRolePolicyDocument?.Statement?.[0]
+          ?.Principal?.Service
+      ).toBe('codedeploy.amazonaws.com');
+      // Verify inline policy exists with CodeDeploy ECS permissions
+      expect(codeDeployRole?.Properties?.Policies).toBeDefined();
+      const policies = codeDeployRole?.Properties?.Policies || [];
+      const codeDeployPolicy = policies.find(
+        (p: any) => p.PolicyName === 'CodeDeployECSPolicy'
+      );
+      expect(codeDeployPolicy).toBeDefined();
+      expect(JSON.stringify(codeDeployPolicy)).toContain('ecs');
     });
 
     test('should grant cross-account assume role for CodeDeploy', () => {
       const roles = template.findResources('AWS::IAM::Role');
-      const codeDeployRole = Object.values(roles).find((role: any) => 
+      const codeDeployRole = Object.values(roles).find((role: any) =>
         role.Properties?.RoleName?.includes('test-codedeploy-role')
       );
       const roleStr = JSON.stringify(codeDeployRole);
@@ -521,12 +550,49 @@ describe('TapStack', () => {
       });
     });
 
-    test('should have all required stages', () => {
+    test('should have all required stages (without deployment stages when service ARNs not provided)', () => {
       const pipeline = template.findResources('AWS::CodePipeline::Pipeline');
       const pipelineResource = Object.values(pipeline)[0] as any;
       const stages = pipelineResource?.Properties?.Stages || [];
       const stageNames = stages.map((stage: any) => stage.Name);
+
+      // Core stages should always exist
+      expect(stageNames).toContain('Source');
+      expect(stageNames).toContain('Build');
+      expect(stageNames).toContain('Test');
+      expect(stageNames).toContain('ImageBuild');
       
+      // Deployment stages are conditional - only exist when service ARNs are provided
+      // Without service ARNs, we should have 4 stages
+      expect(stages.length).toBe(4);
+    });
+
+    test('should have deployment stages when service ARNs are provided', () => {
+      app = new cdk.App({
+        context: {
+          environmentSuffix: 'test',
+          stagingServiceArn: 'arn:aws:ecs:us-east-1:123456789012:service/test-cluster/test-service',
+          prodServiceArn: 'arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/prod-service',
+          stagingVpcId: 'vpc-12345678',
+          stagingPublicSubnetId: 'subnet-11111111',
+          stagingPrivateSubnetId: 'subnet-22222222',
+          stagingSecurityGroupId: 'sg-12345678',
+          prodVpcId: 'vpc-87654321',
+          prodPublicSubnetId: 'subnet-33333333',
+          prodPrivateSubnetId: 'subnet-44444444',
+          prodSecurityGroupId: 'sg-87654321',
+        },
+      });
+      stack = new TapStack(app, 'TestTapStackWithDeploy', {
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      template = Template.fromStack(stack);
+
+      const pipeline = template.findResources('AWS::CodePipeline::Pipeline');
+      const pipelineResource = Object.values(pipeline)[0] as any;
+      const stages = pipelineResource?.Properties?.Stages || [];
+      const stageNames = stages.map((stage: any) => stage.Name);
+
       expect(stageNames).toContain('Source');
       expect(stageNames).toContain('Build');
       expect(stageNames).toContain('Test');
@@ -537,7 +603,22 @@ describe('TapStack', () => {
       expect(stages.length).toBe(7);
     });
 
-    test('should configure manual approval action with SNS notification', () => {
+    test('should configure manual approval action with SNS notification when production service ARN provided', () => {
+      app = new cdk.App({
+        context: {
+          environmentSuffix: 'test',
+          prodServiceArn: 'arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/prod-service',
+          prodVpcId: 'vpc-87654321',
+          prodPublicSubnetId: 'subnet-33333333',
+          prodPrivateSubnetId: 'subnet-44444444',
+          prodSecurityGroupId: 'sg-87654321',
+        },
+      });
+      stack = new TapStack(app, 'TestTapStackApproval', {
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      template = Template.fromStack(stack);
+
       template.hasResourceProperties('AWS::CodePipeline::Pipeline', {
         Stages: Match.arrayWith([
           Match.objectLike({
@@ -546,7 +627,8 @@ describe('TapStack', () => {
               Match.objectLike({
                 Configuration: {
                   NotificationArn: Match.anyValue(),
-                  CustomData: 'Please review staging deployment and approve production release',
+                  CustomData:
+                    'Please review staging deployment and approve production release',
                 },
               }),
             ]),
@@ -557,28 +639,66 @@ describe('TapStack', () => {
   });
 
   describe('CodeDeploy Deployment Groups', () => {
-    beforeEach(() => {
+    test('should not create deployment groups when service ARNs not provided', () => {
       app = new cdk.App();
       stack = new TapStack(app, 'TestTapStack', {
         environmentSuffix: 'test',
         env: { account: '123456789012', region: 'us-east-1' },
       });
       template = Template.fromStack(stack);
+
+      // Deployment groups are conditional - should not exist without service ARNs
+      template.resourceCountIs('AWS::CodeDeploy::DeploymentGroup', 0);
     });
 
-    test('should create staging deployment group', () => {
-      template.resourceCountIs('AWS::CodeDeploy::DeploymentGroup', 2);
+    test('should create staging deployment group when service ARN provided', () => {
+      app = new cdk.App({
+        context: {
+          environmentSuffix: 'test',
+          stagingServiceArn: 'arn:aws:ecs:us-east-1:123456789012:service/test-cluster/test-service',
+          stagingVpcId: 'vpc-12345678',
+          stagingPublicSubnetId: 'subnet-11111111',
+          stagingPrivateSubnetId: 'subnet-22222222',
+          stagingSecurityGroupId: 'sg-12345678',
+        },
+      });
+      stack = new TapStack(app, 'TestTapStackStaging', {
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      template = Template.fromStack(stack);
+
+      template.resourceCountIs('AWS::CodeDeploy::DeploymentGroup', 1);
       template.hasResourceProperties('AWS::CodeDeploy::DeploymentGroup', {
         DeploymentGroupName: Match.stringLikeRegexp('.*-test-staging'),
         DeploymentConfigName: Match.stringLikeRegexp('CodeDeployDefault.*'),
         AutoRollbackConfiguration: {
           Enabled: true,
-          Events: Match.arrayWith(['DEPLOYMENT_FAILURE', 'DEPLOYMENT_STOP_ON_REQUEST', 'DEPLOYMENT_STOP_ON_ALARM']),
+          Events: Match.arrayWith([
+            'DEPLOYMENT_FAILURE',
+            'DEPLOYMENT_STOP_ON_REQUEST',
+            'DEPLOYMENT_STOP_ON_ALARM',
+          ]),
         },
       });
     });
 
-    test('should create production deployment group', () => {
+    test('should create production deployment group when service ARN provided', () => {
+      app = new cdk.App({
+        context: {
+          environmentSuffix: 'test',
+          prodServiceArn: 'arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/prod-service',
+          prodVpcId: 'vpc-87654321',
+          prodPublicSubnetId: 'subnet-33333333',
+          prodPrivateSubnetId: 'subnet-44444444',
+          prodSecurityGroupId: 'sg-87654321',
+        },
+      });
+      stack = new TapStack(app, 'TestTapStackProd', {
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      template = Template.fromStack(stack);
+
+      template.resourceCountIs('AWS::CodeDeploy::DeploymentGroup', 1);
       template.hasResourceProperties('AWS::CodeDeploy::DeploymentGroup', {
         DeploymentGroupName: Match.stringLikeRegexp('.*-test-prod'),
         AutoRollbackConfiguration: {
@@ -587,7 +707,27 @@ describe('TapStack', () => {
       });
     });
 
-    test('should configure blue-green deployment', () => {
+    test('should configure blue-green deployment when service ARNs provided', () => {
+      app = new cdk.App({
+        context: {
+          environmentSuffix: 'test',
+          stagingServiceArn: 'arn:aws:ecs:us-east-1:123456789012:service/test-cluster/test-service',
+          prodServiceArn: 'arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/prod-service',
+          stagingVpcId: 'vpc-12345678',
+          stagingPublicSubnetId: 'subnet-11111111',
+          stagingPrivateSubnetId: 'subnet-22222222',
+          stagingSecurityGroupId: 'sg-12345678',
+          prodVpcId: 'vpc-87654321',
+          prodPublicSubnetId: 'subnet-33333333',
+          prodPrivateSubnetId: 'subnet-44444444',
+          prodSecurityGroupId: 'sg-87654321',
+        },
+      });
+      stack = new TapStack(app, 'TestTapStackBlueGreen', {
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      template = Template.fromStack(stack);
+
       template.hasResourceProperties('AWS::CodeDeploy::DeploymentGroup', {
         BlueGreenDeploymentConfiguration: Match.anyValue(),
       });
@@ -595,16 +735,40 @@ describe('TapStack', () => {
   });
 
   describe('ECS Services', () => {
-    beforeEach(() => {
+    test('should not create ECS services when service ARNs not provided', () => {
       app = new cdk.App();
       stack = new TapStack(app, 'TestTapStack', {
         environmentSuffix: 'test',
         env: { account: '123456789012', region: 'us-east-1' },
       });
       template = Template.fromStack(stack);
+
+      // ECS services are conditional - should not exist without service ARNs
+      template.resourceCountIs('AWS::ECS::Service', 0);
+      template.resourceCountIs('AWS::ECS::TaskDefinition', 0);
     });
 
-    test('should create staging and production ECS services', () => {
+    test('should create staging and production ECS services when service ARNs provided', () => {
+      app = new cdk.App({
+        context: {
+          environmentSuffix: 'test',
+          stagingServiceArn: 'arn:aws:ecs:us-east-1:123456789012:service/test-cluster/test-service',
+          prodServiceArn: 'arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/prod-service',
+          stagingVpcId: 'vpc-12345678',
+          stagingPublicSubnetId: 'subnet-11111111',
+          stagingPrivateSubnetId: 'subnet-22222222',
+          stagingSecurityGroupId: 'sg-12345678',
+          prodVpcId: 'vpc-87654321',
+          prodPublicSubnetId: 'subnet-33333333',
+          prodPrivateSubnetId: 'subnet-44444444',
+          prodSecurityGroupId: 'sg-87654321',
+        },
+      });
+      stack = new TapStack(app, 'TestTapStackWithServices', {
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      template = Template.fromStack(stack);
+
       template.resourceCountIs('AWS::ECS::Service', 2);
       template.hasResourceProperties('AWS::ECS::Service', {
         DeploymentController: {
@@ -614,7 +778,27 @@ describe('TapStack', () => {
       });
     });
 
-    test('should create task definitions with placeholder containers', () => {
+    test('should create task definitions with placeholder containers when service ARNs provided', () => {
+      app = new cdk.App({
+        context: {
+          environmentSuffix: 'test',
+          stagingServiceArn: 'arn:aws:ecs:us-east-1:123456789012:service/test-cluster/test-service',
+          prodServiceArn: 'arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/prod-service',
+          stagingVpcId: 'vpc-12345678',
+          stagingPublicSubnetId: 'subnet-11111111',
+          stagingPrivateSubnetId: 'subnet-22222222',
+          stagingSecurityGroupId: 'sg-12345678',
+          prodVpcId: 'vpc-87654321',
+          prodPublicSubnetId: 'subnet-33333333',
+          prodPrivateSubnetId: 'subnet-44444444',
+          prodSecurityGroupId: 'sg-87654321',
+        },
+      });
+      stack = new TapStack(app, 'TestTapStackTaskDefs', {
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      template = Template.fromStack(stack);
+
       template.resourceCountIs('AWS::ECS::TaskDefinition', 2);
       template.hasResourceProperties('AWS::ECS::TaskDefinition', {
         ContainerDefinitions: Match.arrayWith([
@@ -732,7 +916,9 @@ describe('TapStack', () => {
       });
       const outputs = template.findOutputs('*');
       expect(outputs.DashboardUrl.Value).toBeDefined();
-      expect(JSON.stringify(outputs.DashboardUrl.Value)).toContain('cloudwatch');
+      expect(JSON.stringify(outputs.DashboardUrl.Value)).toContain(
+        'cloudwatch'
+      );
     });
   });
 
@@ -741,7 +927,8 @@ describe('TapStack', () => {
       app = new cdk.App({
         context: {
           environmentSuffix: 'test',
-          stagingServiceArn: 'arn:aws:ecs:us-east-1:123456789012:service/test-cluster/test-service',
+          stagingServiceArn:
+            'arn:aws:ecs:us-east-1:123456789012:service/test-cluster/test-service',
           stagingVpcId: 'vpc-12345678',
           stagingPublicSubnetId: 'subnet-11111111',
           stagingPrivateSubnetId: 'subnet-22222222',
@@ -753,15 +940,16 @@ describe('TapStack', () => {
       });
       template = Template.fromStack(stack);
 
-      // Verify ECS service is created
-      template.resourceCountIs('AWS::ECS::Service', 2);
+      // Verify ECS service is created (only staging, not production)
+      template.resourceCountIs('AWS::ECS::Service', 1);
     });
 
     test('should use context variables for production service ARN', () => {
       app = new cdk.App({
         context: {
           environmentSuffix: 'test',
-          prodServiceArn: 'arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/prod-service',
+          prodServiceArn:
+            'arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/prod-service',
           prodVpcId: 'vpc-87654321',
           prodPublicSubnetId: 'subnet-33333333',
           prodPrivateSubnetId: 'subnet-44444444',
@@ -773,7 +961,8 @@ describe('TapStack', () => {
       });
       template = Template.fromStack(stack);
 
-      template.resourceCountIs('AWS::ECS::Service', 2);
+      // Verify ECS service is created (only production, not staging)
+      template.resourceCountIs('AWS::ECS::Service', 1);
     });
   });
 
@@ -834,36 +1023,8 @@ describe('TapStack', () => {
       app = new cdk.App({
         context: {
           environmentSuffix: 'test',
-          stagingServiceArn: 'arn:aws:ecs:us-east-1:123456789012:service/my-cluster/my-service',
-        },
-      });
-      stack = new TapStack(app, 'TestTapStack', {
-        env: { account: '123456789012', region: 'us-east-1' },
-      });
-      template = Template.fromStack(stack);
-
-      // Should create ECS service with parsed cluster and service names
-      template.resourceCountIs('AWS::ECS::Service', 2);
-    });
-
-    test('should use default values when context variables are missing', () => {
-      app = new cdk.App();
-      stack = new TapStack(app, 'TestTapStack', {
-        environmentSuffix: 'test',
-        env: { account: '123456789012', region: 'us-east-1' },
-      });
-      template = Template.fromStack(stack);
-
-      // Should still create all resources with default ARNs
-      template.resourceCountIs('AWS::ECS::Service', 2);
-      template.resourceCountIs('AWS::CodeDeploy::DeploymentGroup', 2);
-    });
-
-    test('should handle listener ARN parsing with match', () => {
-      app = new cdk.App({
-        context: {
-          environmentSuffix: 'test',
-          stagingListenerArn: 'arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/alb/1234567890123456/1234567890123456',
+          stagingServiceArn:
+            'arn:aws:ecs:us-east-1:123456789012:service/my-cluster/my-service',
           stagingVpcId: 'vpc-12345678',
           stagingPublicSubnetId: 'subnet-11111111',
           stagingPrivateSubnetId: 'subnet-22222222',
@@ -875,13 +1036,49 @@ describe('TapStack', () => {
       });
       template = Template.fromStack(stack);
 
-      template.resourceCountIs('AWS::CodeDeploy::DeploymentGroup', 2);
+      // Should create ECS service with parsed cluster and service names (only staging)
+      template.resourceCountIs('AWS::ECS::Service', 1);
+    });
+
+    test('should not create ECS services and deployment groups when context variables are missing', () => {
+      app = new cdk.App();
+      stack = new TapStack(app, 'TestTapStack', {
+        environmentSuffix: 'test',
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      template = Template.fromStack(stack);
+
+      // Without service ARNs, ECS services and deployment groups should not be created
+      template.resourceCountIs('AWS::ECS::Service', 0);
+      template.resourceCountIs('AWS::CodeDeploy::DeploymentGroup', 0);
+    });
+
+    test('should handle listener ARN parsing with match', () => {
+      app = new cdk.App({
+        context: {
+          environmentSuffix: 'test',
+          stagingServiceArn: 'arn:aws:ecs:us-east-1:123456789012:service/test-cluster/test-service',
+          stagingListenerArn:
+            'arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/alb/1234567890123456/1234567890123456',
+          stagingVpcId: 'vpc-12345678',
+          stagingPublicSubnetId: 'subnet-11111111',
+          stagingPrivateSubnetId: 'subnet-22222222',
+          stagingSecurityGroupId: 'sg-12345678',
+        },
+      });
+      stack = new TapStack(app, 'TestTapStack', {
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      template = Template.fromStack(stack);
+
+      template.resourceCountIs('AWS::CodeDeploy::DeploymentGroup', 1);
     });
 
     test('should handle listener ARN parsing without match (fallback)', () => {
       app = new cdk.App({
         context: {
           environmentSuffix: 'test',
+          stagingServiceArn: 'arn:aws:ecs:us-east-1:123456789012:service/test-cluster/test-service',
           stagingListenerArn: 'invalid-arn',
           stagingVpcId: 'vpc-12345678',
           stagingPublicSubnetId: 'subnet-11111111',
@@ -895,14 +1092,15 @@ describe('TapStack', () => {
       template = Template.fromStack(stack);
 
       // Should still create resources with fallback ARN
-      template.resourceCountIs('AWS::CodeDeploy::DeploymentGroup', 2);
+      template.resourceCountIs('AWS::CodeDeploy::DeploymentGroup', 1);
     });
 
     test('should handle service ARN parsing with match', () => {
       app = new cdk.App({
         context: {
           environmentSuffix: 'test',
-          stagingServiceArn: 'arn:aws:ecs:us-east-1:123456789012:service/cluster-name/service-name',
+          stagingServiceArn:
+            'arn:aws:ecs:us-east-1:123456789012:service/cluster-name/service-name',
           stagingVpcId: 'vpc-12345678',
           stagingPublicSubnetId: 'subnet-11111111',
           stagingPrivateSubnetId: 'subnet-22222222',
@@ -914,7 +1112,7 @@ describe('TapStack', () => {
       });
       template = Template.fromStack(stack);
 
-      template.resourceCountIs('AWS::ECS::Service', 2);
+      template.resourceCountIs('AWS::ECS::Service', 1);
     });
 
     test('should handle service ARN parsing without match (fallback)', () => {
@@ -933,15 +1131,17 @@ describe('TapStack', () => {
       });
       template = Template.fromStack(stack);
 
-      // Should still create resources with fallback names
-      template.resourceCountIs('AWS::ECS::Service', 2);
+      // Should still create resources with fallback names (even invalid ARN triggers creation)
+      template.resourceCountIs('AWS::ECS::Service', 1);
     });
 
     test('should handle production listener ARN parsing with match', () => {
       app = new cdk.App({
         context: {
           environmentSuffix: 'test',
-          prodListenerArn: 'arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/alb/1234567890123456/1234567890123456',
+          prodServiceArn: 'arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/prod-service',
+          prodListenerArn:
+            'arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/alb/1234567890123456/1234567890123456',
           prodVpcId: 'vpc-87654321',
           prodPublicSubnetId: 'subnet-33333333',
           prodPrivateSubnetId: 'subnet-44444444',
@@ -953,13 +1153,14 @@ describe('TapStack', () => {
       });
       template = Template.fromStack(stack);
 
-      template.resourceCountIs('AWS::CodeDeploy::DeploymentGroup', 2);
+      template.resourceCountIs('AWS::CodeDeploy::DeploymentGroup', 1);
     });
 
     test('should handle production listener ARN parsing without match (fallback)', () => {
       app = new cdk.App({
         context: {
           environmentSuffix: 'test',
+          prodServiceArn: 'arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/prod-service',
           prodListenerArn: 'invalid-arn',
           prodVpcId: 'vpc-87654321',
           prodPublicSubnetId: 'subnet-33333333',
@@ -972,14 +1173,15 @@ describe('TapStack', () => {
       });
       template = Template.fromStack(stack);
 
-      template.resourceCountIs('AWS::CodeDeploy::DeploymentGroup', 2);
+      template.resourceCountIs('AWS::CodeDeploy::DeploymentGroup', 1);
     });
 
     test('should handle production service ARN parsing with match', () => {
       app = new cdk.App({
         context: {
           environmentSuffix: 'test',
-          prodServiceArn: 'arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/prod-service',
+          prodServiceArn:
+            'arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/prod-service',
           prodVpcId: 'vpc-87654321',
           prodPublicSubnetId: 'subnet-33333333',
           prodPrivateSubnetId: 'subnet-44444444',
@@ -991,7 +1193,7 @@ describe('TapStack', () => {
       });
       template = Template.fromStack(stack);
 
-      template.resourceCountIs('AWS::ECS::Service', 2);
+      template.resourceCountIs('AWS::ECS::Service', 1);
     });
 
     test('should handle production service ARN parsing without match (fallback)', () => {
@@ -1010,7 +1212,7 @@ describe('TapStack', () => {
       });
       template = Template.fromStack(stack);
 
-      template.resourceCountIs('AWS::ECS::Service', 2);
+      template.resourceCountIs('AWS::ECS::Service', 1);
     });
 
     test('should handle availability zones fallback when not available', () => {
@@ -1026,14 +1228,16 @@ describe('TapStack', () => {
       });
       template = Template.fromStack(stack);
 
-      // Should still create resources with fallback availability zone
-      template.resourceCountIs('AWS::ECS::Service', 2);
+      // Without service ARNs, ECS services should not be created
+      template.resourceCountIs('AWS::ECS::Service', 0);
     });
 
     test('should use fallback availability zone when availabilityZones is empty', () => {
       app = new cdk.App({
         context: {
           environmentSuffix: 'test',
+          stagingServiceArn: 'arn:aws:ecs:us-east-1:123456789012:service/test-cluster/test-service',
+          prodServiceArn: 'arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/prod-service',
           stagingVpcId: 'vpc-12345678',
           stagingPublicSubnetId: 'subnet-11111111',
           stagingPrivateSubnetId: 'subnet-22222222',
@@ -1054,7 +1258,7 @@ describe('TapStack', () => {
 
       // Should create resources successfully with fallback AZ
       template.resourceCountIs('AWS::ECS::Service', 2);
-      
+
       // Verify VPC attributes are created (which uses the fallback)
       const vpcs = template.findResources('AWS::EC2::VPC');
       // VPCs are referenced, not created, so verify ECS services exist
@@ -1065,7 +1269,9 @@ describe('TapStack', () => {
       app = new cdk.App({
         context: {
           environmentSuffix: 'test',
-          stagingListenerArn: 'arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/alb/1234567890123456/listener/app/alb/1234567890123456/1234567890123456',
+          stagingServiceArn: 'arn:aws:ecs:us-east-1:123456789012:service/test-cluster/test-service',
+          stagingListenerArn:
+            'arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/alb/1234567890123456/listener/app/alb/1234567890123456/1234567890123456',
           stagingVpcId: 'vpc-12345678',
           stagingPublicSubnetId: 'subnet-11111111',
           stagingPrivateSubnetId: 'subnet-22222222',
@@ -1077,14 +1283,16 @@ describe('TapStack', () => {
       });
       template = Template.fromStack(stack);
 
-      template.resourceCountIs('AWS::CodeDeploy::DeploymentGroup', 2);
+      template.resourceCountIs('AWS::CodeDeploy::DeploymentGroup', 1);
     });
 
     test('should handle production listener ARN with replace operation when match found', () => {
       app = new cdk.App({
         context: {
           environmentSuffix: 'test',
-          prodListenerArn: 'arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/alb/1234567890123456/listener/app/alb/1234567890123456/1234567890123456',
+          prodServiceArn: 'arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/prod-service',
+          prodListenerArn:
+            'arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/alb/1234567890123456/listener/app/alb/1234567890123456/1234567890123456',
           prodVpcId: 'vpc-87654321',
           prodPublicSubnetId: 'subnet-33333333',
           prodPrivateSubnetId: 'subnet-44444444',
@@ -1096,7 +1304,7 @@ describe('TapStack', () => {
       });
       template = Template.fromStack(stack);
 
-      template.resourceCountIs('AWS::CodeDeploy::DeploymentGroup', 2);
+      template.resourceCountIs('AWS::CodeDeploy::DeploymentGroup', 1);
     });
   });
 });
