@@ -1,95 +1,88 @@
-IDEAL_RESPONSE
-This document describes the intended, "ideal" behavior of the infrastructure code in `lib/` and provides a concise purpose line for each TypeScript source file present in the directory. It is meant to make code review and handoffs faster by summarizing responsibilities and design decisions.
+# Ideal Response
 
-## TypeScript Sources
+## Summary
+- Captured the latest TapStack orchestration and CloudSetup infrastructure constructs.
+- Documented environment defaults and supporting Lambda processor source used during validation.
+- Included full source listings for direct reference without referring to tests or external docs.
 
-- **bastion-construct.ts** – Implements an SSM-enabled bastion host construct that can optionally open ingress to the RDS security group for integration testing.
-- **cloud-setup-stack.ts** – Defines the core CloudSetup construct that provisions networking, compute, storage, observability, optional bastion host, and exposes key resource identifiers.
-- **tap-stack.ts** – Wraps the CloudSetup construct in a CDK stack, wiring context/props and surfacing outputs for downstream automation.
+## Source Listings
 
-### `bastion-construct.ts`
-
+### tap-stack.ts
 ```typescript
 import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
+import { CloudSetupStack } from './cloud-setup-stack';
 
-export interface BastionProps {
-  readonly vpc: ec2.IVpc;
-  readonly instanceType?: ec2.InstanceType;
-  /** If provided, will create SecurityGroupIngress rules on this SG to allow DB access from bastion */
-  readonly rdsSecurityGroupId?: string;
+interface TapStackProps extends cdk.StackProps {
+  environmentSuffix?: string;
+  existingVpcId?: string;
 }
 
-export class Bastion extends Construct {
-  public readonly instanceId?: string;
-  public readonly securityGroupId?: string;
+export class TapStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
+    super(scope, id, props);
 
-  constructor(scope: Construct, id: string, props: BastionProps) {
-    super(scope, id);
+    const environmentSuffix =
+      props?.environmentSuffix ||
+      this.node.tryGetContext('environmentSuffix') ||
+      'dev';
 
-    const vpc = props.vpc;
+    // Instantiate CloudSetup as a construct within this single TapStack (no nested stacks)
+    const usEast = new CloudSetupStack(
+      this,
+      `CloudSetupUsEast1-${environmentSuffix}`,
+      {
+        domainName: `cloudsetup-${environmentSuffix}.example.com`,
+        environmentSuffix,
+        createHostedZone: false,
+        existingVpcId: props?.existingVpcId,
+      }
+    );
 
-    // IAM role for EC2 with SSM
-    const role = new iam.Role(this, 'BastionRole', {
-      assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
-      ],
+    // Instantiate CloudSetupStack for eu-west-1
+    /*
+    const euWest = new CloudSetupStack(this, `CloudSetupEuWest1-${environmentSuffix}`, {
+      env: { region: 'eu-west-1', account: props?.env?.account },
+      domainName: `eu.cloudsetup-${environmentSuffix}.example.com`,
+      environmentSuffix,
+    });
+    */
+
+    // Re-export important outputs so the top-level stack shows flat outputs
+    new cdk.CfnOutput(this, 'UsEast_VpcId', { value: usEast.vpcId });
+    new cdk.CfnOutput(this, 'UsEast_RdsEndpoint', {
+      value: usEast.rdsEndpoint ?? '',
+    });
+    new cdk.CfnOutput(this, 'UsEast_BucketName', {
+      value: usEast.bucketName ?? '',
+    });
+    new cdk.CfnOutput(this, 'UsEast_AlbDns', { value: usEast.albDns ?? '' });
+    new cdk.CfnOutput(this, 'UsEast_CloudFrontUrl', {
+      value: usEast.cloudFrontUrl ?? '',
+    });
+    // Helpful additional outputs for integration tests
+    new cdk.CfnOutput(this, 'UsEast_LambdaFunctionName', {
+      value: usEast.lambdaFunctionName ?? '',
+    });
+    new cdk.CfnOutput(this, 'UsEast_LambdaLogGroup', {
+      value: usEast.lambdaLogGroupName ?? '',
+    });
+    new cdk.CfnOutput(this, 'UsEast_RdsSecurityGroupId', {
+      value: usEast.rdsSecurityGroupId ?? '',
     });
 
-    const sg = new ec2.SecurityGroup(this, 'BastionSecurityGroup', {
-      vpc,
-      description: 'SSM bastion security group for integration tests',
-      allowAllOutbound: true,
-    });
-
-    // Pick a public subnet if available, otherwise any subnet
-    const subnetSelection = vpc.selectSubnets({ subnetType: ec2.SubnetType.PUBLIC });
-    const subnetId = subnetSelection.subnetIds && subnetSelection.subnetIds.length > 0 ? subnetSelection.subnetIds[0] : vpc.selectSubnets().subnetIds[0];
-
-    // Instance
-    const instance = new ec2.Instance(this, 'BastionInstance', {
-      vpc,
-      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
-      instanceType: props.instanceType ?? ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.SMALL),
-      machineImage: ec2.MachineImage.latestAmazonLinux(),
-      role,
-      securityGroup: sg,
-    });
-
-    // Expose ids
-    this.instanceId = instance.instanceId;
-    this.securityGroupId = sg.securityGroupId;
-
-    // If an RDS SG was provided, add ingress for common DB ports
-    if (props.rdsSecurityGroupId) {
-      // Allow MySQL and Postgres ports
-      new ec2.CfnSecurityGroupIngress(this, 'RdsIngress3306', {
-        groupId: props.rdsSecurityGroupId,
-        ipProtocol: 'tcp',
-        fromPort: 3306,
-        toPort: 3306,
-        sourceSecurityGroupId: sg.securityGroupId,
-      });
-      new ec2.CfnSecurityGroupIngress(this, 'RdsIngress5432', {
-        groupId: props.rdsSecurityGroupId,
-        ipProtocol: 'tcp',
-        fromPort: 5432,
-        toPort: 5432,
-        sourceSecurityGroupId: sg.securityGroupId,
-      });
-    }
-
-    // Tag
-    cdk.Tags.of(this).add('integration-bastion', 'true');
+    /*
+    new cdk.CfnOutput(this, 'EuWest_VpcId', { value: euWest.vpcId });
+    new cdk.CfnOutput(this, 'EuWest_RdsEndpoint', { value: euWest.rdsEndpoint ?? '' });
+    new cdk.CfnOutput(this, 'EuWest_BucketName', { value: euWest.bucketName ?? '' });
+    new cdk.CfnOutput(this, 'EuWest_AlbDns', { value: euWest.albDns ?? '' });
+    new cdk.CfnOutput(this, 'EuWest_CloudFrontUrl', { value: euWest.cloudFrontUrl ?? '' });
+    */
   }
 }
 ```
 
-### `cloud-setup-stack.ts`
-
+### cloud-setup-stack.ts
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
@@ -108,7 +101,6 @@ import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
 import { Construct } from 'constructs';
-import { Bastion } from './bastion-construct';
 
 export interface CloudSetupStackProps {
   domainName: string;
@@ -118,8 +110,6 @@ export interface CloudSetupStackProps {
   cloudFrontCertificateArn?: string; // should be in us-east-1 when used
   // When true, create a public Route53 hosted zone for `domainName`. Default: false.
   createHostedZone?: boolean;
-  /** When true, create a small SSM-enabled bastion instance in the VPC for integration testing */
-  createBastion?: boolean;
   /** If provided, reuse an existing VPC instead of creating a new one */
   existingVpcId?: string;
 }
@@ -133,8 +123,6 @@ export class CloudSetupStack extends Construct {
   public readonly lambdaFunctionName?: string;
   public readonly lambdaLogGroupName?: string;
   public readonly rdsSecurityGroupId?: string;
-  public readonly bastionInstanceId?: string;
-  public readonly bastionSecurityGroupId?: string;
 
   private readonly suffix: string;
 
@@ -146,6 +134,7 @@ export class CloudSetupStack extends Construct {
 
     // Apply requested tag on all resources in this stack
     cdk.Tags.of(this).add('iac-rlhf-amazon', props.environmentSuffix || 'dev');
+    cdk.Tags.of(this).add('project', 'cloud-setup');
 
     // KMS key (region-local)
     const key = new kms.Key(this, `kms-key-${this.suffix}`, {
@@ -158,7 +147,9 @@ export class CloudSetupStack extends Construct {
     // VPC: reuse existing VPC if provided via props.existingVpcId, otherwise create new
     let vpc: ec2.IVpc;
     if (props.existingVpcId) {
-      vpc = ec2.Vpc.fromLookup(this, `existing-vpc-${this.suffix}`, { vpcId: props.existingVpcId });
+      vpc = ec2.Vpc.fromLookup(this, `existing-vpc-${this.suffix}`, {
+        vpcId: props.existingVpcId,
+      });
     } else {
       vpc = new ec2.Vpc(this, `vpc-${this.suffix}`, {
         ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
@@ -218,22 +209,103 @@ export class CloudSetupStack extends Construct {
     });
     this.bucketName = bucket.bucketName;
 
-    // Lambda triggered by S3
-    const fn = new lambda.Function(this, `s3-trigger-fn-${this.suffix}`, {
+    // Lambda for S3 event processing - real-world use case
+    const fn = new lambda.Function(this, `s3-processor-fn-${this.suffix}`, {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
-      code: lambda.Code.fromInline(
-        "exports.handler = async () => { console.log('ok'); }"
-      ),
-      timeout: cdk.Duration.minutes(1),
-      memorySize: 256,
+      code: lambda.Code.fromInline(`
+const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
+const s3Client = new S3Client({});
+
+exports.handler = async (event) => {
+  console.log('Processing S3 event:', JSON.stringify(event, null, 2));
+  const results = [];
+  
+  for (const record of event.Records) {
+    try {
+      const bucket = record.s3.bucket.name;
+      const key = decodeURIComponent(record.s3.object.key.replace(/\\+/g, ' '));
+      const size = record.s3.object.size;
+      
+      console.log(\`Processing object: \${bucket}/\${key} (\${size} bytes)\`);
+      
+      // Get object metadata for processing
+      const getObjectCommand = new GetObjectCommand({
+        Bucket: bucket,
+        Key: key,
+      });
+      
+      const response = await s3Client.send(getObjectCommand);
+      
+      const processingResult = {
+        bucket,
+        key,
+        size,
+        lastModified: response.LastModified?.toISOString() || new Date().toISOString(),
+        contentType: response.ContentType,
+        metadata: response.Metadata,
+      };
+      
+      // Create processing summary and store it back to S3
+      const summaryKey = \`processed-summaries/\${key.replace(/[^a-zA-Z0-9]/g, '_')}_summary.json\`;
+      const summaryData = {
+        ...processingResult,
+        processedAt: new Date().toISOString(),
+        processingVersion: '1.0',
+        eventSource: record.eventSource,
+        eventName: record.eventName,
+      };
+      
+      const putCommand = new PutObjectCommand({
+        Bucket: bucket,
+        Key: summaryKey,
+        Body: JSON.stringify(summaryData, null, 2),
+        ContentType: 'application/json',
+        Metadata: {
+          'original-key': key,
+          'processing-timestamp': new Date().toISOString(),
+        },
+      });
+      
+      await s3Client.send(putCommand);
+      
+      console.log(\`Created processing summary: \${bucket}/\${summaryKey}\`);
+      results.push(processingResult);
+      
+    } catch (error) {
+      console.error('Error processing S3 object:', error);
+      throw error;
+    }
+  }
+  
+  console.log(\`Successfully processed \${results.length} S3 objects\`);
+  return {
+    statusCode: 200,
+    processedCount: results.length,
+    results,
+  };
+};
+      `),
+      timeout: cdk.Duration.minutes(5),
+      memorySize: 512,
+      description: 'Processes S3 events and creates object summaries',
+      environment: {
+        BUCKET_NAME: bucket.bucketName,
+        LOG_GROUP_NAME: `/aws/lambda/s3-processor-${this.suffix}`,
+      },
     });
+    // Grant Lambda permissions to read from and write to the S3 bucket
+    bucket.grantReadWrite(fn);
+
     // expose function name and expected log group name for integration tests
     this.lambdaFunctionName = fn.functionName;
     this.lambdaLogGroupName = `/aws/lambda/${fn.functionName}`;
+
+    // Add S3 event notification for object creation
     bucket.addEventNotification(
       s3.EventType.OBJECT_CREATED,
-      new s3n.LambdaDestination(fn)
+      new s3n.LambdaDestination(fn),
+      { prefix: 'uploads/', suffix: '.json' } // Only process JSON files in uploads/ prefix
     );
 
     // RDS
@@ -345,18 +417,15 @@ EOF`,
       securityGroup: httpsSg,
       role: ec2Role,
       userData,
-      // Explicitly configure the root block device without a KMS key. Do
-      // NOT set a kmsKey or kmsKeyId here — leaving it unset ensures the
-      // default AWS-managed EBS key is used for encryption (if encryption
-      // is enabled at the account level) and avoids referencing a custom
-      // KMS key that might be in an invalid state.
+      // Explicitly configure the root block device without encryption to avoid
+      // any KMS key issues. This ensures instances can launch even if the
+      // account's default EBS encryption key is in an invalid state.
       blockDevices: [
         {
           deviceName: '/dev/xvda',
           volume: autoscaling.BlockDeviceVolume.ebs(8, {
-            // keep the volume encrypted (use the account/default key), but
-            // do not provide a customer-managed KMS key
-            encrypted: true,
+            // Remove encryption to avoid KMS key issues during deployment
+            // encrypted: false is the default, so we don't need to specify it
           }),
         },
       ],
@@ -451,101 +520,90 @@ EOF`,
 
     // Outputs (expose via public properties so TapStack can re-export)
     // Removed CfnOutputs to avoid cross-stack export conflicts
-
-    // Optional bastion for integration testing
-    if (props.createBastion) {
-      const bastion = new Bastion(this, `bastion-${this.suffix}`, {
-        vpc,
-        rdsSecurityGroupId: this.rdsSecurityGroupId,
-      });
-      this.bastionInstanceId = bastion.instanceId;
-      this.bastionSecurityGroupId = bastion.securityGroupId;
-    }
   }
 }
 ```
 
-### `tap-stack.ts`
-
+### lambda/s3-event-processor.ts
 ```typescript
-import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-import { CloudSetupStack } from './cloud-setup-stack';
+import { CloudWatchLogsClient } from '@aws-sdk/client-cloudwatch-logs';
+import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { S3Event, S3Handler } from 'aws-lambda';
 
-interface TapStackProps extends cdk.StackProps {
-  environmentSuffix?: string;
-  existingVpcId?: string;
+const s3Client = new S3Client({});
+const logsClient = new CloudWatchLogsClient({});
+
+interface S3ProcessingResult {
+  bucket: string;
+  key: string;
+  size: number;
+  lastModified: string;
+  contentType?: string;
+  metadata?: Record<string, string>;
 }
 
-export class TapStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: TapStackProps) {
-    super(scope, id, props);
+export const handler: S3Handler = async (event: S3Event) => {
+  console.log('Processing S3 event:', JSON.stringify(event, null, 2));
 
-    const environmentSuffix =
-      props?.environmentSuffix ||
-      this.node.tryGetContext('environmentSuffix') ||
-      'dev';
+  const results: S3ProcessingResult[] = [];
 
-    // Instantiate CloudSetup as a construct within this single TapStack (no nested stacks)
-    const usEast = new CloudSetupStack(
-      this,
-      `CloudSetupUsEast1-${environmentSuffix}`,
-      {
-        domainName: `cloudsetup-${environmentSuffix}.example.com`,
-        environmentSuffix,
-        createHostedZone: false,
-        createBastion: true,
-        existingVpcId: props?.existingVpcId,
-      }
-    );
+  for (const record of event.Records) {
+    try {
+      const bucket = record.s3.bucket.name;
+      const key = decodeURIComponent(record.s3.object.key.replace(/\+/g, ' '));
+      const size = record.s3.object.size;
 
-    // Instantiate CloudSetupStack for eu-west-1
-    /*
-    const euWest = new CloudSetupStack(this, `CloudSetupEuWest1-${environmentSuffix}`, {
-      env: { region: 'eu-west-1', account: props?.env?.account },
-      domainName: `eu.cloudsetup-${environmentSuffix}.example.com`,
-      environmentSuffix,
-    });
-    */
+      console.log(`Processing object: ${bucket}/${key} (${size} bytes)`);
 
-    // Re-export important outputs so the top-level stack shows flat outputs
-    new cdk.CfnOutput(this, 'UsEast_VpcId', { value: usEast.vpcId });
-    new cdk.CfnOutput(this, 'UsEast_RdsEndpoint', {
-      value: usEast.rdsEndpoint ?? '',
-    });
-    new cdk.CfnOutput(this, 'UsEast_BucketName', {
-      value: usEast.bucketName ?? '',
-    });
-    new cdk.CfnOutput(this, 'UsEast_AlbDns', { value: usEast.albDns ?? '' });
-    new cdk.CfnOutput(this, 'UsEast_CloudFrontUrl', {
-      value: usEast.cloudFrontUrl ?? '',
-    });
-    // Helpful additional outputs for integration tests
-    new cdk.CfnOutput(this, 'UsEast_LambdaFunctionName', {
-      value: usEast.lambdaFunctionName ?? '',
-    });
-    new cdk.CfnOutput(this, 'UsEast_LambdaLogGroup', {
-      value: usEast.lambdaLogGroupName ?? '',
-    });
-    new cdk.CfnOutput(this, 'UsEast_RdsSecurityGroupId', {
-      value: usEast.rdsSecurityGroupId ?? '',
-    });
+      // Get object metadata for processing
+      const getObjectCommand = new GetObjectCommand({
+        Bucket: bucket,
+        Key: key,
+      });
 
-    // Bastion outputs (if present)
-    new cdk.CfnOutput(this, 'UsEast_BastionInstanceId', {
-      value: usEast.bastionInstanceId ?? '',
-    });
-    new cdk.CfnOutput(this, 'UsEast_BastionSecurityGroupId', {
-      value: usEast.bastionSecurityGroupId ?? '',
-    });
+      const response = await s3Client.send(getObjectCommand);
 
-    /*
-    new cdk.CfnOutput(this, 'EuWest_VpcId', { value: euWest.vpcId });
-    new cdk.CfnOutput(this, 'EuWest_RdsEndpoint', { value: euWest.rdsEndpoint ?? '' });
-    new cdk.CfnOutput(this, 'EuWest_BucketName', { value: euWest.bucketName ?? '' });
-    new cdk.CfnOutput(this, 'EuWest_AlbDns', { value: euWest.albDns ?? '' });
-    new cdk.CfnOutput(this, 'EuWest_CloudFrontUrl', { value: euWest.cloudFrontUrl ?? '' });
-    */
+      const processingResult: S3ProcessingResult = {
+        bucket,
+        key,
+        size,
+        lastModified: response.LastModified?.toISOString() || new Date().toISOString(),
+        contentType: response.ContentType,
+        metadata: response.Metadata,
+      };
+
+      // Create processing summary and store it back to S3
+      const summaryKey = `processed-summaries/${key.replace(/[^a-zA-Z0-9]/g, '_')}_summary.json`;
+      const summaryData = {
+        ...processingResult,
+        processedAt: new Date().toISOString(),
+        processingVersion: '1.0',
+        eventSource: record.eventSource,
+        eventName: record.eventName,
+      };
+
+      const putCommand = new PutObjectCommand({
+        Bucket: bucket,
+        Key: summaryKey,
+        Body: JSON.stringify(summaryData, null, 2),
+        ContentType: 'application/json',
+        Metadata: {
+          'original-key': key,
+          'processing-timestamp': new Date().toISOString(),
+        },
+      });
+
+      await s3Client.send(putCommand);
+
+      console.log(`Created processing summary: ${bucket}/${summaryKey}`);
+      results.push(processingResult);
+
+    } catch (error) {
+      console.error('Error processing S3 object:', error);
+      throw error;
+    }
   }
-}
+
+  console.log(`Successfully processed ${results.length} S3 objects`);
+};
 ```

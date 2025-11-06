@@ -1,9 +1,11 @@
-import { CloudWatchLogsClient } from '@aws-sdk/client-cloudwatch-logs';
-import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { S3Event, S3Handler } from 'aws-lambda';
 
 const s3Client = new S3Client({});
-const logsClient = new CloudWatchLogsClient({});
 
 interface S3ProcessingResult {
   bucket: string;
@@ -39,7 +41,8 @@ export const handler: S3Handler = async (event: S3Event) => {
         bucket,
         key,
         size,
-        lastModified: response.LastModified?.toISOString() || new Date().toISOString(),
+        lastModified:
+          response.LastModified?.toISOString() || new Date().toISOString(),
         contentType: response.ContentType,
         metadata: response.Metadata,
       };
@@ -69,7 +72,6 @@ export const handler: S3Handler = async (event: S3Event) => {
 
       console.log(`Created processing summary: ${bucket}/${summaryKey}`);
       results.push(processingResult);
-
     } catch (error) {
       console.error('Error processing S3 object:', error);
       throw error;
