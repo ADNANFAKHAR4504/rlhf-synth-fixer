@@ -38,7 +38,7 @@ export class VpcStack extends Construct {
     super(scope, id);
 
     const { environmentSuffix } = props;
-    const awsRegion = 'ca-central-1';
+    const awsRegion = 'eu-south-1';
     // Common tags for all resources
     const commonTags = {
       Environment: 'Production',
@@ -46,7 +46,7 @@ export class VpcStack extends Construct {
       ManagedBy: 'CDKTF',
     };
 
-    // Define availability zones for ca-central-1
+    // Define availability zones for eu-south-1
     const availabilityZones = [`${awsRegion}a`];
 
     // Create VPC with DNS support enabled
@@ -74,8 +74,8 @@ export class VpcStack extends Construct {
     // Create CloudWatch Log Group for VPC Flow Logs
     // Note: Set skipDestroy to true to prevent CloudFormation from deleting the log group
     // This avoids conflicts when log groups are created in parallel or across environments
-    const flowLogGroup = new CloudwatchLogGroup(this, 'vpc-flow-logs', {
-      name: `/aws/vpc/flowlogs-${environmentSuffix}`,
+    const flowLogGroup = new CloudwatchLogGroup(this, 'vpcs-flow-logs', {
+      name: `/aws/vpcs/flowlogs-${environmentSuffix}`,
       retentionInDays: 7,
       skipDestroy: true,
       tags: {
@@ -85,8 +85,8 @@ export class VpcStack extends Construct {
     });
 
     // Create IAM Role for VPC Flow Logs
-    const flowLogRole = new IamRole(this, 'abcvpc', {
-      name: `abcvpc-${environmentSuffix}`,
+    const flowLogRole = new IamRole(this, 'abcdvpc', {
+      name: `abcdvpc-${environmentSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -100,7 +100,7 @@ export class VpcStack extends Construct {
         ],
       }),
       tags: {
-        Name: `abcvpc-${environmentSuffix}`,
+        Name: `abcdvpc-${environmentSuffix}`,
         ...commonTags,
       },
     });
@@ -390,7 +390,7 @@ export class VpcStack extends Construct {
 
     // Create IAM Role for EC2 instances to use Session Manager
     const ec2Role = new IamRole(this, 'ec2-ssm-role', {
-      name: `abcssm-${environmentSuffix}`,
+      name: `abcdssm-${environmentSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -404,7 +404,7 @@ export class VpcStack extends Construct {
         ],
       }),
       tags: {
-        Name: `abcssm-${environmentSuffix}`,
+        Name: `abcdssm-${environmentSuffix}`,
         ...commonTags,
       },
     });
@@ -420,7 +420,7 @@ export class VpcStack extends Construct {
       this,
       'ec2-instance-profile',
       {
-        name: `abcec2-${environmentSuffix}`,
+        name: `abcdec2-${environmentSuffix}`,
         role: ec2Role.name,
       }
     );

@@ -39,6 +39,7 @@ new LocalBackend(this, {
 **AWS Documentation Reference**: https://developer.hashicorp.com/terraform/language/settings/backends/s3
 
 **Cost/Security/Performance Impact**:
+
 - Blocks all deployments (deployment blocker)
 - Could lead to state corruption if multiple users deploy simultaneously without proper locking
 - Security impact: state file management is critical for infrastructure security
@@ -57,7 +58,7 @@ routeTableIds: [
   ...privateSubnets.map((_, index) => {
     return `\${aws_route_table.private-route-table-${index}.id}`;
   }),
-]
+];
 ```
 
 **IDEAL_RESPONSE Fix**: Store route table references in an array and use actual object references:
@@ -71,10 +72,7 @@ privateSubnets.forEach((subnet, index) => {
 });
 
 // Later, when creating VPC endpoints:
-routeTableIds: [
-  publicRouteTable.id,
-  ...privateRouteTables.map((rt) => rt.id),
-]
+routeTableIds: [publicRouteTable.id, ...privateRouteTables.map(rt => rt.id)];
 ```
 
 **Root Cause**: Model attempted to use Terraform string interpolation syntax within CDKTF TypeScript code. CDKTF uses object references, not string interpolation, to establish resource dependencies.
@@ -82,6 +80,7 @@ routeTableIds: [
 **AWS Documentation Reference**: https://developer.hashicorp.com/terraform/cdktf/concepts/resources
 
 **Cost/Security/Performance Impact**:
+
 - Blocks deployment (deployment blocker)
 - Would prevent VPC endpoints from functioning correctly
 - Cost impact: Without VPC endpoints, data transfer costs would be higher (~$0.09/GB vs free for S3/DynamoDB gateway endpoints)
@@ -93,6 +92,7 @@ routeTableIds: [
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**: EC2 instances failed to launch with error:
+
 ```
 Client.InvalidKMSKey.InvalidState: The KMS key provided is in an incorrect state
 ```
@@ -128,15 +128,18 @@ rootBlockDevice: {
 ```
 
 **Root Cause**: The account may have EBS encryption enabled by default with a KMS key that is either:
+
 1. In a pending deletion state
-2. Not accessible in the target region (ca-central-1)
+2. Not accessible in the target region (eu-south-1)
 3. Not granted proper permissions for EC2 service
 
 **AWS Documentation Reference**:
+
 - https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/EBSEncryption.html
 - https://docs.aws.amazon.com/kms/latest/developerguide/services-ebs.html
 
 **Cost/Security/Performance Impact**:
+
 - Blocks deployment (deployment blocker)
 - Security: Prevents instances from launching, blocking entire application
 - All 3 EC2 instances failed to launch
@@ -177,6 +180,7 @@ new IamRolePolicyAttachment(this, 'ec2-ssm-policy-attachment', {
 **AWS Documentation Reference**: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment
 
 **Cost/Security/Performance Impact**:
+
 - Low immediate impact (still works but generates warnings)
 - Future compatibility risk
 - Could cause issues in future Terraform/CDKTF versions
@@ -192,10 +196,12 @@ new IamRolePolicyAttachment(this, 'ec2-ssm-policy-attachment', {
 **MODEL_RESPONSE Issue**: The metadata constraint specifies "NAT Gateways must have Elastic IPs with deletion protection enabled", but Elastic IPs don't support deletion protection as a property.
 
 **IDEAL_RESPONSE Fix**: Document this constraint clarification. EIPs are implicitly protected by:
+
 1. Being associated with NAT Gateways (can't be deleted while in use)
 2. Requiring explicit `force_detach` in Terraform to remove
 
 The code correctly implements:
+
 ```typescript
 const eip = new Eip(this, `nat-eip-${index}`, {
   domain: 'vpc',
@@ -222,9 +228,10 @@ const eip = new Eip(this, `nat-eip-${index}`, {
 ### Deployment Progress
 
 The deployment created the following resources successfully before failing:
+
 - VPC with DNS support
 - Internet Gateway
-- 3 Availability Zones (ca-central-1a, ca-central-1b, ca-central-1d)
+- 3 Availability Zones (eu-south-1a, eu-south-1b, eu-south-1d)
 - 6 Subnets (3 public, 3 private) with proper CIDR allocation
 - 3 Elastic IPs for NAT Gateways
 - 3 NAT Gateways (one per AZ)
@@ -236,6 +243,7 @@ The deployment created the following resources successfully before failing:
 - VPC Endpoints for S3 and DynamoDB
 
 Failed to create:
+
 - 3 EC2 instances (due to KMS key issue)
 - CloudWatch Dashboard (dependent on successful deployment)
 
@@ -250,6 +258,7 @@ Failed to create:
 ### Training Quality Score Justification
 
 This task provides excellent training data because:
+
 - Demonstrates multiple common CDKTF anti-patterns
 - Shows proper vs improper resource referencing in Infrastructure as Code
 - Highlights the importance of understanding provider-specific deprecations

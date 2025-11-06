@@ -34,7 +34,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
   let cloudWatchClient: CloudWatchClient;
   let iamClient: IAMClient;
 
-  const region = process.env.AWS_REGION || 'ca-central-1';
+  const region = process.env.AWS_REGION || 'eu-south-1';
   const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
   const USE_MOCKS = process.env.USE_MOCKS !== 'false'; // Default to using mocks for local testing
 
@@ -80,7 +80,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
             SubnetId: outputs['vpc-stack_public-subnet-ids_9241F01E'][0],
             CidrBlock: '10.0.0.0/24',
             MapPublicIpOnLaunch: true,
-            AvailabilityZone: 'ca-central-1a',
+            AvailabilityZone: 'eu-south-1a',
           },
         ],
       },
@@ -90,7 +90,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
             SubnetId: outputs['vpc-stack_private-subnet-ids_7503D504'][0],
             CidrBlock: '10.0.1.0/24',
             MapPublicIpOnLaunch: false,
-            AvailabilityZone: 'ca-central-1a',
+            AvailabilityZone: 'eu-south-1a',
           },
         ],
       },
@@ -100,13 +100,13 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
             SubnetId: outputs['vpc-stack_public-subnet-ids_9241F01E'][0],
             CidrBlock: '10.0.0.0/24',
             MapPublicIpOnLaunch: true,
-            AvailabilityZone: 'ca-central-1a',
+            AvailabilityZone: 'eu-south-1a',
           },
           {
             SubnetId: outputs['vpc-stack_private-subnet-ids_7503D504'][0],
             CidrBlock: '10.0.1.0/24',
             MapPublicIpOnLaunch: false,
-            AvailabilityZone: 'ca-central-1a',
+            AvailabilityZone: 'eu-south-1a',
           },
         ],
       },
@@ -173,7 +173,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
             {
               VpcEndpointId: outputs['vpc-stack_s3-endpoint-id_75E8EEA3'],
               VpcEndpointType: 'Gateway',
-              ServiceName: 'com.amazonaws.ca-central-1.s3',
+              ServiceName: 'com.amazonaws.eu-south-1.s3',
               State: 'available',
             },
           ],
@@ -183,7 +183,7 @@ describe('Payment Processing VPC Infrastructure Integration Tests', () => {
             {
               VpcEndpointId: outputs['vpc-stack_dynamodb-endpoint-id_8FD40CED'],
               VpcEndpointType: 'Gateway',
-              ServiceName: 'com.amazonaws.ca-central-1.dynamodb',
+              ServiceName: 'com.amazonaws.eu-south-1.dynamodb',
               State: 'available',
             },
           ],

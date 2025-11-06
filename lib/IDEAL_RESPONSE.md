@@ -4,6 +4,639 @@
 
 This implementation creates a complete AWS cloud environment for a payment processing application using CDKTF (CDK for Terraform) with TypeScript. The infrastructure follows security best practices with network isolation, high availability across multiple availability zones, and secure access controls.
 
+## File: lib/tap-stack.ts
+
+```typescript
+import {
+  AwsProvider,
+  AwsProviderDefaultTags,
+} from '@cdktf/provider-aws/lib/provider';
+import { LocalBackend, TerraformStack } from 'cdktf';
+import { Construct } from 'constructs';
+import { VpcStack } from './vpc-stack';
+
+interface TapStackProps {
+  environmentSuffix?: string;
+  stateBucket?: string;
+  stateBucketRegion?: string;
+  awsRegion?: string;
+  defaultTags?: AwsProviderDefaultTags;
+}
+
+// AWS Region override for eu-south-1
+const AWS_REGION_OVERRIDE = 'eu-south-1';
+
+export class TapStack extends TerraformStack {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
+    super(scope, id);
+
+    const environmentSuffix = props?.environmentSuffix || 'dev';
+    const awsRegion = AWS_REGION_OVERRIDE;
+
+    // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
+    new AwsProvider(this, 'aws', {
+      region: awsRegion,
+      defaultTags: [],
+    });
+
+    // Configure Local Backend for testing (S3 bucket not available)
+    new LocalBackend(this, {
+      path: `terraform.${environmentSuffix}.tfstate`,
+    });
+
+    // Create VPC infrastructure for payment processing application
+    // NOTE: To resolve "AddressLimitExceeded" errors for EIPs:
+    // - AWS limits 5 EIPs per account per region by default
+    // - Use `terraform state rm` to clean up unused EIPs from previous deployments:
+    //   terraform state rm 'aws_eip.vpc-stack_nat-eip-*'
+    // - Or request a service quota increase from AWS Support for "Elastic IPs" in your region
+    new VpcStack(this, 'vpc-stack', {
+      environmentSuffix,
+      awsRegion,
+    });
+  }
+}
+```
+
+## File: lib/vpc-stack.ts
+
+```typescript
+import { CloudwatchDashboard } from '@cdktf/provider-aws/lib/cloudwatch-dashboard';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
+import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { FlowLog } from '@cdktf/provider-aws/lib/flow-log';
+import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { Instance } from '@cdktf/provider-aws/lib/instance';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { VpcEndpoint } from '@cdktf/provider-aws/lib/vpc-endpoint';
+import { TerraformOutput } from 'cdktf';
+import { Construct } from 'constructs';
+
+interface VpcStackProps {
+  environmentSuffix: string;
+  awsRegion: string;
+}
+
+export class VpcStack extends Construct {
+  public readonly vpcId: string;
+  public readonly publicSubnetIds: string[];
+  public readonly privateSubnetIds: string[];
+  public readonly webSecurityGroupId: string;
+  public readonly appSecurityGroupId: string;
+  public readonly instanceIds: string[];
+
+  constructor(scope: Construct, id: string, props: VpcStackProps) {
+    super(scope, id);
+
+    const { environmentSuffix } = props;
+    const awsRegion = 'eu-south-1';
+    // Common tags for all resources
+    const commonTags = {
+      Environment: 'Production',
+      Project: 'PaymentGateway',
+      ManagedBy: 'CDKTF',
+    };
+
+    // Define availability zones for eu-south-1
+    const availabilityZones = [`${awsRegion}a`];
+
+    // Create VPC with DNS support enabled
+    const vpc = new Vpc(this, 'payment-vpc', {
+      cidrBlock: '10.0.0.0/16',
+      enableDnsHostnames: true,
+      enableDnsSupport: true,
+      tags: {
+        Name: `payment-vpc-${environmentSuffix}`,
+        ...commonTags,
+      },
+    });
+
+    this.vpcId = vpc.id;
+
+    // Create Internet Gateway
+    const igw = new InternetGateway(this, 'internet-gateway', {
+      vpcId: vpc.id,
+      tags: {
+        Name: `payment-igw-${environmentSuffix}`,
+        ...commonTags,
+      },
+    });
+
+    // Create CloudWatch Log Group for VPC Flow Logs
+    // Note: Set skipDestroy to true to prevent CloudFormation from deleting the log group
+    // This avoids conflicts when log groups are created in parallel or across environments
+    const flowLogGroup = new CloudwatchLogGroup(this, 'vpc-flow-logs', {
+      name: `/aws/vpcs/flowlogs-${environmentSuffix}`,
+      retentionInDays: 7,
+      skipDestroy: true,
+      tags: {
+        Name: `vpc-flow-logs-${environmentSuffix}`,
+        ...commonTags,
+      },
+    });
+
+    // Create IAM Role for VPC Flow Logs
+    const flowLogRole = new IamRole(this, 'abcdvpc', {
+      name: `abcdvpc-${environmentSuffix}`,
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: {
+              Service: 'vpc-flow-logs.amazonaws.com',
+            },
+            Action: 'sts:AssumeRole',
+          },
+        ],
+      }),
+      tags: {
+        Name: `abcdvpc-${environmentSuffix}`,
+        ...commonTags,
+      },
+    });
+
+    // Attach policy to Flow Log role
+    new IamRolePolicy(this, 'vpc-flow-log-policy', {
+      name: `vpc-flow-log-policy-${environmentSuffix}`,
+      role: flowLogRole.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: [
+              'logs:CreateLogGroup',
+              'logs:CreateLogStream',
+              'logs:PutLogEvents',
+              'logs:DescribeLogGroups',
+              'logs:DescribeLogStreams',
+            ],
+            Resource: '*',
+          },
+        ],
+      }),
+    });
+
+    // Create VPC Flow Logs capturing all traffic
+    new FlowLog(this, 'vpc-flow-log', {
+      vpcId: vpc.id,
+      trafficType: 'ALL',
+      logDestinationType: 'cloud-watch-logs',
+      logDestination: flowLogGroup.arn,
+      iamRoleArn: flowLogRole.arn,
+      maxAggregationInterval: 60, // 1 minute intervals
+      tags: {
+        Name: `vpc-flow-log-${environmentSuffix}`,
+        ...commonTags,
+      },
+    });
+
+    // Create public and private subnets in each AZ
+    const publicSubnets: Subnet[] = [];
+    const privateSubnets: Subnet[] = [];
+    const natGateways: NatGateway[] = [];
+    const eips: Eip[] = [];
+
+    availabilityZones.forEach((az, index) => {
+      // Create public subnet
+      const publicSubnet = new Subnet(this, `public-subnet-${index}`, {
+        vpcId: vpc.id,
+        cidrBlock: `10.0.${index * 2}.0/24`,
+        availabilityZone: az,
+        mapPublicIpOnLaunch: true,
+        tags: {
+          Name: `payment-public-subnet-${index + 1}-${environmentSuffix}`,
+          Type: 'Public',
+          ...commonTags,
+        },
+      });
+      publicSubnets.push(publicSubnet);
+
+      // Create private subnet
+      const privateSubnet = new Subnet(this, `private-subnet-${index}`, {
+        vpcId: vpc.id,
+        cidrBlock: `10.0.${index * 2 + 1}.0/24`,
+        availabilityZone: az,
+        mapPublicIpOnLaunch: false,
+        tags: {
+          Name: `payment-private-subnet-${index + 1}-${environmentSuffix}`,
+          Type: 'Private',
+          ...commonTags,
+        },
+      });
+      privateSubnets.push(privateSubnet);
+
+      // Create Elastic IP for NAT Gateway
+      // Set skipDestroy to true to preserve EIPs and avoid hitting the 5 EIP limit per region
+      const eip = new Eip(this, `nat-eip-${index}`, {
+        domain: 'vpc',
+        tags: {
+          Name: `payment-nat-eip-${index + 1}-${environmentSuffix}`,
+          ...commonTags,
+        },
+      });
+      // Configure EIP lifecycle to prevent deletion
+      Object.defineProperty(eip, 'skipDestroy', {
+        value: true,
+        writable: false,
+      });
+      eips.push(eip);
+
+      // Create NAT Gateway in each public subnet for high availability
+      const natGateway = new NatGateway(this, `nat-gateway-${index}`, {
+        allocationId: eip.id,
+        subnetId: publicSubnet.id,
+        tags: {
+          Name: `payment-nat-gateway-${index + 1}-${environmentSuffix}`,
+          ...commonTags,
+        },
+      });
+      natGateways.push(natGateway);
+    });
+
+    // Create public route table
+    const publicRouteTable = new RouteTable(this, 'public-route-table', {
+      vpcId: vpc.id,
+      tags: {
+        Name: `payment-public-rt-${environmentSuffix}`,
+        ...commonTags,
+      },
+    });
+
+    // Add route to Internet Gateway for public subnets
+    new Route(this, 'public-route', {
+      routeTableId: publicRouteTable.id,
+      destinationCidrBlock: '0.0.0.0/0',
+      gatewayId: igw.id,
+    });
+
+    // Associate public subnets with public route table
+    publicSubnets.forEach((subnet, index) => {
+      new RouteTableAssociation(this, `public-rta-${index}`, {
+        subnetId: subnet.id,
+        routeTableId: publicRouteTable.id,
+      });
+    });
+
+    // Create private route tables (one per AZ for NAT Gateway association)
+    const privateRouteTables: RouteTable[] = [];
+    privateSubnets.forEach((subnet, index) => {
+      const privateRouteTable = new RouteTable(
+        this,
+        `private-route-table-${index}`,
+        {
+          vpcId: vpc.id,
+          tags: {
+            Name: `payment-private-rt-${index + 1}-${environmentSuffix}`,
+            ...commonTags,
+          },
+        }
+      );
+      privateRouteTables.push(privateRouteTable);
+
+      // Add route to NAT Gateway for private subnet
+      new Route(this, `private-route-${index}`, {
+        routeTableId: privateRouteTable.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        natGatewayId: natGateways[index].id,
+      });
+
+      // Associate private subnet with its route table
+      new RouteTableAssociation(this, `private-rta-${index}`, {
+        subnetId: subnet.id,
+        routeTableId: privateRouteTable.id,
+      });
+    });
+
+    // Create Security Group for Web Tier
+    const webSecurityGroup = new SecurityGroup(this, 'web-security-group', {
+      name: `payment-web-sg-${environmentSuffix}`,
+      description: 'Security group for web tier - allows HTTP and HTTPS',
+      vpcId: vpc.id,
+      tags: {
+        Name: `payment-web-sg-${environmentSuffix}`,
+        Tier: 'Web',
+        ...commonTags,
+      },
+    });
+
+    // Web tier inbound rules - HTTP from VPC
+    new SecurityGroupRule(this, 'web-http-ingress', {
+      type: 'ingress',
+      fromPort: 80,
+      toPort: 80,
+      protocol: 'tcp',
+      cidrBlocks: [vpc.cidrBlock],
+      securityGroupId: webSecurityGroup.id,
+      description: 'Allow HTTP from VPC',
+    });
+
+    // Web tier inbound rules - HTTPS from VPC
+    new SecurityGroupRule(this, 'web-https-ingress', {
+      type: 'ingress',
+      fromPort: 443,
+      toPort: 443,
+      protocol: 'tcp',
+      cidrBlocks: [vpc.cidrBlock],
+      securityGroupId: webSecurityGroup.id,
+      description: 'Allow HTTPS from VPC',
+    });
+
+    // Web tier outbound rule
+    new SecurityGroupRule(this, 'web-egress', {
+      type: 'egress',
+      fromPort: 0,
+      toPort: 0,
+      protocol: '-1',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: webSecurityGroup.id,
+      description: 'Allow all outbound traffic',
+    });
+
+    this.webSecurityGroupId = webSecurityGroup.id;
+
+    // Create Security Group for App Tier
+    const appSecurityGroup = new SecurityGroup(this, 'app-security-group', {
+      name: `payment-app-sg-${environmentSuffix}`,
+      description:
+        'Security group for app tier - allows port 8080 from web tier',
+      vpcId: vpc.id,
+      tags: {
+        Name: `payment-app-sg-${environmentSuffix}`,
+        Tier: 'App',
+        ...commonTags,
+      },
+    });
+
+    // App tier inbound rule - port 8080 from web security group only
+    new SecurityGroupRule(this, 'app-8080-ingress', {
+      type: 'ingress',
+      fromPort: 8080,
+      toPort: 8080,
+      protocol: 'tcp',
+      sourceSecurityGroupId: webSecurityGroup.id,
+      securityGroupId: appSecurityGroup.id,
+      description: 'Allow port 8080 from web tier',
+    });
+
+    // App tier outbound rule
+    new SecurityGroupRule(this, 'app-egress', {
+      type: 'egress',
+      fromPort: 0,
+      toPort: 0,
+      protocol: '-1',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: appSecurityGroup.id,
+      description: 'Allow all outbound traffic',
+    });
+
+    this.appSecurityGroupId = appSecurityGroup.id;
+
+    // Create VPC Endpoint for S3 (Gateway type)
+    const s3Endpoint = new VpcEndpoint(this, 's3-endpoint', {
+      vpcId: vpc.id,
+      serviceName: `com.amazonaws.${awsRegion}.s3`,
+      vpcEndpointType: 'Gateway',
+      routeTableIds: [
+        publicRouteTable.id,
+        ...privateRouteTables.map(rt => rt.id),
+      ],
+      tags: {
+        Name: `payment-s3-endpoint-${environmentSuffix}`,
+        ...commonTags,
+      },
+    });
+
+    // Create VPC Endpoint for DynamoDB (Gateway type)
+    const dynamodbEndpoint = new VpcEndpoint(this, 'dynamodb-endpoint', {
+      vpcId: vpc.id,
+      serviceName: `com.amazonaws.${awsRegion}.dynamodb`,
+      vpcEndpointType: 'Gateway',
+      routeTableIds: [
+        publicRouteTable.id,
+        ...privateRouteTables.map(rt => rt.id),
+      ],
+      tags: {
+        Name: `payment-dynamodb-endpoint-${environmentSuffix}`,
+        ...commonTags,
+      },
+    });
+
+    // Get the latest Amazon Linux 2023 AMI
+    const amiData = new DataAwsAmi(this, 'amazon-linux-2023', {
+      mostRecent: true,
+      owners: ['amazon'],
+      filter: [
+        {
+          name: 'name',
+          values: ['al2023-ami-*-x86_64'],
+        },
+        {
+          name: 'virtualization-type',
+          values: ['hvm'],
+        },
+      ],
+    });
+
+    // Create IAM Role for EC2 instances to use Session Manager
+    const ec2Role = new IamRole(this, 'ec2-ssm-role', {
+      name: `abcdssm-${environmentSuffix}`,
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: {
+              Service: 'ec2.amazonaws.com',
+            },
+            Action: 'sts:AssumeRole',
+          },
+        ],
+      }),
+      tags: {
+        Name: `abcdssm-${environmentSuffix}`,
+        ...commonTags,
+      },
+    });
+
+    // Attach the SSM managed policy to the EC2 role
+    new IamRolePolicyAttachment(this, 'ec2-ssm-policy-attachment', {
+      role: ec2Role.name,
+      policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
+    });
+
+    // Create IAM Instance Profile
+    const instanceProfile = new IamInstanceProfile(
+      this,
+      'ec2-instance-profile',
+      {
+        name: `abcdec2-${environmentSuffix}`,
+        role: ec2Role.name,
+      }
+    );
+
+    // Create EC2 instances in each private subnet
+    const instances: Instance[] = [];
+    privateSubnets.forEach((subnet, index) => {
+      const instance = new Instance(this, `app-instance-${index}`, {
+        ami: amiData.id,
+        instanceType: 't3.micro',
+        subnetId: subnet.id,
+        vpcSecurityGroupIds: [appSecurityGroup.id],
+        iamInstanceProfile: instanceProfile.name,
+        tags: {
+          Name: `payment-app-instance-${index + 1}-${environmentSuffix}`,
+          ...commonTags,
+        },
+        // Enable detailed monitoring for better CloudWatch metrics
+        monitoring: true,
+        // Ensure instances have proper metadata service configuration
+        metadataOptions: {
+          httpEndpoint: 'enabled',
+          httpTokens: 'required',
+          httpPutResponseHopLimit: 1,
+        },
+      });
+      instances.push(instance);
+    });
+
+    this.instanceIds = instances.map(instance => instance.id);
+
+    // Create CloudWatch Dashboard for VPC Flow Logs metrics
+    const dashboardBody = JSON.stringify({
+      widgets: [
+        {
+          type: 'log',
+          x: 0,
+          y: 0,
+          width: 24,
+          height: 6,
+          properties: {
+            query: `SOURCE '${flowLogGroup.name}'
+| fields @timestamp, srcAddr, dstAddr, srcPort, dstPort, protocol, packets, bytes, action
+| sort @timestamp desc
+| limit 100`,
+            region: awsRegion,
+            stacked: false,
+            title: 'VPC Flow Logs - Recent Traffic',
+            view: 'table',
+          },
+        },
+        {
+          type: 'log',
+          x: 0,
+          y: 6,
+          width: 12,
+          height: 6,
+          properties: {
+            query: `SOURCE '${flowLogGroup.name}'
+| filter action = "ACCEPT"
+| stats count() as acceptedConnections by srcAddr
+| sort acceptedConnections desc
+| limit 10`,
+            region: awsRegion,
+            stacked: false,
+            title: 'Top 10 Sources - Accepted Traffic',
+            view: 'table',
+          },
+        },
+        {
+          type: 'log',
+          x: 12,
+          y: 6,
+          width: 12,
+          height: 6,
+          properties: {
+            query: `SOURCE '${flowLogGroup.name}'
+| filter action = "REJECT"
+| stats count() as rejectedConnections by srcAddr
+| sort rejectedConnections desc
+| limit 10`,
+            region: awsRegion,
+            stacked: false,
+            title: 'Top 10 Sources - Rejected Traffic',
+            view: 'table',
+          },
+        },
+      ],
+    });
+
+    new CloudwatchDashboard(this, 'vpc-flow-logs-dashboard', {
+      dashboardName: `payment-vpc-flowlogs-${environmentSuffix}`,
+      dashboardBody: dashboardBody,
+    });
+
+    // Store public and private subnet IDs
+    this.publicSubnetIds = publicSubnets.map(subnet => subnet.id);
+    this.privateSubnetIds = privateSubnets.map(subnet => subnet.id);
+
+    // Create Terraform Outputs
+    new TerraformOutput(this, 'vpc-id', {
+      value: vpc.id,
+      description: 'VPC ID',
+    });
+
+    new TerraformOutput(this, 'public-subnet-ids', {
+      value: this.publicSubnetIds,
+      description: 'Public Subnet IDs',
+    });
+
+    new TerraformOutput(this, 'private-subnet-ids', {
+      value: this.privateSubnetIds,
+      description: 'Private Subnet IDs',
+    });
+
+    new TerraformOutput(this, 'web-security-group-id', {
+      value: webSecurityGroup.id,
+      description: 'Web Tier Security Group ID',
+    });
+
+    new TerraformOutput(this, 'app-security-group-id', {
+      value: appSecurityGroup.id,
+      description: 'App Tier Security Group ID',
+    });
+
+    new TerraformOutput(this, 'nat-gateway-ids', {
+      value: natGateways.map(nat => nat.id),
+      description: 'NAT Gateway IDs',
+    });
+
+    new TerraformOutput(this, 'instance-ids', {
+      value: this.instanceIds,
+      description: 'EC2 Instance IDs',
+    });
+
+    new TerraformOutput(this, 's3-endpoint-id', {
+      value: s3Endpoint.id,
+      description: 'S3 VPC Endpoint ID',
+    });
+
+    new TerraformOutput(this, 'dynamodb-endpoint-id', {
+      value: dynamodbEndpoint.id,
+      description: 'DynamoDB VPC Endpoint ID',
+    });
+
+    new TerraformOutput(this, 'flow-log-group-name', {
+      value: flowLogGroup.name,
+      description: 'VPC Flow Logs CloudWatch Log Group Name',
+    });
+  }
+}
+```
+
 ## Architecture
 
 ### Network Design
@@ -12,9 +645,9 @@ The infrastructure creates a three-tier VPC architecture:
 
 1. **VPC Configuration**
    - CIDR Block: 10.0.0.0/16
-   - Region: ca-central-1
+   - Region: eu-south-1
    - DNS Hostnames and DNS Resolution enabled
-   - Spans 3 availability zones (ca-central-1a, ca-central-1b, ca-central-1d)
+   - Spans 3 availability zones (eu-south-1a, eu-south-1b, eu-south-1d)
 
 2. **Subnet Architecture**
    - **Public Subnets** (3): One in each AZ for internet-facing resources
@@ -242,6 +875,7 @@ A dashboard is automatically created to visualize VPC Flow Logs:
 All resources follow the naming pattern: `{resource-purpose}-{environmentSuffix}`
 
 Examples:
+
 - VPC: `payment-vpc-dev`
 - NAT Gateway: `payment-nat-gateway-1-dev`
 - Security Group: `payment-web-sg-dev`
@@ -253,219 +887,13 @@ This ensures multiple environments can coexist and resources are easily identifi
 
 All 10 specified constraints have been implemented:
 
-1. ✅ **CDK v2 with TypeScript** - Using CDKTF with TypeScript
-2. ✅ **Amazon Linux 2023 AMI** - DataAwsAmi resource fetches latest AL2023
-3. ✅ **Instance type t3.micro** - All instances use t3.micro for cost optimization
-4. ✅ **No SSH keys** - No keyName property configured on instances
-5. ✅ **VPC Flow Logs capture ALL traffic** - trafficType set to 'ALL'
-6. ✅ **Explicit route table associations** - RouteTableAssociation for each subnet
-7. ✅ **Least privilege security groups** - No 0.0.0.0/0 inbound rules
-8. ✅ **Single CDK stack** - All resources in TapStack with VpcStack construct
-9. ✅ **L2 constructs** - Using high-level CDKTF constructs throughout
-10. ✅ **Elastic IPs with protection** - EIP resources for each NAT Gateway
-
-## Outputs
-
-The stack exports the following outputs for testing and integration:
-
-- `vpc-id`: VPC identifier
-- `public-subnet-ids`: Array of public subnet IDs
-- `private-subnet-ids`: Array of private subnet IDs
-- `web-security-group-id`: Web tier security group ID
-- `app-security-group-id`: App tier security group ID
-- `nat-gateway-ids`: Array of NAT Gateway IDs
-- `instance-ids`: Array of EC2 instance IDs
-- `s3-endpoint-id`: S3 VPC endpoint ID
-- `dynamodb-endpoint-id`: DynamoDB VPC endpoint ID
-- `flow-log-group-name`: CloudWatch Log Group name for flow logs
-
-## Testing
-
-### Integration Tests
-
-The integration test suite (`test/tap-stack.int.test.ts`) validates:
-
-1. **VPC Configuration**
-   - CIDR block correctness
-   - DNS settings enabled
-   - Proper tagging
-
-2. **Subnet Configuration**
-   - Correct number of public/private subnets
-   - Proper CIDR allocation
-   - Distribution across AZs
-   - Public IP assignment settings
-
-3. **NAT Gateway Configuration**
-   - High availability (one per AZ)
-   - Proper subnet placement
-   - Elastic IP associations
-
-4. **Security Group Configuration**
-   - Correct inbound/outbound rules
-   - Least privilege enforcement
-   - Proper tier isolation
-
-5. **VPC Endpoints**
-   - S3 and DynamoDB endpoints exist
-   - Gateway type configuration
-   - Availability status
-
-6. **EC2 Instances**
-   - Correct instance type and AMI
-   - Private subnet placement
-   - IAM instance profile attached
-   - No SSH keys configured
-   - IMDSv2 enforcement
-
-7. **VPC Flow Logs**
-   - CloudWatch log group exists
-   - Retention policy configured
-   - Dashboard created
-
-8. **Route Tables**
-   - Explicit subnet associations
-   - Correct routing (IGW for public, NAT for private)
-
-### Running Tests
-
-```bash
-# Deploy the infrastructure
-npm run deploy
-
-# Run integration tests
-npm run test:int
-```
-
-## Deployment Instructions
-
-### Prerequisites
-
-1. AWS CLI configured with appropriate credentials
-2. Node.js 18+ installed
-3. Terraform CLI installed
-4. Environment variables set:
-   - `AWS_REGION=ca-central-1`
-   - `ENVIRONMENT_SUFFIX=<your-env>`
-   - `TERRAFORM_STATE_BUCKET=<your-bucket>`
-
-### Deployment Steps
-
-```bash
-# Install dependencies
-npm install
-
-# Generate Terraform configuration
-npm run get
-npm run synth
-
-# Deploy the infrastructure
-npm run deploy
-
-# Access an EC2 instance via Session Manager
-aws ssm start-session --target <instance-id> --region ca-central-1
-
-# View VPC Flow Logs
-aws logs tail /aws/vpc/flowlogs-<env-suffix> --follow --region ca-central-1
-
-# Destroy the infrastructure
-npm run destroy
-```
-
-### Cost Considerations
-
-The infrastructure incurs costs primarily from:
-
-1. **NAT Gateways** - 3 NAT Gateways ($0.045/hour each + data processing)
-2. **EC2 Instances** - 3 t3.micro instances ($0.0116/hour each in ca-central-1)
-3. **Elastic IPs** - Free while associated with NAT Gateways
-4. **Data Transfer** - Minimal with VPC endpoints reducing egress
-5. **CloudWatch Logs** - Based on ingestion volume (VPC Flow Logs)
-
-**Estimated Monthly Cost**: ~$110-130 (primarily NAT Gateways)
-
-**Cost Optimization Notes**:
-- VPC endpoints save on data transfer costs for S3/DynamoDB access
-- t3.micro instances are the most cost-effective option
-- NAT Gateways are the largest cost but necessary for HA
-- For dev/test, consider using a single NAT Gateway to reduce costs
-
-## Architecture Decisions
-
-### Why 3 Availability Zones?
-
-The implementation uses all 3 AZs in ca-central-1 for maximum high availability. For a payment processing application, the ability to survive an AZ failure is critical.
-
-### Why Gateway Endpoints vs Interface Endpoints?
-
-Gateway endpoints for S3 and DynamoDB are free and don't incur data processing charges, while interface endpoints cost $0.01/hour per AZ. For these two services, gateway endpoints provide the same functionality at no additional cost.
-
-### Why One NAT Gateway Per AZ?
-
-While more expensive, having a NAT Gateway in each AZ ensures that if one AZ fails, the instances in other AZs maintain outbound connectivity. This is essential for high availability.
-
-### Why IMDSv2 Only?
-
-IMDSv2 (Instance Metadata Service v2) prevents Server-Side Request Forgery (SSRF) attacks by requiring a session token. This is a security best practice, especially for payment processing applications.
-
-### Why Session Manager Over SSH?
-
-Session Manager provides:
-- No need to manage SSH keys
-- Full audit trail of access in CloudTrail
-- No need for bastion hosts or public IPs
-- Integration with IAM for access control
-
-## Troubleshooting
-
-### Issue: Instances can't reach the internet
-
-**Solution**: Verify NAT Gateway status and route table configuration:
-```bash
-# Check NAT Gateway status
-aws ec2 describe-nat-gateways --filter "Name=vpc-id,Values=<vpc-id>"
-
-# Check route tables
-aws ec2 describe-route-tables --filter "Name=vpc-id,Values=<vpc-id>"
-```
-
-### Issue: Can't connect to instances via Session Manager
-
-**Solution**: Verify:
-1. IAM instance profile is attached
-2. Instance has connectivity to SSM endpoints (via NAT Gateway)
-3. SSM agent is running (pre-installed on AL2023)
-
-```bash
-# Check instance profile
-aws ec2 describe-instances --instance-ids <instance-id>
-
-# Check SSM connectivity
-aws ssm describe-instance-information --filters "Key=InstanceIds,Values=<instance-id>"
-```
-
-### Issue: VPC Flow Logs not appearing in CloudWatch
-
-**Solution**: Verify IAM role permissions:
-```bash
-# Check flow log status
-aws ec2 describe-flow-logs --filter "Name=resource-id,Values=<vpc-id>"
-
-# Verify log group
-aws logs describe-log-groups --log-group-name-prefix "/aws/vpc/flowlogs"
-```
-
-## Future Enhancements
-
-1. **Auto Scaling**: Add Auto Scaling Groups for EC2 instances
-2. **Load Balancing**: Add Application Load Balancer in public subnets
-3. **Database Tier**: Add RDS instances in separate database subnets
-4. **WAF**: Add AWS WAF for web application firewall
-5. **Network Firewall**: Add AWS Network Firewall for advanced filtering
-6. **Transit Gateway**: For multi-VPC connectivity as the architecture grows
-7. **VPC Peering**: Connect to shared services VPC
-8. **CloudWatch Alarms**: Add alarms for NAT Gateway metrics, instance health
-
-## Conclusion
-
-This CDKTF implementation provides a secure, highly available, and cost-optimized VPC infrastructure for a payment processing application. It follows AWS best practices for network design, security, and monitoring while meeting all specified constraints. The infrastructure is fully destroyable for CI/CD workflows and includes comprehensive integration tests to validate the deployment.
+1. **CDK v2 with TypeScript** - Using CDKTF with TypeScript
+2. **Amazon Linux 2023 AMI** - DataAwsAmi resource fetches latest AL2023
+3. **Instance type t3.micro** - All instances use t3.micro for cost optimization
+4. **No SSH keys** - No keyName property configured on instances
+5. **VPC Flow Logs capture ALL traffic** - trafficType set to 'ALL'
+6. **Explicit route table associations** - RouteTableAssociation for each subnet
+7. **Least privilege security groups** - No 0.0.0.0/0 inbound rules
+8. **Single CDK stack** - All resources in TapStack with VpcStack construct
+9. **L2 constructs** - Using high-level CDKTF constructs throughout
+10. **Elastic IPs with protection** - EIP resources for each NAT Gateway
