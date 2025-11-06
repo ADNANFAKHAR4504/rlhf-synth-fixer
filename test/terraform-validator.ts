@@ -340,20 +340,7 @@ export class TerraformValidator {
   /**
    * Generate comprehensive validation report
    */
-  public generateReport(): {
-    provider: ReturnType<typeof this.validateProvider>;
-    variables: ReturnType<typeof this.validateVariables>;
-    locals: ReturnType<typeof this.validateLocals>;
-    vpcPeering: ReturnType<typeof this.validateVpcPeering>;
-    routing: ReturnType<typeof this.validateRouting>;
-    securityGroups: ReturnType<typeof this.validateSecurityGroups>;
-    flowLogs: ReturnType<typeof this.validateFlowLogs>;
-    cloudWatch: ReturnType<typeof this.validateCloudWatch>;
-    iam: ReturnType<typeof this.validateIam>;
-    outputs: ReturnType<typeof this.validateOutputs>;
-    tagging: ReturnType<typeof this.validateTagging>;
-    codeQuality: ReturnType<typeof this.validateCodeQuality>;
-  } {
+  public generateReport() {
     return {
       provider: this.validateProvider(),
       variables: this.validateVariables(),

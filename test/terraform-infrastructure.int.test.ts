@@ -81,8 +81,10 @@ describe('Terraform Infrastructure - Integration Tests', () => {
       });
       const response = await ec2Client.send(command);
 
-      expect(response.Vpcs?.[0].EnableDnsSupport).toBe(true);
-      expect(response.Vpcs?.[0].EnableDnsHostnames).toBe(true);
+      // Type assertion for AWS SDK v3 Vpc type
+      const vpc = response.Vpcs?.[0] as any;
+      expect(vpc?.EnableDnsSupport?.Value).toBe(true);
+      expect(vpc?.EnableDnsHostnames?.Value).toBe(true);
     });
 
     test('should have public subnets', async () => {

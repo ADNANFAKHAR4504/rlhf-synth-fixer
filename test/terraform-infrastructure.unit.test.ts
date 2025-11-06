@@ -432,7 +432,7 @@ describe('Terraform Multi-Environment Infrastructure - Unit Tests', () => {
         if (data.content) {
           // Allow the hardcoded password in RDS as it's for demo purposes
           const lines = data.content.split('\n');
-          lines.forEach(line => {
+          lines.forEach((line: string) => {
             if (!line.includes('master_password') && !line.includes('ChangeMe123!')) {
               expect(line).not.toMatch(/password\s*=\s*["'][^"']*["']/i);
             }
