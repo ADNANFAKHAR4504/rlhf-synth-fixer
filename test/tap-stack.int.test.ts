@@ -9,14 +9,12 @@ import fs from 'fs';
 import https from 'https';
 import path from 'path';
 
-// Create AWS config factory to use detected region
 function createAwsConfig() {
   const config: any = {
     maxAttempts: 3,
     region: detectedRegion
   };
 
-  // If AWS credentials are available in environment, use them explicitly
   if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
     config.credentials = {
       accessKeyId: process.env.AWS_ACCESS_KEY_ID,
@@ -28,7 +26,6 @@ function createAwsConfig() {
   return config;
 }
 
-// Optional: allow CI to override outputs path, default to local flat-outputs.json
 const outputsPath = process.env.CFN_OUTPUTS_PATH || path.join(__dirname, '../cfn-outputs/flat-outputs.json');
 
 function readFlatOutputs(): Record<string, any> | null {
@@ -62,21 +59,17 @@ function httpsGet(url: string): Promise<{ status: number; body: string; headers:
   });
 }
 
-// Read once for all tests
 const flat = readFlatOutputs();
 
-// Extract AWS region from outputs (API endpoint or State Machine ARN)
 function extractRegionFromOutputs(): string {
   if (!flat) return process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
 
-  // Try to extract from API endpoint
   const apiEndpoint = flat['APIEndpoint'];
   if (apiEndpoint && typeof apiEndpoint === 'string') {
     const match = apiEndpoint.match(/execute-api\.([a-z0-9-]+)\.amazonaws\.com/);
     if (match) return match[1];
   }
 
-  // Try to extract from State Machine ARN
   const stateMachineArn = flat['StateMachineArn'];
   if (stateMachineArn && typeof stateMachineArn === 'string') {
     const match = stateMachineArn.match(/^arn:aws:states:([a-z0-9-]+):/);
@@ -89,7 +82,6 @@ function extractRegionFromOutputs(): string {
 const detectedRegion = extractRegionFromOutputs();
 
 describe('TapStack Integration Tests (Serverless Transaction Processing)', () => {
-  // Increase timeout for network calls and async operations
   beforeAll(() => {
     jest.setTimeout(60000);
 
@@ -176,15 +168,8 @@ describe('TapStack Integration Tests (Serverless Transaction Processing)', () =>
         console.log('Endpoint Configuration:', api?.endpointConfiguration?.types?.join(', '));
         console.log('Created Date:', api?.createdDate);
       } catch (error: any) {
-        if (error.message?.includes('dynamic import')) {
-          console.log('\n=== API Gateway Details ===');
-          console.log('API Endpoint:', apiEndpoint);
-          console.log('WARNING: Skipping live API Gateway validation due to SDK compatibility issue');
-          console.log('Note: API endpoint format is valid');
-        } else {
-          console.log('API Gateway check error:', error.message);
-          // Don't fail - endpoint format validation passed
-        }
+        console.log('API Gateway check error:', error.message);
+        throw error;
       }
     });
 
@@ -217,12 +202,8 @@ describe('TapStack Integration Tests (Serverless Transaction Processing)', () =>
         console.log('Last Updated:', stageResponse.lastUpdatedDate);
         console.log('Method Settings Available:', Object.keys(stageResponse.methodSettings || {}).length > 0 ? 'Yes' : 'No');
       } catch (error: any) {
-        if (error.message?.includes('dynamic import')) {
-          console.log('\n=== API Gateway Stage ===');
-          console.log('WARNING: Skipping stage validation due to SDK compatibility issue');
-        } else {
-          console.log('Stage check error:', error.message);
-        }
+        console.log('Stage check error:', error.message);
+        throw error;
       }
     });
   });
@@ -249,10 +230,8 @@ describe('TapStack Integration Tests (Serverless Transaction Processing)', () =>
       } catch (error: any) {
         console.log('\n=== API Gateway Connectivity ===');
         console.log('Endpoint:', `${apiEndpoint}/transactions`);
-        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-          throw new Error('API Gateway endpoint is not reachable. Check if stack is deployed correctly.');
-        }
-        console.log('Connection test completed with expected authentication error (IAM auth required)');
+        console.log('Connection error:', error.message);
+        throw error;
       }
     });
 
@@ -268,7 +247,6 @@ describe('TapStack Integration Tests (Serverless Transaction Processing)', () =>
         console.log('Authentication Type: AWS_IAM');
         console.log('Response Status:', status);
 
-        // Unsigned requests should be rejected with 403
         if (status === 403 || status === 401) {
           console.log('PASS: Correctly rejecting unauthenticated requests');
           expect([403, 401]).toContain(status);
@@ -277,8 +255,8 @@ describe('TapStack Integration Tests (Serverless Transaction Processing)', () =>
         }
       } catch (error: any) {
         console.log('\n=== API Gateway Security ===');
-        console.log('Note: Cannot test IAM auth without AWS credentials');
-        console.log('Expected behavior: Reject unsigned requests with 403/401');
+        console.log('IAM authentication check error:', error.message);
+        throw error;
       }
     });
 
@@ -339,13 +317,8 @@ describe('TapStack Integration Tests (Serverless Transaction Processing)', () =>
           console.log('States:', Object.keys(definition.States).join(', '));
         }
       } catch (error: any) {
-        if (error.message?.includes('dynamic import')) {
-          console.log('\n=== State Machine Details ===');
-          console.log('State Machine ARN:', stateMachineArn);
-          console.log('WARNING: Skipping state machine validation due to SDK compatibility issue');
-        } else {
-          throw error;
-        }
+        console.log('State machine check error:', error.message);
+        throw error;
       }
     });
 
@@ -373,12 +346,8 @@ describe('TapStack Integration Tests (Serverless Transaction Processing)', () =>
           console.log('No executions found yet (expected for new deployment)');
         }
       } catch (error: any) {
-        if (error.message?.includes('dynamic import')) {
-          console.log('\n=== State Machine Executions ===');
-          console.log('WARNING: Skipping execution history check due to SDK compatibility issue');
-        } else {
-          console.log('Execution history error:', error.message);
-        }
+        console.log('Execution history error:', error.message);
+        throw error;
       }
     });
   });
@@ -417,15 +386,8 @@ describe('TapStack Integration Tests (Serverless Transaction Processing)', () =>
           console.log('X-Ray Tracing:', response.Configuration?.TracingConfig?.Mode);
           console.log('Last Modified:', response.Configuration?.LastModified);
         } catch (error: any) {
-          if (error.message?.includes('dynamic import')) {
-            console.log(`\n=== ${functionType} Lambda ===`);
-            console.log('WARNING: Skipping Lambda validation due to SDK compatibility issue');
-          } else if (error.name === 'ResourceNotFoundException') {
-            console.log(`\n=== ${functionType} Lambda ===`);
-            console.log('WARNING: Function not found - check if stack name pattern matches');
-          } else {
-            console.log(`${functionType} Lambda check error:`, error.message);
-          }
+          console.log(`${functionType} Lambda check error:`, error.message);
+          throw error;
         }
       });
     });
@@ -467,13 +429,8 @@ describe('TapStack Integration Tests (Serverless Transaction Processing)', () =>
         expect(hashKey?.AttributeName).toBe('transactionId');
         expect(rangeKey?.AttributeName).toBe('timestamp');
       } catch (error: any) {
-        if (error.message?.includes('dynamic import')) {
-          console.log('\n=== Transactions Table ===');
-          console.log('Table Name:', transactionsTableName);
-          console.log('WARNING: Skipping table validation due to SDK compatibility issue');
-        } else {
-          throw error;
-        }
+        console.log('Transactions table check error:', error.message);
+        throw error;
       }
     });
 
@@ -491,8 +448,6 @@ describe('TapStack Integration Tests (Serverless Transaction Processing)', () =>
         expect(table).toBeDefined();
         expect(table?.TableStatus).toBe('ACTIVE');
 
-        // For PROVISIONED mode, BillingModeSummary may not be present
-        // Instead, check that ProvisionedThroughput is defined
         expect(table?.ProvisionedThroughput).toBeDefined();
         expect(table?.ProvisionedThroughput?.ReadCapacityUnits).toBe(100);
         expect(table?.ProvisionedThroughput?.WriteCapacityUnits).toBe(100);
@@ -506,19 +461,13 @@ describe('TapStack Integration Tests (Serverless Transaction Processing)', () =>
         console.log('Item Count:', table?.ItemCount);
         console.log('Encryption:', table?.SSEDescription?.Status);
 
-        // Validate key schema
         const hashKey = table?.KeySchema?.find(k => k.KeyType === 'HASH');
         const rangeKey = table?.KeySchema?.find(k => k.KeyType === 'RANGE');
         expect(hashKey?.AttributeName).toBe('patternId');
         expect(rangeKey?.AttributeName).toBe('riskScore');
       } catch (error: any) {
-        if (error.message?.includes('dynamic import')) {
-          console.log('\n=== Fraud Patterns Table ===');
-          console.log('Table Name:', fraudPatternsTableName);
-          console.log('WARNING: Skipping table validation due to SDK compatibility issue');
-        } else {
-          throw error;
-        }
+        console.log('Fraud patterns table check error:', error.message);
+        throw error;
       }
     });
   });
@@ -535,7 +484,6 @@ describe('TapStack Integration Tests (Serverless Transaction Processing)', () =>
           const stackName = transactionsTableName.replace('-Transactions', '');
           const queueName = `${stackName}-${type}-DLQ`;
 
-          // Try to get queue attributes (requires queue URL, so we'll check basic format)
           console.log(`\n=== ${type} DLQ ===`);
           console.log('Expected Queue Name:', queueName);
           console.log('Expected Retention: 14 days (1209600 seconds)');
@@ -543,6 +491,7 @@ describe('TapStack Integration Tests (Serverless Transaction Processing)', () =>
           console.log('Note: DLQ is configured for Lambda error handling');
         } catch (error: any) {
           console.log(`${type} DLQ check error:`, error.message);
+          throw error;
         }
       });
     });
@@ -582,15 +531,8 @@ describe('TapStack Integration Tests (Serverless Transaction Processing)', () =>
           console.log(`  Target ${idx + 1}:`, target.Arn?.split(':').slice(-2).join(':'));
         });
       } catch (error: any) {
-        if (error.message?.includes('dynamic import')) {
-          console.log('\n=== EventBridge Rule ===');
-          console.log('WARNING: Skipping EventBridge validation due to SDK compatibility issue');
-        } else if (error.name === 'ResourceNotFoundException') {
-          console.log('\n=== EventBridge Rule ===');
-          console.log('WARNING: Rule not found - check stack name pattern');
-        } else {
-          console.log('EventBridge check error:', error.message);
-        }
+        console.log('EventBridge check error:', error.message);
+        throw error;
       }
     });
   });
@@ -628,12 +570,8 @@ describe('TapStack Integration Tests (Serverless Transaction Processing)', () =>
           console.log('Description:', keyResponse.KeyMetadata?.Description);
         }
       } catch (error: any) {
-        if (error.message?.includes('dynamic import')) {
-          console.log('\n=== KMS Encryption ===');
-          console.log('WARNING: Skipping KMS validation due to SDK compatibility issue');
-        } else {
-          console.log('KMS check error:', error.message);
-        }
+        console.log('KMS check error:', error.message);
+        throw error;
       }
     });
 
@@ -656,12 +594,8 @@ describe('TapStack Integration Tests (Serverless Transaction Processing)', () =>
         console.log('Transactions Table Encryption:', transactionsResponse.Table?.SSEDescription?.Status);
         console.log('Fraud Patterns Table Encryption:', fraudPatternsResponse.Table?.SSEDescription?.Status);
       } catch (error: any) {
-        if (error.message?.includes('dynamic import')) {
-          console.log('\n=== DynamoDB Encryption ===');
-          console.log('WARNING: Skipping encryption validation due to SDK compatibility issue');
-        } else {
-          console.log('Encryption check error:', error.message);
-        }
+        console.log('Encryption check error:', error.message);
+        throw error;
       }
     });
   });
@@ -687,13 +621,8 @@ describe('TapStack Integration Tests (Serverless Transaction Processing)', () =>
         console.log('  - AuditLogger: PutItem, GetItem');
         console.log('PASS: DynamoDB table is accessible and active');
       } catch (error: any) {
-        if (error.message?.includes('dynamic import')) {
-          console.log('\n=== Lambda to DynamoDB Connectivity ===');
-          console.log('Table Name:', transactionsTableName);
-          console.log('WARNING: Skipping connectivity test due to SDK compatibility issue');
-        } else {
-          throw error;
-        }
+        console.log('Lambda to DynamoDB connectivity check error:', error.message);
+        throw error;
       }
     });
 
@@ -718,13 +647,8 @@ describe('TapStack Integration Tests (Serverless Transaction Processing)', () =>
         console.log('  - GetItem for specific patterns');
         console.log('PASS: Fraud patterns table is accessible and active');
       } catch (error: any) {
-        if (error.message?.includes('dynamic import')) {
-          console.log('\n=== Lambda to Fraud Patterns Table Connectivity ===');
-          console.log('Table Name:', fraudPatternsTableName);
-          console.log('WARNING: Skipping connectivity test due to SDK compatibility issue');
-        } else {
-          throw error;
-        }
+        console.log('Lambda to Fraud Patterns Table connectivity check error:', error.message);
+        throw error;
       }
     });
 
@@ -805,8 +729,8 @@ describe('TapStack Integration Tests (Serverless Transaction Processing)', () =>
           console.log(`${name}:`, mode);
         });
       } catch (error: any) {
-        console.log('\n=== X-Ray Tracing ===');
-        console.log('WARNING: Skipping tracing validation due to SDK compatibility issue');
+        console.log('X-Ray tracing check error:', error.message);
+        throw error;
       }
     });
 
