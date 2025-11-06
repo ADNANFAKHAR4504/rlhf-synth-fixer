@@ -126,18 +126,11 @@ jobs:
       - name: Build
         run: ./scripts/build.sh
 
-      - name: Upload build artifacts (dist/)
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-dist
-          path: dist
-          if-no-files-found: ignore
-
   synth:
     name: Synth
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch' && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
     environment: dev
     permissions:
       contents: read
@@ -149,18 +142,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Skip Synth for non-CDK/CDKTF platforms
-        if: ${{ needs.detect-metadata.outputs.platform != 'cdk' && needs.detect-metadata.outputs.platform != 'cdktf' }}
-        run: |
-          echo "✅ Synth step not required for platform: ${{ needs.detect-metadata.outputs.platform }}"
-          echo "This platform does not require synthesis. Job passes automatically."
-
       - name: Setup Environment
         if: ${{ needs.detect-metadata.outputs.platform == 'cdk' || needs.detect-metadata.outputs.platform == 'cdktf' }}
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'false'
+          download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
@@ -366,12 +353,6 @@ jobs:
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
-      - name: Download build artifacts (dist/)
-        if: ${{ needs.detect-metadata.outputs.language == 'ts' || needs.detect-metadata.outputs.language == 'js' }}
-        uses: actions/download-artifact@v4
-        with:
-          name: build-dist
-          path: dist
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
         with:
@@ -417,45 +398,6 @@ jobs:
           path: |
             cfn-outputs/
             cdk-stacks.json
-
-  iac-optimization:
-    name: IaC Optimization
-    runs-on: ubuntu-24.04
-    needs: [detect-metadata, deploy]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && contains(needs.detect-metadata.outputs.subject_labels, 'IaC Optimization')}}
-    environment: dev
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "true"
-          platform: ${{ needs.detect-metadata.outputs.platform }}
-          language: ${{ needs.detect-metadata.outputs.language }}
-
-      - name: Download Deployment Outputs
-        uses: actions/download-artifact@v4
-        with:
-          name: cfn-outputs
-          path: .
-
-      - name: Configure AWS
-        uses: ./.github/actions/configure-aws
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
-
-      - name: Check and Run IaC Optimization
-        run: ./scripts/optimize.sh
-        env:
-          ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
-          AWS_REGION: ${{ env.AWS_REGION || 'us-east-1' }}
-
   lint:
     name: Lint
     runs-on: ubuntu-24.04
