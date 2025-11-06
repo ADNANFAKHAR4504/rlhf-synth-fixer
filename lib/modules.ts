@@ -78,7 +78,7 @@ export class VpcModule extends Construct {
       const privateSubnet = new aws.subnet.Subnet(this, `private-subnet-${i}`, {
         vpcId: this.vpc.id,
         cidrBlock: `10.0.${i + 10}.0/24`,
-        availabilityZone: azs.names[i],
+        availabilityZone: availabilityZone,
         tags: {
           Name: `${config.environment}-private-subnet-${i}`,
           Type: 'Private',
@@ -96,9 +96,10 @@ export class VpcModule extends Construct {
     });
 
     // NAT Gateway for Lambda internet access
+    const firstPublicSubnet = this.publicSubnets[0];
     this.natGateway = new aws.natGateway.NatGateway(this, 'nat', {
       allocationId: eip.id,
-      subnetId: this.publicSubnets[0].id,
+      subnetId: firstPublicSubnet.id,
       tags: {
         Name: `${config.environment}-nat`,
       },
