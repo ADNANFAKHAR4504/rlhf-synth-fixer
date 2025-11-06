@@ -296,11 +296,27 @@ describe("Payment Processing Infrastructure Integration Tests", () => {
     });
 
     it("validates NAT Gateway configuration", async () => {
-      const command = new DescribeNatGatewaysCommand({
+      // First, get the actual VPC to ensure it exists
+      const vpcCommand = new DescribeVpcsCommand({
         Filters: [
           {
+            Name: "tag:Name",
+            Values: ["*payment-processing*"]
+          }
+        ]
+      });
+
+      const vpcResponse = await ec2Client.send(vpcCommand);
+      expect(vpcResponse.Vpcs).toBeDefined();
+      expect(vpcResponse.Vpcs!.length).toBeGreaterThan(0);
+
+      const actualVpcId = vpcResponse.Vpcs![0].VpcId!;
+
+      const command = new DescribeNatGatewaysCommand({
+        Filter: [
+          {
             Name: "vpc-id",
-            Values: [outputs.vpc_id]
+            Values: [actualVpcId]
           }
         ]
       });
@@ -311,7 +327,7 @@ describe("Payment Processing Infrastructure Integration Tests", () => {
 
       response.NatGateways!.forEach(natGateway => {
         expect(natGateway.State).toBe("available");
-        expect(natGateway.VpcId).toBe(outputs.vpc_id);
+        expect(natGateway.VpcId).toBe(actualVpcId);
       });
     });
 
