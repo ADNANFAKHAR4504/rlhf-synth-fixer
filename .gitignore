@@ -45,14 +45,6 @@ logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-deploy-log.txt
-deploy-output.txt
-cleanup-output.txt
-unit-test-output.txt
-test-results.txt
-*-output.txt
-*-log.txt
-*-results.txt
 
 # Runtime data
 pids/
@@ -85,7 +77,6 @@ venv.bak/
 .coverage
 coverage.xml
 cov.json
-coverage.json
 coverage
 
 cfn-outputs/*
