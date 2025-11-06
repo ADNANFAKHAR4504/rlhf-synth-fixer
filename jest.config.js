@@ -32,4 +32,13 @@ module.exports = {
   testTimeout: 30000,
   silent: false,
   verbose: true,
+  globals: {
+    'ts-jest': {
+      isolatedModules: true,
+      tsconfig: {
+        allowJs: true,
+        esModuleInterop: true
+      }
+    }
+  }
 };
