@@ -1,0 +1,25 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-06T12:26:00.429441",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Networking",
+    "VPC",
+    "Security",
+    "Compliance"
+  ],
+  "po_id": "101000849",
+  "aws_services": [
+    "CloudWatch",
+    "EC2",
+    "IAM",
+    "Logs",
+    "VPC"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9
+}

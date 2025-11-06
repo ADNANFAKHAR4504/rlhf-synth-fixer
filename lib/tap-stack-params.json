@@ -1,0 +1,14 @@
+[
+  {
+    "ParameterKey": "EnvironmentSuffix",
+    "ParameterValue": "dev"
+  },
+  {
+    "ParameterKey": "ProjectTag",
+    "ParameterValue": "FinancialTradingPlatform"
+  },
+  {
+    "ParameterKey": "CostCenterTag",
+    "ParameterValue": "TradingOps"
+  }
+]
