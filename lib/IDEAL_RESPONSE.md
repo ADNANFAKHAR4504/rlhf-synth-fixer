@@ -1,10 +1,13 @@
-# Serverless Webhook Processing System - Complete Implementation with Tests
+# Terraform HCL Infrastructure for Serverless Webhook Processing System
 
-This document provides the ideal, production-ready implementation of the serverless webhook processing system, including comprehensive testing infrastructure.
+**Platform**: Terraform (tf)
+**Language**: HCL
+
+This solution uses **Terraform with HCL** to provision a complete serverless webhook processing system with PCI-compliant architecture, full test coverage, automated validation, and deployment readiness.
 
 ## Overview
 
-A complete Terraform implementation for a PCI-compliant webhook processing system with full test coverage, automated validation, and deployment readiness.
+A production-ready Terraform implementation for a serverless webhook processing system with comprehensive AWS services integration.
 
 ## Architecture Summary
 
@@ -22,47 +25,226 @@ A complete Terraform implementation for a PCI-compliant webhook processing syste
 
 ### File: lib/provider.tf
 
-Terraform >= 1.5.0, AWS Provider ~> 5.0, S3 backend configured, region from variable, default tags with environment_suffix.
+```hcl
+terraform {
+  required_version = ">= 1.5.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+
+  # Partial backend config: values are injected at `terraform init` time
+  backend "s3" {}
+}
+
+provider "aws" {
+  region = var.aws_region
+
+  default_tags {
+    tags = {
+      Environment = var.environment_suffix
+      ManagedBy   = "Terraform"
+      Project     = "webhook-processing"
+    }
+  }
+}
+```
 
 ### File: lib/variables.tf
 
-- `environment_suffix` (string, required): Unique suffix for resource names
-- `acm_certificate_arn` (string, required): ACM certificate for custom domain
-- `custom_domain_name` (string, required): Custom domain for API Gateway
-- `aws_region` (string, default: "us-east-1"): AWS deployment region
+```hcl
+variable "environment_suffix" {
+  description = "Environment suffix for resource naming to support multiple deployments"
+  type        = string
+}
+
+variable "acm_certificate_arn" {
+  description = "ARN of the existing ACM certificate for custom domain"
+  type        = string
+}
+
+variable "custom_domain_name" {
+  description = "Custom domain name for API Gateway"
+  type        = string
+}
+
+variable "aws_region" {
+  description = "AWS region for resource deployment"
+  type        = string
+  default     = "us-east-1"
+}
+```
 
 ### File: lib/main.tf
 
-**Resources Deployed** (27 total):
+The main infrastructure file contains 27 Terraform resources. Here are key examples:
 
-1. **KMS Key** (webhook_kms): 7-day deletion, key rotation enabled
-2. **KMS Alias** (webhook_kms_alias): Friendly name for key
-3. **DynamoDB Table** (webhooks): PAY_PER_REQUEST billing, webhook_id hash key, TTL enabled, KMS encrypted, PITR enabled
-4. **SQS DLQ** (webhook_dlq): FIFO queue for failed messages
-5. **SQS Queue** (webhook_queue): FIFO queue, 5-min visibility, KMS encrypted, redrive policy (max 3 attempts)
-6. **SNS Topic** (webhook_notifications): KMS encrypted
-7. **CloudWatch Log Groups** (3): validation Lambda, processing Lambda, API Gateway (7-day retention)
-8. **IAM Roles** (2): validation Lambda, processing Lambda
-9. **IAM Policies** (2): Least-privilege permissions for DynamoDB, SQS, SNS, KMS, Logs, X-Ray
-10. **Lambda Functions** (2): validation (512MB, Python 3.9, X-Ray), processing (512MB, Python 3.9, X-Ray, DLQ)
-11. **Lambda Event Source Mapping**: SQS to processing Lambda (batch size 10)
-12. **Processing Lambda DLQ**: Captures Lambda execution failures
-13. **API Gateway REST API**: Regional endpoint
-14. **API Gateway Resource**: /webhooks path
-15. **API Gateway Method**: POST
-16. **API Gateway Integration**: Lambda proxy
-17. **Lambda Permission**: Allow API Gateway invoke
-18. **API Gateway Deployment**: Managed deployment
-19. **API Gateway Stage**: prod stage with X-Ray tracing and access logging
-20. **API Gateway Custom Domain**: Regional certificate
-21. **API Gateway Base Path Mapping**: Maps domain to API
-22. **CloudWatch Alarm**: DLQ message monitoring
+```hcl
+# KMS Key for encryption
+resource "aws_kms_key" "webhook_kms" {
+  description             = "KMS key for webhook system encryption"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+
+  tags = {
+    Name        = "webhook-kms-${var.environment_suffix}"
+    Environment = var.environment_suffix
+  }
+}
+
+resource "aws_kms_alias" "webhook_kms_alias" {
+  name          = "alias/webhook-kms-${var.environment_suffix}"
+  target_key_id = aws_kms_key.webhook_kms.key_id
+}
+
+# DynamoDB Table for webhook storage
+resource "aws_dynamodb_table" "webhooks" {
+  name         = "webhooks-${var.environment_suffix}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "webhook_id"
+
+  attribute {
+    name = "webhook_id"
+    type = "S"
+  }
+
+  ttl {
+    attribute_name = "expiry_time"
+    enabled        = true
+  }
+
+  server_side_encryption {
+    enabled     = true
+    kms_key_arn = aws_kms_key.webhook_kms.arn
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  tags = {
+    Name        = "webhooks-${var.environment_suffix}"
+    Environment = var.environment_suffix
+  }
+}
+
+# SQS FIFO Queue with DLQ
+resource "aws_sqs_queue" "webhook_dlq" {
+  name                              = "webhook-dlq-${var.environment_suffix}.fifo"
+  fifo_queue                        = true
+  content_based_deduplication       = true
+  kms_master_key_id                 = aws_kms_key.webhook_kms.id
+  kms_data_key_reuse_period_seconds = 300
+
+  tags = {
+    Name        = "webhook-dlq-${var.environment_suffix}"
+    Environment = var.environment_suffix
+  }
+}
+
+resource "aws_sqs_queue" "webhook_queue" {
+  name                              = "webhook-queue-${var.environment_suffix}.fifo"
+  fifo_queue                        = true
+  content_based_deduplication       = true
+  visibility_timeout_seconds        = 300
+  kms_master_key_id                 = aws_kms_key.webhook_kms.id
+  kms_data_key_reuse_period_seconds = 300
+
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.webhook_dlq.arn
+    maxReceiveCount     = 3
+  })
+
+  tags = {
+    Name        = "webhook-queue-${var.environment_suffix}"
+    Environment = var.environment_suffix
+  }
+}
+
+# SNS Topic for notifications
+resource "aws_sns_topic" "webhook_notifications" {
+  name              = "webhook-notifications-${var.environment_suffix}"
+  kms_master_key_id = aws_kms_key.webhook_kms.id
+
+  tags = {
+    Name        = "webhook-notifications-${var.environment_suffix}"
+    Environment = var.environment_suffix
+  }
+}
+
+# Additional resources include:
+# - CloudWatch Log Groups (3)
+# - IAM Roles and Policies (4)
+# - Lambda Functions (2) with X-Ray tracing
+# - Lambda Event Source Mapping
+# - API Gateway REST API, Resource, Method, Integration
+# - API Gateway Custom Domain and Base Path Mapping
+# - CloudWatch Alarms
+```
 
 All resources include `environment_suffix` in names for parallel deployments.
 
 ### File: lib/outputs.tf
 
-11 outputs: api_gateway_url, custom_domain_url, dynamodb_table_name, sqs_queue_url, sns_topic_arn, validation_lambda_arn, processing_lambda_arn, kms_key_id, dlq_url, regional_domain_name, regional_zone_id
+```hcl
+output "api_gateway_url" {
+  description = "API Gateway invoke URL"
+  value       = "${aws_api_gateway_stage.webhook_stage.invoke_url}/webhooks"
+}
+
+output "custom_domain_url" {
+  description = "Custom domain URL for API Gateway"
+  value       = "https://${aws_api_gateway_domain_name.webhook_domain.domain_name}/webhooks"
+}
+
+output "dynamodb_table_name" {
+  description = "DynamoDB table name"
+  value       = aws_dynamodb_table.webhooks.name
+}
+
+output "sqs_queue_url" {
+  description = "SQS FIFO queue URL"
+  value       = aws_sqs_queue.webhook_queue.id
+}
+
+output "sns_topic_arn" {
+  description = "SNS topic ARN"
+  value       = aws_sns_topic.webhook_notifications.arn
+}
+
+output "validation_lambda_arn" {
+  description = "Validation Lambda function ARN"
+  value       = aws_lambda_function.webhook_validation.arn
+}
+
+output "processing_lambda_arn" {
+  description = "Processing Lambda function ARN"
+  value       = aws_lambda_function.webhook_processing.arn
+}
+
+output "kms_key_id" {
+  description = "KMS key ID for encryption"
+  value       = aws_kms_key.webhook_kms.id
+}
+
+output "dlq_url" {
+  description = "Dead letter queue URL"
+  value       = aws_sqs_queue.webhook_dlq.id
+}
+
+output "regional_domain_name" {
+  description = "Regional domain name for Route53 alias"
+  value       = aws_api_gateway_domain_name.webhook_domain.regional_domain_name
+}
+
+output "regional_zone_id" {
+  description = "Regional zone ID for Route53 alias"
+  value       = aws_api_gateway_domain_name.webhook_domain.regional_zone_id
+}
+```
 
 ### File: lib/lambda/validation.py
 
