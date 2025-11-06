@@ -459,7 +459,37 @@ exports.handler = async (event) => {
         ],
       }
     );
-    transactionsTable.grantReadWriteData(lambdaRole);
+    
+    // Grant DynamoDB permissions
+    if (isSourceRegion) {
+      // Source region: grant on the actual table
+      transactionsTable.grantReadWriteData(lambdaRole);
+    } else {
+      // Target region: For Global Tables, grant permissions to the regional replica
+      // The table name is the same, but we need to grant to the table in this region
+      const tableName = tableNameResource?.getAttString('Value') || '';
+      if (tableName) {
+        lambdaRole.addToPolicy(
+          new iam.PolicyStatement({
+            actions: [
+              'dynamodb:PutItem',
+              'dynamodb:GetItem',
+              'dynamodb:UpdateItem',
+              'dynamodb:DeleteItem',
+              'dynamodb:Query',
+              'dynamodb:Scan',
+              'dynamodb:BatchGetItem',
+              'dynamodb:BatchWriteItem',
+            ],
+            resources: [
+              `arn:aws:dynamodb:${currentRegion}:${this.account}:table/${tableName}`,
+              `arn:aws:dynamodb:${currentRegion}:${this.account}:table/${tableName}/index/*`,
+            ],
+          })
+        );
+      }
+    }
+    
     logsBucket.grantReadWrite(lambdaRole);
     dataKmsKey.grantEncryptDecrypt(lambdaRole);
 
