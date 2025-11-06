@@ -31,11 +31,16 @@ export PULUMI_CONFIG_PASSPHRASE=${PULUMI_CONFIG_PASSPHRASE:-}
 export TF_VAR_db_username=${TF_VAR_db_username:-temp_admin}
 export TF_VAR_db_password=${TF_VAR_db_password:-TempPassword123!}
 
+# Export environment_suffix as Terraform variable
+# This ensures Terraform uses the correct environment suffix instead of the default "prod"
+export TF_VAR_environment_suffix=${ENVIRONMENT_SUFFIX}
+
 echo "Environment configuration:"
 echo "  Environment suffix: $ENVIRONMENT_SUFFIX"
 echo "  Repository: $REPOSITORY"
 echo "  Commit author: $COMMIT_AUTHOR"
 echo "  AWS region: $AWS_REGION"
+echo "Using TF_VAR_environment_suffix: $TF_VAR_environment_suffix"
 echo "Using TF_VAR_db_username: (set)"
 echo "Using TF_VAR_db_password: (set)"
 if [ -n "$TERRAFORM_STATE_BUCKET" ]; then
