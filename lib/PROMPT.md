@@ -1,82 +1,127 @@
-# Provisioning of Infrastructure Environments
+# Event-Driven Transaction Processing Pipeline
 
-> **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using Terraform with HCL**
->
-> Platform: **terraform**
-> Language: **HCL**
-> Region: **us-east-1**
->
-> **Do not substitute or change the platform or language.** All infrastructure code must be written using the specified platform and language combination.
+Hey team,
 
----
+We need to build an event-driven transaction processing system for a financial services company that processes credit card transactions asynchronously. I've been asked to create this using **CDK with TypeScript**. The business wants a robust pipeline that can handle webhook events, validate transactions, enrich them with customer data, and route them to different processing queues based on transaction amounts.
 
-## Background
-A fintech startup needs to establish secure communication between their production environment and a partner's AWS account for real-time payment processing. The partner has strict security requirements including encrypted transit, restricted access patterns, and comprehensive audit logging.
+The current challenge is that transaction events arrive via webhooks and need to be processed through multiple stages - validation, enrichment with customer data from DynamoDB, and then routing to appropriate queues based on dollar amount thresholds. The architecture needs to handle failures gracefully with dead letter queues and provide comprehensive monitoring through CloudWatch.
 
-## Problem Statement
-Create a Terraform configuration to establish a cross-region VPC peering connection between your production VPC and a partner's VPC. The configuration must:
+We're deploying this to us-east-1 and need everything to be serverless to optimize costs. The system must be fully observable with X-Ray tracing, CloudWatch alarms, and proper logging at every stage.
 
-1. Create a VPC peering connection with appropriate requester and accepter configurations.
-2. Configure DNS resolution options for both VPCs to enable hostname resolution across the peering connection.
-3. Update route tables in both VPCs to enable traffic flow only between specific application subnets.
-4. Create security group rules that allow HTTPS (443) and custom API traffic (8443) between peered VPCs.
-5. Set up VPC Flow Logs for both VPCs with S3 bucket storage and 1-minute aggregation intervals.
-6. Implement IAM roles and policies for cross-account access with explicit deny for unauthorized actions.
-7. Use Terraform data sources to dynamically fetch accepter VPC details and validate CIDR compatibility.
-8. Configure monitoring alarms for peering connection state changes and traffic anomalies.
-9. Create a locals block to manage CIDR calculations and tag mappings.
-10. Output the peering connection ID, DNS resolution status, and configured route counts.
+## What we need to build
 
-Expected output: A complete Terraform configuration with modules for VPC peering, security, monitoring, and IAM that establishes secure cross-region connectivity while maintaining strict access controls and comprehensive logging.
+Create a complete transaction processing pipeline using **CDK with TypeScript** that handles webhook events, validates transactions, enriches them with customer data, and routes them based on transaction value.
 
-## Environment Setup
-Multi-account AWS deployment spanning us-east-1 and us-east-2 regions. Production VPC (10.0.0.0/16) in us-east-1 needs to peer with partner VPC (172.16.0.0/16) in us-east-2. Both VPCs have existing 3-tier architecture with public, private, and database subnets across 3 availability zones. Requires Terraform 1.5+ with AWS provider 5.x. Each VPC has NAT gateways, Internet gateways, and existing EC2 instances running application services. S3 VPC endpoints already configured.
+### Core Requirements
 
-## Constraints and Requirements
-- VPC peering connection must use DNS resolution for cross-account resource discovery
-- Route tables must only allow traffic to specific CIDR blocks, not entire VPCs
-- Security groups must restrict traffic to ports 443 and 8443 only
-- All resources must be tagged with Environment, Project, and CostCenter tags
-- Use data sources to reference the accepter VPC instead of hardcoding values
-- Implement CloudWatch VPC Flow Logs for both VPCs with 1-minute capture intervals
-- Create separate route tables for public and private subnets with appropriate peering routes
-- Use locals blocks for repeated values and complex expressions
-- All IAM roles must follow principle of least privilege with explicit deny statements
-- Configure VPC peering options to prevent overlapping CIDR blocks from being accepted
+1. **Webhook Receiver Infrastructure**
+   - Deploy a Lambda function that accepts POST requests for incoming transactions
+   - Configure the Lambda to publish received transactions to an SNS topic
+   - Output the webhook endpoint URL for integration testing
 
----
+2. **Event Distribution Layer**
+   - Create an SNS topic for incoming transactions with server-side encryption
+   - Enable fanout to multiple SQS queues for parallel processing
+   - Publish the SNS topic ARN for reference
 
-## Implementation Guidelines
+3. **Value-Based Queue System**
+   - Set up three SQS queues for different transaction value tiers
+   - High-value queue for transactions over $10,000
+   - Standard queue for transactions between $1,000 and $10,000
+   - Low-value queue for transactions under $1,000
+   - Output all queue URLs for integration testing
 
-### Platform Requirements
-- Use Terraform as the IaC framework
-- All code must be written in HCL
-- Follow Terraform best practices for resource organization
-- Ensure all resources use the `environment_suffix` variable for naming
+4. **Transaction Validation Processing**
+   - Deploy a validator Lambda triggered by SNS
+   - Validate transaction format and required fields
+   - Publish validation results to a dedicated queue
 
-### Security and Compliance
-- Implement encryption at rest for all data stores using AWS KMS
-- Enable encryption in transit using TLS/SSL
-- Follow the principle of least privilege for IAM roles and policies
-- Enable logging and monitoring using CloudWatch
-- Tag all resources appropriately
+5. **Data Enrichment Processing**
+   - Create an enrichment Lambda that reads from validation queue
+   - Fetch and add customer data from DynamoDB table
+   - Pass enriched transactions to routing stage
 
-### Testing
-- Write unit tests with good coverage
-- Integration tests must validate end-to-end workflows using deployed resources
-- Load test outputs from `cfn-outputs/flat-outputs.json`
+6. **Intelligent Transaction Routing**
+   - Implement a routing Lambda that reads enriched transactions
+   - Route transactions to appropriate value-based queues
+   - Apply business rules based on transaction amount thresholds
 
-### Resource Management
-- Infrastructure should be fully destroyable for CI/CD workflows
-- **Important**: Secrets should be fetched from existing Secrets Manager entries, not created
-- Avoid DeletionPolicy: Retain unless required
+7. **Transaction State Management**
+   - Configure DynamoDB table with partition key 'transactionId'
+   - Enable TTL for automatic cleanup of old transaction records
+   - Use on-demand billing for cost optimization
 
-## Target Region
-Deploy all resources to: **us-east-1**
+8. **Error Handling Infrastructure**
+   - Set up dead letter queues for each processing queue
+   - Configure maximum receive count of 3 before moving to DLQ
+   - Set DLQ message retention to exactly 14 days
 
-## Success Criteria
-- Infrastructure deploys successfully
-- All security and compliance constraints are met
-- Tests pass successfully
-- Resources are properly tagged and named with environment_suffix
-- Infrastructure can be cleanly destroyed
+9. **Monitoring and Alerting**
+   - Create CloudWatch alarms for queue depth exceeding 1000 messages
+   - Alert on Lambda error rates exceeding 1%
+   - Set CloudWatch Logs retention to 30 days for all Lambda functions
+
+10. **Async Invocation Handling**
+    - Implement Lambda destinations for async invocations
+    - Create separate queues for success and failure destinations
+    - Ensure proper routing of invocation results
+
+### Technical Requirements
+
+- All infrastructure defined using **CDK with TypeScript**
+- Use **Lambda** for all compute operations with Node.js 18.x runtime
+- Use **SNS** for event fanout with AWS managed key encryption
+- Use **SQS** for message queuing with appropriate visibility timeouts
+- Use **DynamoDB** for transaction state storage with on-demand billing
+- Use **CloudWatch** for alarms, metrics, and log aggregation
+- Resource names must include **environmentSuffix** for uniqueness
+- Follow naming convention: `resource-type-environment-suffix`
+- Deploy to **us-east-1** region
+- Enable X-Ray tracing for all Lambda functions
+- Set SQS visibility timeout to 6 times the Lambda timeout
+- Configure message retention period of 4 days for all SQS queues
+- Use reserved concurrent executions to prevent Lambda throttling
+
+### Constraints
+
+- Lambda functions must use Node.js 18.x runtime exclusively
+- All Lambda functions must have X-Ray tracing enabled
+- Dead letter queues must retain messages for exactly 14 days
+- SNS topics must use server-side encryption with AWS managed keys
+- SQS queues visibility timeout must be 6 times Lambda timeout
+- Lambda functions must use reserved concurrent executions
+- All IAM roles must follow least privilege principle
+- Lambda functions must use environment variables for configuration
+- SQS queues must have message retention period of 4 days
+- Lambda CloudWatch Logs retention must be 30 days
+- All resources must be destroyable (no Retain policies)
+- Include proper error handling and logging at every stage
+- Use encryption at rest and in transit for all data
+
+### Success Criteria
+
+- **Functionality**: All 10 requirements from problem statement implemented
+- **Performance**: Reserved concurrency configured to prevent throttling
+- **Reliability**: Dead letter queues configured with proper retention
+- **Security**: Encryption enabled, least privilege IAM, no hardcoded credentials
+- **Resource Naming**: All resources include environmentSuffix variable
+- **Observability**: X-Ray tracing, CloudWatch alarms, comprehensive logging
+- **Code Quality**: TypeScript with proper types, well-structured CDK constructs
+
+## What to deliver
+
+- Complete CDK TypeScript implementation in lib/ directory
+- Lambda function code for webhook receiver
+- Lambda function code for transaction validator
+- Lambda function code for enrichment processor
+- Lambda function code for routing logic
+- DynamoDB table with TTL enabled
+- SNS topic with encryption
+- Three value-based SQS queues (high, standard, low)
+- Dead letter queues for error handling
+- Lambda destinations for async invocations
+- CloudWatch alarms for monitoring
+- IAM roles and policies following least privilege
+- Stack outputs including webhook URL, SNS ARN, queue URLs
+- All resources using environmentSuffix for naming
+- Proper error handling and logging throughout

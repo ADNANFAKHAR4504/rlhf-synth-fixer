@@ -1,10 +1,3 @@
-# Event-Driven Transaction Processing Pipeline - Initial Implementation
-
-This implementation creates a complete event-driven transaction processing pipeline using AWS CDK with TypeScript.
-
-## File: lib/transaction-processing-stack.ts
-
-```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as sns from 'aws-cdk-lib/aws-sns';
@@ -14,8 +7,6 @@ import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
-import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 import * as path from 'path';
 
@@ -24,7 +15,11 @@ interface TransactionProcessingStackProps extends cdk.StackProps {
 }
 
 export class TransactionProcessingStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props: TransactionProcessingStackProps) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: TransactionProcessingStackProps
+  ) {
     super(scope, id, props);
 
     const { environmentSuffix } = props;
@@ -205,7 +200,9 @@ export class TransactionProcessingStack extends cdk.Stack {
     transactionTable.grantWriteData(validatorFunction);
 
     // Subscribe validator to SNS topic
-    transactionTopic.addSubscription(new subscriptions.LambdaSubscription(validatorFunction));
+    transactionTopic.addSubscription(
+      new subscriptions.LambdaSubscription(validatorFunction)
+    );
 
     // Enrichment Lambda
     const enrichmentFunction = new lambda.Function(this, 'EnrichmentFunction', {
@@ -276,7 +273,8 @@ export class TransactionProcessingStack extends cdk.Stack {
         metric: queue.metricApproximateNumberOfMessagesVisible(),
         threshold: 1000,
         evaluationPeriods: 1,
-        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
       });
       return alarm;
     };
@@ -288,13 +286,17 @@ export class TransactionProcessingStack extends cdk.Stack {
     createQueueAlarm(lowValueQueue, 'LowValueQueue');
 
     // CloudWatch Alarms for Lambda Errors
-    const createLambdaErrorAlarm = (fn: lambda.Function, functionName: string) => {
+    const createLambdaErrorAlarm = (
+      fn: lambda.Function,
+      functionName: string
+    ) => {
       const alarm = new cloudwatch.Alarm(this, `${functionName}ErrorAlarm`, {
         alarmName: `${functionName}-errors-${environmentSuffix}`,
         metric: fn.metricErrors(),
         threshold: 1,
         evaluationPeriods: 1,
-        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
       });
       return alarm;
     };
@@ -342,355 +344,3 @@ export class TransactionProcessingStack extends cdk.Stack {
     });
   }
 }
-```
-
-## File: lib/lambda/webhook/index.js
-
-```javascript
-const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
-
-const snsClient = new SNSClient({});
-
-exports.handler = async (event) => {
-  console.log('Received webhook event:', JSON.stringify(event));
-
-  try {
-    // Parse the incoming transaction
-    const transaction = JSON.parse(event.body || '{}');
-
-    // Add timestamp
-    transaction.receivedAt = new Date().toISOString();
-    transaction.transactionId = transaction.transactionId || `txn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-    // Publish to SNS topic
-    const command = new PublishCommand({
-      TopicArn: process.env.TOPIC_ARN,
-      Message: JSON.stringify(transaction),
-      Subject: 'New Transaction',
-    });
-
-    const response = await snsClient.send(command);
-    console.log('Published to SNS:', response.MessageId);
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify({
-        message: 'Transaction received',
-        transactionId: transaction.transactionId,
-        messageId: response.MessageId,
-      }),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    };
-  } catch (error) {
-    console.error('Error processing webhook:', error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({
-        error: 'Failed to process transaction',
-        message: error.message,
-      }),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    };
-  }
-};
-```
-
-## File: lib/lambda/webhook/package.json
-
-```json
-{
-  "name": "webhook-receiver",
-  "version": "1.0.0",
-  "description": "Webhook receiver for transaction processing",
-  "main": "index.js",
-  "dependencies": {
-    "@aws-sdk/client-sns": "^3.400.0"
-  }
-}
-```
-
-## File: lib/lambda/validator/index.js
-
-```javascript
-const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
-const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
-
-const sqsClient = new SQSClient({});
-const dynamoClient = new DynamoDBClient({});
-
-exports.handler = async (event) => {
-  console.log('Validator received event:', JSON.stringify(event));
-
-  const results = [];
-
-  for (const record of event.Records) {
-    try {
-      const message = JSON.parse(record.Sns.Message);
-      console.log('Validating transaction:', message);
-
-      // Validate transaction
-      const validationResult = validateTransaction(message);
-
-      if (validationResult.valid) {
-        // Store in DynamoDB
-        const ttl = Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60); // 30 days
-
-        await dynamoClient.send(new PutItemCommand({
-          TableName: process.env.TRANSACTION_TABLE,
-          Item: {
-            transactionId: { S: message.transactionId },
-            status: { S: 'validated' },
-            transaction: { S: JSON.stringify(message) },
-            validatedAt: { S: new Date().toISOString() },
-            ttl: { N: ttl.toString() },
-          },
-        }));
-
-        // Send to validation queue
-        await sqsClient.send(new SendMessageCommand({
-          QueueUrl: process.env.VALIDATION_QUEUE_URL,
-          MessageBody: JSON.stringify({
-            ...message,
-            validationStatus: 'valid',
-            validatedAt: new Date().toISOString(),
-          }),
-        }));
-
-        results.push({ transactionId: message.transactionId, status: 'validated' });
-      } else {
-        console.error('Invalid transaction:', validationResult.errors);
-        results.push({ transactionId: message.transactionId, status: 'invalid', errors: validationResult.errors });
-      }
-    } catch (error) {
-      console.error('Error validating transaction:', error);
-      throw error; // Let Lambda retry mechanism handle it
-    }
-  }
-
-  return {
-    statusCode: 200,
-    body: JSON.stringify({ results }),
-  };
-};
-
-function validateTransaction(transaction) {
-  const errors = [];
-
-  if (!transaction.transactionId) {
-    errors.push('Missing transactionId');
-  }
-
-  if (!transaction.amount || typeof transaction.amount !== 'number') {
-    errors.push('Invalid or missing amount');
-  }
-
-  if (!transaction.currency) {
-    errors.push('Missing currency');
-  }
-
-  if (!transaction.customerId) {
-    errors.push('Missing customerId');
-  }
-
-  return {
-    valid: errors.length === 0,
-    errors,
-  };
-}
-```
-
-## File: lib/lambda/validator/package.json
-
-```json
-{
-  "name": "transaction-validator",
-  "version": "1.0.0",
-  "description": "Transaction validator",
-  "main": "index.js",
-  "dependencies": {
-    "@aws-sdk/client-sqs": "^3.400.0",
-    "@aws-sdk/client-dynamodb": "^3.400.0"
-  }
-}
-```
-
-## File: lib/lambda/enrichment/index.js
-
-```javascript
-const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
-const { DynamoDBClient, GetItemCommand, UpdateItemCommand } = require('@aws-sdk/client-dynamodb');
-
-const sqsClient = new SQSClient({});
-const dynamoClient = new DynamoDBClient({});
-
-exports.handler = async (event) => {
-  console.log('Enrichment received event:', JSON.stringify(event));
-
-  for (const record of event.Records) {
-    try {
-      const transaction = JSON.parse(record.body);
-      console.log('Enriching transaction:', transaction);
-
-      // Fetch customer data from DynamoDB (simulated)
-      const customerData = await getCustomerData(transaction.customerId);
-
-      // Enrich transaction
-      const enrichedTransaction = {
-        ...transaction,
-        customerName: customerData.name,
-        customerTier: customerData.tier,
-        customerRiskScore: customerData.riskScore,
-        enrichedAt: new Date().toISOString(),
-      };
-
-      // Update DynamoDB
-      await dynamoClient.send(new UpdateItemCommand({
-        TableName: process.env.TRANSACTION_TABLE,
-        Key: {
-          transactionId: { S: transaction.transactionId },
-        },
-        UpdateExpression: 'SET #status = :status, enrichedData = :data, enrichedAt = :enrichedAt',
-        ExpressionAttributeNames: {
-          '#status': 'status',
-        },
-        ExpressionAttributeValues: {
-          ':status': { S: 'enriched' },
-          ':data': { S: JSON.stringify(customerData) },
-          ':enrichedAt': { S: new Date().toISOString() },
-        },
-      }));
-
-      // Send to enrichment queue
-      await sqsClient.send(new SendMessageCommand({
-        QueueUrl: process.env.ENRICHMENT_QUEUE_URL,
-        MessageBody: JSON.stringify(enrichedTransaction),
-      }));
-
-      console.log('Transaction enriched:', enrichedTransaction.transactionId);
-    } catch (error) {
-      console.error('Error enriching transaction:', error);
-      throw error;
-    }
-  }
-
-  return { statusCode: 200 };
-};
-
-async function getCustomerData(customerId) {
-  // Simulated customer data lookup
-  // In production, this would query the actual customer database
-  return {
-    customerId,
-    name: `Customer ${customerId}`,
-    tier: 'gold',
-    riskScore: 0.2,
-  };
-}
-```
-
-## File: lib/lambda/enrichment/package.json
-
-```json
-{
-  "name": "transaction-enrichment",
-  "version": "1.0.0",
-  "description": "Transaction enrichment processor",
-  "main": "index.js",
-  "dependencies": {
-    "@aws-sdk/client-sqs": "^3.400.0",
-    "@aws-sdk/client-dynamodb": "^3.400.0"
-  }
-}
-```
-
-## File: lib/lambda/routing/index.js
-
-```javascript
-const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
-const { DynamoDBClient, UpdateItemCommand } = require('@aws-sdk/client-dynamodb');
-
-const sqsClient = new SQSClient({});
-const dynamoClient = new DynamoDBClient({});
-
-exports.handler = async (event) => {
-  console.log('Routing received event:', JSON.stringify(event));
-
-  for (const record of event.Records) {
-    try {
-      const transaction = JSON.parse(record.body);
-      console.log('Routing transaction:', transaction);
-
-      // Determine target queue based on amount
-      let targetQueueUrl;
-      let valueCategory;
-
-      if (transaction.amount > 10000) {
-        targetQueueUrl = process.env.HIGH_VALUE_QUEUE_URL;
-        valueCategory = 'high';
-      } else if (transaction.amount >= 1000) {
-        targetQueueUrl = process.env.STANDARD_VALUE_QUEUE_URL;
-        valueCategory = 'standard';
-      } else {
-        targetQueueUrl = process.env.LOW_VALUE_QUEUE_URL;
-        valueCategory = 'low';
-      }
-
-      // Add routing metadata
-      const routedTransaction = {
-        ...transaction,
-        valueCategory,
-        routedAt: new Date().toISOString(),
-      };
-
-      // Update DynamoDB
-      await dynamoClient.send(new UpdateItemCommand({
-        TableName: process.env.TRANSACTION_TABLE,
-        Key: {
-          transactionId: { S: transaction.transactionId },
-        },
-        UpdateExpression: 'SET #status = :status, valueCategory = :category, routedAt = :routedAt',
-        ExpressionAttributeNames: {
-          '#status': 'status',
-        },
-        ExpressionAttributeValues: {
-          ':status': { S: 'routed' },
-          ':category': { S: valueCategory },
-          ':routedAt': { S: new Date().toISOString() },
-        },
-      }));
-
-      // Send to appropriate value queue
-      await sqsClient.send(new SendMessageCommand({
-        QueueUrl: targetQueueUrl,
-        MessageBody: JSON.stringify(routedTransaction),
-      }));
-
-      console.log(`Transaction routed to ${valueCategory} queue:`, transaction.transactionId);
-    } catch (error) {
-      console.error('Error routing transaction:', error);
-      throw error;
-    }
-  }
-
-  return { statusCode: 200 };
-};
-```
-
-## File: lib/lambda/routing/package.json
-
-```json
-{
-  "name": "transaction-routing",
-  "version": "1.0.0",
-  "description": "Transaction routing processor",
-  "main": "index.js",
-  "dependencies": {
-    "@aws-sdk/client-sqs": "^3.400.0",
-    "@aws-sdk/client-dynamodb": "^3.400.0"
-  }
-}
-```
