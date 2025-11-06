@@ -38,9 +38,14 @@ export class TapStack extends cdk.Stack {
     const targetRegion = props.targetRegion;
     const currentRegion = this.region;
 
+    // Use different CIDR blocks for source and target regions to avoid overlap
+    // Source region (us-east-1): 10.0.0.0/16
+    // Target region (us-east-2): 10.1.0.0/16
+    const vpcCidr = isSourceRegion ? '10.0.0.0/16' : '10.1.0.0/16';
     const vpc = new ec2.Vpc(this, `tap-vpc-${environmentSuffix}`, {
       maxAzs: 2,
       natGateways: 1,
+      cidr: vpcCidr,
       subnetConfiguration: [
         { name: 'public', subnetType: ec2.SubnetType.PUBLIC },
         {
@@ -797,28 +802,49 @@ exports.handler = async (event) => {
                   VpcPeeringConnectionId: existing.VpcPeeringConnectionId,
                 }).promise();
                 // Wait for deletion to complete and verify it's gone
+                // AWS requires failed connections to be fully deleted before creating new ones
                 let deleteWaitAttempts = 0;
-                while (deleteWaitAttempts < 10) {
-                  await new Promise(resolve => setTimeout(resolve, 3000));
+                const maxDeleteWaitAttempts = 30; // 30 attempts * 5 seconds = 2.5 minutes
+                let deletionConfirmed = false;
+                
+                while (deleteWaitAttempts < maxDeleteWaitAttempts) {
+                  await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds between checks
                   try {
                     const verifyDelete = await ec2Source.describeVpcPeeringConnections({
                       VpcPeeringConnectionIds: [existing.VpcPeeringConnectionId],
                     }).promise();
                     if (!verifyDelete.VpcPeeringConnections || verifyDelete.VpcPeeringConnections.length === 0) {
                       console.log('Failed connection successfully deleted');
+                      deletionConfirmed = true;
                       break;
+                    } else {
+                      const currentStatus = verifyDelete.VpcPeeringConnections[0].Status.Code;
+                      console.log('Connection still exists with status: ' + currentStatus);
+                      if (currentStatus === 'deleted') {
+                        console.log('Connection marked as deleted');
+                        deletionConfirmed = true;
+                        break;
+                      }
                     }
                   } catch (verifyErr) {
                     if (verifyErr.code === 'InvalidVpcPeeringConnectionID.NotFound') {
                       console.log('Failed connection successfully deleted (not found)');
+                      deletionConfirmed = true;
                       break;
+                    } else {
+                      console.log('Error verifying deletion: ' + verifyErr.code);
                     }
                   }
                   deleteWaitAttempts++;
                 }
-                if (deleteWaitAttempts >= 10) {
-                  console.log('Warning: Could not verify deletion of failed connection, but continuing');
+                
+                if (!deletionConfirmed) {
+                  throw new Error('Failed to delete and verify removal of failed peering connection after ' + maxDeleteWaitAttempts + ' attempts. Cannot create new connection.');
                 }
+                
+                // Additional wait after deletion confirmation to ensure AWS has fully processed it
+                console.log('Waiting additional 10 seconds after deletion confirmation...');
+                await new Promise(resolve => setTimeout(resolve, 10000));
               } catch (deleteErr) {
                 if (deleteErr.code === 'InvalidVpcPeeringConnectionID.NotFound') {
                   console.log('Connection already deleted');
@@ -916,6 +942,10 @@ exports.handler = async (event) => {
             const remainingStatuses = remainingConnections.map(c => c.Status.Code).join(', ');
             throw new Error('Cannot create new peering connection: existing connections still present with statuses: ' + remainingStatuses);
           }
+          
+          // Final wait before creating to ensure AWS has fully processed any deletions
+          console.log('Waiting 5 seconds before creating new peering connection...');
+          await new Promise(resolve => setTimeout(resolve, 5000));
           
           const createResponse = await ec2Source.createVpcPeeringConnection({
             VpcId: SourceVpcId,
@@ -1087,7 +1117,7 @@ exports.handler = async (event) => {
           `tap-peering-route-${index}-${environmentSuffix}`,
           {
             routeTableId: subnet.routeTable.routeTableId,
-            destinationCidrBlock: '10.0.0.0/16',
+            destinationCidrBlock: '10.0.0.0/16', // Source VPC CIDR (hardcoded since source is always 10.0.0.0/16)
             vpcPeeringConnectionId: peeringConnectionId,
           }
         );
