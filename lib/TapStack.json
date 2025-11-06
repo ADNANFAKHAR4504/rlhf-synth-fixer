@@ -28,6 +28,58 @@
             "MinValue": 16,
             "MaxValue": 64,
             "Description": "Length for dynamically generated secrets"
+        },
+        "PlatformName": {
+            "Type": "String",
+            "Default": "cloudformation",
+            "AllowedValues": [
+                "cloudformation"
+            ],
+            "Description": "Helper value for external platform validation scripts."
+        },
+        "EnableEC2": {
+            "Type": "String",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Default": "false",
+            "Description": "Toggle to create a minimal sample EC2 instance in default VPC"
+        },
+        "EC2KeyPairName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "(Optional) EC2 KeyPair name for the sample instance (empty to skip SSH key association)",
+            "AllowedPattern": "^$|^[a-zA-Z0-9._-]+$"
+        },
+        "EC2AmiId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64",
+            "Description": "SSM path for Amazon Linux 2023 AMI (x86_64)"
+        },
+        "EnableRDS": {
+            "Type": "String",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Default": "false",
+            "Description": "Toggle to create optional sample RDS resources"
+        },
+        "DBSubnetIdA": {
+            "Type": "String",
+            "Default": "",
+            "Description": "(Optional) Private subnet A for RDS"
+        },
+        "DBSubnetIdB": {
+            "Type": "String",
+            "Default": "",
+            "Description": "(Optional) Private subnet B for RDS"
+        },
+        "DBVpcSecurityGroupId": {
+            "Type": "String",
+            "Default": "",
+            "Description": "(Optional) VPC security group ID for RDS instance"
         }
     },
     "Conditions": {
@@ -50,6 +102,93 @@
                     ]
                 }
             ]
+        },
+        "HasKeyPair": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "EC2KeyPairName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "HasDBA": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "DBSubnetIdA"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "HasDBB": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "DBSubnetIdB"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "HasDBSG": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "DBVpcSecurityGroupId"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateEC2": {
+            "Fn::And": [
+                {
+                    "Condition": "IsApprovedRegion"
+                },
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "EnableEC2"
+                        },
+                        "true"
+                    ]
+                }
+            ]
+        },
+        "CreateRDS": {
+            "Fn::And": [
+                {
+                    "Condition": "IsApprovedRegion"
+                },
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "EnableRDS"
+                        },
+                        "true"
+                    ]
+                },
+                {
+                    "Condition": "HasDBA"
+                },
+                {
+                    "Condition": "HasDBB"
+                },
+                {
+                    "Condition": "HasDBSG"
+                }
+            ]
         }
     },
     "Metadata": {
@@ -57,6 +196,39 @@
             "Owner": "Security",
             "Classification": "Confidential",
             "Controls": "CIS-1.1, CIS-3.1, CIS-3.2, CIS-3.4, CIS-4.1"
+        },
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Validation / Platform"
+                    },
+                    "Parameters": [
+                        "PlatformName"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Optional EC2 Sample (default VPC)"
+                    },
+                    "Parameters": [
+                        "EnableEC2",
+                        "EC2KeyPairName",
+                        "EC2AmiId"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Optional RDS Sample (requires VPC)"
+                    },
+                    "Parameters": [
+                        "EnableRDS",
+                        "DBSubnetIdA",
+                        "DBSubnetIdB",
+                        "DBVpcSecurityGroupId"
+                    ]
+                }
+            ]
         }
     },
     "Resources": {
@@ -1421,7 +1593,7 @@
                 "Runtime": "python3.12",
                 "Timeout": 120,
                 "Code": {
-                    "ZipFile": "import json, boto3, urllib.request, traceback, time\n\ndef send_response(event, context, status, data, reason=None, physical_resource_id=None):\n    response_url = event['ResponseURL']\n    body = {\n        'Status': status,\n        'Reason': reason or f'See CloudWatch Log Stream: {context.log_stream_name}',\n        'PhysicalResourceId': physical_resource_id or context.log_stream_name,\n        'StackId': event['StackId'],\n        'RequestId': event['RequestId'],\n        'LogicalResourceId': event['LogicalResourceId'],\n        'Data': data or {}\n    }\n    req = urllib.request.Request(response_url, data=json.dumps(body).encode('utf-8'), method='PUT')\n    req.add_header('content-type', '')\n    urllib.request.urlopen(req)\n\ndef handler(event, context):\n    cfg = boto3.client('config')\n    props = event.get('ResourceProperties', {})\n    desired_recorder_name = f\"tapstack-recorder-{props.get('EnvironmentSuffix','env')}\"\n    desired_channel_name  = f\"tapstack-channel-{props.get('EnvironmentSuffix','env')}\"\n    role_arn    = props['RoleArn']\n    bucket_name = props['BucketName']\n    kms_arn     = props['S3KmsKeyArn']\n\n    try:\n        req_type = event['RequestType']\n\n        if req_type in ('Create', 'Update'):\n            recs = cfg.describe_configuration_recorders().get('ConfigurationRecorders', [])\n            chans = cfg.describe_delivery_channels().get('DeliveryChannels', [])\n\n            recorder_name = (recs[0]['name'] if recs else desired_recorder_name)\n            channel_name  = (chans[0]['name'] if chans else desired_channel_name)\n\n            cfg.put_configuration_recorder(\n                ConfigurationRecorder={\n                    'name': recorder_name,\n                    'roleARN': role_arn,\n                    'recordingGroup': {\n                        'allSupported': True,\n                        'includeGlobalResourceTypes': False\n                    }\n                }\n            )\n\n            # IMPORTANT: do NOT set s3KeyPrefix (AWS Config reserves 'AWSLogs/')\n            cfg.put_delivery_channel(\n                DeliveryChannel={\n                    'name': channel_name,\n                    's3BucketName': bucket_name,\n                    's3KmsKeyArn': kms_arn\n                }\n            )\n\n            # Start recorder (retry briefly for eventual consistency)\n            for _ in range(6):\n                try:\n                    cfg.start_configuration_recorder(ConfigurationRecorderName=recorder_name)\n                    break\n                except Exception:\n                    time.sleep(2)\n\n            send_response(event, context, 'SUCCESS',\n                          {'RecorderName': recorder_name, 'ChannelName': channel_name},\n                          physical_resource_id=recorder_name)\n\n        elif req_type == 'Delete':\n            try:\n                recs = cfg.describe_configuration_recorders().get('ConfigurationRecorders', [])\n                if recs:\n                    cfg.stop_configuration_recorder(ConfigurationRecorderName=recs[0]['name'])\n            except Exception:\n                pass\n            try:\n                chans = cfg.describe_delivery_channels().get('DeliveryChannels', [])\n                if chans:\n                    cfg.delete_delivery_channel(DeliveryChannelName=chans[0]['name'])\n            except Exception:\n                pass\n            try:\n                recs = cfg.describe_configuration_recorders().get('ConfigurationRecorders', [])\n                if recs:\n                    cfg.delete_configuration_recorder(ConfigurationRecorderName=recs[0]['name'])\n            except Exception:\n                pass\n            send_response(event, context, 'SUCCESS', {}, physical_resource_id='ConfigBootstrap-Cleanup')\n\n    except Exception as e:\n        reason = f\"{str(e)} | Trace: {traceback.format_exc()}\"\n        try:\n            send_response(event, context, 'FAILED', {}, reason=reason)\n        except Exception:\n            pass\n        raise\n"
+                    "ZipFile": "import json, boto3, urllib.request, traceback, time\ndef send_response(event, context, status, data, reason=None, physical_resource_id=None):\n    response_url = event['ResponseURL']\n    body = {\n        'Status': status,\n        'Reason': reason or f'See CloudWatch Log Stream: {context.log_stream_name}',\n        'PhysicalResourceId': physical_resource_id or context.log_stream_name,\n        'StackId': event['StackId'],\n        'RequestId': event['RequestId'],\n        'LogicalResourceId': event['LogicalResourceId'],\n        'Data': data or {}\n    }\n    req = urllib.request.Request(response_url, data=json.dumps(body).encode('utf-8'), method='PUT')\n    req.add_header('content-type', '')\n    urllib.request.urlopen(req)\ndef handler(event, context):\n    cfg = boto3.client('config')\n    props = event.get('ResourceProperties', {})\n    desired_recorder_name = f\"tapstack-recorder-{props.get('EnvironmentSuffix','env')}\"\n    desired_channel_name  = f\"tapstack-channel-{props.get('EnvironmentSuffix','env')}\"\n    role_arn    = props['RoleArn']\n    bucket_name = props['BucketName']\n    kms_arn     = props['S3KmsKeyArn']\n    try:\n        req_type = event['RequestType']\n        if req_type in ('Create', 'Update'):\n            recs = cfg.describe_configuration_recorders().get('ConfigurationRecorders', [])\n            chans = cfg.describe_delivery_channels().get('DeliveryChannels', [])\n            recorder_name = (recs[0]['name'] if recs else desired_recorder_name)\n            channel_name  = (chans[0]['name'] if chans else desired_channel_name)\n            cfg.put_configuration_recorder(\n                ConfigurationRecorder={\n                    'name': recorder_name,\n                    'roleARN': role_arn,\n                    'recordingGroup': {\n                        'allSupported': True,\n                        'includeGlobalResourceTypes': False\n                    }\n                }\n            )\n            cfg.put_delivery_channel(\n                DeliveryChannel={\n                    'name': channel_name,\n                    's3BucketName': bucket_name,\n                    's3KmsKeyArn': kms_arn\n                }\n            )\n            for _ in range(6):\n                try:\n                    cfg.start_configuration_recorder(ConfigurationRecorderName=recorder_name)\n                    break\n                except Exception:\n                    time.sleep(2)\n            send_response(event, context, 'SUCCESS',\n                          {'RecorderName': recorder_name, 'ChannelName': channel_name},\n                          physical_resource_id=recorder_name)\n        elif req_type == 'Delete':\n            try:\n                recs = cfg.describe_configuration_recorders().get('ConfigurationRecorders', [])\n                if recs:\n                    cfg.stop_configuration_recorder(ConfigurationRecorderName=recs[0]['name'])\n            except Exception:\n                pass\n            try:\n                chans = cfg.describe_delivery_channels().get('DeliveryChannels', [])\n                if chans:\n                    cfg.delete_delivery_channel(DeliveryChannelName=chans[0]['name'])\n            except Exception:\n                pass\n            try:\n                recs = cfg.describe_configuration_recorders().get('ConfigurationRecorders', [])\n                if recs:\n                    cfg.delete_configuration_recorder(ConfigurationRecorderName=recs[0]['name'])\n            except Exception:\n                pass\n            send_response(event, context, 'SUCCESS', {}, physical_resource_id='ConfigBootstrap-Cleanup')\n    except Exception as e:\n        reason = f\"{str(e)} | Trace: {traceback.format_exc()}\"\n        try:\n            send_response(event, context, 'FAILED', {}, reason=reason)\n        except Exception:\n            pass\n        raise\n"
                 }
             }
         },
@@ -1559,6 +1731,257 @@
                     ]
                 }
             }
+        },
+        "SampleEBSVolume": {
+            "Type": "AWS::EC2::Volume",
+            "Condition": "IsApprovedRegion",
+            "Properties": {
+                "AvailabilityZone": {
+                    "Fn::Sub": "${AWS::Region}a"
+                },
+                "Size": 8,
+                "Encrypted": true,
+                "KmsKeyId": {
+                    "Fn::GetAtt": [
+                        "EBSEncryptionKey",
+                        "Arn"
+                    ]
+                },
+                "VolumeType": "gp3",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "sample-ebs-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Compliance",
+                        "Value": "Security-Baseline"
+                    }
+                ]
+            }
+        },
+        "EC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Condition": "CreateEC2",
+            "Properties": {
+                "Roles": [
+                    {
+                        "Ref": "EC2InstanceRole"
+                    }
+                ],
+                "InstanceProfileName": {
+                    "Fn::Sub": "ec2-instance-profile-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "SampleEC2Instance": {
+            "Type": "AWS::EC2::Instance",
+            "Condition": "CreateEC2",
+            "Properties": {
+                "IamInstanceProfile": {
+                    "Ref": "EC2InstanceProfile"
+                },
+                "ImageId": {
+                    "Ref": "EC2AmiId"
+                },
+                "InstanceType": "t3.micro",
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/xvda",
+                        "Ebs": {
+                            "VolumeSize": 8,
+                            "VolumeType": "gp3",
+                            "Encrypted": true,
+                            "KmsKeyId": {
+                                "Fn::GetAtt": [
+                                    "EBSEncryptionKey",
+                                    "Arn"
+                                ]
+                            },
+                            "DeleteOnTermination": true
+                        }
+                    }
+                ],
+                "KeyName": {
+                    "Fn::If": [
+                        "HasKeyPair",
+                        {
+                            "Ref": "EC2KeyPairName"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "sample-ec2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Compliance",
+                        "Value": "Security-Baseline"
+                    }
+                ]
+            }
+        },
+        "SampleECSCluster": {
+            "Type": "AWS::ECS::Cluster",
+            "Condition": "IsApprovedRegion",
+            "Properties": {
+                "ClusterName": {
+                    "Fn::Sub": "sample-ecs-cluster-${EnvironmentSuffix}"
+                },
+                "CapacityProviders": [
+                    "FARGATE",
+                    "FARGATE_SPOT"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "SampleECSTaskDefinition": {
+            "Type": "AWS::ECS::TaskDefinition",
+            "Condition": "IsApprovedRegion",
+            "Properties": {
+                "Family": {
+                    "Fn::Sub": "sample-task-${EnvironmentSuffix}"
+                },
+                "RequiresCompatibilities": [
+                    "FARGATE"
+                ],
+                "Cpu": "256",
+                "Memory": "512",
+                "NetworkMode": "awsvpc",
+                "ExecutionRoleArn": {
+                    "Fn::GetAtt": [
+                        "ECSTaskExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "ContainerDefinitions": [
+                    {
+                        "Name": "hello",
+                        "Image": "public.ecr.aws/amazonlinux/amazonlinux:2023",
+                        "Command": [
+                            "bash",
+                            "-lc",
+                            "echo hello-from-ecs; sleep 3600"
+                        ],
+                        "LogConfiguration": {
+                            "LogDriver": "awslogs",
+                            "Options": {
+                                "awslogs-group": {
+                                    "Ref": "ApplicationLogGroup"
+                                },
+                                "awslogs-region": {
+                                    "Ref": "AWS::Region"
+                                },
+                                "awslogs-stream-prefix": "ecs"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        "SampleDBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Condition": "CreateRDS",
+            "Properties": {
+                "DBSubnetGroupDescription": {
+                    "Fn::Sub": "sample-rds-subnets-${EnvironmentSuffix}"
+                },
+                "SubnetIds": [
+                    {
+                        "Ref": "DBSubnetIdA"
+                    },
+                    {
+                        "Ref": "DBSubnetIdB"
+                    }
+                ],
+                "DBSubnetGroupName": {
+                    "Fn::Sub": "sample-rds-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "SampleRDSInstance": {
+            "Type": "AWS::RDS::DBInstance",
+            "Condition": "CreateRDS",
+            "DeletionPolicy": "Snapshot",
+            "UpdateReplacePolicy": "Snapshot",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "sample-rds-${EnvironmentSuffix}"
+                },
+                "Engine": "postgres",
+                "EngineVersion": "16",
+                "DBInstanceClass": "db.t4g.micro",
+                "AllocatedStorage": 20,
+                "StorageType": "gp3",
+                "PubliclyAccessible": false,
+                "MultiAZ": false,
+                "StorageEncrypted": true,
+                "KmsKeyId": {
+                    "Ref": "RDSEncryptionKey"
+                },
+                "MasterUsername": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}::username}}"
+                },
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}::password}}"
+                },
+                "DBSubnetGroupName": {
+                    "Ref": "SampleDBSubnetGroup"
+                },
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "DBVpcSecurityGroupId"
+                    }
+                ],
+                "DeletionProtection": false,
+                "BackupRetentionPeriod": 7,
+                "EnablePerformanceInsights": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "sample-rds-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Compliance",
+                        "Value": "Security-Baseline"
+                    }
+                ]
+            }
         }
     },
     "Outputs": {
@@ -1645,6 +2068,50 @@
             "Description": "Name of the secure S3 bucket",
             "Value": {
                 "Ref": "SecureS3Bucket"
+            }
+        },
+        "PlatformNameOut": {
+            "Description": "Helper output for platform validation (expected 'cloudformation')",
+            "Value": {
+                "Ref": "PlatformName"
+            }
+        },
+        "SampleEBSVolumeId": {
+            "Condition": "IsApprovedRegion",
+            "Description": "ID of the sample encrypted EBS volume",
+            "Value": {
+                "Ref": "SampleEBSVolume"
+            }
+        },
+        "SampleEC2InstanceId": {
+            "Condition": "CreateEC2",
+            "Description": "ID of the sample EC2 instance (created only when enabled)",
+            "Value": {
+                "Ref": "SampleEC2Instance"
+            }
+        },
+        "SampleECSClusterName": {
+            "Condition": "IsApprovedRegion",
+            "Description": "Name of the sample ECS Cluster",
+            "Value": {
+                "Ref": "SampleECSCluster"
+            }
+        },
+        "SampleECSTaskFamily": {
+            "Condition": "IsApprovedRegion",
+            "Description": "ECS TaskDefinition family name",
+            "Value": {
+                "Ref": "SampleECSTaskDefinition"
+            }
+        },
+        "SampleRDSInstanceEndpoint": {
+            "Condition": "CreateRDS",
+            "Description": "RDS instance endpoint address",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SampleRDSInstance",
+                    "Endpoint.Address"
+                ]
             }
         }
     }

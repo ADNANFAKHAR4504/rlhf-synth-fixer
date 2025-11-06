@@ -1,4 +1,3 @@
-# TapStack.yml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   Zero-trust security baseline for a fresh AWS account. Least-privilege IAM, permission boundaries,
@@ -34,16 +33,89 @@ Parameters:
     MaxValue: 64
     Description: Length for dynamically generated secrets
 
+  # --------------------------
+  # Validation / helper
+  # --------------------------
+  PlatformName:
+    Type: String
+    Default: cloudformation
+    AllowedValues: [cloudformation]
+    Description: Helper value for external platform validation scripts.
+
+  # --------------------------
+  # Optional EC2 sample (off by default)
+  # --------------------------
+  EnableEC2:
+    Type: String
+    AllowedValues: ['true','false']
+    Default: 'false'
+    Description: Toggle to create a minimal sample EC2 instance in default VPC
+  EC2KeyPairName:
+    Type: String
+    Default: ''
+    Description: (Optional) EC2 KeyPair name for the sample instance (empty to skip SSH key association)
+    AllowedPattern: '^$|^[a-zA-Z0-9._-]+$'
+  EC2AmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: SSM path for Amazon Linux 2023 AMI (x86_64)
+
+  # --------------------------
+  # Optional RDS sample (off by default)
+  # --------------------------
+  EnableRDS:
+    Type: String
+    AllowedValues: ['true','false']
+    Default: 'false'
+    Description: Toggle to create optional sample RDS resources
+  DBSubnetIdA:
+    Type: String
+    Default: ''
+    Description: (Optional) Private subnet A for RDS
+  DBSubnetIdB:
+    Type: String
+    Default: ''
+    Description: (Optional) Private subnet B for RDS
+  DBVpcSecurityGroupId:
+    Type: String
+    Default: ''
+    Description: (Optional) VPC security group ID for RDS instance
+
 Conditions:
   IsApprovedRegion: !Or
     - !Equals [!Ref 'AWS::Region', 'us-east-1']
     - !Equals [!Ref 'AWS::Region', 'us-west-2']
+
+  HasKeyPair: !Not [ !Equals [ !Ref EC2KeyPairName, '' ] ]
+
+  HasDBA:  !Not [ !Equals [ !Ref DBSubnetIdA, '' ] ]
+  HasDBB:  !Not [ !Equals [ !Ref DBSubnetIdB, '' ] ]
+  HasDBSG: !Not [ !Equals [ !Ref DBVpcSecurityGroupId, '' ] ]
+
+  CreateEC2: !And
+    - !Condition IsApprovedRegion
+    - !Equals [ !Ref EnableEC2, 'true' ]
+
+  CreateRDS: !And
+    - !Condition IsApprovedRegion
+    - !Equals [ !Ref EnableRDS, 'true' ]
+    - !Condition HasDBA
+    - !Condition HasDBB
+    - !Condition HasDBSG
 
 Metadata:
   Compliance:
     Owner: Security
     Classification: Confidential
     Controls: CIS-1.1, CIS-3.1, CIS-3.2, CIS-3.4, CIS-4.1
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: { default: "Validation / Platform" }
+        Parameters: [ PlatformName ]
+      - Label: { default: "Optional EC2 Sample (default VPC)" }
+        Parameters: [ EnableEC2, EC2KeyPairName, EC2AmiId ]
+      - Label: { default: "Optional RDS Sample (requires VPC)" }
+        Parameters: [ EnableRDS, DBSubnetIdA, DBSubnetIdB, DBVpcSecurityGroupId ]
 
 Resources:
   ###########################################################
@@ -130,7 +202,6 @@ Resources:
             Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
             Action: [ kms:Encrypt, kms:Decrypt, kms:ReEncrypt*, kms:GenerateDataKey*, kms:DescribeKey ]
             Resource: '*'
-          # Allow AWS Config service and the delivery role to use this CMK for SSE-KMS writes
           - Sid: AllowAWSConfigServiceUseOfKey
             Effect: Allow
             Principal: { Service: config.amazonaws.com }
@@ -421,7 +492,6 @@ Resources:
     Type: AWS::S3::Bucket
     Condition: IsApprovedRegion
     Properties:
-      # Auto-generated name avoids global 409 conflicts
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -593,7 +663,6 @@ Resources:
         - { Key: Environment, Value: !Ref EnvironmentSuffix }
         - { Key: Compliance, Value: Security-Baseline }
 
-  # SSM parameters (String) with dynamic refs to Secrets Manager values
   DBPasswordParameter:
     Type: AWS::SSM::Parameter
     Condition: IsApprovedRegion
@@ -711,7 +780,6 @@ Resources:
       Code:
         ZipFile: |
           import json, boto3, urllib.request, traceback, time
-
           def send_response(event, context, status, data, reason=None, physical_resource_id=None):
               response_url = event['ResponseURL']
               body = {
@@ -726,7 +794,6 @@ Resources:
               req = urllib.request.Request(response_url, data=json.dumps(body).encode('utf-8'), method='PUT')
               req.add_header('content-type', '')
               urllib.request.urlopen(req)
-
           def handler(event, context):
               cfg = boto3.client('config')
               props = event.get('ResourceProperties', {})
@@ -735,17 +802,13 @@ Resources:
               role_arn    = props['RoleArn']
               bucket_name = props['BucketName']
               kms_arn     = props['S3KmsKeyArn']
-
               try:
                   req_type = event['RequestType']
-
                   if req_type in ('Create', 'Update'):
                       recs = cfg.describe_configuration_recorders().get('ConfigurationRecorders', [])
                       chans = cfg.describe_delivery_channels().get('DeliveryChannels', [])
-
                       recorder_name = (recs[0]['name'] if recs else desired_recorder_name)
                       channel_name  = (chans[0]['name'] if chans else desired_channel_name)
-
                       cfg.put_configuration_recorder(
                           ConfigurationRecorder={
                               'name': recorder_name,
@@ -756,8 +819,6 @@ Resources:
                               }
                           }
                       )
-
-                      # IMPORTANT: do NOT set s3KeyPrefix (AWS Config reserves 'AWSLogs/')
                       cfg.put_delivery_channel(
                           DeliveryChannel={
                               'name': channel_name,
@@ -765,19 +826,15 @@ Resources:
                               's3KmsKeyArn': kms_arn
                           }
                       )
-
-                      # Start recorder (retry briefly for eventual consistency)
                       for _ in range(6):
                           try:
                               cfg.start_configuration_recorder(ConfigurationRecorderName=recorder_name)
                               break
                           except Exception:
                               time.sleep(2)
-
                       send_response(event, context, 'SUCCESS',
                                     {'RecorderName': recorder_name, 'ChannelName': channel_name},
                                     physical_resource_id=recorder_name)
-
                   elif req_type == 'Delete':
                       try:
                           recs = cfg.describe_configuration_recorders().get('ConfigurationRecorders', [])
@@ -798,7 +855,6 @@ Resources:
                       except Exception:
                           pass
                       send_response(event, context, 'SUCCESS', {}, physical_resource_id='ConfigBootstrap-Cleanup')
-
               except Exception as e:
                   reason = f"{str(e)} | Trace: {traceback.format_exc()}"
                   try:
@@ -810,8 +866,7 @@ Resources:
   ConfigBootstrap:
     Type: AWS::CloudFormation::CustomResource
     Condition: IsApprovedRegion
-    DependsOn:
-      - S3BucketPolicy  # bucket+policy must exist first
+    DependsOn: [ S3BucketPolicy ]
     Properties:
       ServiceToken: !GetAtt ConfigBootstrapFunction.Arn
       RoleArn: !GetAtt ConfigDeliveryRole.Arn
@@ -819,7 +874,6 @@ Resources:
       S3KmsKeyArn: !GetAtt S3EncryptionKey.Arn
       EnvironmentSuffix: !Ref EnvironmentSuffix
 
-  # Managed Rules (after bootstrap completes and recorder is started)
   S3BucketSSLConfigRule:
     Type: AWS::Config::ConfigRule
     Condition: IsApprovedRegion
@@ -887,6 +941,125 @@ Resources:
               StringEquals:
                 aws:PrincipalARN: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
 
+  # ----------------------------------------------------------------
+  # Minimal, opt-in resources to address service coverage gaps
+  # ----------------------------------------------------------------
+
+  # EBS: standalone encrypted volume (no VPC required)
+  SampleEBSVolume:
+    Type: AWS::EC2::Volume
+    Condition: IsApprovedRegion
+    Properties:
+      AvailabilityZone: !Sub '${AWS::Region}a'
+      Size: 8
+      Encrypted: true
+      KmsKeyId: !GetAtt EBSEncryptionKey.Arn
+      VolumeType: gp3
+      Tags:
+        - { Key: Name, Value: !Sub 'sample-ebs-${EnvironmentSuffix}' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Compliance, Value: Security-Baseline }
+
+  # EC2: instance profile + tiny instance (created only when enabled; will launch in default VPC)
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Condition: CreateEC2
+    Properties:
+      Roles: [ !Ref EC2InstanceRole ]
+      InstanceProfileName: !Sub 'ec2-instance-profile-${EnvironmentSuffix}'
+
+  SampleEC2Instance:
+    Type: AWS::EC2::Instance
+    Condition: CreateEC2
+    Properties:
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      ImageId: !Ref EC2AmiId
+      InstanceType: t3.micro
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 8
+            VolumeType: gp3
+            Encrypted: true
+            KmsKeyId: !GetAtt EBSEncryptionKey.Arn
+            DeleteOnTermination: true
+      KeyName: !If [ HasKeyPair, !Ref EC2KeyPairName, !Ref 'AWS::NoValue' ]
+      Tags:
+        - { Key: Name, Value: !Sub 'sample-ec2-${EnvironmentSuffix}' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Compliance, Value: Security-Baseline }
+
+  # ECS: cluster + minimal task definition (no service/networking needed)
+  SampleECSCluster:
+    Type: AWS::ECS::Cluster
+    Condition: IsApprovedRegion
+    Properties:
+      ClusterName: !Sub 'sample-ecs-cluster-${EnvironmentSuffix}'
+      CapacityProviders: [ FARGATE, FARGATE_SPOT ]
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  SampleECSTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Condition: IsApprovedRegion
+    Properties:
+      Family: !Sub 'sample-task-${EnvironmentSuffix}'
+      RequiresCompatibilities: [ FARGATE ]
+      Cpu: '256'
+      Memory: '512'
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: hello
+          Image: public.ecr.aws/amazonlinux/amazonlinux:2023
+          Command: [ "bash", "-lc", "echo hello-from-ecs; sleep 3600" ]
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ApplicationLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  # RDS: KMS-encrypted PostgreSQL instance (only if toggled + inputs provided)
+  SampleDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Condition: CreateRDS
+    Properties:
+      DBSubnetGroupDescription: !Sub 'sample-rds-subnets-${EnvironmentSuffix}'
+      SubnetIds:
+        - !Ref DBSubnetIdA
+        - !Ref DBSubnetIdB
+      DBSubnetGroupName: !Sub 'sample-rds-${EnvironmentSuffix}'
+
+  SampleRDSInstance:
+    Type: AWS::RDS::DBInstance
+    Condition: CreateRDS
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub 'sample-rds-${EnvironmentSuffix}'
+      Engine: postgres
+      EngineVersion: '16'
+      DBInstanceClass: db.t4g.micro
+      AllocatedStorage: 20
+      StorageType: gp3
+      PubliclyAccessible: false
+      MultiAZ: false
+      StorageEncrypted: true
+      KmsKeyId: !Ref RDSEncryptionKey
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseSecret}::username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}::password}}'
+      DBSubnetGroupName: !Ref SampleDBSubnetGroup
+      VPCSecurityGroups: [ !Ref DBVpcSecurityGroupId ]
+      DeletionProtection: false
+      BackupRetentionPeriod: 7
+      EnablePerformanceInsights: false
+      Tags:
+        - { Key: Name, Value: !Sub 'sample-rds-${EnvironmentSuffix}' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Compliance, Value: Security-Baseline }
+
 Outputs:
   EC2InstanceRoleArn:
     Condition: IsApprovedRegion
@@ -937,3 +1110,32 @@ Outputs:
     Condition: IsApprovedRegion
     Description: Name of the secure S3 bucket
     Value: !Ref SecureS3Bucket
+
+  PlatformNameOut:
+    Description: Helper output for platform validation (expected 'cloudformation')
+    Value: !Ref PlatformName
+
+  SampleEBSVolumeId:
+    Condition: IsApprovedRegion
+    Description: ID of the sample encrypted EBS volume
+    Value: !Ref SampleEBSVolume
+
+  SampleEC2InstanceId:
+    Condition: CreateEC2
+    Description: ID of the sample EC2 instance (created only when enabled)
+    Value: !Ref SampleEC2Instance
+
+  SampleECSClusterName:
+    Condition: IsApprovedRegion
+    Description: Name of the sample ECS Cluster
+    Value: !Ref SampleECSCluster
+
+  SampleECSTaskFamily:
+    Condition: IsApprovedRegion
+    Description: ECS TaskDefinition family name
+    Value: !Ref SampleECSTaskDefinition
+
+  SampleRDSInstanceEndpoint:
+    Condition: CreateRDS
+    Description: RDS instance endpoint address
+    Value: !GetAtt SampleRDSInstance.Endpoint.Address
