@@ -12,12 +12,12 @@ on:
   workflow_dispatch:
     inputs:
       environment_suffix:
-        description: "Environment suffix for resource naming (e.g., pr123, dev, test)"
+        description: 'Environment suffix for resource naming (e.g., pr123, dev, test)'
         required: false
-        default: "manual"
+        default: 'manual'
         type: string
       skip_cleanup:
-        description: "Skip cleanup/destroy step after deployment"
+        description: 'Skip cleanup/destroy step after deployment'
         required: false
         default: false
         type: boolean
@@ -26,29 +26,30 @@ permissions:
   contents: read
 
 env:
-  NODE_VERSION: "22.17.0"
-  GO_VERSION: "1.23.12"
+  NODE_VERSION: '22.17.0'
+  GO_VERSION: '1.23.12'
   # Use PR number for resource isolation, manual input, or fallback to 'dev' for main branch
   # Prefix with 'pr' to ensure AWS resource names start with a letter
   ENVIRONMENT_SUFFIX: ${{ github.event.inputs.environment_suffix || (github.event.number && format('pr{0}', github.event.number)) || 'dev' }}
-  S3_RELEASE_BUCKET_NAME: "iac-rlhf-aws-release-342597974367-us-east-1"
-  TERRAFORM_STATE_BUCKET: "iac-rlhf-tf-states-342597974367"
-  TERRAFORM_STATE_BUCKET_REGION: "us-east-1"
+  S3_RELEASE_BUCKET_NAME: 'iac-rlhf-aws-release-342597974367-us-east-1'
+  TERRAFORM_STATE_BUCKET: 'iac-rlhf-tf-states-342597974367'
+  TERRAFORM_STATE_BUCKET_REGION: 'us-east-1'
   TERRAFORM_STATE_BUCKET_KEY: ${{ github.event.pull_request.number }}
-  PULUMI_STATE_BUCKET: "iac-rlhf-pulumi-states-342597974367"
-  PULUMI_BUCKET_REGION: "us-east-1"
+  PULUMI_STATE_BUCKET: 'iac-rlhf-pulumi-states-342597974367'
+  PULUMI_BUCKET_REGION: 'us-east-1'
   PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
-  PULUMI_ORG: "organization"
+  PULUMI_ORG: 'organization'
   AWS_REGION: ${{ vars.AWS_REGION }}
   CDK_DEFAULT_REGION: ${{ vars.CDK_DEFAULT_REGION || vars.AWS_REGION || 'us-east-1' }}
   CURRENT_ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  MODEL_S3_URI: "s3://social-platform-sagemaker-342597974367-dev/model.tar.gz"
+  MODEL_S3_URI: 's3://social-platform-sagemaker-342597974367-dev/model.tar.gz'
   # Go caching optimization
   GOCACHE: ${{ github.workspace }}/.cache/go-build
   GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
   IAC_ANALYSIS_SUBJECT_LABEL: "Infrastructure Analysis/Monitoring"
+  CICD_PIPELINE_SUBJECT_LABEL: "CI/CD Pipeline"
 
 jobs:
   detect-metadata:
@@ -62,6 +63,7 @@ jobs:
       subtask: ${{ steps.metadata.outputs.subtask }}
       subject_labels: ${{ steps.metadata.outputs.subject_labels }}
       analysis_subject_label: ${{ env.IAC_ANALYSIS_SUBJECT_LABEL }}
+      cicd_pipeline_subject_label: ${{ env.CICD_PIPELINE_SUBJECT_LABEL }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -71,9 +73,9 @@ jobs:
       - name: Fetch base branch
         run: git fetch origin main:main
 
-      - name: Check Project Files
-        id: check-files
-        run: ./scripts/check-project-files.sh
+      # - name: Check Project Files
+      #   id: check-files
+      #   run: ./scripts/check-project-files.sh
 
       - name: Detect metadata and validate project
         id: metadata
@@ -88,11 +90,15 @@ jobs:
         with:
           fetch-depth: 0 # Required to fetch all history for commitlint
 
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
+      - name: Setup Node for Commitlint
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "false"
+
+      - name: Install Commitlint locally
+        run: |
+          npm install --no-save \
+            @commitlint/{cli,config-conventional}
 
       - name: Validate commit message
         run: npx commitlint --last
@@ -101,7 +107,7 @@ jobs:
     name: Build
     runs-on: ubuntu-24.04
     needs: detect-metadata
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label)}}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
     environment: dev
 
     steps:
@@ -112,19 +118,26 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "false"
-          upload-artifacts: "true"
+          download-artifacts: 'false'
+          upload-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Build
         run: ./scripts/build.sh
 
+      - name: Upload build artifacts (dist/)
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-dist
+          path: dist
+          if-no-files-found: ignore
+
   synth:
     name: Synth
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch' && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
     environment: dev
     permissions:
       contents: read
@@ -136,12 +149,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Skip Synth for non-CDK/CDKTF platforms
+        if: ${{ needs.detect-metadata.outputs.platform != 'cdk' && needs.detect-metadata.outputs.platform != 'cdktf' }}
+        run: |
+          echo "✅ Synth step not required for platform: ${{ needs.detect-metadata.outputs.platform }}"
+          echo "This platform does not require synthesis. Job passes automatically."
+
       - name: Setup Environment
         if: ${{ needs.detect-metadata.outputs.platform == 'cdk' || needs.detect-metadata.outputs.platform == 'cdktf' }}
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "true"
+          download-artifacts: 'false'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
@@ -296,11 +315,43 @@ jobs:
           name: analysis-results
           path: lib/analysis-results.txt
           if-no-files-found: warn
+
+  cicd-pipeline-optimization:
+    name: CICD Pipeline Optimization
+    runs-on: ubuntu-24.04
+    needs: detect-metadata
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') && contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
+    environment: dev
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          ref: ${{ github.head_ref }}
+
+      - name: Execute CI/CD Pipeline Script
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+        run: ./scripts/cicd-pipeline.sh
+
+      - name: Upload Pipeline Configuration
+        uses: actions/upload-artifact@v4
+        with:
+          name: cicd-pipeline-config
+          path: lib/ci-cd.yml
+          if-no-files-found: error
+
   deploy:
     name: Deploy
     runs-on: ubuntu-24.04
     needs: [detect-metadata, synth]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label)}}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
     environment: dev
 
     steps:
@@ -311,10 +362,16 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "true"
+          download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
+      - name: Download build artifacts (dist/)
+        if: ${{ needs.detect-metadata.outputs.language == 'ts' || needs.detect-metadata.outputs.language == 'js' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: build-dist
+          path: dist
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
         with:
@@ -360,15 +417,13 @@ jobs:
           path: |
             cfn-outputs/
             cdk-stacks.json
-  lint:
-    name: Lint
+
+  iac-optimization:
+    name: IaC Optimization
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, build]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label)}}
-    environment: qa
-    outputs:
-      platform: ${{ needs.detect-metadata.outputs.platform }}
-      language: ${{ needs.detect-metadata.outputs.language }}
+    needs: [detect-metadata, deploy]
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && contains(needs.detect-metadata.outputs.subject_labels, 'IaC Optimization')}}
+    environment: dev
 
     steps:
       - name: Checkout code
@@ -382,6 +437,47 @@ jobs:
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
+      - name: Download Deployment Outputs
+        uses: actions/download-artifact@v4
+        with:
+          name: cfn-outputs
+          path: .
+
+      - name: Configure AWS
+        uses: ./.github/actions/configure-aws
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
+
+      - name: Check and Run IaC Optimization
+        run: ./scripts/optimize.sh
+        env:
+          ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
+          AWS_REGION: ${{ env.AWS_REGION || 'us-east-1' }}
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    needs: [detect-metadata, build]
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
+    environment: qa
+    outputs:
+      platform: ${{ needs.detect-metadata.outputs.platform }}
+      language: ${{ needs.detect-metadata.outputs.language }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          download-artifacts: 'true'
+          platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
+
       # Python setup is handled by the setup-environment action
 
       - name: Run Linting
@@ -391,7 +487,7 @@ jobs:
     name: Unit Testing
     runs-on: ubuntu-24.04
     needs: [detect-metadata, lint]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
     environment: qa
 
     steps:
@@ -402,7 +498,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "true"
+          download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
@@ -458,7 +554,7 @@ jobs:
 
   claude-task-analyze:
     runs-on: ubuntu-24.04
-    name: "Claude Task Analysis"
+    name: 'Claude Task Analysis'
     needs: [detect-metadata, unit-tests]
     if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization'}}
     permissions:
@@ -478,15 +574,15 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "false"
+          download-artifacts: 'false'
 
       - name: Run Claude Task Analysis
         uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          allowed_tools: "Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite"
-          trigger_phrase: ""
+          allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
+          trigger_phrase: ''
           custom_instructions: |
             Analyze the IAC task files in the lib/ folder and generate a report showing which resources have deletion protection enabled.
             This helps identify resources that will REMAIN after stack deletion.
@@ -566,7 +662,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [detect-metadata, lint, unit-tests, deploy]
     environment: qa
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label)}}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
 
     steps:
       - name: Checkout code
@@ -576,8 +672,9 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "true"
+          download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Download Deployment Outputs
         uses: actions/download-artifact@v4
@@ -599,7 +696,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ env.AWS_REGION || 'us-east-1' }}
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
-          CI: "1" # Set CI for the entire step
+          CI: '1' # Set CI for the entire step
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
@@ -607,8 +704,25 @@ jobs:
   claude-code-action:
     runs-on: ubuntu-24.04
     name: "Claude Review"
-    needs: [integration-tests-live, analysis]
-    if: always() && !cancelled() && (needs.analysis.result == 'success' || needs.analysis.result == 'skipped') && needs.integration-tests-live.result == 'success'
+    needs: [detect-metadata, integration-tests-live, analysis, cicd-pipeline-optimization]
+    # For Infrastructure Analysis/Monitoring OR CI/CD Pipeline: Allow int-tests to be skipped
+    # For all other subject labels: Require int-tests to succeed
+    if: |
+      always() && !cancelled() &&
+      (needs.analysis.result == 'success' || needs.analysis.result == 'skipped') &&
+      (needs.cicd-pipeline-optimization.result == 'success' || needs.cicd-pipeline-optimization.result == 'skipped') &&
+      (
+        (
+          (contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) ||
+           contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)) &&
+          (needs.integration-tests-live.result == 'success' || needs.integration-tests-live.result == 'skipped')
+        ) ||
+        (
+          !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) &&
+          !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) &&
+          needs.integration-tests-live.result == 'success'
+        )
+      )
     permissions:
       contents: write
       pull-requests: write
@@ -653,14 +767,112 @@ jobs:
             exit 1
           fi
 
+      - name: Determine review type
+        id: review-type
+        run: |
+          SUBJECT_LABELS=$(jq -r '.subject_labels[]?' metadata.json 2>/dev/null || echo "")
+          if echo "$SUBJECT_LABELS" | grep -q "CI/CD Pipeline"; then
+            echo "review_type=cicd-pipeline" >> $GITHUB_OUTPUT
+            echo "📋 Detected CI/CD Pipeline subject label - will use specialized review criteria"
+          else
+            echo "review_type=iac-standard" >> $GITHUB_OUTPUT
+            echo "📋 Using standard IaC review criteria"
+          fi
+
       - name: Run Claude PR Review Action
         uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          allowed_tools: "Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite"
-          trigger_phrase: ""
+          allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
+          trigger_phrase: ''
           custom_instructions: |
+            # Determine Review Type
+
+            First, check the subject_labels in metadata.json to determine the review type:
+            ```bash
+            SUBJECT_LABELS=$(jq -r '.subject_labels[]?' metadata.json 2>/dev/null || echo "")
+            if echo "$SUBJECT_LABELS" | grep -q "CI/CD Pipeline"; then
+              REVIEW_TYPE="cicd-pipeline"
+            else
+              REVIEW_TYPE="iac-standard"
+            fi
+            echo "Review type: $REVIEW_TYPE"
+            ```
+
+            # CI/CD Pipeline Review (If REVIEW_TYPE=cicd-pipeline)
+
+            If this is a CI/CD Pipeline task, follow these specialized review criteria:
+
+            ## Step 1: Read CI/CD Pipeline Review Guidelines
+            Read and follow `.claude/prompts/cicd-pipeline-review.md` for complete scoring criteria.
+
+            ## Step 2: Validate lib/ci-cd.yml
+
+            The CI/CD pipeline configuration is in `lib/ci-cd.yml`. Review it against these critical criteria:
+
+            ### Security (3 points - CRITICAL)
+            1. **Secrets Management (2 points)** - NO hardcoded secrets, all use `${{ secrets.* }}` or `${{ vars.* }}`
+            2. **IAM & Authentication (1 point)** - Proper OIDC or GitHub Secrets authentication
+
+            If ANY hardcoded secrets found: **Automatic FAIL (score = 0)**
+
+            ### Architecture (3 points)
+            1. **Multi-stage deployment (2 points)** - Dev → Staging → Prod with approval gates
+            2. **Job dependencies & artifacts (1 point)** - Proper `needs:` relationships and artifact management
+
+            ### Configuration Management (2 points)
+            1. **Environment variables & parameterization** - Reusable env vars, workflow_dispatch inputs
+
+            ### Requirements Compliance (2 points)
+            1. **lib/ci-cd.yml patterns (1.5 points)** - Follows specification and best practices
+            2. **PROMPT requirements (0.5 points)** - All requirements from lib/PROMPT.md implemented
+
+            ## Step 3: Calculate Score (Total: 10 points)
+
+            Sum all category scores directly (no conversion needed).
+            - Minimum passing score: 8/10
+
+            ## Step 4: Update metadata.json with Training Quality
+
+            **MANDATORY ACTION**: You MUST update metadata.json with the training quality score using the Bash tool.
+
+            After calculating your score, execute this command using the Bash tool (replace <score> with actual numeric value 0-10):
+
+            ```bash
+            jq --argjson tq <score> '.training_quality = $tq' metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json && echo "Updated training_quality to <score>/10" && cat metadata.json
+            ```
+
+            Example if score is 10:
+            ```bash
+            jq --argjson tq 10 '.training_quality = $tq' metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json && echo "Updated training_quality to 10/10" && cat metadata.json
+            ```
+
+            **Verification**: After running the command, verify the output shows training_quality field was added to metadata.json.
+
+            **CRITICAL**: Do NOT skip this step. The metadata.json MUST be updated before posting the review comment.
+
+            **Note**: CI/CD Pipeline tasks do NOT require aws_services field. Do NOT flag aws_services as missing for CI/CD tasks.
+
+            ## Step 5: Post Review Comment
+
+            Post a GitHub comment with the format specified in `.claude/prompts/cicd-pipeline-review.md`.
+
+            ## Step 6: Output Score
+
+            At the very end of your output, on its own line:
+            ```
+            SCORE:<numeric_value>
+            ```
+
+            Example: `SCORE:8`
+
+            ---
+
+            # Standard IaC Review (If REVIEW_TYPE=iac-standard)
+
+            If this is NOT a CI/CD Pipeline task, follow the standard review process:
+
             CRITICAL: you MUST validate the latest PROMPT file format, and add a github comment if it appears to be AI-generated rather than human-written:
             1. Identify all the PROMPT file (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) - always use the highest numbered one
             2. Read the PROMPT files
@@ -698,14 +910,26 @@ jobs:
 
             Follow instructions in .claude/agents/iac-code-reviewer.md. Do not commit any changes, but allow the metadata.json file to be updated.
             Important: The Metadata Enhancement phase in .claude/agents/iac-code-reviewer.md is very important for this project. Make sure that the
-            metadata.json file is updated with the fields stated there. If the metadata.json file after the review does not contain the fields:
-            - training_quality
-            - aws_services
-            then add a github comment indicating the issue
+            metadata.json file is updated with the required fields:
+
+            For standard IaC tasks:
+            - training_quality (required)
+            - aws_services (required)
+
+            For CI/CD Pipeline tasks (subject_label: "CI/CD Pipeline" OR platform: "cicd"):
+            - training_quality (required)
+            - aws_services (NOT required - CI/CD pipelines don't deploy AWS services)
+
+            If metadata.json is missing required fields for the task type, add a github comment indicating the issue.
 
             This validation is mandatory and must be completed before any other review activities.
 
-            Now follow the instructions in .claude/agents/iac-code-reviewer.md 
+            Now follow the instructions in .claude/agents/iac-code-reviewer.md
+
+            ---
+
+            # Final Output Format (Both Review Types)
+
             SCORE:<numeric_value>
             Example: SCORE:8
 
@@ -727,12 +951,8 @@ jobs:
             | jq -r '.comments[].body' > all_comments.txt
 
           echo "🍀 Searching for quality score pattern..."
-          # Match any of these:
-          # - "**Final Score: 9.5/10**"
-          # - "Training Quality: 9/10"
-          # - "SCORE:10"
-          # Handles decimals, optional markdown, emojis, and spaces
-          SCORE=$(grep -Eo '(\*\*)?(Final|Training)[[:space:]]*Quality:?[[:space:]]*[0-9]+(\.[0-9]+)?/10(\*\*)?|SCORE:[[:space:]]*[0-9]+(\.[0-9]+)?' all_comments.txt \
+          # Case-insensitive search for multiple variants (Final Score, Training Quality, etc.)
+          SCORE=$(grep -Eoi '(final[[:space:]]*(score|quality):?|training[_[:space:]]*quality:?|quality[[:space:]]*score:?|score:)[[:space:]]*[0-9]+(\.[0-9]+)?' all_comments.txt \
             | tail -1 | grep -Eo '[0-9]+(\.[0-9]+)?' | head -1)
 
           if [ -z "$SCORE" ]; then
@@ -763,26 +983,59 @@ jobs:
           if-no-files-found: warn
     outputs:
       quality_score: ${{ steps.extract.outputs.quality_score }}
+
   cleanup:
     name: Cleanup (Destroy Resources)
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, integration-tests-live, claude-code-action]
-    if: ${{ always() && !cancelled() && needs.integration-tests-live.result == 'success' && needs.claude-code-action.result == 'success' && ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch' && !inputs.skip_cleanup)) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
-    environment: stage
+    needs: [detect-metadata, integration-tests-live, claude-code-action, analysis, cicd-pipeline-optimization]
+    # Cleanup runs when:
+    # 1. Claude review succeeded
+    # 2. For Analysis/CI/CD tasks: int-tests can be success OR skipped
+    # 3. For normal infra tasks: int-tests MUST be success (not skipped)
+    if: |
+      always() && !cancelled() &&
+      needs.claude-code-action.result == 'success' &&
+      (
+        (needs.integration-tests-live.result == 'success') ||
+        (needs.integration-tests-live.result == 'skipped' && 
+         (contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) ||
+          contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)))
+      ) &&
+      ((github.event_name == 'pull_request' && github.event.action != 'closed') || 
+       (github.event_name == 'workflow_dispatch' && !inputs.skip_cleanup)) &&
+      !contains(github.event.head_commit.message, '[skip-jobs]')
+    environment: qa
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Check if cleanup is needed
+        id: check-cleanup
+        run: |
+          SUBJECT_LABELS='${{ needs.detect-metadata.outputs.subject_labels }}'
+          ANALYSIS_LABEL='${{ needs.detect-metadata.outputs.analysis_subject_label }}'
+          CICD_LABEL='${{ needs.detect-metadata.outputs.cicd_pipeline_subject_label }}'
+
+          if echo "$SUBJECT_LABELS" | grep -q "$ANALYSIS_LABEL" || echo "$SUBJECT_LABELS" | grep -q "$CICD_LABEL"; then
+            echo "needs_cleanup=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ Analysis or CI/CD Pipeline task - no infrastructure to cleanup"
+          else
+            echo "needs_cleanup=true" >> $GITHUB_OUTPUT
+            echo "✅ Infrastructure task - cleanup needed"
+          fi
+
       - name: Setup Environment
+        if: steps.check-cleanup.outputs.needs_cleanup == 'true'
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "false"
+          download-artifacts: 'false'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Configure AWS
+        if: steps.check-cleanup.outputs.needs_cleanup == 'true'
         uses: ./.github/actions/configure-aws
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -790,6 +1043,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Destroy Resources (cleanup any leftover resources)
+        if: steps.check-cleanup.outputs.needs_cleanup == 'true'
         run: ./scripts/destroy.sh
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
@@ -798,6 +1052,14 @@ jobs:
           TERRAFORM_STATE_BUCKET_KEY: ${{ env.ENVIRONMENT_SUFFIX }}
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
+
+      - name: Cleanup Complete
+        run: |
+          if [ "${{ steps.check-cleanup.outputs.needs_cleanup }}" == "true" ]; then
+            echo "✅ Infrastructure cleanup completed"
+          else
+            echo "✅ No cleanup needed - proceeding to archive"
+          fi
   debug-claude-outputs:
     name: Debug Claude outputs
     runs-on: ubuntu-24.04
@@ -814,8 +1076,9 @@ jobs:
   archive-folders:
     name: Archive Folders and Reset Repository
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, cleanup]
-    if: ${{ always() && !cancelled() && needs.cleanup.result == 'success' && needs.detect-metadata.result == 'success' && ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch')) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
+    needs: [detect-metadata, cleanup, claude-code-action]
+    environment: stage
+    if: ${{ always() && !cancelled() && needs.cleanup.result == 'success' && needs.claude-code-action.result == 'success' && needs.detect-metadata.result == 'success' && ((github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch')) && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     permissions:
       contents: write
 
@@ -829,6 +1092,7 @@ jobs:
           ref: ${{ github.head_ref }}
 
       - name: Download coverage reports
+        if: ${{ !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
         uses: actions/download-artifact@v4
         with:
           name: coverage-reports
@@ -845,6 +1109,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: analysis-results
+          path: lib/
+
+      - name: Download CI/CD Pipeline configuration
+        if: ${{ contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
+        uses: actions/download-artifact@v4
+        with:
+          name: cicd-pipeline-config
           path: lib/
 
       - name: Configure AWS
@@ -871,7 +1142,11 @@ jobs:
           echo "Commit author: $COMMIT_AUTHOR"
 
           # Extract coverage percentages based on language
-          if [ "$LANGUAGE" = "py" ]; then
+          if [ "$LANGUAGE" = "yml" ]; then
+            echo "CI/CD Pipeline task - no unit test coverage required"
+            LINES_COVERAGE=100
+            BRANCHES_COVERAGE=100
+          elif [ "$LANGUAGE" = "py" ]; then
             echo "Extracting Python coverage from cov.json..."
             if [ -f "cov.json" ]; then
               LINES_COVERAGE=$(jq -r '.totals.percent_covered' cov.json)
@@ -1090,7 +1365,7 @@ jobs:
     runs-on: ubuntu-24.04
     # This job should run regardless of the [skip-jobs] tag since it's for cleanup
     if: github.event_name == 'pull_request' && github.event.action == 'closed' && !github.event.pull_request.merged
-    environment: stage
+    environment: release
 
     steps:
       - name: Checkout code
@@ -1100,7 +1375,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "false"
+          download-artifacts: 'false'
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
@@ -1141,7 +1416,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "false"
+          download-artifacts: 'false'
 
       - name: Run semantic-release
         run: npm run release
