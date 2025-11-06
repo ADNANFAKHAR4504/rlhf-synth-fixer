@@ -1125,7 +1125,7 @@ import boto3
 import cfnresponse
 import time
 
-rds = boto3.client('rds')  574:11  error  'listener' is assigned a value but never used  @typescript-eslint/no-unused-vars
+rds = boto3.client('rds')
 
 def handler(event, context):
     """
