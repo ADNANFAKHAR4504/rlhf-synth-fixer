@@ -137,7 +137,7 @@ jobs:
     name: Synth
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch' && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
     environment: dev
     permissions:
       contents: read
@@ -149,21 +149,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Skip Synth for non-CDK/CDKTF platforms
+        if: ${{ needs.detect-metadata.outputs.platform != 'cdk' && needs.detect-metadata.outputs.platform != 'cdktf' }}
+        run: |
+          echo "✅ Synth step not required for platform: ${{ needs.detect-metadata.outputs.platform }}"
+          echo "This platform does not require synthesis. Job passes automatically."
+
       - name: Setup Environment
         if: ${{ needs.detect-metadata.outputs.platform == 'cdk' || needs.detect-metadata.outputs.platform == 'cdktf' }}
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'true'
+          download-artifacts: 'false'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
-      - name: Download build artifacts (dist/)
-        if: ${{ needs.detect-metadata.outputs.language == 'ts' || needs.detect-metadata.outputs.language == 'js' }}
-        uses: actions/download-artifact@v4
-        with:
-          name: build-dist
-          path: dist
-          if-no-files-found: ignore
 
       - name: Configure AWS
         if: ${{ needs.detect-metadata.outputs.platform == 'cdk' || needs.detect-metadata.outputs.platform == 'cdktf' }}
@@ -373,7 +372,6 @@ jobs:
         with:
           name: build-dist
           path: dist
-          if-no-files-found: ignore
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
         with:
