@@ -1,8 +1,8 @@
-# Production EKS Cluster with Graviton2 Node Groups - Complete Implementation
+# Production EKS Cluster with Graviton2 Node Groups - Terraform Implementation
 
 ## Overview
 
-This solution implements a production-grade Amazon EKS cluster optimized for cost and performance using AWS Graviton2 ARM-based instances. The deployment follows AWS Well-Architected Framework principles, providing a secure, highly available, and scalable Kubernetes platform in the **us-east-2** region with comprehensive infrastructure as code using Terraform.
+This solution implements a production-grade Amazon EKS cluster optimized for cost and performance using AWS Graviton2 ARM-based instances. The deployment follows AWS Well-Architected Framework principles, providing a secure, highly available, and scalable Kubernetes platform in the **us-east-2** region with comprehensive infrastructure as code using **Terraform HCL**.
 
 ## Architecture Components
 
@@ -18,10 +18,10 @@ This solution implements a production-grade Amazon EKS cluster optimized for cos
 
 #### Compute - Graviton2 Node Groups
 - **Instance Type**: t4g.medium (AWS Graviton2 ARM64 processor)
-- **AMI**: Amazon Linux 2 EKS-optimized for ARM64
+- **AMI**: Amazon Linux 2 EKS-optimized for ARM64 (`AL2_ARM_64`)
 - **Scaling Configuration**:
   - Minimum nodes: 3
-  - Maximum nodes: 15  
+  - Maximum nodes: 15
   - Desired capacity: 3
   - Auto-scaling enabled via Cluster Autoscaler
 - **Storage**: 100GB gp3 EBS volumes per node with:
@@ -83,6 +83,7 @@ This solution implements a production-grade Amazon EKS cluster optimized for cos
 - **EBS Volumes**: Encrypted using the same KMS key
 - **Key Rotation**: Automatic key rotation enabled
 - **Deletion Protection**: 7-day recovery window
+- **Auto Scaling Service Integration**: Includes permissions for ASG service-linked role
 
 #### Endpoint Access
 - **Private Endpoint**: Enabled for internal cluster communication
@@ -160,52 +161,698 @@ lib/
 └── README.md               # Quick start and deployment guide
 ```
 
-## Implementation Details
+## Implementation Details - Terraform HCL Code
 
-### Variable Configuration
+### 1. Provider Configuration (provider.tf)
 
-All resources are parameterized for flexibility:
+```hcl
+terraform {
+  required_version = ">= 1.5.0"
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `environment_suffix` | `prod` | Unique suffix for resource naming |
-| `region` | `us-east-2` | AWS region for deployment |
-| `vpc_cidr` | `10.0.0.0/16` | VPC CIDR block |
-| `cluster_version` | `1.28` | Kubernetes version |
-| `node_instance_type` | `t4g.medium` | Graviton2 instance type |
-| `node_min_size` | `3` | Minimum nodes |
-| `node_max_size` | `15` | Maximum nodes |
-| `node_desired_size` | `3` | Initial node count |
-| `node_disk_size` | `100` | Node root volume size (GB) |
-| `authorized_cidr_blocks` | `["0.0.0.0/0"]` | CIDRs allowed to access cluster |
-| `enable_prefix_delegation` | `true` | Enable VPC CNI prefix delegation |
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
+    }
+  }
+}
 
-### Key Features
+provider "aws" {
+  region = var.region
 
-#### 1. Native AWS Integration
-- Fully managed Kubernetes control plane
-- Seamless integration with AWS services (ALB, EBS, IAM)
-- Automatic security patches and updates
+  default_tags {
+    tags = var.common_tags
+  }
+}
 
-#### 2. Security Best Practices
-- Network isolation with private subnets for nodes
-- Encryption at rest and in transit
-- IAM-based authentication and authorization
-- Security groups with minimal required access
-- No hardcoded credentials
+# Data sources
+data "aws_availability_zones" "available" {
+  state = "available"
+  filter {
+    name   = "zone-name"
+    values = ["${var.region}a", "${var.region}b", "${var.region}c"]
+  }
+}
 
-#### 3. Production Readiness
-- Multi-AZ deployment for high availability
-- Auto-scaling for dynamic workload handling
-- CloudWatch logging for troubleshooting
-- Modular Terraform code for maintainability
-- Comprehensive tagging strategy
+data "aws_caller_identity" "current" {}
 
-#### 4. Infrastructure as Code
-- 100% declarative infrastructure
-- Version controlled configuration
-- Reproducible deployments
-- Easy disaster recovery
+# Local variables
+locals {
+  cluster_name = "eks-cluster-${var.environment_suffix}"
+  azs          = slice(data.aws_availability_zones.available.names, 0, 3)
+
+  tags = merge(
+    var.common_tags,
+    {
+      "kubernetes.io/cluster/${local.cluster_name}" = "shared"
+    }
+  )
+}
+```
+
+### 2. Variables Configuration (variables.tf)
+
+```hcl
+variable "environment_suffix" {
+  description = "Unique suffix for resource naming to enable multiple deployments"
+  type        = string
+  default     = "prod"
+}
+
+variable "region" {
+  description = "AWS region for EKS cluster deployment"
+  type        = string
+  default     = "us-east-2"
+}
+
+variable "vpc_cidr" {
+  description = "CIDR block for VPC"
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "cluster_version" {
+  description = "Kubernetes version for EKS cluster"
+  type        = string
+  default     = "1.28"
+}
+
+variable "node_instance_type" {
+  description = "EC2 instance type for EKS nodes (Graviton2 ARM)"
+  type        = string
+  default     = "t4g.medium"
+}
+
+variable "node_min_size" {
+  description = "Minimum number of nodes in the node group"
+  type        = number
+  default     = 3
+}
+
+variable "node_max_size" {
+  description = "Maximum number of nodes in the node group"
+  type        = number
+  default     = 15
+}
+
+variable "node_desired_size" {
+  description = "Desired number of nodes in the node group"
+  type        = number
+  default     = 3
+}
+
+variable "node_disk_size" {
+  description = "Root volume size for EKS nodes in GB"
+  type        = number
+  default     = 100
+}
+
+variable "authorized_cidr_blocks" {
+  description = "CIDR blocks allowed to access EKS public endpoint"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
+variable "enable_prefix_delegation" {
+  description = "Enable VPC CNI prefix delegation for increased pod density"
+  type        = bool
+  default     = true
+}
+
+variable "common_tags" {
+  description = "Common tags to apply to all resources"
+  type        = map(string)
+  default = {
+    Environment = "production"
+    ManagedBy   = "terraform"
+  }
+}
+```
+
+### 3. VPC and Networking (vpc.tf)
+
+```hcl
+# VPC
+resource "aws_vpc" "main" {
+  cidr_block           = var.vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+
+  tags = merge(
+    local.tags,
+    {
+      Name = "vpc-${var.environment_suffix}"
+    }
+  )
+}
+
+# Internet Gateway
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "igw-${var.environment_suffix}"
+  }
+}
+
+# Public Subnets (3 across 3 AZs)
+resource "aws_subnet" "public" {
+  count = 3
+
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index)
+  availability_zone       = local.azs[count.index]
+  map_public_ip_on_launch = true
+
+  tags = merge(
+    local.tags,
+    {
+      Name                                          = "public-subnet-${count.index + 1}-${var.environment_suffix}"
+      "kubernetes.io/role/elb"                      = "1"
+      "kubernetes.io/cluster/${local.cluster_name}" = "shared"
+    }
+  )
+}
+
+# Private Subnets (3 across 3 AZs)
+resource "aws_subnet" "private" {
+  count = 3
+
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 10)
+  availability_zone = local.azs[count.index]
+
+  tags = merge(
+    local.tags,
+    {
+      Name                                          = "private-subnet-${count.index + 1}-${var.environment_suffix}"
+      "kubernetes.io/role/internal-elb"             = "1"
+      "kubernetes.io/cluster/${local.cluster_name}" = "shared"
+    }
+  )
+}
+
+# Elastic IPs for NAT Gateways
+resource "aws_eip" "nat" {
+  count  = 3
+  domain = "vpc"
+
+  tags = {
+    Name = "nat-eip-${count.index + 1}-${var.environment_suffix}"
+  }
+
+  depends_on = [aws_internet_gateway.main]
+}
+
+# NAT Gateways (one per AZ for high availability)
+resource "aws_nat_gateway" "main" {
+  count = 3
+
+  allocation_id = aws_eip.nat[count.index].id
+  subnet_id     = aws_subnet.public[count.index].id
+
+  tags = {
+    Name = "nat-gateway-${count.index + 1}-${var.environment_suffix}"
+  }
+
+  depends_on = [aws_internet_gateway.main]
+}
+
+# Public Route Table
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
+
+  tags = {
+    Name = "public-rt-${var.environment_suffix}"
+  }
+}
+
+# Public Route Table Associations
+resource "aws_route_table_association" "public" {
+  count = 3
+
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}
+
+# Private Route Tables (one per AZ)
+resource "aws_route_table" "private" {
+  count  = 3
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main[count.index].id
+  }
+
+  tags = {
+    Name = "private-rt-${count.index + 1}-${var.environment_suffix}"
+  }
+}
+
+# Private Route Table Associations
+resource "aws_route_table_association" "private" {
+  count = 3
+
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private[count.index].id
+}
+```
+
+### 4. EKS Cluster with KMS and OIDC (eks-cluster.tf)
+
+```hcl
+# CloudWatch Log Group for EKS Control Plane
+resource "aws_cloudwatch_log_group" "eks" {
+  name              = "/aws/eks/${local.cluster_name}/cluster"
+  retention_in_days = 7
+
+  tags = {
+    Name = "eks-logs-${var.environment_suffix}"
+  }
+}
+
+# EKS Cluster Security Group
+resource "aws_security_group" "cluster" {
+  name_prefix = "eks-cluster-sg-${var.environment_suffix}-"
+  description = "Security group for EKS cluster control plane"
+  vpc_id      = aws_vpc.main.id
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound traffic"
+  }
+
+  tags = {
+    Name = "eks-cluster-sg-${var.environment_suffix}"
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# KMS Key for EKS Encryption
+resource "aws_kms_key" "eks" {
+  description             = "EKS Secret Encryption Key for ${var.environment_suffix}"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow service-linked role use of the key"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow attachment of persistent resources"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+        }
+        Action = [
+          "kms:CreateGrant"
+        ]
+        Resource = "*"
+        Condition = {
+          Bool = {
+            "kms:GrantIsForAWSResource" = "true"
+          }
+        }
+      },
+      {
+        Sid    = "Allow EKS to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = "eks.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = {
+    Name = "eks-key-${var.environment_suffix}"
+  }
+}
+
+resource "aws_kms_alias" "eks" {
+  name          = "alias/eks-${var.environment_suffix}"
+  target_key_id = aws_kms_key.eks.key_id
+}
+
+# EKS Cluster
+resource "aws_eks_cluster" "main" {
+  name     = local.cluster_name
+  role_arn = aws_iam_role.cluster.arn
+  version  = var.cluster_version
+
+  vpc_config {
+    subnet_ids              = concat(aws_subnet.private[*].id, aws_subnet.public[*].id)
+    endpoint_private_access = true
+    endpoint_public_access  = true
+    public_access_cidrs     = var.authorized_cidr_blocks
+    security_group_ids      = [aws_security_group.cluster.id]
+  }
+
+  enabled_cluster_log_types = ["api", "audit"]
+
+  encryption_config {
+    provider {
+      key_arn = aws_kms_key.eks.arn
+    }
+    resources = ["secrets"]
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.cluster_policy,
+    aws_iam_role_policy_attachment.cluster_vpc_resource_controller,
+    aws_cloudwatch_log_group.eks
+  ]
+
+  tags = {
+    Name = local.cluster_name
+  }
+}
+
+# OIDC Provider for EKS (IRSA)
+data "tls_certificate" "cluster" {
+  url = aws_eks_cluster.main.identity[0].oidc[0].issuer
+}
+
+resource "aws_iam_openid_connect_provider" "cluster" {
+  client_id_list  = ["sts.amazonaws.com"]
+  thumbprint_list = [data.tls_certificate.cluster.certificates[0].sha1_fingerprint]
+  url             = aws_eks_cluster.main.identity[0].oidc[0].issuer
+
+  tags = {
+    Name = "eks-oidc-${var.environment_suffix}"
+  }
+}
+```
+
+### 5. EKS Node Group with Launch Template (eks-node-group.tf)
+
+```hcl
+# Launch Template for EKS Nodes
+resource "aws_launch_template" "nodes" {
+  name_prefix = "eks-node-${var.environment_suffix}-"
+  description = "Launch template for EKS managed node group"
+
+  block_device_mappings {
+    device_name = "/dev/xvda"
+
+    ebs {
+      volume_size           = var.node_disk_size
+      volume_type           = "gp3"
+      iops                  = 3000
+      throughput            = 125
+      encrypted             = true
+      kms_key_id            = aws_kms_key.eks.arn
+      delete_on_termination = true
+    }
+  }
+
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 2
+  }
+
+  monitoring {
+    enabled = true
+  }
+
+  tag_specifications {
+    resource_type = "instance"
+
+    tags = merge(
+      local.tags,
+      {
+        Name = "eks-node-${var.environment_suffix}"
+      }
+    )
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# EKS Managed Node Group
+resource "aws_eks_node_group" "main" {
+  cluster_name    = aws_eks_cluster.main.name
+  node_group_name = "node-group-${var.environment_suffix}"
+  node_role_arn   = aws_iam_role.node.arn
+  subnet_ids      = aws_subnet.private[*].id
+  instance_types  = [var.node_instance_type]
+  ami_type        = "AL2_ARM_64"
+
+  scaling_config {
+    min_size     = var.node_min_size
+    max_size     = var.node_max_size
+    desired_size = var.node_desired_size
+  }
+
+  update_config {
+    max_unavailable_percentage = 33
+  }
+
+  launch_template {
+    id      = aws_launch_template.nodes.id
+    version = "$Latest"
+  }
+
+  labels = {
+    role        = "worker"
+    environment = var.environment_suffix
+  }
+
+  tags = {
+    Name                                              = "eks-node-group-${var.environment_suffix}"
+    "k8s.io/cluster-autoscaler/${local.cluster_name}" = "owned"
+    "k8s.io/cluster-autoscaler/enabled"               = "true"
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.node_policy,
+    aws_iam_role_policy_attachment.node_cni_policy,
+    aws_iam_role_policy_attachment.node_container_registry,
+  ]
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes        = [scaling_config[0].desired_size]
+  }
+}
+```
+
+### 6. Cluster Autoscaler IAM Role (iam-autoscaler.tf)
+
+```hcl
+# Cluster Autoscaler IAM Role for Service Account (IRSA)
+resource "aws_iam_role" "cluster_autoscaler" {
+  name_prefix = "eks-cluster-autoscaler-${var.environment_suffix}-"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Federated = aws_iam_openid_connect_provider.cluster.arn
+      }
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${replace(aws_iam_openid_connect_provider.cluster.url, "https://", "")}:sub" = "system:serviceaccount:kube-system:cluster-autoscaler"
+          "${replace(aws_iam_openid_connect_provider.cluster.url, "https://", "")}:aud" = "sts.amazonaws.com"
+        }
+      }
+    }]
+  })
+
+  tags = {
+    Name = "eks-cluster-autoscaler-role-${var.environment_suffix}"
+  }
+}
+
+resource "aws_iam_role_policy" "cluster_autoscaler" {
+  name_prefix = "eks-cluster-autoscaler-policy-"
+  role        = aws_iam_role.cluster_autoscaler.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "autoscaling:DescribeAutoScalingGroups",
+          "autoscaling:DescribeAutoScalingInstances",
+          "autoscaling:DescribeLaunchConfigurations",
+          "autoscaling:DescribeScalingActivities",
+          "autoscaling:DescribeTags",
+          "ec2:DescribeInstanceTypes",
+          "ec2:DescribeLaunchTemplateVersions"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "autoscaling:SetDesiredCapacity",
+          "autoscaling:TerminateInstanceInAutoScalingGroup",
+          "ec2:DescribeImages",
+          "ec2:GetInstanceTypesFromInstanceRequirements",
+          "eks:DescribeNodegroup"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+```
+
+### 7. VPC CNI Addon with Prefix Delegation (vpc-cni-addon.tf)
+
+```hcl
+# VPC CNI Add-on with prefix delegation
+resource "aws_eks_addon" "vpc_cni" {
+  cluster_name                = aws_eks_cluster.main.name
+  addon_name                  = "vpc-cni"
+  addon_version               = "v1.18.0-eksbuild.1"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  configuration_values = jsonencode({
+    env = {
+      ENABLE_PREFIX_DELEGATION = "true"
+      WARM_PREFIX_TARGET       = "1"
+      ENABLE_POD_ENI           = "false"
+    }
+  })
+
+  depends_on = [aws_eks_node_group.main]
+
+  tags = {
+    Name = "vpc-cni-addon-${var.environment_suffix}"
+  }
+}
+
+# CoreDNS Add-on
+resource "aws_eks_addon" "coredns" {
+  cluster_name                = aws_eks_cluster.main.name
+  addon_name                  = "coredns"
+  addon_version               = "v1.10.1-eksbuild.38"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  depends_on = [aws_eks_node_group.main]
+
+  tags = {
+    Name = "coredns-addon-${var.environment_suffix}"
+  }
+}
+
+# kube-proxy Add-on
+resource "aws_eks_addon" "kube_proxy" {
+  cluster_name                = aws_eks_cluster.main.name
+  addon_name                  = "kube-proxy"
+  addon_version               = "v1.28.1-eksbuild.1"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  depends_on = [aws_eks_node_group.main]
+
+  tags = {
+    Name = "kube-proxy-addon-${var.environment_suffix}"
+  }
+}
+```
+
+## Key Features Implemented
+
+### 1. Multi-AZ High Availability
+- VPC spans exactly 3 availability zones in us-east-2
+- 3 public subnets and 3 private subnets
+- 3 NAT gateways (one per AZ) for fault tolerance
+- Node group distributes nodes across all 3 AZs
+
+### 2. Graviton2 ARM Architecture
+- Uses `t4g.medium` instance type (Graviton2 processor)
+- AMI type set to `AL2_ARM_64` for ARM64 optimization
+- Up to 20% better price-performance compared to x86
+
+### 3. Advanced Storage Configuration
+- **gp3 EBS volumes** with custom IOPS (3000) and throughput (125 MiB/s)
+- **KMS encryption** for all EBS volumes
+- **IMDSv2 enforced** (`http_tokens = "required"`) for enhanced security
+- Monitoring enabled on all instances
+
+### 4. VPC CNI Prefix Delegation
+- **ENABLE_PREFIX_DELEGATION** set to `true`
+- Dramatically increases pod density per node
+- **WARM_PREFIX_TARGET** set to 1 for efficient IP allocation
+- Configured via EKS addon with custom configuration values
+
+### 5. IRSA (IAM Roles for Service Accounts)
+- OIDC provider configured for cluster
+- Cluster Autoscaler role with proper trust policy
+- Service account scoped to `system:serviceaccount:kube-system:cluster-autoscaler`
+- Eliminates need for long-lived AWS credentials in pods
+
+### 6. KMS Encryption with Auto Scaling Integration
+- Customer-managed KMS key for EKS secrets
+- Automatic key rotation enabled
+- **Critical Fix**: Includes permissions for Auto Scaling service-linked role
+- Prevents encryption errors when Auto Scaling Group creates encrypted volumes
+
+### 7. Security Best Practices
+- Private subnets for all worker nodes
+- Public endpoint access configurable via CIDR whitelist
+- Security groups with least privilege
+- IMDSv2 enforced on all instances
+- CloudWatch logging for audit trail
+
+### 8. Cost Optimization
+- Selective logging (only `api` and `audit` logs)
+- gp3 volumes instead of gp2 for better price-performance
+- 7-day log retention to minimize storage costs
+- Graviton2 instances for lower compute costs
+- Efficient IP allocation via prefix delegation
 
 ## Deployment Instructions
 
@@ -278,16 +925,15 @@ export TF_VAR_environment_suffix=${ENVIRONMENT_SUFFIX}
 - **Easy Cleanup**: Destroy specific environment without affecting others
 - **Testing**: Integration tests validate correct environment
 
-**Important**: The `scripts/deploy.sh` script automatically handles the `TF_VAR_environment_suffix` export. Manual deployments should set this variable or accept the default "prod" value.
-
 ### Post-Deployment Configuration
 
 #### Install Cluster Autoscaler
 
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/master/cluster-autoscaler/cloudprovider/aws/examples/cluster-autoscaler-autodiscover.yaml
+
 kubectl -n kube-system annotate serviceaccount cluster-autoscaler \
-  eks.amazonaws.com/role-arn=arn:aws:iam::ACCOUNT_ID:role/cluster-autoscaler-role
+  eks.amazonaws.com/role-arn=$(terraform output -raw cluster_autoscaler_role_arn)
 ```
 
 #### Deploy Sample Application
@@ -309,20 +955,14 @@ The following outputs are provided for easy cluster access:
 | `cluster_certificate_authority_data` | Base64-encoded CA certificate for cluster authentication |
 | `cluster_security_group_id` | Security group ID attached to the EKS cluster |
 | `cluster_oidc_issuer_url` | OIDC issuer URL for the EKS cluster |
-| `oidc_provider_url` | OIDC provider URL for IRSA (alias for cluster_oidc_issuer_url) |
 | `oidc_provider_arn` | ARN of the OIDC provider for IAM Roles for Service Accounts |
 | `cluster_autoscaler_role_arn` | IAM role ARN for cluster autoscaler with IRSA |
-| `cluster_autoscaler_policy_arn` | IAM policy reference for cluster autoscaler permissions |
 | `node_group_id` | Managed node group unique identifier |
-| `node_group_name` | Managed node group name |
-| `node_group_arn` | ARN of the EKS managed node group |
-| `node_group_status` | Current status of the node group (ACTIVE, etc.) |
 | `node_role_arn` | IAM role ARN for EKS worker nodes |
 | `vpc_id` | VPC ID where EKS cluster is deployed |
 | `private_subnet_ids` | List of private subnet IDs (JSON array) |
 | `public_subnet_ids` | List of public subnet IDs (JSON array) |
 | `kubectl_config_command` | Command to configure kubectl for this cluster |
-| `cloudwatch_log_group_name` | CloudWatch log group name for EKS control plane logs |
 
 ## Testing
 
@@ -332,39 +972,11 @@ Run comprehensive validation of Terraform configuration files:
 npm test -- terraform.unit.test.ts
 ```
 
-**Test Coverage**:
-- 134 comprehensive tests validating Terraform configuration
-- File structure validation (all required .tf files and documentation)
-- Provider and variable configuration checks
-- VPC and networking configuration validation
-- IAM roles and policies verification (cluster, nodes, autoscaler)
-- EKS cluster configuration validation (version, logging, encryption)
-- Node group configuration (Graviton2, scaling, storage)
-- VPC CNI addon with prefix delegation
-- Security best practices validation (encryption, IRSA, least privilege)
-- Cost optimization verification (Graviton2, gp3, selective logging)
-- High availability checks (multi-AZ, NAT gateways)
-- Resource tagging and naming conventions
-- README documentation completeness
-
 ### Integration Tests
 Validate deployed infrastructure using actual AWS resources:
 ```bash
 npm test -- terraform.int.test.ts
 ```
-
-**Test Coverage**:
-- 24 tests validating deployed infrastructure
-- Infrastructure outputs validation (all critical outputs present)
-- EKS cluster endpoint and certificate authority verification
-- OIDC provider configuration for IRSA
-- VPC and subnet deployment across 3 AZs
-- Node group configuration (name, ARN, status)
-- IAM role ARNs validation (cluster autoscaler, nodes)
-- Region verification (us-east-2)
-- Graviton2 ARM architecture validation
-- Security configuration checks
-- Output data type validation
 
 ### Running All Tests
 ```bash
@@ -373,16 +985,121 @@ npm test
 
 # Run specific test suite
 npm test -- terraform.unit.test.ts
-npm test -- terraform.int.test.ts
-
-# Run with verbose output
-npm test -- --verbose
 ```
 
-### Test Results
-- **Unit Tests**: 134/134 passing (100%)
-- **Integration Tests**: 24/24 passing (100%)
-- **Total**: 158/158 tests passing (100%)
+## Notable Implementation Highlights
+
+### 1. Critical KMS Key Policy Fix
+The KMS key policy includes permissions for the Auto Scaling service-linked role, which is essential for EKS node groups:
+
+```hcl
+{
+  Sid    = "Allow service-linked role use of the key"
+  Effect = "Allow"
+  Principal = {
+    AWS = "arn:aws:iam::${account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+  }
+  Action = [
+    "kms:Decrypt",
+    "kms:Encrypt",
+    "kms:ReEncrypt*",
+    "kms:GenerateDataKey*",
+    "kms:CreateGrant"
+  ]
+  Resource = "*"
+}
+```
+
+This prevents encryption errors when the Auto Scaling Group attempts to create encrypted EBS volumes.
+
+### 2. VPC CNI Prefix Delegation Configuration
+Configured via EKS addon with inline configuration values:
+
+```hcl
+configuration_values = jsonencode({
+  env = {
+    ENABLE_PREFIX_DELEGATION = "true"
+    WARM_PREFIX_TARGET       = "1"
+    ENABLE_POD_ENI           = "false"
+  }
+})
+```
+
+This significantly increases pod density from ~29 pods per t4g.medium to ~110 pods.
+
+### 3. IRSA Trust Policy for Cluster Autoscaler
+The trust policy properly scopes the role to the specific service account:
+
+```hcl
+Condition = {
+  StringEquals = {
+    "${oidc_provider}:sub" = "system:serviceaccount:kube-system:cluster-autoscaler"
+    "${oidc_provider}:aud" = "sts.amazonaws.com"
+  }
+}
+```
+
+### 4. Multi-AZ NAT Gateway Design
+Each availability zone has its own NAT gateway and route table:
+
+```hcl
+resource "aws_nat_gateway" "main" {
+  count = 3
+  allocation_id = aws_eip.nat[count.index].id
+  subnet_id     = aws_subnet.public[count.index].id
+}
+
+resource "aws_route_table" "private" {
+  count  = 3
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main[count.index].id
+  }
+}
+```
+
+This prevents a single NAT gateway from being a single point of failure.
+
+## Best Practices Implemented
+
+### Terraform Best Practices
+- **Modularity**: Separate files for each logical component
+- **Variables**: All values parameterized for reusability
+- **Outputs**: Comprehensive outputs for integration
+- **State Management**: Compatible with remote state (S3 + DynamoDB)
+- **Resource Dependencies**: Explicit `depends_on` where needed
+- **Lifecycle Management**: `create_before_destroy` and `ignore_changes` used appropriately
+
+### AWS Well-Architected Framework
+- **Operational Excellence**: IaC, CloudWatch logging, automated testing
+- **Security**: Encryption at rest/transit, IAM least privilege, IRSA, IMDSv2
+- **Reliability**: Multi-AZ, auto-scaling, managed services
+- **Performance Efficiency**: Graviton2, prefix delegation, gp3 volumes
+- **Cost Optimization**: ARM instances, selective logging, right-sizing
+
+### Kubernetes Best Practices
+- **IRSA**: Service accounts mapped to IAM roles
+- **Network Policies**: VPC CNI supports network policies
+- **Resource Limits**: Infrastructure ready for pod resource constraints
+- **Logging**: Control plane logs in CloudWatch
+- **Monitoring**: Compatible with Container Insights
+
+## Cost Estimation
+
+### Monthly Cost Breakdown (Approximate)
+
+| Resource | Estimated Cost |
+|----------|---------------|
+| EKS Cluster | $73/month |
+| EC2 Instances (3x t4g.medium) | ~$60/month |
+| EBS Storage (3x 100GB gp3) | ~$30/month |
+| NAT Gateways (3) | ~$100/month |
+| Data Transfer | Variable |
+| **Total** | **~$263/month** |
+
+*Note: Costs are estimates and vary by usage, region, and AWS pricing changes*
 
 ## Maintenance & Operations
 
@@ -402,8 +1119,6 @@ terraform apply -var="node_desired_size=5"
 terraform apply -var="cluster_version=1.29"
 ```
 
-**Node AMI Updates**: Managed automatically by AWS or via launch template updates
-
 ### Monitoring
 
 **View Cluster Logs**:
@@ -414,966 +1129,25 @@ aws logs tail /aws/eks/eks-cluster-${ENVIRONMENT_SUFFIX}/cluster --follow
 **Check Node Health**:
 ```bash
 kubectl get nodes -o wide
-kubectl describe nodes
 ```
-
-### Backup & Disaster Recovery
-
-**Backup Strategy**:
-- EBS volumes backed up via AWS Backup (can be configured)
-- etcd automatically backed up by AWS
-- Infrastructure code in version control
-
-**Recovery**:
-```bash
-terraform destroy  # Remove old infrastructure
-terraform apply    # Redeploy from code
-```
-
-## Security Considerations
-
-### Network Security
-- Worker nodes in private subnets only
-- Public endpoint access controllable via CIDR whitelist
-- Security groups follow least privilege
-
-### Data Security
-- KMS encryption for all sensitive data
-- Secrets Manager integration supported
-- No plaintext credentials in code or logs
-
-### Access Security
-- IAM-based authentication
-- RBAC for Kubernetes authorization
-- IRSA for pod-level IAM permissions
-
-### Compliance
-- Infrastructure as code for audit trails
-- CloudWatch logging for security analysis
-- Tagging for cost allocation and compliance
 
 ## Troubleshooting
 
-### Common Issues and Solutions
-
-#### Cluster Creation Issues
-
-**Issue**: EKS cluster creation times out or fails
-**Symptoms**:
-- Terraform apply hangs for >20 minutes on cluster creation
-- Error: "ResourceNotReady: failed waiting for successful resource state"
-
-**Solutions**:
-1. Check VPC and subnet configuration:
-   ```bash
-   aws ec2 describe-subnets --subnet-ids subnet-xxx
-   aws ec2 describe-route-tables --filters "Name=association.subnet-id,Values=subnet-xxx"
-   ```
-2. Verify IAM role trust relationships:
-   ```bash
-   aws iam get-role --role-name eks-cluster-role-${ENVIRONMENT_SUFFIX}
-   ```
-3. Check service limits:
-   ```bash
-   aws service-quotas get-service-quota --service-code eks --quota-code L-1194D53C
-   ```
-4. Review CloudWatch logs for cluster creation events
-
-**Issue**: Nodes not joining cluster
-**Symptoms**:
-- Nodes show as "NotReady" in `kubectl get nodes`
-- Auto Scaling Group shows healthy instances but cluster shows 0 nodes
-
-**Solutions**:
-1. Verify IAM role permissions:
-   ```bash
-   aws iam list-attached-role-policies --role-name eks-node-role-${ENVIRONMENT_SUFFIX}
-   ```
-2. Check security group ingress/egress rules:
-   ```bash
-   aws ec2 describe-security-groups --group-ids sg-xxx
-   ```
-3. Verify aws-auth ConfigMap:
-   ```bash
-   kubectl get configmap -n kube-system aws-auth -o yaml
-   ```
-4. Check node group launch template user data:
-   ```bash
-   aws ec2 describe-launch-template-versions --launch-template-id lt-xxx
-   ```
-
-**Issue**: Pods not scheduling
-**Symptoms**:
-- Pods stuck in "Pending" state
-- Events show "0/3 nodes are available: insufficient cpu/memory"
-
-**Solutions**:
-1. Check node capacity:
-   ```bash
-   kubectl describe nodes
-   kubectl top nodes  # Requires metrics-server
-   ```
-2. Review pod resource requests:
-   ```bash
-   kubectl describe pod <pod-name>
-   ```
-3. Check for taints on nodes:
-   ```bash
-   kubectl get nodes -o json | jq '.items[].spec.taints'
-   ```
-4. Scale up node group if needed:
-   ```bash
-   aws eks update-nodegroup-config --cluster-name eks-cluster-${ENVIRONMENT_SUFFIX} \
-     --nodegroup-name node-group-${ENVIRONMENT_SUFFIX} --scaling-config desiredSize=5
-   ```
-
-**Issue**: Unable to pull images
-**Symptoms**:
-- ImagePullBackOff errors
-- "pull access denied" or "unauthorized" errors
-
-**Solutions**:
-1. Verify AmazonEC2ContainerRegistryReadOnly policy:
-   ```bash
-   aws iam list-attached-role-policies --role-name eks-node-role-${ENVIRONMENT_SUFFIX}
-   ```
-2. Check ECR repository permissions:
-   ```bash
-   aws ecr describe-repositories
-   aws ecr get-login-password --region us-east-2
-   ```
-3. Verify VPC endpoints for ECR (if using private subnets only):
-   ```bash
-   aws ec2 describe-vpc-endpoints --filters "Name=vpc-id,Values=vpc-xxx"
-   ```
-
-#### Networking Issues
-
-**Issue**: Pods can't reach external services
-**Symptoms**:
-- DNS resolution failures
-- Timeout errors connecting to external APIs
-
-**Solutions**:
-1. Check VPC DNS settings:
-   ```bash
-   aws ec2 describe-vpc-attribute --vpc-id vpc-xxx --attribute enableDnsSupport
-   aws ec2 describe-vpc-attribute --vpc-id vpc-xxx --attribute enableDnsHostnames
-   ```
-2. Verify NAT Gateway status and routes:
-   ```bash
-   aws ec2 describe-nat-gateways --filter "Name=vpc-id,Values=vpc-xxx"
-   aws ec2 describe-route-tables --filters "Name=vpc-id,Values=vpc-xxx"
-   ```
-3. Test DNS from a pod:
-   ```bash
-   kubectl run -it --rm debug --image=busybox --restart=Never -- nslookup google.com
-   ```
-4. Check CoreDNS pods:
-   ```bash
-   kubectl get pods -n kube-system -l k8s-app=kube-dns
-   kubectl logs -n kube-system -l k8s-app=kube-dns
-   ```
-
-**Issue**: Service load balancers not creating
-**Symptoms**:
-- LoadBalancer service stuck in "Pending" state
-- No external IP assigned
-
-**Solutions**:
-1. Check AWS Load Balancer Controller:
-   ```bash
-   kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
-   ```
-2. Verify subnet tags for load balancer discovery:
-   ```bash
-   # Public subnets need: kubernetes.io/role/elb = 1
-   # Private subnets need: kubernetes.io/role/internal-elb = 1
-   aws ec2 describe-subnets --filters "Name=tag:kubernetes.io/role/elb,Values=1"
-   ```
-3. Review service annotations and events:
-   ```bash
-   kubectl describe service <service-name>
-   ```
-
-#### OIDC and IRSA Issues
-
-**Issue**: Pods can't assume IAM roles
-**Symptoms**:
-- "AccessDenied" errors when accessing AWS services
-- ServiceAccount annotations present but role not assumed
-
-**Solutions**:
-1. Verify OIDC provider exists:
-   ```bash
-   aws iam list-open-id-connect-providers
-   ```
-2. Check ServiceAccount annotation:
-   ```bash
-   kubectl describe serviceaccount <sa-name> -n <namespace>
-   ```
-3. Verify IAM role trust policy:
-   ```bash
-   aws iam get-role --role-name <role-name> --query 'Role.AssumeRolePolicyDocument'
-   ```
-4. Test from pod:
-   ```bash
-   kubectl exec -it <pod-name> -- env | grep AWS
-   ```
-
-### Debug Commands
-
-#### Cluster Health Checks
-
-```bash
-# Check cluster status and endpoint
-aws eks describe-cluster --name eks-cluster-${ENVIRONMENT_SUFFIX} \
-  --query 'cluster.[status,endpoint,version]' --output table
-
-# View cluster health
-aws eks describe-cluster --name eks-cluster-${ENVIRONMENT_SUFFIX} \
-  --query 'cluster.health' --output json
-
-# List all resources in cluster
-kubectl get all --all-namespaces
-
-# Check cluster events
-kubectl get events --all-namespaces --sort-by='.lastTimestamp'
-```
-
-#### Node Diagnostics
-
-```bash
-# View node group details
-aws eks describe-nodegroup \
-  --cluster-name eks-cluster-${ENVIRONMENT_SUFFIX} \
-  --nodegroup-name node-group-${ENVIRONMENT_SUFFIX}
-
-# Check node status and capacity
-kubectl get nodes -o wide
-kubectl describe nodes
-
-# View node conditions
-kubectl get nodes -o json | jq '.items[] | {name:.metadata.name, conditions:.status.conditions}'
-
-# Check node allocatable resources
-kubectl get nodes -o json | jq '.items[] | {name:.metadata.name, allocatable:.status.allocatable}'
-```
-
-#### IAM and Authentication
-
-```bash
-# Check IAM authenticator
-kubectl get configmap -n kube-system aws-auth -o yaml
-
-# Verify OIDC provider
-aws eks describe-cluster --name eks-cluster-${ENVIRONMENT_SUFFIX} \
-  --query 'cluster.identity.oidc.issuer' --output text
-
-# List IAM roles
-aws iam list-roles --query 'Roles[?contains(RoleName, `eks`)].[RoleName,Arn]' --output table
-```
-
-#### Networking Diagnostics
-
-```bash
-# View VPC CNI logs
-kubectl logs -n kube-system -l k8s-app=aws-node --tail=100
-
-# Check VPC CNI configuration
-kubectl get daemonset -n kube-system aws-node -o yaml
-
-# View CoreDNS configuration
-kubectl get configmap -n kube-system coredns -o yaml
-
-# Test pod networking
-kubectl run -it --rm debug --image=nicolaka/netshoot --restart=Never -- bash
-# Inside pod: ping, curl, nslookup, traceroute, etc.
-```
-
-#### Storage and Persistent Volumes
-
-```bash
-# Check EBS CSI driver
-kubectl get pods -n kube-system -l app=ebs-csi-controller
-
-# View storage classes
-kubectl get storageclasses
-
-# Check persistent volumes
-kubectl get pv,pvc --all-namespaces
-
-# Describe volume attachment issues
-kubectl describe pvc <pvc-name> -n <namespace>
-```
-
-#### Logs and Monitoring
-
-```bash
-# View control plane logs in CloudWatch
-aws logs tail /aws/eks/eks-cluster-${ENVIRONMENT_SUFFIX}/cluster --follow
-
-# Get pod logs
-kubectl logs <pod-name> -n <namespace> --tail=100 --follow
-
-# View previous container logs (if crashed)
-kubectl logs <pod-name> -n <namespace> --previous
-
-# Get logs from all containers in a pod
-kubectl logs <pod-name> -n <namespace> --all-containers=true
-```
-
-#### Performance Troubleshooting
-
-```bash
-# Check cluster metrics (requires metrics-server)
-kubectl top nodes
-kubectl top pods --all-namespaces
-
-# View resource usage per namespace
-kubectl top pods --all-namespaces --sort-by=cpu
-kubectl top pods --all-namespaces --sort-by=memory
-
-# Check for resource constraints
-kubectl describe nodes | grep -A 5 "Allocated resources"
-
-# View pod quality of service class
-kubectl get pods --all-namespaces -o custom-columns=NAME:.metadata.name,NAMESPACE:.metadata.namespace,QOS:.status.qosClass
-```
-
-## Performance Tuning and Optimization
-
-### Cluster Performance Optimization
-
-#### Pod Density and IP Management
-
-**VPC CNI Prefix Delegation** (Already Enabled):
-- Increases maximum pods per node from ~29 to ~110 for t4g.medium
-- Allocates /28 prefixes instead of individual IPs
-- Significantly reduces IP exhaustion issues
-
-**Enable Prefix Delegation Verification**:
-```bash
-kubectl set env daemonset aws-node -n kube-system ENABLE_PREFIX_DELEGATION=true
-kubectl set env daemonset aws-node -n kube-system WARM_PREFIX_TARGET=1
-```
-
-**Monitor IP Usage**:
-```bash
-kubectl get nodes -o json | jq '.items[] | {name:.metadata.name, podCIDR:.spec.podCIDR, allocatable:.status.allocatable.pods}'
-```
-
-#### Node Performance Tuning
-
-**Kernel Parameters for High-Performance Workloads**:
-```yaml
-# Add to node user data or use DaemonSet
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: node-tuning
-  namespace: kube-system
-data:
-  tune.sh: |
-    #!/bin/bash
-    # Increase file descriptor limits
-    echo "fs.file-max = 2097152" >> /etc/sysctl.conf
-    # Optimize network stack
-    echo "net.core.somaxconn = 32768" >> /etc/sysctl.conf
-    echo "net.ipv4.tcp_max_syn_backlog = 8192" >> /etc/sysctl.conf
-    sysctl -p
-```
-
-**Resource Reservations**:
-```bash
-# Check current reservations
-kubectl describe node | grep -A 10 "Allocated resources"
-
-# Adjust kubelet reservations if needed (in launch template user data)
---system-reserved=cpu=250m,memory=1Gi,ephemeral-storage=1Gi
---kube-reserved=cpu=250m,memory=1Gi,ephemeral-storage=1Gi
-```
-
-#### Application Performance
-
-**Pod Resource Requests and Limits**:
-```yaml
-# Best practice: Set both requests and limits
-resources:
-  requests:
-    cpu: "500m"      # Guaranteed CPU
-    memory: "512Mi"  # Guaranteed memory
-  limits:
-    cpu: "1000m"     # Maximum CPU (throttled if exceeded)
-    memory: "1Gi"    # Maximum memory (OOMKilled if exceeded)
-```
-
-**Quality of Service Classes**:
-- **Guaranteed**: requests == limits (highest priority)
-- **Burstable**: requests < limits (medium priority)
-- **BestEffort**: no requests/limits (lowest priority, first to evict)
-
-**Horizontal Pod Autoscaler (HPA)**:
-```yaml
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: app-hpa
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: my-app
-  minReplicas: 2
-  maxReplicas: 10
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
-  - type: Resource
-    resource:
-      name: memory
-      target:
-        type: Utilization
-        averageUtilization: 80
-```
-
-### Network Performance
-
-#### DNS Optimization
-
-**CoreDNS Performance Tuning**:
-```yaml
-# Adjust CoreDNS replicas based on cluster size
-kubectl scale deployment coredns -n kube-system --replicas=3
-
-# Enable CoreDNS caching
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: coredns
-  namespace: kube-system
-data:
-  Corefile: |
-    .:53 {
-        errors
-        health {
-           lameduck 5s
-        }
-        ready
-        kubernetes cluster.local in-addr.arpa ip6.arpa {
-          pods insecure
-          fallthrough in-addr.arpa ip6.arpa
-          ttl 30
-        }
-        prometheus :9153
-        forward . /etc/resolv.conf
-        cache 30  # Enable 30-second caching
-        loop
-        reload
-        loadbalance
-    }
-```
-
-**Node-Local DNS Cache**:
-```bash
-# Deploy node-local-dns for improved DNS performance
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/kubernetes/master/cluster/addons/dns/nodelocaldns/nodelocaldns.yaml
-```
-
-#### Service Mesh Considerations
-
-For advanced traffic management:
-- **AWS App Mesh**: Native AWS service mesh
-- **Istio**: Feature-rich but resource-intensive
-- **Linkerd**: Lightweight alternative
-
-### Storage Performance
-
-#### EBS Volume Optimization
-
-**gp3 Volume Tuning**:
-```bash
-# Increase IOPS for database workloads
-aws ec2 modify-volume --volume-id vol-xxx --iops 16000 --throughput 1000
-
-# Monitor volume performance
-aws cloudwatch get-metric-statistics --namespace AWS/EBS \
-  --metric-name VolumeReadOps --dimensions Name=VolumeId,Value=vol-xxx \
-  --start-time 2024-01-01T00:00:00Z --end-time 2024-01-02T00:00:00Z \
-  --period 3600 --statistics Average
-```
-
-**Storage Class with High Performance**:
-```yaml
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: high-performance-gp3
-provisioner: ebs.csi.aws.com
-parameters:
-  type: gp3
-  iops: "16000"          # Max for gp3
-  throughput: "1000"     # Max for gp3
-  encrypted: "true"
-volumeBindingMode: WaitForFirstConsumer
-allowVolumeExpansion: true
-```
-
-### Monitoring and Metrics
-
-#### Install Metrics Server
-
-```bash
-kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
-
-# Verify installation
-kubectl get deployment metrics-server -n kube-system
-kubectl top nodes
-```
-
-#### CloudWatch Container Insights
-
-```bash
-# Install CloudWatch agent and Fluent Bit
-ClusterName=eks-cluster-${ENVIRONMENT_SUFFIX}
-RegionName=us-east-2
-FluentBitHttpPort='2020'
-FluentBitReadFromHead='Off'
-
-curl https://raw.githubusercontent.com/aws-samples/amazon-cloudwatch-container-insights/latest/k8s-deployment-manifest-templates/deployment-mode/daemonset/container-insights-monitoring/quickstart/cwagent-fluent-bit-quickstart.yaml | sed "s/{{cluster_name}}/${ClusterName}/;s/{{region_name}}/${RegionName}/;s/{{http_server_toggle}}/\"On\"/;s/{{http_server_port}}/${FluentBitHttpPort}/;s/{{read_from_head}}/${FluentBitReadFromHead}/" | kubectl apply -f -
-```
-
-#### Prometheus and Grafana (Optional)
-
-```bash
-# Install Prometheus using Helm
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm install prometheus prometheus-community/kube-prometheus-stack \
-  --namespace monitoring --create-namespace
-
-# Access Grafana dashboard
-kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
-```
-
-## Disaster Recovery and Business Continuity
-
-### Backup Strategy
-
-#### EKS Control Plane Backups
-
-**AWS Managed Backups**:
-- Control plane configuration: Automatically backed up by AWS
-- etcd data: Automatically replicated across AZs
-- No manual backup needed for control plane
-
-#### Application Data Backups
-
-**Velero for Kubernetes Backups**:
-```bash
-# Install Velero
-wget https://github.com/vmware-tanzu/velero/releases/download/v1.12.0/velero-v1.12.0-linux-amd64.tar.gz
-tar -xvf velero-v1.12.0-linux-amd64.tar.gz
-sudo mv velero-v1.12.0-linux-amd64/velero /usr/local/bin/
-
-# Create S3 bucket for backups
-aws s3 mb s3://eks-velero-backups-${ENVIRONMENT_SUFFIX} --region us-east-2
-
-# Install Velero in cluster
-velero install \
-  --provider aws \
-  --plugins velero/velero-plugin-for-aws:v1.8.0 \
-  --bucket eks-velero-backups-${ENVIRONMENT_SUFFIX} \
-  --backup-location-config region=us-east-2 \
-  --snapshot-location-config region=us-east-2 \
-  --use-node-agent
-
-# Create scheduled backup
-velero schedule create daily-backup --schedule="0 2 * * *" --ttl 720h
-```
-
-**Manual Backups**:
-```bash
-# Backup entire cluster
-velero backup create manual-backup-$(date +%Y%m%d)
-
-# Backup specific namespace
-velero backup create app-backup --include-namespaces production
-
-# Backup with specific labels
-velero backup create critical-backup --selector app=critical
-```
-
-#### EBS Snapshot Strategy
-
-**Automated EBS Snapshots**:
-```bash
-# Create snapshot lifecycle policy
-aws dlm create-lifecycle-policy \
-  --description "Daily EBS snapshots for EKS" \
-  --state ENABLED \
-  --execution-role-arn arn:aws:iam::ACCOUNT_ID:role/AWSDataLifecycleManagerDefaultRole \
-  --policy-details '{
-    "ResourceTypes": ["VOLUME"],
-    "TargetTags": [{"Key": "kubernetes.io/cluster/eks-cluster-'${ENVIRONMENT_SUFFIX}'", "Value": "owned"}],
-    "Schedules": [{
-      "Name": "DailySnapshots",
-      "CreateRule": {"Interval": 24, "IntervalUnit": "HOURS", "Times": ["03:00"]},
-      "RetainRule": {"Count": 7},
-      "TagsToAdd": [{"Key": "SnapshotType", "Value": "Automated"}],
-      "CopyTags": true
-    }]
-  }'
-```
-
-### Recovery Procedures
-
-#### Cluster Recovery from Backup
-
-**Infrastructure Recovery**:
-```bash
-# 1. Restore Terraform state (if lost)
-terraform init -backend-config="key=${ENVIRONMENT_SUFFIX}/terraform.tfstate"
-
-# 2. Recreate infrastructure
-terraform apply -auto-approve
-
-# 3. Configure kubectl
-aws eks update-kubeconfig --region us-east-2 --name eks-cluster-${ENVIRONMENT_SUFFIX}
-```
-
-**Application Recovery with Velero**:
-```bash
-# List available backups
-velero backup get
-
-# Restore from backup
-velero restore create --from-backup daily-backup-20240101
-
-# Monitor restore progress
-velero restore describe <restore-name>
-velero restore logs <restore-name>
-
-# Restore specific namespace
-velero restore create --from-backup daily-backup-20240101 --include-namespaces production
-```
-
-#### Node Group Recovery
-
-**Replace Unhealthy Nodes**:
-```bash
-# Drain node before termination
-kubectl drain <node-name> --ignore-daemonsets --delete-emptydir-data
-
-# Terminate unhealthy node (Auto Scaling Group will replace it)
-aws ec2 terminate-instances --instance-ids i-xxx
-
-# Or update node group to force rolling update
-aws eks update-nodegroup-config \
-  --cluster-name eks-cluster-${ENVIRONMENT_SUFFIX} \
-  --nodegroup-name node-group-${ENVIRONMENT_SUFFIX} \
-  --update-config maxUnavailable=1
-```
-
-#### Database Recovery
-
-**RDS Point-in-Time Recovery** (if using RDS):
-```bash
-aws rds restore-db-instance-to-point-in-time \
-  --source-db-instance-identifier mydb \
-  --target-db-instance-identifier mydb-restored \
-  --restore-time 2024-01-01T12:00:00Z
-```
-
-### RTO and RPO Targets
-
-**Typical Recovery Objectives**:
-- **RTO (Recovery Time Objective)**:
-  - Infrastructure: 15-30 minutes (Terraform apply)
-  - Applications: 5-15 minutes (Velero restore)
-  - Total: ~45 minutes
-
-- **RPO (Recovery Point Objective)**:
-  - Infrastructure: Minutes (Terraform state in S3)
-  - Applications: 24 hours (daily backups)
-  - Database: 5 minutes (automated RDS backups)
-
-**Improving RTO/RPO**:
-1. Use multi-region deployments
-2. Implement active-active architecture
-3. Increase backup frequency
-4. Automate recovery procedures
-5. Regular disaster recovery drills
-
-### High Availability Testing
-
-**Chaos Engineering with Chaos Mesh**:
-```bash
-# Install Chaos Mesh
-helm repo add chaos-mesh https://charts.chaos-mesh.org
-helm install chaos-mesh chaos-mesh/chaos-mesh \
-  --namespace chaos-testing --create-namespace
-
-# Simulate node failure
-kubectl apply -f - <<EOF
-apiVersion: chaos-mesh.org/v1alpha1
-kind: PodChaos
-metadata:
-  name: pod-kill-example
-  namespace: chaos-testing
-spec:
-  action: pod-kill
-  mode: one
-  selector:
-    namespaces:
-      - production
-    labelSelectors:
-      app: myapp
-  scheduler:
-    cron: '@every 10m'
-EOF
-```
-
-## Compliance and Governance
-
-### Security Compliance
-
-#### CIS Benchmark Compliance
-
-**Automated Scanning with kube-bench**:
-```bash
-# Run CIS Kubernetes Benchmark
-kubectl apply -f https://raw.githubusercontent.com/aquasecurity/kube-bench/main/job.yaml
-
-# View results
-kubectl logs -f job/kube-bench
-
-# Export results
-kubectl logs job/kube-bench > cis-benchmark-results.txt
-```
-
-**Key CIS Controls Implemented**:
-- ✅ 1.2.1: Ensure that the --anonymous-auth argument is set to false
-- ✅ 1.2.5: Ensure that the --kubelet-certificate-authority argument is set
-- ✅ 3.2.1: Ensure that a minimal audit policy is created
-- ✅ 4.2.1: Ensure that the --anonymous-auth argument is set to false
-- ✅ 5.1.5: Ensure that default service accounts are not actively used
-
-#### PCI DSS Compliance
-
-**Network Segmentation**:
-```yaml
-# Implement Network Policies for PCI compliance
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: pci-cardholder-data-isolation
-  namespace: payment-processing
-spec:
-  podSelector:
-    matchLabels:
-      tier: cardholder-data
-  policyTypes:
-  - Ingress
-  - Egress
-  ingress:
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          name: payment-processing
-    - podSelector:
-        matchLabels:
-          tier: application
-  egress:
-  - to:
-    - namespaceSelector:
-        matchLabels:
-          name: payment-processing
-```
-
-**Encryption Requirements**:
-- ✅ Encryption at rest: KMS for EKS secrets and EBS volumes
-- ✅ Encryption in transit: TLS for all communications
-- ✅ Key rotation: Enabled for KMS keys
-
-#### HIPAA Compliance
-
-**Audit Logging**:
-```bash
-# Enable comprehensive audit logging
-kubectl get configmap -n kube-system audit-policy -o yaml
-
-# Verify audit logs in CloudWatch
-aws logs tail /aws/eks/eks-cluster-${ENVIRONMENT_SUFFIX}/cluster --follow --filter-pattern "audit"
-```
-
-**Access Controls**:
-```yaml
-# Implement RBAC for HIPAA compliance
-apiVersion: rbac.authorization.k8s.io/v1
-kind:Role
-metadata:
-  namespace: healthcare
-  name: phi-reader
-rules:
-- apiGroups: [""]
-  resources: ["secrets", "configmaps"]
-  verbs: ["get", "list"]
-- apiGroups: [""]
-  resources: ["pods", "pods/log"]
-  verbs: ["get", "list"]
-```
-
-### Cost Allocation and Chargeback
-
-**Tagging Strategy**:
-```hcl
-# Implemented in variables.tf and provider.tf
-common_tags = {
-  Environment    = "production"
-  ManagedBy      = "terraform"
-  Project        = "eks-graviton"
-  CostCenter     = "engineering"
-  Owner          = "platform-team"
-  Compliance     = "pci-dss"
-}
-```
-
-**Cost Tracking with Kubecost**:
-```bash
-# Install Kubecost
-helm repo add kubecost https://kubecost.github.io/cost-analyzer/
-helm install kubecost kubecost/cost-analyzer \
-  --namespace kubecost --create-namespace \
-  --set kubecostToken="your-token"
-
-# Access Kubecost dashboard
-kubectl port-forward -n kubecost deployment/kubecost-cost-analyzer 9090:9090
-```
-
-### Policy Enforcement
-
-**OPA Gatekeeper for Policy Management**:
-```bash
-# Install OPA Gatekeeper
-kubectl apply -f https://raw.githubusercontent.com/open-policy-agent/gatekeeper/release-3.14/deploy/gatekeeper.yaml
-
-# Create constraint template
-kubectl apply -f - <<EOF
-apiVersion: templates.gatekeeper.sh/v1
-kind: ConstraintTemplate
-metadata:
-  name: k8srequiredlabels
-spec:
-  crd:
-    spec:
-      names:
-        kind: K8sRequiredLabels
-      validation:
-        openAPIV3Schema:
-          type: object
-          properties:
-            labels:
-              type: array
-              items:
-                type: string
-  targets:
-    - target: admission.k8s.gatekeeper.sh
-      rego: |
-        package k8srequiredlabels
-        violation[{"msg": msg, "details": {"missing_labels": missing}}] {
-          provided := {label | input.review.object.metadata.labels[label]}
-          required := {label | label := input.parameters.labels[_]}
-          missing := required - provided
-          count(missing) > 0
-          msg := sprintf("Required labels missing: %v", [missing])
-        }
-EOF
-```
-
-## Cost Estimation
-
-### Monthly Cost Breakdown (Approximate)
-
-| Resource | Estimated Cost |
-|----------|---------------|
-| EKS Cluster | $73/month |
-| EC2 Instances (3x t4g.medium) | ~$60/month |
-| EBS Storage (3x 100GB gp3) | ~$30/month |
-| NAT Gateways (3) | ~$100/month |
-| Data Transfer | Variable |
-| **Total** | **~$263/month** |
-
-*Note: Costs are estimates and vary by usage, region, and AWS pricing changes*
-
-### Cost Optimization Tips
-1. Use Spot instances for non-critical workloads
-2. Scale down during off-hours
-3. Implement pod resource limits
-4. Use Fargate for intermittent workloads
-5. Enable S3 VPC endpoints to reduce data transfer costs
-
-## Best Practices Implemented
-
-### Infrastructure as Code Standards
-- **Modularity**: Separate files for each logical component (VPC, IAM, EKS)
-- **Variables**: All values parameterized for reusability across environments
-- **Outputs**: Comprehensive outputs for integration with other systems
-- **Documentation**: Inline comments and comprehensive external documentation
-- **Version Control**: Compatible with Git workflows and CI/CD pipelines
-
-### AWS Well-Architected Framework Alignment
-
-#### Operational Excellence
-- Infrastructure defined as code for reproducibility
-- CloudWatch logging for operational insights
-- Automated testing (unit and integration)
-- Clear deployment and maintenance procedures
-
-#### Security
-- Encryption at rest (KMS) and in transit (TLS)
-- IAM roles with least privilege principle
-- Network isolation with private subnets
-- Security groups with explicit allow rules only
-- No hardcoded credentials or secrets
-- IRSA for fine-grained pod permissions
-
-#### Reliability
-- Multi-AZ deployment for high availability
-- Auto-scaling for handling load variations
-- Managed services reduce operational burden
-- Automatic backups of control plane
-
-#### Performance Efficiency
-- Graviton2 processors for optimal price-performance
-- VPC CNI prefix delegation for increased pod density
-- gp3 volumes with optimized IOPS and throughput
-- Right-sized instances and storage
-
-#### Cost Optimization
-- Graviton2 ARM instances (20% better price-performance)
-- Auto-scaling to match demand
-- Selective control plane logging
-- gp3 volumes for better cost-efficiency
-- Configurable instance types and counts
-
-### Terraform Best Practices
-- **State Management**: Remote state recommended (S3 + DynamoDB)
-- **Resource Dependencies**: Explicit `depends_on` where needed
-- **Resource Naming**: Consistent naming with environment suffixes
-- **Tags**: Comprehensive tagging for cost allocation
-- **No Hardcoding**: All environment-specific values parameterized
-- **Idempotency**: Safe to run multiple times
-
-### Kubernetes Best Practices
-- **IRSA**: Service accounts mapped to IAM roles
-- **Network Policies**: VPC CNI supports network policies
-- **Resource Limits**: Launch template ready for resource constraints
-- **Logging**: Control plane logs in CloudWatch
-- **Monitoring**: Compatible with CloudWatch Container Insights
+### Common Issues
+
+**Nodes not joining cluster**:
+- Verify IAM role permissions for nodes
+- Check security group ingress/egress rules
+- Verify subnet routing to NAT gateways
+
+**Pods not scheduling**:
+- Check node capacity: `kubectl describe nodes`
+- Review pod resource requests
+- Verify cluster autoscaler is running
+
+**Unable to pull images**:
+- Verify AmazonEC2ContainerRegistryReadOnly policy attached
+- Check VPC routing for ECR endpoints
 
 ## Additional Resources
 
@@ -1382,40 +1156,11 @@ EOF
 - [EKS Best Practices Guide](https://aws.github.io/aws-eks-best-practices/)
 - [Graviton Performance](https://aws.amazon.com/ec2/graviton/)
 - [VPC CNI Plugin](https://docs.aws.amazon.com/eks/latest/userguide/pod-networking.html)
-- [IRSA Documentation](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html)
-
-### Kubernetes Resources
-- [Kubernetes Documentation](https://kubernetes.io/docs/)
-- [kubectl Cheat Sheet](https://kubernetes.io/docs/reference/kubectl/cheatsheet/)
-- [Cluster Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler)
-- [Kubernetes RBAC](https://kubernetes.io/docs/reference/access-authn-authz/rbac/)
 
 ### Terraform Resources
 - [Terraform AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
 - [Terraform EKS Resources](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/eks_cluster)
-- [Terraform Best Practices](https://www.terraform.io/docs/cloud/guides/recommended-practices/)
-
-### Security Resources
-- [CIS Amazon EKS Benchmark](https://www.cisecurity.org/benchmark/amazon_eks)
-- [AWS Security Best Practices](https://docs.aws.amazon.com/security/)
-- [Kubernetes Security](https://kubernetes.io/docs/concepts/security/)
-
-## Support
-
-For issues or questions:
-1. Check CloudWatch logs for cluster events
-2. Review Terraform plan output for configuration issues
-3. Consult AWS Support for platform-specific problems
-4. Refer to Kubernetes community for application-level issues
 
 ## License
 
-This implementation follows standard Terraform and AWS service terms. Ensure compliance with your organization's policies and AWS terms of service.
-
-## Version History
-
-- **v1.0.0**: Initial production release
-  - EKS 1.28 with Graviton2 nodes
-  - VPC CNI prefix delegation
-  - Comprehensive security configuration
-  - 100% test coverage
+This implementation follows standard Terraform and AWS service terms.
