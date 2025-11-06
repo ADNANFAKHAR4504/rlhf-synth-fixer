@@ -251,4 +251,3 @@ func TestLoadBalancerConfiguration(t *testing.T) {
 	assert.Equal(t, 30, healthCheckInterval, "Health check interval should be 30 seconds")
 	assert.Equal(t, 5, healthCheckTimeout, "Health check timeout should be 5 seconds")
 }
-
