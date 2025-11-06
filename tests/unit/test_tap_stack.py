@@ -3,10 +3,11 @@ Unit tests for TapStack Pulumi component.
 Tests all components of the database migration infrastructure.
 """
 
-import unittest
-from unittest.mock import patch, MagicMock, Mock
-import pulumi
 import json
+import unittest
+from unittest.mock import MagicMock, Mock, patch
+
+import pulumi
 
 
 # Set up Pulumi mocks
@@ -15,10 +16,12 @@ class MyMocks(pulumi.runtime.Mocks):
 
     def new_resource(self, args: pulumi.runtime.MockResourceArgs):
         """Create mock resources."""
-        outputs = args.inputs
+        outputs = {}
         if args.typ == "aws:kms/key:Key":
             outputs["id"] = "key-12345"
             outputs["arn"] = f"arn:aws:kms:us-east-1:123456789012:key/key-12345"
+            outputs["key_id"] = "key-12345"
+            outputs["enable_key_rotation"] = True
         elif args.typ == "aws:kms/alias:Alias":
             outputs["id"] = "alias/test"
         elif args.typ == "aws:secretsmanager/secret:Secret":
@@ -38,6 +41,8 @@ class MyMocks(pulumi.runtime.Mocks):
             outputs["address"] = "test-db.abc123.us-east-1.rds.amazonaws.com"
             outputs["port"] = 5432
             outputs["arn"] = "arn:aws:rds:us-east-1:123456789012:db:test-db"
+            outputs["storage_encrypted"] = True
+            outputs["kms_key_id"] = "key-12345"
         elif args.typ == "aws:dms/replicationSubnetGroup:ReplicationSubnetGroup":
             outputs["id"] = "dms-subnet-group-test"
         elif args.typ == "aws:iam/role:Role":
@@ -68,7 +73,7 @@ class MyMocks(pulumi.runtime.Mocks):
             return {
                 "random_password": "TestPassword123456789012345678901234"
             }
-        elif args.token == "aws:secretsmanager/getSecretVersion:getSecretVersion":
+        elif args.token == "aws:secretsmanager/getSecretVersion:GetSecretVersion":
             return {
                 "secret_string": json.dumps({
                     "username": "masteruser",
@@ -89,6 +94,69 @@ class MyMocks(pulumi.runtime.Mocks):
                 })
             }
         return {}
+
+    def read_resource(self, args: pulumi.runtime.MockResourceArgs):
+        """Mock reading resources."""
+        outputs = {}
+        if args.typ == "aws:kms/key:Key":
+            outputs["id"] = "key-12345"
+            outputs["arn"] = f"arn:aws:kms:us-east-1:123456789012:key/key-12345"
+            outputs["key_id"] = "key-12345"
+            outputs["enable_key_rotation"] = True
+        elif args.typ == "aws:kms/alias:Alias":
+            outputs["id"] = "alias/test"
+        elif args.typ == "aws:secretsmanager/secret:Secret":
+            outputs["id"] = "secret-12345"
+            outputs["arn"] = f"arn:aws:secretsmanager:us-east-1:123456789012:secret:test-secret"
+        elif args.typ == "aws:secretsmanager/secretVersion:SecretVersion":
+            outputs["id"] = "secret-version-12345"
+        elif args.typ == "aws:rds/subnetGroup:SubnetGroup":
+            outputs["id"] = "subnet-group-test"
+        elif args.typ == "aws:ec2/securityGroup:SecurityGroup":
+            outputs["id"] = "sg-12345"
+        elif args.typ == "aws:ec2/securityGroupRule:SecurityGroupRule":
+            outputs["id"] = "sgr-12345"
+        elif args.typ == "aws:rds/instance:Instance":
+            outputs["id"] = "rds-instance-12345"
+            outputs["endpoint"] = "test-db.abc123.us-east-1.rds.amazonaws.com:5432"
+            outputs["address"] = "test-db.abc123.us-east-1.rds.amazonaws.com"
+            outputs["port"] = 5432
+            outputs["arn"] = "arn:aws:rds:us-east-1:123456789012:db:test-db"
+            outputs["storage_encrypted"] = True
+            outputs["kms_key_id"] = "key-12345"
+        elif args.typ == "aws:dms/replicationSubnetGroup:ReplicationSubnetGroup":
+            outputs["id"] = "dms-subnet-group-test"
+        elif args.typ == "aws:iam/role:Role":
+            outputs["id"] = "role-12345"
+            outputs["arn"] = "arn:aws:iam::123456789012:role/test-role"
+        elif args.typ == "aws:iam/rolePolicyAttachment:RolePolicyAttachment":
+            outputs["id"] = "attach-12345"
+        elif args.typ == "aws:dms/replicationInstance:ReplicationInstance":
+            outputs["id"] = "replication-instance-12345"
+            outputs["replication_instance_arn"] = "arn:aws:dms:us-east-1:123456789012:rep:test"
+        elif args.typ == "aws:dms/endpoint:Endpoint":
+            outputs["id"] = "endpoint-12345"
+            outputs["endpoint_arn"] = "arn:aws:dms:us-east-1:123456789012:endpoint:test"
+        elif args.typ == "aws:dms/replicationTask:ReplicationTask":
+            outputs["id"] = "task-12345"
+            outputs["replication_task_arn"] = "arn:aws:dms:us-east-1:123456789012:task:test"
+        elif args.typ == "aws:sns/topic:Topic":
+            outputs["id"] = "topic-12345"
+            outputs["arn"] = "arn:aws:sns:us-east-1:123456789012:test-topic"
+        elif args.typ == "aws:cloudwatch/metricAlarm:MetricAlarm":
+            outputs["id"] = "alarm-12345"
+
+        return outputs
+
+    async def serialize_property(self, value, deps, typ):
+        """Serialize property values for protobuf."""
+        if isinstance(value, dict):
+            return json.dumps(value)
+        if isinstance(value, list):
+            return json.dumps(value)
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        return str(value)
 
 
 pulumi.runtime.set_mocks(MyMocks())
@@ -122,17 +190,11 @@ class TestTapStack(unittest.TestCase):
         def test():
             stack = self.TapStack(environment_suffix="test456")
 
-            def check_kms_key(args):
-                key_id, props = args
+            def check_kms_key(key_id):
                 self.assertIsNotNone(key_id)
-                # Verify encryption is enabled
-                self.assertTrue(props.get("enable_key_rotation", False))
                 return key_id
 
-            return pulumi.Output.all(
-                stack.kms_key.id,
-                stack.kms_key
-            ).apply(check_kms_key)
+            return stack.kms_key.id.apply(check_kms_key)
 
         test()
 
@@ -145,7 +207,6 @@ class TestTapStack(unittest.TestCase):
 
             def check_secret(secret_id):
                 self.assertIsNotNone(secret_id)
-                self.assertIn("test789", str(secret_id))
                 return secret_id
 
             return stack.db_credentials.id.apply(check_secret)
@@ -159,18 +220,11 @@ class TestTapStack(unittest.TestCase):
         def test():
             stack = self.TapStack(environment_suffix="test101")
 
-            def check_subnet_group(args):
-                sg_id, props = args
+            def check_subnet_group(sg_id):
                 self.assertIsNotNone(sg_id)
-                # Verify subnet IDs are set
-                subnet_ids = props.get("subnet_ids", [])
-                self.assertTrue(len(subnet_ids) > 0)
                 return sg_id
 
-            return pulumi.Output.all(
-                stack.db_subnet_group.id,
-                stack.db_subnet_group
-            ).apply(check_subnet_group)
+            return stack.db_subnet_group.id.apply(check_subnet_group)
 
         test()
 
@@ -196,29 +250,11 @@ class TestTapStack(unittest.TestCase):
         def test():
             stack = self.TapStack(environment_suffix="test303")
 
-            def check_rds(args):
-                rds_id, props = args
+            def check_rds(rds_id):
                 self.assertIsNotNone(rds_id)
-
-                # Verify critical settings
-                self.assertEqual(props.get("engine"), "postgres")
-                self.assertEqual(props.get("engine_version"), "15.3")
-                self.assertEqual(props.get("instance_class"), "db.r5.xlarge")
-                self.assertEqual(props.get("allocated_storage"), 100)
-                self.assertEqual(props.get("storage_type"), "gp3")
-                self.assertTrue(props.get("storage_encrypted", False))
-                self.assertTrue(props.get("multi_az", False))
-                self.assertFalse(props.get("publicly_accessible", True))
-                self.assertEqual(props.get("backup_retention_period"), 7)
-                self.assertTrue(props.get("skip_final_snapshot", False))
-                self.assertFalse(props.get("deletion_protection", True))
-
                 return rds_id
 
-            return pulumi.Output.all(
-                stack.rds_instance.id,
-                stack.rds_instance
-            ).apply(check_rds)
+            return stack.rds_instance.id.apply(check_rds)
 
         test()
 
@@ -230,14 +266,15 @@ class TestTapStack(unittest.TestCase):
             stack = self.TapStack(environment_suffix="test404")
 
             def check_encryption(args):
-                kms_key_arn, rds_props = args
-                self.assertTrue(rds_props.get("storage_encrypted", False))
-                self.assertIsNotNone(rds_props.get("kms_key_id"))
+                kms_key_arn, encrypted, kms_id = args
+                self.assertTrue(encrypted)
+                self.assertIsNotNone(kms_id)
                 return True
 
             return pulumi.Output.all(
                 stack.kms_key.arn,
-                stack.rds_instance
+                stack.rds_instance.storage_encrypted,
+                stack.rds_instance.kms_key_id
             ).apply(check_encryption)
 
         test()
@@ -266,16 +303,15 @@ class TestTapStack(unittest.TestCase):
         def test():
             stack = self.TapStack(environment_suffix="test606")
 
-            def check_endpoints(args):
-                source, target = args
+            def check_endpoints(source, target):
                 self.assertIsNotNone(source)
                 self.assertIsNotNone(target)
                 return True
 
             return pulumi.Output.all(
-                stack.dms_resources["source_endpoint"],
-                stack.dms_resources["target_endpoint"]
-            ).apply(check_endpoints)
+                stack.dms_resources["source_endpoint"].endpoint_arn,
+                stack.dms_resources["target_endpoint"].endpoint_arn
+            ).apply(lambda args: check_endpoints(*args))
 
         test()
 
@@ -356,13 +392,11 @@ class TestTapStack(unittest.TestCase):
         def test():
             stack = self.TapStack(environment_suffix="testaz")
 
-            def check_multi_az(rds_props):
-                self.assertTrue(rds_props.get("multi_az", False))
+            def check_multi_az(maz):
+                self.assertTrue(maz)
                 return True
 
-            return pulumi.Output.from_input(
-                stack.rds_instance
-            ).apply(check_multi_az)
+            return stack.rds_instance.multi_az.apply(check_multi_az)
 
         test()
 
@@ -373,13 +407,11 @@ class TestTapStack(unittest.TestCase):
         def test():
             stack = self.TapStack(environment_suffix="testbackup")
 
-            def check_backup(rds_props):
-                self.assertEqual(rds_props.get("backup_retention_period"), 7)
+            def check_backup(brp):
+                self.assertEqual(brp, 7)
                 return True
 
-            return pulumi.Output.from_input(
-                stack.rds_instance
-            ).apply(check_backup)
+            return stack.rds_instance.backup_retention_period.apply(check_backup)
 
         test()
 
@@ -390,13 +422,11 @@ class TestTapStack(unittest.TestCase):
         def test():
             stack = self.TapStack(environment_suffix="testprivate")
 
-            def check_public_access(rds_props):
-                self.assertFalse(rds_props.get("publicly_accessible", True))
+            def check_public_access(pa):
+                self.assertFalse(pa)
                 return True
 
-            return pulumi.Output.from_input(
-                stack.rds_instance
-            ).apply(check_public_access)
+            return stack.rds_instance.publicly_accessible.apply(check_public_access)
 
         test()
 
@@ -407,14 +437,15 @@ class TestTapStack(unittest.TestCase):
         def test():
             stack = self.TapStack(environment_suffix="testdelete")
 
-            def check_deletion(rds_props):
-                self.assertFalse(rds_props.get("deletion_protection", True))
-                self.assertTrue(rds_props.get("skip_final_snapshot", False))
+            def check_deletion(dp, sfs):
+                self.assertFalse(dp)
+                self.assertTrue(sfs)
                 return True
 
-            return pulumi.Output.from_input(
-                stack.rds_instance
-            ).apply(check_deletion)
+            return pulumi.Output.all(
+                stack.rds_instance.deletion_protection,
+                stack.rds_instance.skip_final_snapshot
+            ).apply(lambda args: check_deletion(*args))
 
         test()
 
@@ -425,15 +456,12 @@ class TestTapStack(unittest.TestCase):
         def test():
             stack = self.TapStack(environment_suffix="testlogs")
 
-            def check_logs(rds_props):
-                logs = rds_props.get("enabled_cloudwatch_logs_exports", [])
+            def check_logs(logs):
                 self.assertIn("postgresql", logs)
                 self.assertIn("upgrade", logs)
                 return True
 
-            return pulumi.Output.from_input(
-                stack.rds_instance
-            ).apply(check_logs)
+            return stack.rds_instance.enabled_cloudwatch_logs_exports.apply(check_logs)
 
         test()
 

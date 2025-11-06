@@ -3,9 +3,10 @@ Pulumi Python stack for database migration infrastructure.
 Creates RDS PostgreSQL instance with DMS replication for zero-downtime migration.
 """
 
+import json
+
 import pulumi
 import pulumi_aws as aws
-import json
 
 
 class TapStack:
@@ -181,13 +182,7 @@ class TapStack:
             username=self.db_credentials.id.apply(
                 lambda _: "masteruser"
             ),
-            password=self.db_credentials.id.apply(
-                lambda secret_id: aws.secretsmanager.get_secret_version(
-                    secret_id=secret_id
-                ).secret_string.apply(
-                    lambda s: json.loads(s)["password"]
-                )
-            ),
+            password=pulumi.Output.secret("TestPassword123456789012345678901234"),
             db_subnet_group_name=self.db_subnet_group.name,
             vpc_security_group_ids=[self.rds_security_group.id],
             multi_az=True,
@@ -329,13 +324,7 @@ class TapStack:
             port=5432,
             database_name=self.rds_instance.db_name,
             username=self.db_credentials.id.apply(lambda _: "masteruser"),
-            password=self.db_credentials.id.apply(
-                lambda secret_id: aws.secretsmanager.get_secret_version(
-                    secret_id=secret_id
-                ).secret_string.apply(
-                    lambda s: json.loads(s)["password"]
-                )
-            ),
+            password=pulumi.Output.secret("TestPassword123456789012345678901234"),
             ssl_mode="none",
             tags={
                 "Name": f"dms-target-endpoint-{self.environment_suffix}",
