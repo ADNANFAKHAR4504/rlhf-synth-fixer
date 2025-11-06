@@ -112,6 +112,13 @@ bash ./.claude/scripts/validate-code-platform.sh
 
 **NOTE**: MODEL_RESPONSE.md may contain errors - that's expected! MODEL_FAILURES.md documents what was fixed. Only IDEAL_RESPONSE.md matters for this validation.
 
+**Special Case - Analysis Platform**:
+When `metadata.json` has `"platform": "analysis"`:
+- Script skips IaC platform detection (CDK/Terraform/Pulumi/CloudFormation)
+- Validates that analysis script exists: `lib/analyse.py`, `lib/analyze.py`, or `lib/analyse.sh`
+- Only validates language matches (should be "python" or "bash")
+- IDEAL_RESPONSE.md should contain Python or Bash code blocks, not IaC templates
+
 ---
 
 ## Checkpoint F: environmentSuffix Usage
@@ -163,16 +170,20 @@ npm run synth     # if applicable (CDK, Pulumi, CDKTF)
 # Unit tests with coverage
 npm run test:coverage  # or platform equivalent
 
-# Extract coverage percentage
-COVERAGE=$(jq -r '.total.lines.pct' coverage/coverage-summary.json)
+# Extract coverage percentages
+STMT_COV=$(jq -r '.total.statements.pct' coverage/coverage-summary.json)
+FUNC_COV=$(jq -r '.total.functions.pct' coverage/coverage-summary.json)
+LINE_COV=$(jq -r '.total.lines.pct' coverage/coverage-summary.json)
 
-# Check threshold
-test "$COVERAGE" -ge 90
+# Check threshold - MUST be 100%
+test "$STMT_COV" -eq 100
+test "$FUNC_COV" -eq 100
+test "$LINE_COV" -eq 100
 ```
 
-**Pass criteria**: ≥90% line coverage, all tests pass
-**Fail action**: Add tests until coverage ≥90%
-**Reference**: validation_and_testing_guide.md Phase 3
+**Pass criteria**: 100% statement, function, and line coverage - all tests pass
+**Fail action**: Add tests until coverage reaches 100%
+**Reference**: validation_and_testing_guide.md Phase 3, pre-submission-checklist.md Section 5
 
 ---
 
@@ -220,7 +231,62 @@ test "$TRAINING_QUALITY" -ge 8
 
 ---
 
-## Checkpoint K: PR Prerequisites
+## Checkpoint K: File Location Compliance
+
+**When**: Before PR creation (after code-reviewer, before task-coordinator Phase 5)
+**Who**: iac-code-reviewer (Phase 1.5 Step 9), task-coordinator (Phase 5)
+
+**Validation**:
+```bash
+# Check what files will be in the PR
+git diff --name-only origin/main...HEAD
+
+# Verify all files are in allowed locations
+# This mimics what scripts/check-project-files.sh will check in CI/CD
+
+# Allowed folders: bin/, lib/, test/, tests/
+# Allowed root files: metadata.json, cdk.json, cdktf.json, Pulumi.yaml, 
+#                     tap.py, tap.go, package.json, package-lock.json
+
+# Manual check - each file must match one of:
+# - bin/*
+# - lib/*
+# - test/*
+# - tests/*
+# - metadata.json
+# - cdk.json
+# - cdktf.json
+# - Pulumi.yaml
+# - tap.py
+# - tap.go
+# - package.json
+# - package-lock.json
+```
+
+**Pass criteria**: All files in allowed locations
+**Fail action**: 
+- Report: "❌ BLOCKED: Files in wrong locations will FAIL CI/CD"
+- List violating files and correct locations
+- Training quality penalty: -3 points
+- Do NOT proceed to PR creation until fixed
+**Reference**: cicd-file-restrictions.md
+
+**Common Violations and Fixes**:
+| Wrong Location | Correct Location |
+|----------------|------------------|
+| `/README.md` | `/lib/README.md` |
+| `/PROMPT.md` | `/lib/PROMPT.md` |
+| `/MODEL_RESPONSE.md` | `/lib/MODEL_RESPONSE.md` |
+| `/IDEAL_RESPONSE.md` | `/lib/IDEAL_RESPONSE.md` |
+| `/MODEL_FAILURES.md` | `/lib/MODEL_FAILURES.md` |
+| `/lambda/handler.py` | `/lib/lambda/handler.py` |
+| `/docs/*` | Not allowed |
+| `/.github/*` | Not allowed (managed by repo) |
+| `/scripts/*` | Not allowed (managed by repo) |
+
+---
+
+## Checkpoint L: PR Prerequisites
 
 **When**: Before PR creation
 **Who**: task-coordinator (Phase 5)
@@ -235,6 +301,7 @@ pwd | grep -E 'worktree/synth-[^/]+$'
 
 # Verify code-reviewer reported "Ready"
 # Verify training_quality ≥ 8 (Checkpoint J)
+# Verify file locations valid (Checkpoint K)
 ```
 
 **Pass criteria**: All prerequisites met
@@ -254,10 +321,11 @@ pwd | grep -E 'worktree/synth-[^/]+$'
 | E | 4, 3 | generator, qa-trainer | Code platform | Matches metadata |
 | F | 3 | qa-trainer | environmentSuffix | ≥80% usage |
 | G | 3 | qa-trainer | Build quality | Lint+build+synth pass |
-| H | 3 | qa-trainer | Unit test coverage | ≥90% |
+| H | 3 | qa-trainer | Unit test coverage | 100% (stmt, func, line) |
 | I | 3 | qa-trainer | Integration tests | No mocking, uses outputs |
 | J | 4, 5 | reviewer, coordinator | Training quality | ≥8/10 |
-| K | 5 | coordinator | PR prerequisites | gh + worktree + ready |
+| K | 4, 5 | reviewer, coordinator | File locations | All in allowed locations |
+| L | 5 | coordinator | PR prerequisites | gh + worktree + ready |
 
 ## Usage Pattern
 
