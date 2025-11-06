@@ -374,16 +374,33 @@ exports.handler = async (event) => {
     return { PhysicalResourceId: ParameterName };
   }
   
-  try {
-    const response = await ssm.getParameter({ Name: ParameterName }).promise();
-    
-    return {
-      PhysicalResourceId: ParameterName,
-      Data: { Value: response.Parameter.Value },
-    };
-  } catch (error) {
-    console.error('Error reading SSM parameter:', error);
-    throw error;
+  // Retry logic to wait for SSM parameter to be created by source stack
+  let attempts = 0;
+  const maxAttempts = 30;
+  const waitTime = 5000; // 5 seconds
+  
+  while (attempts < maxAttempts) {
+    try {
+      const response = await ssm.getParameter({ Name: ParameterName }).promise();
+      
+      return {
+        PhysicalResourceId: ParameterName,
+        Data: { Value: response.Parameter.Value },
+      };
+    } catch (error) {
+      if (error.code === 'ParameterNotFound') {
+        attempts++;
+        if (attempts >= maxAttempts) {
+          console.error('SSM parameter not found after ' + maxAttempts + ' attempts: ' + ParameterName);
+          throw new Error('SSM parameter not found: ' + ParameterName + '. Source stack may not have deployed yet.');
+        }
+        console.log('SSM parameter not found yet, waiting... (attempt ' + attempts + '/' + maxAttempts + ')');
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      } else {
+        console.error('Error reading SSM parameter:', error);
+        throw error;
+      }
+    }
   }
 };
           `),
