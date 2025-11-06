@@ -513,7 +513,7 @@ class TapStack(pulumi.ComponentResource):
         # IAM Role for EC2 instances
         ec2_role = aws.iam.Role(
             f"payment-ec2-role-{self.environment_suffix}",
-            name=f"payment-ec2-role-{self.environment_suffix}",
+            name=f"paymentt-ec2-role-{self.environment_suffix}",
             assume_role_policy="""{
                 "Version": "2012-10-17",
                 "Statement": [{
