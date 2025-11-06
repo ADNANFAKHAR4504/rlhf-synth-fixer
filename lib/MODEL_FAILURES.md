@@ -35,3 +35,18 @@ Fix - Remove sg- will all the security groups being created.
 │ 
 
 ```
+
+2. Critical Failure - In Terraform's AWS provider, the aws_route53_health_check resource does not use an argument named interval. Instead, it uses the argument request_interval to specify the number of seconds between health checks, with accepted values typically 10 or 30
+
+
+```
+╷
+│ Error: Unsupported argument
+│ 
+│   on tap_stack.tf line 1570, in resource "aws_route53_health_check" "primary":
+│ 1570:   interval          = 30
+│ 
+│ An argument named "interval" is not expected here.
+╵
+
+```

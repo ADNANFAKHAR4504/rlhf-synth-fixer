@@ -1567,7 +1567,7 @@ resource "aws_route53_health_check" "primary" {
   fqdn              = aws_db_instance.primary.address
   port              = 5432
   type              = "TCP"
-  interval          = 30
+  request_interval          = 30
   failure_threshold = 2
 
   tags = merge(local.common_tags, {
