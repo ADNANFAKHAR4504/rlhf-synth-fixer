@@ -110,6 +110,10 @@ resource "aws_iam_role" "developer" {
   max_session_duration = 14400 # 4 hours
 
   tags = local.mandatory_tags
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # Developer policy
@@ -217,6 +221,10 @@ resource "aws_iam_role" "operations" {
   max_session_duration = 28800 # 8 hours
 
   tags = local.mandatory_tags
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # Operations policy
@@ -456,6 +464,10 @@ resource "aws_iam_role" "security" {
   max_session_duration = 43200 # 12 hours
 
   tags = local.mandatory_tags
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # Security team policy

@@ -24,6 +24,10 @@ resource "aws_cloudwatch_log_group" "audit_logs" {
   depends_on = [aws_kms_key.s3]
 
   tags = local.mandatory_tags
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # Metric filter for root account usage

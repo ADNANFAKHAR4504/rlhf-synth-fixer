@@ -5,6 +5,10 @@ resource "aws_s3_bucket" "session_logs" {
   bucket = "${local.name_prefix}-session-logs-${data.aws_caller_identity.current.account_id}"
 
   tags = local.mandatory_tags
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # S3 bucket versioning
@@ -47,6 +51,10 @@ resource "aws_cloudwatch_log_group" "session_logs" {
   depends_on = [aws_kms_key.s3]
 
   tags = local.mandatory_tags
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # Session Manager preferences document
@@ -97,6 +105,10 @@ resource "aws_iam_role" "ssm_instance" {
   })
 
   tags = local.mandatory_tags
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # Attach SSM managed instance core policy

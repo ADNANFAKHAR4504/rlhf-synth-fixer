@@ -523,6 +523,10 @@ resource "aws_iam_role" "developer" {
   max_session_duration = 14400 # 4 hours
 
   tags = local.mandatory_tags
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # Developer policy
@@ -630,6 +634,10 @@ resource "aws_iam_role" "operations" {
   max_session_duration = 28800 # 8 hours
 
   tags = local.mandatory_tags
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # Operations policy
@@ -869,6 +877,10 @@ resource "aws_iam_role" "security" {
   max_session_duration = 43200 # 12 hours
 
   tags = local.mandatory_tags
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # Security team policy
@@ -1042,6 +1054,10 @@ resource "aws_kms_key" "s3" {
   tags = merge(local.mandatory_tags, {
     Purpose = "S3-Encryption"
   })
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # KMS key alias for S3
@@ -1116,6 +1132,10 @@ resource "aws_kms_key" "rds" {
   tags = merge(local.mandatory_tags, {
     Purpose = "RDS-Encryption"
   })
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # KMS key alias for RDS
@@ -1211,6 +1231,10 @@ resource "aws_kms_key" "ebs" {
   tags = merge(local.mandatory_tags, {
     Purpose = "EBS-Encryption"
   })
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # KMS key alias for EBS
@@ -1416,6 +1440,10 @@ resource "aws_cloudwatch_log_group" "audit_logs" {
   depends_on = [aws_kms_key.s3]
 
   tags = local.mandatory_tags
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # Metric filter for root account usage
@@ -1578,6 +1606,10 @@ resource "aws_s3_bucket" "config" {
   bucket = "${local.name_prefix}-config-bucket-${data.aws_caller_identity.current.account_id}"
 
   tags = local.mandatory_tags
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # S3 bucket versioning
@@ -1672,6 +1704,10 @@ resource "aws_iam_role" "config" {
   })
 
   tags = local.mandatory_tags
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # IAM policy for Config
@@ -1913,6 +1949,10 @@ resource "aws_s3_bucket" "session_logs" {
   bucket = "${local.name_prefix}-session-logs-${data.aws_caller_identity.current.account_id}"
 
   tags = local.mandatory_tags
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # S3 bucket versioning
@@ -1955,6 +1995,10 @@ resource "aws_cloudwatch_log_group" "session_logs" {
   depends_on = [aws_kms_key.s3]
 
   tags = local.mandatory_tags
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # Session Manager preferences document
@@ -2005,6 +2049,10 @@ resource "aws_iam_role" "ssm_instance" {
   })
 
   tags = local.mandatory_tags
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # Attach SSM managed instance core policy
@@ -2184,6 +2232,10 @@ resource "aws_iam_role" "auto_tagging_lambda" {
   })
 
   tags = local.mandatory_tags
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # Lambda execution policy
@@ -2464,6 +2516,10 @@ resource "aws_iam_role" "audit" {
   max_session_duration = 43200 # 12 hours
 
   tags = local.mandatory_tags
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # Audit policy - read-only access (using AWS managed policy instead of custom)
@@ -2975,7 +3031,7 @@ All IAM roles require MFA for assumption. No exceptions for developer, operation
 Separate KMS keys for different purposes:
 
 - S3 encryption key
-- RDS encryption key  
+- RDS encryption key
 - EBS encryption key
 
 All keys have automatic rotation enabled.
@@ -3009,3 +3065,13 @@ Developers cannot escalate privileges beyond defined boundaries.
 ### Audit Trail
 
 All logs encrypted and retained for 365 days for compliance.
+
+### Lifecycle Protection
+
+All critical resources include lifecycle blocks with prevent_destroy set to false for flexibility in test
+environments. For production deployments, consider changing prevent_destroy to true for:
+
+- KMS encryption keys (S3, RDS, EBS)
+- S3 buckets (Config, Session logs)
+- CloudWatch log groups (Audit, Session logs)
+- IAM roles (Developer, Operations, Security, Config, SSM, Audit, Auto-tagging)

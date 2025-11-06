@@ -72,6 +72,10 @@ resource "aws_kms_key" "s3" {
   tags = merge(local.mandatory_tags, {
     Purpose = "S3-Encryption"
   })
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # KMS key alias for S3
@@ -146,6 +150,10 @@ resource "aws_kms_key" "rds" {
   tags = merge(local.mandatory_tags, {
     Purpose = "RDS-Encryption"
   })
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # KMS key alias for RDS
@@ -241,6 +249,10 @@ resource "aws_kms_key" "ebs" {
   tags = merge(local.mandatory_tags, {
     Purpose = "EBS-Encryption"
   })
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # KMS key alias for EBS

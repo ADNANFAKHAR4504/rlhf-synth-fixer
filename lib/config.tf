@@ -5,6 +5,10 @@ resource "aws_s3_bucket" "config" {
   bucket = "${local.name_prefix}-config-bucket-${data.aws_caller_identity.current.account_id}"
 
   tags = local.mandatory_tags
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # S3 bucket versioning
@@ -99,6 +103,10 @@ resource "aws_iam_role" "config" {
   })
 
   tags = local.mandatory_tags
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # IAM policy for Config

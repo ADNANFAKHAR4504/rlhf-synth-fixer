@@ -34,6 +34,10 @@ resource "aws_iam_role" "audit" {
   max_session_duration = 43200 # 12 hours
 
   tags = local.mandatory_tags
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # Audit policy - read-only access (using AWS managed policy instead of custom)

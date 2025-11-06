@@ -101,6 +101,10 @@ resource "aws_iam_role" "auto_tagging_lambda" {
   })
 
   tags = local.mandatory_tags
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # Lambda execution policy
