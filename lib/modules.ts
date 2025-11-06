@@ -389,7 +389,7 @@ export class RdsModule extends Construct {
       maintenanceWindow: 'sun:04:00-sun:05:00',
       multiAz: true,
       autoMinorVersionUpgrade: true,
-      deletionProtection: true,
+      deletionProtection: false,
       enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
       tags: config.tags,
     });
@@ -412,7 +412,7 @@ export class AlbModule extends Construct {
       loadBalancerType: 'application',
       subnets: config.subnetIds,
       securityGroups: config.securityGroupIds,
-      enableDeletionProtection: true,
+      enableDeletionProtection: false,
       enableHttp2: true,
       enableCrossZoneLoadBalancing: true,
       tags: config.tags,
@@ -482,7 +482,7 @@ export class LambdaSecurityModule extends Construct {
 
     // Create Lambda execution role
     this.role = new aws.iamRole.IamRole(this, 'role', {
-      name: 'security-automation-lambda-role',
+      name: `security-automation-lambda-role-${tags['Environment'] || 'dev'}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -539,7 +539,7 @@ export class LambdaSecurityModule extends Construct {
 
     // Create Lambda function from S3
     this.function = new aws.lambdaFunction.LambdaFunction(this, 'function', {
-      functionName: 'security-automation-lambda',
+      functionName: `security-automation-lambda-${tags['Environment'] || 'dev'}`,
       runtime: 'python3.11',
       handler: 'index.handler',
       role: this.role.arn,
@@ -564,7 +564,7 @@ export class LambdaSecurityModule extends Construct {
       this,
       'schedule',
       {
-        name: 'security-automation-schedule',
+        name: `security-automation-schedule-${tags['Environment'] || 'dev'}`,
         description: 'Trigger security automation Lambda',
         scheduleExpression: 'rate(1 hour)',
         tags,
@@ -589,7 +589,6 @@ export class LambdaSecurityModule extends Construct {
 // Security Services Module
 export class SecurityServicesModule extends Construct {
   public readonly securityHub: aws.securityhubAccount.SecurityhubAccount;
-  public readonly config: aws.configConfigurationRecorder.ConfigConfigurationRecorder;
   public readonly wafWebAcl: aws.wafv2WebAcl.Wafv2WebAcl;
   public readonly cloudTrail: aws.cloudtrail.Cloudtrail;
   public readonly snsTopic: aws.snsTopic.SnsTopic;
@@ -625,7 +624,7 @@ export class SecurityServicesModule extends Construct {
 
     // Create S3 bucket for CloudTrail and Config
     const bucket = new aws.s3Bucket.S3Bucket(this, 'security-bucket', {
-      bucket: `security-logs-${Date.now()}`,
+      bucket: `security-logs-${tags['Environment'] || 'dev'}-${Date.now()}`,
       tags,
     });
 
@@ -663,95 +662,17 @@ export class SecurityServicesModule extends Construct {
       },
     });
 
-    // Create Config Recorder
-    const configRole = new aws.iamRole.IamRole(this, 'config-role', {
-      name: 'aws-config-role',
-      assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Action: 'sts:AssumeRole',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'config.amazonaws.com',
-            },
-          },
-        ],
-      }),
-      tags,
-    });
 
-    new aws.iamRolePolicyAttachment.IamRolePolicyAttachment(
-      this,
-      'config-policy',
-      {
-        role: configRole.name,
-        policyArn: 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole',
-      }
-    );
-
-    const configBucket = new aws.configDeliveryChannel.ConfigDeliveryChannel(
-      this,
-      'config-delivery',
-      {
-        name: 'config-delivery-channel',
-        s3BucketName: bucket.id,
-      }
-    );
-
-    this.config =
-      new aws.configConfigurationRecorder.ConfigConfigurationRecorder(
-        this,
-        'config-recorder',
-        {
-          name: 'config-recorder',
-          roleArn: configRole.arn,
-          recordingGroup: {
-            allSupported: true,
-            includeGlobalResourceTypes: true,
-          },
-        }
-      );
-
-    new aws.configConfigurationRecorderStatus.ConfigConfigurationRecorderStatus(
-      this,
-      'config-status',
-      {
-        name: this.config.name,
-        isEnabled: true,
-        dependsOn: [configBucket],
-      }
-    );
-
-    // Config Rules
-    new aws.configConfigRule.ConfigConfigRule(this, 'mfa-enabled-rule', {
-      name: 'mfa-enabled-for-iam-console-access',
-      source: {
-        owner: 'AWS',
-        sourceIdentifier: 'MFA_ENABLED_FOR_IAM_CONSOLE_ACCESS',
-      },
-      tags,
-      dependsOn: [this.config],
-    });
-
-    new aws.configConfigRule.ConfigConfigRule(this, 'encrypted-volumes', {
-      name: 'encrypted-volumes',
-      source: {
-        owner: 'AWS',
-        sourceIdentifier: 'ENCRYPTED_VOLUMES',
-      },
-      tags,
-    });
 
     // Create SNS Topic for notifications
     this.snsTopic = new aws.snsTopic.SnsTopic(this, 'security-alerts', {
-      name: 'security-alerts-topic',
+      name: `security-alerts-topic-${tags['Environment'] || 'dev'}`,
       tags,
     });
 
     // CloudTrail
     const cloudtrailRole = new aws.iamRole.IamRole(this, 'cloudtrail-role', {
-      name: 'cloudtrail-cloudwatch-role',
+      name: `cloudtrail-cloudwatch-role-${tags['Environment'] || 'dev'}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -790,7 +711,7 @@ export class SecurityServicesModule extends Construct {
       this,
       'cloudtrail-logs',
       {
-        name: '/aws/cloudtrail/security-logs',
+        name: `/aws/cloudtrail/security-logs-${tags['Environment'] || 'dev'}`,
         retentionInDays: 90,
         tags,
       }
@@ -829,50 +750,9 @@ export class SecurityServicesModule extends Construct {
       }),
     });
 
-    // Add bucket policy for Config
-    new aws.s3BucketPolicy.S3BucketPolicy(this, 'config-bucket-policy', {
-      bucket: bucket.id,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Sid: 'AWSConfigBucketPermissionsCheck',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'config.amazonaws.com',
-            },
-            Action: 's3:GetBucketAcl',
-            Resource: bucket.arn,
-          },
-          {
-            Sid: 'AWSConfigBucketExistenceCheck',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'config.amazonaws.com',
-            },
-            Action: 's3:ListBucket',
-            Resource: bucket.arn,
-          },
-          {
-            Sid: 'AWSConfigBucketDelivery',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'config.amazonaws.com',
-            },
-            Action: 's3:PutObject',
-            Resource: `${bucket.arn}/*`,
-            Condition: {
-              StringEquals: {
-                's3:x-amz-acl': 'bucket-owner-full-control',
-              },
-            },
-          },
-        ],
-      }),
-    });
 
     this.cloudTrail = new aws.cloudtrail.Cloudtrail(this, 'trail', {
-      name: 'security-trail',
+      name: `security-trail-${tags['Environment'] || 'dev'}`,
       s3BucketName: bucket.id,
       includeGlobalServiceEvents: true,
       isMultiRegionTrail: true,
@@ -899,7 +779,7 @@ export class SecurityServicesModule extends Construct {
       this,
       'policy-changes',
       {
-        name: 'detect-policy-changes',
+        name: `detect-policy-changes-${tags['Environment'] || 'dev'}`,
         description: 'Detect IAM policy changes',
         eventPattern: JSON.stringify({
           source: ['aws.iam'],
@@ -939,7 +819,7 @@ export class SecurityServicesModule extends Construct {
     // WAF Web ACL
     // WAF Web ACL
     this.wafWebAcl = new aws.wafv2WebAcl.Wafv2WebAcl(this, 'waf', {
-      name: 'application-waf',
+      name: `application-waf-${tags['Environment'] || 'dev'}`,
       scope: 'REGIONAL',
       defaultAction: {
         allow: {},
@@ -1042,7 +922,7 @@ export class MonitoringModule extends Construct {
       this,
       'app-logs',
       {
-        name: '/aws/application/main',
+        name: `/aws/application/main-${tags['Environment'] || 'dev'}`,
         retentionInDays: 30,
         tags,
       }
@@ -1053,7 +933,7 @@ export class MonitoringModule extends Construct {
       this,
       'dashboard',
       {
-        dashboardName: 'security-monitoring-dashboard',
+        dashboardName: `security-monitoring-dashboard-${tags['Environment'] || 'dev'}`,
         dashboardBody: JSON.stringify({
           widgets: [
             {

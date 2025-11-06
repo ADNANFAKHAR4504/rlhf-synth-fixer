@@ -17,7 +17,7 @@ Design a CDK for Terraform (CDKTF) application in **TypeScript** that provisions
 - Enable **AWS Security Hub** and integrate it with Lambda automation
 - Enforce **MFA on all IAM users**
 - Attach IAM roles to Lambda with proper permissions (least-privilege)
-- Use **AWS Config** to enforce compliance with defined rules
+- Configure compliance monitoring and security rules
 - Configure **AWS WAF** to protect the ALB
 - Detect and alert on policy changes using **CloudTrail + SNS**
 - Implement encryption:

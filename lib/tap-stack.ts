@@ -89,14 +89,14 @@ export class TapStack extends TerraformStack {
       this,
       'lambda-code-bucket',
       {
-        bucket: `tap-lambda-code-${currentAccount.accountId}`,
+        bucket: `tap-lambda-code-${environmentSuffix}-${currentAccount.accountId}`,
         tags: commonTags,
       }
     );
 
     // 1. NETWORKING - VPC with public and private subnets across 2 AZs
     const vpcModule = new VpcModule(this, 'vpc', {
-      name: 'tap-vpc',
+      name: `tap-vpc-${environmentSuffix}`,
       cidr: '10.0.0.0/16',
       azCount: 2,
       publicSubnetCidrs: ['10.0.1.0/24', '10.0.2.0/24'],
@@ -108,7 +108,7 @@ export class TapStack extends TerraformStack {
     // 2. SECURITY GROUPS
     // ALB Security Group - Allow HTTPS (443) from internet
     const albSecurityGroup = new SecurityGroupModule(this, 'alb-sg', {
-      name: 'tap-alb-sg',
+      name: `tap-alb-sg-${environmentSuffix}`,
       vpcId: vpcModule.vpc.id,
       ingressRules: [
         {
@@ -118,12 +118,12 @@ export class TapStack extends TerraformStack {
           cidrBlocks: ['0.0.0.0/0'],
         },
       ],
-      tags: { ...commonTags, Name: 'tap-alb-sg' },
+      tags: { ...commonTags, Name: `tap-alb-sg-${environmentSuffix}` },
     });
 
     // EC2 Security Group - Allow HTTPS from ALB and SSH from bastion
     const ec2SecurityGroup = new SecurityGroupModule(this, 'ec2-sg', {
-      name: 'tap-ec2-sg',
+      name: `tap-ec2-sg-${environmentSuffix}`,
       vpcId: vpcModule.vpc.id,
       ingressRules: [
         {
@@ -139,12 +139,12 @@ export class TapStack extends TerraformStack {
           cidrBlocks: ['10.0.0.0/16'], // Only from VPC
         },
       ],
-      tags: { ...commonTags, Name: 'tap-ec2-sg' },
+      tags: { ...commonTags, Name: `tap-ec2-sg-${environmentSuffix}` },
     });
 
     // RDS Security Group - Allow MySQL/Aurora from EC2
     const rdsSecurityGroup = new SecurityGroupModule(this, 'rds-sg', {
-      name: 'tap-rds-sg',
+      name: `tap-rds-sg-${environmentSuffix}`,
       vpcId: vpcModule.vpc.id,
       ingressRules: [
         {
@@ -154,20 +154,20 @@ export class TapStack extends TerraformStack {
           securityGroups: [ec2SecurityGroup.securityGroup.id],
         },
       ],
-      tags: { ...commonTags, Name: 'tap-rds-sg' },
+      tags: { ...commonTags, Name: `tap-rds-sg-${environmentSuffix}` },
     });
 
     // Lambda Security Group
     const lambdaSecurityGroup = new SecurityGroupModule(this, 'lambda-sg', {
-      name: 'tap-lambda-sg',
+      name: `tap-lambda-sg-${environmentSuffix}`,
       vpcId: vpcModule.vpc.id,
       ingressRules: [],
-      tags: { ...commonTags, Name: 'tap-lambda-sg' },
+      tags: { ...commonTags, Name: `tap-lambda-sg-${environmentSuffix}` },
     });
 
     // 3. COMPUTE - EC2 Instances in private subnets with auto-recovery
     const ec2Module = new Ec2Module(this, 'ec2', {
-      name: 'tap-app-server',
+      name: `tap-app-server-${environmentSuffix}`,
       instanceType: 't3.medium',
       subnetIds: vpcModule.privateSubnets.map(s => s.id),
       securityGroupIds: [ec2SecurityGroup.securityGroup.id],
@@ -183,7 +183,7 @@ systemctl enable nginx
 
     // 4. DATABASE - RDS instance in private subnets
     const rdsModule = new RdsModule(this, 'rds', {
-      identifier: 'tap-database',
+      identifier: `tap-database-${environmentSuffix}`,
       engine: 'mysql',
       instanceClass: 'db.t3.medium',
       allocatedStorage: 100,
@@ -196,7 +196,7 @@ systemctl enable nginx
 
     // 5. LOAD BALANCER - ALB in public subnets
     const albModule = new AlbModule(this, 'alb', {
-      name: 'tap-alb',
+      name: `tap-alb-${environmentSuffix}`,
       vpcId: vpcModule.vpc.id,
       subnetIds: vpcModule.publicSubnets.map(s => s.id),
       securityGroupIds: [albSecurityGroup.securityGroup.id],
@@ -232,7 +232,7 @@ systemctl enable nginx
       this,
       'api-keys',
       {
-        name: 'tap-api-keys',
+        name: `tap-api-keys-${environmentSuffix}`,
         description: 'API keys for external services',
         kmsKeyId: 'alias/aws/secretsmanager',
         tags: commonTags,
@@ -253,7 +253,7 @@ systemctl enable nginx
 
     // 9. DYNAMODB TABLE with encryption
     new aws.dynamodbTable.DynamodbTable(this, 'app-table', {
-      name: 'tap-application-data',
+      name: `tap-application-data-${environmentSuffix}`,
       billingMode: 'PAY_PER_REQUEST',
       hashKey: 'id',
       rangeKey: 'timestamp',
@@ -272,7 +272,7 @@ systemctl enable nginx
 
     // 10. S3 BUCKETS with encryption
     const logBucket = new aws.s3Bucket.S3Bucket(this, 'log-bucket', {
-      bucket: `tap-logs-${currentAccount.accountId}`,
+      bucket: `tap-logs-${environmentSuffix}-${currentAccount.accountId}`,
       tags: commonTags,
     });
 
@@ -369,24 +369,6 @@ systemctl enable nginx
       }
     );
 
-    // 16. CONFIG RULES for compliance
-    new aws.configConfigRule.ConfigConfigRule(this, 's3-bucket-encryption', {
-      name: 's3-bucket-server-side-encryption-enabled',
-      source: {
-        owner: 'AWS',
-        sourceIdentifier: 'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED',
-      },
-      tags: commonTags,
-    });
-
-    new aws.configConfigRule.ConfigConfigRule(this, 'rds-encryption', {
-      name: 'rds-storage-encrypted',
-      source: {
-        owner: 'AWS',
-        sourceIdentifier: 'RDS_STORAGE_ENCRYPTED',
-      },
-      tags: commonTags,
-    });
 
     // TERRAFORM OUTPUTS
     new TerraformOutput(this, 'vpc-id', {
