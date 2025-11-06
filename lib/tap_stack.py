@@ -209,7 +209,6 @@ class TapStack:
             f"rds-postgres-{self.environment_suffix}",
             identifier=f"rds-postgres-{self.environment_suffix}",
             engine="postgres",
-            engine_version="15.3",
             instance_class="db.r5.xlarge",
             allocated_storage=100,
             storage_type="gp3",
@@ -325,7 +324,6 @@ class TapStack:
             replication_subnet_group_id=dms_subnet_group.replication_subnet_group_id,
             publicly_accessible=False,
             multi_az=False,
-            engine_version="3.4.7",
             tags={
                 "Name": f"dms-replication-instance-{self.environment_suffix}",
                 "Environment": self.environment_suffix
