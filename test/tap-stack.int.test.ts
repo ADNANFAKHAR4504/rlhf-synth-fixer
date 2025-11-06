@@ -88,10 +88,14 @@ function extractRegionFromOutputs(): string {
 
 const detectedRegion = extractRegionFromOutputs();
 
-(flat ? describe : describe.skip)('TapStack Integration Tests (Serverless Transaction Processing)', () => {
+describe('TapStack Integration Tests (Serverless Transaction Processing)', () => {
   // Increase timeout for network calls and async operations
   beforeAll(() => {
     jest.setTimeout(60000);
+
+    if (!flat) {
+      throw new Error('flat-outputs.json not found. Deploy the stack first to generate cfn-outputs/flat-outputs.json');
+    }
   });
 
   const apiEndpoint = (flat!['APIEndpoint'] || '').toString();
@@ -175,7 +179,7 @@ const detectedRegion = extractRegionFromOutputs();
         if (error.message?.includes('dynamic import')) {
           console.log('\n— API Gateway Details —');
           console.log('API Endpoint:', apiEndpoint);
-          console.log('⚠️  Skipping live API Gateway validation due to SDK compatibility issue');
+          console.log('WARNING: Skipping live API Gateway validation due to SDK compatibility issue');
           console.log('Note: API endpoint format is valid');
         } else {
           console.log('API Gateway check error:', error.message);
@@ -215,7 +219,7 @@ const detectedRegion = extractRegionFromOutputs();
       } catch (error: any) {
         if (error.message?.includes('dynamic import')) {
           console.log('\n— API Gateway Stage —');
-          console.log('⚠️  Skipping stage validation due to SDK compatibility issue');
+          console.log('WARNING: Skipping stage validation due to SDK compatibility issue');
         } else {
           console.log('Stage check error:', error.message);
         }
@@ -266,10 +270,10 @@ const detectedRegion = extractRegionFromOutputs();
 
         // Unsigned requests should be rejected with 403
         if (status === 403 || status === 401) {
-          console.log('✓ Correctly rejecting unauthenticated requests');
+          console.log('PASS: Correctly rejecting unauthenticated requests');
           expect([403, 401]).toContain(status);
         } else {
-          console.log('⚠️  API may not have IAM authentication properly configured');
+          console.log('WARNING: API may not have IAM authentication properly configured');
         }
       } catch (error: any) {
         console.log('\n— API Gateway Security —');
@@ -338,7 +342,7 @@ const detectedRegion = extractRegionFromOutputs();
         if (error.message?.includes('dynamic import')) {
           console.log('\n— State Machine Details —');
           console.log('State Machine ARN:', stateMachineArn);
-          console.log('⚠️  Skipping state machine validation due to SDK compatibility issue');
+          console.log('WARNING: Skipping state machine validation due to SDK compatibility issue');
         } else {
           throw error;
         }
@@ -371,7 +375,7 @@ const detectedRegion = extractRegionFromOutputs();
       } catch (error: any) {
         if (error.message?.includes('dynamic import')) {
           console.log('\n— State Machine Executions —');
-          console.log('⚠️  Skipping execution history check due to SDK compatibility issue');
+          console.log('WARNING: Skipping execution history check due to SDK compatibility issue');
         } else {
           console.log('Execution history error:', error.message);
         }
@@ -415,10 +419,10 @@ const detectedRegion = extractRegionFromOutputs();
         } catch (error: any) {
           if (error.message?.includes('dynamic import')) {
             console.log(`\n— ${functionType} Lambda —`);
-            console.log('⚠️  Skipping Lambda validation due to SDK compatibility issue');
+            console.log('WARNING: Skipping Lambda validation due to SDK compatibility issue');
           } else if (error.name === 'ResourceNotFoundException') {
             console.log(`\n— ${functionType} Lambda —`);
-            console.log('⚠️  Function not found - check if stack name pattern matches');
+            console.log('WARNING: Function not found - check if stack name pattern matches');
           } else {
             console.log(`${functionType} Lambda check error:`, error.message);
           }
@@ -466,7 +470,7 @@ const detectedRegion = extractRegionFromOutputs();
         if (error.message?.includes('dynamic import')) {
           console.log('\n— Transactions Table —');
           console.log('Table Name:', transactionsTableName);
-          console.log('⚠️  Skipping table validation due to SDK compatibility issue');
+          console.log('WARNING: Skipping table validation due to SDK compatibility issue');
         } else {
           throw error;
         }
@@ -511,7 +515,7 @@ const detectedRegion = extractRegionFromOutputs();
         if (error.message?.includes('dynamic import')) {
           console.log('\n— Fraud Patterns Table —');
           console.log('Table Name:', fraudPatternsTableName);
-          console.log('⚠️  Skipping table validation due to SDK compatibility issue');
+          console.log('WARNING: Skipping table validation due to SDK compatibility issue');
         } else {
           throw error;
         }
@@ -580,10 +584,10 @@ const detectedRegion = extractRegionFromOutputs();
       } catch (error: any) {
         if (error.message?.includes('dynamic import')) {
           console.log('\n— EventBridge Rule —');
-          console.log('⚠️  Skipping EventBridge validation due to SDK compatibility issue');
+          console.log('WARNING: Skipping EventBridge validation due to SDK compatibility issue');
         } else if (error.name === 'ResourceNotFoundException') {
           console.log('\n— EventBridge Rule —');
-          console.log('⚠️  Rule not found - check stack name pattern');
+          console.log('WARNING: Rule not found - check stack name pattern');
         } else {
           console.log('EventBridge check error:', error.message);
         }
@@ -626,7 +630,7 @@ const detectedRegion = extractRegionFromOutputs();
       } catch (error: any) {
         if (error.message?.includes('dynamic import')) {
           console.log('\n— KMS Encryption —');
-          console.log('⚠️  Skipping KMS validation due to SDK compatibility issue');
+          console.log('WARNING: Skipping KMS validation due to SDK compatibility issue');
         } else {
           console.log('KMS check error:', error.message);
         }
@@ -654,7 +658,7 @@ const detectedRegion = extractRegionFromOutputs();
       } catch (error: any) {
         if (error.message?.includes('dynamic import')) {
           console.log('\n— DynamoDB Encryption —');
-          console.log('⚠️  Skipping encryption validation due to SDK compatibility issue');
+          console.log('WARNING: Skipping encryption validation due to SDK compatibility issue');
         } else {
           console.log('Encryption check error:', error.message);
         }
@@ -681,12 +685,12 @@ const detectedRegion = extractRegionFromOutputs();
         console.log('  - TransactionValidator: PutItem, GetItem, Query');
         console.log('  - FraudDetector: GetItem, UpdateItem');
         console.log('  - AuditLogger: PutItem, GetItem');
-        console.log('✓ DynamoDB table is accessible and active');
+        console.log('PASS: DynamoDB table is accessible and active');
       } catch (error: any) {
         if (error.message?.includes('dynamic import')) {
           console.log('\n— Lambda → DynamoDB Connectivity —');
           console.log('Table Name:', transactionsTableName);
-          console.log('⚠️  Skipping connectivity test due to SDK compatibility issue');
+          console.log('WARNING: Skipping connectivity test due to SDK compatibility issue');
         } else {
           throw error;
         }
@@ -712,12 +716,12 @@ const detectedRegion = extractRegionFromOutputs();
         console.log('  - Query fraud patterns');
         console.log('  - Scan for risk analysis');
         console.log('  - GetItem for specific patterns');
-        console.log('✓ Fraud patterns table is accessible and active');
+        console.log('PASS: Fraud patterns table is accessible and active');
       } catch (error: any) {
         if (error.message?.includes('dynamic import')) {
           console.log('\n— Lambda → Fraud Patterns Table Connectivity —');
           console.log('Table Name:', fraudPatternsTableName);
-          console.log('⚠️  Skipping connectivity test due to SDK compatibility issue');
+          console.log('WARNING: Skipping connectivity test due to SDK compatibility issue');
         } else {
           throw error;
         }
@@ -727,48 +731,48 @@ const detectedRegion = extractRegionFromOutputs();
     test('Complete transaction processing path verification', async () => {
       console.log('\n— Complete Transaction Processing Path —');
       console.log('1. Client → API Gateway (POST /transactions)');
-      console.log('   ✓ Regional endpoint with IAM authentication');
-      console.log('   ✓ Request validation using JSON schema');
-      console.log('   ✓ CORS headers configured');
+      console.log('   [x] Regional endpoint with IAM authentication');
+      console.log('   [x] Request validation using JSON schema');
+      console.log('   [x] CORS headers configured');
       console.log('');
       console.log('2. API Gateway → Step Functions');
-      console.log('   ✓ Direct integration (no Lambda proxy)');
-      console.log('   ✓ StartExecution action');
-      console.log('   ✓ X-Ray tracing enabled');
+      console.log('   [x] Direct integration (no Lambda proxy)');
+      console.log('   [x] StartExecution action');
+      console.log('   [x] X-Ray tracing enabled');
       console.log('');
       console.log('3. Step Functions → ValidateTransaction Lambda');
-      console.log('   ✓ Validates required fields');
-      console.log('   ✓ Checks amount > 0');
-      console.log('   ✓ Stores validated transaction in DynamoDB');
-      console.log('   ✓ DLQ configured for failures');
+      console.log('   [x] Validates required fields');
+      console.log('   [x] Checks amount > 0');
+      console.log('   [x] Stores validated transaction in DynamoDB');
+      console.log('   [x] DLQ configured for failures');
       console.log('');
       console.log('4. Step Functions → ParallelProcessing');
       console.log('   ├─ FraudDetector Lambda');
-      console.log('   │  ✓ Queries fraud patterns from DynamoDB');
-      console.log('   │  ✓ Calculates risk score');
-      console.log('   │  ✓ Updates transaction with fraud score');
-      console.log('   │  ✓ Memory: 512MB, Timeout: 30s');
+      console.log('   │  [x] Queries fraud patterns from DynamoDB');
+      console.log('   │  [x] Calculates risk score');
+      console.log('   │  [x] Updates transaction with fraud score');
+      console.log('   │  [x] Memory: 512MB, Timeout: 30s');
       console.log('   └─ AuditLogger Lambda');
-      console.log('      ✓ Creates audit log entry');
-      console.log('      ✓ Updates transaction with audit info');
-      console.log('      ✓ Memory: 128MB, Timeout: 30s');
+      console.log('      [x] Creates audit log entry');
+      console.log('      [x] Updates transaction with audit info');
+      console.log('      [x] Memory: 128MB, Timeout: 30s');
       console.log('');
       console.log('5. EventBridge → AuditLogger (on completion)');
-      console.log('   ✓ Triggers on SUCCEEDED state');
-      console.log('   ✓ Final audit log entry');
-      console.log('   ✓ Retry policy: 2 attempts');
+      console.log('   [x] Triggers on SUCCEEDED state');
+      console.log('   [x] Final audit log entry');
+      console.log('   [x] Retry policy: 2 attempts');
       console.log('');
       console.log('Security & Monitoring:');
-      console.log('   ✓ All data encrypted at rest (KMS)');
-      console.log('   ✓ All Lambda environment vars encrypted');
-      console.log('   ✓ X-Ray tracing on all components');
-      console.log('   ✓ CloudWatch Logs (7-day retention)');
-      console.log('   ✓ Dead Letter Queues for error handling');
+      console.log('   [x] All data encrypted at rest (KMS)');
+      console.log('   [x] All Lambda environment vars encrypted');
+      console.log('   [x] X-Ray tracing on all components');
+      console.log('   [x] CloudWatch Logs (7-day retention)');
+      console.log('   [x] Dead Letter Queues for error handling');
       console.log('');
       console.log('API Endpoint:', apiEndpoint);
       console.log('State Machine:', stateMachineArn);
       console.log('');
-      console.log('✓ All infrastructure components are properly configured');
+      console.log('PASS: All infrastructure components are properly configured');
     });
   });
 
@@ -802,7 +806,7 @@ const detectedRegion = extractRegionFromOutputs();
         });
       } catch (error: any) {
         console.log('\n— X-Ray Tracing —');
-        console.log('⚠️  Skipping tracing validation due to SDK compatibility issue');
+        console.log('WARNING: Skipping tracing validation due to SDK compatibility issue');
       }
     });
 
@@ -822,12 +826,4 @@ const detectedRegion = extractRegionFromOutputs();
     });
   });
 });
-
-if (!flat) {
-  describe.skip('TapStack Integration Tests (Serverless Transaction Processing)', () => {
-    test('flat-outputs.json not found - skipping integration tests', () => {
-      console.log('Deploy the stack first to generate cfn-outputs/flat-outputs.json');
-    });
-  });
-}
 
