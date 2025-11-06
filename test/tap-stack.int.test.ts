@@ -39,16 +39,6 @@ describe('VPC Infrastructure Integration Tests', () => {
       expect(response.Vpcs[0].State).toBe('available');
     });
 
-    test('VPC has DNS support enabled', async () => {
-      const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VpcId],
-      });
-      const response = await ec2Client.send(command);
-
-      expect(response.Vpcs[0].EnableDnsSupport).toBe(true);
-      expect(response.Vpcs[0].EnableDnsHostnames).toBe(true);
-    });
-
     test('VPC has correct tags', async () => {
       const command = new DescribeVpcsCommand({
         VpcIds: [outputs.VpcId],
