@@ -60,7 +60,7 @@ variable "database_subnet_cidrs" {
 variable "postgres_engine_version" {
   description = "PostgreSQL engine version for Aurora"
   type        = string
-  default     = "14.9"
+  default     = "15.6"
 }
 
 variable "database_name" {
