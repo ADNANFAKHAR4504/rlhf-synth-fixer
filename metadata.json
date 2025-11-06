@@ -5,8 +5,10 @@
   "turn_type": "single",
   "team": "synth",
   "startedAt": "2025-11-06T12:00:12Z",
-  "subtask": "Application Deployment",
-  "subject_labels": [],
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Application Deployment"
+  ],
   "po_id": "bo3zl",
   "aws_services": [
     "EKS",
