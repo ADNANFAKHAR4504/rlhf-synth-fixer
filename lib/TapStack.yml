@@ -151,6 +151,7 @@ Mappings:
     dev:     { code: d }
     staging: { code: s }
     prod:    { code: p }
+    default: { code: d }
 
 Conditions:
   CreateAccessLogs: !Equals [ !Ref S3AccessLoggingToggle, 'Enabled' ]
@@ -1272,7 +1273,7 @@ Resources:
               - !If
                 - IsKnownEnv
                 - !FindInMap [ EnvCode, !Ref EnvironmentSuffix, code ]
-                - d
+                - !FindInMap [ EnvCode, default, code ]
               - !Ref UniqueSuffix
           - !Join
             - '-'
@@ -1281,7 +1282,7 @@ Resources:
               - !If
                 - IsKnownEnv
                 - !FindInMap [ EnvCode, !Ref EnvironmentSuffix, code ]
-                - d
+                - !FindInMap [ EnvCode, default, code ]
               - !Select
                 - 0
                 - !Split
