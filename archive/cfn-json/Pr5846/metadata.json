@@ -20,5 +20,10 @@
   ],
   "training_quality": 8,
   "reviewer": "balasl342",
-  "author": "iamarpit-turing"
+  "author": "iamarpit-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
