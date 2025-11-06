@@ -1,8 +1,10 @@
-import pulumi
-import pulumi_aws as aws
 import json
 import random
 import string
+
+import pulumi
+import pulumi_aws as aws
+
 
 class TapStack:
     def __init__(self, name, environment_suffix="prod"):
@@ -469,6 +471,7 @@ class TapStack:
             task_definition=self.task_definition.arn,
             desired_count=2,
             launch_type="FARGATE",
+            platform_version="LATEST",
             network_configuration=aws.ecs.ServiceNetworkConfigurationArgs(
                 assign_public_ip=False,
                 subnets=[subnet.id for subnet in self.private_subnets],
@@ -482,6 +485,7 @@ class TapStack:
             health_check_grace_period_seconds=60,
             tags={"Name": f"ecs-service-{environment_suffix}"},
             opts=pulumi.ResourceOptions(
+                delete_before_replace=True,
                 depends_on=[self.alb_listener, self.rds_instance]
             )
         )

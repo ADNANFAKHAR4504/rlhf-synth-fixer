@@ -5,7 +5,8 @@ Unit tests for the TapStack Pulumi component using Pulumi's testing utilities.
 """
 
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 import pulumi
 
 
@@ -39,6 +40,12 @@ class MyMocks(pulumi.runtime.Mocks):
                 **args.inputs,
                 "id": "ecs-cluster-1",
                 "arn": "arn:aws:ecs:us-east-1:123456789012:cluster/test-cluster",
+            }
+        elif args.typ == "aws:ecs/service:Service":
+            outputs = {
+                **args.inputs,
+                "id": f"ecs-service-{args.name}",
+                "name": args.inputs.get("name", f"service-{args.name}"),
             }
         else:
             outputs = {

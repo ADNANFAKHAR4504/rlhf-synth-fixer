@@ -2,7 +2,7 @@
 
 This is the corrected implementation with all fixes applied for production readiness.
 
-## File: __main__.py
+## File: **main**.py
 
 ```python
 import pulumi
@@ -27,11 +27,13 @@ pulumi.export("rds_endpoint", stack.rds_instance.endpoint)
 ## File: tap_stack.py
 
 ```python
-import pulumi
-import pulumi_aws as aws
 import json
 import random
 import string
+
+import pulumi
+import pulumi_aws as aws
+
 
 class TapStack:
     def __init__(self, name, environment_suffix="prod"):
@@ -109,9 +111,9 @@ class TapStack:
         for i in range(2):
             eip = aws.ec2.Eip(
                 f"nat-eip-{i}-{environment_suffix}",
-                domain="vpc",  # Fixed: vpc=True is deprecated, use domain="vpc"
+                domain="vpc",
                 tags={"Name": f"nat-eip-{i}-{environment_suffix}"},
-                opts=pulumi.ResourceOptions(depends_on=[self.igw])  # Fixed: EIP needs IGW
+                opts=pulumi.ResourceOptions(depends_on=[self.igw])
             )
 
             nat = aws.ec2.NatGateway(
@@ -119,7 +121,7 @@ class TapStack:
                 allocation_id=eip.id,
                 subnet_id=self.public_subnets[i].id,
                 tags={"Name": f"nat-{i}-{environment_suffix}"},
-                opts=pulumi.ResourceOptions(depends_on=[eip, self.igw])  # Fixed: explicit dependencies
+                opts=pulumi.ResourceOptions(depends_on=[eip, self.igw])
             )
             self.nat_gateways.append(nat)
 
@@ -137,7 +139,7 @@ class TapStack:
                 route_table_id=private_rt.id,
                 destination_cidr_block="0.0.0.0/0",
                 nat_gateway_id=self.nat_gateways[i].id,
-                opts=pulumi.ResourceOptions(depends_on=[self.nat_gateways[i]])  # Fixed: explicit dependency
+                opts=pulumi.ResourceOptions(depends_on=[self.nat_gateways[i]])
             )
 
             # Associate private subnets with private route table
@@ -156,8 +158,8 @@ class TapStack:
             image_scanning_configuration=aws.ecr.RepositoryImageScanningConfigurationArgs(
                 scan_on_push=True
             ),
-            image_tag_mutability="MUTABLE",  # Added: allow overwriting tags
-            force_delete=True,  # Added: allow deletion even with images
+            image_tag_mutability="MUTABLE",
+            force_delete=True,
             tags={"Name": f"ecr-repo-{environment_suffix}"}
         )
 
@@ -266,7 +268,6 @@ class TapStack:
         )
 
         # Generate random password for database
-        # Fixed: Use proper random password generation instead of hardcoded password
         db_password = ''.join(random.choices(string.ascii_letters + string.digits, k=20))
         db_username = "postgres"
 
@@ -282,7 +283,7 @@ class TapStack:
             f"rds-{environment_suffix}",
             identifier=f"product-catalog-{environment_suffix}",
             engine="postgres",
-            engine_version="14.7",
+            engine_version="14.15",
             instance_class="db.t3.micro",
             allocated_storage=20,
             storage_encrypted=True,
@@ -294,13 +295,13 @@ class TapStack:
             multi_az=True,
             skip_final_snapshot=True,
             publicly_accessible=False,
-            backup_retention_period=7,  # Added: enable automated backups
-            backup_window="03:00-04:00",  # Added: backup window
-            maintenance_window="mon:04:00-mon:05:00",  # Added: maintenance window
+            backup_retention_period=7,
+            backup_window="03:00-04:00",
+            maintenance_window="mon:04:00-mon:05:00",
             tags={"Name": f"rds-{environment_suffix}"}
         )
 
-        # Fixed: Store secret version properly using Output.all() to handle Pulumi outputs
+        # Store secret version properly using Output.all()
         self.db_secret_version = pulumi.Output.all(
             self.db_secret.id,
             self.rds_instance.endpoint,
@@ -312,7 +313,7 @@ class TapStack:
                 "username": db_username,
                 "password": db_password,
                 "engine": "postgres",
-                "host": args[2],  # Use address instead of parsing endpoint
+                "host": args[2],
                 "port": 5432,
                 "dbname": "productcatalog",
                 "connection_string": f"postgresql://{db_username}:{db_password}@{args[2]}:5432/productcatalog"
@@ -361,7 +362,7 @@ class TapStack:
             policy_arn="arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
         )
 
-        # Fixed: Add specific secrets manager access with proper resource ARN
+        # Add specific secrets manager access with proper resource ARN
         self.secrets_policy = aws.iam.RolePolicy(
             f"ecs-secrets-policy-{environment_suffix}",
             role=self.task_execution_role.id,
@@ -373,7 +374,7 @@ class TapStack:
                         "secretsmanager:GetSecretValue",
                         "secretsmanager:DescribeSecret"
                     ],
-                    "Resource": args[0]  # Fixed: specific resource instead of "*"
+                    "Resource": args[0]
                 }]
             }))
         )
@@ -394,7 +395,7 @@ class TapStack:
             tags={"Name": f"ecs-task-role-{environment_suffix}"}
         )
 
-        # Fixed: Create task definition with proper secret reference (use ::: to reference full JSON)
+        # Create ECS Task Definition
         self.task_definition = aws.ecs.TaskDefinition(
             f"task-def-{environment_suffix}",
             family=f"product-catalog-{environment_suffix}",
@@ -414,14 +415,14 @@ class TapStack:
                 "essential": True,
                 "portMappings": [{
                     "containerPort": 5000,
-                    "hostPort": 5000,  # Added: explicit host port for Fargate
+                    "hostPort": 5000,
                     "protocol": "tcp"
                 }],
                 "secrets": [{
                     "name": "DATABASE_URL",
-                    "valueFrom": f"{args[1]}:connection_string::"  # Fixed: proper secret reference format
+                    "valueFrom": f"{args[1]}:connection_string::"
                 }],
-                "environment": [  # Added: additional environment variables
+                "environment": [
                     {"name": "FLASK_ENV", "value": "production"},
                     {"name": "LOG_LEVEL", "value": "INFO"}
                 ],
@@ -433,7 +434,7 @@ class TapStack:
                         "awslogs-stream-prefix": "ecs"
                     }
                 },
-                "healthCheck": {  # Added: container health check
+                "healthCheck": {
                     "command": ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"],
                     "interval": 30,
                     "timeout": 5,
@@ -451,9 +452,9 @@ class TapStack:
             load_balancer_type="application",
             security_groups=[self.alb_sg.id],
             subnets=[subnet.id for subnet in self.public_subnets],
-            enable_deletion_protection=False,  # Added: allow deletion for testing
-            enable_http2=True,  # Added: enable HTTP/2
-            idle_timeout=60,  # Added: connection idle timeout
+            enable_deletion_protection=False,
+            enable_http2=True,
+            idle_timeout=60,
             tags={"Name": f"alb-{environment_suffix}"}
         )
 
@@ -464,7 +465,7 @@ class TapStack:
             protocol="HTTP",
             vpc_id=self.vpc.id,
             target_type="ip",
-            deregistration_delay=30,  # Added: faster draining for testing
+            deregistration_delay=30,
             health_check=aws.lb.TargetGroupHealthCheckArgs(
                 enabled=True,
                 path="/health",
@@ -474,7 +475,7 @@ class TapStack:
                 unhealthy_threshold=2,
                 timeout=5,
                 interval=30,
-                matcher="200"  # Added: explicit success code
+                matcher="200"
             ),
             tags={"Name": f"tg-{environment_suffix}"}
         )
@@ -491,7 +492,7 @@ class TapStack:
             )]
         )
 
-        # Fixed: Create ECS Service with proper depends_on to avoid race conditions
+        # Create ECS Service with proper depends_on
         self.ecs_service = aws.ecs.Service(
             f"ecs-service-{environment_suffix}",
             name=f"product-catalog-{environment_suffix}",
@@ -499,7 +500,7 @@ class TapStack:
             task_definition=self.task_definition.arn,
             desired_count=2,
             launch_type="FARGATE",
-            platform_version="LATEST",  # Added: explicit platform version
+            platform_version="LATEST",
             network_configuration=aws.ecs.ServiceNetworkConfigurationArgs(
                 assign_public_ip=False,
                 subnets=[subnet.id for subnet in self.private_subnets],
@@ -510,14 +511,11 @@ class TapStack:
                 container_name="product-catalog",
                 container_port=5000
             )],
-            health_check_grace_period_seconds=60,  # Added: grace period for tasks to become healthy
-            deployment_configuration=aws.ecs.ServiceDeploymentConfigurationArgs(  # Added: deployment config
-                maximum_percent=200,
-                minimum_healthy_percent=100
-            ),
+            health_check_grace_period_seconds=60,
             tags={"Name": f"ecs-service-{environment_suffix}"},
             opts=pulumi.ResourceOptions(
-                depends_on=[self.alb_listener, self.rds_instance]  # Fixed: explicit dependencies
+                delete_before_replace=True,
+                depends_on=[self.alb_listener, self.rds_instance]
             )
         )
 
@@ -529,7 +527,7 @@ class TapStack:
             resource_id=pulumi.Output.concat("service/", self.ecs_cluster.name, "/", self.ecs_service.name),
             scalable_dimension="ecs:service:DesiredCount",
             service_namespace="ecs",
-            opts=pulumi.ResourceOptions(depends_on=[self.ecs_service])  # Fixed: explicit dependency
+            opts=pulumi.ResourceOptions(depends_on=[self.ecs_service])
         )
 
         # Create Auto Scaling Policy
@@ -577,27 +575,32 @@ config:
 ## Deployment Instructions
 
 1. Install dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```
 
 2. Configure AWS credentials:
+
 ```bash
 aws configure
 ```
 
 3. Initialize Pulumi stack:
+
 ```bash
 pulumi stack init dev
 pulumi config set aws:region us-east-1
 ```
 
 4. Deploy infrastructure:
+
 ```bash
 pulumi up
 ```
 
 5. Build and push Docker image to ECR:
+
 ```bash
 # Get ECR URL from outputs
 ECR_URL=$(pulumi stack output ecr_repository_url)
@@ -615,6 +618,7 @@ aws ecs update-service --cluster $(pulumi stack output ecs_cluster_name) --servi
 ```
 
 6. Access the application:
+
 ```bash
 ALB_DNS=$(pulumi stack output alb_dns_name)
 curl http://$ALB_DNS/health
