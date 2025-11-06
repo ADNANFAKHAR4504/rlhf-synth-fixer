@@ -37,7 +37,12 @@ Parameters:
 
   CodeStarConnectionArn:
     Type: String
-    Description: ARN of the CodeStar Connection for GitHub (create this manually in AWS Console first)
+    Default: ''
+    Description: ARN of the CodeStar Connection for GitHub (create this manually in AWS Console first, or leave empty to skip CI/CD pipeline)
+
+# Conditions
+Conditions:
+  CreatePipeline: !Not [!Equals [!Ref CodeStarConnectionArn, '']]
 
 # Global Configuration for Lambda Functions
 Globals:
@@ -690,6 +695,7 @@ Resources:
   # S3 Bucket for Pipeline Artifacts
   PipelineArtifactStore:
     Type: AWS::S3::Bucket
+    Condition: CreatePipeline
     Properties:
       BucketName: !Sub '${ProjectName}-${Environment}-pipeline-artifacts-${AWS::AccountId}'
       BucketEncryption:
@@ -712,6 +718,7 @@ Resources:
   # CodeBuild Project
   CodeBuildProject:
     Type: AWS::CodeBuild::Project
+    Condition: CreatePipeline
     Properties:
       Name: !Sub '${ProjectName}-${Environment}-Build'
       ServiceRole: !GetAtt CodeBuildRole.Arn
@@ -755,6 +762,7 @@ Resources:
   # CodeBuild IAM Role
   CodeBuildRole:
     Type: AWS::IAM::Role
+    Condition: CreatePipeline
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -789,6 +797,7 @@ Resources:
   # CodePipeline
   DeploymentPipeline:
     Type: AWS::CodePipeline::Pipeline
+    Condition: CreatePipeline
     Properties:
       Name: !Sub '${ProjectName}-${Environment}-Pipeline'
       RoleArn: !GetAtt CodePipelineRole.Arn
@@ -850,6 +859,7 @@ Resources:
   # CodePipeline IAM Role
   CodePipelineRole:
     Type: AWS::IAM::Role
+    Condition: CreatePipeline
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -891,6 +901,7 @@ Resources:
   # CloudFormation Execution Role
   CloudFormationRole:
     Type: AWS::IAM::Role
+    Condition: CreatePipeline
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -975,6 +986,7 @@ Outputs:
       Name: !Sub '${ProjectName}-${Environment}-TableName'
 
   PipelineUrl:
+    Condition: CreatePipeline
     Description: URL of the CodePipeline
     Value: !Sub 'https://console.aws.amazon.com/codesuite/codepipeline/pipelines/${DeploymentPipeline}/view'
     Export:
