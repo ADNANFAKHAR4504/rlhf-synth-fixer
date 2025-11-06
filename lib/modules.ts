@@ -619,17 +619,18 @@ export class ComputeModule extends Construct {
         enabled: true,
         healthyThreshold: 2,
         interval: 30,
-        matcher: '200',
-        path: '/health',
+        matcher: '200,404', // Accept 404 as nginx default page returns 404 for /
+        path: '/', // Change from /health to /
         port: 'traffic-port',
         protocol: 'HTTP',
         timeout: 5,
-        unhealthyThreshold: 2,
+        unhealthyThreshold: 3,
       },
       tags: config.tags,
     });
 
     // Task Definition
+    // In ComputeModule class, update the task definition:
     this.taskDefinition = new aws.ecsTaskDefinition.EcsTaskDefinition(
       this,
       'task-def',
@@ -644,7 +645,8 @@ export class ComputeModule extends Construct {
         containerDefinitions: JSON.stringify([
           {
             name: 'app',
-            image: 'nginx:latest',
+            // Use a simple web server with health check support
+            image: 'public.ecr.aws/nginx/nginx:stable-alpine',
             cpu: 256,
             memory: 512,
             essential: true,
@@ -654,12 +656,37 @@ export class ComputeModule extends Construct {
                 protocol: 'tcp',
               },
             ],
+            // Add health check command
+            healthCheck: {
+              command: [
+                'CMD-SHELL',
+                'wget --no-verbose --tries=1 --spider http://localhost/ || exit 1',
+              ],
+              interval: 30,
+              timeout: 5,
+              retries: 3,
+              startPeriod: 60,
+            },
+            // Add environment variables for database connection if needed
+            environment: database
+              ? [
+                  {
+                    name: 'DB_ENDPOINT',
+                    value: database.cluster.endpoint,
+                  },
+                  {
+                    name: 'DB_NAME',
+                    value: 'appdb',
+                  },
+                ]
+              : [],
             logConfiguration: {
               logDriver: 'awslogs',
               options: {
                 'awslogs-group': `/ecs/${config.name}-app`,
                 'awslogs-region': awsRegion,
                 'awslogs-stream-prefix': 'ecs',
+                'awslogs-create-group': 'true',
               },
             },
           },
@@ -702,6 +729,40 @@ export class ComputeModule extends Construct {
         tags: config.tags,
       }
     );
+
+    // Add this rule to allow health checks from ALB
+    new aws.securityGroup.SecurityGroup(this, 'service-sg', {
+      name: `${config.name}-ecs-service-sg`,
+      description: 'Security group for ECS service',
+      vpcId: network.vpc.id,
+      tags: config.tags,
+    });
+
+    // Add ingress rule to allow traffic from ALB
+    new aws.securityGroupRule.SecurityGroupRule(
+      this,
+      'service-sg-ingress-alb',
+      {
+        type: 'ingress',
+        securityGroupId: serviceSecurityGroup.id,
+        fromPort: 80,
+        toPort: 80,
+        protocol: 'tcp',
+        sourceSecurityGroupId: albSecurityGroupId,
+        description: 'Allow traffic from ALB',
+      }
+    );
+
+    // Add egress rule for outbound traffic
+    new aws.securityGroupRule.SecurityGroupRule(this, 'service-sg-egress', {
+      type: 'egress',
+      securityGroupId: serviceSecurityGroup.id,
+      fromPort: 0,
+      toPort: 0,
+      protocol: '-1',
+      cidrBlocks: ['0.0.0.0/0'],
+      description: 'Allow all outbound traffic',
+    });
 
     // ECS Service
     this.service = new aws.ecsService.EcsService(this, 'service', {
