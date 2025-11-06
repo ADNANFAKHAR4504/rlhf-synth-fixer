@@ -4,13 +4,14 @@ import csv
 import io
 import os
 from datetime import datetime
-
-s3_client = boto3.client('s3')
-dynamodb = boto3.resource('dynamodb')
-table_name = os.environ['DYNAMODB_TABLE']
-table = dynamodb.Table(table_name)
+from decimal import Decimal
 
 def handler(event, context):
+    # Initialize clients inside handler for proper mocking in tests
+    s3_client = boto3.client('s3')
+    dynamodb = boto3.resource('dynamodb')
+    table_name = os.environ['DYNAMODB_TABLE']
+    table = dynamodb.Table(table_name)
     """
     Validates CSV transaction files uploaded to S3
     """
@@ -40,7 +41,7 @@ def handler(event, context):
                     continue
 
                 # Validate data types
-                amount = float(row['amount'])
+                amount = Decimal(str(row['amount']))
                 timestamp = int(datetime.utcnow().timestamp())
 
                 # Store in DynamoDB

@@ -7,19 +7,39 @@ Unit tests for the validation Lambda function using moto for AWS mocking.
 import unittest
 import json
 import os
+import sys
 from unittest.mock import patch, MagicMock
 from moto import mock_aws
 import boto3
+import importlib
 
 
 class TestValidationLambda(unittest.TestCase):
     """Test cases for validation Lambda function."""
 
+    def setUp(self):
+        """Set up test environment variables before each test."""
+        # Set default environment variables for all tests
+        self.env_patcher = patch.dict(os.environ, {
+            'S3_BUCKET': 'test-transaction-bucket',
+            'DYNAMODB_TABLE': 'test-transactions-table',
+            'AWS_DEFAULT_REGION': 'us-east-1'
+        })
+        self.env_patcher.start()
+
+    def tearDown(self):
+        """Clean up after each test."""
+        self.env_patcher.stop()
+        # Unload the module so it can be freshly imported in the next test
+        if 'lib.lambda.validation' in sys.modules:
+            del sys.modules['lib.lambda.validation']
+
     @mock_aws
     def test_handler_processes_s3_event(self):
         """Test that handler processes S3 event correctly."""
         # Import after mocking
-        from lambda.validation import handler
+        validation_module = importlib.import_module('lib.lambda.validation')
+        handler = validation_module.handler
 
         # Setup mocked AWS services
         s3 = boto3.client('s3', region_name='us-east-1')
@@ -71,10 +91,9 @@ txn002,250.75,merchant456,5500000000000004,1609459260"""
             'DYNAMODB_TABLE': table_name
         }):
             # Reload module to pick up new environment variables
-            import importlib
-            import lambda.validation
-            importlib.reload(lambda.validation)
-            from lambda.validation import handler
+            validation_module = importlib.import_module('lib.lambda.validation')
+            importlib.reload(validation_module)
+            handler = validation_module.handler
 
             # Execute handler
             result = handler(event, None)
@@ -83,7 +102,7 @@ txn002,250.75,merchant456,5500000000000004,1609459260"""
             self.assertEqual(result['statusCode'], 200)
             body = json.loads(result['body'])
             self.assertEqual(body['processed'], 2)
-            self.assertEqual(body['failed'], 0)
+            self.assertEqual(body['errors'], 0)
 
             # Verify items in DynamoDB
             response = table.scan()
@@ -92,7 +111,8 @@ txn002,250.75,merchant456,5500000000000004,1609459260"""
     @mock_aws
     def test_handler_validates_csv_structure(self):
         """Test that handler validates CSV structure."""
-        from lambda.validation import handler
+        validation_module = importlib.import_module('lib.lambda.validation')
+        handler = validation_module.handler
 
         # Setup mocked AWS services
         s3 = boto3.client('s3', region_name='us-east-1')
@@ -143,10 +163,9 @@ txn001,100.50"""
             'DYNAMODB_TABLE': table_name
         }):
             # Reload module
-            import importlib
-            import lambda.validation
-            importlib.reload(lambda.validation)
-            from lambda.validation import handler
+            validation_module = importlib.import_module('lib.lambda.validation')
+            importlib.reload(validation_module)
+            handler = validation_module.handler
 
             # Execute handler
             result = handler(event, None)
@@ -157,7 +176,8 @@ txn001,100.50"""
     @mock_aws
     def test_card_number_masking(self):
         """Test that card numbers are properly masked."""
-        from lambda.validation import handler
+        validation_module = importlib.import_module('lib.lambda.validation')
+        handler = validation_module.handler
 
         # Setup mocked AWS services
         s3 = boto3.client('s3', region_name='us-east-1')
@@ -208,10 +228,9 @@ txn003,100.00,merchant789,4111111111111111,1609459200"""
             'DYNAMODB_TABLE': table_name
         }):
             # Reload module
-            import importlib
-            import lambda.validation
-            importlib.reload(lambda.validation)
-            from lambda.validation import handler
+            validation_module = importlib.import_module('lib.lambda.validation')
+            importlib.reload(validation_module)
+            handler = validation_module.handler
 
             # Execute handler
             handler(event, None)
@@ -228,7 +247,8 @@ txn003,100.00,merchant789,4111111111111111,1609459200"""
     @mock_aws
     def test_error_handling_missing_bucket(self):
         """Test error handling when S3 bucket doesn't exist."""
-        from lambda.validation import handler
+        validation_module = importlib.import_module('lib.lambda.validation')
+        handler = validation_module.handler
 
         # Create S3 event for non-existent bucket
         event = {
@@ -246,10 +266,9 @@ txn003,100.00,merchant789,4111111111111111,1609459200"""
             'DYNAMODB_TABLE': 'test-table'
         }):
             # Reload module
-            import importlib
-            import lambda.validation
-            importlib.reload(lambda.validation)
-            from lambda.validation import handler
+            validation_module = importlib.import_module('lib.lambda.validation')
+            importlib.reload(validation_module)
+            handler = validation_module.handler
 
             # Execute handler
             result = handler(event, None)

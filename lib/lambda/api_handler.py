@@ -3,14 +3,14 @@ import boto3
 import os
 from datetime import datetime, timedelta
 
-s3_client = boto3.client('s3')
-dynamodb = boto3.resource('dynamodb')
-
-bucket_name = os.environ['S3_BUCKET']
-table_name = os.environ['DYNAMODB_TABLE']
-table = dynamodb.Table(table_name)
-
 def handler(event, context):
+    # Initialize clients inside handler for proper mocking in tests
+    s3_client = boto3.client('s3')
+    dynamodb = boto3.resource('dynamodb')
+    bucket_name = os.environ['S3_BUCKET']
+    table_name = os.environ['DYNAMODB_TABLE']
+    table = dynamodb.Table(table_name)
+    
     """
     Handles API Gateway requests for presigned URLs and status checks
     """
@@ -20,11 +20,11 @@ def handler(event, context):
 
         # Handle POST /upload - generate presigned URL
         if path == '/upload' and http_method == 'POST':
-            return handle_upload_request(event)
+            return handle_upload_request(event, s3_client, bucket_name)
 
         # Handle GET /status/{transaction_id}
         if path.startswith('/status/') and http_method == 'GET':
-            return handle_status_request(event)
+            return handle_status_request(event, table)
 
         return {
             'statusCode': 404,
@@ -43,7 +43,7 @@ def handler(event, context):
             })
         }
 
-def handle_upload_request(event):
+def handle_upload_request(event, s3_client, bucket_name):
     """
     Generate presigned URL for file upload
     """
@@ -86,7 +86,7 @@ def handle_upload_request(event):
             })
         }
 
-def handle_status_request(event):
+def handle_status_request(event, table):
     """
     Check transaction processing status
     """

@@ -7,19 +7,40 @@ Unit tests for the API handler Lambda function using moto for AWS mocking.
 import unittest
 import json
 import os
+import sys
 from unittest.mock import patch
 from moto import mock_aws
 import boto3
 from decimal import Decimal
+import importlib
 
 
 class TestApiHandlerLambda(unittest.TestCase):
     """Test cases for API handler Lambda function."""
 
+    def setUp(self):
+        """Set up test environment variables before each test."""
+        # Set default environment variables for all tests
+        self.env_patcher = patch.dict(os.environ, {
+            'S3_BUCKET': 'test-transaction-bucket',
+            'DYNAMODB_TABLE': 'test-transactions-table',
+            'AWS_DEFAULT_REGION': 'us-east-1'
+        })
+        self.env_patcher.start()
+
+    def tearDown(self):
+        """Clean up after each test."""
+        self.env_patcher.stop()
+        # Unload the module so it can be freshly imported in the next test
+        if 'lib.lambda.api_handler' in sys.modules:
+            del sys.modules['lib.lambda.api_handler']
+
     @mock_aws
     def test_upload_endpoint_generates_presigned_url(self):
         """Test POST /upload generates presigned URL."""
-        from lambda.api_handler import handler
+        # Import module (environment variables already set in setUp)
+        api_handler = importlib.import_module('lib.lambda.api_handler')
+        handler = api_handler.handler
 
         # Setup mocked S3
         s3 = boto3.client('s3', region_name='us-east-1')
@@ -50,31 +71,26 @@ class TestApiHandlerLambda(unittest.TestCase):
             'body': None
         }
 
-        # Set environment variables
-        with patch.dict(os.environ, {
-            'S3_BUCKET': bucket_name,
-            'DYNAMODB_TABLE': table_name
-        }):
-            # Reload module
-            import importlib
-            import lambda.api_handler
-            importlib.reload(lambda.api_handler)
-            from lambda.api_handler import handler
+        # Reload module to pick up mocked AWS resources
+        api_handler_module = importlib.import_module('lib.lambda.api_handler')
+        importlib.reload(api_handler_module)
+        handler = api_handler_module.handler
 
-            # Execute handler
-            result = handler(event, None)
+        # Execute handler
+        result = handler(event, None)
 
-            # Verify response
-            self.assertEqual(result['statusCode'], 200)
-            body = json.loads(result['body'])
-            self.assertIn('upload_url', body)
-            self.assertIn('filename', body)
-            self.assertEqual(body['expires_in'], 900)
+        # Verify response
+        self.assertEqual(result['statusCode'], 200)
+        body = json.loads(result['body'])
+        self.assertIn('upload_url', body)
+        self.assertIn('filename', body)
+        self.assertEqual(body['expires_in'], 900)
 
     @mock_aws
     def test_status_endpoint_returns_transaction(self):
         """Test GET /status/{transaction_id} returns transaction."""
-        from lambda.api_handler import handler
+        api_handler_module = importlib.import_module('lib.lambda.api_handler')
+        handler = api_handler_module.handler
 
         # Setup mocked DynamoDB
         dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
@@ -119,10 +135,9 @@ class TestApiHandlerLambda(unittest.TestCase):
             'DYNAMODB_TABLE': table_name
         }):
             # Reload module
-            import importlib
-            import lambda.api_handler
-            importlib.reload(lambda.api_handler)
-            from lambda.api_handler import handler
+            api_handler_module = importlib.import_module('lib.lambda.api_handler')
+            importlib.reload(api_handler_module)
+            handler = api_handler_module.handler
 
             # Execute handler
             result = handler(event, None)
@@ -137,7 +152,8 @@ class TestApiHandlerLambda(unittest.TestCase):
     @mock_aws
     def test_status_endpoint_transaction_not_found(self):
         """Test GET /status/{transaction_id} when transaction doesn't exist."""
-        from lambda.api_handler import handler
+        api_handler_module = importlib.import_module('lib.lambda.api_handler')
+        handler = api_handler_module.handler
 
         # Setup mocked DynamoDB
         dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
@@ -174,10 +190,9 @@ class TestApiHandlerLambda(unittest.TestCase):
             'DYNAMODB_TABLE': table_name
         }):
             # Reload module
-            import importlib
-            import lambda.api_handler
-            importlib.reload(lambda.api_handler)
-            from lambda.api_handler import handler
+            api_handler_module = importlib.import_module('lib.lambda.api_handler')
+            importlib.reload(api_handler_module)
+            handler = api_handler_module.handler
 
             # Execute handler
             result = handler(event, None)
@@ -190,7 +205,8 @@ class TestApiHandlerLambda(unittest.TestCase):
     @mock_aws
     def test_invalid_endpoint_returns_404(self):
         """Test invalid endpoint returns 404."""
-        from lambda.api_handler import handler
+        api_handler_module = importlib.import_module('lib.lambda.api_handler')
+        handler = api_handler_module.handler
 
         # Setup mocked services
         s3 = boto3.client('s3', region_name='us-east-1')
@@ -225,10 +241,9 @@ class TestApiHandlerLambda(unittest.TestCase):
             'DYNAMODB_TABLE': table_name
         }):
             # Reload module
-            import importlib
-            import lambda.api_handler
-            importlib.reload(lambda.api_handler)
-            from lambda.api_handler import handler
+            api_handler_module = importlib.import_module('lib.lambda.api_handler')
+            importlib.reload(api_handler_module)
+            handler = api_handler_module.handler
 
             # Execute handler
             result = handler(event, None)
@@ -241,7 +256,8 @@ class TestApiHandlerLambda(unittest.TestCase):
     @mock_aws
     def test_cors_headers_present(self):
         """Test that CORS headers are present in responses."""
-        from lambda.api_handler import handler
+        api_handler_module = importlib.import_module('lib.lambda.api_handler')
+        handler = api_handler_module.handler
 
         # Setup mocked S3
         s3 = boto3.client('s3', region_name='us-east-1')
@@ -278,10 +294,9 @@ class TestApiHandlerLambda(unittest.TestCase):
             'DYNAMODB_TABLE': table_name
         }):
             # Reload module
-            import importlib
-            import lambda.api_handler
-            importlib.reload(lambda.api_handler)
-            from lambda.api_handler import handler
+            api_handler_module = importlib.import_module('lib.lambda.api_handler')
+            importlib.reload(api_handler_module)
+            handler = api_handler_module.handler
 
             # Execute handler
             result = handler(event, None)
@@ -294,7 +309,8 @@ class TestApiHandlerLambda(unittest.TestCase):
     @mock_aws
     def test_decimal_to_float_conversion(self):
         """Test that Decimal values are converted to float for JSON."""
-        from lambda.api_handler import handler
+        api_handler_module = importlib.import_module('lib.lambda.api_handler')
+        handler = api_handler_module.handler
 
         # Setup mocked DynamoDB
         dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
@@ -339,10 +355,9 @@ class TestApiHandlerLambda(unittest.TestCase):
             'DYNAMODB_TABLE': table_name
         }):
             # Reload module
-            import importlib
-            import lambda.api_handler
-            importlib.reload(lambda.api_handler)
-            from lambda.api_handler import handler
+            api_handler_module = importlib.import_module('lib.lambda.api_handler')
+            importlib.reload(api_handler_module)
+            handler = api_handler_module.handler
 
             # Execute handler
             result = handler(event, None)

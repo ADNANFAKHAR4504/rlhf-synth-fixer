@@ -7,19 +7,38 @@ Unit tests for the anomaly detection Lambda function using moto for AWS mocking.
 import unittest
 import json
 import os
+import sys
 from unittest.mock import patch
 from moto import mock_aws
 import boto3
 from decimal import Decimal
+import importlib
 
 
 class TestAnomalyDetectionLambda(unittest.TestCase):
     """Test cases for anomaly detection Lambda function."""
 
+    def setUp(self):
+        """Set up test environment variables before each test."""
+        # Set default environment variables for all tests
+        self.env_patcher = patch.dict(os.environ, {
+            'SNS_TOPIC_ARN': 'arn:aws:sns:us-east-1:123456789012:test-alerts-topic',
+            'AWS_DEFAULT_REGION': 'us-east-1'
+        })
+        self.env_patcher.start()
+
+    def tearDown(self):
+        """Clean up after each test."""
+        self.env_patcher.stop()
+        # Unload the module so it can be freshly imported in the next test
+        if 'lib.lambda.anomaly_detection' in sys.modules:
+            del sys.modules['lib.lambda.anomaly_detection']
+
     @mock_aws
     def test_handler_processes_dynamodb_stream(self):
         """Test that handler processes DynamoDB stream events."""
-        from lambda.anomaly_detection import handler
+        anomaly_detection = importlib.import_module('lib.lambda.anomaly_detection')
+        handler = anomaly_detection.handler
 
         # Setup mocked SNS
         sns = boto3.client('sns', region_name='us-east-1')
@@ -46,10 +65,9 @@ class TestAnomalyDetectionLambda(unittest.TestCase):
             'SNS_TOPIC_ARN': topic_arn
         }):
             # Reload module
-            import importlib
-            import lambda.anomaly_detection
-            importlib.reload(lambda.anomaly_detection)
-            from lambda.anomaly_detection import handler
+            anomaly_detection_module = importlib.import_module('lib.lambda.anomaly_detection')
+            importlib.reload(anomaly_detection_module)
+            handler = anomaly_detection_module.handler
 
             # Execute handler
             result = handler(event, None)
@@ -62,7 +80,8 @@ class TestAnomalyDetectionLambda(unittest.TestCase):
     @mock_aws
     def test_detects_high_amount_anomaly(self):
         """Test detection of high transaction amounts."""
-        from lambda.anomaly_detection import handler
+        anomaly_detection = importlib.import_module('lib.lambda.anomaly_detection')
+        handler = anomaly_detection.handler
 
         # Setup mocked SNS
         sns = boto3.client('sns', region_name='us-east-1')
@@ -89,10 +108,9 @@ class TestAnomalyDetectionLambda(unittest.TestCase):
             'SNS_TOPIC_ARN': topic_arn
         }):
             # Reload module
-            import importlib
-            import lambda.anomaly_detection
-            importlib.reload(lambda.anomaly_detection)
-            from lambda.anomaly_detection import handler
+            anomaly_detection_module = importlib.import_module('lib.lambda.anomaly_detection')
+            importlib.reload(anomaly_detection_module)
+            handler = anomaly_detection_module.handler
 
             # Execute handler
             result = handler(event, None)
@@ -105,7 +123,8 @@ class TestAnomalyDetectionLambda(unittest.TestCase):
     @mock_aws
     def test_detects_low_amount_anomaly(self):
         """Test detection of suspiciously low amounts."""
-        from lambda.anomaly_detection import handler
+        anomaly_detection = importlib.import_module('lib.lambda.anomaly_detection')
+        handler = anomaly_detection.handler
 
         # Setup mocked SNS
         sns = boto3.client('sns', region_name='us-east-1')
@@ -132,10 +151,9 @@ class TestAnomalyDetectionLambda(unittest.TestCase):
             'SNS_TOPIC_ARN': topic_arn
         }):
             # Reload module
-            import importlib
-            import lambda.anomaly_detection
-            importlib.reload(lambda.anomaly_detection)
-            from lambda.anomaly_detection import handler
+            anomaly_detection_module = importlib.import_module('lib.lambda.anomaly_detection')
+            importlib.reload(anomaly_detection_module)
+            handler = anomaly_detection_module.handler
 
             # Execute handler
             result = handler(event, None)
@@ -148,7 +166,8 @@ class TestAnomalyDetectionLambda(unittest.TestCase):
     @mock_aws
     def test_sends_sns_alert(self):
         """Test that SNS alerts are sent for anomalies."""
-        from lambda.anomaly_detection import handler
+        anomaly_detection = importlib.import_module('lib.lambda.anomaly_detection')
+        handler = anomaly_detection.handler
 
         # Setup mocked SNS
         sns = boto3.client('sns', region_name='us-east-1')
@@ -182,10 +201,9 @@ class TestAnomalyDetectionLambda(unittest.TestCase):
             'SNS_TOPIC_ARN': topic_arn
         }):
             # Reload module
-            import importlib
-            import lambda.anomaly_detection
-            importlib.reload(lambda.anomaly_detection)
-            from lambda.anomaly_detection import handler
+            anomaly_detection_module = importlib.import_module('lib.lambda.anomaly_detection')
+            importlib.reload(anomaly_detection_module)
+            handler = anomaly_detection_module.handler
 
             # Execute handler
             result = handler(event, None)
@@ -199,7 +217,8 @@ class TestAnomalyDetectionLambda(unittest.TestCase):
     @mock_aws
     def test_processes_multiple_records(self):
         """Test processing multiple records in one event."""
-        from lambda.anomaly_detection import handler
+        anomaly_detection = importlib.import_module('lib.lambda.anomaly_detection')
+        handler = anomaly_detection.handler
 
         # Setup mocked SNS
         sns = boto3.client('sns', region_name='us-east-1')
@@ -239,10 +258,9 @@ class TestAnomalyDetectionLambda(unittest.TestCase):
             'SNS_TOPIC_ARN': topic_arn
         }):
             # Reload module
-            import importlib
-            import lambda.anomaly_detection
-            importlib.reload(lambda.anomaly_detection)
-            from lambda.anomaly_detection import handler
+            anomaly_detection_module = importlib.import_module('lib.lambda.anomaly_detection')
+            importlib.reload(anomaly_detection_module)
+            handler = anomaly_detection_module.handler
 
             # Execute handler
             result = handler(event, None)
@@ -256,7 +274,8 @@ class TestAnomalyDetectionLambda(unittest.TestCase):
     @mock_aws
     def test_error_handling_missing_topic(self):
         """Test error handling when SNS topic doesn't exist."""
-        from lambda.anomaly_detection import handler
+        anomaly_detection = importlib.import_module('lib.lambda.anomaly_detection')
+        handler = anomaly_detection.handler
 
         # Create DynamoDB stream event
         event = {
@@ -278,10 +297,9 @@ class TestAnomalyDetectionLambda(unittest.TestCase):
             'SNS_TOPIC_ARN': 'arn:aws:sns:us-east-1:123456789012:non-existent'
         }):
             # Reload module
-            import importlib
-            import lambda.anomaly_detection
-            importlib.reload(lambda.anomaly_detection)
-            from lambda.anomaly_detection import handler
+            anomaly_detection_module = importlib.import_module('lib.lambda.anomaly_detection')
+            importlib.reload(anomaly_detection_module)
+            handler = anomaly_detection_module.handler
 
             # Execute handler
             result = handler(event, None)

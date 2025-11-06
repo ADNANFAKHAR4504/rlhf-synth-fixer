@@ -206,7 +206,7 @@ class TapStack(pulumi.ComponentResource):
             memory_size=512,
             reserved_concurrent_executions=10,
             code=pulumi.AssetArchive({
-                ".": pulumi.FileArchive("./lambda")
+                ".": pulumi.FileArchive("./lib/lambda")
             }),
             environment=aws.lambda_.FunctionEnvironmentArgs(
                 variables={
@@ -329,7 +329,7 @@ class TapStack(pulumi.ComponentResource):
             memory_size=512,
             reserved_concurrent_executions=10,
             code=pulumi.AssetArchive({
-                ".": pulumi.FileArchive("./lambda")
+                ".": pulumi.FileArchive("./lib/lambda")
             }),
             environment=aws.lambda_.FunctionEnvironmentArgs(
                 variables={
@@ -438,7 +438,7 @@ class TapStack(pulumi.ComponentResource):
             memory_size=512,
             reserved_concurrent_executions=10,
             code=pulumi.AssetArchive({
-                ".": pulumi.FileArchive("./lambda")
+                ".": pulumi.FileArchive("./lib/lambda")
             }),
             environment=aws.lambda_.FunctionEnvironmentArgs(
                 variables={

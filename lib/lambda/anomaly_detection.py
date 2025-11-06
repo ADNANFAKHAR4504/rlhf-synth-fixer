@@ -3,10 +3,10 @@ import boto3
 import os
 from decimal import Decimal
 
-sns_client = boto3.client('sns')
-topic_arn = os.environ['SNS_TOPIC_ARN']
-
 def handler(event, context):
+    # Initialize clients inside handler for proper mocking in tests
+    sns_client = boto3.client('sns')
+    topic_arn = os.environ['SNS_TOPIC_ARN']
     """
     Detects anomalies in transaction stream from DynamoDB
     """
