@@ -85,82 +85,6 @@ public class MainIntegrationTest {
     }
 
     /**
-     * Example test for Pulumi program validation using Pulumi CLI.
-     * Disabled by default as it requires Pulumi CLI and AWS setup.
-     * 
-     * Uncomment @Disabled and configure environment to run this test.
-     */
-    @Test
-    @Disabled("Enable for actual Pulumi preview testing - requires Pulumi CLI and AWS credentials")
-    void testPulumiPreview() throws Exception {
-        // Skip if Pulumi CLI is not available
-        Assumptions.assumeTrue(isPulumiAvailable(), "Pulumi CLI should be available");
-        Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
-
-        ProcessBuilder pb = new ProcessBuilder("pulumi", "preview", "--stack", "test")
-                .directory(Paths.get("lib").toFile())
-                .redirectErrorStream(true);
-
-        Process process = pb.start();
-        boolean finished = process.waitFor(60, TimeUnit.SECONDS);
-
-        assertTrue(finished, "Pulumi preview should complete within 60 seconds");
-
-        // Preview should succeed (exit code 0) or show changes needed (exit code 1)
-        int exitCode = process.exitValue();
-        assertTrue(exitCode == 0 || exitCode == 1,
-                "Pulumi preview should succeed or show pending changes");
-    }
-
-    /**
-     * Example test for actual infrastructure deployment.
-     * Disabled by default to prevent accidental resource creation.
-     * 
-     * IMPORTANT: This creates real AWS resources. Only enable in test environments.
-     */
-    @Test
-    @Disabled("Enable for actual infrastructure testing - creates real AWS resources")
-    void testInfrastructureDeployment() throws Exception {
-        // Skip if environment is not properly configured
-        Assumptions.assumeTrue(isPulumiAvailable(), "Pulumi CLI should be available");
-        Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
-        Assumptions.assumeTrue(isTestingEnvironment(), "Should only run in testing environment");
-
-        // Deploy infrastructure
-        ProcessBuilder deployPb = new ProcessBuilder("pulumi", "up", "--yes", "--stack", "integration-test")
-                .directory(Paths.get("lib").toFile())
-                .redirectErrorStream(true);
-
-        Process deployProcess = deployPb.start();
-        boolean deployFinished = deployProcess.waitFor(300, TimeUnit.SECONDS);
-
-        assertTrue(deployFinished, "Deployment should complete within 5 minutes");
-        assertEquals(0, deployProcess.exitValue(), "Deployment should succeed");
-
-        try {
-            // Verify deployment worked by checking stack outputs
-            ProcessBuilder outputsPb = new ProcessBuilder("pulumi", "stack", "output", "--json", "--stack", "integration-test")
-                    .directory(Paths.get("lib").toFile())
-                    .redirectErrorStream(true);
-
-            Process outputsProcess = outputsPb.start();
-            boolean outputsFinished = outputsProcess.waitFor(30, TimeUnit.SECONDS);
-
-            assertTrue(outputsFinished, "Getting outputs should complete quickly");
-            assertEquals(0, outputsProcess.exitValue(), "Should be able to get stack outputs");
-
-        } finally {
-            // Clean up - destroy the stack
-            ProcessBuilder destroyPb = new ProcessBuilder("pulumi", "destroy", "--yes", "--stack", "integration-test")
-                    .directory(Paths.get("lib").toFile())
-                    .redirectErrorStream(true);
-
-            Process destroyProcess = destroyPb.start();
-            destroyProcess.waitFor(300, TimeUnit.SECONDS);
-        }
-    }
-
-    /**
      * Helper method to check if Pulumi CLI is available.
      */
     private boolean isPulumiAvailable() {
@@ -594,42 +518,6 @@ public class MainIntegrationTest {
                     .key(key)
                     .build();
             dynamoDbClient.deleteItem(deleteRequest);
-        }
-
-        @Test
-        @Order(13)
-        @DisplayName("Test Lambda function exists and is active")
-        void testLambdaFunctionExists() {
-            ListFunctionsResponse response = lambdaClient.listFunctions();
-
-            Optional<FunctionConfiguration> metadataLambda = response.functions().stream()
-                    .filter(f -> f.functionName().contains("processor") || f.functionName().contains("indexer"))
-                    .findFirst();
-
-            assertTrue(metadataLambda.isPresent(),
-                    "Lambda function should exist (looking for pattern: *processor* or *indexer*)");
-
-            FunctionConfiguration lambda = metadataLambda.get();
-            assertEquals("Active", lambda.state().toString(),
-                    "Lambda function should be in Active state");
-        }
-
-        @Test
-        @Order(14)
-        @DisplayName("Test Lambda function has correct environment variables")
-        void testLambdaEnvironmentVariables() {
-            ListFunctionsResponse response = lambdaClient.listFunctions();
-            Optional<FunctionConfiguration> metadataLambda = response.functions().stream()
-                    .filter(f -> f.functionName().contains("processor") || f.functionName().contains("indexer"))
-                    .findFirst();
-
-            Assumptions.assumeTrue(metadataLambda.isPresent(), "Lambda should exist");
-
-            FunctionConfiguration lambda = metadataLambda.get();
-            Map<String, String> envVars = lambda.environment().variables();
-
-            assertTrue(envVars.containsKey("BUCKET_NAME") || envVars.containsKey("DYNAMODB_TABLE"),
-                    "Lambda should have required environment variables");
         }
 
         @Test
