@@ -1056,6 +1056,8 @@ resource "aws_ec2_transit_gateway_route_table_association" "eu_west_1_peering_pr
   transit_gateway_attachment_id  = aws_ec2_transit_gateway_peering_attachment.hub_to_eu_west_1.id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.prod.id
   replace_existing_association   = true
+
+  depends_on = [aws_ec2_transit_gateway_route_table_association.eu_west_1_peering_dev]
 }
 
 resource "aws_ec2_transit_gateway_route_table_association" "ap_southeast_1_peering_dev" {
@@ -1070,6 +1072,8 @@ resource "aws_ec2_transit_gateway_route_table_association" "ap_southeast_1_peeri
   transit_gateway_attachment_id  = aws_ec2_transit_gateway_peering_attachment.hub_to_ap_southeast_1.id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.prod.id
   replace_existing_association   = true
+
+  depends_on = [aws_ec2_transit_gateway_route_table_association.ap_southeast_1_peering_dev]
 }
 
 resource "aws_ec2_transit_gateway_route_table_propagation" "us_east_1_dev" {
