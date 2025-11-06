@@ -1,0 +1,28 @@
+{
+  "task_id": "ankk1",
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101",
+  "team": "synth",
+  "aws_services": [
+    "eks",
+    "vpc",
+    "ec2",
+    "iam",
+    "cloudwatch",
+    "kms"
+  ],
+  "subject_labels": [
+    "kubernetes",
+    "eks",
+    "node-groups",
+    "irsa",
+    "vpc",
+    "security"
+  ],
+  "startedAt": "2025-11-06T22:32:00Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "training_quality": 8
+}
