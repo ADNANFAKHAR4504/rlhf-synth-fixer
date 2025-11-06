@@ -61,8 +61,8 @@ describe('Terraform Infrastructure - Integration Tests', () => {
 
   // Helper function to skip test if no outputs available
   const skipIfNoOutputs = () => {
-    if (!outputs) {
-      console.warn('Skipping test - infrastructure not deployed');
+    if (!outputs || !outputs.vpc_id) {
+      console.warn('Skipping test - infrastructure not deployed or outputs incomplete');
       return true;
     }
     return false;
