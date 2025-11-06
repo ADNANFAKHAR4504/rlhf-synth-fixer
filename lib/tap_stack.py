@@ -67,7 +67,11 @@ class TapStack:
                 }
             )
             self.private_subnet_ids = [subnet1.id, subnet2.id]
-        self.app_security_group_id = config.get("app_security_group_id") or "sg-app-servers"
+        self.app_security_group_id = config.get("app_security_group_id")
+        if self.app_security_group_id and not self.app_security_group_id.startswith("sg-"):
+            # If it's a name, get the security group
+            app_sg = aws.ec2.get_security_group(name=self.app_security_group_id, vpc_id=self.vpc_id)
+            self.app_security_group_id = app_sg.id
         self.onprem_db_host = config.get("onprem_db_host") or "10.0.1.50"
         self.onprem_db_port = config.get_int("onprem_db_port") or 5432
         self.onprem_db_name = config.get("onprem_db_name") or "payments"
@@ -177,17 +181,30 @@ class TapStack:
             }
         )
 
-        # Allow inbound PostgreSQL traffic from application security group
-        aws.ec2.SecurityGroupRule(
-            f"rds-ingress-from-app-{self.environment_suffix}",
-            type="ingress",
-            from_port=5432,
-            to_port=5432,
-            protocol="tcp",
-            source_security_group_id=self.app_security_group_id,
-            security_group_id=sg.id,
-            description="Allow PostgreSQL from application servers"
-        )
+        # Allow inbound PostgreSQL traffic from application security group or CIDR
+        if self.app_security_group_id:
+            aws.ec2.SecurityGroupRule(
+                f"rds-ingress-from-app-{self.environment_suffix}",
+                type="ingress",
+                from_port=5432,
+                to_port=5432,
+                protocol="tcp",
+                source_security_group_id=self.app_security_group_id,
+                security_group_id=sg.id,
+                description="Allow PostgreSQL from application servers"
+            )
+        else:
+            # Fallback: allow from VPC CIDR if no app SG specified
+            aws.ec2.SecurityGroupRule(
+                f"rds-ingress-from-vpc-{self.environment_suffix}",
+                type="ingress",
+                from_port=5432,
+                to_port=5432,
+                protocol="tcp",
+                cidr_blocks=["10.0.0.0/16"],  # Adjust to your VPC CIDR
+                security_group_id=sg.id,
+                description="Allow PostgreSQL from VPC (fallback)"
+            )
 
         # Allow egress for all traffic (needed for DMS)
         aws.ec2.SecurityGroupRule(
