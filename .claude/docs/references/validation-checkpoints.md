@@ -119,6 +119,12 @@ When `metadata.json` has `"platform": "analysis"`:
 - Only validates language matches (should be "python" or "bash")
 - IDEAL_RESPONSE.md should contain Python or Bash code blocks, not IaC templates
 
+**Special Case - IAC Optimization**:
+When `metadata.json` has `"subtask": "IaC Optimization"`:
+- Validates that optimization script exists: `lib/optimize.py`
+- Validate optimize.py against the PROMPT.md
+- IDEAL_RESPONSE.md should contain code from `lib/optimize.py` which is the optimization code
+
 ---
 
 ## Checkpoint F: environmentSuffix Usage
