@@ -5,7 +5,7 @@
 variable "aws_region" {
   description = "AWS region for deployment"
   type        = string
-  default     = "us-west-2"
+  default     = "ap-northeast-1"
 }
 
 variable "project_name" {
@@ -632,6 +632,11 @@ locals {
 # ====================
 # Outputs
 # ====================
+
+output "aws_region" {
+  description = "aws region"
+  value       = var.aws_region
+}
 
 output "db_instance_endpoint" {
   description = "The connection endpoint for the RDS instance"
