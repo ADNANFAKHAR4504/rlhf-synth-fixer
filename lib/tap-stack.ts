@@ -464,7 +464,7 @@ exports.handler = async (event) => {
         ],
       }
     );
-    
+
     // Grant DynamoDB permissions
     if (isSourceRegion) {
       // Source region: grant on the actual table
@@ -494,7 +494,7 @@ exports.handler = async (event) => {
         );
       }
     }
-    
+
     logsBucket.grantReadWrite(lambdaRole);
     dataKmsKey.grantEncryptDecrypt(lambdaRole);
 
