@@ -29,7 +29,7 @@
     "Backup"
   ],
   "region": "ap-southeast-1",
-  "training_quality": 10,
+  "training_quality": 9,
   "review_date": "2025-11-05T20:00:00+05:30",
   "reviewer": "iac-code-reviewer",
   "test_coverage": {
@@ -38,5 +38,11 @@
     "functions": 100,
     "lines": 100
   },
-  "blocked_reason": null
+  "blocked_reason": null,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
