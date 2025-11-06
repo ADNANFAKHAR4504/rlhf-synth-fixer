@@ -17,7 +17,17 @@ interface AlertThresholds {
   orderVolumeThreshold: number;
 }
 
-export const handler = async (event: Record<string, unknown>) => {
+interface AlertEvent {
+  alertType?: string;
+  metrics?: {
+    latency?: number;
+    errorRate?: number;
+    unhealthyServices?: string[];
+    orderVolume?: number;
+  };
+}
+
+export const handler = async (event: AlertEvent) => {
   console.log('Processing automated response event:', JSON.stringify(event));
 
   const responses: AutoResponse[] = [];
