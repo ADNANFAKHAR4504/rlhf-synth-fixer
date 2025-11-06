@@ -240,7 +240,7 @@ describe('MigrationStack Unit Tests', () => {
 
     test('Target group has health check configured', () => {
       template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
-        HealthCheckPath: '/health',
+        HealthCheckPath: '/',
         HealthCheckIntervalSeconds: 30,
         HealthCheckTimeoutSeconds: 5,
         HealthyThresholdCount: 2,
