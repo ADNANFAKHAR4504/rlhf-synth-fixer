@@ -58,15 +58,10 @@ class TestTapStackIntegration(unittest.TestCase):
         # Check for ENVIRONMENT_SUFFIX to construct stack name (CI/CD pattern)
         env_suffix = os.getenv('ENVIRONMENT_SUFFIX')
         if env_suffix:
-            # In CI/CD, stack pattern might be like: TapStack<suffix>
-            import glob
-            stack_files = glob.glob(os.path.join(cls.project_dir, 'Pulumi.*.yaml'))
-            for stack_file in stack_files:
-                stack_name = os.path.basename(stack_file).replace('Pulumi.', '').replace('.yaml', '')
-                # Match stack files that contain the environment suffix
-                if env_suffix.lower() in stack_name.lower() or stack_name.startswith('TapStack'):
-                    print(f"Using stack matching environment suffix {env_suffix}: {stack_name}")
-                    return stack_name
+            # In CI/CD, stack naming pattern is: TapStack<suffix>
+            stack_name = f"TapStack{env_suffix}"
+            print(f"Constructed stack name from ENVIRONMENT_SUFFIX: {stack_name}")
+            return stack_name
         
         # Try to get currently selected stack
         try:
@@ -97,7 +92,7 @@ class TestTapStackIntegration(unittest.TestCase):
                 print(f"Using first available stack: {stack_name}")
                 return stack_name
         
-        raise RuntimeError("Could not discover stack name. Please set PULUMI_STACK environment variable or select a stack with 'pulumi stack select'")
+        raise RuntimeError("Could not discover stack name. Please set PULUMI_STACK or ENVIRONMENT_SUFFIX environment variable, or select a stack with 'pulumi stack select'")
 
     @classmethod
     def _discover_region(cls) -> str:
