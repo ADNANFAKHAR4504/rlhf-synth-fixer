@@ -465,6 +465,7 @@ class TapStack:
 
         # Create ECS Service with proper depends_on
         self.ecs_service = aws.ecs.Service(
+            f"ecs-service-{environment_suffix}",
             name=f"product-catalog-{environment_suffix}",
             cluster=self.ecs_cluster.arn,
             task_definition=self.task_definition.arn,

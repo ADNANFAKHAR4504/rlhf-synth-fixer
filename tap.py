@@ -15,9 +15,9 @@ try:
     initialize_python_environment()
 except ImportError:
     # Fallback: manually add venv to path if environment initialization not available
-    import sys
     import os
     import subprocess
+    import sys
     try:
         result = subprocess.run(
             ['pipenv', '--venv'],
@@ -39,8 +39,10 @@ except ImportError:
         pass
 
 import os
+
 import pulumi
 from pulumi import Config
+
 from lib.tap_stack import TapStack
 
 # Initialize Pulumi configuration
@@ -62,7 +64,7 @@ default_tags = {
 
 # Create the infrastructure stack
 stack = TapStack(
-    name="pulumi-infra",
+    name="tapstack",
     environment_suffix=environment_suffix
 )
 
