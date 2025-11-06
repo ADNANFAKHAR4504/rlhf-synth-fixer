@@ -7,7 +7,7 @@ import re
 import time
 import unittest
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Optional
 
 import boto3
 import requests
@@ -46,10 +46,6 @@ def _stage_from_url(url: Optional[str]) -> Optional[str]:
     return m.group(1) if m else None
 
 
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
 class LiveResources:
     """
     Resolves live resource identifiers using flat-outputs when available;
@@ -62,7 +58,6 @@ class LiveResources:
         self.api_base_url = FLAT_OUTPUTS.get("ApiBaseUrl") or FLAT_OUTPUTS.get("TransactionAPIEndpointF9B09F4E")
         if not self.stage:
             self.stage = _stage_from_url(self.api_base_url)
-        # fallbacks from CI env if needed
         if not self.stage:
             self.stage = (
                 os.environ.get("ENV_SUFFIX")
@@ -95,7 +90,7 @@ class LiveResources:
         self.lambda_dlq_url = FLAT_OUTPUTS.get("LambdaDLQUrl")
         self.eb_dlq_url = FLAT_OUTPUTS.get("EventBridgeDLQUrl")
 
-        # Bucket (must come from outputs because name includes account id)
+        # Bucket (try outputs; otherwise discover)
         self.bucket = FLAT_OUTPUTS.get("ProcessedBucketName")
 
         # API specific
@@ -112,6 +107,7 @@ class LiveResources:
         self.lambda_ = boto3.client("lambda", region_name=self.region)
         self.logs = boto3.client("logs", region_name=self.region)
         self.sqs = boto3.client("sqs", region_name=self.region)
+        self.cfn = boto3.client("cloudformation", region_name=self.region)
         self.sts = boto3.client("sts", region_name=self.region)
 
         # Derive names from ARNs if needed
@@ -129,11 +125,12 @@ class LiveResources:
         if not self.eb_dlq_url:
             self.eb_dlq_url = self._queue_url(f"tap-{self.stage}-eventbridge-failures-dlq")
 
-        # Sanity assertions (no skipping)
+        # Ensure bucket if missing
+        if not self.bucket:
+            self.bucket = self._discover_bucket()
+
+        # Sanity: only enforce that we can hit the API; bucket gets asserted in the S3 test itself.
         assert self.transactions_endpoint, "Could not discover TransactionsEndpoint"
-        assert self.bucket, "ProcessedBucketName missing and could not be derived"
-        assert self.lambda_dlq_url, "Lambda DLQ URL not found"
-        assert self.eb_dlq_url, "EventBridge DLQ URL not found"
 
     # ---------- discovery helpers ----------
     def _ensure_bus_name(self, arn: Optional[str], fallback: str) -> str:
@@ -156,13 +153,10 @@ class LiveResources:
                 return None
 
     def _discover_api_endpoints(self) -> None:
-        """Try to build ApiBaseUrl and /transactions path from REST API name+stage discovery."""
         rest_id = self._rest_api_id_by_name(self.api_name)
         if not rest_id:
             return
-        # determine stage name (prefer explicit self.stage)
         stage_name = self.stage
-        # construct base and transactions endpoint
         self.api_base_url = f"https://{rest_id}.execute-api.{self.region}.amazonaws.com/{stage_name}/"
         self.transactions_endpoint = self.api_base_url.rstrip("/") + "/transactions"
 
@@ -172,9 +166,74 @@ class LiveResources:
         except ClientError:
             return None
 
+    def _discover_bucket(self) -> Optional[str]:
+        """
+        Try CloudFormation outputs first; if not found, fall back to S3 list + region/account matching:
+        tap-<stage>-<region>-<account>-processed-data
+        """
+        # 1) CloudFormation outputs search
+        try:
+            paginator = self.cfn.get_paginator("describe_stacks")
+            for page in paginator.paginate():
+                for st in page.get("Stacks", []):
+                    for out in st.get("Outputs", []) or []:
+                        if out.get("OutputKey") == "ProcessedBucketName":
+                            val = out.get("OutputValue")
+                            if val and f"tap-{self.stage}-" in val:
+                                # confirm region
+                                if self._bucket_in_region(val):
+                                    return val
+        except ClientError:
+            pass
+
+        # 2) S3 name pattern + region/account match
+        acct = ""
+        try:
+            acct = self.sts.get_caller_identity().get("Account", "")
+        except ClientError:
+            pass
+
+        try:
+            buckets = self.s3.list_buckets().get("Buckets", [])
+            candidates = []
+            for b in buckets:
+                name = b.get("Name", "")
+                if not name.startswith(f"tap-{self.stage}-"):
+                    continue
+                if not name.endswith("-processed-data"):
+                    continue
+                if not self._bucket_in_region(name):
+                    continue
+                candidates.append(name)
+
+            if not candidates:
+                return None
+
+            # prefer account/id hint, then region, else first
+            for n in candidates:
+                if acct and acct in n:
+                    return n
+            for n in candidates:
+                if self.region in n:
+                    return n
+            return candidates[0]
+        except ClientError:
+            return None
+
+    def _bucket_in_region(self, bucket_name: str) -> bool:
+        try:
+            loc = self.s3.get_bucket_location(Bucket=bucket_name).get("LocationConstraint")
+            # us-east-1 returns None; some old EU returns 'EU'. Accept regional equivalents.
+            if loc in (None, "", "us-east-1"):
+                return self.region == "us-east-1"
+            if loc == "EU":
+                return self.region.startswith("eu-")
+            return loc == self.region
+        except ClientError:
+            return False
+
     # ---------- API key & logs ----------
     def get_api_key_value(self) -> Optional[str]:
-        """Find API key value by key name (tap-<stage>-api-key)."""
         position = None
         while True:
             kwargs = {"includeValues": False, "limit": 500}
@@ -191,7 +250,6 @@ class LiveResources:
                 return None
 
     def diag_lambda_tail(self, fn_name: str, lines: int = 20) -> str:
-        """Return recent log lines for a lambda function (best effort)."""
         try:
             log_group = f"/aws/lambda/{fn_name}"
             streams = self.logs.describe_log_streams(
@@ -211,7 +269,6 @@ class LiveResources:
         table = self.ddb_resource.Table(table_name)
         deadline = time.time() + timeout_s
         while time.time() < deadline:
-            # scan on key attribute (tables are small in test)
             resp = table.scan(
                 ProjectionExpression=key_attr,
                 FilterExpression="#k = :v",
@@ -238,13 +295,17 @@ class TestTapStackIntegration(unittest.TestCase):
             conf = self.res.lambda_.get_function(FunctionName=fn)["Configuration"]
             self.assertEqual(conf["Runtime"], "nodejs18.x")
             self.assertIn(conf["MemorySize"], (512, 3008))
-            # For non-prod stages we expect at least 10 (from stack); tolerate >=1 if throttled by account policy
             rce = conf.get("ReservedConcurrentExecutions")
             self.assertTrue(rce is None or rce >= 1)
 
     # ---------------------- S3 ----------------------
     @mark.it("S3 bucket: versioning enabled and policy enforces encryption (deny unencrypted PUT)")
     def test_s3_bucket_versioning_and_encryption(self):
+        self.assertIsNotNone(
+            self.res.bucket,
+            "Processed S3 bucket could not be discovered. "
+            "Ensure your stack outputs ProcessedBucketName or the bucket follows 'tap-<stage>-*-processed-data'.",
+        )
         ver = self.res.s3.get_bucket_versioning(Bucket=self.res.bucket)
         self.assertEqual(ver.get("Status"), "Enabled", "S3 versioning must be Enabled")
 
@@ -267,7 +328,6 @@ class TestTapStackIntegration(unittest.TestCase):
             ContentType="application/json",
             ServerSideEncryption="AES256",
         )
-        # Cleanup best effort
         try:
             self.res.s3.delete_object(Bucket=self.res.bucket, Key=key_sse)
         except ClientError:
@@ -313,7 +373,6 @@ class TestTapStackIntegration(unittest.TestCase):
             self.assertTrue(ok, "DynamoDB write not found after successful API call")
             return
 
-        # Diagnose Lambda runtime issue; if it's the known import error, pass with diagnostic
         tail = self.res.diag_lambda_tail(self.res.fn_ingest)
         if _is_import_error(tail):
             print(
@@ -344,7 +403,7 @@ class TestTapStackIntegration(unittest.TestCase):
             "accountId": "acc-eb",
             "amount": 250.0,
             "currency": "USD",
-            "merchantCategory": "electronics",  # matches high-risk MCC rule
+            "merchantCategory": "electronics",
             "country": "US",
             "cardNotPresent": False,
             "localHour": 14,
@@ -361,12 +420,10 @@ class TestTapStackIntegration(unittest.TestCase):
         )
         self.assertGreaterEqual(put.get("FailedEntryCount", 0), 0, "PutEvents returned failure")
 
-        # Buffer queue from stack: tap-<stage>-buffer-queue
         q_name = f"tap-{self.res.stage}-buffer-queue"
         q_url = self.res._queue_url(q_name)
         self.assertIsNotNone(q_url, f"Buffer queue '{q_name}' not found")
 
-        # Poll for message arrival
         found_msg = False
         deadline = time.time() + 150
         while time.time() < deadline and not found_msg:
@@ -384,7 +441,6 @@ class TestTapStackIntegration(unittest.TestCase):
                 return
             self.fail("No message received on SQS buffer queue from EventBridge rule within timeout.")
 
-        # Fraud detector should write into audit table
         ok = self.res.wait_ddb_item(self.res.tbl_audit, "transactionId", txn_id)
         if ok:
             return
@@ -393,7 +449,7 @@ class TestTapStackIntegration(unittest.TestCase):
         if _is_import_error(tail):
             print(
                 "\n[CAPTURED-KNOWN-RUNTIME-DEFECT] Fraud Lambda missing 'aws-sdk' under Node 18 — "
-                "audit write prevented. Not failing this test.\n" + tail
+                    "audit write prevented. Not failing this test.\n" + tail
             )
             return
 
@@ -411,7 +467,6 @@ class TestTapStackIntegration(unittest.TestCase):
         invoke = self.res.lambda_.invoke(FunctionName=self.res.fn_ingest, Payload=json.dumps(payload).encode("utf-8"))
         self.assertEqual(invoke.get("StatusCode"), 200)
 
-        # Confirm log events appear eventually
         lg_name = f"/aws/lambda/{self.res.fn_ingest}"
         have_events = False
         deadline = time.time() + 120
@@ -452,6 +507,7 @@ class TestTapStackIntegration(unittest.TestCase):
     @mark.it("SQS: DLQs exist with expected defaults")
     def test_sqs_dlqs(self):
         for url in (self.res.lambda_dlq_url, self.res.eb_dlq_url):
+            self.assertIsNotNone(url, "Expected DLQ URL to be discoverable")
             attrs = self.res.sqs.get_queue_attributes(QueueUrl=url, AttributeNames=["All"]).get("Attributes", {})
             self.assertEqual(attrs.get("VisibilityTimeout"), "300")
             self.assertIn("ApproximateNumberOfMessages", attrs)
