@@ -47,10 +47,6 @@ Parameters:
   EnvironmentSuffix:
     Type: String
     Default: prod
-    AllowedValues:
-      - dev
-      - staging
-      - prod
     Description: Environment suffix for resource naming and tagging
 
   VPCCIDR:
