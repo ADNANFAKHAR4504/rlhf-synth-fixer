@@ -381,6 +381,27 @@ async function main(): Promise<void> {
 
     if (confirmApply) {
       await copyTemplate(templateName);
+
+      // Copy optimize.py if IaC Optimization subtask is selected
+      if (taskSubCategory === 'IaC Optimization') {
+        const optimizePath = path.join(
+          __dirname,
+          '..',
+          'templates',
+          'optimize',
+          'optimize.py'
+        );
+        const destPath = path.join(__dirname, '..', 'lib', 'optimize.py');
+        try {
+          if (await fs.pathExists(optimizePath)) {
+            await fs.copy(optimizePath, destPath, { overwrite: true });
+            console.log('✓ Copied optimize.py to lib/');
+          }
+        } catch (err: unknown) {
+          console.error('Error copying optimize.py:', err);
+        }
+      }
+
       await generateMetadataFile(metadata);
 
       // Create tfvars files for Multi-Environment Consistency with Terraform
