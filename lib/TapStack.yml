@@ -1006,3 +1006,142 @@ Outputs:
     Value: !Sub 'https://console.aws.amazon.com/codesuite/codepipeline/pipelines/${DeploymentPipeline}/view'
     Export:
       Name: !Sub '${ProjectName}-${Environment}-PipelineUrl'
+
+  PublicApiKey:
+    Description: API Key ID for Public API
+    Value: !Ref PublicApiKey
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-PublicApiKeyId'
+
+  GetUserFunctionName:
+    Description: Name of the GetUser Lambda function
+    Value: !Ref GetUserFunction
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-GetUserFunctionName'
+
+  CreateUserFunctionName:
+    Description: Name of the CreateUser Lambda function
+    Value: !Ref CreateUserFunction
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-CreateUserFunctionName'
+
+  ProcessDataFunctionName:
+    Description: Name of the ProcessData Lambda function
+    Value: !Ref ProcessDataFunction
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-ProcessDataFunctionName'
+
+  GetUserFunctionArn:
+    Description: ARN of the GetUser Lambda function
+    Value: !GetAtt GetUserFunction.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-GetUserFunctionArn'
+
+  CreateUserFunctionArn:
+    Description: ARN of the CreateUser Lambda function
+    Value: !GetAtt CreateUserFunction.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-CreateUserFunctionArn'
+
+  ProcessDataFunctionArn:
+    Description: ARN of the ProcessData Lambda function
+    Value: !GetAtt ProcessDataFunction.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-ProcessDataFunctionArn'
+
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-VPCId'
+
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-PrivateSubnet1Id'
+
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-PrivateSubnet2Id'
+
+  LambdaSecurityGroupId:
+    Description: Lambda Security Group ID
+    Value: !Ref LambdaSecurityGroup
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-LambdaSecurityGroupId'
+
+  VPCEndpointId:
+    Description: VPC Endpoint ID for Private API
+    Value: !Ref VPCEndpoint
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-VPCEndpointId'
+
+  WAFWebACLArn:
+    Description: ARN of the WAF Web ACL
+    Value: !GetAtt WAFWebACL.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-WAFWebACLArn'
+
+  WAFWebACLId:
+    Description: ID of the WAF Web ACL
+    Value: !GetAtt WAFWebACL.Id
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-WAFWebACLId'
+
+  ApiLogGroupName:
+    Description: CloudWatch Log Group name for API Gateway
+    Value: !Ref ApiLogGroup
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-ApiLogGroupName'
+
+  DatabaseEndpointParameterName:
+    Description: SSM Parameter name for database endpoint
+    Value: !Ref DatabaseEndpointParameter
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-DatabaseEndpointParameterName'
+
+  ApiKeyParameterName:
+    Description: SSM Parameter name for API key
+    Value: !Ref ApiKeyParameter
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-ApiKeyParameterName'
+
+  UserDataTableArn:
+    Description: ARN of the DynamoDB table
+    Value: !GetAtt UserDataTable.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-TableArn'
+
+  UserDataTableStreamArn:
+    Description: Stream ARN of the DynamoDB table
+    Value: !GetAtt UserDataTable.StreamArn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-TableStreamArn'
+
+  LambdaExecutionRoleArn:
+    Description: ARN of the Lambda execution role
+    Value: !GetAtt LambdaExecutionRole.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-LambdaExecutionRoleArn'
+
+  PipelineArtifactStoreBucket:
+    Condition: CreatePipeline
+    Description: S3 Bucket for pipeline artifacts
+    Value: !Ref PipelineArtifactStore
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-PipelineArtifactStoreBucket'
+
+  StackName:
+    Description: Name of this CloudFormation stack
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-StackName'
+
+  Region:
+    Description: AWS Region where the stack is deployed
+    Value: !Ref AWS::Region
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-Region'
