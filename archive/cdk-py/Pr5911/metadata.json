@@ -12,15 +12,21 @@
   "po_id": "ojozm",
   "aws_services": [
     "KMS",
+    "VPC",
     "EC2",
     "S3",
     "Lambda",
     "IAM",
     "API Gateway",
     "CloudWatch Logs",
-    "CloudWatch",
-    "VPC"
+    "CloudWatch"
   ],
   "region": "us-east-1",
-  "training_quality": 8
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
