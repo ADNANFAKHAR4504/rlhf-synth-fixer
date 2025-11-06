@@ -16,12 +16,17 @@
   "aws_services": [
     "RDS",
     "VPC",
-    "Secrets Manager",
     "KMS",
+    "Secrets Manager",
     "CloudWatch",
     "IAM"
   ],
-  "training_quality": 9,
+  "training_quality": 8,
   "author": "iamarpit-turing",
-  "reviewer": "emmanuel-turing"
+  "reviewer": "emmanuel-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
