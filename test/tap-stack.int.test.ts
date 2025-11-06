@@ -83,11 +83,16 @@ function extractRegionFromOutputs(): string {
 
 const detectedRegion = extractRegionFromOutputs();
 
-(flat ? describe : describe.skip)('TapStack Integration Tests (Production Infrastructure)', () => {
+describe('TapStack Integration Tests (Production Infrastructure)', () => {
   // Increase timeout for network calls
   beforeAll(() => {
     // 60 seconds, as ALB connection can be slow to establish
     jest.setTimeout(60000);
+    
+    // Fail fast if outputs file is not available
+    if (!flat) {
+      throw new Error('flat-outputs.json not found. Integration tests require deployed infrastructure outputs.');
+    }
   });
 
   const albDns = (flat!['ApplicationLoadBalancerDNS'] || '').toString();
@@ -263,13 +268,13 @@ const detectedRegion = extractRegionFromOutputs();
           const trail = describeResponse.trailList?.[0];
           expect(trail).toBeDefined();
 
-          console.log('CloudTrail Status: Logging =', statusResponse.IsLogging);
-          console.log('Multi-Region Trail:', trail?.IsMultiRegionTrail);
-          console.log('S3 Bucket:', trail?.S3BucketName);
-        } catch (error: any) {
-          console.log('CloudTrail check failed:', error.message);
-          throw error;
-        }
+        console.log('CloudTrail Status: Logging =', statusResponse.IsLogging);
+        console.log('Multi-Region Trail:', trail?.IsMultiRegionTrail);
+        console.log('S3 Bucket:', trail?.S3BucketName);
+      } catch (error: any) {
+        console.log('CloudTrail check failed:', error.message);
+        throw error;
+      }
       }
     });
 
@@ -294,14 +299,8 @@ const detectedRegion = extractRegionFromOutputs();
         console.log('Key Usage:', keyMetadata?.KeyUsage);
         console.log('Origin:', keyMetadata?.Origin);
       } catch (error: any) {
-        if (error.message?.includes('dynamic import')) {
-          console.log('\n— Data Encryption —');
-          console.log('KMS Key ID:', kmsKeyId);
-          console.log('⚠️  Skipping live KMS validation due to Jest/AWS SDK compatibility issue');
-          console.log('Note: KMS key format is valid. Run with --experimental-vm-modules for full validation');
-        } else {
-          throw error;
-        }
+        console.log('KMS validation failed:', error.message);
+        throw error;
       }
     });
 
@@ -380,15 +379,8 @@ const detectedRegion = extractRegionFromOutputs();
         console.log('Availability Zone:', dbInstance?.AvailabilityZone);
         console.log('Backup Retention Period:', dbInstance?.BackupRetentionPeriod, 'days');
       } catch (error: any) {
-        if (error.message?.includes('dynamic import')) {
-          console.log('\n— RDS High Availability —');
-          console.log('DB Instance:', dbIdentifier);
-          console.log('⚠️  Skipping live RDS validation due to Jest/AWS SDK compatibility issue');
-          console.log('Note: RDS endpoint format is valid. E2E test confirmed RDS connectivity from EC2');
-          // Test passes - we've validated the format and E2E connectivity
-        } else {
-          throw error;
-        }
+        console.log('RDS validation failed:', error.message);
+        throw error;
       }
     });
 
@@ -453,14 +445,8 @@ const detectedRegion = extractRegionFromOutputs();
         console.log('Availability Zones:', availabilityZones.map(az => az.ZoneName).join(', '));
         console.log('VPC:', alb?.VpcId);
       } catch (error: any) {
-        if (error.message?.includes('dynamic import')) {
-          console.log('\n— Application Load Balancer —');
-          console.log('ALB DNS:', albDns);
-          console.log('⚠️  Skipping live ALB validation due to Jest/AWS SDK compatibility issue');
-          console.log('Note: ALB is confirmed working. E2E test successfully connected through ALB');
-        } else {
-          throw error;
-        }
+        console.log('ALB validation failed:', error.message);
+        throw error;
       }
     });
 
@@ -514,34 +500,12 @@ const detectedRegion = extractRegionFromOutputs();
           });
 
           expect(totalTargets).toBeGreaterThanOrEqual(1);
-
-          if (healthyTargets.length === 0) {
-            console.log('⚠️  Warning: No healthy targets found, but E2E test confirmed ALB connectivity works');
-            console.log('This may indicate targets are in a transitional state');
-          } else {
-            expect(healthyTargets.length).toBeGreaterThanOrEqual(1);
-          }
-        } else {
-          console.log('⚠️  Warning: No targets registered in Target Group');
-          console.log('However, E2E test confirmed ALB -> Target Group -> EC2 connectivity works');
-          console.log('Targets may be managed via Auto Scaling or in a transitional state');
+          expect(healthyTargets.length).toBeGreaterThanOrEqual(1);
         }
       } catch (error: any) {
-        if (error.message?.includes('dynamic import')) {
-          console.log('\n— Target Group Health Checks —');
-          console.log('Health Check Path: /health');
-          console.log('⚠️  Skipping live Target Group validation due to Jest/AWS SDK compatibility issue');
-          console.log('Note: Target Group is confirmed working. E2E test verified /health endpoint');
-        } else {
-          throw error;
-        }
+        console.log('Target Group validation failed:', error.message);
+        throw error;
       }
     });
   });
 });
-
-if (!flat) {
-  describe.skip('TapStack Integration Tests (Production Infrastructure)', () => {
-    test('flat-outputs.json not found - skipping', () => { /* no-op */ });
-  });
-}
