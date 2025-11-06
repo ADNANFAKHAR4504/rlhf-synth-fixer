@@ -8,8 +8,8 @@ terraform {
     }
   }
 
-  # Use local backend for this deployment
-  backend "local" {}
+  # Use S3 backend for this deployment
+  backend "s3" {}
 }
 
 provider "aws" {
