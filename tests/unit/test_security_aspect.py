@@ -2,6 +2,7 @@
 Unit tests for Security Aspect
 """
 import pytest
+from unittest.mock import patch
 from aws_cdk import Stack, App, Aspects
 from aws_cdk import aws_s3 as s3
 from aws_cdk import aws_rds as rds
@@ -159,3 +160,132 @@ class TestSecurityPolicyAspect:
 
         # VPC should be created without issues
         assert vpc is not None
+
+    @patch('builtins.print')
+    def test_s3_bucket_missing_encryption_warning(self, mock_print):
+        """Test security aspect warns about S3 buckets without encryption"""
+        app = App()
+        stack = Stack(app, "TestStack")
+        aspect = SecurityPolicyAspect()
+        
+        # Create S3 bucket without encryption using CfnBucket directly
+        cfn_bucket = s3.CfnBucket(
+            stack,
+            "TestCfnBucket",
+            bucket_name="test-bucket-no-encryption"
+        )
+        
+        # Manually call visit on the CfnBucket (without encryption)
+        aspect.visit(cfn_bucket)
+        
+        # Verify warning was printed
+        mock_print.assert_called_with(f"WARNING: S3 bucket {cfn_bucket.node.id} missing encryption")
+
+    @patch('builtins.print')
+    def test_s3_bucket_with_encryption_no_warning(self, mock_print):
+        """Test security aspect doesn't warn about S3 buckets with encryption"""
+        app = App()
+        stack = Stack(app, "TestStack")
+        aspect = SecurityPolicyAspect()
+        
+        # Create S3 bucket with encryption using CfnBucket
+        cfn_bucket = s3.CfnBucket(
+            stack,
+            "TestCfnBucketEncrypted",
+            bucket_name="test-bucket-encrypted",
+            bucket_encryption=s3.CfnBucket.BucketEncryptionProperty(
+                server_side_encryption_configuration=[
+                    s3.CfnBucket.ServerSideEncryptionRuleProperty(
+                        server_side_encryption_by_default=s3.CfnBucket.ServerSideEncryptionByDefaultProperty(
+                            sse_algorithm="AES256"
+                        )
+                    )
+                ]
+            )
+        )
+        
+        # Manually call visit on the CfnBucket (with encryption)
+        aspect.visit(cfn_bucket)
+        
+        # Verify no warning was printed
+        mock_print.assert_not_called()
+
+    @patch('builtins.print')
+    def test_rds_cluster_missing_encryption_warning(self, mock_print):
+        """Test security aspect warns about RDS clusters without encryption"""
+        app = App()
+        stack = Stack(app, "TestStack")
+        aspect = SecurityPolicyAspect()
+        
+        # Create RDS cluster without encryption using CfnDBCluster
+        cfn_cluster = rds.CfnDBCluster(
+            stack,
+            "TestCfnCluster",
+            engine="aurora-postgresql",
+            master_username="testuser"
+        )
+        
+        # Manually call visit on the CfnDBCluster (without encryption)
+        aspect.visit(cfn_cluster)
+        
+        # Verify warning was printed
+        mock_print.assert_called_with(f"WARNING: RDS cluster {cfn_cluster.node.id} missing encryption")
+
+    @patch('builtins.print')
+    def test_rds_cluster_with_encryption_no_warning(self, mock_print):
+        """Test security aspect doesn't warn about RDS clusters with encryption"""
+        app = App()
+        stack = Stack(app, "TestStack")
+        aspect = SecurityPolicyAspect()
+        
+        # Create RDS cluster with encryption using CfnDBCluster
+        cfn_cluster = rds.CfnDBCluster(
+            stack,
+            "TestCfnClusterEncrypted",
+            engine="aurora-postgresql",
+            master_username="testuser",
+            storage_encrypted=True
+        )
+        
+        # Manually call visit on the CfnDBCluster (with encryption)
+        aspect.visit(cfn_cluster)
+        
+        # Verify no warning was printed
+        mock_print.assert_not_called()
+
+    def test_security_aspect_visit_non_matching_construct(self):
+        """Test security aspect handles constructs that don't match S3 or RDS"""
+        app = App()
+        stack = Stack(app, "TestStack")
+        aspect = SecurityPolicyAspect()
+        
+        # Create a VPC (non-matching construct)
+        vpc = ec2.Vpc(stack, "TestVpc")
+        
+        # Visit should complete without errors or warnings
+        aspect.visit(vpc)
+        
+        # No exception should be raised
+        assert vpc is not None
+
+    @patch('builtins.print')
+    def test_security_aspect_cfn_constructs_directly(self, mock_print):
+        """Test security aspect on CFN constructs directly to ensure full coverage"""
+        app = App()
+        stack = Stack(app, "TestStack")
+        aspect = SecurityPolicyAspect()
+        
+        # Test S3 CfnBucket without encryption
+        s3_bucket = s3.CfnBucket(stack, "S3Bucket")
+        aspect.visit(s3_bucket)
+        
+        # Test RDS CfnDBCluster without encryption
+        rds_cluster = rds.CfnDBCluster(
+            stack, 
+            "RDSCluster",
+            engine="aurora-postgresql"
+        )
+        aspect.visit(rds_cluster)
+        
+        # Should have printed 2 warnings
+        assert mock_print.call_count == 2

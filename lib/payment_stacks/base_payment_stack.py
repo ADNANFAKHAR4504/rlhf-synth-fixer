@@ -31,7 +31,7 @@ from lib.constructs.monitoring_construct import MonitoringConstruct
 from lib.aspects.security_aspect import SecurityPolicyAspect
 
 
-class BasePaymentStack(Construct):
+class BasePaymentStack(cdk.Stack):
     """
     Abstract base stack containing shared infrastructure for payment processing.
 

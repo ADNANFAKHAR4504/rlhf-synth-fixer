@@ -14,13 +14,27 @@ class VpcPeeringConstruct(Construct):
         self,
         scope: Construct,
         construct_id: str,
-        vpc: ec2.Vpc,
-        peer_vpc_id: str,
-        peer_vpc_cidr: str,
-        environment_suffix: str,
+        vpc: ec2.IVpc | None = None,
+        peer_vpc_id: str | None = None,
+        peer_vpc_cidr: str | None = None,
+        environment_suffix: str = "",
+        source_vpc: object | None = None,
+        destination_vpc: object | None = None,
         **kwargs
     ):
         super().__init__(scope, construct_id)
+
+        # Support tests calling with source_vpc/destination_vpc
+        if vpc is None and source_vpc is not None:
+            vpc = source_vpc
+        if peer_vpc_id is None and destination_vpc is not None:
+            peer_vpc_id = getattr(destination_vpc, "vpc_id", None)
+        if peer_vpc_cidr is None and destination_vpc is not None:
+            peer_vpc_cidr = getattr(destination_vpc, "vpc_cidr_block", None)
+
+        assert vpc is not None, "vpc/source_vpc is required"
+        assert peer_vpc_id, "peer_vpc_id/destination_vpc.vpc_id is required"
+        assert peer_vpc_cidr, "peer_vpc_cidr/destination_vpc.vpc_cidr_block is required"
 
         # Create VPC peering connection
         self.peering_connection = ec2.CfnVPCPeeringConnection(
