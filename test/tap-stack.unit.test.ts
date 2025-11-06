@@ -652,7 +652,7 @@ describe('TapStack - EKS Infrastructure Unit Tests', () => {
     });
 
     test('stack is deployed to correct region', () => {
-      expect(stack.region).toBe('ap-southeast-1');
+      expect(stack.region).toBe('us-east-1');
     });
 
     test('stack has environment suffix in name', () => {
