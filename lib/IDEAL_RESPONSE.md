@@ -1076,7 +1076,7 @@ class DatabaseConstruct(Construct):
 ```python
 """ecs_construct.py
 
-Custom CDK construct for ECS Fargate service with Application Load Balancer.
+Custom CDK construct for ECS Fargate with ALB.
 """
 
 from aws_cdk import (
@@ -1095,7 +1095,7 @@ from constructs import Construct
 
 
 class EcsConstruct(Construct):
-    """Custom construct for ECS Fargate service with auto-scaling."""
+    """Custom construct for ECS Fargate service."""
 
     def __init__(
         self,
@@ -1113,7 +1113,6 @@ class EcsConstruct(Construct):
     ):
         super().__init__(scope, construct_id)
 
-        # Create ECS cluster with container insights
         self.cluster = ecs.Cluster(
             self,
             f"PaymentCluster-{environment_suffix}",
@@ -1122,7 +1121,6 @@ class EcsConstruct(Construct):
             container_insights=True
         )
 
-        # Create IAM roles for ECS tasks
         execution_role = iam.Role(
             self,
             f"TaskExecutionRole-{environment_suffix}",
@@ -1140,13 +1138,11 @@ class EcsConstruct(Construct):
             assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com")
         )
 
-        # Grant permissions to task role
         database.secret.grant_read(task_role)
         session_table.grant_read_write_data(task_role)
         queue.grant_send_messages(task_role)
         queue.grant_consume_messages(task_role)
 
-        # Create CloudWatch log group
         log_group = logs.LogGroup(
             self,
             f"PaymentLogGroup-{environment_suffix}",
@@ -1154,7 +1150,6 @@ class EcsConstruct(Construct):
             removal_policy=RemovalPolicy.DESTROY
         )
 
-        # Create Fargate task definition
         task_definition = ecs.FargateTaskDefinition(
             self,
             f"PaymentTaskDef-{environment_suffix}",
@@ -1164,10 +1159,9 @@ class EcsConstruct(Construct):
             task_role=task_role
         )
 
-        # Add container to task definition
         container = task_definition.add_container(
             f"PaymentContainer-{environment_suffix}",
-            image=ecs.ContainerImage.from_registry("amazon/amazon-ecs-sample"),
+            image=ecs.ContainerImage.from_registry("public.ecr.aws/docker/library/nginx:latest"),
             logging=ecs.LogDrivers.aws_logs(
                 stream_prefix="payment",
                 log_group=log_group
@@ -1185,10 +1179,9 @@ class EcsConstruct(Construct):
         )
 
         container.add_port_mappings(
-            ecs.PortMapping(container_port=8080, protocol=ecs.Protocol.TCP)
+            ecs.PortMapping(container_port=80, protocol=ecs.Protocol.TCP)
         )
 
-        # Create Application Load Balancer
         self.alb = elbv2.ApplicationLoadBalancer(
             self,
             f"PaymentALB-{environment_suffix}",
@@ -1197,25 +1190,22 @@ class EcsConstruct(Construct):
             load_balancer_name=f"payment-alb-{environment_suffix}"
         )
 
-        # Create target group
         target_group = elbv2.ApplicationTargetGroup(
             self,
             f"PaymentTargetGroup-{environment_suffix}",
             vpc=vpc,
-            port=8080,
+            port=80,
             protocol=elbv2.ApplicationProtocol.HTTP,
             target_type=elbv2.TargetType.IP,
             health_check=elbv2.HealthCheck(
-                path="/health",
+                path="/",
                 interval=Duration.seconds(30),
                 timeout=Duration.seconds(5),
                 healthy_threshold_count=2,
                 unhealthy_threshold_count=3
-            ),
-            deregistration_delay=Duration.seconds(30)
+            )
         )
 
-        # Add listener to ALB
         self.alb.add_listener(
             f"PaymentListener-{environment_suffix}",
             port=80,
@@ -1223,7 +1213,6 @@ class EcsConstruct(Construct):
             default_target_groups=[target_group]
         )
 
-        # Create Fargate service
         self.service = ecs.FargateService(
             self,
             f"PaymentService-{environment_suffix}",
@@ -1235,20 +1224,16 @@ class EcsConstruct(Construct):
             vpc_subnets=ec2.SubnetSelection(
                 subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
             ),
-            service_name=f"payment-service-{environment_suffix}",
-            circuit_breaker=ecs.DeploymentCircuitBreaker(rollback=True)
+            service_name=f"payment-service-{environment_suffix}"
         )
 
-        # Attach service to target group
         self.service.attach_to_application_target_group(target_group)
 
-        # Configure auto-scaling
         scaling = self.service.auto_scale_task_count(
             min_capacity=min_capacity,
             max_capacity=max_capacity
         )
 
-        # CPU-based auto-scaling
         scaling.scale_on_cpu_utilization(
             f"CpuScaling-{environment_suffix}",
             target_utilization_percent=70,
@@ -1256,19 +1241,9 @@ class EcsConstruct(Construct):
             scale_out_cooldown=Duration.seconds(60)
         )
 
-        # Memory-based auto-scaling
         scaling.scale_on_memory_utilization(
             f"MemoryScaling-{environment_suffix}",
             target_utilization_percent=70,
-            scale_in_cooldown=Duration.seconds(60),
-            scale_out_cooldown=Duration.seconds(60)
-        )
-
-        # Request count-based auto-scaling
-        scaling.scale_on_request_count(
-            f"RequestScaling-{environment_suffix}",
-            requests_per_target=1000,
-            target_group=target_group,
             scale_in_cooldown=Duration.seconds(60),
             scale_out_cooldown=Duration.seconds(60)
         )

@@ -85,7 +85,7 @@ class EcsConstruct(Construct):
 
         container = task_definition.add_container(
             f"PaymentContainer-{environment_suffix}",
-            image=ecs.ContainerImage.from_registry("amazon/amazon-ecs-sample"),
+            image=ecs.ContainerImage.from_registry("public.ecr.aws/docker/library/nginx:latest"),
             logging=ecs.LogDrivers.aws_logs(
                 stream_prefix="payment",
                 log_group=log_group
@@ -103,7 +103,7 @@ class EcsConstruct(Construct):
         )
 
         container.add_port_mappings(
-            ecs.PortMapping(container_port=8080, protocol=ecs.Protocol.TCP)
+            ecs.PortMapping(container_port=80, protocol=ecs.Protocol.TCP)
         )
 
         self.alb = elbv2.ApplicationLoadBalancer(
@@ -118,11 +118,11 @@ class EcsConstruct(Construct):
             self,
             f"PaymentTargetGroup-{environment_suffix}",
             vpc=vpc,
-            port=8080,
+            port=80,
             protocol=elbv2.ApplicationProtocol.HTTP,
             target_type=elbv2.TargetType.IP,
             health_check=elbv2.HealthCheck(
-                path="/health",
+                path="/",
                 interval=Duration.seconds(30),
                 timeout=Duration.seconds(5),
                 healthy_threshold_count=2,
