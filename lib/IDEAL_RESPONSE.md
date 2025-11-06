@@ -2,6 +2,255 @@
 
 This Terraform configuration implements a complete multi-region disaster recovery solution spanning us-east-1 (primary) and us-east-2 (DR) with automated failover capabilities.
 
+## Architecture Overview
+
+This solution provides a robust disaster recovery architecture with the following key characteristics:
+
+- **RTO (Recovery Time Objective)**: < 15 minutes
+- **RPO (Recovery Point Objective)**: < 5 minutes
+- **Availability**: Multi-AZ deployment in both regions (3 AZs each)
+- **Automation**: Automated DNS failover using Route 53 health checks
+- **Replication**: Aurora Global Database and S3 cross-region replication
+
+### Components
+
+1. **Database Layer**: Aurora PostgreSQL Global Database with automatic cross-region replication
+2. **Storage Layer**: S3 buckets with cross-region replication for transaction logs
+3. **Compute Layer**: Lambda functions in VPC private subnets
+4. **API Layer**: API Gateway REST APIs with health check endpoints
+5. **DNS & Failover**: Route 53 health checks and failover routing
+6. **Monitoring**: CloudWatch alarms for replication lag, API errors, and Lambda failures
+7. **Networking**: VPCs with public/private subnets, NAT Gateways, and security groups
+
+### How Failover Works
+
+1. Route 53 health check continuously monitors the primary region API endpoint
+2. If health check fails for 3 consecutive intervals (90 seconds), Route 53 marks primary as unhealthy
+3. DNS automatically routes traffic to the DR region (SECONDARY)
+4. CloudWatch alarms notify operations team via SNS
+5. Aurora Global Database ensures data is replicated with minimal lag
+6. S3 cross-region replication ensures transaction logs are available in DR region
+
+## Deployment Instructions
+
+### Prerequisites
+
+- AWS CLI configured with appropriate credentials
+- Terraform 1.5+ installed
+- Node.js 18.x for Lambda function development
+- AWS account with permissions for all required services
+
+### Step 1: Prepare Lambda Function
+
+```bash
+cd lib/lambda
+zip payment_processor.zip index.js
+cd ../..
+```
+
+### Step 2: Initialize Terraform
+
+```bash
+cd lib
+terraform init
+```
+
+### Step 3: Create terraform.tfvars
+
+```hcl
+environment_suffix     = "prod-001"
+primary_region         = "us-east-1"
+dr_region              = "us-east-2"
+domain_name            = "payments-api.example.com"
+db_master_username     = "dbadmin"
+```
+
+### Step 4: Plan and Apply
+
+```bash
+terraform plan -out=tfplan
+terraform apply tfplan
+```
+
+### Step 5: Configure DNS Delegation
+
+After deployment, delegate your domain to the Route 53 hosted zone name servers shown in outputs.
+
+## Testing Disaster Recovery
+
+### Test 1: Verify Health Checks
+
+```bash
+# Get health check endpoint from outputs
+PRIMARY_HEALTH=$(terraform output -raw primary_health_check_endpoint)
+DR_HEALTH=$(terraform output -raw dr_health_check_endpoint)
+
+# Test both endpoints
+curl $PRIMARY_HEALTH
+curl $DR_HEALTH
+```
+
+### Test 2: Simulate Primary Region Failure
+
+```bash
+# Disable primary API Gateway stage
+aws apigateway update-stage \
+  --rest-api-id $(terraform output -raw primary_api_id) \
+  --stage-name prod \
+  --patch-operations op=replace,path=/deploymentId,value=invalid
+
+# Monitor Route 53 health check status
+aws route53 get-health-check-status \
+  --health-check-id $(terraform output -raw route53_health_check_id)
+
+# Wait 90-120 seconds for DNS failover
+# Test failover domain
+curl https://api.payments-api.example.com/health
+```
+
+### Test 3: Database Replication Verification
+
+```bash
+# Check replication lag from CloudWatch
+aws cloudwatch get-metric-statistics \
+  --namespace AWS/RDS \
+  --metric-name AuroraGlobalDBReplicationLag \
+  --dimensions Name=DBClusterIdentifier,Value=$(terraform output -raw primary_cluster_id) \
+  --start-time $(date -u -d '5 minutes ago' +%Y-%m-%dT%H:%M:%S) \
+  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
+  --period 60 \
+  --statistics Average
+```
+
+## Cost Optimization
+
+### Current Configuration Costs (Estimated Monthly)
+
+- Aurora Global Database: ~$800-1000 (2x db.r6g.large per region)
+- NAT Gateways: ~$96 (2x $48/month)
+- Lambda: ~$10-50 (depending on invocations)
+- API Gateway: ~$3.50 per million requests
+- Route 53: ~$0.50 per health check + $0.50 per hosted zone
+- S3 Replication: Variable based on data transfer
+- Data Transfer: Variable based on cross-region replication volume
+
+### Optimization Recommendations
+
+1. **Aurora Serverless v2**: Consider using Aurora Serverless v2 for non-production environments to reduce costs during low-usage periods
+2. **VPC Endpoints**: Add VPC endpoints for S3 and Secrets Manager to reduce NAT Gateway data transfer costs
+3. **S3 Lifecycle Policies**: Implement lifecycle policies to transition older transaction logs to S3 Glacier
+4. **Lambda Memory**: Fine-tune Lambda memory allocation based on actual usage patterns
+5. **Reserved Capacity**: Purchase Aurora Reserved Instances for production workloads (up to 60% savings)
+
+## Security Best Practices
+
+### Implemented Security Controls
+
+1. **Encryption at Rest**:
+   - Aurora clusters encrypted with KMS
+   - S3 buckets with server-side encryption (AES256)
+   - Secrets Manager for database credentials
+
+2. **Encryption in Transit**:
+   - HTTPS-only for API Gateway endpoints
+   - SSL/TLS for Aurora connections
+   - HTTPS for Route 53 health checks
+
+3. **Network Security**:
+   - Lambda functions in private subnets
+   - Security groups with least privilege rules
+   - No public access to databases
+   - NAT Gateways for outbound connectivity
+
+4. **IAM Security**:
+   - Least privilege IAM roles for Lambda
+   - Separate IAM roles for S3 replication
+   - No hardcoded credentials
+
+5. **Secrets Management**:
+   - Database passwords in Secrets Manager
+   - Random password generation (32 characters)
+   - No sensitive data in Terraform state
+
+### Additional Security Recommendations
+
+1. **Enable AWS GuardDuty** for threat detection
+2. **Enable AWS Config** for compliance monitoring
+3. **Enable VPC Flow Logs** for network traffic analysis
+4. **Implement AWS WAF** on API Gateway for application-layer protection
+5. **Enable CloudTrail** for API audit logging
+6. **Rotate database credentials** regularly using Secrets Manager rotation
+7. **Enable S3 bucket logging** for access auditing
+8. **Implement least privilege** with IAM policy conditions
+
+## Maintenance and Operations
+
+### Monitoring Checklist
+
+- [ ] Monitor Aurora replication lag (should be < 1 second)
+- [ ] Monitor Route 53 health check status
+- [ ] Review CloudWatch alarms daily
+- [ ] Check API Gateway 4XX/5XX error rates
+- [ ] Review Lambda function error rates and duration
+- [ ] Monitor NAT Gateway connection counts
+- [ ] Review S3 replication metrics
+
+### Backup and Recovery
+
+- Aurora automated backups retained for 7 days
+- S3 versioning enabled on both buckets
+- Cross-region replication ensures data durability
+- Test recovery procedures quarterly
+
+### Runbook: Manual Failover
+
+If automated failover doesn't work:
+
+1. **Verify DR Region Health**:
+   ```bash
+   curl $(terraform output -raw dr_health_check_endpoint)
+   ```
+
+2. **Promote DR Aurora Cluster** (if needed):
+   ```bash
+   aws rds failover-global-cluster \
+     --global-cluster-identifier payment-global-cluster-<suffix> \
+     --target-db-cluster-identifier payment-cluster-dr-<suffix> \
+     --region us-east-2
+   ```
+
+3. **Update Route 53 Manually**:
+   - Delete PRIMARY record
+   - Change SECONDARY to PRIMARY
+   - Update health check to monitor DR region
+
+4. **Notify Stakeholders** via SNS or communication channels
+
+### Runbook: Failback to Primary Region
+
+1. **Verify Primary Region Recovery**:
+   ```bash
+   curl $(terraform output -raw primary_health_check_endpoint)
+   ```
+
+2. **Sync Data** (if necessary):
+   - Verify Aurora replication is healthy
+   - Check S3 replication status
+
+3. **Test Primary Region Thoroughly**:
+   - Run smoke tests on all endpoints
+   - Verify database connectivity
+   - Check Lambda function execution
+
+4. **Update DNS**:
+   - Re-enable PRIMARY record in Route 53
+   - Monitor health checks for stability
+
+5. **Gradual Traffic Shift**:
+   - Use Route 53 weighted routing to gradually shift traffic
+   - Monitor metrics during transition
+   - Complete failback after validation
+
 ## File: provider.tf
 
 ```hcl

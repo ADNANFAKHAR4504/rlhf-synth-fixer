@@ -32,7 +32,19 @@ function readTerraformOutputs(): any {
   if (!fs.existsSync(ALL_OUTPUTS_FILE)) {
     return null;
   }
-  return JSON.parse(fs.readFileSync(ALL_OUTPUTS_FILE, "utf-8"));
+  const rawOutputs = JSON.parse(fs.readFileSync(ALL_OUTPUTS_FILE, "utf-8"));
+
+  // Extract values from Terraform output format
+  // Terraform outputs have structure: { "output_name": { "value": actual_value, "type": "string", "sensitive": false } }
+  const outputs: any = {};
+  for (const [key, outputObj] of Object.entries(rawOutputs)) {
+    if (outputObj && typeof outputObj === 'object' && 'value' in outputObj) {
+      outputs[key] = (outputObj as any).value;
+    } else {
+      outputs[key] = outputObj;
+    }
+  }
+  return outputs;
 }
 
 // Helper function to check if infrastructure is deployed
