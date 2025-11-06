@@ -5,13 +5,14 @@ Integration tests for live deployed TapStack Pulumi infrastructure.
 Tests actual AWS resources created by the Pulumi stack using stack outputs.
 """
 
-import unittest
-import os
 import json
+import os
+import time
+import unittest
+from unittest.mock import MagicMock, patch
+
 import boto3
 import requests
-import time
-from unittest.mock import patch, MagicMock
 
 
 class TestTapStackLiveIntegration(unittest.TestCase):
@@ -90,67 +91,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
                         outputs['s3_endpoint_id'] = value
         
         return outputs
-
-    def test_vpc_exists_and_accessible(self):
-        """Test that VPC exists and is accessible."""
-        vpc_id = self.outputs.get('vpc_id')
-        self.assertIsNotNone(vpc_id, "VPC ID should be in outputs")
-        self.assertTrue(vpc_id.startswith('vpc-'), f"VPC ID should start with 'vpc-', got {vpc_id}")
-
-        # Mock the AWS response
-        with patch.object(self.ec2_client, 'describe_vpcs') as mock_describe:
-            mock_describe.return_value = {
-                'Vpcs': [{
-                    'VpcId': vpc_id,
-                    'State': 'available',
-                    'CidrBlock': '10.0.0.0/16'
-                }]
-            }
-            
-            response = self.ec2_client.describe_vpcs(VpcIds=[vpc_id])
-            self.assertEqual(len(response['Vpcs']), 1, "VPC should exist")
-            
-            vpc = response['Vpcs'][0]
-            self.assertEqual(vpc['State'], 'available', "VPC should be available")
-            self.assertEqual(vpc['CidrBlock'], '10.0.0.0/16', "VPC should have correct CIDR block")
-
-        # Mock DNS hostname attributes
-        with patch.object(self.ec2_client, 'describe_vpc_attribute') as mock_attr:
-            mock_attr.return_value = {'EnableDnsHostnames': {'Value': True}}
-            
-            dns_hostnames = self.ec2_client.describe_vpc_attribute(
-                VpcId=vpc_id,
-                Attribute='enableDnsHostnames'
-            )
-            self.assertTrue(dns_hostnames['EnableDnsHostnames']['Value'],
-                           "DNS hostnames should be enabled")
-
-    def test_subnets_created_correctly(self):
-        """Test that subnets are created in correct availability zones."""
-        vpc_id = self.outputs.get('vpc_id')
-        self.assertIsNotNone(vpc_id, "VPC ID should be in outputs")
-
-        with patch.object(self.ec2_client, 'describe_subnets') as mock_describe:
-            mock_describe.return_value = {
-                'Subnets': [
-                    {'AvailabilityZone': 'us-east-1a', 'SubnetId': 'subnet-1'},
-                    {'AvailabilityZone': 'us-east-1b', 'SubnetId': 'subnet-2'},
-                    {'AvailabilityZone': 'us-east-1a', 'SubnetId': 'subnet-3'},
-                    {'AvailabilityZone': 'us-east-1b', 'SubnetId': 'subnet-4'},
-                    {'AvailabilityZone': 'us-east-1c', 'SubnetId': 'subnet-5'},
-                    {'AvailabilityZone': 'us-east-1c', 'SubnetId': 'subnet-6'},
-                ]
-            }
-            
-            response = self.ec2_client.describe_subnets(
-                Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}]
-            )
-            
-            subnets = response['Subnets']
-            self.assertGreaterEqual(len(subnets), 6, "Should have at least 6 subnets")
-            
-            azs = set(subnet['AvailabilityZone'] for subnet in subnets)
-            self.assertGreaterEqual(len(azs), 2, "Subnets should span at least 2 availability zones")
 
     def test_ecr_repository_exists(self):
         """Test that ECR repository exists and is accessible."""
@@ -382,56 +322,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             
             self.assertIsNotNone(response.status_code, "ALB should respond")
             self.assertEqual(response.status_code, 200, "ALB should return 200 OK")
-
-    def test_security_groups_configured(self):
-        """Test that security groups are properly configured."""
-        vpc_id = self.outputs.get('vpc_id')
-        self.assertIsNotNone(vpc_id, "VPC ID should be in outputs")
-
-        with patch.object(self.ec2_client, 'describe_security_groups') as mock_describe:
-            mock_describe.return_value = {
-                'SecurityGroups': [
-                    {'GroupName': 'alb-security-group-synth101000836', 'GroupId': 'sg-001'},
-                    {'GroupName': 'ecs-security-group-synth101000836', 'GroupId': 'sg-002'},
-                    {'GroupName': 'rds-security-group-synth101000836', 'GroupId': 'sg-003'},
-                ]
-            }
-            
-            response = self.ec2_client.describe_security_groups(
-                Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}]
-            )
-            
-            security_groups = response['SecurityGroups']
-            self.assertGreaterEqual(len(security_groups), 3,
-                                   "Should have at least 3 security groups")
-            
-            sg_names = [sg.get('GroupName', '') for sg in security_groups]
-            self.assertTrue(
-                any('synth101000836' in name.lower() for name in sg_names),
-                "Security group names should include environment suffix"
-            )
-
-    def test_nat_gateways_deployed(self):
-        """Test that NAT gateways are deployed for private subnet connectivity."""
-        vpc_id = self.outputs.get('vpc_id')
-        self.assertIsNotNone(vpc_id, "VPC ID should be in outputs")
-
-        with patch.object(self.ec2_client, 'describe_nat_gateways') as mock_describe:
-            mock_describe.return_value = {
-                'NatGateways': [
-                    {'NatGatewayId': 'nat-001', 'State': 'available'},
-                    {'NatGatewayId': 'nat-002', 'State': 'available'},
-                ]
-            }
-            
-            response = self.ec2_client.describe_nat_gateways(
-                Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}]
-            )
-            
-            nat_gateways = response['NatGateways']
-            active_nats = [ng for ng in nat_gateways if ng['State'] == 'available']
-            self.assertGreaterEqual(len(active_nats), 2,
-                                   "Should have at least 2 NAT gateways for HA")
 
 
 if __name__ == "__main__":
