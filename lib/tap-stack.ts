@@ -1,4 +1,3 @@
-// lib/tap-stack.ts
 
 import {
   AwsProvider,
