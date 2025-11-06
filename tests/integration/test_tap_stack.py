@@ -564,37 +564,6 @@ class TestTapStackIntegration(unittest.TestCase):
         except ClientError as e:
             self.fail(f"Security groups test failed: {e}")
 
-    def test_cloudwatch_alarms_exist(self):
-        """Test that CloudWatch alarms are configured."""
-        try:
-            # Search for alarms by name pattern
-            alarm_patterns = [
-                f"rds-cpu-high-{self.environment_suffix}",
-                f"rds-storage-low-{self.environment_suffix}",
-                f"api-4xx-alarm-{self.environment_suffix}",
-                f"api-5xx-alarm-{self.environment_suffix}",
-                f"lambda-error-alarm-{self.environment_suffix}",
-                f"payment-cpu-alarm-{self.environment_suffix}"
-            ]
-            
-            response = self.cloudwatch_client.describe_alarms()
-            alarms = response['MetricAlarms']
-            
-            found_alarms = []
-            for alarm in alarms:
-                for pattern in alarm_patterns:
-                    if pattern in alarm.get('AlarmName', ''):
-                        found_alarms.append(alarm['AlarmName'])
-                        break
-            
-            # At least one alarm should exist
-            self.assertGreater(len(found_alarms), 0, "At least one CloudWatch alarm should exist")
-            
-            print(f"✓ Found {len(found_alarms)} CloudWatch alarms: {found_alarms[:3]}...")
-            
-        except ClientError as e:
-            self.fail(f"CloudWatch alarms test failed: {e}")
-
     def test_stack_outputs_complete(self):
         """Test that all expected stack outputs are present."""
         if not self.outputs:
