@@ -4,6 +4,7 @@ import {
   DescribeRouteTablesCommand,
   DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
+  DescribeVpcAttributeCommand,
   DescribeVpcEndpointsCommand,
   DescribeVpcsCommand,
   EC2Client
@@ -32,6 +33,22 @@ describe('VPC Migration Infrastructure Integration Tests', () => {
       expect(response.Vpcs?.[0].VpcId).toBe(outputs.VPCId);
     });
 
+    test('VPC should have DNS support and hostnames enabled', async () => {
+      const dnsSupportCommand = new DescribeVpcAttributeCommand({
+        VpcId: outputs.VPCId,
+        Attribute: 'enableDnsSupport'
+      });
+      const dnsSupportResponse = await ec2Client.send(dnsSupportCommand);
+
+      const dnsHostnamesCommand = new DescribeVpcAttributeCommand({
+        VpcId: outputs.VPCId,
+        Attribute: 'enableDnsHostnames'
+      });
+      const dnsHostnamesResponse = await ec2Client.send(dnsHostnamesCommand);
+
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
+    });
 
     test('VPC should have appropriate CIDR block', async () => {
       const command = new DescribeVpcsCommand({
