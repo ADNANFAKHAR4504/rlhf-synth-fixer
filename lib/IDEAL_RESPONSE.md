@@ -708,8 +708,8 @@ resource "aws_cloudtrail" "main" {
     include_management_events = true
 
     data_resource {
-      type   = "AWS::RDS::DBCluster"
-      values = ["arn:aws:rds:*:*:cluster:*"]
+      type   = "AWS::S3::Object"
+      values = ["arn:aws:s3:::"]
     }
   }
 
@@ -968,9 +968,9 @@ resource "aws_lb" "main" {
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
 
-  enable_deletion_protection        = false
-  enable_http2                      = true
-  enable_drop_invalid_header_fields = true
+  enable_deletion_protection = false
+  enable_http2               = true
+  drop_invalid_header_fields = true
 
   access_logs {
     bucket  = aws_s3_bucket.logs.bucket
