@@ -57,6 +57,7 @@ class TapStack(pulumi.ComponentResource):
         super().__init__('tap:stack:TapStack', name, None, opts)
 
         self.environment_suffix = args.environment_suffix
+        self.tags = args.tags
         base_tags = args.tags or {}
         region = args.region
 
