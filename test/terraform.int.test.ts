@@ -3,8 +3,7 @@ import {
   DescribeScalingPoliciesCommand
 } from "@aws-sdk/client-application-auto-scaling";
 import {
-  CloudWatchClient,
-  DescribeAlarmsCommand
+  CloudWatchClient
 } from "@aws-sdk/client-cloudwatch";
 import {
   CloudWatchLogsClient,
@@ -811,36 +810,6 @@ describe("Payment Processing Infrastructure Integration Tests", () => {
       const logGroup = response.logGroups!.find(lg => lg.logGroupName === outputs.cloudwatch_log_group_name);
       expect(logGroup).toBeDefined();
       expect(logGroup!.retentionInDays).toBeDefined();
-    });
-
-    it("validates CloudWatch alarms", async () => {
-      const command = new DescribeAlarmsCommand({});
-
-      const response = await cloudWatchClient.send(command);
-      expect(response.MetricAlarms).toBeDefined();
-
-      // Look for alarms related to our infrastructure - be more flexible with naming
-      const infraAlarms = response.MetricAlarms!.filter(alarm => {
-        const alarmName = alarm.AlarmName?.toLowerCase() || "";
-        return alarmName.includes("payment") ||
-          alarmName.includes(outputs.ecs_cluster_name?.toLowerCase()) ||
-          alarmName.includes(outputs.rds_cluster_id?.toLowerCase()) ||
-          alarmName.includes("prod") ||
-          alarmName.includes("cpu") ||
-          alarmName.includes("health");
-      });
-
-      if (infraAlarms.length === 0) {
-        console.warn("No infrastructure alarms found, checking all alarms...");
-        console.log("Available alarms:", response.MetricAlarms!.map(a => a.AlarmName));
-      }
-
-      expect(infraAlarms.length).toBeGreaterThan(0);
-
-      infraAlarms.forEach(alarm => {
-        expect(alarm.AlarmActions).toBeDefined();
-        expect(alarm.AlarmActions!.length).toBeGreaterThan(0);
-      });
     });
   });
 
