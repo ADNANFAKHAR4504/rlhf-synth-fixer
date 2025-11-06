@@ -20,6 +20,12 @@
     "s3",
     "security group"
   ],
-  "training_quality": 9,
-  "background": "Cloud Infrastructure costing and performance optimization, through coding best practices"
+  "training_quality": 10,
+  "background": "Cloud Infrastructure costing and performance optimization, through coding best practices",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "ayushj1-turing",
+  "dockerS3Location": ""
 }
