@@ -179,34 +179,80 @@ elif [ "$PLATFORM" = "pulumi" ]; then
 elif [ "$PLATFORM" = "tf" ]; then
   echo "✅ Terraform project detected, writing outputs to cfn-outputs..."
   touch cfn-outputs/flat-outputs.json
-  
+
   # Change to lib directory where Terraform files are located
   cd lib
-  
+
+  # Refresh Terraform state to ensure outputs are up-to-date with current outputs.tf
+  # This is crucial when outputs.tf has been modified but state hasn't been updated
+  echo "🔄 Refreshing Terraform state to capture any new outputs..."
+  if ! terraform refresh -input=false; then
+    echo "⚠️ Terraform refresh failed, but continuing with existing state..."
+  fi
+
   # Get structured outputs (JSON)
-  if terraform output -json > ../cfn-outputs/all-outputs.json; then
-    echo "✅ Terraform outputs retrieved successfully"
-    
-    # Create flat key=value version
-    echo "{}" > ../cfn-outputs/flat-outputs.json
-    jq -r 'to_entries[] | "\(.key)=\(.value.value)"' ../cfn-outputs/all-outputs.json | while IFS='=' read -r key value; do
-      jq --arg key "$key" --arg value "$value" '. + {($key): $value}' ../cfn-outputs/flat-outputs.json > ../temp-flat.json
-      mv ../temp-flat.json ../cfn-outputs/flat-outputs.json
-    done
+  # This includes both sensitive and non-sensitive outputs
+  if terraform output -json > ../cfn-outputs/all-outputs-temp.json 2>&1; then
+    # Check if we got valid JSON output
+    if jq empty ../cfn-outputs/all-outputs-temp.json 2>/dev/null; then
+      mv ../cfn-outputs/all-outputs-temp.json ../cfn-outputs/all-outputs.json
+      echo "✅ Terraform outputs retrieved successfully"
+
+      # Check for empty outputs
+      OUTPUT_COUNT=$(jq 'length' ../cfn-outputs/all-outputs.json)
+      echo "📊 Found $OUTPUT_COUNT outputs in Terraform state"
+
+      if [ "$OUTPUT_COUNT" = "0" ] || [ "$OUTPUT_COUNT" = "null" ]; then
+        echo "⚠️ Warning: No outputs found in Terraform state"
+        echo "   This usually means:"
+        echo "   1. No output blocks are defined in *.tf files"
+        echo "   2. All outputs failed to evaluate (resource errors)"
+        echo "   3. Terraform apply hasn't been run yet"
+      fi
+
+      # Create flat key=value version
+      echo "{}" > ../cfn-outputs/flat-outputs.json
+      jq -r 'to_entries[] | "\(.key)=\(.value.value)"' ../cfn-outputs/all-outputs.json | while IFS='=' read -r key value; do
+        # Handle arrays and objects by JSON-encoding them
+        if echo "$value" | jq empty 2>/dev/null && [ "$value" != "null" ]; then
+          # Value is already JSON, use as-is
+          jq --arg key "$key" --argjson value "$value" '. + {($key): $value}' ../cfn-outputs/flat-outputs.json > ../temp-flat.json
+        else
+          # Value is a string or primitive
+          jq --arg key "$key" --arg value "$value" '. + {($key): $value}' ../cfn-outputs/flat-outputs.json > ../temp-flat.json
+        fi
+        mv ../temp-flat.json ../cfn-outputs/flat-outputs.json
+      done
+
+      # List all outputs for debugging
+      echo "📋 Available outputs:"
+      jq -r 'keys[]' ../cfn-outputs/all-outputs.json || echo "   (unable to list outputs)"
+
+    else
+      echo "⚠️ Terraform output returned invalid JSON, creating empty files"
+      echo "{}" > ../cfn-outputs/all-outputs.json
+      echo "{}" > ../cfn-outputs/flat-outputs.json
+      cat ../cfn-outputs/all-outputs-temp.json 2>/dev/null || true
+    fi
   else
     echo "⚠️ Failed to get Terraform outputs, creating empty files"
+    echo "Error details:"
+    cat ../cfn-outputs/all-outputs-temp.json 2>/dev/null || echo "   (no error details available)"
     echo "{}" > ../cfn-outputs/all-outputs.json
     echo "{}" > ../cfn-outputs/flat-outputs.json
   fi
-  
+
+  # Clean up temp file
+  rm -f ../cfn-outputs/all-outputs-temp.json
+
   # Go back to root directory
   cd ..
 
   echo "✅ Consolidated Terraform outputs:"
-  cat cfn-outputs/all-outputs.json || echo "No structured outputs"
+  cat cfn-outputs/all-outputs.json | jq '.' 2>/dev/null || cat cfn-outputs/all-outputs.json || echo "No structured outputs"
 
   echo "✅ Flat outputs:"
-  cat cfn-outputs/flat-outputs.json || echo "No flat outputs"    
+  cat cfn-outputs/flat-outputs.json | jq '.' 2>/dev/null || cat cfn-outputs/flat-outputs.json || echo "No flat outputs"    
 
 else
   echo "ℹ️ Not a recognized platform, creating empty outputs for consistency"
