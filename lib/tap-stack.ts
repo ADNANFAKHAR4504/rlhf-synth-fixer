@@ -194,10 +194,10 @@ exports.handler = async (event) => {
               Priority: 1,
               Filter: {},
               Destination: {
-                Bucket: \`arn:aws:s3:::\${TargetBucket}\`,
+                Bucket: 'arn:aws:s3:::' + TargetBucket,
                 StorageClass: 'STANDARD_IA',
                 EncryptionConfiguration: {
-                  ReplicaKmsKeyId: \`arn:aws:kms:\${TargetRegion}:\${AccountId}:alias/aws/s3\`,
+                  ReplicaKmsKeyId: 'arn:aws:kms:' + TargetRegion + ':' + AccountId + ':alias/aws/s3',
                 },
               },
               DeleteMarkerReplication: {
@@ -716,17 +716,31 @@ exports.handler = async (event) => {
       
       if (RequestType === 'Create' || !peeringId || peeringId === 'none') {
         // Check for existing peering connections between these VPCs
+        // For cross-region, we need to check both directions (requester and accepter)
         const existingPeerings = await ec2Source.describeVpcPeeringConnections({
           Filters: [
-            { Name: 'requester-vpc-info.vpc-id', Values: [SourceVpcId] },
-            { Name: 'accepter-vpc-info.vpc-id', Values: [TargetVpcId] },
-            { Name: 'status-code', Values: ['pending-acceptance', 'provisioning', 'active', 'failed', 'rejected', 'expired', 'deleted'] },
+            {
+              Name: 'requester-vpc-info.vpc-id',
+              Values: [SourceVpcId],
+            },
           ],
         }).promise();
         
+        // Filter to find connections where target VPC is the accepter
+        const matchingPeerings = existingPeerings.VpcPeeringConnections
+          ? existingPeerings.VpcPeeringConnections.filter((conn) => {
+              const accepterVpcId = conn.AccepterVpcInfo?.VpcId;
+              const accepterRegion = conn.AccepterVpcInfo?.Region;
+              return (
+                accepterVpcId === TargetVpcId &&
+                accepterRegion === '${currentRegion}'
+              );
+            })
+          : [];
+        
         // Clean up any failed, rejected, expired, or deleted connections
-        if (existingPeerings.VpcPeeringConnections) {
-          for (const existing of existingPeerings.VpcPeeringConnections) {
+        if (matchingPeerings.length > 0) {
+          for (const existing of matchingPeerings) {
             const status = existing.Status.Code;
             if (status === 'failed' || status === 'rejected' || status === 'expired') {
               console.log('Deleting existing ' + status + ' peering connection: ' + existing.VpcPeeringConnectionId);
@@ -753,6 +767,7 @@ exports.handler = async (event) => {
                 await ec2Target.acceptVpcPeeringConnection({
                   VpcPeeringConnectionId: peeringId,
                 }).promise();
+                console.log('Accepted existing pending connection, will wait for active status');
               } catch (acceptErr) {
                 console.log('Error accepting existing connection: ' + acceptErr.code);
                 // Continue to create new one if accept fails
@@ -772,8 +787,9 @@ exports.handler = async (event) => {
           
           peeringId = createResponse.VpcPeeringConnection.VpcPeeringConnectionId;
           console.log('Created new VPC peering connection:', peeringId);
+        }
         
-        // Check if already accepted before trying to accept
+        // Check if already accepted before trying to accept (for both new and existing connections)
         let needsAcceptance = true;
         try {
           const currentStatus = await ec2Source.describeVpcPeeringConnections({
