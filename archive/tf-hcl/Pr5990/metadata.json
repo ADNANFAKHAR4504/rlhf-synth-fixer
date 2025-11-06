@@ -6,7 +6,10 @@
   "team": "synth",
   "startedAt": "2025-11-06T20:43:51+05:30",
   "subtask": "Application Deployment",
-  "subject_labels": ["Web Application Deployment", "Serverless Infrastructure (Functions as Code)"],
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
   "po_id": "v4bg1",
   "aws_services": [
     "VPC",
@@ -23,5 +26,11 @@
     "Auto Scaling Policy",
     "CloudWatch Alarm"
   ],
-  "training_quality": 9
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
