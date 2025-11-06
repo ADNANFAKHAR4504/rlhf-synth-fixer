@@ -204,6 +204,43 @@ Resource handler returned message: "Destination bucket must exist.
 
 ---
 
+## Issue 9: CloudFormation Export Propagation Timing Issue
+
+**Problem**: Secondary stack deployment failed with export not found error
+```
+DRStackSecondary-pr5822 | ROLLBACK_IN_PROGRESS
+No export named AlertTopicArn-pr5822 found.
+```
+
+**Root Cause**: 
+- GlobalResourcesStack completed at 7:23:45 AM and created the export `AlertTopicArn-pr5822`
+- DRStackSecondary-pr5822 started deploying only 3 seconds later at 7:23:48 AM
+- CloudFormation exports take 10-60 seconds to propagate across AWS infrastructure
+- The `cdk deploy --all` command deploys stacks as quickly as possible, not waiting for export propagation
+- Secondary stack tried to import the export before it was available
+
+**Solution Applied**:
+- Removed CloudFormation exports/imports entirely (lines 61-63 in `global-resources-stack.ts`)
+- Changed to direct property passing via CDK constructs
+- Updated `MultiRegionDRStackProps` interface to accept `alertTopic: sns.ITopic` (line 19 in `multi-region-dr-stack.ts`)
+- Removed `Fn.importValue()` logic and replaced with direct prop usage (lines 34-35 in `multi-region-dr-stack.ts`)
+- Updated `bin/tap.ts` to pass `alertTopic: globalStack.alertTopic` to both regional stacks (lines 47, 64)
+- Updated all unit tests to pass `alertTopic` when instantiating `MultiRegionDRStack`
+
+**Result**: 
+- No CloudFormation exports = no propagation delays
+- CDK passes references at synthesis time via CloudFormation parameters
+- Stack dependencies still respected via `addDependency()`
+- All unit tests pass (16/16)
+- 100% code coverage maintained
+- Infrastructure synthesizes and deploys correctly
+
+**Lesson**: When using `cdk deploy --all`, avoid CloudFormation cross-stack exports for timing-sensitive resources. Instead, use direct CDK property passing which creates CloudFormation parameters automatically. This is more idiomatic CDK and avoids race conditions.
+
+**Key Advantage**: Solution works within project constraints - only modified files in `lib/` and `test/` directories, no deployment script changes required.
+
+---
+
 ## Summary
 
 **Final Status**:

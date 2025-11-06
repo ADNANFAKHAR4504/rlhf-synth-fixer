@@ -60,7 +60,6 @@ export class GlobalResourcesStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'AlertTopicArn', {
       value: this.alertTopic.topicArn,
-      exportName: `AlertTopicArn-${props.environment}`,
     });
   }
 }

@@ -65,7 +65,6 @@ export class GlobalResourcesStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'AlertTopicArn', {
       value: this.alertTopic.topicArn,
-      exportName: `AlertTopicArn-${props.environment}`,
     });
   }
 }
@@ -92,6 +91,7 @@ export interface MultiRegionDRStackProps extends cdk.StackProps {
   isPrimary: boolean;
   environment: string;
   globalTableName: string;
+  alertTopic: sns.ITopic;
 }
 
 export class MultiRegionDRStack extends cdk.Stack {
@@ -106,15 +106,8 @@ export class MultiRegionDRStack extends cdk.Stack {
     const region = props.env?.region || 'us-east-1';
     const drRole = props.isPrimary ? 'primary' : 'secondary';
 
-    // Import alert topic
-    const alertTopicArn = cdk.Fn.importValue(
-      `AlertTopicArn-${props.environment}`
-    );
-    const alertTopic = sns.Topic.fromTopicArn(
-      this,
-      'AlertTopic',
-      alertTopicArn
-    );
+    // Use alert topic passed from global stack
+    const alertTopic = props.alertTopic;
 
     // VPC Configuration
     this.vpc = new ec2.Vpc(this, 'DRVPC', {

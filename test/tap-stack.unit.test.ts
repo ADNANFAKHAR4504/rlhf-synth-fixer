@@ -94,6 +94,7 @@ describe('Multi-Region DR Architecture', () => {
         },
         isPrimary: true,
         globalTableName: globalStack.globalTableName,
+        alertTopic: globalStack.alertTopic,
       });
     });
 
@@ -209,6 +210,7 @@ describe('Multi-Region DR Architecture', () => {
         },
         isPrimary: false,
         globalTableName: globalStack.globalTableName,
+        alertTopic: globalStack.alertTopic,
       });
     });
 
@@ -262,6 +264,7 @@ describe('Multi-Region DR Architecture', () => {
         environment: environmentSuffix,
         isPrimary: false,
         globalTableName: globalStack3.globalTableName,
+        alertTopic: globalStack3.alertTopic,
       });
 
       const template = Template.fromStack(stackNoRegion);
