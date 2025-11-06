@@ -249,6 +249,37 @@ All resources are parameterized for flexibility:
    kubectl get pods --all-namespaces
    ```
 
+### CI/CD Deployment Configuration
+
+#### Environment-Specific Deployments
+
+The infrastructure supports multiple isolated environments using the `environment_suffix` variable:
+
+```bash
+# For CI/CD pipelines (automatically set)
+export ENVIRONMENT_SUFFIX="pr5923"  # or pr123, dev, staging, etc.
+
+# The deploy script automatically exports this as a Terraform variable
+export TF_VAR_environment_suffix=${ENVIRONMENT_SUFFIX}
+
+# Deploy with environment-specific naming
+./scripts/deploy.sh
+```
+
+**Resources will be created with the suffix**:
+- EKS Cluster: `eks-cluster-pr5923`
+- Node Group: `node-group-pr5923`
+- VPC: Tagged with `EnvironmentSuffix=pr5923`
+- All other resources follow the same pattern
+
+**Benefits**:
+- **Isolation**: Each PR/environment gets separate infrastructure
+- **No Conflicts**: Multiple deployments can coexist
+- **Easy Cleanup**: Destroy specific environment without affecting others
+- **Testing**: Integration tests validate correct environment
+
+**Important**: The `scripts/deploy.sh` script automatically handles the `TF_VAR_environment_suffix` export. Manual deployments should set this variable or accept the default "prod" value.
+
 ### Post-Deployment Configuration
 
 #### Install Cluster Autoscaler
