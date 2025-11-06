@@ -111,8 +111,21 @@ Resources:
             Principal:
               Service: application-autoscaling.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/DynamoDBAutoscalingRole
+      Policies:
+        - PolicyName: DynamoDBAutoScalingPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:DescribeTable
+                  - dynamodb:UpdateTable
+                  - cloudwatch:PutMetricAlarm
+                  - cloudwatch:DescribeAlarms
+                  - cloudwatch:GetMetricStatistics
+                  - cloudwatch:SetAlarmState
+                  - cloudwatch:DeleteAlarms
+                Resource: '*'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -432,6 +445,7 @@ Resources:
   # API Key for Public API (SAM creates the stage automatically)
   PublicApiKey:
     Type: AWS::ApiGateway::ApiKey
+    DependsOn: PublicApiStage
     Properties:
       Name: !Sub '${ProjectName}-${Environment}-ApiKey'
       Description: API Key for Public API access
@@ -443,6 +457,7 @@ Resources:
   # Usage Plan
   PublicApiUsagePlan:
     Type: AWS::ApiGateway::UsagePlan
+    DependsOn: PublicApiStage
     Properties:
       UsagePlanName: !Sub '${ProjectName}-${Environment}-UsagePlan'
       Description: Usage plan for Public API
@@ -477,12 +492,11 @@ Resources:
           - !Ref VPCEndpoint
       Auth:
         ResourcePolicy:
-          Version: '2012-10-17'
-          Statement:
+          CustomStatements:
             - Effect: Allow
               Principal: '*'
-              Action: execute-api:Invoke
-              Resource: execute-api:/*
+              Action: 'execute-api:Invoke'
+              Resource: '*'
               Condition:
                 StringEquals:
                   aws:SourceVpce: !Ref VPCEndpoint
@@ -680,6 +694,7 @@ Resources:
   # Associate WAF with API Gateway
   WAFAssociation:
     Type: AWS::WAFv2::WebACLAssociation
+    DependsOn: PublicApiStage
     Properties:
       ResourceArn: !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/${PublicApi}/stages/${Environment}'
       WebACLArn: !GetAtt WAFWebACL.Arn
