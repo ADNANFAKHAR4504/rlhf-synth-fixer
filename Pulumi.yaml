@@ -1,4 +1,4 @@
-name: TapStack
+name: TapStackRes
 runtime:
   name: nodejs
   options:
