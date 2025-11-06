@@ -2,9 +2,9 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
-import { Construct } from 'constructs';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
+import { Construct } from 'constructs';
 
 // Note: Module imports commented out as they don't exist yet
 // import {

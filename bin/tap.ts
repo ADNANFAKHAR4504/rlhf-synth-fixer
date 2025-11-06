@@ -18,13 +18,13 @@ const stackName = `TapStack${environmentSuffix}`;
 
 // defaultTags is structured in adherence to the AwsProviderDefaultTags interface
 const defaultTags: import('@cdktf/provider-aws/lib/provider').AwsProviderDefaultTags =
-  {
-    tags: {
-      Environment: environmentSuffix,
-      Repository: repositoryName,
-      CommitAuthor: commitAuthor,
-    },
-  };
+{
+  tags: {
+    Environment: environmentSuffix,
+    Repository: repositoryName,
+    CommitAuthor: commitAuthor,
+  },
+};
 
 // Create the TapStack with the calculated properties
 new TapStack(app, stackName, {
