@@ -149,7 +149,7 @@ locals {
   environment = terraform.workspace
   region      = var.aws_region
 
-  name_prefix = "${local.environment}-${local.region}-${var.service_name}"
+  name_prefix   = "${local.environment}-${local.region}-${var.service_name}"
   random_suffix = random_id.suffix.hex
 
   database_password = var.database_password != "" ? var.database_password : random_password.db_password.result
