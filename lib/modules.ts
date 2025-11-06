@@ -1,31 +1,31 @@
-import { Construct } from 'constructs';
-import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
-import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
-import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
-import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
-import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
 import { cloudtrail } from '@cdktf/provider-aws';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
-import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
-import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
-import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
-import { Route } from '@cdktf/provider-aws/lib/route';
-import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
-import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
-import { Eip } from '@cdktf/provider-aws/lib/eip';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { SecurityGroupRule as AwsSecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule'; // Renamed to avoid conflict
-import { Instance } from '@cdktf/provider-aws/lib/instance';
+import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
-import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
+import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { Instance } from '@cdktf/provider-aws/lib/instance';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
+import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
+import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
+import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
+import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { SecurityGroupRule as AwsSecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule'; // Renamed to avoid conflict
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Password } from '@cdktf/provider-random/lib/password';
+import { Construct } from 'constructs';
 
 // KMS Module - Creates customer-managed KMS key
 export interface KmsModuleProps {
@@ -575,13 +575,12 @@ export class Ec2Module extends Construct {
     });
 
     // Create EC2 instance
-    this.instance = new Instance(this, 'instance', {
+    const instanceConfig: any = {
       ami: ami.id,
       instanceType: props.instanceType,
       subnetId: props.subnetId,
       vpcSecurityGroupIds: props.securityGroupIds,
       iamInstanceProfile: props.instanceProfile.name,
-      keyName: props.keyName,
       userData: `#!/bin/bash
 yum update -y
 yum install -y amazon-cloudwatch-agent
@@ -591,7 +590,14 @@ yum install -y amazon-cloudwatch-agent
         Project: props.project,
         Environment: props.environment,
       },
-    });
+    };
+
+    // Only add keyName if provided
+    if (props.keyName) {
+      instanceConfig.keyName = props.keyName;
+    }
+
+    this.instance = new Instance(this, 'instance', instanceConfig);
   }
 }
 
