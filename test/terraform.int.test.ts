@@ -12,7 +12,23 @@ import {
 
 jest.setTimeout(180_000);
 
-type RawOutputValue = { value: any } | string | string[] | undefined;
+type TfOutputValue<T> = {
+  sensitive: boolean;
+  type: any;
+  value: T;
+};
+
+type StructuredOutputs = {
+  vpc_id?: TfOutputValue<string>;
+  vpc_cidr?: TfOutputValue<string>;
+  public_subnet_ids?: TfOutputValue<string[]>;
+  private_subnet_ids?: TfOutputValue<string[]>;
+  internet_gateway_id?: TfOutputValue<string>;
+  public_route_table_id?: TfOutputValue<string>;
+  web_security_group_id?: TfOutputValue<string>;
+  database_security_group_id?: TfOutputValue<string>;
+  availability_zones?: TfOutputValue<string[]>;
+};
 
 interface TerraformOutputs {
   vpcId: string;
@@ -24,80 +40,6 @@ interface TerraformOutputs {
   webSecurityGroupId?: string;
   databaseSecurityGroupId?: string;
   availabilityZones: string[];
-}
-
-function readRawOutputs(): Record<string, any> {
-  const possiblePaths = [
-    path.resolve(process.cwd(), "tf-outputs/all-outputs.json"),
-    path.resolve(process.cwd(), "tf-outputs.json"),
-    path.resolve(process.cwd(), "outputs.json"),
-    path.resolve(process.cwd(), "lib/terraform.tfstate.d/outputs.json"),
-  ];
-
-  for (const outputPath of possiblePaths) {
-    if (fs.existsSync(outputPath)) {
-      try {
-        const contents = fs.readFileSync(outputPath, "utf8");
-        return JSON.parse(contents);
-      } catch (err) {
-        console.warn(`Failed to parse outputs from ${outputPath}:`, err);
-      }
-    }
-  }
-
-  const envJson = process.env.TF_OUTPUTS_JSON;
-  if (envJson) {
-    try {
-      return JSON.parse(envJson);
-    } catch (err) {
-      console.warn("Failed to parse TF_OUTPUTS_JSON env variable", err);
-    }
-  }
-
-  const envOutputs: Record<string, string | undefined> = {
-    vpc_id: process.env.TF_OUTPUT_VPC_ID,
-    vpc_cidr: process.env.TF_OUTPUT_VPC_CIDR,
-    public_route_table_id: process.env.TF_OUTPUT_PUBLIC_ROUTE_TABLE_ID,
-    internet_gateway_id: process.env.TF_OUTPUT_INTERNET_GATEWAY_ID,
-    public_subnet_ids: process.env.TF_OUTPUT_PUBLIC_SUBNET_IDS,
-    private_subnet_ids: process.env.TF_OUTPUT_PRIVATE_SUBNET_IDS,
-    web_security_group_id: process.env.TF_OUTPUT_WEB_SECURITY_GROUP_ID,
-    database_security_group_id: process.env.TF_OUTPUT_DATABASE_SECURITY_GROUP_ID,
-    availability_zones: process.env.TF_OUTPUT_AVAILABILITY_ZONES,
-  };
-
-  if (Object.values(envOutputs).some(Boolean)) {
-    return envOutputs;
-  }
-
-  throw new Error(
-    "Terraform outputs not found. Provide outputs via tf-outputs/all-outputs.json, tf-outputs.json, outputs.json, " +
-      "lib/terraform.tfstate.d/outputs.json, TF_OUTPUTS_JSON, or TF_OUTPUT_* environment variables."
-  );
-}
-
-function normalizeValue(raw: RawOutputValue): any {
-  if (raw === undefined || raw === null) {
-    return undefined;
-  }
-
-  if (typeof raw === "object" && "value" in raw) {
-    return normalizeValue((raw as { value: any }).value);
-  }
-
-  if (typeof raw === "string") {
-    const trimmed = raw.trim();
-    if ((trimmed.startsWith("[") && trimmed.endsWith("]")) || (trimmed.startsWith("{") && trimmed.endsWith("}"))) {
-      try {
-        return JSON.parse(trimmed);
-      } catch {
-        return trimmed;
-      }
-    }
-    return trimmed;
-  }
-
-  return raw;
 }
 
 function ensureStringArray(value: any): string[] {
@@ -128,24 +70,123 @@ function ensureStringArray(value: any): string[] {
   return [];
 }
 
-function mapOutputs(raw: Record<string, any>): TerraformOutputs {
-  const normalize = (key: string): any => normalizeValue(raw[key]);
+function readStructuredOutputs(): StructuredOutputs {
+  // Try multiple possible output file locations
+  const possiblePaths = [
+    path.resolve(process.cwd(), "lib/terraform.tfstate.d/outputs.json"),
+    path.resolve(process.cwd(), "lib/.terraform/outputs.json"),
+    path.resolve(process.cwd(), "tf-outputs/all-outputs.json"),
+    path.resolve(process.cwd(), "cfn-outputs/all-outputs.json"),
+    path.resolve(process.cwd(), "tf-outputs.json"),
+    path.resolve(process.cwd(), "outputs.json"),
+  ];
 
-  const vpcId = normalize("vpc_id");
+  for (const outputPath of possiblePaths) {
+    if (fs.existsSync(outputPath)) {
+      try {
+        const raw = JSON.parse(fs.readFileSync(outputPath, "utf8"));
+        // Check if outputs are already structured (have sensitive/type/value)
+        const firstKey = Object.keys(raw)[0];
+        if (firstKey && raw[firstKey] && typeof raw[firstKey] === "object" && "value" in raw[firstKey]) {
+          // Already structured format
+          return raw as StructuredOutputs;
+        } else {
+          // Flat format - convert to structured
+          const structured: StructuredOutputs = {};
+          for (const [key, value] of Object.entries(raw)) {
+            if (key === "vpc_id" || key === "vpc_cidr" || key === "internet_gateway_id" || 
+                key === "public_route_table_id" || key === "web_security_group_id" || 
+                key === "database_security_group_id") {
+              structured[key as keyof StructuredOutputs] = {
+                sensitive: false,
+                type: "string",
+                value: String(value),
+              } as any;
+            } else if (key === "public_subnet_ids" || key === "private_subnet_ids" || key === "availability_zones") {
+              structured[key as keyof StructuredOutputs] = {
+                sensitive: false,
+                type: "list(string)",
+                value: ensureStringArray(value),
+              } as any;
+            }
+          }
+          return structured;
+        }
+      } catch (err) {
+        console.warn(`Failed to parse outputs from ${outputPath}:`, err);
+      }
+    }
+  }
+
+  // Fallback: try reading from environment variables or terraform output
+  // For CI/CD, outputs might be available as environment variables
+  const outputs: StructuredOutputs = {};
+  if (process.env.TF_VPC_ID) {
+    outputs.vpc_id = { sensitive: false, type: "string", value: process.env.TF_VPC_ID };
+  }
+  if (process.env.TF_VPC_CIDR) {
+    outputs.vpc_cidr = { sensitive: false, type: "string", value: process.env.TF_VPC_CIDR };
+  }
+  if (process.env.TF_PUBLIC_SUBNET_IDS) {
+    try {
+      outputs.public_subnet_ids = { sensitive: false, type: "list(string)", value: JSON.parse(process.env.TF_PUBLIC_SUBNET_IDS) };
+    } catch {
+      outputs.public_subnet_ids = { sensitive: false, type: "list(string)", value: process.env.TF_PUBLIC_SUBNET_IDS.split(",").map(s => s.trim()) };
+    }
+  }
+  if (process.env.TF_PRIVATE_SUBNET_IDS) {
+    try {
+      outputs.private_subnet_ids = { sensitive: false, type: "list(string)", value: JSON.parse(process.env.TF_PRIVATE_SUBNET_IDS) };
+    } catch {
+      outputs.private_subnet_ids = { sensitive: false, type: "list(string)", value: process.env.TF_PRIVATE_SUBNET_IDS.split(",").map(s => s.trim()) };
+    }
+  }
+  if (process.env.TF_INTERNET_GATEWAY_ID) {
+    outputs.internet_gateway_id = { sensitive: false, type: "string", value: process.env.TF_INTERNET_GATEWAY_ID };
+  }
+  if (process.env.TF_PUBLIC_ROUTE_TABLE_ID) {
+    outputs.public_route_table_id = { sensitive: false, type: "string", value: process.env.TF_PUBLIC_ROUTE_TABLE_ID };
+  }
+  if (process.env.TF_WEB_SECURITY_GROUP_ID) {
+    outputs.web_security_group_id = { sensitive: false, type: "string", value: process.env.TF_WEB_SECURITY_GROUP_ID };
+  }
+  if (process.env.TF_DATABASE_SECURITY_GROUP_ID) {
+    outputs.database_security_group_id = { sensitive: false, type: "string", value: process.env.TF_DATABASE_SECURITY_GROUP_ID };
+  }
+  if (process.env.TF_AVAILABILITY_ZONES) {
+    try {
+      outputs.availability_zones = { sensitive: false, type: "list(string)", value: JSON.parse(process.env.TF_AVAILABILITY_ZONES) };
+    } catch {
+      outputs.availability_zones = { sensitive: false, type: "list(string)", value: process.env.TF_AVAILABILITY_ZONES.split(",").map(s => s.trim()) };
+    }
+  }
+
+  if (Object.keys(outputs).length === 0) {
+    throw new Error(
+      `Outputs file not found. Tried: ${possiblePaths.join(", ")}\n` +
+      "Set environment variables or ensure Terraform outputs are available."
+    );
+  }
+
+  return outputs;
+}
+
+function mapOutputs(structured: StructuredOutputs): TerraformOutputs {
+  const vpcId = structured.vpc_id?.value;
   if (!vpcId) {
     throw new Error("vpc_id output is required for integration tests");
   }
 
   return {
     vpcId: String(vpcId),
-    vpcCidr: normalize("vpc_cidr") ? String(normalize("vpc_cidr")) : undefined,
-    publicSubnetIds: ensureStringArray(normalize("public_subnet_ids")),
-    privateSubnetIds: ensureStringArray(normalize("private_subnet_ids")),
-    internetGatewayId: normalize("internet_gateway_id") ? String(normalize("internet_gateway_id")) : undefined,
-    publicRouteTableId: normalize("public_route_table_id") ? String(normalize("public_route_table_id")) : undefined,
-    webSecurityGroupId: normalize("web_security_group_id") ? String(normalize("web_security_group_id")) : undefined,
-    databaseSecurityGroupId: normalize("database_security_group_id") ? String(normalize("database_security_group_id")) : undefined,
-    availabilityZones: ensureStringArray(normalize("availability_zones")),
+    vpcCidr: structured.vpc_cidr?.value ? String(structured.vpc_cidr.value) : undefined,
+    publicSubnetIds: ensureStringArray(structured.public_subnet_ids?.value),
+    privateSubnetIds: ensureStringArray(structured.private_subnet_ids?.value),
+    internetGatewayId: structured.internet_gateway_id?.value ? String(structured.internet_gateway_id.value) : undefined,
+    publicRouteTableId: structured.public_route_table_id?.value ? String(structured.public_route_table_id.value) : undefined,
+    webSecurityGroupId: structured.web_security_group_id?.value ? String(structured.web_security_group_id.value) : undefined,
+    databaseSecurityGroupId: structured.database_security_group_id?.value ? String(structured.database_security_group_id.value) : undefined,
+    availabilityZones: ensureStringArray(structured.availability_zones?.value),
   };
 }
 
@@ -168,8 +209,8 @@ async function retry<T>(fn: () => Promise<T>, attempts = 8, baseDelayMs = 2000, 
   throw lastError;
 }
 
-const rawOutputs = readRawOutputs();
-const outputs = mapOutputs(rawOutputs);
+const structuredOutputs = readStructuredOutputs();
+const outputs = mapOutputs(structuredOutputs);
 const region = process.env.AWS_REGION || "us-east-1";
 const ec2Client = new EC2Client({ region });
 
