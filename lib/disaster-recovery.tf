@@ -587,22 +587,23 @@ resource "aws_cloudwatch_dashboard" "dr_monitoring" {
           title  = "DR Cluster Node Health"
         }
       },
-      {
-        type   = "metric"
-        width  = 12
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", aws_db_instance.dr_read_replica.identifier],
-            [".", "ReadLatency", ".", "."],
-            [".", "WriteLatency", ".", "."]
-          ]
-          period = 300
-          stat   = "Average"
-          region = var.dr_aws_region
-          title  = "DR Database Metrics"
-        }
-      },
+      # Commented out - requires DR database instance to be defined
+      # {
+      #   type   = "metric"
+      #   width  = 12
+      #   height = 6
+      #   properties = {
+      #     metrics = [
+      #       ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", aws_db_instance.dr_read_replica.identifier],
+      #       [".", "ReadLatency", ".", "."],
+      #       [".", "WriteLatency", ".", "."]
+      #     ]
+      #     period = 300
+      #     stat   = "Average"
+      #     region = var.dr_aws_region
+      #     title  = "DR Database Metrics"
+      #   }
+      # },
       {
         type   = "metric"
         width  = 24
