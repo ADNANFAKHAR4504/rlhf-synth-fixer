@@ -81,7 +81,7 @@ export class TapStack extends cdk.Stack {
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
       ],
-      natGateways: 3, // One NAT Gateway per AZ for high availability
+      natGateways: 1, // One NAT Gateway to save costs and EIP addresses
     });
 
     // Apply tags to VPC
@@ -242,56 +242,359 @@ export class TapStack extends cdk.Stack {
 }
 ```
 
-## Implementation Details
+## File: test/tap-stack.int.test.ts
 
-### AWS Resources Created
+```typescript
+import {
+  CloudFormationClient,
+  DescribeStacksCommand,
+} from '@aws-sdk/client-cloudformation';
+import {
+  DescribeFlowLogsCommand,
+  DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcAttributeCommand,
+  DescribeVpcEndpointsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import { HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
 
-1. **VPC**
-   - CIDR: 10.0.0.0/16
-   - Spans 3 availability zones
-   - DNS hostnames and DNS support enabled
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const stackName = `TapStack${environmentSuffix}`;
+const region = process.env.AWS_REGION || 'us-east-2';
 
-2. **Subnets** (6 total)
-   - 3 public subnets (/24 each) for load balancers
-   - 3 private subnets (/24 each) for application containers
-   - Properly distributed across availability zones
+const cfnClient = new CloudFormationClient({ region });
+const ec2Client = new EC2Client({ region });
+const s3Client = new S3Client({ region });
 
-3. **Internet Gateway**
-   - Attached to VPC
-   - Provides internet access for public subnets
+async function getStackOutputs(): Promise<Record<string, string>> {
+  const response = await cfnClient.send(
+    new DescribeStacksCommand({ StackName: stackName })
+  );
 
-4. **NAT Gateways** (3)
-   - One per availability zone in public subnets
-   - Provides high availability for outbound traffic from private subnets
+  const stack = response.Stacks?.[0];
+  if (!stack || !stack.Outputs) {
+    throw new Error(`Stack ${stackName} not found or has no outputs`);
+  }
 
-5. **Security Groups** (3)
-   - ALB SG: Allows HTTP (80) and HTTPS (443) from internet
-   - ECS SG: Allows port 8080 from ALB only
-   - RDS SG: Allows port 5432 from ECS only, no outbound traffic
+  const outputs: Record<string, string> = {};
+  for (const output of stack.Outputs) {
+    if (output.OutputKey && output.OutputValue) {
+      outputs[output.OutputKey] = output.OutputValue;
+    }
+  }
 
-6. **VPC Flow Logs**
-   - Logs all traffic to S3 bucket
-   - 1-minute aggregation interval
-   - S3 bucket with encryption and lifecycle policy (90 days)
+  return outputs;
+}
 
-7. **VPC Endpoints** (2)
-   - S3 Gateway Endpoint for cost-effective S3 access
-   - DynamoDB Gateway Endpoint for cost-effective DynamoDB access
+let outputs: Record<string, string>;
 
-### Key Features
+describe('Payment Processing VPC Integration Tests', () => {
+  beforeAll(async () => {
+    outputs = await getStackOutputs();
+  }, 30000);
 
-- PCI-DSS compliant network segmentation
-- Multi-AZ architecture for high availability
-- Least privilege security group rules
-- Proper resource naming with environmentSuffix
-- Comprehensive CloudFormation outputs
-- Mandatory tagging for cost allocation and governance
-- No resource retention policies (fully destroyable)
+  describe('VPC Configuration', () => {
+    test('VPC exists with correct CIDR block', async () => {
+      const vpcId = outputs.VpcId;
+      expect(vpcId).toBeDefined();
 
-### Corrections Applied
+      const response = await ec2Client.send(
+        new DescribeVpcsCommand({ VpcIds: [vpcId] })
+      );
 
-1. Removed unused `iam` import
-2. Applied prettier formatting for consistent code style
-3. Simplified arrow function syntax in map operations
+      expect(response.Vpcs).toHaveLength(1);
+      expect(response.Vpcs![0].CidrBlock).toBe('10.0.0.0/16');
 
-All requirements from PROMPT.md have been successfully implemented.
+      const dnsHostnamesResponse = await ec2Client.send(
+        new DescribeVpcAttributeCommand({
+          VpcId: vpcId,
+          Attribute: 'enableDnsHostnames',
+        })
+      );
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
+
+      const dnsSupportResponse = await ec2Client.send(
+        new DescribeVpcAttributeCommand({
+          VpcId: vpcId,
+          Attribute: 'enableDnsSupport',
+        })
+      );
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
+    });
+
+    test('VPC has mandatory tags', async () => {
+      const vpcId = outputs.VpcId;
+      const response = await ec2Client.send(
+        new DescribeVpcsCommand({ VpcIds: [vpcId] })
+      );
+
+      const tags = response.Vpcs![0].Tags || [];
+      const tagMap = Object.fromEntries(
+        tags.map((tag) => [tag.Key, tag.Value])
+      );
+
+      expect(tagMap['Environment']).toBe('production');
+      expect(tagMap['Project']).toBe('payment-processor');
+      expect(tagMap['CostCenter']).toBe('engineering');
+    });
+  });
+
+  describe('Subnet Configuration', () => {
+    test('public subnets exist and are configured correctly', async () => {
+      const subnetIds = outputs.PublicSubnetIds.split(',');
+      expect(subnetIds).toHaveLength(3);
+
+      const response = await ec2Client.send(
+        new DescribeSubnetsCommand({ SubnetIds: subnetIds })
+      );
+
+      expect(response.Subnets).toHaveLength(3);
+      response.Subnets!.forEach((subnet) => {
+        expect(subnet.MapPublicIpOnLaunch).toBe(true);
+      });
+    });
+
+    test('private subnets exist and are configured correctly', async () => {
+      const subnetIds = outputs.PrivateSubnetIds.split(',');
+      expect(subnetIds).toHaveLength(3);
+
+      const response = await ec2Client.send(
+        new DescribeSubnetsCommand({ SubnetIds: subnetIds })
+      );
+
+      expect(response.Subnets).toHaveLength(3);
+      response.Subnets!.forEach((subnet) => {
+        expect(subnet.MapPublicIpOnLaunch).toBe(false);
+      });
+    });
+
+    test('subnets span 3 availability zones', async () => {
+      const publicSubnetIds = outputs.PublicSubnetIds.split(',');
+      const privateSubnetIds = outputs.PrivateSubnetIds.split(',');
+      const allSubnetIds = [...publicSubnetIds, ...privateSubnetIds];
+
+      const response = await ec2Client.send(
+        new DescribeSubnetsCommand({ SubnetIds: allSubnetIds })
+      );
+
+      const availabilityZones = new Set(
+        response.Subnets!.map((subnet) => subnet.AvailabilityZone)
+      );
+
+      expect(availabilityZones.size).toBe(3);
+    });
+  });
+
+  describe('NAT Gateway Configuration', () => {
+    test('NAT Gateway exists in public subnet', async () => {
+      const vpcId = outputs.VpcId;
+      const response = await ec2Client.send(
+        new DescribeNatGatewaysCommand({
+          Filter: [
+            { Name: 'vpc-id', Values: [vpcId] },
+            { Name: 'state', Values: ['available'] },
+          ],
+        })
+      );
+
+      expect(response.NatGateways!.length).toBeGreaterThanOrEqual(1);
+
+      const publicSubnetIds = outputs.PublicSubnetIds.split(',');
+      response.NatGateways!.forEach((natGateway) => {
+        expect(publicSubnetIds).toContain(natGateway.SubnetId);
+      });
+    });
+  });
+
+  describe('Internet Gateway Configuration', () => {
+    test('Internet Gateway exists and is attached to VPC', async () => {
+      const vpcId = outputs.VpcId;
+      const response = await ec2Client.send(
+        new DescribeInternetGatewaysCommand({
+          Filters: [{ Name: 'attachment.vpc-id', Values: [vpcId] }],
+        })
+      );
+
+      expect(response.InternetGateways).toHaveLength(1);
+      expect(response.InternetGateways![0].Attachments![0].VpcId).toBe(vpcId);
+    });
+  });
+
+  describe('Security Groups', () => {
+    test('ALB security group allows HTTP and HTTPS traffic', async () => {
+      const sgId = outputs.ALBSecurityGroupId;
+      const response = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({ GroupIds: [sgId] })
+      );
+
+      expect(response.SecurityGroups).toHaveLength(1);
+      const sg = response.SecurityGroups![0];
+
+      const httpRule = sg.IpPermissions!.find(
+        (rule) => rule.FromPort === 80 && rule.ToPort === 80
+      );
+      const httpsRule = sg.IpPermissions!.find(
+        (rule) => rule.FromPort === 443 && rule.ToPort === 443
+      );
+
+      expect(httpRule).toBeDefined();
+      expect(httpsRule).toBeDefined();
+    });
+
+    test('ECS security group allows traffic from ALB on port 8080', async () => {
+      const sgId = outputs.ECSSecurityGroupId;
+      const albSgId = outputs.ALBSecurityGroupId;
+
+      const response = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({ GroupIds: [sgId] })
+      );
+
+      expect(response.SecurityGroups).toHaveLength(1);
+      const sg = response.SecurityGroups![0];
+
+      const ecsRule = sg.IpPermissions!.find(
+        (rule) =>
+          rule.FromPort === 8080 &&
+          rule.ToPort === 8080 &&
+          rule.UserIdGroupPairs?.some((pair) => pair.GroupId === albSgId)
+      );
+
+      expect(ecsRule).toBeDefined();
+    });
+
+    test('RDS security group allows traffic from ECS on port 5432', async () => {
+      const sgId = outputs.RDSSecurityGroupId;
+      const ecsSgId = outputs.ECSSecurityGroupId;
+
+      const response = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({ GroupIds: [sgId] })
+      );
+
+      expect(response.SecurityGroups).toHaveLength(1);
+      const sg = response.SecurityGroups![0];
+
+      const rdsRule = sg.IpPermissions!.find(
+        (rule) =>
+          rule.FromPort === 5432 &&
+          rule.ToPort === 5432 &&
+          rule.UserIdGroupPairs?.some((pair) => pair.GroupId === ecsSgId)
+      );
+
+      expect(rdsRule).toBeDefined();
+    });
+
+    test('all security groups have mandatory tags', async () => {
+      const sgIds = [
+        outputs.ALBSecurityGroupId,
+        outputs.ECSSecurityGroupId,
+        outputs.RDSSecurityGroupId,
+      ];
+
+      const response = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({ GroupIds: sgIds })
+      );
+
+      response.SecurityGroups!.forEach((sg) => {
+        const tags = sg.Tags || [];
+        const tagMap = Object.fromEntries(
+          tags.map((tag) => [tag.Key, tag.Value])
+        );
+
+        expect(tagMap['Environment']).toBe('production');
+        expect(tagMap['Project']).toBe('payment-processor');
+        expect(tagMap['CostCenter']).toBe('engineering');
+      });
+    });
+  });
+
+  describe('VPC Flow Logs', () => {
+    test('VPC Flow Logs are enabled', async () => {
+      const vpcId = outputs.VpcId;
+      const response = await ec2Client.send(
+        new DescribeFlowLogsCommand({
+          Filter: [{ Name: 'resource-id', Values: [vpcId] }],
+        })
+      );
+
+      expect(response.FlowLogs!.length).toBeGreaterThan(0);
+
+      const flowLog = response.FlowLogs![0];
+      expect(flowLog.TrafficType).toBe('ALL');
+      expect(flowLog.LogDestinationType).toBe('s3');
+      expect(flowLog.MaxAggregationInterval).toBe(60);
+    });
+
+    test('Flow Log S3 bucket exists', async () => {
+      const bucketName = outputs.FlowLogBucketName;
+      expect(bucketName).toBeDefined();
+
+      await expect(
+        s3Client.send(new HeadBucketCommand({ Bucket: bucketName }))
+      ).resolves.not.toThrow();
+    });
+  });
+
+  describe('VPC Endpoints', () => {
+    test('S3 VPC endpoint exists', async () => {
+      const vpcId = outputs.VpcId;
+      const response = await ec2Client.send(
+        new DescribeVpcEndpointsCommand({
+          Filters: [
+            { Name: 'vpc-id', Values: [vpcId] },
+            { Name: 'service-name', Values: [`com.amazonaws.${region}.s3`] },
+          ],
+        })
+      );
+
+      expect(response.VpcEndpoints!.length).toBeGreaterThan(0);
+      expect(response.VpcEndpoints![0].VpcEndpointType).toBe('Gateway');
+    });
+
+    test('DynamoDB VPC endpoint exists', async () => {
+      const vpcId = outputs.VpcId;
+      const response = await ec2Client.send(
+        new DescribeVpcEndpointsCommand({
+          Filters: [
+            { Name: 'vpc-id', Values: [vpcId] },
+            {
+              Name: 'service-name',
+              Values: [`com.amazonaws.${region}.dynamodb`],
+            },
+          ],
+        })
+      );
+
+      expect(response.VpcEndpoints!.length).toBeGreaterThan(0);
+      expect(response.VpcEndpoints![0].VpcEndpointType).toBe('Gateway');
+    });
+  });
+});
+```
+
+## Implementation Summary
+
+This implementation creates a production-ready VPC infrastructure with the following components:
+
+### Infrastructure Components
+
+1. **VPC**: CIDR 10.0.0.0/16 spanning 3 availability zones with DNS enabled
+2. **Subnets**: 3 public and 3 private subnets distributed across AZs
+3. **NAT Gateway**: 1 NAT Gateway for cost optimization and EIP conservation
+4. **Security Groups**: ALB, ECS, and RDS with least-privilege rules
+5. **VPC Flow Logs**: All traffic logged to S3 with 1-minute aggregation
+6. **VPC Endpoints**: S3 and DynamoDB Gateway Endpoints
+
+### Integration Tests
+
+Integration tests dynamically discover deployed resources via CloudFormation API with no file dependencies, supporting multi-region deployments.
+
+### Key Corrections from MODEL_RESPONSE
+
+1. **NAT Gateway Optimization**: Reduced from 3 to 1 to avoid AWS EIP limits
+2. **Dynamic Stack Discovery**: Implemented CloudFormation-based discovery instead of file-based
+3. **Region Flexibility**: Tests adapt to any AWS region via environment variable
+4. **Clean Imports**: Removed unused iam import

@@ -21,7 +21,7 @@
     "VPCEndpoint",
     "S3"
   ],
-  "region": "eu-west-3",
+  "region": "us-east-2",
   "author": "iamarpit-turing",
   "reviewer": "chriscrsov",
   "training_quality": 8
