@@ -1,5 +1,5 @@
 {
-  "platform": "cfn",
+  "platform": "cloudformation",
   "language": "json",
   "complexity": "medium",
   "team": "synth",
@@ -26,5 +26,10 @@
   ],
   "training_quality": 10,
   "author": "iamarpit-turing",
-  "reviewer": "balasl342"
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
