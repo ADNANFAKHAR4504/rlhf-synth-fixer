@@ -65,7 +65,10 @@ class TapStack(pulumi.ComponentResource):
         }
 
         # Get availability zones dynamically from eu-west-3
-        azs_result = aws.get_availability_zones(state="available", opts=pulumi.InvokeOptions(provider=self.aws_provider))
+        azs_result = aws.get_availability_zones(
+            state="available", 
+            opts=pulumi.InvokeOptions(provider=self.aws_provider)
+        )
         azs = azs_result.names[:3]  # Use first 3 AZs
 
         # Create VPC
@@ -293,7 +296,11 @@ class TapStack(pulumi.ComponentResource):
             iam_role_arn=self.flow_log_role.arn,
             max_aggregation_interval=600,  # 10 minutes (closest to 5 min requirement)
             tags={**common_tags, "Name": f"vpc-flow-log-{self.environment_suffix}"},
-            opts=pulumi.ResourceOptions(parent=self, provider=self.aws_provider, depends_on=[self.flow_log_policy, self.log_group]),
+            opts=pulumi.ResourceOptions(
+                parent=self, 
+                provider=self.aws_provider, 
+                depends_on=[self.flow_log_policy, self.log_group]
+            ),
         )
 
         # Register outputs
