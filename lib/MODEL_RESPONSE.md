@@ -1392,26 +1392,26 @@ class DeploymentValidator {
    * Deploy stacks in the correct order
    */
   async deployStacks(): Promise<void> {
-    console.log('🚀 Starting deployment process...');
+    console.log('[START] Starting deployment process...');
 
     try {
       // Deploy primary stack first
-      console.log(`📦 Deploying primary stack in ${this.primaryRegion}...`);
+      console.log(`[DEPLOY] Deploying primary stack in ${this.primaryRegion}...`);
       await execAsync(`cdk deploy TradingPlatformPrimaryStack --require-approval never`);
-      console.log('✅ Primary stack deployed successfully');
+      console.log('[OK] Primary stack deployed successfully');
 
       // Deploy DR stack
-      console.log(`📦 Deploying DR stack in ${this.drRegion}...`);
+      console.log(`[DEPLOY] Deploying DR stack in ${this.drRegion}...`);
       await execAsync(`cdk deploy TradingPlatformDrStack --require-approval never`);
-      console.log('✅ DR stack deployed successfully');
+      console.log('[OK] DR stack deployed successfully');
 
       // Deploy single region app
-      console.log('📦 Deploying single region app stack...');
+      console.log('[DEPLOY] Deploying single region app stack...');
       await execAsync(`cdk deploy SingleRegionAppStack --require-approval never`);
-      console.log('✅ Single region app stack deployed successfully');
+      console.log('[OK] Single region app stack deployed successfully');
 
     } catch (error) {
-      console.error('❌ Deployment failed:', error);
+      console.error('[FAIL] Deployment failed:', error);
       throw error;
     }
   }
@@ -1451,10 +1451,10 @@ class DeploymentValidator {
         }
       );
 
-      console.log('✅ DynamoDB global table replication is active');
+      console.log('[OK] DynamoDB global table replication is active');
       return result;
     } catch (error) {
-      console.error('❌ DynamoDB replication check failed:', error);
+      console.error('[FAIL] DynamoDB replication check failed:', error);
       return false;
     }
   }
@@ -1501,14 +1501,14 @@ class DeploymentValidator {
         }
       );
 
-      console.log('✅ S3 cross-region replication is working');
+      console.log('[OK] S3 cross-region replication is working');
 
       // Cleanup
       await s3Primary.deleteObject({ Bucket: bucketName, Key: testKey }).promise();
 
       return result;
     } catch (error) {
-      console.error('❌ S3 replication check failed:', error);
+      console.error('[FAIL] S3 replication check failed:', error);
       return false;
     }
   }
@@ -1550,10 +1550,10 @@ class DeploymentValidator {
         }
       );
 
-      console.log('✅ SSM parameter replication is working');
+      console.log('[OK] SSM parameter replication is working');
       return result;
     } catch (error) {
-      console.error('❌ SSM replication check failed:', error);
+      console.error('[FAIL] SSM replication check failed:', error);
       return false;
     }
   }
@@ -1585,14 +1585,14 @@ class DeploymentValidator {
       );
 
       if (!crossRegionSub) {
-        console.warn('⚠️  Cross-region SNS subscription not found');
+        console.warn('[WARN]  Cross-region SNS subscription not found');
         return true; // Continue deployment but warn
       }
 
-      console.log('✅ SNS cross-region subscription configured');
+      console.log('[OK] SNS cross-region subscription configured');
       return true;
     } catch (error) {
-      console.error('❌ SNS subscription check failed:', error);
+      console.error('[FAIL] SNS subscription check failed:', error);
       return false;
     }
   }
@@ -1601,7 +1601,7 @@ class DeploymentValidator {
    * Run all validation checks
    */
   async validateReplication(): Promise<boolean> {
-    console.log('🔍 Starting replication validation...');
+    console.log('[CHECK] Starting replication validation...');
 
     const status: ReplicationStatus = {
       dynamoDB: await this.checkDynamoDBReplication(),
@@ -1613,10 +1613,10 @@ class DeploymentValidator {
     const allPassed = Object.values(status).every(s => s === true);
 
     console.log('\n📊 Replication Status Summary:');
-    console.log(`   DynamoDB Global Tables: ${status.dynamoDB ? '✅' : '❌'}`);
-    console.log(`   S3 Cross-Region Replication: ${status.s3 ? '✅' : '❌'}`);
-    console.log(`   SSM Parameter Replication: ${status.ssmParameters ? '✅' : '❌'}`);
-    console.log(`   SNS Cross-Region Subscriptions: ${status.snsSubscriptions ? '✅' : '❌'}`);
+    console.log(`   DynamoDB Global Tables: ${status.dynamoDB ? '[OK]' : '[FAIL]'}`);
+    console.log(`   S3 Cross-Region Replication: ${status.s3 ? '[OK]' : '[FAIL]'}`);
+    console.log(`   SSM Parameter Replication: ${status.ssmParameters ? '[OK]' : '[FAIL]'}`);
+    console.log(`   SNS Cross-Region Subscriptions: ${status.snsSubscriptions ? '[OK]' : '[FAIL]'}`);
 
     return allPassed;
   }
@@ -1630,23 +1630,23 @@ class DeploymentValidator {
       await this.deployStacks();
 
       // Wait a bit for resources to stabilize
-      console.log('⏳ Waiting for resources to stabilize...');
+      console.log('[WAIT] Waiting for resources to stabilize...');
       await new Promise(resolve => setTimeout(resolve, 30000));
 
       // Validate replication
       const isValid = await this.validateReplication();
 
       if (!isValid) {
-        console.error('\n❌ Deployment validation failed!');
+        console.error('\n[FAIL] Deployment validation failed!');
         console.error('Some replication checks did not pass. Please check the logs above.');
         process.exit(1);
       }
 
-      console.log('\n✅ Deployment completed successfully!');
+      console.log('\n[OK] Deployment completed successfully!');
       console.log('All replication and health checks passed.');
       
     } catch (error) {
-      console.error('\n❌ Deployment failed with error:', error);
+      console.error('\n[FAIL] Deployment failed with error:', error);
       process.exit(1);
     }
   }
@@ -1901,7 +1901,7 @@ class SmokeTests {
     console.log('═══════════════════════════════════════════');
     
     this.results.forEach(result => {
-      const status = result.passed ? '✅ PASS' : '❌ FAIL';
+      const status = result.passed ? '[OK] PASS' : '[FAIL] FAIL';
       console.log(`${status} - ${result.test}`);
       if (result.details) {
         console.log(`   └─ ${result.details}`);
@@ -1912,9 +1912,9 @@ class SmokeTests {
     
     console.log('\n═══════════════════════════════════════════');
     if (allPassed) {
-      console.log('✅ All smoke tests passed!');
+      console.log('[OK] All smoke tests passed!');
     } else {
-      console.log('❌ Some smoke tests failed. Please check the results above.');
+      console.log('[FAIL] Some smoke tests failed. Please check the results above.');
       process.exit(1);
     }
   }

@@ -16,6 +16,9 @@ interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
 }
 
+export const resolvePrimaryRegion = (stack: cdk.Stack): string =>
+  stack.region ?? 'us-east-1';
+
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
@@ -30,7 +33,7 @@ export class TapStack extends cdk.Stack {
     const timestamp = Date.now().toString();
 
     // Configuration
-    const primaryRegion = this.region || 'us-east-1';
+    const primaryRegion = resolvePrimaryRegion(this);
     const drRegion = 'us-west-2';
 
     // Apply global tags

@@ -22,14 +22,14 @@ class ComprehensiveDeployment {
   }
 
   async deploy(): Promise<void> {
-    console.log('🚀 Starting comprehensive deployment...');
+    console.log('[START] Starting comprehensive deployment...');
     console.log(`Environment: ${this.config.environmentSuffix}`);
     console.log(`Primary Region: ${this.config.region}`);
     console.log(`DR Region: ${this.config.drRegion}`);
 
     try {
       // 1. Synthesize to check for errors
-      console.log('\n📋 Synthesizing CDK templates...');
+      console.log('\n[SYNTH] Synthesizing CDK templates...');
       execSync('npm run build && npx cdk synth', {
         stdio: 'inherit',
         env: {
@@ -39,7 +39,7 @@ class ComprehensiveDeployment {
       });
 
       // 2. Deploy main stack
-      console.log('\n📦 Deploying main stack...');
+      console.log('\n[DEPLOY] Deploying main stack...');
       execSync(
         `npx cdk deploy TapStack${this.config.environmentSuffix} --context environmentSuffix=${this.config.environmentSuffix}`,
         {
@@ -52,22 +52,22 @@ class ComprehensiveDeployment {
       );
 
       // 3. Wait for initial stabilization
-      console.log('\n⏳ Waiting for resources to stabilize...');
+      console.log('\n[WAIT] Waiting for resources to stabilize...');
       await this.sleep(60000); // 1 minute
 
       // 4. Validate deployment
-      console.log('\n🔍 Validating deployment...');
+      console.log('\n[CHECK] Validating deployment...');
       await this.validateDeployment();
 
       // 5. Run health checks
-      console.log('\n🏥 Running health checks...');
+      console.log('\n[HEALTH] Running health checks...');
       await this.runHealthChecks();
 
-      console.log('\n✅ Deployment completed successfully!');
+      console.log('\n[OK] Deployment completed successfully!');
       console.log('All components are operational and validated.');
     } catch (error) {
       console.error(
-        '\n❌ Deployment failed:',
+        '\n[FAIL] Deployment failed:',
         error instanceof Error ? error.message : String(error)
       );
       process.exit(1);
@@ -99,7 +99,7 @@ class ComprehensiveDeployment {
         );
       }
 
-      console.log(`✅ Stack ${stackName} is in state: ${stack.StackStatus}`);
+      console.log(`[OK] Stack ${stackName} is in state: ${stack.StackStatus}`);
 
       // Validate outputs exist
       const outputs = stack.Outputs || [];
@@ -116,10 +116,10 @@ class ComprehensiveDeployment {
         if (!output) {
           throw new Error(`Required output ${expectedOutput} not found`);
         }
-        console.log(`✅ Output ${expectedOutput}: ${output.OutputValue}`);
+        console.log(`[OK] Output ${expectedOutput}: ${output.OutputValue}`);
       }
     } catch (error) {
-      console.error('❌ Stack validation failed:', error);
+      console.error('[FAIL] Stack validation failed:', error);
       throw error;
     }
   }
@@ -131,7 +131,7 @@ class ComprehensiveDeployment {
 
     try {
       // 1. Test Lambda functions
-      console.log('🔍 Testing Lambda functions...');
+      console.log('[CHECK] Testing Lambda functions...');
       const lambdas = await lambda
         .listFunctions({
           MaxItems: 50,
@@ -157,24 +157,24 @@ class ComprehensiveDeployment {
             .promise();
 
           if (response.StatusCode === 200) {
-            console.log(`✅ Lambda ${fn.FunctionName} is healthy`);
+            console.log(`[OK] Lambda ${fn.FunctionName} is healthy`);
           } else {
             console.warn(
-              `⚠️  Lambda ${fn.FunctionName} returned status ${response.StatusCode}`
+              `[WARN]  Lambda ${fn.FunctionName} returned status ${response.StatusCode}`
             );
           }
         } catch (error) {
           const errorMessage =
             error instanceof Error ? error.message : String(error);
           console.warn(
-            `⚠️  Lambda ${fn.FunctionName} health check failed:`,
+            `[WARN]  Lambda ${fn.FunctionName} health check failed:`,
             errorMessage
           );
         }
       }
 
       // 2. Test DynamoDB table
-      console.log('🔍 Testing DynamoDB table...');
+      console.log('[CHECK] Testing DynamoDB table...');
       const tables = await dynamodb.listTables().promise();
       const tradingTable = tables.TableNames?.find(name =>
         name.includes(`iac-rlhf-${this.config.environmentSuffix}-orders`)
@@ -188,16 +188,16 @@ class ComprehensiveDeployment {
           .promise();
 
         if (tableDesc.Table?.TableStatus === 'ACTIVE') {
-          console.log(`✅ DynamoDB table ${tradingTable} is active`);
+          console.log(`[OK] DynamoDB table ${tradingTable} is active`);
         } else {
           console.warn(
-            `⚠️  DynamoDB table ${tradingTable} status: ${tableDesc.Table?.TableStatus}`
+            `[WARN]  DynamoDB table ${tradingTable} status: ${tableDesc.Table?.TableStatus}`
           );
         }
       }
 
       // 3. Test S3 buckets
-      console.log('🔍 Testing S3 buckets...');
+      console.log('[CHECK] Testing S3 buckets...');
       const buckets = await s3.listBuckets().promise();
       const tradingBuckets =
         buckets.Buckets?.filter(bucket =>
@@ -207,20 +207,20 @@ class ComprehensiveDeployment {
       for (const bucket of tradingBuckets) {
         try {
           await s3.headBucket({ Bucket: bucket.Name! }).promise();
-          console.log(`✅ S3 bucket ${bucket.Name} is accessible`);
+          console.log(`[OK] S3 bucket ${bucket.Name} is accessible`);
         } catch (error) {
           const errorMessage =
             error instanceof Error ? error.message : String(error);
           console.warn(
-            `⚠️  S3 bucket ${bucket.Name} access failed:`,
+            `[WARN]  S3 bucket ${bucket.Name} access failed:`,
             errorMessage
           );
         }
       }
 
-      console.log('✅ Health checks completed');
+      console.log('[OK] Health checks completed');
     } catch (error) {
-      console.error('❌ Health checks failed:', error);
+      console.error('[FAIL] Health checks failed:', error);
       throw error;
     }
   }
@@ -230,13 +230,18 @@ class ComprehensiveDeployment {
   }
 }
 
-// Run deployment if this script is executed directly
-if (require.main === module) {
-  const deployment = new ComprehensiveDeployment();
-  deployment.deploy().catch(error => {
-    console.error('Deployment failed:', error);
-    process.exit(1);
-  });
-}
+export const runCliDeployment = (force = false): Promise<void> | undefined => {
+  if (force || require.main === module) {
+    const deployment = new ComprehensiveDeployment();
+    return deployment.deploy().catch(error => {
+      console.error('Deployment failed:', error);
+      process.exit(1);
+    });
+  }
+
+  return undefined;
+};
+
+runCliDeployment();
 
 export { ComprehensiveDeployment };
