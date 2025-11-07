@@ -44,6 +44,16 @@ def load_outputs() -> Dict[str, Any]:
                     print(f"[WARNING] Outputs file is empty at {FLAT_OUTPUTS_PATH}")
                     return {}
                 outputs = json.loads(content)
+                
+                # Parse JSON-encoded string values for list outputs
+                # The flat outputs file stores arrays as JSON-encoded strings
+                for key in ['ec2_instance_ids', 'nat_gateway_ids', 'private_subnet_ids', 'public_subnet_ids']:
+                    if key in outputs and isinstance(outputs[key], str):
+                        try:
+                            outputs[key] = json.loads(outputs[key])
+                        except json.JSONDecodeError:
+                            print(f"[WARNING] Could not parse {key} as JSON array: {outputs[key]}")
+                
                 print(f"[INFO] Successfully loaded {len(outputs)} outputs from {FLAT_OUTPUTS_PATH}")
                 return outputs
         except (json.JSONDecodeError, IOError) as e:
