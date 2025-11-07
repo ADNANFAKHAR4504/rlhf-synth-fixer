@@ -215,16 +215,17 @@ export class S3Module extends Construct {
     });
 
     // Add Bucket Ownership Controls instead of ACL
-    this.bucketOwnershipControls = new aws.s3BucketOwnershipControls.S3BucketOwnershipControls(
-      this,
-      'ownership-controls',
-      {
-        bucket: this.bucket.id,
-        rule: {
-          objectOwnership: 'BucketOwnerEnforced', // This replaces ACLs
-        },
-      }
-    );
+    this.bucketOwnershipControls =
+      new aws.s3BucketOwnershipControls.S3BucketOwnershipControls(
+        this,
+        'ownership-controls',
+        {
+          bucket: this.bucket.id,
+          rule: {
+            objectOwnership: 'BucketOwnerEnforced', // This replaces ACLs
+          },
+        }
+      );
 
     // Enable versioning
     this.bucketVersioning = new aws.s3BucketVersioning.S3BucketVersioningA(
