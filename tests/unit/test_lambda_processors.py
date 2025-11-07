@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-LAMBDA_DIR = Path(__file__).resolve().parents[1] / "lib" / "lambda"
+LAMBDA_DIR = Path(__file__).resolve().parents[2] / "lib" / "lambda"
 
 
 def _load_lambda_module(name: str):
@@ -96,6 +96,31 @@ def test_stripe_processor_success(monkeypatch):
     assert stub.messages
 
 
+def test_stripe_processor_without_body_wrapper(monkeypatch):
+    """Test Stripe processor when event is passed directly without body wrapper"""
+    module = _load_lambda_module("stripe_processor")
+    module.sqs_client = StubSqsClient()
+    monkeypatch.setenv("QUEUE_URL", "https://example.com/queue")
+
+    # Pass event directly without 'body' wrapper
+    event = {"id": "evt_stripe_direct", "type": "payment_succeeded"}
+    result = module.lambda_handler(event, None)
+    assert result["statusCode"] == 200
+    assert module.sqs_client.messages
+
+
+def test_stripe_processor_empty_payload_error(monkeypatch):
+    """Test Stripe processor with empty payload raises error"""
+    module = _load_lambda_module("stripe_processor")
+    monkeypatch.setenv("QUEUE_URL", "https://example.com/queue")
+
+    # Pass empty event
+    event = {"body": json.dumps(None)}
+    result = module.lambda_handler(event, None)
+    assert result["statusCode"] == 500
+    assert "Empty webhook payload" in result["body"]
+
+
 def test_paypal_processor_handles_sqs_failure(monkeypatch):
     module = _load_lambda_module("paypal_processor")
     monkeypatch.setenv("QUEUE_URL", "https://example.com/queue")
@@ -117,6 +142,31 @@ def test_paypal_processor_success(monkeypatch):
     result = module.lambda_handler(event, None)
     assert result["statusCode"] == 200
     assert module.sqs_client.messages
+
+
+def test_paypal_processor_without_body_wrapper(monkeypatch):
+    """Test PayPal processor when event is passed directly without body wrapper"""
+    module = _load_lambda_module("paypal_processor")
+    module.sqs_client = StubSqsClient()
+    monkeypatch.setenv("QUEUE_URL", "https://example.com/queue")
+
+    # Pass event directly without 'body' wrapper
+    event = {"id": "evt-paypal-direct", "event_type": "PAYMENT.SALE"}
+    result = module.lambda_handler(event, None)
+    assert result["statusCode"] == 200
+    assert module.sqs_client.messages
+
+
+def test_paypal_processor_empty_payload_error(monkeypatch):
+    """Test PayPal processor with empty payload raises error"""
+    module = _load_lambda_module("paypal_processor")
+    monkeypatch.setenv("QUEUE_URL", "https://example.com/queue")
+
+    # Pass empty event
+    event = {"body": json.dumps(None)}
+    result = module.lambda_handler(event, None)
+    assert result["statusCode"] == 500
+    assert "Empty webhook payload" in result["body"]
 
 
 def test_square_processor_returns_error_on_empty_payload(monkeypatch):
