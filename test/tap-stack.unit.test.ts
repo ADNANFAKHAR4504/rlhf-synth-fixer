@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
@@ -10,7 +10,8 @@ import * as sns from 'aws-cdk-lib/aws-sns';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
 import { execSync } from 'child_process';
-import { TapStack, resolvePrimaryRegion } from '../lib/tap-stack';
+import { ComprehensiveDeployment, runCliDeployment } from '../lib/comprehensive-deploy';
+import { DrTestingWorkflow } from '../lib/constructs/dr-testing-workflow';
 import { DynamoDBGlobalTable } from '../lib/constructs/dynamodb-global-table';
 import { LambdaWithDlq } from '../lib/constructs/lambda-with-dlq';
 import { MonitoringDashboard } from '../lib/constructs/monitoring-dashboard';
@@ -19,8 +20,7 @@ import { S3ReplicatedBucket } from '../lib/constructs/s3-replicated-bucket';
 import { SingleRegionApp } from '../lib/constructs/single-region-app';
 import { SnsCrossRegion } from '../lib/constructs/sns-cross-region';
 import { SsmReplicatedParameter } from '../lib/constructs/ssm-replicated-parameter';
-import { DrTestingWorkflow } from '../lib/constructs/dr-testing-workflow';
-import { ComprehensiveDeployment, runCliDeployment } from '../lib/comprehensive-deploy';
+import { TapStack, resolvePrimaryRegion } from '../lib/tap-stack';
 
 const describeStacksPromise = jest.fn();
 const listFunctionsPromise = jest.fn();
@@ -452,16 +452,16 @@ describe('Purpose-built constructs', () => {
     });
 
     expect(
-      dashboard.alarms.some(alarm => alarm.metric?.namespace === 'AWS/Lambda')
+      dashboard.alarms.some(alarm => alarm.alarmName?.includes('lambda-errors'))
     ).toBe(true);
     expect(
-      dashboard.alarms.some(alarm => alarm.metric?.namespace === 'AWS/DynamoDB')
+      dashboard.alarms.some(alarm => alarm.alarmName?.includes('dynamo-throttles'))
     ).toBe(true);
     expect(
-      dashboard.alarms.some(alarm => alarm.metric?.namespace === 'AWS/ApiGateway')
+      dashboard.alarms.some(alarm => alarm.alarmName?.includes('api-5xx'))
     ).toBe(true);
     expect(
-      dashboard.alarms.some(alarm => alarm.metric?.namespace === 'AWS/SQS')
+      dashboard.alarms.some(alarm => alarm.alarmName?.includes('sqs-age'))
     ).toBe(true);
 
     const template = Template.fromStack(stack);
@@ -593,7 +593,7 @@ describe('ComprehensiveDeployment automation', () => {
 
   it('runs deployment workflow end-to-end', async () => {
     const deployment = new ComprehensiveDeployment();
-    const sleepSpy = jest.spyOn<any, any>(deployment as any, 'sleep').mockResolvedValue();
+    const sleepSpy = jest.spyOn<any, any>(deployment as any, 'sleep').mockResolvedValue(undefined);
 
     await deployment.deploy();
 
@@ -739,7 +739,7 @@ describe('ComprehensiveDeployment automation', () => {
     expect(deploySpy).toHaveBeenCalled();
 
     deploySpy.mockRestore();
-    expect(runCliDeployment()).toBeUndefined();
+    expect(runCliDeployment(false)).toBeUndefined();
   });
 
   it('reports CLI failures and exits the process', async () => {
