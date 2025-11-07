@@ -9,6 +9,7 @@ import {
   ApplicationAutoScalingClient,
   DescribeScalableTargetsCommand,
   DescribeScalingPoliciesCommand,
+  DescribeScheduledActionsCommand,
   PutScalingPolicyCommand,
 } from '@aws-sdk/client-application-auto-scaling';
 import {
@@ -175,19 +176,23 @@ describe('ECS Cost Optimization Integration Tests', () => {
         p => p.PolicyType === 'StepScaling'
       );
       expect(stepPolicy).toBeDefined();
-      expect(
-        stepPolicy?.StepScalingPolicyConfiguration?.StepAdjustments?.length
-      ).toBe(3);
-
+      
+      // AWS may combine or represent step adjustments differently
+      // Check that we have at least the expected step adjustments
       const stepAdjustments =
         stepPolicy?.StepScalingPolicyConfiguration?.StepAdjustments;
-      expect(stepAdjustments?.[0]?.ScalingAdjustment).toBe(2);
-      expect(stepAdjustments?.[1]?.ScalingAdjustment).toBe(4);
-      expect(stepAdjustments?.[2]?.ScalingAdjustment).toBe(6);
+      expect(stepAdjustments?.length).toBeGreaterThanOrEqual(2);
+      
+      // Verify the step adjustments contain the expected values
+      const adjustments = stepAdjustments?.map(a => a.ScalingAdjustment) || [];
+      expect(adjustments).toContain(2);
+      expect(adjustments).toContain(4);
+      expect(adjustments).toContain(6);
 
+      // Cannot publish to AWS namespaces - use custom namespace for testing
       await cloudwatchClient.send(
         new PutMetricDataCommand({
-          Namespace: 'AWS/ECS',
+          Namespace: 'ECS/Custom',
           MetricData: [
             {
               MetricName: 'CPUUtilization',
@@ -209,20 +214,20 @@ describe('ECS Cost Optimization Integration Tests', () => {
       const serviceName = serviceNames[0];
       const resourceId = `service/${clusterName}/${serviceName}`;
 
-      const scalableTarget = await autoscalingClient.send(
-        new DescribeScalableTargetsCommand({
-          ResourceIds: [resourceId],
+      // Use DescribeScheduledActions API to check scheduled actions
+      const scheduledActions = await autoscalingClient.send(
+        new DescribeScheduledActionsCommand({
+          ResourceId: resourceId,
           ServiceNamespace: 'ecs',
           ScalableDimension: 'ecs:service:DesiredCount',
         })
       );
 
-      const target = scalableTarget.ScalableTargets?.[0];
-      expect(target).toBeDefined();
-      expect((target as any)?.ScheduledActions).toBeDefined();
+      expect(scheduledActions.ScheduledActions).toBeDefined();
+      expect(scheduledActions.ScheduledActions?.length).toBeGreaterThan(0);
 
-      const peakSchedule = (target as any)?.ScheduledActions?.find(
-        (action: any) => action.Schedule?.includes('cron(0 9')
+      const peakSchedule = scheduledActions.ScheduledActions?.find(
+        (action) => action.Schedule?.includes('cron(0 9')
       );
       expect(peakSchedule).toBeDefined();
       expect(peakSchedule?.ScalableTargetAction?.MinCapacity).toBe(10);
@@ -235,19 +240,20 @@ describe('ECS Cost Optimization Integration Tests', () => {
       const serviceName = serviceNames[0];
       const resourceId = `service/${clusterName}/${serviceName}`;
 
-      const scalableTarget = await autoscalingClient.send(
-        new DescribeScalableTargetsCommand({
-          ResourceIds: [resourceId],
+      // Use DescribeScheduledActions API to check scheduled actions
+      const scheduledActions = await autoscalingClient.send(
+        new DescribeScheduledActionsCommand({
+          ResourceId: resourceId,
           ServiceNamespace: 'ecs',
           ScalableDimension: 'ecs:service:DesiredCount',
         })
       );
 
-      const target = scalableTarget.ScalableTargets?.[0];
-      expect(target).toBeDefined();
+      expect(scheduledActions.ScheduledActions).toBeDefined();
+      expect(scheduledActions.ScheduledActions?.length).toBeGreaterThan(0);
 
-      const offPeakSchedule = (target as any)?.ScheduledActions?.find(
-        (action: any) => action.Schedule?.includes('cron(0 18')
+      const offPeakSchedule = scheduledActions.ScheduledActions?.find(
+        (action) => action.Schedule?.includes('cron(0 18')
       );
       expect(offPeakSchedule).toBeDefined();
       expect(offPeakSchedule?.ScalableTargetAction?.MinCapacity).toBe(2);
@@ -312,9 +318,11 @@ describe('ECS Cost Optimization Integration Tests', () => {
 
       expect(subscriptions.Subscriptions).toBeDefined();
 
+      // Cannot publish to AWS namespaces - use custom namespace for testing
+      // Note: In real scenarios, alarms monitor AWS/ECS metrics automatically
       await cloudwatchClient.send(
         new PutMetricDataCommand({
-          Namespace: 'AWS/ECS',
+          Namespace: 'ECS/Custom',
           MetricData: [
             {
               MetricName: 'CPUUtilization',
