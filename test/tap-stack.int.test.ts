@@ -24,7 +24,20 @@ const outputsPath = path.join(
 let outputs: any = {};
 
 if (fs.existsSync(outputsPath)) {
-  outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+  const rawOutputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+  // Parse JSON string values back to arrays/objects
+  outputs = Object.entries(rawOutputs).reduce((acc, [key, value]) => {
+    if (typeof value === 'string' && value.startsWith('[')) {
+      try {
+        acc[key] = JSON.parse(value);
+      } catch {
+        acc[key] = value;
+      }
+    } else {
+      acc[key] = value;
+    }
+    return acc;
+  }, {} as any);
 }
 
 const region = process.env.AWS_REGION || 'us-east-1';
