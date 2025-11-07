@@ -5,13 +5,7 @@
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
-# Random suffix for unique resource naming
-resource "random_id" "suffix" {
-  byte_length = 4
-}
-
 locals {
-  resource_suffix = random_id.suffix.hex
   common_tags = {
     Project     = "ServerlessPaymentAPI"
     Environment = "production"
@@ -74,12 +68,12 @@ resource "aws_kms_key" "payment_system" {
   })
 
   tags = merge(local.common_tags, {
-    Name = "payment-system-kms-key-${local.resource_suffix}"
+    Name = "payment-system-kms-key-${var.environment_suffix}"
   })
 }
 
 resource "aws_kms_alias" "payment_system" {
-  name          = "alias/payment-system-${local.resource_suffix}"
+  name          = "alias/payment-system-${var.environment_suffix}"
   target_key_id = aws_kms_key.payment_system.key_id
 }
 
@@ -89,7 +83,7 @@ resource "aws_kms_alias" "payment_system" {
 
 resource "aws_dynamodb_table" "payment_transactions" {
   name             = "payment_transactions"
-  billing_mode     = "ON_DEMAND"
+  billing_mode     = "PAY_PER_REQUEST"
   hash_key         = "transaction_id"
   range_key        = "timestamp"
   stream_enabled   = true
@@ -115,7 +109,7 @@ resource "aws_dynamodb_table" "payment_transactions" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "payment-transactions-${local.resource_suffix}"
+    Name = "payment-transactions-${var.environment_suffix}"
   })
 }
 
@@ -125,7 +119,7 @@ resource "aws_dynamodb_table" "payment_transactions" {
 
 # Main notification queue
 resource "aws_sqs_queue" "notification_queue" {
-  name                       = "payment-notifications-${local.resource_suffix}"
+  name                       = "payment-notifications-${var.environment_suffix}"
   visibility_timeout_seconds = 300
   message_retention_seconds  = 1209600 # 14 days
   receive_wait_time_seconds  = 20      # Long polling
@@ -133,38 +127,38 @@ resource "aws_sqs_queue" "notification_queue" {
   kms_master_key_id = aws_kms_key.payment_system.arn
 
   tags = merge(local.common_tags, {
-    Name = "payment-notifications-${local.resource_suffix}"
+    Name = "payment-notifications-${var.environment_suffix}"
   })
 }
 
 # Dead Letter Queues
 resource "aws_sqs_queue" "webhook_processor_dlq" {
-  name                      = "webhook-processor-dlq-${local.resource_suffix}"
+  name                      = "webhook-processor-dlq-${var.environment_suffix}"
   message_retention_seconds = 1209600 # 14 days
   kms_master_key_id         = aws_kms_key.payment_system.arn
 
   tags = merge(local.common_tags, {
-    Name = "webhook-processor-dlq-${local.resource_suffix}"
+    Name = "webhook-processor-dlq-${var.environment_suffix}"
   })
 }
 
 resource "aws_sqs_queue" "transaction_reader_dlq" {
-  name                      = "transaction-reader-dlq-${local.resource_suffix}"
+  name                      = "transaction-reader-dlq-${var.environment_suffix}"
   message_retention_seconds = 1209600 # 14 days
   kms_master_key_id         = aws_kms_key.payment_system.arn
 
   tags = merge(local.common_tags, {
-    Name = "transaction-reader-dlq-${local.resource_suffix}"
+    Name = "transaction-reader-dlq-${var.environment_suffix}"
   })
 }
 
 resource "aws_sqs_queue" "notification_sender_dlq" {
-  name                      = "notification-sender-dlq-${local.resource_suffix}"
+  name                      = "notification-sender-dlq-${var.environment_suffix}"
   message_retention_seconds = 1209600 # 14 days
   kms_master_key_id         = aws_kms_key.payment_system.arn
 
   tags = merge(local.common_tags, {
-    Name = "notification-sender-dlq-${local.resource_suffix}"
+    Name = "notification-sender-dlq-${var.environment_suffix}"
   })
 }
 
@@ -173,11 +167,11 @@ resource "aws_sqs_queue" "notification_sender_dlq" {
 # ================================
 
 resource "aws_sns_topic" "email_notifications" {
-  name              = "payment-email-notifications-${local.resource_suffix}"
+  name              = "payment-email-notifications-${var.environment_suffix}"
   kms_master_key_id = aws_kms_key.payment_system.arn
 
   tags = merge(local.common_tags, {
-    Name = "payment-email-notifications-${local.resource_suffix}"
+    Name = "payment-email-notifications-${var.environment_suffix}"
   })
 }
 
@@ -186,42 +180,42 @@ resource "aws_sns_topic" "email_notifications" {
 # ================================
 
 resource "aws_cloudwatch_log_group" "webhook_processor" {
-  name              = "/aws/lambda/webhook-processor-${local.resource_suffix}"
+  name              = "/aws/lambda/webhook-processor-${var.environment_suffix}"
   retention_in_days = 7
   kms_key_id        = aws_kms_key.payment_system.arn
 
   tags = merge(local.common_tags, {
-    Name = "webhook-processor-logs-${local.resource_suffix}"
+    Name = "webhook-processor-logs-${var.environment_suffix}"
   })
 }
 
 resource "aws_cloudwatch_log_group" "transaction_reader" {
-  name              = "/aws/lambda/transaction-reader-${local.resource_suffix}"
+  name              = "/aws/lambda/transaction-reader-${var.environment_suffix}"
   retention_in_days = 7
   kms_key_id        = aws_kms_key.payment_system.arn
 
   tags = merge(local.common_tags, {
-    Name = "transaction-reader-logs-${local.resource_suffix}"
+    Name = "transaction-reader-logs-${var.environment_suffix}"
   })
 }
 
 resource "aws_cloudwatch_log_group" "notification_sender" {
-  name              = "/aws/lambda/notification-sender-${local.resource_suffix}"
+  name              = "/aws/lambda/notification-sender-${var.environment_suffix}"
   retention_in_days = 7
   kms_key_id        = aws_kms_key.payment_system.arn
 
   tags = merge(local.common_tags, {
-    Name = "notification-sender-logs-${local.resource_suffix}"
+    Name = "notification-sender-logs-${var.environment_suffix}"
   })
 }
 
 resource "aws_cloudwatch_log_group" "api_gateway" {
-  name              = "/aws/apigateway/payment-api-${local.resource_suffix}"
+  name              = "/aws/apigateway/payment-api-${var.environment_suffix}"
   retention_in_days = 7
   kms_key_id        = aws_kms_key.payment_system.arn
 
   tags = merge(local.common_tags, {
-    Name = "api-gateway-logs-${local.resource_suffix}"
+    Name = "api-gateway-logs-${var.environment_suffix}"
   })
 }
 
@@ -231,7 +225,7 @@ resource "aws_cloudwatch_log_group" "api_gateway" {
 
 # Webhook Processor Lambda Role
 resource "aws_iam_role" "webhook_processor_role" {
-  name = "webhook-processor-role-${local.resource_suffix}"
+  name = "webhook-processor-role-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -250,7 +244,7 @@ resource "aws_iam_role" "webhook_processor_role" {
 }
 
 resource "aws_iam_role_policy" "webhook_processor_policy" {
-  name = "webhook-processor-policy-${local.resource_suffix}"
+  name = "webhook-processor-policy-${var.environment_suffix}"
   role = aws_iam_role.webhook_processor_role.id
 
   policy = jsonencode({
@@ -307,7 +301,7 @@ resource "aws_iam_role_policy" "webhook_processor_policy" {
 
 # Transaction Reader Lambda Role
 resource "aws_iam_role" "transaction_reader_role" {
-  name = "transaction-reader-role-${local.resource_suffix}"
+  name = "transaction-reader-role-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -326,7 +320,7 @@ resource "aws_iam_role" "transaction_reader_role" {
 }
 
 resource "aws_iam_role_policy" "transaction_reader_policy" {
-  name = "transaction-reader-policy-${local.resource_suffix}"
+  name = "transaction-reader-policy-${var.environment_suffix}"
   role = aws_iam_role.transaction_reader_role.id
 
   policy = jsonencode({
@@ -380,7 +374,7 @@ resource "aws_iam_role_policy" "transaction_reader_policy" {
 
 # Notification Sender Lambda Role
 resource "aws_iam_role" "notification_sender_role" {
-  name = "notification-sender-role-${local.resource_suffix}"
+  name = "notification-sender-role-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -399,7 +393,7 @@ resource "aws_iam_role" "notification_sender_role" {
 }
 
 resource "aws_iam_role_policy" "notification_sender_policy" {
-  name = "notification-sender-policy-${local.resource_suffix}"
+  name = "notification-sender-policy-${var.environment_suffix}"
   role = aws_iam_role.notification_sender_role.id
 
   policy = jsonencode({
@@ -465,7 +459,7 @@ resource "aws_iam_role_policy" "notification_sender_policy" {
 # Webhook Processor Lambda
 resource "aws_lambda_function" "webhook_processor" {
   filename      = "webhook_processor.zip"
-  function_name = "webhook-processor-${local.resource_suffix}"
+  function_name = "webhook-processor-${var.environment_suffix}"
   role          = aws_iam_role.webhook_processor_role.arn
   handler       = "index.handler"
   runtime       = "python3.11"
@@ -495,14 +489,14 @@ resource "aws_lambda_function" "webhook_processor" {
   depends_on = [aws_cloudwatch_log_group.webhook_processor]
 
   tags = merge(local.common_tags, {
-    Name = "webhook-processor-${local.resource_suffix}"
+    Name = "webhook-processor-${var.environment_suffix}"
   })
 }
 
 # Transaction Reader Lambda
 resource "aws_lambda_function" "transaction_reader" {
   filename      = "transaction_reader.zip"
-  function_name = "transaction-reader-${local.resource_suffix}"
+  function_name = "transaction-reader-${var.environment_suffix}"
   role          = aws_iam_role.transaction_reader_role.arn
   handler       = "index.handler"
   runtime       = "python3.11"
@@ -531,14 +525,14 @@ resource "aws_lambda_function" "transaction_reader" {
   depends_on = [aws_cloudwatch_log_group.transaction_reader]
 
   tags = merge(local.common_tags, {
-    Name = "transaction-reader-${local.resource_suffix}"
+    Name = "transaction-reader-${var.environment_suffix}"
   })
 }
 
 # Notification Sender Lambda
 resource "aws_lambda_function" "notification_sender" {
   filename      = "notification_sender.zip"
-  function_name = "notification-sender-${local.resource_suffix}"
+  function_name = "notification-sender-${var.environment_suffix}"
   role          = aws_iam_role.notification_sender_role.arn
   handler       = "index.handler"
   runtime       = "python3.11"
@@ -568,7 +562,7 @@ resource "aws_lambda_function" "notification_sender" {
   depends_on = [aws_cloudwatch_log_group.notification_sender]
 
   tags = merge(local.common_tags, {
-    Name = "notification-sender-${local.resource_suffix}"
+    Name = "notification-sender-${var.environment_suffix}"
   })
 }
 
@@ -577,7 +571,7 @@ resource "aws_lambda_function" "notification_sender" {
 # ================================
 
 resource "aws_api_gateway_rest_api" "payment_api" {
-  name        = "payment-api-${local.resource_suffix}"
+  name        = "payment-api-${var.environment_suffix}"
   description = "Serverless Payment Webhook Processing API"
 
   endpoint_configuration {
@@ -585,7 +579,7 @@ resource "aws_api_gateway_rest_api" "payment_api" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "payment-api-${local.resource_suffix}"
+    Name = "payment-api-${var.environment_suffix}"
   })
 }
 
@@ -827,7 +821,7 @@ resource "aws_api_gateway_stage" "prod" {
   })
 
   tags = merge(local.common_tags, {
-    Name = "payment-api-prod-${local.resource_suffix}"
+    Name = "payment-api-prod-${var.environment_suffix}"
   })
 }
 
