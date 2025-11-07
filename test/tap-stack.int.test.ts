@@ -163,6 +163,7 @@ describe("TapStack — Live Integration Tests", () => {
       "DynamoDBGatewayEndpointId",
       "SQSEndpointId",
       "CloudWatchLogsEndpointId",
+      "LambdaErrorsAlarmName",
     ];
     must.forEach((k) => expect(typeof outputs[k]).toBe("string"));
   });
@@ -364,7 +365,6 @@ describe("TapStack — Live Integration Tests", () => {
     const d = await retry(() => ddb.send(new DescribeTableCommand({ TableName: tableName })));
     expect(d.Table?.TableName).toBe(tableName);
     expect(d.Table?.StreamSpecification?.StreamEnabled).toBe(true);
-    // If LatestStreamArn is present, ensure it matches the account/region shape.
     if (d.Table?.LatestStreamArn) {
       expect(d.Table.LatestStreamArn.startsWith("arn:aws:dynamodb:")).toBe(true);
     }
@@ -417,5 +417,31 @@ describe("TapStack — Live Integration Tests", () => {
     const name = outputs.LambdaFunctionName;
     const arn = outputs.LambdaFunctionArn;
     expect(arn.includes(`function:${name}`) || arn.endsWith(`function:${name}`)).toBe(true);
+  });
+
+  /* 24 */ it("CloudWatch alarm for Lambda errors exists and is correctly configured", async () => {
+    const alarmName = outputs.LambdaErrorsAlarmName;
+    const topicArn = outputs.SNSTopicArn;
+    const fnName = outputs.LambdaFunctionName;
+
+    const resp = await retry(() =>
+      cw.send(new DescribeAlarmsCommand({ AlarmNames: [alarmName] }))
+    );
+    const a = (resp.MetricAlarms || []).find(m => m.AlarmName === alarmName);
+    expect(a).toBeDefined();
+    expect(a?.Namespace).toBe("AWS/Lambda");
+    expect(a?.MetricName).toBe("Errors");
+    expect(a?.Statistic).toBe("Sum");
+    expect(a?.Period).toBe(300);
+    expect(a?.EvaluationPeriods).toBe(1);
+    expect(Number(a?.Threshold)).toBe(1);
+    expect(a?.ComparisonOperator).toBe("GreaterThanOrEqualToThreshold");
+
+    const dims = new Map((a?.Dimensions || []).map(d => [d.Name, d.Value]));
+    expect(dims.get("FunctionName")).toBe(fnName);
+
+    // Verify SNS action included
+    const actions = new Set(a?.AlarmActions || []);
+    expect(actions.has(topicArn)).toBe(true);
   });
 });

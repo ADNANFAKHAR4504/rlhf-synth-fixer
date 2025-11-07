@@ -45,6 +45,7 @@ Parameters:
     Type: String
     Default: python3.9
     Description: Lambda runtime version
+
 Resources:
   VPC:
     Type: AWS::EC2::VPC
@@ -332,7 +333,6 @@ Resources:
   LogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      #BucketName: !Sub '${Team}-${Service}-${UseCase}-logs-${EnvironmentSuffix}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - BucketKeyEnabled: true
@@ -404,7 +404,6 @@ Resources:
   LambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      #RoleName: !Sub '${Team}-${Service}-${UseCase}-lambda-role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -651,6 +650,28 @@ Resources:
         - Key: Name
           Value: !Sub '${Team}-${Service}-${UseCase}-trail-${EnvironmentSuffix}'
 
+  # -------------------------
+  # 🔔 Lambda Errors Alarm
+  # -------------------------
+  LambdaErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Team}-${Service}-${UseCase}-lambda-errors-${EnvironmentSuffix}'
+      AlarmDescription: 'Lambda function error monitoring'
+      Namespace: 'AWS/Lambda'
+      MetricName: 'Errors'
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref LambdaFunction
+      Statistic: 'Sum'
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref SNSTopic
+
 Outputs:
   VPCId:
     Description: VPC ID
@@ -715,3 +736,6 @@ Outputs:
   CloudWatchLogsEndpointId:
     Description: CloudWatch Logs Interface Endpoint ID
     Value: !Ref CloudWatchLogsEndpoint
+  LambdaErrorsAlarmName:
+    Description: CloudWatch Alarm Name for Lambda Errors
+    Value: !Ref LambdaErrorsAlarm

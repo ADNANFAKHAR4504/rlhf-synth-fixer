@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Serverless logging and data-processing stack with VPC, Lambda, SQS, DynamoDB Streams, S3, KMS, CloudTrail, and monitoring in us-west-2",
+    "Description": "Serverless logging and data-processing stack with VPC, Lambda, SQS, DynamoDB Streams, S3, KMS, CloudTrail, and monitoring in us-east-1",
     "Parameters": {
         "Team": {
             "Type": "String",
@@ -1127,6 +1127,36 @@
                     }
                 ]
             }
+        },
+        "LambdaErrorsAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${Team}-${Service}-${UseCase}-lambda-errors-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Lambda function error monitoring",
+                "Namespace": "AWS/Lambda",
+                "MetricName": "Errors",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "LambdaFunction"
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "TreatMissingData": "notBreaching",
+                "AlarmActions": [
+                    {
+                        "Ref": "SNSTopic"
+                    }
+                ]
+            }
         }
     },
     "Outputs": {
@@ -1272,6 +1302,12 @@
             "Description": "CloudWatch Logs Interface Endpoint ID",
             "Value": {
                 "Ref": "CloudWatchLogsEndpoint"
+            }
+        },
+        "LambdaErrorsAlarmName": {
+            "Description": "CloudWatch Alarm Name for Lambda Errors",
+            "Value": {
+                "Ref": "LambdaErrorsAlarm"
             }
         }
     }
