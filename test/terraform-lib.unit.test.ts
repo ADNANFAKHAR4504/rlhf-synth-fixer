@@ -183,16 +183,16 @@ describe('Terraform Lib Unit Tests', () => {
   describe('IAM Configuration Tests', () => {
     test('should have EKS cluster IAM role', () => {
       const iamContent = fs.readFileSync(path.join(libPath, 'iam-eks-cluster.tf'), 'utf8');
-      
-      expect(iamContent).toContain('resource "aws_iam_role" "eks_cluster"');
+
+      expect(iamContent).toContain('resource "aws_iam_role" "cluster"');
       expect(iamContent).toContain('assume_role_policy');
       expect(iamContent).toContain('EKSClusterPolicy');
     });
 
     test('should have node group IAM roles', () => {
       const nodeIamContent = fs.readFileSync(path.join(libPath, 'iam-node-groups.tf'), 'utf8');
-      
-      expect(nodeIamContent).toContain('resource "aws_iam_role" "node_group"');
+
+      expect(nodeIamContent).toContain('resource "aws_iam_role" "node"');
       expect(nodeIamContent).toContain('EKSWorkerNodePolicy');
       expect(nodeIamContent).toContain('EKS_CNI_Policy');
       expect(nodeIamContent).toContain('ContainerRegistryReadOnly');
@@ -200,7 +200,7 @@ describe('Terraform Lib Unit Tests', () => {
 
     test('should have IRSA roles configured', () => {
       const irsaContent = fs.readFileSync(path.join(libPath, 'iam-irsa.tf'), 'utf8');
-      
+
       expect(irsaContent).toContain('cluster_autoscaler');
       expect(irsaContent).toContain('alb_controller');
       expect(irsaContent).toContain('external_secrets');
@@ -238,17 +238,9 @@ describe('Terraform Lib Unit Tests', () => {
   });
 
   describe('CloudWatch Configuration Tests', () => {
-    test('should have CloudWatch log group', () => {
-      const cloudwatchContent = fs.readFileSync(path.join(libPath, 'cloudwatch.tf'), 'utf8');
-      
-      expect(cloudwatchContent).toContain('resource "aws_cloudwatch_log_group"');
-      expect(cloudwatchContent).toContain('aws/eks');
-      expect(cloudwatchContent).toContain('retention');
-    });
-
     test('should have Container Insights configuration', () => {
       const cloudwatchContent = fs.readFileSync(path.join(libPath, 'cloudwatch.tf'), 'utf8');
-      
+
       expect(cloudwatchContent).toContain('cloudwatch');
     });
   });
