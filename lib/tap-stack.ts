@@ -155,7 +155,9 @@ export class TapStack extends cdk.Stack {
     apiTaskDefinition.addContainer('ApiContainer', {
       containerName: 'api-container',
       // Use public nginx image instead of ECR for demonstration
-      image: ecs.ContainerImage.fromRegistry('public.ecr.aws/docker/library/nginx:latest'),
+      image: ecs.ContainerImage.fromRegistry(
+        'public.ecr.aws/docker/library/nginx:latest'
+      ),
       logging: ecs.LogDriver.awsLogs({
         streamPrefix: 'api',
         logGroup: apiLogGroup,
@@ -188,7 +190,9 @@ export class TapStack extends cdk.Stack {
     workerTaskDefinition.addContainer('WorkerContainer', {
       containerName: 'worker-container',
       // Use public alpine image for worker (it will just sleep)
-      image: ecs.ContainerImage.fromRegistry('public.ecr.aws/docker/library/alpine:latest'),
+      image: ecs.ContainerImage.fromRegistry(
+        'public.ecr.aws/docker/library/alpine:latest'
+      ),
       logging: ecs.LogDriver.awsLogs({
         streamPrefix: 'worker',
         logGroup: workerLogGroup,
@@ -198,7 +202,11 @@ export class TapStack extends cdk.Stack {
         SERVICE_NAME: 'worker-service',
       },
       // Add command to keep container running
-      command: ['/bin/sh', '-c', 'while true; do echo "Worker running..."; sleep 30; done'],
+      command: [
+        '/bin/sh',
+        '-c',
+        'while true; do echo "Worker running..."; sleep 30; done',
+      ],
     });
 
     // Application Load Balancer
@@ -286,7 +294,7 @@ export class TapStack extends cdk.Stack {
       circuitBreaker: {
         rollback: true,
       },
-      // Use deploymentController instead of deploymentConfiguration  
+      // Use deploymentController instead of deploymentConfiguration
       deploymentController: {
         type: ecs.DeploymentControllerType.ECS,
       },
