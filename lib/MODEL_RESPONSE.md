@@ -17,7 +17,7 @@ The solution implements a serverless architecture with the following components:
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { FraudDetectionStack } from './fraud-detection-stack';
@@ -46,7 +46,7 @@ export class TapStack extends cdk.Stack {
 
 ## File: lib/fraud-detection-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -440,7 +440,7 @@ export class FraudDetectionStack extends Construct {
 
 ## File: lib/lambda/transaction-validator/index.ts
 
-```typescript
+```ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
@@ -583,7 +583,7 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
 ## File: lib/lambda/fifo-processor/index.ts
 
-```typescript
+```ts
 import { SQSEvent, SQSRecord } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
@@ -684,7 +684,7 @@ function maskCardNumber(cardNumber: string): string {
 
 ## File: lib/lambda/alert-handler/index.ts
 
-```typescript
+```ts
 import { SNSEvent, SNSEventRecord } from 'aws-lambda';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 
@@ -788,7 +788,7 @@ async function processAlert(record: SNSEventRecord, alertEmail: string): Promise
 
 ## File: lib/lambda/batch-processor/index.ts
 
-```typescript
+```ts
 import { ScheduledEvent } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';

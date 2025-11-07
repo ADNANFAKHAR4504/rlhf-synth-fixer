@@ -39,7 +39,7 @@ This document analyzes the failures in the MODEL_RESPONSE.md and describes the c
 ```
 
 **bin/tap.ts**:
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { TapStack } from '../lib/tap-stack';
@@ -73,7 +73,7 @@ new TapStack(app, `TapStack${environmentSuffix}`, {
 
 **IDEAL_RESPONSE Fix**: Removed the maxBatchingWindow parameter from the FIFO queue event source:
 
-```typescript
+```ts
 fifoProcessor.addEventSource(
   new lambda_event_sources.SqsEventSource(transactionQueue, {
     batchSize: 10,
@@ -122,7 +122,7 @@ fifoProcessor.addEventSource(
 
 **IDEAL_RESPONSE Fix**: Removed the unused import:
 
-```typescript
+```ts
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 // import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions'; // Removed
 import * as events from 'aws-cdk-lib/aws-events';
