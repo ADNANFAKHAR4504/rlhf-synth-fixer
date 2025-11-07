@@ -69,5 +69,70 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(this).add('Environment', props.environment);
     cdk.Tags.of(this).add('CostCenter', 'analytics');
     cdk.Tags.of(this).add('ManagedBy', 'cdk');
+
+    // Stack Outputs for Integration Tests
+    new cdk.CfnOutput(this, 'VpcId', {
+      value: vpcConstruct.vpc.vpcId,
+      description: 'VPC ID',
+      exportName: `${props.environmentSuffix}-VpcId`,
+    });
+
+    new cdk.CfnOutput(this, 'DatabaseEndpoint', {
+      value: databaseConstruct.database.dbInstanceEndpointAddress,
+      description: 'RDS Database Endpoint',
+      exportName: `${props.environmentSuffix}-DatabaseEndpoint`,
+    });
+
+    new cdk.CfnOutput(this, 'DatabaseIdentifier', {
+      value: databaseConstruct.database.instanceIdentifier,
+      description: 'RDS Database Identifier',
+      exportName: `${props.environmentSuffix}-DatabaseIdentifier`,
+    });
+
+    new cdk.CfnOutput(this, 'LambdaFunctionName', {
+      value: lambdaConstruct.dataProcessorFunction.functionName,
+      description: 'Lambda Function Name',
+      exportName: `${props.environmentSuffix}-LambdaFunctionName`,
+    });
+
+    new cdk.CfnOutput(this, 'LambdaFunctionArn', {
+      value: lambdaConstruct.dataProcessorFunction.functionArn,
+      description: 'Lambda Function ARN',
+      exportName: `${props.environmentSuffix}-LambdaFunctionArn`,
+    });
+
+    new cdk.CfnOutput(this, 'S3BucketName', {
+      value: storageConstruct.dataBucket.bucketName,
+      description: 'S3 Data Bucket Name',
+      exportName: `${props.environmentSuffix}-S3BucketName`,
+    });
+
+    new cdk.CfnOutput(this, 'DynamoDBTableName', {
+      value: storageConstruct.stateTable.tableName,
+      description: 'DynamoDB Table Name',
+      exportName: `${props.environmentSuffix}-DynamoDBTableName`,
+    });
+
+    new cdk.CfnOutput(this, 'DatabaseSecretArn', {
+      value: databaseConstruct.credentials.secretArn,
+      description: 'Database Credentials Secret ARN',
+      exportName: `${props.environmentSuffix}-DatabaseSecretArn`,
+    });
+
+    new cdk.CfnOutput(this, 'Region', {
+      value: this.region,
+      description: 'AWS Region',
+      exportName: `${props.environmentSuffix}-Region`,
+    });
+
+    new cdk.CfnOutput(this, 'EnvironmentSuffix', {
+      value: props.environmentSuffix,
+      description: 'Environment Suffix',
+    });
+
+    new cdk.CfnOutput(this, 'Environment', {
+      value: props.environment,
+      description: 'Environment',
+    });
   }
 }

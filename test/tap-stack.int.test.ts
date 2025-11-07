@@ -149,7 +149,7 @@ describe('TapStack Integration Tests - Real AWS Resources', () => {
 
       // Find database security group
       const dbSecurityGroup = response.SecurityGroups!.find((sg) =>
-        sg.GroupDescription?.includes('RDS database')
+        sg.Description?.includes('RDS database')
       );
 
       if (dbSecurityGroup) {
