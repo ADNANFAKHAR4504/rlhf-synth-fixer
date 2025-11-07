@@ -91,7 +91,7 @@ export class TapStack extends TerraformStack {
 
     // 2. Secrets Module - Store application secrets
     this.secrets = new SecretsModule(this, 'secrets', {
-      secretName: `${environmentSuffix}-app-secrets`,
+      secretName: `${environmentSuffix}-new-app-secrets`,
       description: 'Application secrets for serverless app',
       environment: environmentSuffix,
       secretData: {
