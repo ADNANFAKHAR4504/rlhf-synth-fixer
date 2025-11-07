@@ -768,10 +768,10 @@ resource "aws_lb_target_group" "main" {
   port     = 30080
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
-  
+
   # Since we're using NodePort with Kubernetes, target type should be instance
   target_type = "instance"
-  
+
   health_check {
     enabled             = true
     healthy_threshold   = 2
@@ -782,9 +782,9 @@ resource "aws_lb_target_group" "main" {
     matcher             = "200-399"
     protocol            = "HTTP"
   }
-  
+
   deregistration_delay = 30
-  
+
   tags = merge(
     local.common_tags,
     {
@@ -798,19 +798,19 @@ resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
-  
+
   # Default action - returns a fixed response
   # You can change this to forward to target group when you have services running
   default_action {
     type = "fixed-response"
-    
+
     fixed_response {
       content_type = "text/plain"
       message_body = "EKS Cluster ${var.cluster_name} is running. Deploy your applications to see them here."
       status_code  = "200"
     }
   }
-  
+
   tags = merge(
     local.common_tags,
     {
@@ -846,18 +846,18 @@ resource "aws_lb_listener" "http_forward" {
 resource "aws_lb_listener_rule" "example" {
   listener_arn = aws_lb_listener.http.arn
   priority     = 100
-  
+
   action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.main.arn
   }
-  
+
   condition {
     path_pattern {
       values = ["/app/*"]
     }
   }
-  
+
   tags = merge(
     local.common_tags,
     {
