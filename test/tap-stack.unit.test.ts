@@ -16,7 +16,7 @@ pulumi.runtime.setMocks({
     const state: any = {
       ...args.inputs,
       id: args.name + '_id',
-      arn: `arn:aws:${args.type}:ap-southeast-1:123456789012:${args.name}`,
+      arn: `arn:aws:${args.type}:us-east-1:123456789012:${args.name}`,
     };
 
     // Add type-specific mock properties
@@ -25,15 +25,15 @@ pulumi.runtime.setMocks({
       state.arn = `arn:aws:s3:::${state.bucket}`;
     } else if (args.type === 'aws:dynamodb/table:Table') {
       state.name = args.inputs.name || args.name;
-      state.arn = `arn:aws:dynamodb:ap-southeast-1:123456789012:table/${state.name}`;
+      state.arn = `arn:aws:dynamodb:us-east-1:123456789012:table/${state.name}`;
     } else if (args.type === 'aws:lambda/function:Function') {
       state.name = args.inputs.name || args.name;
-      state.invokeArn = `arn:aws:apigateway:ap-southeast-1:lambda:path/2015-03-31/functions/${state.arn}/invocations`;
+      state.invokeArn = `arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${state.arn}/invocations`;
     } else if (args.type === 'aws:apigateway/restApi:RestApi') {
       state.rootResourceId = 'root123';
-      state.executionArn = `arn:aws:execute-api:ap-southeast-1:123456789012:${args.name}`;
+      state.executionArn = `arn:aws:execute-api:us-east-1:123456789012:${args.name}`;
     } else if (args.type === 'aws:apigateway/deployment:Deployment') {
-      state.invokeUrl = `https://${args.inputs.restApi}.execute-api.ap-southeast-1.amazonaws.com`;
+      state.invokeUrl = `https://${args.inputs.restApi}.execute-api.us-east-1.amazonaws.com`;
     } else if (args.type === 'aws:iam/role:Role') {
       state.name = args.inputs.name || args.name;
     }
@@ -46,8 +46,8 @@ pulumi.runtime.setMocks({
   call: function (args: pulumi.runtime.MockCallArgs) {
     if (args.token === 'aws:index/getRegion:getRegion') {
       return {
-        name: 'ap-southeast-1',
-        id: 'ap-southeast-1',
+        name: 'us-east-1',
+        id: 'us-east-1',
       };
     }
     return args.inputs;
@@ -79,7 +79,7 @@ describe('TapStack', () => {
         expect(apiUrl).toBeDefined();
         expect(typeof apiUrl).toBe('string');
         expect(apiUrl).toContain('execute-api');
-        expect(apiUrl).toContain('ap-southeast-1');
+        expect(apiUrl).toContain('us-east-1');
         expect(apiUrl).toContain('amazonaws.com');
         done();
       });

@@ -1,10 +1,10 @@
 # Application Deployment
 
 > **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using pulumi with ts**
-> 
-> Platform: **pulumi**  
-> Language: **ts**  
-> Region: **ap-southeast-1**
+>
+> Platform: **pulumi**
+> Language: **ts**
+> Region: **us-east-1**
 >
 > **Do not substitute or change the platform or language.** All infrastructure code must be written using the specified platform and language combination.
 
@@ -61,4 +61,4 @@ Serverless infrastructure deployed in us-east-2 region using AWS Lambda for comp
 - Enable appropriate logging and monitoring
 
 ## Target Region
-All resources should be deployed to: **ap-southeast-1**
+All resources should be deployed to: **us-east-1**

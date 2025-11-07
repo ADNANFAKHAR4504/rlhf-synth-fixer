@@ -10,6 +10,9 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly apiUrl: pulumi.Output<string>;
   public readonly tableName: pulumi.Output<string>;
   public readonly bucketName: pulumi.Output<string>;
+  public readonly apiKeyValue: pulumi.Output<string>;
+  public readonly apiKeyId: pulumi.Output<string>;
+  public readonly apiId: pulumi.Output<string>;
 
   constructor(name: string, props?: TapStackProps) {
     super('custom:TapStack', name, {}, {});
@@ -683,15 +686,20 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Exports
-    this.apiUrl = pulumi.interpolate`${api.id}.execute-api.${aws.getRegionOutput().name}.amazonaws.com/${stage.stageName}`;
+    this.apiUrl = pulumi.interpolate`https://${api.id}.execute-api.${aws.getRegionOutput().name}.amazonaws.com/${stage.stageName}`;
     this.tableName = transactionsTable.name;
     this.bucketName = auditBucket.bucket;
+    this.apiKeyValue = apiKey.value;
+    this.apiKeyId = apiKey.id;
+    this.apiId = api.id;
 
     this.registerOutputs({
       apiUrl: this.apiUrl,
       tableName: this.tableName,
       bucketName: this.bucketName,
-      apiKeyId: apiKey.id,
+      apiKeyValue: this.apiKeyValue,
+      apiKeyId: this.apiKeyId,
+      apiId: this.apiId,
     });
   }
 }

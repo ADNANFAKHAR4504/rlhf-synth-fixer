@@ -49,7 +49,7 @@ import axios from 'axios';
 
 describe('TapStack Integration Tests', () => {
   let outputs: any;
-  const region = 'ap-southeast-1';
+  const region = 'us-east-1';
   const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'synth6dl6v';
 
   // AWS Clients

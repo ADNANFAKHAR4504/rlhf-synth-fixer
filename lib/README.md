@@ -36,7 +36,7 @@ This system implements a complete serverless transaction processing pipeline:
 npm install
 
 # Configure Pulumi
-pulumi config set aws:region ap-southeast-1
+pulumi config set aws:region us-east-1
 
 # Deploy
 pulumi up
