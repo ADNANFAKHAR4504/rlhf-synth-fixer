@@ -6,7 +6,9 @@
   "team": "synth",
   "startedAt": "2025-11-06T19:29:30+05:30",
   "subtask": "Application Deployment",
-  "subject_labels": ["Web Application Deployment"],
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
   "po_id": "harn4",
   "aws_services": [
     "VPC",
@@ -23,5 +25,6 @@
     "SSM Parameter Store"
   ],
   "region": "ap-southeast-1",
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "rajendra-s-aws"
 }
