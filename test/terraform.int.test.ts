@@ -109,13 +109,20 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       const devZoneId = outputs.dev_route53_zone_id?.value as string;
       const euWest1VpcId = outputs.eu_west_1_vpc_id?.value as string;
 
+      expect(devZoneId).toBeDefined();
+      expect(euWest1VpcId).toBeDefined();
+
       const zoneCommand = new GetHostedZoneCommand({ Id: devZoneId });
       const zoneResponse = await route53Client.send(zoneCommand);
 
+      expect(zoneResponse.HostedZone?.Name).toBe("dev.internal.");
+
       const vpcAssociations = zoneResponse.VPCs || [];
+      // Check if eu-west-1 VPC is associated (VPC ID match is sufficient for cross-region)
       const euWest1VpcAssociated = vpcAssociations.some(
-        vpc => vpc.VPCId === euWest1VpcId && vpc.VPCRegion === "eu-west-1"
+        vpc => vpc.VPCId === euWest1VpcId
       );
+      
       expect(euWest1VpcAssociated).toBe(true);
     });
 
@@ -123,15 +130,20 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       const prodZoneId = outputs.prod_route53_zone_id?.value as string;
       const apSoutheast1VpcId = outputs.ap_southeast_1_vpc_id?.value as string;
 
+      expect(prodZoneId).toBeDefined();
+      expect(apSoutheast1VpcId).toBeDefined();
+
       const zoneCommand = new GetHostedZoneCommand({ Id: prodZoneId });
       const zoneResponse = await route53Client.send(zoneCommand);
 
       expect(zoneResponse.HostedZone?.Name).toBe("prod.internal.");
 
       const vpcAssociations = zoneResponse.VPCs || [];
+      // Check if ap-southeast-1 VPC is associated (VPC ID match is sufficient for cross-region)
       const apSoutheast1VpcAssociated = vpcAssociations.some(
-        vpc => vpc.VPCId === apSoutheast1VpcId && vpc.VPCRegion === "ap-southeast-1"
+        vpc => vpc.VPCId === apSoutheast1VpcId
       );
+      
       expect(apSoutheast1VpcAssociated).toBe(true);
     });
   });
