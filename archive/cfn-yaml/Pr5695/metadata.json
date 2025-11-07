@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000171",
+  "team": "2",
+  "startedAt": "2025-11-03T12:12:55.320Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "CloudFormation",
+    "RDS Aurora MySQL",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "Route53",
+    "CloudFront",
+    "CloudWatch",
+    "IAM",
+    "KMS"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}
