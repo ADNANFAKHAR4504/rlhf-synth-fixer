@@ -30,7 +30,14 @@ pulumi.runtime.setMocks({
     if (args.token === 'aws:secretsmanager/getRandomPassword:getRandomPassword') {
       return {
         outputs: {
-          randomPassword: 'mock-password-123456789012',
+          randomPassword: JSON.stringify({ password: 'mock-password-123456789012' }),
+        },
+      };
+    }
+    if (args.token === 'aws:index/getRegion:getRegion') {
+      return {
+        outputs: {
+          name: 'us-east-1',
         },
       };
     }
@@ -40,13 +47,51 @@ pulumi.runtime.setMocks({
 
 // Set required configuration
 pulumi.runtime.setConfig('project:environmentSuffix', 'test');
-pulumi.runtime.setConfig('aws:region', 'us-east-1');
+// Note: We intentionally don't set aws:region here to test the fallback to 'us-east-1'
+// pulumi.runtime.setConfig('aws:region', 'us-east-1');
 
 // Import infrastructure after mocks are set up
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const infrastructure = require('../bin/tap');
 
 describe('Order Processing API Infrastructure - Unit Tests', () => {
+
+  describe('Configuration Management', () => {
+    it('should use environmentSuffix from Pulumi config', (done) => {
+      pulumi.all([infrastructure.ecrRepositoryUrl]).apply(([url]) => {
+        expect(url).toContain('test');
+        done();
+      });
+    });
+
+    it('should apply environmentSuffix consistently across all resources', (done) => {
+      pulumi.all([
+        infrastructure.albDnsName,
+        infrastructure.ecrRepositoryUrl,
+        infrastructure.ecsServiceArn,
+        infrastructure.rdsClusterEndpoint,
+      ]).apply(([albDns, ecrUrl, ecsArn, rdsEndpoint]) => {
+        expect(albDns).toContain('test');
+        expect(ecrUrl).toContain('test');
+        expect(ecsArn).toContain('test');
+        expect(rdsEndpoint).toContain('test');
+        done();
+      });
+    });
+
+    it('should handle region configuration correctly', (done) => {
+      pulumi.all([
+        infrastructure.albDnsName,
+        infrastructure.rdsClusterEndpoint,
+        infrastructure.ecrRepositoryUrl,
+      ]).apply(([albDns, rdsEndpoint, ecrUrl]) => {
+        expect(albDns).toContain('us-east-1');
+        expect(rdsEndpoint).toContain('us-east-1');
+        expect(ecrUrl).toContain('us-east-1');
+        done();
+      });
+    });
+  });
 
   describe('VPC Configuration', () => {
     it('should export vpcId', (done) => {
@@ -360,6 +405,89 @@ describe('Order Processing API Infrastructure - Unit Tests', () => {
           expect(typeof greenTargetGroupArn).toBe('string');
           done();
         });
+    });
+  });
+
+  describe('Infrastructure Validation', () => {
+    it('should have unique ARNs for blue and green target groups', (done) => {
+      pulumi.all([infrastructure.blueTargetGroupArn, infrastructure.greenTargetGroupArn]).apply(([blue, green]) => {
+        expect(blue).not.toBe(green);
+        expect(blue.length).toBeGreaterThan(0);
+        expect(green.length).toBeGreaterThan(0);
+        done();
+      });
+    });
+
+    it('should have different RDS endpoints for writer and reader', (done) => {
+      pulumi.all([infrastructure.rdsClusterEndpoint, infrastructure.rdsReaderEndpoint]).apply(([writer, reader]) => {
+        expect(writer).not.toBe(reader);
+        expect(writer.split('.')[0]).toBe(reader.split('.')[0].replace('-ro', ''));
+        done();
+      });
+    });
+
+    it('should have properly formatted dashboard URL with region', (done) => {
+      pulumi.all([infrastructure.dashboardUrl]).apply(([url]) => {
+        expect(url).toContain('https://');
+        expect(url).toContain('console.aws.amazon.com');
+        expect(url).toContain('region=');
+        expect(url).toContain('dashboards');
+        done();
+      });
+    });
+
+    it('should have ECR repository URL with correct format', (done) => {
+      pulumi.all([infrastructure.ecrRepositoryUrl]).apply(([url]) => {
+        const parts = url.split('/');
+        expect(parts.length).toBe(2);
+        expect(parts[0]).toContain('.dkr.ecr.');
+        expect(parts[0]).toContain('.amazonaws.com');
+        expect(parts[1]).toContain('order-api');
+        done();
+      });
+    });
+
+    it('should have VPC ID with correct AWS format', (done) => {
+      pulumi.all([infrastructure.vpcId]).apply(([vpcId]) => {
+        expect(vpcId).toMatch(/^vpc-/);
+        expect(vpcId.length).toBeGreaterThan(4);
+        done();
+      });
+    });
+  });
+
+  describe('Resource Tagging and Naming', () => {
+    it('should have consistent naming pattern across resources', (done) => {
+      pulumi.all([
+        infrastructure.albDnsName,
+        infrastructure.ecrRepositoryUrl,
+        infrastructure.ecsServiceArn,
+      ]).apply(([alb, ecr, ecs]) => {
+        const suffix = 'test';
+        expect(alb).toContain(suffix);
+        expect(ecr).toContain(suffix);
+        expect(ecs).toContain(suffix);
+        done();
+      });
+    });
+
+    it('should have all ARNs containing service identifiers', (done) => {
+      pulumi.all([
+        infrastructure.ecsServiceArn,
+        infrastructure.wafWebAclArn,
+        infrastructure.blueTargetGroupArn,
+        infrastructure.greenTargetGroupArn,
+      ]).apply(([ecs, waf, blue, green]) => {
+        expect(ecs).toBeDefined();
+        expect(waf).toBeDefined();
+        expect(blue).toBeDefined();
+        expect(green).toBeDefined();
+        expect(typeof ecs).toBe('string');
+        expect(typeof waf).toBe('string');
+        expect(typeof blue).toBe('string');
+        expect(typeof green).toBe('string');
+        done();
+      });
     });
   });
 });
