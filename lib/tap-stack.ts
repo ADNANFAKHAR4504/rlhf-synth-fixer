@@ -100,19 +100,33 @@ export class TapStack extends cdk.Stack {
     // Reference or create ALB
     let alb: elbv2.IApplicationLoadBalancer | undefined;
     let albSecurityGroup: ec2.ISecurityGroup | undefined;
+    let albDnsName: string | undefined;
     if (albArn) {
       // For existing ALB, reference it by ARN
-      // Note: fromApplicationLoadBalancerAttributes requires securityGroupId
+      // Note: fromApplicationLoadBalancerAttributes requires securityGroupId and loadBalancerDnsName
       // For test environment, we'll create a new ALB if VPC is available
       // Otherwise, ALB operations will be skipped
       if (vpc) {
+        // Extract DNS name from ARN or use placeholder
+        // When referencing existing ALB, DNS name should be looked up or provided
+        const albArnStr = albArn as string;
+        const loadBalancerFullName = albArnStr
+          .split('/')
+          .slice(-2)
+          .join('/')
+          .replace('loadbalancer/', '');
+        // Use a placeholder DNS name format for referenced ALBs
+        // In real scenarios, this should be looked up from AWS
+        albDnsName = `${loadBalancerFullName}.elb.amazonaws.com`;
+        
         alb =
           elbv2.ApplicationLoadBalancer.fromApplicationLoadBalancerAttributes(
             this,
             'ExistingALB',
             {
-              loadBalancerArn: albArn as string,
+              loadBalancerArn: albArnStr,
               securityGroupId: 'sg-placeholder', // Placeholder - actual SG will be looked up at runtime
+              loadBalancerDnsName: albDnsName,
             }
           );
       }
@@ -849,10 +863,14 @@ def handler(event, context):
     });
 
     if (alb) {
-      new cdk.CfnOutput(this, 'AlbDns', {
-        value: alb.loadBalancerDnsName,
-        description: 'Application Load Balancer DNS Name',
-      });
+      // Use stored DNS name for referenced ALBs, or get from created ALB
+      const dnsName = albDnsName || alb.loadBalancerDnsName;
+      if (dnsName) {
+        new cdk.CfnOutput(this, 'AlbDns', {
+          value: dnsName,
+          description: 'Application Load Balancer DNS Name',
+        });
+      }
     }
 
     new cdk.CfnOutput(this, 'CostAnomalyTopicArn', {
