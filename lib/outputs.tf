@@ -137,19 +137,21 @@ output "secrets_rotation_role_arn" {
 }
 
 # IAM Policy Outputs
-output "lambda_policy_arn" {
-  description = "ARN of the Lambda IAM policy"
-  value       = aws_iam_role_policy.lambda.arn
+
+
+output "lambda_policy_id" {
+  description = "ID of the Lambda IAM role policy"
+  value       = aws_iam_role_policy.lambda.id
 }
 
-output "vpc_flow_logs_policy_arn" {
-  description = "ARN of the VPC flow logs IAM policy"
-  value       = aws_iam_role_policy.vpc_flow_logs.arn
+output "vpc_flow_logs_policy_id" {
+  description = "ID of the VPC flow logs IAM role policy"
+  value       = aws_iam_role_policy.vpc_flow_logs.id
 }
 
-output "secrets_rotation_policy_arn" {
-  description = "ARN of the secrets rotation IAM policy"
-  value       = aws_iam_role_policy.secrets_rotation.arn
+output "secrets_rotation_policy_id" {
+  description = "ID of the secrets rotation IAM role policy"
+  value       = aws_iam_role_policy.secrets_rotation.id
 }
 
 # CloudWatch Log Groups Outputs
