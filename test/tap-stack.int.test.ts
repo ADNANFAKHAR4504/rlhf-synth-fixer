@@ -11,6 +11,7 @@ import {
   DescribeVpcEndpointsCommand,
   DescribeTransitGatewaysCommand,
   DescribeFlowLogsCommand,
+  DescribeVpcAttributeCommand,
 } from '@aws-sdk/client-ec2';
 import { S3Client, GetBucketEncryptionCommand, GetBucketLifecycleConfigurationCommand } from '@aws-sdk/client-s3';
 
@@ -55,14 +56,20 @@ describe('Payment Processing VPC Integration Tests', () => {
     });
 
     test('VPC has DNS support enabled', async () => {
-      const command = new DescribeVpcsCommand({
-        VpcIds: [vpcId],
+      const dnsSupportCommand = new DescribeVpcAttributeCommand({
+        VpcId: vpcId,
+        Attribute: 'enableDnsSupport',
       });
-      const response = await ec2Client.send(command);
-      const vpc = response.Vpcs?.[0];
+      const dnsSupportResponse = await ec2Client.send(dnsSupportCommand);
 
-      expect(vpc?.EnableDnsSupport).toBe(true);
-      expect(vpc?.EnableDnsHostnames).toBe(true);
+      const dnsHostnamesCommand = new DescribeVpcAttributeCommand({
+        VpcId: vpcId,
+        Attribute: 'enableDnsHostnames',
+      });
+      const dnsHostnamesResponse = await ec2Client.send(dnsHostnamesCommand);
+
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
     });
 
     test('VPC has correct tags', async () => {
