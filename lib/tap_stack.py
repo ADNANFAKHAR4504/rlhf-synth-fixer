@@ -303,7 +303,7 @@ bucket_public_access_block = aws.s3.BucketPublicAccessBlock(
 # 9. DynamoDB table with point-in-time recovery and encryption
 transactions_table = aws.dynamodb.Table(
     f"payment-transactions-{environment_suffix}",
-    name=f"payment-transactions-{environment_suffix}",
+    name=f"payment-transactions-{environment_suffix}-pr6109",
     billing_mode="PAY_PER_REQUEST",
     hash_key="transactionId",
     attributes=[

@@ -1,14 +1,19 @@
 """
 test_tap_stack.py
 
-Unit tests for the TapStack Pulumi component with proper mocking
-to avoid AWS API calls during test collection.
+Comprehensive Unit Tests for TapStack Pulumi component
+Target: 100% code coverage for lib/tap_stack.py
+Tests all AWS resources, configurations, and edge cases
 """
 
 import unittest
-from unittest.mock import patch, MagicMock, Mock
+from unittest.mock import patch, MagicMock, Mock, PropertyMock, call, ANY
 import sys
 import os
+import json
+import pulumi
+from pulumi import Config, Output
+import pulumi_aws as aws
 
 # Add the lib directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../lib'))
