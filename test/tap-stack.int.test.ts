@@ -1,16 +1,17 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
-import fs from 'fs';
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeNatGatewaysCommand,
-  DescribeInternetGatewaysCommand,
-  DescribeVpcEndpointsCommand,
   DescribeFlowLogsCommand,
+  DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcAttributeCommand,
+  DescribeVpcEndpointsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
 } from '@aws-sdk/client-ec2';
-import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
+import { HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
+import fs from 'fs';
 
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
@@ -35,8 +36,23 @@ describe('Payment Processing VPC Integration Tests', () => {
 
       expect(response.Vpcs).toHaveLength(1);
       expect(response.Vpcs![0].CidrBlock).toBe('10.0.0.0/16');
-      expect(response.Vpcs![0].EnableDnsHostnames).toBe(true);
-      expect(response.Vpcs![0].EnableDnsSupport).toBe(true);
+
+      // Check DNS attributes using DescribeVpcAttribute
+      const dnsHostnamesResponse = await ec2Client.send(
+        new DescribeVpcAttributeCommand({
+          VpcId: vpcId,
+          Attribute: 'enableDnsHostnames',
+        })
+      );
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
+
+      const dnsSupportResponse = await ec2Client.send(
+        new DescribeVpcAttributeCommand({
+          VpcId: vpcId,
+          Attribute: 'enableDnsSupport',
+        })
+      );
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
     });
 
     test('VPC has mandatory tags', async () => {
