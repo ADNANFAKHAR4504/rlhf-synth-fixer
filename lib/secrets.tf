@@ -88,7 +88,7 @@ resource "aws_iam_role_policy" "secrets_rotation" {
 # Lambda Function for Secrets Rotation
 resource "aws_lambda_function" "secrets_rotation" {
   filename      = "${path.module}/lambda/rotation.zip"
-  function_name = "secrets-rotation-${var.environment_suffix}"
+  function_name = "secrets-rotation-${var.environment_suffix}-ab"
   role          = aws_iam_role.secrets_rotation.arn
   handler       = "rotation.handler"
   runtime       = "python3.11"
@@ -101,7 +101,7 @@ resource "aws_lambda_function" "secrets_rotation" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "secrets-rotation-${var.environment_suffix}"
+    Name = "secrets-rotation-${var.environment_suffix}-ab"
   })
 }
 

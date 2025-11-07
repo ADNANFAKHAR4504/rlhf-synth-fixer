@@ -1,7 +1,7 @@
 # Lambda Function for Data Processing
 resource "aws_lambda_function" "processor" {
   filename      = "${path.module}/lambda/processor.zip"
-  function_name = "data-processor-${var.environment_suffix}"
+  function_name = "data-processor-${var.environment_suffix}-ab"
   role          = aws_iam_role.lambda.arn
   handler       = "index.handler"
   runtime       = "python3.11"
@@ -22,7 +22,7 @@ resource "aws_lambda_function" "processor" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "data-processor-${var.environment_suffix}"
+    Name = "data-processor-${var.environment_suffix}-ab"
   })
 
   depends_on = [
