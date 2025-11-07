@@ -1,37 +1,37 @@
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-} from '@aws-sdk/client-rds';
-import {
-  LambdaClient,
-  GetFunctionCommand,
-  InvokeCommand,
-} from '@aws-sdk/client-lambda';
-import {
-  S3Client,
-  HeadBucketCommand,
-  GetBucketEncryptionCommand,
-  GetBucketVersioningCommand,
-} from '@aws-sdk/client-s3';
-import {
-  DynamoDBClient,
-  DescribeTableCommand,
-} from '@aws-sdk/client-dynamodb';
-import {
-  SSMClient,
-  GetParameterCommand,
-} from '@aws-sdk/client-ssm';
-import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
-import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
+import {
+  DescribeTableCommand,
+  DynamoDBClient,
+} from '@aws-sdk/client-dynamodb';
+import {
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  GetFunctionCommand,
+  InvokeCommand,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
+import {
+  DescribeDBInstancesCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketVersioningCommand,
+  HeadBucketCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
+import {
+  GetParameterCommand,
+  SSMClient,
+} from '@aws-sdk/client-ssm';
 import fs from 'fs';
 import path from 'path';
 
@@ -166,7 +166,8 @@ describe('TapStack Integration Tests - Real AWS Resources', () => {
     test('FIX 1: RDS instance should have encryption enabled', async () => {
       if (skipTests) return;
 
-      const dbIdentifier = `database-${environmentSuffix}`;
+      const dbIdentifier = outputs.DatabaseIdentifier;
+      expect(dbIdentifier).toBeDefined();
 
       const response = await rdsClient.send(
         new DescribeDBInstancesCommand({
@@ -185,7 +186,8 @@ describe('TapStack Integration Tests - Real AWS Resources', () => {
     test('FIX 2: RDS instance should use correct instance type from config', async () => {
       if (skipTests) return;
 
-      const dbIdentifier = `database-${environmentSuffix}`;
+      const dbIdentifier = outputs.DatabaseIdentifier;
+      expect(dbIdentifier).toBeDefined();
 
       const response = await rdsClient.send(
         new DescribeDBInstancesCommand({
@@ -208,7 +210,8 @@ describe('TapStack Integration Tests - Real AWS Resources', () => {
     test('RDS should be using PostgreSQL with correct version', async () => {
       if (skipTests) return;
 
-      const dbIdentifier = `database-${environmentSuffix}`;
+      const dbIdentifier = outputs.DatabaseIdentifier;
+      expect(dbIdentifier).toBeDefined();
 
       const response = await rdsClient.send(
         new DescribeDBInstancesCommand({
@@ -225,7 +228,8 @@ describe('TapStack Integration Tests - Real AWS Resources', () => {
     test('RDS should have correct multi-AZ configuration', async () => {
       if (skipTests) return;
 
-      const dbIdentifier = `database-${environmentSuffix}`;
+      const dbIdentifier = outputs.DatabaseIdentifier;
+      expect(dbIdentifier).toBeDefined();
 
       const response = await rdsClient.send(
         new DescribeDBInstancesCommand({
@@ -246,7 +250,8 @@ describe('TapStack Integration Tests - Real AWS Resources', () => {
     test('RDS should have correct backup retention', async () => {
       if (skipTests) return;
 
-      const dbIdentifier = `database-${environmentSuffix}`;
+      const dbIdentifier = outputs.DatabaseIdentifier;
+      expect(dbIdentifier).toBeDefined();
 
       const response = await rdsClient.send(
         new DescribeDBInstancesCommand({
@@ -269,11 +274,12 @@ describe('TapStack Integration Tests - Real AWS Resources', () => {
     test('RDS credentials should be stored in Secrets Manager', async () => {
       if (skipTests) return;
 
-      const secretName = `db-credentials-${environmentSuffix}`;
+      const secretArn = outputs.DatabaseSecretArn;
+      expect(secretArn).toBeDefined();
 
       const response = await secretsClient.send(
         new GetSecretValueCommand({
-          SecretId: secretName,
+          SecretId: secretArn,
         })
       );
 
@@ -576,7 +582,8 @@ describe('TapStack Integration Tests - Real AWS Resources', () => {
       const functionName = `data-processor-${environmentSuffix}`;
       const bucketName = `analytics-data-${environmentSuffix}`;
       const tableName = `analytics-state-${environmentSuffix}`;
-      const dbIdentifier = `database-${environmentSuffix}`;
+      const dbIdentifier = outputs.DatabaseIdentifier;
+      expect(dbIdentifier).toBeDefined();
 
       // Verify Lambda exists
       const lambdaResponse = await lambdaClient.send(
@@ -605,7 +612,8 @@ describe('TapStack Integration Tests - Real AWS Resources', () => {
     test('All 6 fixes should be verified in deployed infrastructure', async () => {
       if (skipTests) return;
 
-      const dbIdentifier = `database-${environmentSuffix}`;
+      const dbIdentifier = outputs.DatabaseIdentifier;
+      expect(dbIdentifier).toBeDefined();
       const logGroupName = `/aws/lambda/data-processor-${environmentSuffix}`;
 
       // FIX 1: Verify RDS encryption
