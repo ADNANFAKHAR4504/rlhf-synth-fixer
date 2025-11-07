@@ -16,12 +16,16 @@
     "ELB",
     "Auto Scaling",
     "RDS Aurora",
-    "Route 53",
     "S3",
     "CloudWatch",
     "SNS",
     "KMS"
   ],
-  "training_quality": 9,
-  "author": "rajendra-s-aws"
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
