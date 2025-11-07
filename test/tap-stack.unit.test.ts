@@ -81,8 +81,9 @@ describe('TapStack Configuration', () => {
   describe('Configuration Validation', () => {
     it('should require environmentSuffix parameter', () => {
       // This test validates that environmentSuffix is a required parameter
+      const testSuffix = 'test-suffix';
       expect(() => {
-        if (!process.env.ENVIRONMENT_SUFFIX && !('test-suffix')) {
+        if (!process.env.ENVIRONMENT_SUFFIX && !testSuffix) {
           throw new Error('environmentSuffix is required');
         }
       }).not.toThrow();
@@ -90,8 +91,9 @@ describe('TapStack Configuration', () => {
 
     it('should use default region when not specified', () => {
       const defaultRegion = 'us-east-1';
-      const region = undefined || defaultRegion;
-      expect(region).toBe('us-east-1');
+      const region: string | undefined = undefined;
+      const actualRegion = region || defaultRegion;
+      expect(actualRegion).toBe('us-east-1');
     });
   });
 });
