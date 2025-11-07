@@ -106,6 +106,12 @@ describe("Webhook Processing System Integration Tests", () => {
       const stagesResponse = await apiGatewayClient.send(stagesCommand);
 
       expect(stagesResponse.item).toBeDefined();
+      expect(stagesResponse.item).not.toBeNull();
+
+      if (!stagesResponse.item || stagesResponse.item.length === 0) {
+        throw new Error("No stages found for API Gateway");
+      }
+
       expect(stagesResponse.item.length).toBeGreaterThan(0);
 
       const stageName = stagesResponse.item[0].stageName;
@@ -181,6 +187,12 @@ describe("Webhook Processing System Integration Tests", () => {
       const stagesResponse = await apiGatewayClient.send(stagesCommand);
 
       expect(stagesResponse.item).toBeDefined();
+      expect(stagesResponse.item).not.toBeNull();
+
+      if (!stagesResponse.item || stagesResponse.item.length === 0) {
+        throw new Error("No stages found for API Gateway");
+      }
+
       expect(stagesResponse.item.length).toBeGreaterThan(0);
 
       const stageName = stagesResponse.item[0].stageName;
