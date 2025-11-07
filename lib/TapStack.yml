@@ -797,7 +797,6 @@ Resources:
       DBInstanceClass: !Ref DBInstanceClass
       AllocatedStorage: !Ref DBAllocatedStorage
       StorageType: gp3
-      Iops: 3000
       StorageEncrypted: true
       KmsKeyId: alias/aws/rds
       MasterUsername: !Ref DBUsername
