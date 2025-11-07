@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// eslint-disable-next-line import/no-extraneous-dependencies
 import * as AWS from 'aws-sdk';
 import { execSync } from 'child_process';
 

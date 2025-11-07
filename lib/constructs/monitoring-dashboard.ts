@@ -74,9 +74,9 @@ export class MonitoringDashboard extends Construct {
 
     // Add tags
     this.dashboard.node.addMetadata('aws:cdk:tagging', {
-      'Project': 'iac-rlhf-amazon',
-      'Environment': props.environmentSuffix,
-      'Component': 'CloudWatch',
+      Project: 'iac-rlhf-amazon',
+      Environment: props.environmentSuffix,
+      Component: 'CloudWatch',
     });
   }
 
@@ -110,13 +110,17 @@ export class MonitoringDashboard extends Construct {
         left: throttleMetrics,
         width: 12,
         height: 6,
-      }),
+      })
     );
   }
 
   private addDynamoDbWidgets(tables: dynamodb.Table[]): void {
-    const readMetrics = tables.map(table => table.metricConsumedReadCapacityUnits());
-    const writeMetrics = tables.map(table => table.metricConsumedWriteCapacityUnits());
+    const readMetrics = tables.map(table =>
+      table.metricConsumedReadCapacityUnits()
+    );
+    const writeMetrics = tables.map(table =>
+      table.metricConsumedWriteCapacityUnits()
+    );
     const throttleMetrics = tables.map(table => table.metricUserErrors());
 
     this.dashboard.addWidgets(
@@ -137,7 +141,7 @@ export class MonitoringDashboard extends Construct {
         left: throttleMetrics,
         width: 12,
         height: 6,
-      }),
+      })
     );
   }
 
@@ -145,7 +149,7 @@ export class MonitoringDashboard extends Construct {
     // S3 metrics are more limited and require custom metrics
     const widgets: cloudwatch.IWidget[] = [];
 
-    buckets.forEach((bucket, index) => {
+    buckets.forEach((bucket, _index) => {
       widgets.push(
         new cloudwatch.SingleValueWidget({
           title: `S3 Bucket: ${bucket.bucketName}`,
@@ -199,13 +203,17 @@ export class MonitoringDashboard extends Construct {
         left: serverErrorMetrics,
         width: 12,
         height: 6,
-      }),
+      })
     );
   }
 
   private addSqsWidgets(queues: sqs.Queue[]): void {
-    const visibleMetrics = queues.map(queue => queue.metricApproximateNumberOfMessagesVisible());
-    const inFlightMetrics = queues.map(queue => queue.metricApproximateNumberOfMessagesNotVisible());
+    const visibleMetrics = queues.map(queue =>
+      queue.metricApproximateNumberOfMessagesVisible()
+    );
+    const inFlightMetrics = queues.map(queue =>
+      queue.metricApproximateNumberOfMessagesNotVisible()
+    );
     const sentMetrics = queues.map(queue => queue.metricNumberOfMessagesSent());
 
     this.dashboard.addWidgets(
@@ -226,11 +234,13 @@ export class MonitoringDashboard extends Construct {
         left: sentMetrics,
         width: 12,
         height: 6,
-      }),
+      })
     );
   }
 
-  private addStepFunctionsWidgets(stateMachines: stepfunctions.StateMachine[]): void {
+  private addStepFunctionsWidgets(
+    stateMachines: stepfunctions.StateMachine[]
+  ): void {
     const executionMetrics = stateMachines.map(sm => sm.metricStarted());
     const successMetrics = stateMachines.map(sm => sm.metricSucceeded());
     const failedMetrics = stateMachines.map(sm => sm.metricFailed());
@@ -247,7 +257,7 @@ export class MonitoringDashboard extends Construct {
         left: [...successMetrics, ...failedMetrics],
         width: 12,
         height: 6,
-      }),
+      })
     );
   }
 
@@ -276,79 +286,115 @@ Monitor the following manually in CloudWatch Logs:
     this.dashboard.addWidgets(replicationWidget);
   }
 
-  private createLambdaAlarms(functions: lambda.Function[], environmentSuffix: string): void {
+  private createLambdaAlarms(
+    functions: lambda.Function[],
+    environmentSuffix: string
+  ): void {
     functions.forEach((fn, index) => {
       // Error rate alarm
-      const errorAlarm = new cloudwatch.Alarm(this, `LambdaErrorAlarm${index}`, {
-        alarmName: `iac-rlhf-${environmentSuffix}-lambda-errors-${fn.functionName}`,
-        metric: fn.metricErrors(),
-        threshold: 5,
-        evaluationPeriods: 2,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      });
+      const errorAlarm = new cloudwatch.Alarm(
+        this,
+        `LambdaErrorAlarm${index}`,
+        {
+          alarmName: `iac-rlhf-${environmentSuffix}-lambda-errors-${fn.functionName}`,
+          metric: fn.metricErrors(),
+          threshold: 5,
+          evaluationPeriods: 2,
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        }
+      );
 
       // Duration alarm
-      const durationAlarm = new cloudwatch.Alarm(this, `LambdaDurationAlarm${index}`, {
-        alarmName: `iac-rlhf-${environmentSuffix}-lambda-duration-${fn.functionName}`,
-        metric: fn.metricDuration(),
-        threshold: 30000, // 30 seconds
-        evaluationPeriods: 3,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      });
+      const durationAlarm = new cloudwatch.Alarm(
+        this,
+        `LambdaDurationAlarm${index}`,
+        {
+          alarmName: `iac-rlhf-${environmentSuffix}-lambda-duration-${fn.functionName}`,
+          metric: fn.metricDuration(),
+          threshold: 30000, // 30 seconds
+          evaluationPeriods: 3,
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        }
+      );
 
       // Throttle alarm
-      const throttleAlarm = new cloudwatch.Alarm(this, `LambdaThrottleAlarm${index}`, {
-        alarmName: `iac-rlhf-${environmentSuffix}-lambda-throttles-${fn.functionName}`,
-        metric: fn.metricThrottles(),
-        threshold: 1,
-        evaluationPeriods: 1,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      });
+      const throttleAlarm = new cloudwatch.Alarm(
+        this,
+        `LambdaThrottleAlarm${index}`,
+        {
+          alarmName: `iac-rlhf-${environmentSuffix}-lambda-throttles-${fn.functionName}`,
+          metric: fn.metricThrottles(),
+          threshold: 1,
+          evaluationPeriods: 1,
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        }
+      );
 
       this.alarms.push(errorAlarm, durationAlarm, throttleAlarm);
     });
   }
 
-  private createDynamoDbAlarms(tables: dynamodb.Table[], environmentSuffix: string): void {
+  private createDynamoDbAlarms(
+    tables: dynamodb.Table[],
+    environmentSuffix: string
+  ): void {
     tables.forEach((table, index) => {
       // User errors alarm (throttling)
-      const throttleAlarm = new cloudwatch.Alarm(this, `DynamoThrottleAlarm${index}`, {
-        alarmName: `iac-rlhf-${environmentSuffix}-dynamo-throttles-${table.tableName}`,
-        metric: table.metricUserErrors(),
-        threshold: 1,
-        evaluationPeriods: 2,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      });
+      const throttleAlarm = new cloudwatch.Alarm(
+        this,
+        `DynamoThrottleAlarm${index}`,
+        {
+          alarmName: `iac-rlhf-${environmentSuffix}-dynamo-throttles-${table.tableName}`,
+          metric: table.metricUserErrors(),
+          threshold: 1,
+          evaluationPeriods: 2,
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        }
+      );
 
       this.alarms.push(throttleAlarm);
     });
   }
 
-  private createApiGatewayAlarms(apis: apigateway.RestApi[], environmentSuffix: string): void {
+  private createApiGatewayAlarms(
+    apis: apigateway.RestApi[],
+    environmentSuffix: string
+  ): void {
     apis.forEach((api, index) => {
       // 5XX error alarm
-      const serverErrorAlarm = new cloudwatch.Alarm(this, `ApiServerErrorAlarm${index}`, {
-        alarmName: `iac-rlhf-${environmentSuffix}-api-5xx-${api.restApiName}`,
-        metric: api.metricServerError(),
-        threshold: 10,
-        evaluationPeriods: 2,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      });
+      const serverErrorAlarm = new cloudwatch.Alarm(
+        this,
+        `ApiServerErrorAlarm${index}`,
+        {
+          alarmName: `iac-rlhf-${environmentSuffix}-api-5xx-${api.restApiName}`,
+          metric: api.metricServerError(),
+          threshold: 10,
+          evaluationPeriods: 2,
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        }
+      );
 
       // High latency alarm
-      const latencyAlarm = new cloudwatch.Alarm(this, `ApiLatencyAlarm${index}`, {
-        alarmName: `iac-rlhf-${environmentSuffix}-api-latency-${api.restApiName}`,
-        metric: api.metricLatency(),
-        threshold: 5000, // 5 seconds
-        evaluationPeriods: 3,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      });
+      const latencyAlarm = new cloudwatch.Alarm(
+        this,
+        `ApiLatencyAlarm${index}`,
+        {
+          alarmName: `iac-rlhf-${environmentSuffix}-api-latency-${api.restApiName}`,
+          metric: api.metricLatency(),
+          threshold: 5000, // 5 seconds
+          evaluationPeriods: 3,
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        }
+      );
 
       this.alarms.push(serverErrorAlarm, latencyAlarm);
     });
   }
 
-  private createSqsAlarms(queues: sqs.Queue[], environmentSuffix: string): void {
+  private createSqsAlarms(
+    queues: sqs.Queue[],
+    environmentSuffix: string
+  ): void {
     queues.forEach((queue, index) => {
       // Dead letter queue alarm
       if (queue.queueName?.includes('dlq')) {

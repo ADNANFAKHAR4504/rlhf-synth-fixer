@@ -47,20 +47,22 @@ export class S3ReplicatedBucket extends Construct {
         {
           id: 'transition-to-ia',
           enabled: true,
-          transitions: [{
-            storageClass: s3.StorageClass.INFREQUENT_ACCESS,
-            transitionAfter: Duration.days(30),
-          }],
+          transitions: [
+            {
+              storageClass: s3.StorageClass.INFREQUENT_ACCESS,
+              transitionAfter: Duration.days(30),
+            },
+          ],
         },
       ],
     });
 
     // Add tags
     const tags = {
-      'Project': 'iac-rlhf-amazon',
-      'Environment': props.environmentSuffix,
-      'Component': 'S3',
-      'BucketType': props.isPrimary ? 'Primary' : 'Replica',
+      Project: 'iac-rlhf-amazon',
+      Environment: props.environmentSuffix,
+      Component: 'S3',
+      BucketType: props.isPrimary ? 'Primary' : 'Replica',
     };
 
     Object.entries(tags).forEach(([key, value]) => {
@@ -75,7 +77,10 @@ export class S3ReplicatedBucket extends Construct {
     // }
   }
 
-  private setupCrossRegionReplication(destinationBucketName: string, destinationRegion: string): void {
+  private setupCrossRegionReplication(
+    destinationBucketName: string,
+    destinationRegion: string
+  ): void {
     // Create replication role with proper permissions
     const replicationRole = new iam.Role(this, 'ReplicationRole', {
       assumedBy: new iam.ServicePrincipal('s3.amazonaws.com'),
@@ -83,56 +88,62 @@ export class S3ReplicatedBucket extends Construct {
     });
 
     // Grant source bucket permissions
-    replicationRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        's3:GetReplicationConfiguration',
-        's3:ListBucket',
-        's3:GetObjectVersionForReplication',
-        's3:GetObjectVersionAcl',
-        's3:GetObjectVersionTagging',
-      ],
-      resources: [
-        this.bucket.bucketArn,
-        `${this.bucket.bucketArn}/*`,
-      ],
-    }));
+    replicationRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          's3:GetReplicationConfiguration',
+          's3:ListBucket',
+          's3:GetObjectVersionForReplication',
+          's3:GetObjectVersionAcl',
+          's3:GetObjectVersionTagging',
+        ],
+        resources: [this.bucket.bucketArn, `${this.bucket.bucketArn}/*`],
+      })
+    );
 
     // Grant destination bucket permissions
-    replicationRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        's3:ReplicateObject',
-        's3:ReplicateDelete',
-        's3:ReplicateTags',
-        's3:GetObjectVersionTagging',
-      ],
-      resources: [`arn:aws:s3:::${destinationBucketName}/*`],
-    }));
+    replicationRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          's3:ReplicateObject',
+          's3:ReplicateDelete',
+          's3:ReplicateTags',
+          's3:GetObjectVersionTagging',
+        ],
+        resources: [`arn:aws:s3:::${destinationBucketName}/*`],
+      })
+    );
 
     // Grant KMS permissions for encryption
     if (this.kmsKey) {
-      replicationRole.addToPolicy(new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'kms:Decrypt',
-          'kms:DescribeKey',
-          'kms:Encrypt',
-          'kms:GenerateDataKey*',
-          'kms:ReEncrypt*',
-        ],
-        resources: [
-          this.kmsKey.keyArn,
-          // Note: In production, you'd need the destination region KMS key ARN here
-        ],
-      }));
+      replicationRole.addToPolicy(
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'kms:Decrypt',
+            'kms:DescribeKey',
+            'kms:Encrypt',
+            'kms:GenerateDataKey*',
+            'kms:ReEncrypt*',
+          ],
+          resources: [
+            this.kmsKey.keyArn,
+            // Note: In production, you'd need the destination region KMS key ARN here
+          ],
+        })
+      );
     }
 
     // Create custom resource to setup replication (addresses dependency issue from model failures)
-    const replicationSetupFunction = new lambda.Function(this, 'ReplicationSetupFunction', {
-      runtime: lambda.Runtime.PYTHON_3_9,
-      handler: 'index.handler',
-      code: lambda.Code.fromInline(`
+    const replicationSetupFunction = new lambda.Function(
+      this,
+      'ReplicationSetupFunction',
+      {
+        runtime: lambda.Runtime.PYTHON_3_9,
+        handler: 'index.handler',
+        code: lambda.Code.fromInline(`
 import boto3
 import json
 import cfnresponse
@@ -188,18 +199,21 @@ def handler(event, context):
         print(f"Error: {str(e)}")
         cfnresponse.send(event, context, cfnresponse.FAILED, {})
       `),
-      timeout: Duration.minutes(5),
-    });
+        timeout: Duration.minutes(5),
+      }
+    );
 
     // Grant S3 permissions to the setup function
-    replicationSetupFunction.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        's3:PutReplicationConfiguration',
-        's3:GetReplicationConfiguration',
-      ],
-      resources: [this.bucket.bucketArn],
-    }));
+    replicationSetupFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          's3:PutReplicationConfiguration',
+          's3:GetReplicationConfiguration',
+        ],
+        resources: [this.bucket.bucketArn],
+      })
+    );
 
     // Create custom resource
     new CustomResource(this, 'ReplicationSetupResource', {

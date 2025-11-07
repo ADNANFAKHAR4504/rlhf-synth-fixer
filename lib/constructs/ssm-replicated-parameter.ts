@@ -16,7 +16,11 @@ export class SsmReplicatedParameter extends Construct {
   public readonly parameter: ssm.StringParameter;
   public readonly kmsKey: kms.Key;
 
-  constructor(scope: Construct, id: string, props: SsmReplicatedParameterProps) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: SsmReplicatedParameterProps
+  ) {
     super(scope, id);
 
     // Create KMS key for parameter encryption (addresses security issue from model failures)
@@ -35,10 +39,13 @@ export class SsmReplicatedParameter extends Construct {
     });
 
     // Create custom resource for cross-region replication that doesn't expose values
-    const replicationFunction = new lambda.Function(this, 'ReplicationFunction', {
-      runtime: lambda.Runtime.PYTHON_3_9,
-      handler: 'index.handler',
-      code: lambda.Code.fromInline(`
+    const replicationFunction = new lambda.Function(
+      this,
+      'ReplicationFunction',
+      {
+        runtime: lambda.Runtime.PYTHON_3_9,
+        handler: 'index.handler',
+        code: lambda.Code.fromInline(`
 import boto3
 import json
 import cfnresponse
@@ -81,26 +88,35 @@ def handler(event, context):
         print(f"Replication error: {str(e)}")
         cfnresponse.send(event, context, cfnresponse.FAILED, {})
       `),
-      timeout: Duration.minutes(5),
-    });
+        timeout: Duration.minutes(5),
+      }
+    );
 
     // Grant minimal required permissions
     const currentRegion = this.parameter.stack.region;
 
     // Allow reading from current region
-    replicationFunction.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ['ssm:GetParameter'],
-      resources: [`arn:aws:ssm:${currentRegion}:*:parameter${props.parameterName}`],
-    }));
+    replicationFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['ssm:GetParameter'],
+        resources: [
+          `arn:aws:ssm:${currentRegion}:*:parameter${props.parameterName}`,
+        ],
+      })
+    );
 
     // Allow writing to destination regions
     props.destinationRegions.forEach(region => {
-      replicationFunction.addToRolePolicy(new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ['ssm:PutParameter'],
-        resources: [`arn:aws:ssm:${region}:*:parameter${props.parameterName}`],
-      }));
+      replicationFunction.addToRolePolicy(
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: ['ssm:PutParameter'],
+          resources: [
+            `arn:aws:ssm:${region}:*:parameter${props.parameterName}`,
+          ],
+        })
+      );
     });
 
     // Grant KMS permissions for encryption/decryption
@@ -119,9 +135,9 @@ def handler(event, context):
 
     // Add tags
     const tags = {
-      'Project': 'iac-rlhf-amazon',
-      'Environment': props.environmentSuffix,
-      'Component': 'SSM',
+      Project: 'iac-rlhf-amazon',
+      Environment: props.environmentSuffix,
+      Component: 'SSM',
     };
 
     Object.entries(tags).forEach(([key, value]) => {

@@ -26,10 +26,10 @@ export class SnsCrossRegion extends Construct {
 
     // Add tags
     const tags = {
-      'Project': 'iac-rlhf-amazon',
-      'Environment': props.environmentSuffix,
-      'Component': 'SNS',
-      'TopicType': props.isPrimary ? 'Primary' : 'DR',
+      Project: 'iac-rlhf-amazon',
+      Environment: props.environmentSuffix,
+      Component: 'SNS',
+      TopicType: props.isPrimary ? 'Primary' : 'DR',
     };
 
     Object.entries(tags).forEach(([key, value]) => {
@@ -44,10 +44,13 @@ export class SnsCrossRegion extends Construct {
 
   private setupCrossRegionSubscription(drRegion: string): void {
     // Create Lambda function to set up cross-region subscription
-    const subscriptionSetupFunction = new lambda.Function(this, 'SubscriptionSetup', {
-      runtime: lambda.Runtime.PYTHON_3_9,
-      handler: 'index.handler',
-      code: lambda.Code.fromInline(`
+    const subscriptionSetupFunction = new lambda.Function(
+      this,
+      'SubscriptionSetup',
+      {
+        runtime: lambda.Runtime.PYTHON_3_9,
+        handler: 'index.handler',
+        code: lambda.Code.fromInline(`
 import boto3
 import json
 import cfnresponse
@@ -91,20 +94,23 @@ def handler(event, context):
             'Error': str(e)
         })
       `),
-      timeout: Duration.minutes(2),
-    });
+        timeout: Duration.minutes(2),
+      }
+    );
 
     // Grant SNS permissions
-    subscriptionSetupFunction.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'sns:Subscribe',
-        'sns:Unsubscribe',
-        'sns:ListSubscriptionsByTopic',
-        'sts:GetCallerIdentity',
-      ],
-      resources: ['*'],  // SNS cross-region requires broad permissions
-    }));
+    subscriptionSetupFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'sns:Subscribe',
+          'sns:Unsubscribe',
+          'sns:ListSubscriptionsByTopic',
+          'sts:GetCallerIdentity',
+        ],
+        resources: ['*'], // SNS cross-region requires broad permissions
+      })
+    );
 
     // Create custom resource
     new CustomResource(this, 'CrossRegionSubscription', {

@@ -54,29 +54,33 @@ export class LambdaWithDlq extends Construct {
     });
 
     // Apply least privilege principle
-    this.function.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ['sqs:SendMessage', 'sqs:GetQueueAttributes'],
-      resources: [this.dlq.queueArn],
-    }));
+    this.function.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['sqs:SendMessage', 'sqs:GetQueueAttributes'],
+        resources: [this.dlq.queueArn],
+      })
+    );
 
     // Add CloudWatch logs permissions (should be automatic but explicit is better)
-    this.function.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'logs:CreateLogGroup',
-        'logs:CreateLogStream',
-        'logs:PutLogEvents'
-      ],
-      resources: [`${logGroup.logGroupArn}:*`],
-    }));
+    this.function.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'logs:CreateLogGroup',
+          'logs:CreateLogStream',
+          'logs:PutLogEvents',
+        ],
+        resources: [`${logGroup.logGroupArn}:*`],
+      })
+    );
 
     // Add tags to all resources
     const tags = {
-      'Project': 'iac-rlhf-amazon',
-      'Environment': props.environmentSuffix,
-      'Component': 'Lambda',
-      'UseCase': props.useCase,
+      Project: 'iac-rlhf-amazon',
+      Environment: props.environmentSuffix,
+      Component: 'Lambda',
+      UseCase: props.useCase,
     };
 
     Object.entries(tags).forEach(([key, value]) => {

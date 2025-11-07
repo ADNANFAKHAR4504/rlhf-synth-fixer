@@ -191,50 +191,57 @@ export class DrTestingWorkflow extends Construct {
     });
 
     // Grant necessary permissions
-    drTestFunction.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'dynamodb:PutItem',
-        'dynamodb:GetItem',
-        'dynamodb:DeleteItem',
-        'dynamodb:DescribeTable',
-      ],
-      resources: [props.dynamoTable.tableArn],
-    }));
+    drTestFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'dynamodb:PutItem',
+          'dynamodb:GetItem',
+          'dynamodb:DeleteItem',
+          'dynamodb:DescribeTable',
+        ],
+        resources: [props.dynamoTable.tableArn],
+      })
+    );
 
-    drTestFunction.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        's3:PutObject',
-        's3:GetObject',
-        's3:DeleteObject',
-        's3:HeadObject',
-      ],
-      resources: [
-        `${props.primaryBucket.bucketArn}/*`,
-        ...(props.drBucket ? [`${props.drBucket.bucketArn}/*`] : []),
-      ],
-    }));
+    drTestFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          's3:PutObject',
+          's3:GetObject',
+          's3:DeleteObject',
+          's3:HeadObject',
+        ],
+        resources: [
+          `${props.primaryBucket.bucketArn}/*`,
+          ...(props.drBucket ? [`${props.drBucket.bucketArn}/*`] : []),
+        ],
+      })
+    );
 
-    drTestFunction.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'sns:Publish',
-        'lambda:InvokeFunction',
-      ],
-      resources: ['*'],
-    }));
+    drTestFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['sns:Publish', 'lambda:InvokeFunction'],
+        resources: ['*'],
+      })
+    );
 
     // Define Step Functions workflow
-    const dynamodbTest = new stepfunctionsTasks.LambdaInvoke(this, 'DynamoDBTest', {
-      lambdaFunction: drTestFunction,
-      payload: stepfunctions.TaskInput.fromObject({
-        testType: 'DYNAMODB_REPLICATION',
-        tableName: props.dynamoTable.tableName,
-        drRegion: props.drRegion,
-      }),
-      outputPath: '$.Payload',
-    });
+    const dynamodbTest = new stepfunctionsTasks.LambdaInvoke(
+      this,
+      'DynamoDBTest',
+      {
+        lambdaFunction: drTestFunction,
+        payload: stepfunctions.TaskInput.fromObject({
+          testType: 'DYNAMODB_REPLICATION',
+          tableName: props.dynamoTable.tableName,
+          drRegion: props.drRegion,
+        }),
+        outputPath: '$.Payload',
+      }
+    );
 
     const s3Test = new stepfunctionsTasks.LambdaInvoke(this, 'S3Test', {
       lambdaFunction: drTestFunction,
@@ -285,12 +292,15 @@ export class DrTestingWorkflow extends Construct {
     parallelTests.branch(snsTest);
 
     // Aggregate results
-    const aggregateResults = new stepfunctionsTasks.LambdaInvoke(this, 'AggregateResults', {
-      lambdaFunction: new lambda.Function(this, 'AggregateResultsFunction', {
-        functionName: `iac-rlhf-${props.environmentSuffix}-dr-aggregate-${props.timestamp}`,
-        runtime: lambda.Runtime.NODEJS_18_X,
-        handler: 'index.handler',
-        code: lambda.Code.fromInline(`
+    const aggregateResults = new stepfunctionsTasks.LambdaInvoke(
+      this,
+      'AggregateResults',
+      {
+        lambdaFunction: new lambda.Function(this, 'AggregateResultsFunction', {
+          functionName: `iac-rlhf-${props.environmentSuffix}-dr-aggregate-${props.timestamp}`,
+          runtime: lambda.Runtime.NODEJS_18_X,
+          handler: 'index.handler',
+          code: lambda.Code.fromInline(`
           exports.handler = async (event) => {
             console.log('Aggregating DR test results:', JSON.stringify(event));
             
@@ -329,28 +339,32 @@ export class DrTestingWorkflow extends Construct {
             };
           };
         `),
-        timeout: Duration.seconds(30),
-      }),
-      outputPath: '$.Payload',
-    });
+          timeout: Duration.seconds(30),
+        }),
+        outputPath: '$.Payload',
+      }
+    );
 
     // Create state machine
-    this.stateMachine = new stepfunctions.StateMachine(this, 'DrTestStateMachine', {
-      stateMachineName: props.workflowName,
-      definitionBody: stepfunctions.DefinitionBody.fromChainable(
-        stepfunctions.Chain.start(parallelTests)
-          .next(aggregateResults)
-      ),
-      timeout: Duration.minutes(15),
-      removalPolicy: RemovalPolicy.DESTROY,
-    });
+    this.stateMachine = new stepfunctions.StateMachine(
+      this,
+      'DrTestStateMachine',
+      {
+        stateMachineName: props.workflowName,
+        definitionBody: stepfunctions.DefinitionBody.fromChainable(
+          stepfunctions.Chain.start(parallelTests).next(aggregateResults)
+        ),
+        timeout: Duration.minutes(15),
+        removalPolicy: RemovalPolicy.DESTROY,
+      }
+    );
 
     // Add tags
     const tags = {
-      'Project': 'iac-rlhf-amazon',
-      'Environment': props.environmentSuffix,
-      'Component': 'StepFunctions',
-      'Purpose': 'DR-Testing',
+      Project: 'iac-rlhf-amazon',
+      Environment: props.environmentSuffix,
+      Component: 'StepFunctions',
+      Purpose: 'DR-Testing',
     };
 
     Object.entries(tags).forEach(([key, value]) => {

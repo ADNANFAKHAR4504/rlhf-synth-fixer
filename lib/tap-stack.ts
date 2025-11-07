@@ -33,7 +33,6 @@ export class TapStack extends cdk.Stack {
     const timestamp = Date.now().toString();
 
     // Configuration
-    const primaryRegion = resolvePrimaryRegion(this);
     const drRegion = 'us-west-2';
 
     // Apply global tags
@@ -49,13 +48,17 @@ export class TapStack extends cdk.Stack {
     });
 
     // 2. Primary Trading Data S3 Bucket with replication (Problem A requirement)
-    const primaryTradingBucket = new S3ReplicatedBucket(this, 'PrimaryTradingBucket', {
-      bucketName: `iac-rlhf-${environmentSuffix}-trading-primary-${timestamp}`,
-      destinationBucketName: `iac-rlhf-${environmentSuffix}-trading-dr-${timestamp}`,
-      destinationRegion: drRegion,
-      environmentSuffix: environmentSuffix,
-      isPrimary: true,
-    });
+    const primaryTradingBucket = new S3ReplicatedBucket(
+      this,
+      'PrimaryTradingBucket',
+      {
+        bucketName: `iac-rlhf-${environmentSuffix}-trading-primary-${timestamp}`,
+        destinationBucketName: `iac-rlhf-${environmentSuffix}-trading-dr-${timestamp}`,
+        destinationRegion: drRegion,
+        environmentSuffix: environmentSuffix,
+        isPrimary: true,
+      }
+    );
 
     // 3. DR Trading Data S3 Bucket (Problem A requirement)
     const drTradingBucket = new S3ReplicatedBucket(this, 'DrTradingBucket', {
@@ -65,10 +68,13 @@ export class TapStack extends cdk.Stack {
     });
 
     // 4. Order Processing Lambda with DLQ (Problem A requirement)
-    const orderProcessingLambda = new LambdaWithDlq(this, 'OrderProcessingLambda', {
-      functionName: `iac-rlhf-${environmentSuffix}-order-processor-${timestamp}`,
-      handler: 'index.handler',
-      code: lambda.Code.fromInline(`
+    const orderProcessingLambda = new LambdaWithDlq(
+      this,
+      'OrderProcessingLambda',
+      {
+        functionName: `iac-rlhf-${environmentSuffix}-order-processor-${timestamp}`,
+        handler: 'index.handler',
+        code: lambda.Code.fromInline(`
         const AWS = require('aws-sdk');
         const dynamodb = new AWS.DynamoDB.DocumentClient();
         const s3 = new AWS.S3();
@@ -160,24 +166,28 @@ export class TapStack extends cdk.Stack {
           }
         };
       `),
-      environment: {
-        ORDER_TABLE_NAME: orderTable.table.tableName,
-        TRADING_BUCKET_NAME: primaryTradingBucket.bucket.bucketName,
-      },
-      timeout: cdk.Duration.seconds(60),
-      environmentSuffix: environmentSuffix,
-      useCase: 'order-processing',
-    });
+        environment: {
+          ORDER_TABLE_NAME: orderTable.table.tableName,
+          TRADING_BUCKET_NAME: primaryTradingBucket.bucket.bucketName,
+        },
+        timeout: cdk.Duration.seconds(60),
+        environmentSuffix: environmentSuffix,
+        useCase: 'order-processing',
+      }
+    );
 
     // Grant permissions to Lambda
     orderTable.table.grantReadWriteData(orderProcessingLambda.function);
     primaryTradingBucket.bucket.grantReadWrite(orderProcessingLambda.function);
 
     // 5. Shadow Analysis Lambda (Problem A requirement - real-world use case)
-    const shadowAnalysisLambda = new LambdaWithDlq(this, 'ShadowAnalysisLambda', {
-      functionName: `iac-rlhf-${environmentSuffix}-shadow-analysis-${timestamp}`,
-      handler: 'index.handler',
-      code: lambda.Code.fromInline(`
+    const shadowAnalysisLambda = new LambdaWithDlq(
+      this,
+      'ShadowAnalysisLambda',
+      {
+        functionName: `iac-rlhf-${environmentSuffix}-shadow-analysis-${timestamp}`,
+        handler: 'index.handler',
+        code: lambda.Code.fromInline(`
         const AWS = require('aws-sdk');
         const dynamodb = new AWS.DynamoDB.DocumentClient();
         
@@ -266,13 +276,14 @@ export class TapStack extends cdk.Stack {
           }
         };
       `),
-      environment: {
-        ORDER_TABLE_NAME: orderTable.table.tableName,
-      },
-      timeout: cdk.Duration.seconds(45),
-      environmentSuffix: environmentSuffix,
-      useCase: 'log-processing',
-    });
+        environment: {
+          ORDER_TABLE_NAME: orderTable.table.tableName,
+        },
+        timeout: cdk.Duration.seconds(45),
+        environmentSuffix: environmentSuffix,
+        useCase: 'log-processing',
+      }
+    );
 
     // Grant permissions
     orderTable.table.grantReadWriteData(shadowAnalysisLambda.function);
@@ -299,13 +310,13 @@ export class TapStack extends cdk.Stack {
           maxOrderSize: 1000000,
           riskLimits: {
             dailyVaR: 500000,
-            positionLimit: 10000000
+            positionLimit: 10000000,
           },
           fees: {
             commission: 0.001,
-            exchangeFee: 0.0005
-          }
-        }
+            exchangeFee: 0.0005,
+          },
+        },
       }),
       destinationRegions: [drRegion],
       environmentSuffix: environmentSuffix,
@@ -343,25 +354,35 @@ export class TapStack extends cdk.Stack {
     // });
 
     // Create a placeholder
-    const drTestingWorkflow = { stateMachine: { stateMachineArn: 'PLACEHOLDER' } }; // Temporary placeholder
+    const drTestingWorkflow = {
+      stateMachine: { stateMachineArn: 'PLACEHOLDER' },
+    }; // Temporary placeholder
 
     // 11. Comprehensive Monitoring Dashboard (Problem A requirement)
-    const monitoringDashboard = new MonitoringDashboard(this, 'MonitoringDashboard', {
-      dashboardName: `iac-rlhf-${environmentSuffix}-comprehensive-${timestamp}`,
-      environmentSuffix: environmentSuffix,
-      lambdaFunctions: [
-        orderProcessingLambda.function,
-        shadowAnalysisLambda.function,
-        singleRegionApp.apiFunction,
-      ],
-      dynamoTables: [orderTable.table],
-      s3Buckets: [primaryTradingBucket.bucket, drTradingBucket.bucket, singleRegionApp.staticBucket],
-      snsTopics: [primaryAlertsTopic.topic],
-      sqsQueues: [orderProcessingLambda.dlq, shadowAnalysisLambda.dlq],
-      apiGateways: [singleRegionApp.api],
-      // stepFunctions: [drTestingWorkflow.stateMachine], // Temporarily disabled
-      drRegion: drRegion,
-    });
+    const monitoringDashboard = new MonitoringDashboard(
+      this,
+      'MonitoringDashboard',
+      {
+        dashboardName: `iac-rlhf-${environmentSuffix}-comprehensive-${timestamp}`,
+        environmentSuffix: environmentSuffix,
+        lambdaFunctions: [
+          orderProcessingLambda.function,
+          shadowAnalysisLambda.function,
+          singleRegionApp.apiFunction,
+        ],
+        dynamoTables: [orderTable.table],
+        s3Buckets: [
+          primaryTradingBucket.bucket,
+          drTradingBucket.bucket,
+          singleRegionApp.staticBucket,
+        ],
+        snsTopics: [primaryAlertsTopic.topic],
+        sqsQueues: [orderProcessingLambda.dlq, shadowAnalysisLambda.dlq],
+        apiGateways: [singleRegionApp.api],
+        // stepFunctions: [drTestingWorkflow.stateMachine], // Temporarily disabled
+        drRegion: drRegion,
+      }
+    );
 
     // OUTPUTS - Critical for flat-outputs.json discovery
     new cdk.CfnOutput(this, `OrderTableArn${environmentSuffix}`, {

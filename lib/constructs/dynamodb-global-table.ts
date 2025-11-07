@@ -33,7 +33,10 @@ export class DynamoDBGlobalTable extends Construct {
     // Add GSI for order lookups
     this.table.addGlobalSecondaryIndex({
       indexName: 'orderStatusIndex',
-      partitionKey: { name: 'orderStatus', type: dynamodb.AttributeType.STRING },
+      partitionKey: {
+        name: 'orderStatus',
+        type: dynamodb.AttributeType.STRING,
+      },
       sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
     });
 
@@ -42,18 +45,21 @@ export class DynamoDBGlobalTable extends Construct {
 
     // Add tags
     this.table.node.addMetadata('aws:cdk:tagging', {
-      'Project': 'iac-rlhf-amazon',
-      'Environment': props.environmentSuffix,
-      'Component': 'DynamoDB',
+      Project: 'iac-rlhf-amazon',
+      Environment: props.environmentSuffix,
+      Component: 'DynamoDB',
     });
   }
 
   private setupGlobalTableReplication(drRegion: string): void {
     // Create Lambda function to set up global table replication
-    const globalTableSetupFunction = new lambda.Function(this, 'GlobalTableSetup', {
-      runtime: lambda.Runtime.PYTHON_3_9,
-      handler: 'index.handler',
-      code: lambda.Code.fromInline(`
+    const globalTableSetupFunction = new lambda.Function(
+      this,
+      'GlobalTableSetup',
+      {
+        runtime: lambda.Runtime.PYTHON_3_9,
+        handler: 'index.handler',
+        code: lambda.Code.fromInline(`
 import boto3
 import json
 import cfnresponse
@@ -129,21 +135,24 @@ def handler(event, context):
         print(f"Error: {str(e)}")
         cfnresponse.send(event, context, cfnresponse.FAILED, {})
       `),
-      timeout: Duration.minutes(5),
-    });
+        timeout: Duration.minutes(5),
+      }
+    );
 
     // Grant DynamoDB permissions
-    globalTableSetupFunction.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'dynamodb:CreateTable',
-        'dynamodb:DescribeTable',
-        'dynamodb:CreateGlobalTable',
-        'dynamodb:DescribeGlobalTable',
-        'dynamodb:UpdateGlobalTable',
-      ],
-      resources: ['*'],
-    }));
+    globalTableSetupFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'dynamodb:CreateTable',
+          'dynamodb:DescribeTable',
+          'dynamodb:CreateGlobalTable',
+          'dynamodb:DescribeGlobalTable',
+          'dynamodb:UpdateGlobalTable',
+        ],
+        resources: ['*'],
+      })
+    );
 
     // Create custom resource
     new CustomResource(this, 'GlobalTableReplication', {

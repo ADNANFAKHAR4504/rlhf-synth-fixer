@@ -49,11 +49,15 @@ export class SingleRegionApp extends Construct {
     });
 
     // Security group for Lambda (addresses missing security group issue)
-    const lambdaSecurityGroup = new ec2.SecurityGroup(this, 'LambdaSecurityGroup', {
-      vpc: this.vpc,
-      description: 'Security group for Lambda functions',
-      allowAllOutbound: true,
-    });
+    const lambdaSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'LambdaSecurityGroup',
+      {
+        vpc: this.vpc,
+        description: 'Security group for Lambda functions',
+        allowAllOutbound: true,
+      }
+    );
 
     // Security group for RDS
     const rdsSecurityGroup = new ec2.SecurityGroup(this, 'RdsSecurityGroup', {
@@ -94,7 +98,10 @@ export class SingleRegionApp extends Construct {
       engine: rds.DatabaseInstanceEngine.postgres({
         version: rds.PostgresEngineVersion.VER_15,
       }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       vpc: this.vpc,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
@@ -276,16 +283,18 @@ export class SingleRegionApp extends Construct {
     dbCredentials.grantRead(this.apiFunction);
 
     // Grant Cost Explorer permissions
-    this.apiFunction.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'ce:GetCostAndUsage',
-        'ce:GetUsageReport',
-        'ce:GetCostCategories',
-        'ce:GetDimensionValues',
-      ],
-      resources: ['*'],
-    }));
+    this.apiFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'ce:GetCostAndUsage',
+          'ce:GetUsageReport',
+          'ce:GetCostCategories',
+          'ce:GetDimensionValues',
+        ],
+        resources: ['*'],
+      })
+    );
 
     // API Gateway with IAM authentication
     this.api = new apigateway.RestApi(this, 'CostMonitoringApi', {
@@ -299,7 +308,7 @@ export class SingleRegionApp extends Construct {
       defaultMethodOptions: {
         authorizationType: apigateway.AuthorizationType.IAM,
       },
-    });    // Add Lambda integration
+    }); // Add Lambda integration
     const integration = new apigateway.LambdaIntegration(this.apiFunction);
     const costResource = this.api.root.addResource('cost');
     costResource.addMethod('GET', integration);
@@ -323,16 +332,23 @@ export class SingleRegionApp extends Construct {
 
     // Add tags to all resources
     const tags = {
-      'Project': 'iac-rlhf-amazon',
-      'Environment': environmentSuffix,
-      'Component': 'SingleRegionApp',
-      'Timestamp': timestamp,
+      Project: 'iac-rlhf-amazon',
+      Environment: environmentSuffix,
+      Component: 'SingleRegionApp',
+      Timestamp: timestamp,
     };
 
     const taggedResources = [
-      this.vpc, this.database, this.apiFunction, this.api,
-      this.staticBucket, taskQueue,
-      lambdaSecurityGroup, rdsSecurityGroup, rdsKmsKey, s3KmsKey
+      this.vpc,
+      this.database,
+      this.apiFunction,
+      this.api,
+      this.staticBucket,
+      taskQueue,
+      lambdaSecurityGroup,
+      rdsSecurityGroup,
+      rdsKmsKey,
+      s3KmsKey,
     ];
 
     taggedResources.forEach(resource => {

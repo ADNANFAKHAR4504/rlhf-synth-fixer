@@ -32,10 +32,14 @@ export class Route53HealthCheck extends Construct {
     } else {
       // Import existing hosted zone in DR region
       // Note: In a real scenario, you'd get this from cross-stack references
-      const importedZone = route53.HostedZone.fromHostedZoneAttributes(this, 'ImportedZone', {
-        hostedZoneId: 'PLACEHOLDER', // This would be passed from primary stack
-        zoneName: `${zoneName}-${environmentSuffix}-${timestamp}.example.internal`,
-      });
+      const importedZone = route53.HostedZone.fromHostedZoneAttributes(
+        this,
+        'ImportedZone',
+        {
+          hostedZoneId: 'PLACEHOLDER', // This would be passed from primary stack
+          zoneName: `${zoneName}-${environmentSuffix}-${timestamp}.example.internal`,
+        }
+      );
       // Cast to concrete type for consistency
       this.hostedZone = importedZone as route53.HostedZone;
     }
@@ -87,10 +91,10 @@ export class Route53HealthCheck extends Construct {
 
     // Add tags
     const tags = {
-      'Project': 'iac-rlhf-amazon',
-      'Environment': environmentSuffix,
-      'Component': 'Route53',
-      'Type': isPrimary ? 'Primary' : 'DR',
+      Project: 'iac-rlhf-amazon',
+      Environment: environmentSuffix,
+      Component: 'Route53',
+      Type: isPrimary ? 'Primary' : 'DR',
     };
 
     Object.entries(tags).forEach(([key, value]) => {
@@ -102,7 +106,10 @@ export class Route53HealthCheck extends Construct {
     return this._healthCheckId;
   }
 
-  private createApiHealthCheck(api: apigateway.RestApi, type: 'primary' | 'dr'): void {
+  private createApiHealthCheck(
+    api: apigateway.RestApi,
+    type: 'primary' | 'dr'
+  ): void {
     // Create health check for API Gateway
     // Note: This uses the API Gateway's execute-api domain
     const healthCheck = new route53.CfnHealthCheck(this, `${type}HealthCheck`, {
