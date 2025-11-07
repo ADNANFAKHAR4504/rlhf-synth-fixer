@@ -1,46 +1,51 @@
-# Task: Multi-Account, Multi-Stage CodePipeline for CDK Apps
+I'm trying to create a single, ci-cd pipeline to be used in github actions workflow, in YAML format. The goal is to use this one template to deploy our infrastructure for dev, staging, and production environments just by changing some parameters.
 
-Create a comprehensive CI/CD pipeline with the following requirements:
+It's really important that the template includes the following features:
 
-## Requirements
+Single Template: It has to be just one YAML file that can handle all environments.
 
-**Source:**
-- GitHub integration using OIDC (no long-lived keys)
-- Branch filters: main → prod, dev → dev
-- Secure authentication with role assumption
+Parameters for Environments: I want to use parameters to manage the differences, especially a key parameter like EnvType (with allowed values dev, staging, prod). This way, we avoid duplicating the template for each environment.
 
-**Build:**
-- CodeBuild runs `npm ci && npx cdk synth`
-- Integrate cdk-nag security scanning
-- Fail pipeline on high security findings
-- Validate all security best practices
+Environment-Specific Settings:
 
-**Deploy:**
-- CloudFormation change sets for each environment
-- Multi-stage deployment: dev → staging → prod
-- Cross-account roles for staging and production
-- Manual approval gates before staging and production
-- Artifacts encrypted with KMS
+Tagging: All resources should be tagged properly, especially with a tag for the environment (e.g., Environment: dev).
 
-**Notifications:**
-- Per-stage Slack/Chat webhook notifications
-- Report deployment status for each stage
-- Include branch and commit information
+IAM Policies: It needs to create specific IAM roles and policies that are locked down based on which environment is being deployed.
 
-## Expected Output
+Unique Naming: All the resources (like VPCs, Lambdas, etc.) must have names that include the environment (e.g., dev-vpc, prod-lambda) to prevent any conflicts.
 
-A deployable pipeline that:
-- Auto-deploys to dev on commit to dev branch
-- Auto-deploys to prod on commit to main branch (with approvals)
-- Requires manual approval before staging deployment
-- Requires manual approval before production deployment
-- Provides visibility through notifications at each stage
+Networking:
 
-## Integration Test Focus
+It needs to build a VPC with subnets to keep all the resources for that environment isolated.
 
-The pipeline should demonstrate:
-1. End-to-end promotion through all stages
-2. Security guardrails with cdk-nag enforcement
-3. Cross-account role assumptions
-4. Change set safety validations
-5. Manual approval gates functionality
+The template should also output key info, like the VPCId, so other stacks can use it.
+
+Serverless Part:
+
+I'd like to include a basic serverless workflow, so please add an AWS Lambda function and an AWS Step Function.
+
+Storage & DB:
+
+S3: Please add an S3 bucket that has a lifecycle policy set up (e.g., to move old data to cheaper storage).
+
+RDS: It also needs an RDS database instance that is secured using a KMS key for encryption and has a backup retention policy configured.
+
+Monitoring & Deployment:
+
+Alarms: Can you add a couple of CloudWatch alarms to monitor resource health (like CPU on the RDS instance)?
+
+Regional Support: The template should be written in a way that it would work in any region.
+
+What I'm looking for in the output:
+
+A single, complete YAML file that's ready to run. It should be well-structured with:
+
+Parameters: A Parameters section with EnvType, DBPassword, and maybe a KmsKeyArn parameter.
+
+Mappings: A Mappings section to hold environment-specific values (like instance sizes, CIDR blocks, or alarm thresholds for dev vs. prod).
+
+Conditions: A Conditions section (like IsProd, IsDev) that uses the EnvType parameter to control which resources get created or how they're configured.
+
+Resources: All the required resources (VPC, Subnets, IAM Roles, Lambda, Step Function, S3 Bucket, RDS, Alarms, WaitCondition).
+
+Outputs: A full Outputs section that not only shares important ARNs and IDs (like the VPCId, StepFunctionArn, etc.) but also includes a few outputs that confirm which environment was deployed (like "DeployedEnvironment: dev"), just as a verification step.
