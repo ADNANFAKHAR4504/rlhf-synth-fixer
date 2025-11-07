@@ -2122,12 +2122,6 @@ Resources:
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
-        ResourceTypes:
-          - AWS::EC2::Instance
-          - AWS::EC2::SecurityGroup
-          - AWS::RDS::DBCluster
-          - AWS::RDS::DBInstance
-          - AWS::S3::Bucket
 
   DeliveryChannel:
     Type: AWS::Config::DeliveryChannel
