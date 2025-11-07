@@ -10,11 +10,11 @@ The MODEL_RESPONSE implementation requires significant architectural changes to 
 
 **STATUS: REQUIRED**
 
-| Change | Component | Impact | Priority |
-|--------|-----------|--------|----------|
-| Multi-region stack separation | bin/tap.ts | High | Critical |
-| Props interface simplification | TapStackProps | Medium | High |
-| Resource naming standardization | All resources | Medium | High |
+| Change                          | Component     | Impact | Priority |
+| ------------------------------- | ------------- | ------ | -------- |
+| Multi-region stack separation   | bin/tap.ts    | High   | Critical |
+| Props interface simplification  | TapStackProps | Medium | High     |
+| Resource naming standardization | All resources | Medium | High     |
 
 ### Required Changes
 
@@ -28,11 +28,11 @@ The MODEL_RESPONSE implementation requires significant architectural changes to 
 
 **STATUS: REQUIRED**
 
-| Change | Component | Impact | Priority |
-|--------|-----------|--------|----------|
-| Replace CloudFormation exports | Cross-region references | High | Critical |
-| SSM Parameter Store integration | DynamoDB table name, VPC ID | High | Critical |
-| Custom Resource Lambda for SSM | Target region parameter reading | Medium | High |
+| Change                          | Component                       | Impact | Priority |
+| ------------------------------- | ------------------------------- | ------ | -------- |
+| Replace CloudFormation exports  | Cross-region references         | High   | Critical |
+| SSM Parameter Store integration | DynamoDB table name, VPC ID     | High   | Critical |
+| Custom Resource Lambda for SSM  | Target region parameter reading | Medium | High     |
 
 ### Required Changes
 
@@ -44,10 +44,10 @@ The MODEL_RESPONSE implementation requires significant architectural changes to 
 
 **STATUS: REQUIRED**
 
-| Change | Component | Impact | Priority |
-|--------|-----------|--------|----------|
-| S3 replication Custom Resource | S3 cross-region replication | High | Critical |
-| VPC peering Custom Resource | Cross-region VPC connectivity | High | Critical |
+| Change                         | Component                     | Impact | Priority |
+| ------------------------------ | ----------------------------- | ------ | -------- |
+| S3 replication Custom Resource | S3 cross-region replication   | High   | Critical |
+| VPC peering Custom Resource    | Cross-region VPC connectivity | High   | Critical |
 
 ### Required Changes
 
@@ -59,10 +59,10 @@ The MODEL_RESPONSE implementation requires significant architectural changes to 
 
 **STATUS: REQUIRED**
 
-| Change | Component | Impact | Priority |
-|--------|-----------|--------|----------|
-| VPC CIDR block separation | VPC configuration | High | Critical |
-| Route table configuration | Cross-region routing | Medium | High |
+| Change                    | Component            | Impact | Priority |
+| ------------------------- | -------------------- | ------ | -------- |
+| VPC CIDR block separation | VPC configuration    | High   | Critical |
+| Route table configuration | Cross-region routing | Medium | High     |
 
 ### Required Changes
 
@@ -72,10 +72,10 @@ The MODEL_RESPONSE implementation requires significant architectural changes to 
 
 **STATUS: REQUIRED**
 
-| Change | Component | Impact | Priority |
-|--------|-----------|--------|----------|
-| DynamoDB ReplicaProvider permissions | Cross-region replica management | Medium | High |
-| Target region Lambda permissions | DynamoDB access | Medium | High |
+| Change                               | Component                       | Impact | Priority |
+| ------------------------------------ | ------------------------------- | ------ | -------- |
+| DynamoDB ReplicaProvider permissions | Cross-region replica management | Medium | High     |
+| Target region Lambda permissions     | DynamoDB access                 | Medium | High     |
 
 ### Required Changes
 
@@ -87,11 +87,11 @@ The MODEL_RESPONSE implementation requires significant architectural changes to 
 
 **STATUS: REQUIRED**
 
-| Change | Component | Impact | Priority |
-|--------|-----------|--------|----------|
-| Lambda runtime selection | Custom Resource vs Application | Medium | High |
-| Context simplification | cdk.json configuration | Low | Medium |
-| Removal policies | Test environment cleanup | Low | Medium |
+| Change                   | Component                      | Impact | Priority |
+| ------------------------ | ------------------------------ | ------ | -------- |
+| Lambda runtime selection | Custom Resource vs Application | Medium | High     |
+| Context simplification   | cdk.json configuration         | Low    | Medium   |
+| Removal policies         | Test environment cleanup       | Low    | Medium   |
 
 ### Required Changes
 
