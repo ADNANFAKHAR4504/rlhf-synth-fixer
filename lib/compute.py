@@ -9,6 +9,7 @@ import pulumi_aws as aws
 from pulumi import Output, ResourceOptions
 from typing import List, Optional
 import json
+from .config import get_default_egress_rules
 
 
 class ComputeStack(pulumi.ComponentResource):
@@ -19,6 +20,7 @@ class ComputeStack(pulumi.ComponentResource):
     def __init__(
         self,
         name: str,
+        *,
         vpc_id: Output[str],
         private_subnet_ids: List[Output[str]],
         db_secret_arn: Output[str],
@@ -35,14 +37,7 @@ class ComputeStack(pulumi.ComponentResource):
             f'lambda-sg-{environment_suffix}',
             vpc_id=vpc_id,
             description=f'Security group for Lambda functions - {environment_suffix}',
-            egress=[
-                aws.ec2.SecurityGroupEgressArgs(
-                    protocol='-1',
-                    from_port=0,
-                    to_port=0,
-                    cidr_blocks=['0.0.0.0/0']
-                )
-            ],
+            egress=get_default_egress_rules(),
             tags={**tags, 'Name': f'lambda-sg-{environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )

@@ -18,6 +18,7 @@ class MonitoringStack(pulumi.ComponentResource):
     def __init__(
         self,
         name: str,
+        *,
         log_retention_days: int,
         lambda_function_name: Output[str],
         api_gateway_id: Output[str],

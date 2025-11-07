@@ -9,6 +9,7 @@ import pulumi_aws as aws
 from pulumi import Output, ResourceOptions
 from typing import List, Optional
 import json
+from .config import get_default_egress_rules
 
 
 class DatabaseStack(pulumi.ComponentResource):
@@ -19,6 +20,7 @@ class DatabaseStack(pulumi.ComponentResource):
     def __init__(
         self,
         name: str,
+        *,
         vpc_id: Output[str],
         private_subnet_ids: List[Output[str]],
         instance_class: str,
@@ -68,14 +70,7 @@ class DatabaseStack(pulumi.ComponentResource):
                     cidr_blocks=['10.0.0.0/8']  # Allow from VPC
                 )
             ],
-            egress=[
-                aws.ec2.SecurityGroupEgressArgs(
-                    protocol='-1',
-                    from_port=0,
-                    to_port=0,
-                    cidr_blocks=['0.0.0.0/0']
-                )
-            ],
+            egress=get_default_egress_rules(),
             tags={**tags, 'Name': f'db-sg-{environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )

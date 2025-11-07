@@ -18,6 +18,7 @@ class NetworkingStack(pulumi.ComponentResource):
     def __init__(
         self,
         name: str,
+        *,
         vpc_cidr: str,
         environment_suffix: str,
         tags: dict,

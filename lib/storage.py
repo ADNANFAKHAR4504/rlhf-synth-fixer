@@ -18,6 +18,7 @@ class StorageStack(pulumi.ComponentResource):
     def __init__(
         self,
         name: str,
+        *,
         enable_versioning: bool,
         lifecycle_days: Optional[int],
         dynamodb_billing_mode: str,

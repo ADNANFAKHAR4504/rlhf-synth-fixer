@@ -19,6 +19,7 @@ class ApiGatewayStack(pulumi.ComponentResource):
     def __init__(
         self,
         name: str,
+        *,
         lambda_function_arn: Output[str],
         lambda_function_name: Output[str],
         enable_custom_domain: bool,

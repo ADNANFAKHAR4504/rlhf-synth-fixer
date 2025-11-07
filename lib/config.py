@@ -5,7 +5,8 @@ Environment-specific configuration for multi-environment deployments.
 """
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, List
+import pulumi_aws as aws
 
 
 @dataclass
@@ -23,6 +24,23 @@ class EnvironmentConfig:
     dynamodb_billing_mode: str
     enable_storage_encryption: bool
     log_retention_days: int
+
+
+def get_default_egress_rules() -> List[aws.ec2.SecurityGroupEgressArgs]:
+    """
+    Returns standard egress rules for security groups.
+
+    Returns:
+        List of security group egress rules allowing all outbound traffic
+    """
+    return [
+        aws.ec2.SecurityGroupEgressArgs(
+            protocol='-1',
+            from_port=0,
+            to_port=0,
+            cidr_blocks=['0.0.0.0/0']
+        )
+    ]
 
 
 def get_environment_config(environment_suffix: str) -> EnvironmentConfig:
