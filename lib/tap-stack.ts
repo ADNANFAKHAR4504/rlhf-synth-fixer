@@ -77,7 +77,8 @@ export class TapStack extends cdk.Stack {
     );
 
     // Remove default egress rule to match test expectations
-    const dbSecurityGroupResource = dbSecurityGroup.node.defaultChild as ec2.CfnSecurityGroup;
+    const dbSecurityGroupResource = dbSecurityGroup.node
+      .defaultChild as ec2.CfnSecurityGroup;
     dbSecurityGroupResource.securityGroupEgress = [];
 
     // RDS PostgreSQL Multi-AZ with encryption
