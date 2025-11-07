@@ -8,8 +8,8 @@ import * as pulumi from '@pulumi/pulumi';
 import { VpcComponent } from '../lib/vpc-component';
 
 const config = new pulumi.Config();
-const environmentSuffix = config.require('environmentSuffix');
-const region = config.get('region') || 'us-east-1';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || config.get('environmentSuffix') || 'dev';
+const region = process.env.AWS_REGION || config.get('region') || 'us-east-1';
 
 // Define environments
 const environments = [
