@@ -624,7 +624,7 @@ export class SecurityServicesModule extends Construct {
 
     // Create S3 bucket for CloudTrail and Config
     const bucket = new aws.s3Bucket.S3Bucket(this, 'security-bucket', {
-      bucket: `security-logs-production`,
+      bucket: 'security-logs-production',
       tags,
     });
 
