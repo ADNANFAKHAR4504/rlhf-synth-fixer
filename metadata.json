@@ -1,0 +1,28 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000281",
+  "team": "2",
+  "startedAt": "2025-11-06T05:50:35.596Z",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "Route53",
+    "Aurora",
+    "Lambda",
+    "CloudWatch",
+    "SNS",
+    "DynamoDB",
+    "S3",
+    "Systems Manager Parameter Store",
+    "EventBridge",
+    "IAM",
+    "KMS",
+    "VPC"
+  ],
+  "training_quality": 9
+}
