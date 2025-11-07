@@ -12,6 +12,21 @@
   ],
   "aws_services": [
     "VPC",
-    "Lambda"
-  ]
+    "EC2",
+    "Lambda",
+    "S3",
+    "CloudFront",
+    "API Gateway",
+    "IAM",
+    "CloudWatch",
+    "Secrets Manager",
+    "WAF"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
 }
