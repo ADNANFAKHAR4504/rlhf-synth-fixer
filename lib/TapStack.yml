@@ -109,15 +109,15 @@ Parameters:
   AvailabilityZones:
     Type: String
     Default: ''
-    Description: Comma-separated list of availability zones to use for subnets (leave blank to auto-discover)
+    Description: Comma-separated list of availability zones to use for subnets (leave blank to auto-discover). REQUIRED when NumberOfAvailabilityZones is 3 to ensure 3 AZs are available.
 
   NumberOfAvailabilityZones:
     Type: Number
-    Default: 3
+    Default: 2
     AllowedValues:
       - 2
       - 3
-    Description: Number of availability zones to deploy resources across (must be 2 or 3)
+    Description: Number of availability zones to deploy resources across (must be 2 or 3). Use 3 only if your region has 3+ AZs and provide custom AZs in AvailabilityZones parameter.
 
   # Application Parameters
   InstanceType:
