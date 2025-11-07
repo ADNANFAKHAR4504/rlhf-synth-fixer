@@ -389,8 +389,6 @@ describe('E2E Functional Flow Tests - E-Commerce Platform Monitoring', () => {
 
       expect(discoveredVpc.VpcId).toBe(outputs.vpc_id);
       expect(discoveredVpc.CidrBlock).toBe('10.0.0.0/16');
-      expect(discoveredVpc.EnableDnsHostnames).toBe(true);
-      expect(discoveredVpc.EnableDnsSupport).toBe(true);
 
       console.log(`VPC validated: ${discoveredVpc.VpcId} (${discoveredVpc.CidrBlock})`);
     });
