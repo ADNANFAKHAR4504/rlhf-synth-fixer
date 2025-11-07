@@ -56,7 +56,7 @@ export class TapStack extends cdk.Stack {
       'public.ecr.aws/aws-containers/hello-app-runner:latest';
 
     const containerPort =
-      props?.containerPort || this.node.tryGetContext('containerPort') || 8080;
+      props?.containerPort || this.node.tryGetContext('containerPort') || 8000;
 
     cdk.Tags.of(this).add('Service', 'FinancialServices');
     cdk.Tags.of(this).add('Environment', environmentSuffix);
