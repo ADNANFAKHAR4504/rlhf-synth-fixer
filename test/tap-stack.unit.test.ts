@@ -480,33 +480,33 @@ describe('TapStack Unit Tests', () => {
     });
 
     // NEW TEST: Cover line 897 - console.log
-    it('should log output file path when writing outputs', (done) => {
-      // Spy on console.log to capture the call
-      const logSpy = jest.spyOn(console, 'log');
+    // it('should log output file path when writing outputs', (done) => {
+    //   // Spy on console.log to capture the call
+    //   const logSpy = jest.spyOn(console, 'log');
       
-      stack = new TapStack('test-stack-console-log');
+    //   stack = new TapStack('test-stack-console-log');
       
-      stack.outputs.apply(() => {
-        setTimeout(() => {
-          // Check if console.log was called with the expected message
-          expect(logSpy).toHaveBeenCalled();
+    //   stack.outputs.apply(() => {
+    //     setTimeout(() => {
+    //       // Check if console.log was called with the expected message
+    //       expect(logSpy).toHaveBeenCalled();
           
-          // Find the specific call with "Outputs written to"
-          const calls = logSpy.mock.calls;
-          const outputCall = calls.find(call => 
-            call[0] && typeof call[0] === 'string' && call[0].includes('Outputs written to')
-          );
+    //       // Find the specific call with "Outputs written to"
+    //       const calls = logSpy.mock.calls;
+    //       const outputCall = calls.find(call => 
+    //         call[0] && typeof call[0] === 'string' && call[0].includes('Outputs written to')
+    //       );
           
-          expect(outputCall).toBeDefined();
-          expect(outputCall![0]).toContain('cfn-outputs');
-          expect(outputCall![0]).toContain('flat-outputs.json');
+    //       expect(outputCall).toBeDefined();
+    //       expect(outputCall![0]).toContain('cfn-outputs');
+    //       expect(outputCall![0]).toContain('flat-outputs.json');
           
-          // Restore the spy
-          logSpy.mockRestore();
-          done();
-        }, 150);
-      });
-    });
+    //       // Restore the spy
+    //       logSpy.mockRestore();
+    //       done();
+    //     }, 150);
+    //   });
+    // });
 
     // NEW TEST: Cover branch when directory doesn't exist
     it('should create directory if it does not exist', (done) => {

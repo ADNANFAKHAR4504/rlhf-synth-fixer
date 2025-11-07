@@ -899,7 +899,6 @@ export class TapStack extends pulumi.ComponentResource {
 
       // Write outputs to file
       fs.writeFileSync(outputFile, JSON.stringify(data, null, 2));
-      console.log(`Outputs written to ${outputFile}`);
     });
   }
 
