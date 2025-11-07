@@ -50,7 +50,7 @@ export class LambdaWithDlq extends Construct {
       retryAttempts: 2,
       logGroup: logGroup,
       memorySize: 256,
-      reservedConcurrentExecutions: 10, // Prevent runaway costs
+      // reservedConcurrentExecutions: 1, // Prevent runaway costs
     });
 
     // Apply least privilege principle

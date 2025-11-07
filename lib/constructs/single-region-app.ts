@@ -92,9 +92,9 @@ export class SingleRegionApp extends Construct {
     this.database = new rds.DatabaseInstance(this, 'Database', {
       instanceIdentifier: `iac-rlhf-${environmentSuffix}-db-${timestamp}`,
       engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_15_4,
+        version: rds.PostgresEngineVersion.VER_15,
       }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.M4, ec2.InstanceSize.LARGE),
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
       vpc: this.vpc,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
@@ -267,7 +267,7 @@ export class SingleRegionApp extends Construct {
       logRetention: logs.RetentionDays.ONE_WEEK,
       timeout: Duration.seconds(60),
       memorySize: 512,
-      reservedConcurrentExecutions: 5,
+      // reservedConcurrentExecutions: 1,
     });
 
     // Grant Lambda permissions (least privilege)

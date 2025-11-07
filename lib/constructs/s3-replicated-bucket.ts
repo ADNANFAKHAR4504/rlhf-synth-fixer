@@ -69,9 +69,10 @@ export class S3ReplicatedBucket extends Construct {
     });
 
     // Configure cross-region replication if this is the primary bucket and destination is provided
-    if (props.isPrimary && props.destinationBucketName && props.destinationRegion) {
-      this.setupCrossRegionReplication(props.destinationBucketName, props.destinationRegion);
-    }
+    // Temporarily disabled for dev deployment
+    // if (props.isPrimary && props.destinationBucketName && props.destinationRegion) {
+    //   this.setupCrossRegionReplication(props.destinationBucketName, props.destinationRegion);
+    // }
   }
 
   private setupCrossRegionReplication(destinationBucketName: string, destinationRegion: string): void {
