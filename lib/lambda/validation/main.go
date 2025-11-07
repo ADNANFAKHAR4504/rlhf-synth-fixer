@@ -16,12 +16,12 @@ import (
 )
 
 type Transaction struct {
-	ID          string  `json:"id"`
-	Amount      float64 `json:"amount"`
-	Currency    string  `json:"currency"`
-	MerchantID  string  `json:"merchant_id"`
-	CustomerID  string  `json:"customer_id"`
-	Timestamp   string  `json:"timestamp"`
+	ID         string  `json:"id"`
+	Amount     float64 `json:"amount"`
+	Currency   string  `json:"currency"`
+	MerchantID string  `json:"merchant_id"`
+	CustomerID string  `json:"customer_id"`
+	Timestamp  string  `json:"timestamp"`
 }
 
 type ValidationResult struct {
