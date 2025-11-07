@@ -47,8 +47,7 @@ pulumi.runtime.setMocks({
 
 // Set required configuration
 pulumi.runtime.setConfig('project:environmentSuffix', 'test');
-// Intentionally NOT setting aws:region to test the fallback logic in bin/tap.ts line 18
-// pulumi.runtime.setConfig('aws:region', 'us-east-1');
+pulumi.runtime.setConfig('aws:region', 'us-east-1');
 
 // Import infrastructure after mocks are set up
 // eslint-disable-next-line @typescript-eslint/no-var-requires
