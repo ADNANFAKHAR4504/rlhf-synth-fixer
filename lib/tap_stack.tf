@@ -107,7 +107,7 @@ resource "aws_dynamodb_table" "payment_transactions" {
 
   server_side_encryption {
     enabled     = true
-    kms_key_id  = aws_kms_key.payment_system.key_id
+    kms_key_arn = aws_kms_key.payment_system.arn
   }
 
   point_in_time_recovery {
