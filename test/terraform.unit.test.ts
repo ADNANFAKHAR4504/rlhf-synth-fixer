@@ -53,7 +53,7 @@ describe('EKS Infrastructure Terraform Tests', () => {
     });
 
     it('should define cluster_version variable for Kubernetes version', () => {
-      expect(has(/variable\s+"cluster_version"\s*{[\s\S]*?default\s*=\s*"1\.28"/)).toBe(true);
+      expect(has(/variable\s+"cluster_version"\s*{[\s\S]*?default\s*=\s*"1\.33"/)).toBe(true);
       expect(has(/variable\s+"cluster_version"\s*{[\s\S]*?description\s*=\s*"Kubernetes version/)).toBe(true);
     });
 
