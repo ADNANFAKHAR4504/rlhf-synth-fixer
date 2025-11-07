@@ -196,20 +196,20 @@ class TapStack(pulumi.ComponentResource):
 
         # Database Subnets
         db_subnet_1 = aws.ec2.Subnet(
-            f"payment-db-subnet-1-{self.environment_suffix}",
+            f"tap-payment-db-subnet-1-{self.environment_suffix}",
             vpc_id=vpc.id,
             cidr_block="10.0.21.0/24",
             availability_zone=azs.names[0],
-            tags={**common_tags, "Name": f"payment-db-subnet-1-{self.environment_suffix}", "Type": "Database"},
+            tags={**common_tags, "Name": f"tap-payment-db-subnet-1-{self.environment_suffix}", "Type": "Database"},
             opts=ResourceOptions(parent=self),
         )
 
         db_subnet_2 = aws.ec2.Subnet(
-            f"payment-db-subnet-2-{self.environment_suffix}",
+            f"tap-payment-db-subnet-2-{self.environment_suffix}",
             vpc_id=vpc.id,
             cidr_block="10.0.22.0/24",
             availability_zone=azs.names[1],
-            tags={**common_tags, "Name": f"payment-db-subnet-2-{self.environment_suffix}", "Type": "Database"},
+            tags={**common_tags, "Name": f"tap-payment-db-subnet-2-{self.environment_suffix}", "Type": "Database"},
             opts=ResourceOptions(parent=self),
         )
 
@@ -361,7 +361,7 @@ class TapStack(pulumi.ComponentResource):
 
         # Database Security Group
         db_security_group = aws.ec2.SecurityGroup(
-            f"payment-db-sg-{self.environment_suffix}",
+            f"tap-payment-db-sg-{self.environment_suffix}",
             vpc_id=vpc.id,
             description="Security group for RDS database",
             ingress=[
@@ -382,22 +382,22 @@ class TapStack(pulumi.ComponentResource):
                     description="Allow all outbound traffic",
                 )
             ],
-            tags={**common_tags, "Name": f"payment-db-sg-{self.environment_suffix}"},
+            tags={**common_tags, "Name": f"tap-payment-db-sg-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self),
         )
 
         # RDS Subnet Group
         db_subnet_group = aws.rds.SubnetGroup(
-            f"payment-db-subnet-group-{self.environment_suffix}",
+            f"tap-payment-db-subnet-group-{self.environment_suffix}",
             subnet_ids=[db_subnet_1.id, db_subnet_2.id],
-            tags={**common_tags, "Name": f"payment-db-subnet-group-{self.environment_suffix}"},
+            tags={**common_tags, "Name": f"tap-payment-db-subnet-group-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self),
         )
 
         # RDS PostgreSQL Instance
         db_instance = aws.rds.Instance(
-            f"payment-db-{self.environment_suffix}",
-            identifier=f"payment-db-{self.environment_suffix}",
+            f"tap-payment-db-{self.environment_suffix}",
+            identifier=f"tap-payment-db-{self.environment_suffix}",
             engine="postgres",
             engine_version="13.22",
             instance_class=current_config["rds_instance_type"],
@@ -413,7 +413,7 @@ class TapStack(pulumi.ComponentResource):
             skip_final_snapshot=(self.environment != "prod"),
             backup_retention_period=7 if self.environment == "prod" else 1,
             publicly_accessible=False,
-            tags={**common_tags, "Name": f"payment-db-{self.environment_suffix}"},
+            tags={**common_tags, "Name": f"tap-payment-db-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self),
         )
         self.db_instance = db_instance
@@ -459,14 +459,14 @@ class TapStack(pulumi.ComponentResource):
 
         # Application Load Balancer
         alb = aws.lb.LoadBalancer(
-            f"payment-alb-{self.environment_suffix}",
-            name=f"payment-alb-{self.environment_suffix}",
+            f"tap-payment-alb-{self.environment_suffix}",
+            name=f"tap-payment-alb-{self.environment_suffix}",
             internal=False,
             load_balancer_type="application",
             security_groups=[alb_security_group.id],
             subnets=[public_subnet_1.id, public_subnet_2.id],
             enable_deletion_protection=False,
-            tags={**common_tags, "Name": f"payment-alb-{self.environment_suffix}"},
+            tags={**common_tags, "Name": f"tap-payment-alb-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self),
         )
         self.alb = alb
@@ -497,7 +497,7 @@ class TapStack(pulumi.ComponentResource):
 
         # ALB Listener (HTTP)
         alb_listener = aws.lb.Listener(
-            f"payment-alb-listener-{self.environment_suffix}",
+            f"tap-payment-alb-listener-{self.environment_suffix}",
             load_balancer_arn=alb.arn,
             port=80,
             protocol="HTTP",
@@ -586,8 +586,8 @@ echo "OK" > /var/www/html/health
 
         # Launch Template
         launch_template = aws.ec2.LaunchTemplate(
-            f"payment-lt-{self.environment_suffix}",
-            name=f"payment-lt-{self.environment_suffix}",
+            f"tap-payment-lt-{self.environment_suffix}",
+            name=f"tap-payment-lt-{self.environment_suffix}",
             image_id=ami_id,
             instance_type="t3.micro",
             vpc_security_group_ids=[app_security_group.id],
