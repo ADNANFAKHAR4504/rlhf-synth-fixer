@@ -592,7 +592,6 @@ export class SecurityServicesModule extends Construct {
   public readonly wafWebAcl: aws.wafv2WebAcl.Wafv2WebAcl;
   public readonly cloudTrail: aws.cloudtrail.Cloudtrail;
   public readonly snsTopic: aws.snsTopic.SnsTopic;
-  
 
   constructor(
     scope: Construct,
@@ -741,7 +740,7 @@ export class SecurityServicesModule extends Construct {
             Resource: `${bucket.arn}/*`,
             Condition: {
               StringEquals: {
-                's3:x-amz-server-side-encryption': 'AES256',
+                's3:x-amz-acl': 'bucket-owner-full-control',
               },
             },
           },
