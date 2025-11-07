@@ -1,0 +1,30 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000253",
+  "team": "6",
+  "startedAt": "2025-11-03T11:48:05.942Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "ECR",
+    "Systems Manager",
+    "S3",
+    "ECS",
+    "DNS",
+    "IAM",
+    "DynamoDB"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
+}
