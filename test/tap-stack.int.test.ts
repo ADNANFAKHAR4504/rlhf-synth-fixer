@@ -184,8 +184,8 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         rt.Tags?.some(t => t.Key === 'Name' && t.Value?.toLowerCase().includes('public'))
       );
       expect(publicRT).toBeDefined();
-      expect(publicRT.Routes).toBeDefined();
-      const igwRoute = publicRT.Routes!.find(r => r.GatewayId?.startsWith('igw-'));
+      expect(publicRT!.Routes).toBeDefined();
+      const igwRoute = publicRT!.Routes!.find(r => r.GatewayId?.startsWith('igw-'));
       expect(igwRoute).toBeDefined();
 
       // Private route table should have NAT gateway route
@@ -193,8 +193,8 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         rt.Tags?.some(t => t.Key === 'Name' && t.Value?.toLowerCase().includes('private'))
       );
       expect(privateRT).toBeDefined();
-      expect(privateRT.Routes).toBeDefined();
-      const natRoute = privateRT.Routes!.find(r => r.NatGatewayId?.startsWith('nat-'));
+      expect(privateRT!.Routes).toBeDefined();
+      const natRoute = privateRT!.Routes!.find(r => r.NatGatewayId?.startsWith('nat-'));
       expect(natRoute).toBeDefined();
     }, TEST_TIMEOUT);
   });
@@ -272,10 +272,10 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
       expect(clusterResponse.DBClusters).toBeDefined();
       const members = clusterResponse.DBClusters![0].DBClusterMembers;
       expect(members).toBeDefined();
-      expect(members.length).toBeGreaterThanOrEqual(2);
+      expect(members!.length).toBeGreaterThanOrEqual(2);
 
       // Check instance details
-      for (const member of members) {
+      for (const member of members!) {
         const instanceResponse = await rdsClient.send(new DescribeDBInstancesCommand({
           DBInstanceIdentifier: member.DBInstanceIdentifier
         }));
@@ -328,7 +328,7 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
       expect(table.KeySchema).toBeDefined();
       const partitionKey = table.KeySchema!.find(k => k.KeyType === 'HASH');
       expect(partitionKey).toBeDefined();
-      expect(partitionKey.AttributeName).toBe('SessionId');
+      expect(partitionKey!.AttributeName).toBe('SessionId');
     }, TEST_TIMEOUT);
 
     test('FailoverStateTable has correct configuration', async () => {
@@ -343,7 +343,7 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
 
       expect(table.KeySchema).toBeDefined();
       const partitionKey = table.KeySchema!.find(k => k.KeyType === 'HASH');
-      expect(partitionKey.AttributeName).toBe('StateKey');
+      expect(partitionKey!.AttributeName).toBe('StateKey');
     }, TEST_TIMEOUT);
   });
 
@@ -372,10 +372,10 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
       expect(funcResponse.VpcConfig).toBeDefined();
       expect(funcResponse.VpcConfig).toBeDefined();
       expect(funcResponse.VpcConfig!.VpcId).toBe(outputs.VPCId);
-      expect(funcResponse.VpcConfig.SubnetIds).toBeDefined();
+      expect(funcResponse.VpcConfig!.SubnetIds).toBeDefined();
       expect(funcResponse.VpcConfig!.SubnetIds).toBeDefined();
       expect(funcResponse.VpcConfig!.SubnetIds!.length).toBeGreaterThan(0);
-      expect(funcResponse.VpcConfig.SecurityGroupIds).toBeDefined();
+      expect(funcResponse.VpcConfig!.SecurityGroupIds).toBeDefined();
       expect(funcResponse.VpcConfig!.SecurityGroupIds).toBeDefined();
       expect(funcResponse.VpcConfig!.SecurityGroupIds!.length).toBeGreaterThan(0);
     }, TEST_TIMEOUT);
@@ -471,13 +471,13 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
       const primaryLB = lbResponse.LoadBalancers!.find(lb => lb.DNSName === outputs.PrimaryEndpoint);
 
       expect(primaryLB).toBeDefined();
-      expect(primaryLB.Type).toBe('application');
-      expect(primaryLB.Scheme).toBe('internet-facing');
-      expect(primaryLB.State).toBeDefined();
-      expect(primaryLB.State!.Code).toBe('active');
-      expect(primaryLB.VpcId).toBe(outputs.VPCId);
-      expect(primaryLB.AvailabilityZones).toBeDefined();
-      expect(primaryLB.AvailabilityZones!.length).toBeGreaterThanOrEqual(2);
+      expect(primaryLB!.Type).toBe('application');
+      expect(primaryLB!.Scheme).toBe('internet-facing');
+      expect(primaryLB!.State).toBeDefined();
+      expect(primaryLB!.State!.Code).toBe('active');
+      expect(primaryLB!.VpcId).toBe(outputs.VPCId);
+      expect(primaryLB!.AvailabilityZones).toBeDefined();
+      expect(primaryLB!.AvailabilityZones!.length).toBeGreaterThanOrEqual(2);
     }, TEST_TIMEOUT);
 
     test('ALB listeners are configured', async () => {
@@ -486,14 +486,14 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
       const primaryLB = lbResponse.LoadBalancers!.find(lb => lb.DNSName === outputs.PrimaryEndpoint);
 
       const listenersResponse = await elbClient.send(new DescribeListenersCommand({
-        LoadBalancerArn: primaryLB.LoadBalancerArn
+        LoadBalancerArn: primaryLB!.LoadBalancerArn
       }));
 
       expect(listenersResponse.Listeners).toBeDefined();
       expect(listenersResponse.Listeners!.length).toBeGreaterThan(0);
       const httpListener = listenersResponse.Listeners!.find(l => l.Port === 80);
       expect(httpListener).toBeDefined();
-      expect(httpListener.Protocol).toBe('HTTP');
+      expect(httpListener!.Protocol).toBe('HTTP');
     }, TEST_TIMEOUT);
 
     test('Target groups have health checks configured', async () => {
@@ -502,7 +502,7 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
       const primaryLB = lbResponse.LoadBalancers!.find(lb => lb.DNSName === outputs.PrimaryEndpoint);
 
       const tgResponse = await elbClient.send(new DescribeTargetGroupsCommand({
-        LoadBalancerArn: primaryLB.LoadBalancerArn
+        LoadBalancerArn: primaryLB!.LoadBalancerArn
       }));
 
       expect(tgResponse.TargetGroups).toBeDefined();
@@ -899,7 +899,7 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         Key: { StateKey: { S: alertId } }
       }));
 
-      expect(result.Item.state.S).toBe('alert-processed');
+      expect(result.Item!.state.S).toBe('alert-processed');
 
       // Cleanup
       await dynamoClient.send(new DeleteItemCommand({
