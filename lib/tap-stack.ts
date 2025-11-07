@@ -613,7 +613,6 @@ def handler(event, context):
           adjustmentType:
             applicationautoscaling.AdjustmentType.CHANGE_IN_CAPACITY,
           cooldown: cdk.Duration.seconds(60),
-          minAdjustmentMagnitude: 1,
           scalingSteps: [
             {
               lower: 0,
