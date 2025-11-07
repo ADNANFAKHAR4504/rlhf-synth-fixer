@@ -2,6 +2,7 @@ package lib
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudwatch"
@@ -210,11 +211,14 @@ func NewPaymentStack(scope constructs.Construct, id string, props *PaymentStackP
 	}))
 
 	// Create Lambda function for transaction validation
+	// Determine correct path based on whether we're running from project root or lib/
+	lambdaPath := getLambdaAssetPath()
+
 	validationFunction := awslambda.NewFunction(stack, jsii.String(fmt.Sprintf("validation-function-%s", props.EnvironmentSuffix)), &awslambda.FunctionProps{
 		FunctionName:   jsii.String(fmt.Sprintf("transaction-validation-%s", props.EnvironmentSuffix)),
 		Runtime:        awslambda.Runtime_PROVIDED_AL2023(),
 		Handler:        jsii.String("bootstrap"),
-		Code:           awslambda.Code_FromAsset(jsii.String("lib/lambda/validation"), nil),
+		Code:           awslambda.Code_FromAsset(jsii.String(lambdaPath), nil),
 		MemorySize:     jsii.Number(envConfig.LambdaMemorySize),
 		Timeout:        awscdk.Duration_Seconds(jsii.Number(30)),
 		Vpc:            vpc,
@@ -352,4 +356,15 @@ func getRdsCpuThreshold(environment string) float64 {
 		return 80
 	}
 	return 70
+}
+
+// getLambdaAssetPath returns the correct path to Lambda assets
+// depending on whether we're running from project root or lib/ directory
+func getLambdaAssetPath() string {
+	// Check if we're running from lib/ directory (for unit tests)
+	if _, err := os.Stat("lambda/validation"); err == nil {
+		return "lambda/validation"
+	}
+	// Default to project root path
+	return "lib/lambda/validation"
 }
