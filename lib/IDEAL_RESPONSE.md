@@ -1,298 +1,928 @@
-# IDEAL_RESPONSE - Payment Processing VPC Infrastructure
-
-This document describes the ideal implementation of a production-ready VPC infrastructure for a payment processing platform using CDKTF with TypeScript.
+# Payment Processing VPC Infrastructure - CDKTF TypeScript Implementation
 
 ## Overview
 
-The implementation creates a comprehensive, PCI DSS-compliant VPC infrastructure with:
-- Multi-tier network architecture (public, application, database)
+This implementation creates a production-ready, PCI DSS-compliant VPC infrastructure for a payment processing platform using CDKTF with TypeScript. The architecture features:
+
+- Multi-tier network segmentation (public, application, database)
 - High availability across 3 availability zones
-- Cost-optimized NAT instances instead of NAT Gateways
+- Cost-optimized NAT instances (instead of NAT Gateways)
 - Comprehensive security controls (NACLs, Security Groups)
-- Compliance features (Flow Logs, Transit Gateway)
+- Compliance features (VPC Flow Logs, Transit Gateway)
 - VPC Endpoints for private AWS service access
+
+## File: lib/tap-stack.ts
+
+```typescript
+import {
+  AwsProvider,
+  AwsProviderDefaultTags,
+} from '@cdktf/provider-aws/lib/provider';
+import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
+import { Construct } from 'constructs';
+import { NetworkingConstruct } from './networking-construct';
+import { SecurityConstruct } from './security-construct';
+import { EndpointsConstruct } from './endpoints-construct';
+import { TransitGatewayConstruct } from './transit-gateway-construct';
+import { FlowLogsConstruct } from './flow-logs-construct';
+
+interface TapStackProps {
+  environmentSuffix?: string;
+  stateBucket?: string;
+  stateBucketRegion?: string;
+  awsRegion?: string;
+  defaultTags?: AwsProviderDefaultTags[];
+}
+
+const AWS_REGION_OVERRIDE = '';
+
+export class TapStack extends TerraformStack {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
+    super(scope, id);
+
+    const environmentSuffix = props?.environmentSuffix || 'dev';
+    const awsRegion = AWS_REGION_OVERRIDE
+      ? AWS_REGION_OVERRIDE
+      : props?.awsRegion || 'us-east-1';
+    const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
+    const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
+    const defaultTags = props?.defaultTags || [];
+
+    // Configure AWS Provider
+    new AwsProvider(this, 'aws', {
+      region: awsRegion,
+      defaultTags: defaultTags,
+    });
+
+    // Configure S3 Backend with native state locking
+    new S3Backend(this, {
+      bucket: stateBucket,
+      key: `${environmentSuffix}/${id}.tfstate`,
+      region: stateBucketRegion,
+      encrypt: true,
+    });
+
+    // Create networking infrastructure (VPC, subnets, routing, NAT instances)
+    const networking = new NetworkingConstruct(this, 'Networking', {
+      environmentSuffix,
+      region: awsRegion,
+    });
+
+    // Create security groups with strict ingress/egress rules
+    new SecurityConstruct(this, 'Security', {
+      environmentSuffix,
+      vpcId: networking.vpcId,
+    });
+
+    // Create VPC endpoints for S3 and DynamoDB
+    new EndpointsConstruct(this, 'Endpoints', {
+      environmentSuffix,
+      vpcId: networking.vpcId,
+      routeTableIds: networking.privateRouteTableIds,
+    });
+
+    // Create Transit Gateway for multi-region connectivity
+    // Note: Transit Gateway attachments require exactly one subnet per AZ
+    new TransitGatewayConstruct(this, 'TransitGateway', {
+      environmentSuffix,
+      vpcId: networking.vpcId,
+      subnetIds: networking.appSubnetIds,
+    });
+
+    // Enable VPC Flow Logs with S3 storage
+    const flowLogs = new FlowLogsConstruct(this, 'FlowLogs', {
+      environmentSuffix,
+      vpcId: networking.vpcId,
+    });
+
+    // Output key resource identifiers for integration tests
+    new TerraformOutput(this, 'VpcId', {
+      value: networking.vpcId,
+      description: 'The ID of the VPC',
+    });
+
+    new TerraformOutput(this, 'Region', {
+      value: awsRegion,
+      description: 'The AWS region',
+    });
+
+    new TerraformOutput(this, 'FlowLogsBucketName', {
+      value: flowLogs.flowLogsBucketName,
+      description: 'The name of the S3 bucket for VPC Flow Logs',
+    });
+  }
+}
+```
+
+## File: lib/networking-construct.ts
+
+```typescript
+import { Construct } from 'constructs';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+import { Instance } from '@cdktf/provider-aws/lib/instance';
+import { NetworkAcl } from '@cdktf/provider-aws/lib/network-acl';
+import { NetworkAclRule } from '@cdktf/provider-aws/lib/network-acl-rule';
+import { NetworkAclAssociation } from '@cdktf/provider-aws/lib/network-acl-association';
+import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
+import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { EipAssociation } from '@cdktf/provider-aws/lib/eip-association';
+
+interface NetworkingConstructProps {
+  environmentSuffix: string;
+  region: string;
+}
+
+export class NetworkingConstruct extends Construct {
+  public readonly vpcId: string;
+  public readonly publicSubnetIds: string[];
+  public readonly appSubnetIds: string[];
+  public readonly dbSubnetIds: string[];
+  public readonly privateSubnetIds: string[];
+  public readonly publicRouteTableId: string;
+  public readonly privateRouteTableIds: string[];
+
+  constructor(scope: Construct, id: string, props: NetworkingConstructProps) {
+    super(scope, id);
+
+    const { environmentSuffix } = props;
+
+    // Availability zones for us-east-1
+    const availabilityZones = ['us-east-1a', 'us-east-1b', 'us-east-1c'];
+
+    // Create VPC
+    const vpc = new Vpc(this, 'VPC', {
+      cidrBlock: '10.0.0.0/16',
+      enableDnsHostnames: true,
+      enableDnsSupport: true,
+      tags: {
+        Name: `payment-vpc-${environmentSuffix}`,
+        Environment: environmentSuffix,
+        Project: 'PaymentProcessing',
+        CostCenter: 'FinTech',
+      },
+    });
+
+    this.vpcId = vpc.id;
+
+    // Create Internet Gateway
+    const igw = new InternetGateway(this, 'IGW', {
+      vpcId: vpc.id,
+      tags: {
+        Name: `payment-igw-${environmentSuffix}`,
+        Environment: environmentSuffix,
+        Project: 'PaymentProcessing',
+        CostCenter: 'FinTech',
+      },
+    });
+
+    // Create Public Subnets
+    const publicSubnets: Subnet[] = [];
+    const publicSubnetCidrs = ['10.0.1.0/24', '10.0.2.0/24', '10.0.3.0/24'];
+
+    publicSubnetCidrs.forEach((cidr, index) => {
+      const subnet = new Subnet(this, `PublicSubnet${index + 1}`, {
+        vpcId: vpc.id,
+        cidrBlock: cidr,
+        availabilityZone: availabilityZones[index],
+        mapPublicIpOnLaunch: true,
+        tags: {
+          Name: `payment-public-subnet-${index + 1}-${environmentSuffix}`,
+          Environment: environmentSuffix,
+          Project: 'PaymentProcessing',
+          CostCenter: 'FinTech',
+          Tier: 'Public',
+        },
+      });
+      publicSubnets.push(subnet);
+    });
+
+    this.publicSubnetIds = publicSubnets.map(s => s.id);
+
+    // Create Private Subnets - Application Tier
+    const appSubnets: Subnet[] = [];
+    const appSubnetCidrs = ['10.0.16.0/23', '10.0.18.0/23', '10.0.20.0/23'];
+
+    appSubnetCidrs.forEach((cidr, index) => {
+      const subnet = new Subnet(this, `AppSubnet${index + 1}`, {
+        vpcId: vpc.id,
+        cidrBlock: cidr,
+        availabilityZone: availabilityZones[index],
+        mapPublicIpOnLaunch: false,
+        tags: {
+          Name: `payment-app-subnet-${index + 1}-${environmentSuffix}`,
+          Environment: environmentSuffix,
+          Project: 'PaymentProcessing',
+          CostCenter: 'FinTech',
+          Tier: 'Application',
+        },
+      });
+      appSubnets.push(subnet);
+    });
+
+    this.appSubnetIds = appSubnets.map(s => s.id);
+
+    // Create Private Subnets - Database Tier
+    const dbSubnets: Subnet[] = [];
+    const dbSubnetCidrs = ['10.0.32.0/23', '10.0.34.0/23', '10.0.36.0/23'];
+
+    dbSubnetCidrs.forEach((cidr, index) => {
+      const subnet = new Subnet(this, `DBSubnet${index + 1}`, {
+        vpcId: vpc.id,
+        cidrBlock: cidr,
+        availabilityZone: availabilityZones[index],
+        mapPublicIpOnLaunch: false,
+        tags: {
+          Name: `payment-db-subnet-${index + 1}-${environmentSuffix}`,
+          Environment: environmentSuffix,
+          Project: 'PaymentProcessing',
+          CostCenter: 'FinTech',
+          Tier: 'Database',
+        },
+      });
+      dbSubnets.push(subnet);
+    });
+
+    this.dbSubnetIds = dbSubnets.map(s => s.id);
+    this.privateSubnetIds = [...this.appSubnetIds, ...this.dbSubnetIds];
+
+    // Create Public Route Table
+    const publicRouteTable = new RouteTable(this, 'PublicRouteTable', {
+      vpcId: vpc.id,
+      tags: {
+        Name: `payment-public-rt-${environmentSuffix}`,
+        Environment: environmentSuffix,
+        Project: 'PaymentProcessing',
+        CostCenter: 'FinTech',
+      },
+    });
+
+    this.publicRouteTableId = publicRouteTable.id;
+
+    // Create route to Internet Gateway
+    new Route(this, 'PublicRoute', {
+      routeTableId: publicRouteTable.id,
+      destinationCidrBlock: '0.0.0.0/0',
+      gatewayId: igw.id,
+    });
+
+    // Associate public subnets with public route table
+    publicSubnets.forEach((subnet, index) => {
+      new RouteTableAssociation(this, `PublicRTA${index + 1}`, {
+        subnetId: subnet.id,
+        routeTableId: publicRouteTable.id,
+      });
+    });
+
+    // Get Amazon Linux 2 AMI for NAT instances
+    const amiData = new DataAwsAmi(this, 'AmazonLinux2AMI', {
+      mostRecent: true,
+      owners: ['amazon'],
+      filter: [
+        {
+          name: 'name',
+          values: ['amzn2-ami-hvm-*-x86_64-gp2'],
+        },
+        {
+          name: 'state',
+          values: ['available'],
+        },
+      ],
+    });
+
+    // Create NAT Instance Security Group
+    const natSecurityGroup = new SecurityGroup(this, 'NATSecurityGroup', {
+      name: `payment-nat-sg-${environmentSuffix}`,
+      description: 'Security group for NAT instances',
+      vpcId: vpc.id,
+      tags: {
+        Name: `payment-nat-sg-${environmentSuffix}`,
+        Environment: environmentSuffix,
+        Project: 'PaymentProcessing',
+        CostCenter: 'FinTech',
+      },
+    });
+
+    // Allow HTTP/HTTPS from private subnets
+    new SecurityGroupRule(this, 'NATIngressHTTP', {
+      type: 'ingress',
+      fromPort: 80,
+      toPort: 80,
+      protocol: 'tcp',
+      cidrBlocks: ['10.0.0.0/16'],
+      securityGroupId: natSecurityGroup.id,
+    });
+
+    new SecurityGroupRule(this, 'NATIngressHTTPS', {
+      type: 'ingress',
+      fromPort: 443,
+      toPort: 443,
+      protocol: 'tcp',
+      cidrBlocks: ['10.0.0.0/16'],
+      securityGroupId: natSecurityGroup.id,
+    });
+
+    // Allow all outbound traffic
+    new SecurityGroupRule(this, 'NATEgressAll', {
+      type: 'egress',
+      fromPort: 0,
+      toPort: 0,
+      protocol: '-1',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: natSecurityGroup.id,
+    });
+
+    // Create NAT instances and private route tables
+    const natInstances: Instance[] = [];
+    const privateRouteTables: RouteTable[] = [];
+
+    publicSubnets.forEach((subnet, index) => {
+      // Create Elastic IP for NAT instance
+      const eip = new Eip(this, `NATEIP${index + 1}`, {
+        domain: 'vpc',
+        tags: {
+          Name: `payment-nat-eip-${index + 1}-${environmentSuffix}`,
+          Environment: environmentSuffix,
+          Project: 'PaymentProcessing',
+          CostCenter: 'FinTech',
+        },
+      });
+
+      // Create NAT instance
+      const natInstance = new Instance(this, `NATInstance${index + 1}`, {
+        ami: amiData.id,
+        instanceType: 't3.micro',
+        subnetId: subnet.id,
+        vpcSecurityGroupIds: [natSecurityGroup.id],
+        sourceDestCheck: false,
+        userData: `#!/bin/bash
+echo 1 > /proc/sys/net/ipv4/ip_forward
+iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+yum install -y iptables-services
+service iptables save
+`,
+        tags: {
+          Name: `payment-nat-instance-${index + 1}-${environmentSuffix}`,
+          Environment: environmentSuffix,
+          Project: 'PaymentProcessing',
+          CostCenter: 'FinTech',
+        },
+      });
+
+      natInstances.push(natInstance);
+
+      // Associate EIP with NAT instance
+      new EipAssociation(this, `NATEIPAssoc${index + 1}`, {
+        instanceId: natInstance.id,
+        allocationId: eip.id,
+      });
+
+      // Create private route table for this AZ
+      const privateRouteTable = new RouteTable(
+        this,
+        `PrivateRouteTable${index + 1}`,
+        {
+          vpcId: vpc.id,
+          tags: {
+            Name: `payment-private-rt-${index + 1}-${environmentSuffix}`,
+            Environment: environmentSuffix,
+            Project: 'PaymentProcessing',
+            CostCenter: 'FinTech',
+          },
+        }
+      );
+
+      privateRouteTables.push(privateRouteTable);
+
+      // Create route to NAT instance
+      new Route(this, `PrivateRoute${index + 1}`, {
+        routeTableId: privateRouteTable.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        networkInterfaceId: natInstance.primaryNetworkInterfaceId,
+      });
+
+      // Associate app subnet with private route table
+      new RouteTableAssociation(this, `AppRTA${index + 1}`, {
+        subnetId: appSubnets[index].id,
+        routeTableId: privateRouteTable.id,
+      });
+
+      // Associate db subnet with private route table
+      new RouteTableAssociation(this, `DBRTA${index + 1}`, {
+        subnetId: dbSubnets[index].id,
+        routeTableId: privateRouteTable.id,
+      });
+    });
+
+    this.privateRouteTableIds = privateRouteTables.map(rt => rt.id);
+
+    // Create Network ACL for public subnets
+    const publicNacl = new NetworkAcl(this, 'PublicNACL', {
+      vpcId: vpc.id,
+      tags: {
+        Name: `payment-public-nacl-${environmentSuffix}`,
+        Environment: environmentSuffix,
+        Project: 'PaymentProcessing',
+        CostCenter: 'FinTech',
+      },
+    });
+
+    // NACL rules for public subnets
+    // Ingress: Allow HTTPS (443)
+    new NetworkAclRule(this, 'NACLIngressHTTPS', {
+      networkAclId: publicNacl.id,
+      ruleNumber: 100,
+      protocol: 'tcp',
+      ruleAction: 'allow',
+      cidrBlock: '0.0.0.0/0',
+      fromPort: 443,
+      toPort: 443,
+      egress: false,
+    });
+
+    // Ingress: Allow ephemeral ports
+    new NetworkAclRule(this, 'NACLIngressEphemeral', {
+      networkAclId: publicNacl.id,
+      ruleNumber: 110,
+      protocol: 'tcp',
+      ruleAction: 'allow',
+      cidrBlock: '0.0.0.0/0',
+      fromPort: 1024,
+      toPort: 65535,
+      egress: false,
+    });
+
+    // Egress: Allow HTTPS
+    new NetworkAclRule(this, 'NACLEgressHTTPS', {
+      networkAclId: publicNacl.id,
+      ruleNumber: 100,
+      protocol: 'tcp',
+      ruleAction: 'allow',
+      cidrBlock: '0.0.0.0/0',
+      fromPort: 443,
+      toPort: 443,
+      egress: true,
+    });
+
+    // Egress: Allow ephemeral ports
+    new NetworkAclRule(this, 'NACLEgressEphemeral', {
+      networkAclId: publicNacl.id,
+      ruleNumber: 110,
+      protocol: 'tcp',
+      ruleAction: 'allow',
+      cidrBlock: '0.0.0.0/0',
+      fromPort: 1024,
+      toPort: 65535,
+      egress: true,
+    });
+
+    // Associate NACL with public subnets
+    publicSubnets.forEach((subnet, index) => {
+      new NetworkAclAssociation(this, `PublicNACLAssoc${index + 1}`, {
+        networkAclId: publicNacl.id,
+        subnetId: subnet.id,
+      });
+    });
+  }
+}
+```
+
+## File: lib/security-construct.ts
+
+```typescript
+import { Construct } from 'constructs';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
+
+interface SecurityConstructProps {
+  environmentSuffix: string;
+  vpcId: string;
+}
+
+export class SecurityConstruct extends Construct {
+  public readonly webSecurityGroupId: string;
+  public readonly appSecurityGroupId: string;
+  public readonly dbSecurityGroupId: string;
+
+  constructor(scope: Construct, id: string, props: SecurityConstructProps) {
+    super(scope, id);
+
+    const { environmentSuffix, vpcId } = props;
+
+    // Web Tier Security Group
+    const webSG = new SecurityGroup(this, 'WebSG', {
+      name: `payment-web-sg-${environmentSuffix}`,
+      description: 'Security group for web tier',
+      vpcId: vpcId,
+      tags: {
+        Name: `payment-web-sg-${environmentSuffix}`,
+        Environment: environmentSuffix,
+        Project: 'PaymentProcessing',
+        CostCenter: 'FinTech',
+        Tier: 'Web',
+      },
+    });
+
+    this.webSecurityGroupId = webSG.id;
+
+    // Allow HTTPS from internet
+    new SecurityGroupRule(this, 'WebIngressHTTPS', {
+      type: 'ingress',
+      fromPort: 443,
+      toPort: 443,
+      protocol: 'tcp',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: webSG.id,
+      description: 'Allow HTTPS from internet',
+    });
+
+    // Allow HTTP from internet
+    new SecurityGroupRule(this, 'WebIngressHTTP', {
+      type: 'ingress',
+      fromPort: 80,
+      toPort: 80,
+      protocol: 'tcp',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: webSG.id,
+      description: 'Allow HTTP from internet',
+    });
+
+    // Allow all outbound
+    new SecurityGroupRule(this, 'WebEgressAll', {
+      type: 'egress',
+      fromPort: 0,
+      toPort: 0,
+      protocol: '-1',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: webSG.id,
+    });
+
+    // Application Tier Security Group
+    const appSG = new SecurityGroup(this, 'AppSG', {
+      name: `payment-app-sg-${environmentSuffix}`,
+      description: 'Security group for application tier',
+      vpcId: vpcId,
+      tags: {
+        Name: `payment-app-sg-${environmentSuffix}`,
+        Environment: environmentSuffix,
+        Project: 'PaymentProcessing',
+        CostCenter: 'FinTech',
+        Tier: 'Application',
+      },
+    });
+
+    this.appSecurityGroupId = appSG.id;
+
+    // Allow traffic from web tier
+    new SecurityGroupRule(this, 'AppIngressFromWeb', {
+      type: 'ingress',
+      fromPort: 8080,
+      toPort: 8080,
+      protocol: 'tcp',
+      sourceSecurityGroupId: webSG.id,
+      securityGroupId: appSG.id,
+      description: 'Allow traffic from web tier',
+    });
+
+    // Allow all outbound
+    new SecurityGroupRule(this, 'AppEgressAll', {
+      type: 'egress',
+      fromPort: 0,
+      toPort: 0,
+      protocol: '-1',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: appSG.id,
+    });
+
+    // Database Tier Security Group
+    const dbSG = new SecurityGroup(this, 'DBSG', {
+      name: `payment-db-sg-${environmentSuffix}`,
+      description: 'Security group for database tier',
+      vpcId: vpcId,
+      tags: {
+        Name: `payment-db-sg-${environmentSuffix}`,
+        Environment: environmentSuffix,
+        Project: 'PaymentProcessing',
+        CostCenter: 'FinTech',
+        Tier: 'Database',
+      },
+    });
+
+    this.dbSecurityGroupId = dbSG.id;
+
+    // Allow PostgreSQL from app tier
+    new SecurityGroupRule(this, 'DBIngressPostgreSQL', {
+      type: 'ingress',
+      fromPort: 5432,
+      toPort: 5432,
+      protocol: 'tcp',
+      sourceSecurityGroupId: appSG.id,
+      securityGroupId: dbSG.id,
+      description: 'Allow PostgreSQL from app tier',
+    });
+
+    // Allow all outbound
+    new SecurityGroupRule(this, 'DBEgressAll', {
+      type: 'egress',
+      fromPort: 0,
+      toPort: 0,
+      protocol: '-1',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: dbSG.id,
+    });
+  }
+}
+```
+
+## File: lib/endpoints-construct.ts
+
+```typescript
+import { Construct } from 'constructs';
+import { VpcEndpoint } from '@cdktf/provider-aws/lib/vpc-endpoint';
+
+interface EndpointsConstructProps {
+  environmentSuffix: string;
+  vpcId: string;
+  routeTableIds: string[];
+}
+
+export class EndpointsConstruct extends Construct {
+  constructor(scope: Construct, id: string, props: EndpointsConstructProps) {
+    super(scope, id);
+
+    const { environmentSuffix, vpcId, routeTableIds } = props;
+
+    // S3 VPC Endpoint (Gateway type)
+    new VpcEndpoint(this, 'S3Endpoint', {
+      vpcId: vpcId,
+      serviceName: 'com.amazonaws.us-east-1.s3',
+      vpcEndpointType: 'Gateway',
+      routeTableIds: routeTableIds,
+      tags: {
+        Name: `payment-s3-endpoint-${environmentSuffix}`,
+        Environment: environmentSuffix,
+        Project: 'PaymentProcessing',
+        CostCenter: 'FinTech',
+      },
+    });
+
+    // DynamoDB VPC Endpoint (Gateway type)
+    new VpcEndpoint(this, 'DynamoDBEndpoint', {
+      vpcId: vpcId,
+      serviceName: 'com.amazonaws.us-east-1.dynamodb',
+      vpcEndpointType: 'Gateway',
+      routeTableIds: routeTableIds,
+      tags: {
+        Name: `payment-dynamodb-endpoint-${environmentSuffix}`,
+        Environment: environmentSuffix,
+        Project: 'PaymentProcessing',
+        CostCenter: 'FinTech',
+      },
+    });
+  }
+}
+```
+
+## File: lib/transit-gateway-construct.ts
+
+```typescript
+import { Construct } from 'constructs';
+import { Ec2TransitGateway } from '@cdktf/provider-aws/lib/ec2-transit-gateway';
+import { Ec2TransitGatewayVpcAttachment } from '@cdktf/provider-aws/lib/ec2-transit-gateway-vpc-attachment';
+
+interface TransitGatewayConstructProps {
+  environmentSuffix: string;
+  vpcId: string;
+  subnetIds: string[];
+}
+
+export class TransitGatewayConstruct extends Construct {
+  public readonly transitGatewayId: string;
+  public readonly vpcAttachmentId: string;
+
+  constructor(
+    scope: Construct,
+    id: string,
+    props: TransitGatewayConstructProps
+  ) {
+    super(scope, id);
+
+    const { environmentSuffix, vpcId, subnetIds } = props;
+
+    // Create Transit Gateway
+    const transitGateway = new Ec2TransitGateway(this, 'TransitGateway', {
+      description: 'Transit Gateway for multi-region connectivity',
+      amazonSideAsn: 64512,
+      defaultRouteTableAssociation: 'enable',
+      defaultRouteTablePropagation: 'enable',
+      dnsSupport: 'enable',
+      vpnEcmpSupport: 'enable',
+      tags: {
+        Name: `payment-tgw-${environmentSuffix}`,
+        Environment: environmentSuffix,
+        Project: 'PaymentProcessing',
+        CostCenter: 'FinTech',
+      },
+    });
+
+    this.transitGatewayId = transitGateway.id;
+
+    // Attach VPC to Transit Gateway
+    const vpcAttachment = new Ec2TransitGatewayVpcAttachment(
+      this,
+      'VPCAttachment',
+      {
+        transitGatewayId: transitGateway.id,
+        vpcId: vpcId,
+        subnetIds: subnetIds,
+        dnsSupport: 'enable',
+        ipv6Support: 'disable',
+        tags: {
+          Name: `payment-tgw-attachment-${environmentSuffix}`,
+          Environment: environmentSuffix,
+          Project: 'PaymentProcessing',
+          CostCenter: 'FinTech',
+        },
+      }
+    );
+
+    this.vpcAttachmentId = vpcAttachment.id;
+  }
+}
+```
+
+## File: lib/flow-logs-construct.ts
+
+```typescript
+import { Construct } from 'constructs';
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketLifecycleConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-lifecycle-configuration';
+import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
+import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
+import { FlowLog } from '@cdktf/provider-aws/lib/flow-log';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
+
+interface FlowLogsConstructProps {
+  environmentSuffix: string;
+  vpcId: string;
+}
+
+export class FlowLogsConstruct extends Construct {
+  public readonly flowLogsBucketName: string;
+  public readonly flowLogId: string;
+
+  constructor(scope: Construct, id: string, props: FlowLogsConstructProps) {
+    super(scope, id);
+
+    const { environmentSuffix, vpcId } = props;
+
+    // Create S3 bucket for VPC Flow Logs
+    const flowLogsBucket = new S3Bucket(this, 'FlowLogsBucket', {
+      bucket: `payment-flow-logs-${environmentSuffix}`,
+      forceDestroy: true,
+      tags: {
+        Name: `payment-flow-logs-${environmentSuffix}`,
+        Environment: environmentSuffix,
+        Project: 'PaymentProcessing',
+        CostCenter: 'FinTech',
+      },
+    });
+
+    this.flowLogsBucketName = flowLogsBucket.bucket;
+
+    // Block public access to flow logs bucket
+    new S3BucketPublicAccessBlock(this, 'FlowLogsBucketPublicAccessBlock', {
+      bucket: flowLogsBucket.id,
+      blockPublicAcls: true,
+      blockPublicPolicy: true,
+      ignorePublicAcls: true,
+      restrictPublicBuckets: true,
+    });
+
+    // Enable server-side encryption
+    new S3BucketServerSideEncryptionConfigurationA(
+      this,
+      'FlowLogsBucketEncryption',
+      {
+        bucket: flowLogsBucket.id,
+        rule: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'AES256',
+            },
+            bucketKeyEnabled: true,
+          },
+        ],
+      }
+    );
+
+    // Configure lifecycle policy for 90-day retention
+    new S3BucketLifecycleConfiguration(this, 'FlowLogsBucketLifecycle', {
+      bucket: flowLogsBucket.id,
+      rule: [
+        {
+          id: 'delete-old-logs',
+          status: 'Enabled',
+          expiration: [
+            {
+              days: 90,
+            },
+          ],
+        },
+      ],
+    });
+
+    // Create IAM role for VPC Flow Logs
+    const flowLogsRole = new IamRole(this, 'FlowLogsRole', {
+      name: `payment-flow-logs-role-${environmentSuffix}`,
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: {
+              Service: 'vpc-flow-logs.amazonaws.com',
+            },
+            Action: 'sts:AssumeRole',
+          },
+        ],
+      }),
+      tags: {
+        Name: `payment-flow-logs-role-${environmentSuffix}`,
+        Environment: environmentSuffix,
+        Project: 'PaymentProcessing',
+        CostCenter: 'FinTech',
+      },
+    });
+
+    // Create IAM policy for flow logs to write to S3
+    new IamRolePolicy(this, 'FlowLogsPolicy', {
+      name: `payment-flow-logs-policy-${environmentSuffix}`,
+      role: flowLogsRole.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: ['s3:PutObject', 's3:GetBucketLocation', 's3:ListBucket'],
+            Resource: [flowLogsBucket.arn, `${flowLogsBucket.arn}/*`],
+          },
+        ],
+      }),
+    });
+
+    // Create VPC Flow Log
+    const flowLog = new FlowLog(this, 'VPCFlowLog', {
+      vpcId: vpcId,
+      trafficType: 'ALL',
+      logDestinationType: 's3',
+      logDestination: flowLogsBucket.arn,
+      tags: {
+        Name: `payment-flow-log-${environmentSuffix}`,
+        Environment: environmentSuffix,
+        Project: 'PaymentProcessing',
+        CostCenter: 'FinTech',
+      },
+    });
+
+    this.flowLogId = flowLog.id;
+  }
+}
+```
 
 ## Architecture Highlights
 
-### 1. Network Segmentation
-
-**Three-Tier Architecture:**
-- **Public Tier**: Load balancers in 3x /24 subnets
-- **Application Tier**: App servers in 3x /23 subnets
-- **Database Tier**: Databases in 3x /23 subnets
-
-**Benefits:**
-- Clear separation of concerns
-- Defense in depth security model
-- Compliance with PCI DSS network segmentation requirements
-
-### 2. High Availability
-
-**Multi-AZ Deployment:**
-- All tiers span 3 availability zones (us-east-1a, 1b, 1c)
-- Independent routing per AZ with dedicated NAT instances
-- Transit Gateway ready for multi-region failover
-
-**Benefits:**
-- Resilience to AZ failures
-- Supports active-active architectures
-- Meets high availability SLAs
-
-### 3. Cost Optimization
-
-**NAT Instances vs NAT Gateways:**
-- Using t3.micro NAT instances (~$7/month) vs NAT Gateways (~$32/month)
-- Savings: ~$75/month for 3 NAT instances vs 3 NAT Gateways
-- User data configures iptables for NAT functionality
-
-**VPC Endpoints:**
-- Gateway endpoints for S3 and DynamoDB (no data transfer charges)
-- Eliminates NAT Gateway data transfer costs for AWS services
-- Improved latency and reliability
-
-### 4. Security Features
-
-**Network ACLs:**
-- Explicit allow rules for required ports only
-- HTTPS (443) for public access
-- SSH (22) restricted to corporate IP
-- Ephemeral ports (1024-65535) for return traffic
-- Deny all by default
-
-**Security Groups:**
-- Three-tier security model
-- Web SG: Allows HTTPS/HTTP from internet
-- App SG: Allows traffic only from Web SG
-- DB SG: Allows PostgreSQL only from App SG
-- Least privilege principle
-
-**Encryption:**
-- S3 bucket encryption for Flow Logs (AES256)
-- State file encryption in S3 backend
-- KMS can be added for enhanced encryption
-
-### 5. Compliance & Auditing
-
-**VPC Flow Logs:**
-- Captures ALL traffic (accepted and rejected)
-- Stored in S3 with 90-day retention
-- Lifecycle policy for automatic cleanup
-- IAM role with least privilege permissions
-
-**Tagging Strategy:**
-- Consistent tags across all resources:
-  - Environment: Identifies deployment environment
-  - Project: PaymentProcessing
-  - CostCenter: FinTech
-  - Tier: Public/Application/Database (where applicable)
-
-### 6. Transit Gateway
-
-**Multi-Region Readiness:**
-- Transit Gateway configured for future expansion
-- VPC attached with all private subnets
-- DNS support enabled
-- ECMP for VPN redundancy
-- Default route table association for simplified routing
-
-## Implementation Details
-
-### Modular Construct Architecture
-
-**Five Separate Constructs:**
-
-1. **NetworkingConstruct**: VPC, subnets, Internet Gateway, NAT instances, route tables, NACLs
-2. **SecurityConstruct**: Security groups for web, app, and database tiers
-3. **EndpointsConstruct**: VPC endpoints for S3 and DynamoDB
-4. **TransitGatewayConstruct**: Transit Gateway and VPC attachment
-5. **FlowLogsConstruct**: S3 bucket and VPC Flow Log configuration
-
-**Benefits:**
-- Clear separation of concerns
-- Reusable components
+### 1. Modular Construct Design
+- Each construct is self-contained and reusable
+- Clear separation of concerns (networking, security, endpoints, etc.)
 - Easy to test and maintain
-- Follows CDKTF best practices
 
-### Resource Naming Convention
+### 2. Security Best Practices
+- Multi-tier security groups with least privilege
+- Network ACLs for additional layer of defense
+- VPC Flow Logs for audit and compliance
+- Encrypted S3 bucket for flow logs
+- Private subnets for application and database tiers
 
-**Pattern**: `payment-{resource-type}-{detail}-{environmentSuffix}`
-
-**Examples:**
-- `payment-vpc-${environmentSuffix}`
-- `payment-public-subnet-1-${environmentSuffix}`
-- `payment-app-sg-${environmentSuffix}`
-- `payment-flow-logs-${environmentSuffix}`
-
-**Benefits:**
-- Unique resource names across environments
-- Easy identification of resources
-- Prevents naming conflicts in shared accounts
-
-### State Management
-
-**S3 Backend with Locking:**
-- State stored in S3 with encryption
-- Native file-based locking via `use_lockfile`
-- State key includes environment suffix: `${environmentSuffix}/${stackId}.tfstate`
-- Supports concurrent operations safely
-
-### Testing Strategy
-
-**Unit Tests:**
-- 100+ test cases covering all resources
-- Validates resource configuration
-- Checks naming conventions
-- Verifies security settings
-- Tests backend configuration
-
-**Integration Tests:**
-- Uses AWS SDK to verify deployed resources
-- Validates actual resource state
-- Tests connectivity and routing
-- Verifies encryption and compliance settings
-- Checks tagging compliance
-
-## Best Practices Implemented
-
-### 1. Infrastructure as Code
-
-- **Declarative Configuration**: All infrastructure defined in code
-- **Version Control**: Can be tracked in Git
-- **Reproducibility**: Same code produces same infrastructure
-- **Documentation**: Code serves as documentation
-
-### 2. Security
-
-- **Least Privilege**: Minimal required permissions
-- **Defense in Depth**: Multiple security layers
-- **Encryption**: Data at rest and in transit
-- **Audit Logging**: Flow logs for compliance
-
-### 3. Operational Excellence
-
-- **Monitoring**: Flow logs for traffic analysis
-- **Tagging**: Resource organization and cost tracking
-- **Automation**: Fully automated deployment
-- **Disaster Recovery**: Multi-AZ for high availability
+### 3. High Availability
+- Resources distributed across 3 availability zones
+- Independent NAT instances per AZ
+- Transit Gateway ready for multi-region expansion
 
 ### 4. Cost Optimization
+- NAT instances instead of NAT Gateways (~75% cost savings)
+- Gateway VPC endpoints for S3 and DynamoDB (no data transfer charges)
+- Lifecycle policies for automatic log cleanup
 
-- **Right-sizing**: t3.micro for NAT instances
-- **Lifecycle Policies**: Automatic cleanup of old logs
-- **VPC Endpoints**: Eliminate data transfer costs
-- **Resource Tagging**: Enable cost allocation
-
-### 5. Reliability
-
-- **Multi-AZ**: Resilient to AZ failures
-- **Redundancy**: Multiple NAT instances
-- **Transit Gateway**: Multi-region connectivity
-- **Automated Recovery**: Auto-scaling ready
-
-## PCI DSS Compliance Considerations
-
-### Network Segmentation (Requirement 1.2.1)
-
-- Clear separation between public, application, and database tiers
-- Security groups enforce segmentation at network level
-- NACLs provide additional layer of control
-
-### Network Monitoring (Requirement 10.5)
-
-- VPC Flow Logs capture all network traffic
-- 90-day retention for audit requirements
-- S3 storage for log analysis and archival
-
-### Access Control (Requirement 7)
-
-- Security groups implement least privilege
-- SSH restricted to corporate IP ranges
-- Database access only from application tier
-
-### Encryption (Requirement 4)
-
-- HTTPS enforced for public traffic
-- Flow logs encrypted at rest in S3
-- State files encrypted in S3 backend
-
-### Change Tracking (Requirement 10.7)
-
-- Infrastructure defined in code for audit trail
-- Tags identify resources and ownership
-- All changes tracked through version control
-
-## Deployment Considerations
-
-### Prerequisites
-
-- AWS Account with appropriate permissions
-- Terraform state bucket created
-- Environment variables configured
-- Corporate IP ranges identified for SSH access
-
-### Deployment Steps
-
-1. Configure environment variables
-2. Run `cdktf synth` to generate Terraform config
-3. Review generated configuration
-4. Run `cdktf deploy` to create infrastructure
-5. Verify resources created successfully
-6. Run integration tests to validate
-
-### Monitoring and Maintenance
-
-- Review Flow Logs weekly for anomalies
-- Monitor NAT instance health and replace if needed
-- Review security group rules quarterly
-- Update AMIs for NAT instances monthly
-- Validate compliance controls continuously
-
-## Scalability Considerations
-
-### Current Capacity
-
-- Public subnets: 253 IPs per subnet (3x /24)
-- App subnets: 509 IPs per subnet (3x /23)
-- DB subnets: 509 IPs per subnet (3x /23)
-- Total usable: ~4,000 IPs across all tiers
-
-### Future Expansion
-
-- VPC CIDR can be extended with secondary CIDRs
-- Transit Gateway ready for multi-region peering
-- Subnet sizing allows for growth
-- Can add additional subnets in unused CIDR space
-
-## Comparison with Alternatives
-
-### NAT Gateway vs NAT Instance
-
-**NAT Gateway Benefits:**
-- Fully managed by AWS
-- Higher bandwidth (up to 100 Gbps)
-- Automatic failover
-
-**NAT Instance Benefits (Chosen):**
-- 75% cost savings
-- Sufficient for payment processing workload
-- Full control over configuration
-- Can implement custom traffic filtering
-
-### Gateway Endpoints vs Interface Endpoints
-
-**Gateway Endpoints (Chosen):**
-- No additional cost
-- Simpler configuration
-- Sufficient for S3 and DynamoDB
-- Automatic route table updates
-
-**Interface Endpoints:**
-- Support more services
-- Private DNS names
-- Network-level control
-
-## Conclusion
-
-This implementation provides a production-ready, secure, and cost-optimized VPC infrastructure for a payment processing platform. It follows AWS and PCI DSS best practices while maintaining flexibility for future growth and multi-region expansion.
-
-The modular construct architecture ensures maintainability and testability, while comprehensive tagging and monitoring enable operational excellence and compliance.
+### 5. Compliance Features
+- VPC Flow Logs with 90-day retention
+- Comprehensive tagging strategy
+- Transit Gateway for future regulatory requirements
+- Encrypted state files and flow logs
