@@ -45,7 +45,12 @@ let outputs: any = {};
 
 if (fs.existsSync(outputsPath)) {
   const rawOutputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
-  outputs = { ...rawOutputs };
+
+  // Flatten Terraform output format: {key: {value: val, sensitive: bool}} -> {key: val}
+  outputs = Object.keys(rawOutputs).reduce((acc: any, key: string) => {
+    acc[key] = rawOutputs[key].value !== undefined ? rawOutputs[key].value : rawOutputs[key];
+    return acc;
+  }, {});
 
   // Parse JSON string outputs into proper types
   if (outputs.public_subnet_ids && typeof outputs.public_subnet_ids === 'string') {

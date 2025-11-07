@@ -507,3 +507,335 @@ The corrected infrastructure should be tested with:
 6. **Destruction test** verifying `terraform destroy` succeeds completely
 
 All tests should use outputs from the deployed infrastructure for dynamic validation, ensuring tests work across different deployments and AWS accounts.
+
+### Running Integration Tests
+
+After deploying the infrastructure, integration tests should be executed to validate the deployment:
+
+```bash
+# Extract Terraform outputs for testing
+./scripts/extract-outputs.sh
+
+# Run integration tests
+npm test -- TapStack.int.test.ts
+```
+
+The integration test suite (`test/TapStack.int.test.ts`) validates:
+
+1. **Deployment Outputs** - Verifies all required outputs are present
+2. **VPC and Networking** - Validates VPC, subnets, NAT gateways, and security groups
+3. **Application Load Balancer** - Checks ALB deployment, target groups, and HTTP connectivity
+4. **ECS Cluster and Services** - Verifies ECS cluster, blue/green services, and running tasks
+5. **Aurora Database Cluster** - Validates cluster deployment, instances, and configuration
+6. **DMS (Database Migration Service)** - Checks replication instance, endpoints, and tasks
+7. **Route 53 DNS** - Validates private hosted zone and DNS records
+8. **S3 Buckets** - Verifies bucket creation and encryption
+9. **Migration Status** - Checks migration phase and traffic distribution settings
+10. **End-to-End Connectivity** - Tests ALB endpoint reachability and target health checks
+11. **Resource Cleanup Readiness** - Ensures no deletion protection is enabled
+
+**Note:** The integration tests use the flattened Terraform output format. The test file automatically converts Terraform's nested JSON output format (`{key: {value: val}}`) to a flat format (`{key: val}`) for easier access in test assertions.
+
+## Deployment Workflow
+
+### Step 1: Initialize Terraform
+
+```bash
+cd lib
+terraform init
+```
+
+### Step 2: Create Workspace (Optional)
+
+```bash
+terraform workspace new staging-migration
+terraform workspace select staging-migration
+```
+
+### Step 3: Review Plan
+
+```bash
+terraform plan -var-file=terraform.tfvars
+```
+
+### Step 4: Apply Infrastructure
+
+```bash
+terraform apply -var-file=terraform.tfvars -auto-approve
+```
+
+### Step 5: Extract Outputs and Run Tests
+
+```bash
+cd ..
+./scripts/extract-outputs.sh
+npm test -- TapStack.int.test.ts
+```
+
+### Step 6: Destroy Infrastructure
+
+```bash
+cd lib
+terraform destroy -var-file=terraform.tfvars -auto-approve
+```
+
+## Environment-Specific Configurations
+
+The infrastructure uses Terraform workspaces to manage environment-specific settings:
+
+### Staging Migration Environment
+
+- **Workspace**: `staging-migration`
+- **DB Instance Class**: `db.r6g.large`
+- **ECS Task Count**: 2
+- **ECS Task CPU/Memory**: 1024/2048
+- **ALB Deletion Protection**: false
+- **DB Backup Retention**: 7 days
+
+### Production Migration Environment
+
+- **Workspace**: `production-migration`
+- **DB Instance Class**: `db.r6g.xlarge`
+- **ECS Task Count**: 4
+- **ECS Task CPU/Memory**: 2048/4096
+- **ALB Deletion Protection**: false (corrected from true)
+- **DB Backup Retention**: 30 days
+
+## Migration Traffic Shifting Strategy
+
+The infrastructure supports gradual traffic shifting using ALB weighted target groups:
+
+### Phase 1: Preparation (0% AWS Traffic)
+
+```hcl
+blue_target_weight  = 100  # On-premises (simulated)
+green_target_weight = 0    # AWS
+```
+
+### Phase 2: Initial Migration (20% AWS Traffic)
+
+```hcl
+blue_target_weight  = 80
+green_target_weight = 20
+```
+
+### Phase 3: Gradual Shift (50% AWS Traffic)
+
+```hcl
+blue_target_weight  = 50
+green_target_weight = 50
+```
+
+### Phase 4: Complete Migration (100% AWS Traffic)
+
+```hcl
+blue_target_weight  = 0
+green_target_weight = 100
+```
+
+To shift traffic, update the weights in `terraform.tfvars` and apply:
+
+```bash
+terraform apply -var="blue_target_weight=50" -var="green_target_weight=50"
+```
+
+## Key Architecture Decisions
+
+### 1. HTTP-Only ALB Configuration
+
+**Decision**: Use HTTP listener only without HTTPS/TLS for QA environments
+
+**Rationale**:
+- Avoids DNS validation hang during certificate provisioning
+- Simplifies testing and deployment
+- Reduces costs in non-production environments
+- Production deployments can add HTTPS listener with valid certificate
+
+**Alternative**: Use self-signed certificate imported via `aws_acm_certificate` resource with imported PEM files
+
+### 2. Deletion Protection Disabled
+
+**Decision**: Disable deletion protection on all resources (ALB, RDS)
+
+**Rationale**:
+- Required for QA/testing environments to enable complete cleanup
+- Prevents resource accumulation and cost overruns
+- Allows automated testing of full lifecycle (deploy + destroy)
+- Production environments should enable deletion protection post-deployment
+
+### 3. Skip Final Snapshot for RDS
+
+**Decision**: Set `skip_final_snapshot = true` for Aurora cluster
+
+**Rationale**:
+- Enables clean destruction without manual snapshot cleanup
+- Appropriate for ephemeral testing environments
+- Reduces storage costs from accumulated snapshots
+- Production should use `skip_final_snapshot = false` with proper backup strategy
+
+### 4. Cost-Optimized DMS Configuration
+
+**Decision**: Use `dms.t3.small` instance with `multi_az = false`
+
+**Rationale**:
+- Reduces costs by ~50% for testing environments
+- Single-AZ is sufficient for QA validation
+- Provides adequate performance for test data volumes
+- Production should use `dms.t3.medium` or larger with `multi_az = true`
+
+### 5. Realistic Container Image
+
+**Decision**: Use `nginxdemos/hello:latest` as default application image
+
+**Rationale**:
+- Public image available without authentication
+- Listens on port 80 (matches ALB target group configuration)
+- Provides basic health check endpoint at `/`
+- Enables successful ECS task startup and ALB health checks
+- Production should use actual payment application image
+
+## Troubleshooting Common Issues
+
+### Issue: Integration Tests Fail with "undefined is not a valid target group ARN"
+
+**Cause**: Terraform outputs not properly flattened or extracted
+
+**Solution**:
+1. Ensure Terraform apply completed successfully
+2. Run `./scripts/extract-outputs.sh` to extract outputs to `cfn-outputs/flat-outputs.json`
+3. Verify the output file contains all required outputs: `cat cfn-outputs/flat-outputs.json | jq 'keys'`
+4. The test file now automatically flattens Terraform's nested output format
+
+### Issue: Terraform Apply Hangs on Certificate Validation
+
+**Cause**: ACM certificate DNS validation waiting for Route 53 records
+
+**Solution**:
+- The IDEAL_RESPONSE removes HTTPS listener entirely
+- If HTTPS is required, use imported self-signed certificate instead of ACM with DNS validation
+- Alternative: Manually complete DNS validation before applying
+
+### Issue: ECS Tasks Not Starting
+
+**Cause**: Invalid container image or port configuration mismatch
+
+**Solution**:
+1. Verify `payment_app_image` is accessible from ECS (public or ECR)
+2. Ensure `payment_app_port` matches container's exposed port
+3. Check ECS task logs: `aws ecs describe-tasks --cluster <cluster-name> --tasks <task-arn>`
+4. Verify security groups allow traffic between ALB and ECS tasks
+
+### Issue: Terraform Destroy Fails
+
+**Cause**: Resources with deletion protection enabled or lifecycle prevent_destroy
+
+**Solution**:
+- The IDEAL_RESPONSE removes all deletion protection and prevent_destroy blocks
+- Verify no manual modifications enabled deletion protection
+- If destroy still fails, check dependency ordering and manually remove blocking resources
+
+### Issue: DMS Replication Task Fails to Start
+
+**Cause**: Aurora cluster not ready or credentials mismatch
+
+**Solution**:
+1. Verify Aurora cluster instances are in "available" state
+2. Check DMS endpoint connectivity: `aws dms test-connection`
+3. Ensure database credentials match between variables and endpoints
+4. Add explicit `depends_on` for DMS endpoints to Aurora instances (already in IDEAL_RESPONSE)
+
+## Cost Estimation
+
+### Staging Migration Environment (Monthly)
+
+| Service | Configuration | Estimated Cost |
+|---------|--------------|----------------|
+| VPC & Networking | 3 NAT Gateways | $97.20 |
+| Aurora MySQL | db.r6g.large (3 instances) | $525.00 |
+| ECS Fargate | 2 tasks (1 vCPU, 2GB) | $35.04 |
+| Application Load Balancer | Standard ALB | $22.50 |
+| DMS | dms.t3.small single-AZ | $70.08 |
+| S3 Storage | Logs (estimated 10GB) | $0.23 |
+| CloudWatch Logs | 5GB ingestion | $2.50 |
+| **Total** | | **~$752/month** |
+
+### Production Migration Environment (Monthly)
+
+| Service | Configuration | Estimated Cost |
+|---------|--------------|----------------|
+| VPC & Networking | 3 NAT Gateways | $97.20 |
+| Aurora MySQL | db.r6g.xlarge (3 instances) | $1,050.00 |
+| ECS Fargate | 4 tasks (2 vCPU, 4GB) | $140.16 |
+| Application Load Balancer | Standard ALB | $22.50 |
+| DMS | dms.t3.medium multi-AZ | $280.32 |
+| S3 Storage | Logs (estimated 50GB) | $1.15 |
+| CloudWatch Logs | 20GB ingestion | $10.00 |
+| **Total** | | **~$1,601/month** |
+
+**Note**: Costs are estimates based on us-east-1 pricing and assume 24/7 operation. Actual costs may vary based on data transfer, storage growth, and usage patterns.
+
+## Security Considerations
+
+### Secrets Management
+
+All sensitive values should be stored in AWS Systems Manager Parameter Store:
+
+```bash
+# Store database credentials
+aws ssm put-parameter --name "/payment-migration/db/master/username" --value "admin" --type "SecureString"
+aws ssm put-parameter --name "/payment-migration/db/master/password" --value "SecurePassword123" --type "SecureString"
+
+# Store on-premises database credentials
+aws ssm put-parameter --name "/payment-migration/onprem/db/username" --value "onprem_user" --type "SecureString"
+aws ssm put-parameter --name "/payment-migration/onprem/db/password" --value "OnpremPassword123" --type "SecureString"
+```
+
+### Network Security
+
+1. **VPC Isolation**: All resources deployed in private subnets except ALB
+2. **Security Groups**: Strict ingress/egress rules limiting traffic between tiers
+3. **Network ACLs**: Additional layer of network security at subnet level
+4. **Direct Connect**: Encrypted connectivity to on-premises network
+5. **NATGateways**: Controlled outbound internet access for private resources
+
+### Database Security
+
+1. **Encryption at Rest**: Aurora cluster uses AWS KMS encryption
+2. **Encryption in Transit**: SSL/TLS required for all database connections
+3. **IAM Authentication**: Optionally enable IAM database authentication
+4. **Private Subnet**: Database accessible only from application subnet
+5. **Automated Backups**: 7-30 days retention with PITR capability
+
+## Production Readiness Checklist
+
+Before deploying to production, ensure the following adjustments:
+
+- [ ] Update `payment_app_image` to actual payment application image
+- [ ] Configure proper `payment_app_port` matching application
+- [ ] Enable HTTPS listener with valid ACM certificate
+- [ ] Enable ALB deletion protection: `alb_deletion_protection = true`
+- [ ] Enable RDS deletion protection: `deletion_protection = true`
+- [ ] Set `skip_final_snapshot = false` for Aurora cluster
+- [ ] Add lifecycle `prevent_destroy` for critical resources
+- [ ] Increase DMS instance size: `dms.t3.medium` or larger
+- [ ] Enable DMS multi-AZ: `multi_az = true`
+- [ ] Configure Direct Connect with actual gateway and VIF IDs
+- [ ] Update on-premises CIDR and endpoint values
+- [ ] Increase backup retention periods
+- [ ] Configure CloudWatch alarms for critical metrics
+- [ ] Set up AWS Backup for comprehensive disaster recovery
+- [ ] Enable AWS CloudTrail for audit logging
+- [ ] Configure AWS Config for compliance monitoring
+- [ ] Implement AWS WAF rules on ALB
+- [ ] Set up VPC Flow Logs for network monitoring
+- [ ] Configure automated snapshots and backup verification
+- [ ] Establish runbooks for incident response
+- [ ] Conduct disaster recovery drills
+
+## References
+
+- [AWS DMS Best Practices](https://docs.aws.amazon.com/dms/latest/userguide/CHAP_BestPractices.html)
+- [Amazon Aurora MySQL Best Practices](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.BestPractices.html)
+- [ECS Fargate Best Practices](https://docs.aws.amazon.com/AmazonECS/latest/bestpracticesguide/intro.html)
+- [Terraform Workspaces](https://www.terraform.io/docs/language/state/workspaces.html)
+- [Blue-Green Deployments on AWS](https://docs.aws.amazon.com/whitepapers/latest/overview-deployment-options/bluegreen-deployments.html)
