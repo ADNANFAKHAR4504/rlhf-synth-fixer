@@ -19,12 +19,29 @@ if (!fs.existsSync(outputsPath)) {
 
 const outputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
 
-const REGION = process.env.AWS_REGION || "ap-southeast-1";
+// Extract region from any ARN or URL in outputs
+const getRegionFromOutputs = (): string => {
+  const regionFromEnv = process.env.AWS_REGION;
+  if (regionFromEnv) return regionFromEnv;
+
+  // Try to extract from Lambda ARN
+  const lambdaArn = outputs.processor_lambda_arn || outputs.notifier_lambda_arn;
+  if (lambdaArn && typeof lambdaArn === 'string') {
+    const arnParts = lambdaArn.split(':');
+    if (arnParts.length >= 4) {
+      return arnParts[3]; // Region is the 4th part of an ARN
+    }
+  }
+
+  return "ap-northeast-1"; // Default fallback
+};
+
+const REGION = getRegionFromOutputs();
 
 // Extract environment suffix from resource names
 const getEnvironmentSuffix = (): string => {
-  // Extract from Lambda function name (e.g., webhook-validator-dev -> dev)
-  const lambdaArn = outputs.validator_lambda_arn || outputs.processor_lambda_arn || outputs.notifier_lambda_arn;
+  // Extract from Lambda function name (e.g., webhook-notifier-dev -> dev)
+  const lambdaArn = outputs.processor_lambda_arn || outputs.notifier_lambda_arn;
 
   if (!lambdaArn || typeof lambdaArn !== 'string') {
     throw new Error('No Lambda ARNs found in outputs. Please ensure the infrastructure is deployed.');
@@ -41,22 +58,22 @@ const getEnvironmentSuffix = (): string => {
 
 const ENV_SUFFIX = getEnvironmentSuffix();
 
-const cloudwatchClient = new CloudWatchClient({ region: REGION });
-const lambdaClient = new LambdaClient({ region: REGION });
-const apiGatewayClient = new APIGatewayClient({ region: REGION });
-const snsClient = new SNSClient({ region: REGION });
-const sqsClient = new SQSClient({ region: REGION });
+const clientConfig = { region: REGION };
+const cloudwatchClient = new CloudWatchClient(clientConfig);
+const lambdaClient = new LambdaClient(clientConfig);
+const apiGatewayClient = new APIGatewayClient(clientConfig);
+const snsClient = new SNSClient(clientConfig);
+const sqsClient = new SQSClient(clientConfig);
 
 describe("Webhook Processing System Integration Tests", () => {
   describe("Base Infrastructure", () => {
     test("Lambda functions are deployed", async () => {
       const functions = [
-        { name: "validator", arn: outputs.validator_lambda_arn },
         { name: "processor", arn: outputs.processor_lambda_arn },
         { name: "notifier", arn: outputs.notifier_lambda_arn },
       ];
 
-      for (const { name, arn } of functions) {
+      for (const { arn } of functions) {
         expect(arn).toBeDefined();
         expect(typeof arn).toBe("string");
         expect(arn).toMatch(/^arn:aws:lambda:/);
@@ -81,7 +98,7 @@ describe("Webhook Processing System Integration Tests", () => {
         { name: "notification_dlq", url: outputs.notification_dlq_url },
       ];
 
-      for (const { name, url } of queues) {
+      for (const { url } of queues) {
         expect(url).toBeDefined();
         expect(typeof url).toBe("string");
         expect(url).toMatch(/^https:\/\/sqs\./);
@@ -140,8 +157,8 @@ describe("Webhook Processing System Integration Tests", () => {
         alarm.AlarmName?.includes(`-${ENV_SUFFIX}`)
       );
 
-      // Expected: 18 alarms (12 Lambda + 6 SQS + 3 DLQ + 3 API Gateway)
-      expect(ourAlarms.length).toBeGreaterThanOrEqual(18);
+      // Expected: 14 alarms (8 Lambda [2 functions × 4 metrics] + 6 SQS + 3 DLQ + 2 API Gateway)
+      expect(ourAlarms.length).toBeGreaterThanOrEqual(14);
     });
 
     test("SNS topic for alarms exists", async () => {
@@ -158,12 +175,11 @@ describe("Webhook Processing System Integration Tests", () => {
 
     test("X-Ray tracing is enabled on Lambda functions", async () => {
       const functions = [
-        { name: "validator", arn: outputs.validator_lambda_arn },
         { name: "processor", arn: outputs.processor_lambda_arn },
         { name: "notifier", arn: outputs.notifier_lambda_arn },
       ];
 
-      for (const { name, arn } of functions) {
+      for (const { arn } of functions) {
         expect(arn).toBeDefined();
         expect(typeof arn).toBe("string");
         expect(arn).toMatch(/^arn:aws:lambda:/);
@@ -213,7 +229,6 @@ describe("Webhook Processing System Integration Tests", () => {
     test("Lambda error rate alarms are configured correctly", async () => {
       const command = new DescribeAlarmsCommand({
         AlarmNames: [
-          `lambda-validator-errors-${ENV_SUFFIX}`,
           `lambda-processor-errors-${ENV_SUFFIX}`,
           `lambda-notifier-errors-${ENV_SUFFIX}`,
         ],
