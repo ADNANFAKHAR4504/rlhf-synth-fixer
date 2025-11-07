@@ -684,7 +684,7 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   private calculateSubnetCidr(vpcCidr: string, index: number, isPublic: boolean): string {
-    const [baseIp, mask] = vpcCidr.split('/');
+    const [baseIp] = vpcCidr.split('/');
     const octets = baseIp.split('.').map(Number);
     
     // For public subnets: 10.X.0.0/20, 10.X.16.0/20, 10.X.32.0/20
