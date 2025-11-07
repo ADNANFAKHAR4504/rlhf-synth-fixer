@@ -108,7 +108,8 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         VpcIds: [outputs.VPCId]
       }));
 
-      const vpc = vpcResponse.Vpcs[0];
+      expect(vpcResponse.Vpcs).toBeDefined();
+      const vpc = vpcResponse.Vpcs![0];
       expect(vpc.State).toBe('available');
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
 
@@ -117,13 +118,15 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         VpcId: outputs.VPCId,
         Attribute: 'enableDnsHostnames'
       }));
-      expect(dnsHostnamesResponse.EnableDnsHostnames.Value).toBe(true);
+      expect(dnsHostnamesResponse.EnableDnsHostnames).toBeDefined();
+      expect(dnsHostnamesResponse.EnableDnsHostnames!.Value).toBe(true);
 
       const dnsSupportResponse = await ec2Client.send(new DescribeVpcAttributeCommand({
         VpcId: outputs.VPCId,
         Attribute: 'enableDnsSupport'
       }));
-      expect(dnsSupportResponse.EnableDnsSupport.Value).toBe(true);
+      expect(dnsSupportResponse.EnableDnsSupport).toBeDefined();
+      expect(dnsSupportResponse.EnableDnsSupport!.Value).toBe(true);
     }, TEST_TIMEOUT);
 
     test('VPC has public and private subnets in multiple AZs', async () => {
@@ -131,7 +134,8 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         Filters: [{ Name: 'vpc-id', Values: [outputs.VPCId] }]
       }));
 
-      const subnets = subnetsResponse.Subnets;
+      expect(subnetsResponse.Subnets).toBeDefined();
+      const subnets = subnetsResponse.Subnets!;
       expect(subnets.length).toBeGreaterThanOrEqual(4);
 
       const publicSubnets = subnets.filter(s =>
@@ -154,13 +158,15 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         Filter: [{ Name: 'vpc-id', Values: [outputs.VPCId] }]
       }));
 
-      const natGateways = natResponse.NatGateways.filter(ng => ng.State === 'available');
+      expect(natResponse.NatGateways).toBeDefined();
+      const natGateways = natResponse.NatGateways!.filter(ng => ng.State === 'available');
       expect(natGateways.length).toBeGreaterThanOrEqual(1);
 
       // Each NAT gateway should have an Elastic IP
       natGateways.forEach(nat => {
         expect(nat.NatGatewayAddresses).toBeDefined();
-        expect(nat.NatGatewayAddresses.length).toBeGreaterThan(0);
+        expect(nat.NatGatewayAddresses).toBeDefined();
+        expect(nat.NatGatewayAddresses!.length).toBeGreaterThan(0);
       });
     }, TEST_TIMEOUT);
 
@@ -169,7 +175,8 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         Filters: [{ Name: 'vpc-id', Values: [outputs.VPCId] }]
       }));
 
-      const routeTables = rtResponse.RouteTables;
+      expect(rtResponse.RouteTables).toBeDefined();
+      const routeTables = rtResponse.RouteTables!;
       expect(routeTables.length).toBeGreaterThanOrEqual(2);
 
       // Public route table should have internet gateway route
@@ -177,7 +184,8 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         rt.Tags?.some(t => t.Key === 'Name' && t.Value?.toLowerCase().includes('public'))
       );
       expect(publicRT).toBeDefined();
-      const igwRoute = publicRT.Routes.find(r => r.GatewayId?.startsWith('igw-'));
+      expect(publicRT.Routes).toBeDefined();
+      const igwRoute = publicRT.Routes!.find(r => r.GatewayId?.startsWith('igw-'));
       expect(igwRoute).toBeDefined();
 
       // Private route table should have NAT gateway route
@@ -185,7 +193,8 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         rt.Tags?.some(t => t.Key === 'Name' && t.Value?.toLowerCase().includes('private'))
       );
       expect(privateRT).toBeDefined();
-      const natRoute = privateRT.Routes.find(r => r.NatGatewayId?.startsWith('nat-'));
+      expect(privateRT.Routes).toBeDefined();
+      const natRoute = privateRT.Routes!.find(r => r.NatGatewayId?.startsWith('nat-'));
       expect(natRoute).toBeDefined();
     }, TEST_TIMEOUT);
   });
@@ -196,7 +205,8 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         Filters: [{ Name: 'vpc-id', Values: [outputs.VPCId] }]
       }));
 
-      const securityGroups = sgResponse.SecurityGroups;
+      expect(sgResponse.SecurityGroups).toBeDefined();
+      const securityGroups = sgResponse.SecurityGroups!;
       expect(securityGroups.length).toBeGreaterThan(0);
 
       // ALB security group should allow HTTP/HTTPS
@@ -204,7 +214,8 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         sg.GroupName?.toLowerCase().includes('alb')
       );
       if (albSG) {
-        const httpRule = albSG.IpPermissions.find(rule =>
+        expect(albSG.IpPermissions).toBeDefined();
+        const httpRule = albSG.IpPermissions!.find(rule =>
           rule.FromPort === 80 && rule.ToPort === 80
         );
         expect(httpRule).toBeDefined();
@@ -231,7 +242,8 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         DBClusterIdentifier: clusterIdentifier
       }));
 
-      const cluster = clusterResponse.DBClusters[0];
+      expect(clusterResponse.DBClusters).toBeDefined();
+      const cluster = clusterResponse.DBClusters![0];
       expect(cluster.Engine).toBe('aurora-mysql');
       expect(cluster.EngineVersion).toMatch(/^8\.0/);
       expect(cluster.Status).toBe('available');
@@ -243,7 +255,8 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         DBClusterIdentifier: clusterIdentifier
       }));
 
-      const cluster = clusterResponse.DBClusters[0];
+      expect(clusterResponse.DBClusters).toBeDefined();
+      const cluster = clusterResponse.DBClusters![0];
       expect(cluster.StorageEncrypted).toBe(true);
       expect(cluster.KmsKeyId).toBeDefined();
       expect(cluster.BackupRetentionPeriod).toBeGreaterThanOrEqual(7);
@@ -256,7 +269,9 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         DBClusterIdentifier: clusterIdentifier
       }));
 
-      const members = clusterResponse.DBClusters[0].DBClusterMembers;
+      expect(clusterResponse.DBClusters).toBeDefined();
+      const members = clusterResponse.DBClusters![0].DBClusterMembers;
+      expect(members).toBeDefined();
       expect(members.length).toBeGreaterThanOrEqual(2);
 
       // Check instance details
@@ -265,7 +280,8 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
           DBInstanceIdentifier: member.DBInstanceIdentifier
         }));
 
-        const instance = instanceResponse.DBInstances[0];
+        expect(instanceResponse.DBInstances).toBeDefined();
+        const instance = instanceResponse.DBInstances![0];
         expect(instance.DBInstanceStatus).toBe('available');
         expect(instance.Engine).toBe('aurora-mysql');
         expect(instance.PubliclyAccessible).toBe(false);
@@ -278,7 +294,8 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         DBClusterIdentifier: clusterIdentifier
       }));
 
-      const cluster = clusterResponse.DBClusters[0];
+      expect(clusterResponse.DBClusters).toBeDefined();
+      const cluster = clusterResponse.DBClusters![0];
       expect(cluster.Endpoint).toBe(outputs.DatabaseEndpoint);
       expect(cluster.ReaderEndpoint).toBe(outputs.DatabaseReadEndpoint);
       expect(cluster.Port).toBe(3306);
@@ -291,7 +308,8 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         TableName: outputs.SessionTableName
       }));
 
-      const table = tableResponse.Table;
+      expect(tableResponse.Table).toBeDefined();
+      const table = tableResponse.Table!;
       expect(table.TableStatus).toBe('ACTIVE');
       expect(table.BillingModeSummary?.BillingMode).toBeDefined();
 
@@ -302,12 +320,13 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
       const backupsResponse = await dynamoClient.send(new DescribeContinuousBackupsCommand({
         TableName: outputs.SessionTableName
       }));
-      expect(backupsResponse.ContinuousBackupsDescription.PointInTimeRecoveryDescription).toBeDefined();
-      expect(backupsResponse.ContinuousBackupsDescription.PointInTimeRecoveryDescription.PointInTimeRecoveryStatus).toBe('ENABLED');
+      expect(backupsResponse.ContinuousBackupsDescription!.PointInTimeRecoveryDescription!).toBeDefined();
+      expect(backupsResponse.ContinuousBackupsDescription!.PointInTimeRecoveryDescription!.PointInTimeRecoveryStatus).toBe('ENABLED');
 
       // Check key schema
       expect(table.KeySchema).toBeDefined();
-      const partitionKey = table.KeySchema.find(k => k.KeyType === 'HASH');
+      expect(table.KeySchema).toBeDefined();
+      const partitionKey = table.KeySchema!.find(k => k.KeyType === 'HASH');
       expect(partitionKey).toBeDefined();
       expect(partitionKey.AttributeName).toBe('SessionId');
     }, TEST_TIMEOUT);
@@ -317,11 +336,13 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         TableName: outputs.FailoverStateTableName
       }));
 
-      const table = tableResponse.Table;
+      expect(tableResponse.Table).toBeDefined();
+      const table = tableResponse.Table!;
       expect(table.TableStatus).toBe('ACTIVE');
       expect(table.SSEDescription?.Status).toBe('ENABLED');
 
-      const partitionKey = table.KeySchema.find(k => k.KeyType === 'HASH');
+      expect(table.KeySchema).toBeDefined();
+      const partitionKey = table.KeySchema!.find(k => k.KeyType === 'HASH');
       expect(partitionKey.AttributeName).toBe('StateKey');
     }, TEST_TIMEOUT);
   });
@@ -333,7 +354,8 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         FunctionName: functionName
       }));
 
-      const config = funcResponse.Configuration;
+      expect(funcResponse.Configuration).toBeDefined();
+      const config = funcResponse.Configuration!;
       expect(config.State).toBe('Active');
       expect(config.Runtime).toMatch(/python3\./);
       expect(config.Handler).toBeDefined();
@@ -348,11 +370,14 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
       }));
 
       expect(funcResponse.VpcConfig).toBeDefined();
-      expect(funcResponse.VpcConfig.VpcId).toBe(outputs.VPCId);
+      expect(funcResponse.VpcConfig).toBeDefined();
+      expect(funcResponse.VpcConfig!.VpcId).toBe(outputs.VPCId);
       expect(funcResponse.VpcConfig.SubnetIds).toBeDefined();
-      expect(funcResponse.VpcConfig.SubnetIds.length).toBeGreaterThan(0);
+      expect(funcResponse.VpcConfig!.SubnetIds).toBeDefined();
+      expect(funcResponse.VpcConfig!.SubnetIds!.length).toBeGreaterThan(0);
       expect(funcResponse.VpcConfig.SecurityGroupIds).toBeDefined();
-      expect(funcResponse.VpcConfig.SecurityGroupIds.length).toBeGreaterThan(0);
+      expect(funcResponse.VpcConfig!.SecurityGroupIds).toBeDefined();
+      expect(funcResponse.VpcConfig!.SecurityGroupIds!.length).toBeGreaterThan(0);
     }, TEST_TIMEOUT);
 
     test('Lambda functions have environment variables configured', async () => {
@@ -362,8 +387,9 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
       }));
 
       expect(funcResponse.Environment).toBeDefined();
-      expect(funcResponse.Environment.Variables).toBeDefined();
-      expect(Object.keys(funcResponse.Environment.Variables).length).toBeGreaterThan(0);
+      expect(funcResponse.Environment).toBeDefined();
+      expect(funcResponse.Environment!.Variables).toBeDefined();
+      expect(Object.keys(funcResponse.Environment!.Variables!).length).toBeGreaterThan(0);
     }, TEST_TIMEOUT);
 
     test('Lambda functions have CloudWatch log groups', async () => {
@@ -374,7 +400,8 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         logGroupNamePrefix: logGroupName
       }));
 
-      const logGroup = logsResponse.logGroups.find(lg => lg.logGroupName === logGroupName);
+      expect(logsResponse.logGroups).toBeDefined();
+      const logGroup = logsResponse.logGroups!.find(lg => lg.logGroupName === logGroupName);
       expect(logGroup).toBeDefined();
     }, TEST_TIMEOUT);
   });
@@ -386,9 +413,12 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
       }));
 
       expect(encResponse.ServerSideEncryptionConfiguration).toBeDefined();
-      const rule = encResponse.ServerSideEncryptionConfiguration.Rules[0];
-      expect(rule.ApplyServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
-      expect(rule.ApplyServerSideEncryptionByDefault.KMSMasterKeyID).toBeDefined();
+      expect(encResponse.ServerSideEncryptionConfiguration).toBeDefined();
+      expect(encResponse.ServerSideEncryptionConfiguration!.Rules).toBeDefined();
+      const rule = encResponse.ServerSideEncryptionConfiguration!.Rules![0];
+      expect(rule.ApplyServerSideEncryptionByDefault).toBeDefined();
+      expect(rule.ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe('aws:kms');
+      expect(rule.ApplyServerSideEncryptionByDefault!.KMSMasterKeyID).toBeDefined();
     }, TEST_TIMEOUT);
 
     test('S3 buckets have versioning enabled', async () => {
@@ -406,7 +436,8 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         KeyId: outputs.KMSKeyId
       }));
 
-      const keyMetadata = keyResponse.KeyMetadata;
+      expect(keyResponse.KeyMetadata).toBeDefined();
+      const keyMetadata = keyResponse.KeyMetadata!;
       expect(keyMetadata.KeyState).toBe('Enabled');
       expect(keyMetadata.Enabled).toBe(true);
       expect(keyMetadata.KeyUsage).toBe('ENCRYPT_DECRYPT');
@@ -436,39 +467,46 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
   describe('Live Resource Config: Load Balancers', () => {
     test('ALBs have correct configuration', async () => {
       const lbResponse = await elbClient.send(new DescribeLoadBalancersCommand({}));
-      const primaryLB = lbResponse.LoadBalancers.find(lb => lb.DNSName === outputs.PrimaryEndpoint);
+      expect(lbResponse.LoadBalancers).toBeDefined();
+      const primaryLB = lbResponse.LoadBalancers!.find(lb => lb.DNSName === outputs.PrimaryEndpoint);
 
       expect(primaryLB).toBeDefined();
       expect(primaryLB.Type).toBe('application');
       expect(primaryLB.Scheme).toBe('internet-facing');
-      expect(primaryLB.State.Code).toBe('active');
+      expect(primaryLB.State).toBeDefined();
+      expect(primaryLB.State!.Code).toBe('active');
       expect(primaryLB.VpcId).toBe(outputs.VPCId);
-      expect(primaryLB.AvailabilityZones.length).toBeGreaterThanOrEqual(2);
+      expect(primaryLB.AvailabilityZones).toBeDefined();
+      expect(primaryLB.AvailabilityZones!.length).toBeGreaterThanOrEqual(2);
     }, TEST_TIMEOUT);
 
     test('ALB listeners are configured', async () => {
       const lbResponse = await elbClient.send(new DescribeLoadBalancersCommand({}));
-      const primaryLB = lbResponse.LoadBalancers.find(lb => lb.DNSName === outputs.PrimaryEndpoint);
+      expect(lbResponse.LoadBalancers).toBeDefined();
+      const primaryLB = lbResponse.LoadBalancers!.find(lb => lb.DNSName === outputs.PrimaryEndpoint);
 
       const listenersResponse = await elbClient.send(new DescribeListenersCommand({
         LoadBalancerArn: primaryLB.LoadBalancerArn
       }));
 
-      expect(listenersResponse.Listeners.length).toBeGreaterThan(0);
-      const httpListener = listenersResponse.Listeners.find(l => l.Port === 80);
+      expect(listenersResponse.Listeners).toBeDefined();
+      expect(listenersResponse.Listeners!.length).toBeGreaterThan(0);
+      const httpListener = listenersResponse.Listeners!.find(l => l.Port === 80);
       expect(httpListener).toBeDefined();
       expect(httpListener.Protocol).toBe('HTTP');
     }, TEST_TIMEOUT);
 
     test('Target groups have health checks configured', async () => {
       const lbResponse = await elbClient.send(new DescribeLoadBalancersCommand({}));
-      const primaryLB = lbResponse.LoadBalancers.find(lb => lb.DNSName === outputs.PrimaryEndpoint);
+      expect(lbResponse.LoadBalancers).toBeDefined();
+      const primaryLB = lbResponse.LoadBalancers!.find(lb => lb.DNSName === outputs.PrimaryEndpoint);
 
       const tgResponse = await elbClient.send(new DescribeTargetGroupsCommand({
         LoadBalancerArn: primaryLB.LoadBalancerArn
       }));
 
-      tgResponse.TargetGroups.forEach(tg => {
+      expect(tgResponse.TargetGroups).toBeDefined();
+      tgResponse.TargetGroups!.forEach(tg => {
         expect(tg.HealthCheckEnabled).toBe(true);
         expect(tg.HealthCheckProtocol).toBeDefined();
         expect(tg.HealthCheckPath).toBeDefined();
@@ -484,9 +522,10 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         TopicArn: outputs.AlertTopicArn
       }));
 
-      expect(topicResponse.Attributes.TopicArn).toBe(outputs.AlertTopicArn);
-      expect(topicResponse.Attributes.KmsMasterKeyId).toBeDefined();
-      expect(topicResponse.Attributes.DisplayName).toBeDefined();
+      expect(topicResponse.Attributes).toBeDefined();
+      expect(topicResponse.Attributes!.TopicArn).toBe(outputs.AlertTopicArn);
+      expect(topicResponse.Attributes!.KmsMasterKeyId).toBeDefined();
+      expect(topicResponse.Attributes!.DisplayName).toBeDefined();
     }, TEST_TIMEOUT);
   });
 
@@ -523,7 +562,8 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
       }));
 
       expect(getResponse.Item).toBeDefined();
-      expect(getResponse.Item.status.S).toBe('lambda-written');
+      expect(getResponse.Item).toBeDefined();
+      expect(getResponse.Item!.status.S).toBe('lambda-written');
 
       // Cleanup
       await dynamoClient.send(new DeleteItemCommand({
@@ -560,7 +600,8 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         Key: { SessionId: { S: workflowId } }
       }));
 
-      expect(result.Item.status.S).toBe('processing');
+      expect(result.Item).toBeDefined();
+      expect(result.Item!.status.S).toBe('processing');
 
       // Update to completed
       await dynamoClient.send(new UpdateItemCommand({
@@ -577,7 +618,8 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         Key: { SessionId: { S: workflowId } }
       }));
 
-      expect(finalResult.Item.status.S).toBe('completed');
+      expect(finalResult.Item).toBeDefined();
+      expect(finalResult.Item!.status.S).toBe('completed');
 
       // Cleanup
       await dynamoClient.send(new DeleteItemCommand({
@@ -608,7 +650,8 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
       }));
 
       expect(getResponse.ServerSideEncryption).toBe('aws:kms');
-      const content = await getResponse.Body.transformToString();
+      expect(getResponse.Body).toBeDefined();
+      const content = await getResponse.Body!.transformToString();
       expect(JSON.parse(content)).toEqual(testData);
 
       // Verify Lambda can invoke successfully
@@ -653,14 +696,15 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         Key: s3Key
       }));
 
-      const encryptedData = await s3Response.Body.transformToByteArray();
+      expect(s3Response.Body).toBeDefined();
+      const encryptedData = await s3Response.Body!.transformToByteArray();
 
       // Decrypt using KMS
       const decryptResponse = await kmsClient.send(new DecryptCommand({
         CiphertextBlob: encryptedData
       }));
 
-      const decrypted = Buffer.from(decryptResponse.Plaintext).toString();
+      const decrypted = Buffer.from(decryptResponse.Plaintext!).toString();
       expect(decrypted).toBe(plaintext);
 
       // Cleanup
@@ -719,7 +763,8 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         Key: archiveKey
       }));
 
-      const archivedContent = JSON.parse(await s3Response.Body.transformToString());
+      expect(s3Response.Body).toBeDefined();
+      const archivedContent = JSON.parse(await s3Response.Body!.transformToString());
       expect(archivedContent.recordId).toBe(recordId);
       expect(archivedContent.data).toEqual(recordData);
 
@@ -741,7 +786,8 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         Key: { SessionId: { S: recordId } }
       }));
 
-      expect(verifyResponse.Item.status.S).toBe('archived');
+      expect(verifyResponse.Item).toBeDefined();
+      expect(verifyResponse.Item!.status.S).toBe('archived');
 
       // Cleanup
       await dynamoClient.send(new DeleteItemCommand({
@@ -763,7 +809,8 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
       }));
 
       expect(secretResponse.SecretString).toBeDefined();
-      expect(secretResponse.SecretString.length).toBeGreaterThan(0);
+      expect(secretResponse.SecretString).toBeDefined();
+      expect(secretResponse.SecretString!.length).toBeGreaterThan(0);
 
       // Verify Lambda is configured with VPC access to RDS
       const functionName = outputs.HealthMonitorFunctionArn.split(':').pop();
@@ -772,7 +819,8 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
       }));
 
       expect(funcConfig.VpcConfig).toBeDefined();
-      expect(funcConfig.VpcConfig.VpcId).toBe(outputs.VPCId);
+      expect(funcConfig.VpcConfig).toBeDefined();
+      expect(funcConfig.VpcConfig!.VpcId).toBe(outputs.VPCId);
 
       // Verify RDS cluster is accessible
       const clusterIdentifier = outputs.DatabaseEndpoint.split('.')[0];
@@ -780,8 +828,9 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         DBClusterIdentifier: clusterIdentifier
       }));
 
-      expect(clusterResponse.DBClusters[0].Status).toBe('available');
-      expect(clusterResponse.DBClusters[0].Endpoint).toBe(outputs.DatabaseEndpoint);
+      expect(clusterResponse.DBClusters).toBeDefined();
+      expect(clusterResponse.DBClusters![0].Status).toBe('available');
+      expect(clusterResponse.DBClusters![0].Endpoint).toBe(outputs.DatabaseEndpoint);
 
       // Invoke Lambda which would connect to RDS
       const invokeResponse = await lambdaClient.send(new InvokeCommand({
@@ -933,13 +982,15 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         TableName: outputs.SessionTableName,
         Key: { SessionId: { S: transactionId } }
       }));
-      expect(dynamoResult.Item.status.S).toBe('completed');
+      expect(dynamoResult.Item).toBeDefined();
+      expect(dynamoResult.Item!.status.S).toBe('completed');
 
       const s3Result = await s3Client.send(new GetObjectCommand({
         Bucket: outputs.ArtifactsBucket,
         Key: s3Key
       }));
-      const s3Data = JSON.parse(await s3Result.Body.transformToString());
+      expect(s3Result.Body).toBeDefined();
+      const s3Data = JSON.parse(await s3Result.Body!.transformToString());
       expect(s3Data.transactionId).toBe(transactionId);
       expect(s3Data.amount).toBe(transactionData.amount);
 
@@ -1046,14 +1097,16 @@ describe('TAP Stack Integration Tests - Live Resource Configs & Workflows', () =
         TableName: outputs.FailoverStateTableName,
         Key: { StateKey: { S: failoverId } }
       }));
-      expect(finalState.Item.state.S).toBe('failover-completed');
+      expect(finalState.Item).toBeDefined();
+      expect(finalState.Item!.state.S).toBe('failover-completed');
 
       // Verify log exists
       const log = await s3Client.send(new GetObjectCommand({
         Bucket: outputs.ConfigBucket,
         Key: logKey
       }));
-      const logData = JSON.parse(await log.Body.transformToString());
+      expect(log.Body).toBeDefined();
+      const logData = JSON.parse(await log.Body!.transformToString());
       expect(logData.failoverId).toBe(failoverId);
       expect(logData.events).toContain('initiated');
 
