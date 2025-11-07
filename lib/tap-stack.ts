@@ -99,6 +99,7 @@ export class TapStack extends cdk.Stack {
 
     // Reference or create ALB
     let alb: elbv2.IApplicationLoadBalancer | undefined;
+    let albSecurityGroup: ec2.ISecurityGroup | undefined;
     if (albArn) {
       // For existing ALB, reference it by ARN
       // Note: fromApplicationLoadBalancerAttributes requires securityGroupId
@@ -117,7 +118,7 @@ export class TapStack extends cdk.Stack {
       }
     } else if (vpc) {
       // Create ALB for test environment if VPC is available
-      const albSecurityGroup = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
+      albSecurityGroup = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
         vpc: vpc,
         description: 'Security group for ALB',
         allowAllOutbound: true,
@@ -148,12 +149,19 @@ export class TapStack extends cdk.Stack {
         allowAllOutbound: true,
       });
 
-      // Allow traffic from ALB security group if ALB exists
-      if (alb) {
+      // Allow traffic from ALB security group specifically
+      if (albSecurityGroup) {
+        taskSecurityGroup.addIngressRule(
+          ec2.Peer.securityGroupId(albSecurityGroup.securityGroupId),
+          ec2.Port.tcp(containerPort),
+          'Allow traffic from ALB security group'
+        );
+      } else if (alb) {
+        // Fallback: allow from VPC CIDR if ALB security group not available
         taskSecurityGroup.addIngressRule(
           ec2.Peer.ipv4(vpc.vpcCidrBlock),
           ec2.Port.tcp(containerPort),
-          'Allow traffic from ALB'
+          'Allow traffic from VPC (ALB)'
         );
       }
 
@@ -383,9 +391,10 @@ def handler(event, context):
           healthCheck: {
             path: '/',
             interval: cdk.Duration.seconds(30),
-            timeout: cdk.Duration.seconds(5),
+            timeout: cdk.Duration.seconds(10),
             healthyThresholdCount: 2,
-            unhealthyThresholdCount: 3,
+            unhealthyThresholdCount: 5,
+            healthyHttpCodes: '200-499',
           },
           deregistrationDelay: cdk.Duration.seconds(60),
         }
@@ -465,7 +474,7 @@ def handler(event, context):
             base: 0, // No base requirement for Spot
           },
         ],
-        healthCheckGracePeriod: cdk.Duration.seconds(60),
+        healthCheckGracePeriod: cdk.Duration.seconds(120),
         // Add network configuration if VPC is available
         ...(vpc && {
           vpcSubnets: {
@@ -474,6 +483,13 @@ def handler(event, context):
           securityGroups: taskSecurityGroup ? [taskSecurityGroup] : undefined,
           assignPublicIp: false,
         }),
+        // Deployment configuration for stability
+        minHealthyPercent: 50,
+        maxHealthyPercent: 200,
+        circuitBreaker: {
+          enable: true,
+          rollback: true,
+        },
       };
 
       const service = new ecs.FargateService(
@@ -483,6 +499,8 @@ def handler(event, context):
       );
 
       if (targetGroup) {
+        // Ensure target group is ready before service attaches to it
+        service.node.addDependency(targetGroup);
         service.attachToApplicationTargetGroup(targetGroup);
       }
 

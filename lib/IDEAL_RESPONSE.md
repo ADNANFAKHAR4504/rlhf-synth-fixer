@@ -92,6 +92,7 @@ export class TapStack extends cdk.Stack {
     }
 
     let alb: elbv2.IApplicationLoadBalancer | undefined;
+    let albSecurityGroup: ec2.ISecurityGroup | undefined;
     if (albArn) {
       if (vpc) {
         alb = elbv2.ApplicationLoadBalancer.fromApplicationLoadBalancerAttributes(
@@ -104,7 +105,7 @@ export class TapStack extends cdk.Stack {
         );
       }
     } else if (vpc) {
-      const albSecurityGroup = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
+      albSecurityGroup = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
         vpc: vpc,
         description: 'Security group for ALB',
         allowAllOutbound: true,
@@ -134,11 +135,17 @@ export class TapStack extends cdk.Stack {
         allowAllOutbound: true,
       });
 
-      if (alb) {
+      if (albSecurityGroup) {
+        taskSecurityGroup.addIngressRule(
+          ec2.Peer.securityGroupId(albSecurityGroup.securityGroupId),
+          ec2.Port.tcp(containerPort),
+          'Allow traffic from ALB security group'
+        );
+      } else if (alb) {
         taskSecurityGroup.addIngressRule(
           ec2.Peer.ipv4(vpc.vpcCidrBlock),
           ec2.Port.tcp(containerPort),
-          'Allow traffic from ALB'
+          'Allow traffic from VPC (ALB)'
         );
       }
 
@@ -343,6 +350,41 @@ def handler(event, context):
     cdk.Tags.of(dashboard).add('Service', 'FinancialServices');
     cdk.Tags.of(dashboard).add('Environment', environmentSuffix);
 
+    let sharedTargetGroup: elbv2.IApplicationTargetGroup | undefined;
+    let listener: elbv2.ApplicationListener | undefined;
+    if (alb && !albArn && vpc) {
+      sharedTargetGroup = new elbv2.ApplicationTargetGroup(
+        this,
+        'SharedTargetGroup',
+        {
+          vpc: vpc,
+          port: containerPort,
+          protocol: elbv2.ApplicationProtocol.HTTP,
+          targetType: elbv2.TargetType.IP,
+          healthCheck: {
+            path: '/',
+            interval: cdk.Duration.seconds(30),
+            timeout: cdk.Duration.seconds(10),
+            healthyThresholdCount: 2,
+            unhealthyThresholdCount: 5,
+            healthyHttpCodes: '200-499',
+          },
+          deregistrationDelay: cdk.Duration.seconds(60),
+        }
+      );
+
+      cdk.Tags.of(sharedTargetGroup).add('Service', 'FinancialServices');
+      cdk.Tags.of(sharedTargetGroup).add('Environment', environmentSuffix);
+
+      listener = alb.addListener('DefaultListener', {
+        port: 80,
+        protocol: elbv2.ApplicationProtocol.HTTP,
+        defaultTargetGroups: [sharedTargetGroup],
+      });
+      cdk.Tags.of(listener).add('Service', 'FinancialServices');
+      cdk.Tags.of(listener).add('Environment', environmentSuffix);
+    }
+
     serviceNames.forEach((serviceName: string, index: number) => {
       const taskDefinition = new ecs.FargateTaskDefinition(
         this,
@@ -378,38 +420,8 @@ def handler(event, context):
             targetGroupArn: targetGroupArns[index],
           }
         );
-      } else if (alb && vpc) {
-        targetGroup = new elbv2.ApplicationTargetGroup(
-          this,
-          `TargetGroup${index}`,
-          {
-            vpc: vpc,
-            port: containerPort,
-            protocol: elbv2.ApplicationProtocol.HTTP,
-            targetType: elbv2.TargetType.IP,
-            healthCheck: {
-              path: '/',
-              interval: cdk.Duration.seconds(30),
-              timeout: cdk.Duration.seconds(5),
-              healthyThresholdCount: 2,
-              unhealthyThresholdCount: 3,
-            },
-            deregistrationDelay: cdk.Duration.seconds(60),
-          }
-        );
-
-        cdk.Tags.of(targetGroup).add('Service', 'FinancialServices');
-        cdk.Tags.of(targetGroup).add('Environment', environmentSuffix);
-
-        if (index === 0) {
-          const listener = alb.addListener(`Listener${index}`, {
-            port: 80,
-            protocol: elbv2.ApplicationProtocol.HTTP,
-            defaultTargetGroups: [targetGroup],
-          });
-          cdk.Tags.of(listener).add('Service', 'FinancialServices');
-          cdk.Tags.of(listener).add('Environment', environmentSuffix);
-        }
+      } else if (sharedTargetGroup) {
+        targetGroup = sharedTargetGroup;
       }
 
       const serviceProps: ecs.FargateServiceProps = {
@@ -429,7 +441,7 @@ def handler(event, context):
             base: 0,
           },
         ],
-        healthCheckGracePeriod: cdk.Duration.seconds(60),
+        healthCheckGracePeriod: cdk.Duration.seconds(120),
         ...(vpc && {
           vpcSubnets: {
             subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
@@ -437,6 +449,12 @@ def handler(event, context):
           securityGroups: taskSecurityGroup ? [taskSecurityGroup] : undefined,
           assignPublicIp: false,
         }),
+        minHealthyPercent: 50,
+        maxHealthyPercent: 200,
+        circuitBreaker: {
+          enable: true,
+          rollback: true,
+        },
       };
 
       const service = new ecs.FargateService(
@@ -446,6 +464,7 @@ def handler(event, context):
       );
 
       if (targetGroup) {
+        service.node.addDependency(targetGroup);
         service.attachToApplicationTargetGroup(targetGroup);
       }
 
@@ -464,6 +483,8 @@ def handler(event, context):
           role: scalingRole,
         }
       );
+
+      scalableTarget.node.addDependency(service);
 
       cdk.Tags.of(scalableTarget).add('Service', 'FinancialServices');
       cdk.Tags.of(scalableTarget).add('Environment', environmentSuffix);
