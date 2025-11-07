@@ -62,6 +62,14 @@ pulumi.runtime.setMocks({
         outputs.id = `bucket-${args.name}`;
         outputs.bucket = args.inputs.bucket || `bucket-${args.name}`;
         break;
+      case 'aws:s3/bucketVersioning:BucketVersioning':
+        outputs.id = `bucket-versioning-${args.name}`;
+        outputs.bucket = args.inputs.bucket;
+        break;
+      case 'aws:s3/bucketVersioningV2:BucketVersioningV2':
+        outputs.id = `bucket-versioning-v2-${args.name}`;
+        outputs.bucket = args.inputs.bucket;
+        break;
       case 'aws:iam/role:Role':
         outputs.id = `role-${args.name}`;
         break;
@@ -108,6 +116,7 @@ pulumi.runtime.setMocks({
 
 describe('TapStack Unit Tests', () => {
   let stack: TapStack;
+  let consoleLogSpy: jest.SpyInstance;
 
   beforeAll(() => {
     // Clean up any existing output files
@@ -469,6 +478,87 @@ describe('TapStack Unit Tests', () => {
         }, 100);
       });
     });
+
+    // NEW TEST: Cover line 897 - console.log
+    it('should log output file path when writing outputs', (done) => {
+      // Spy on console.log to capture the call
+      const logSpy = jest.spyOn(console, 'log');
+      
+      stack = new TapStack('test-stack-console-log');
+      
+      stack.outputs.apply(() => {
+        setTimeout(() => {
+          // Check if console.log was called with the expected message
+          expect(logSpy).toHaveBeenCalled();
+          
+          // Find the specific call with "Outputs written to"
+          const calls = logSpy.mock.calls;
+          const outputCall = calls.find(call => 
+            call[0] && typeof call[0] === 'string' && call[0].includes('Outputs written to')
+          );
+          
+          expect(outputCall).toBeDefined();
+          expect(outputCall![0]).toContain('cfn-outputs');
+          expect(outputCall![0]).toContain('flat-outputs.json');
+          
+          // Restore the spy
+          logSpy.mockRestore();
+          done();
+        }, 150);
+      });
+    });
+
+    // NEW TEST: Cover branch when directory doesn't exist
+    it('should create directory if it does not exist', (done) => {
+      // Remove the directory if it exists
+      const outputDir = path.join(process.cwd(), 'cfn-outputs');
+      if (fs.existsSync(outputDir)) {
+        const files = fs.readdirSync(outputDir);
+        files.forEach(file => {
+          fs.unlinkSync(path.join(outputDir, file));
+        });
+        fs.rmdirSync(outputDir);
+      }
+      
+      stack = new TapStack('test-stack-create-dir');
+      
+      stack.outputs.apply(() => {
+        setTimeout(() => {
+          // Verify directory was created
+          expect(fs.existsSync(outputDir)).toBe(true);
+          
+          // Verify file was created
+          const outputFile = path.join(outputDir, 'flat-outputs.json');
+          expect(fs.existsSync(outputFile)).toBe(true);
+          
+          done();
+        }, 150);
+      });
+    });
+
+    // NEW TEST: Cover branch when directory already exists
+    it('should use existing directory if it exists', (done) => {
+      // Ensure the directory exists
+      const outputDir = path.join(process.cwd(), 'cfn-outputs');
+      if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+      }
+      
+      stack = new TapStack('test-stack-existing-dir');
+      
+      stack.outputs.apply(() => {
+        setTimeout(() => {
+          // Verify directory still exists
+          expect(fs.existsSync(outputDir)).toBe(true);
+          
+          // Verify file was created
+          const outputFile = path.join(outputDir, 'flat-outputs.json');
+          expect(fs.existsSync(outputFile)).toBe(true);
+          
+          done();
+        }, 150);
+      });
+    });
   });
 
   describe('Tag Validation', () => {
@@ -517,7 +607,9 @@ describe('TapStack Unit Tests', () => {
     });
 
     it('should handle stack creation with null config', () => {
-      stack = new TapStack('test-stack-null-config', null as any);
+      expect(() => {
+        stack = new TapStack('test-stack-null-config', null as any);
+      }).not.toThrow();
       expect(stack).toBeDefined();
     });
 
