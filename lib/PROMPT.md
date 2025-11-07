@@ -1,25 +1,27 @@
-ROLE: You are a senior Terraform engineer.
+Create a production-ready Terraform configuration in HCL that deploys an Amazon EKS cluster supporting mixed architecture workloads (x86 and ARM64). The implementation must be contained entirely within a single file named main.tf. A default provider.tf file will already be provided for AWS configuration, so do not create or modify any provider blocks.
 
-CONTEXT:
-We must migrate an AWS application from region us-west-1 to us-west-2 using Terraform HCL.
+You must adhere to the following constraints:
+Node groups must use managed nodes with both x86 and ARM64 instance types (t3.medium for x86, t4g.medium for ARM64). All worker nodes must be deployed in private subnets only.
+The EKS cluster endpoint must be private with public access restricted to specific company CIDR blocks. IAM Roles for Service Accounts (IRSA) must be enabled for the cluster.
 
-CONSTRAINTS:
-- Preserve logical identity: keep the same names/tags/topology.
-- Resource IDs are region-scoped; provide an old→new ID mapping plan using terraform import (do NOT recreate).
-- Migrate Terraform state to the new region/workspace without data loss.
-- Preserve all SG rules and network configuration semantics.
-- Minimize downtime; propose DNS cutover steps and TTL strategy.
+Both node groups must have auto-scaling enabled with:
+Minimum 2 nodes
+Maximum 10 nodes
+Desired capacity of 3 nodes
 
-DELIVERABLES:
-1) main.tf (providers, resources, modules as needed)
-2) variables.tf
-3) backend.tf (if required) with placeholders, not real secrets
-4) state-migration.md (exact Terraform CLI commands: workspace create/select, import, and verification)
-5) id-mapping.csv sample (headers: resource,address,old_id,new_id,notes)
-6) runbook.md (cutover plan, roll-back, checks)
+All resources must include the following tags:
+Environment = "production"
+Project = "platform-migration"
+Owner = "devops-team"
 
-OUTPUT FORMAT (IMPORTANT):
-- Provide each file in a separate fenced code block with its filename as the first line in a comment, e.g.:
-```hcl
-# main.tf
-...
+EKS cluster logging must be enabled for all types:
+api, audit, authenticator, controllerManager, scheduler
+Proper IAM roles and policies must be created for the EKS cluster and node groups.
+Security groups must allow necessary communication between the control plane and worker nodes.
+
+Outputs must include:
+EKS cluster endpoint
+Certificate authority data
+Cluster security group ID
+
+The solution will run in the us-west-2 region across 3 availability zones with a VPC that includes both public and private subnets, NAT gateways for outbound internet access, and an Application Load Balancer for ingress. Ensure the generated code is modular, secure, and production-ready.
