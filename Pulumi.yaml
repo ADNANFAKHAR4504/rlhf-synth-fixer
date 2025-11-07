@@ -1,4 +1,4 @@
-name: tap
+name: TapStack
 runtime: nodejs
 description: Multi-environment VPC infrastructure for payment processing platform
 main: bin/tap.ts
