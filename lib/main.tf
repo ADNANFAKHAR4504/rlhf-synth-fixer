@@ -64,7 +64,7 @@ locals {
   azs = data.aws_availability_zones.available.names
 
   # Subnet CIDR calculations
-  public_subnet_cidrs    = ["10.0.1.0/24", "10.0.2.0/24"]
+  public_subnet_cidrs      = ["10.0.1.0/24", "10.0.2.0/24"]
   private_app_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
   private_db_subnet_cidrs  = ["10.0.20.0/24", "10.0.21.0/24"]
 }
@@ -570,10 +570,10 @@ resource "aws_lb" "main" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
-  subnets           = aws_subnet.public[*].id
+  subnets            = aws_subnet.public[*].id
 
-  enable_deletion_protection = false
-  enable_http2              = true
+  enable_deletion_protection       = false
+  enable_http2                     = true
   enable_cross_zone_load_balancing = true
 
   access_logs {
@@ -657,7 +657,7 @@ resource "aws_wafv2_web_acl" "main" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name               = "${local.name_prefix}-common-rules"
+      metric_name                = "${local.name_prefix}-common-rules"
       sampled_requests_enabled   = true
     }
   }
@@ -679,7 +679,7 @@ resource "aws_wafv2_web_acl" "main" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name               = "${local.name_prefix}-bad-inputs"
+      metric_name                = "${local.name_prefix}-bad-inputs"
       sampled_requests_enabled   = true
     }
   }
@@ -701,14 +701,14 @@ resource "aws_wafv2_web_acl" "main" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name               = "${local.name_prefix}-sqli-rules"
+      metric_name                = "${local.name_prefix}-sqli-rules"
       sampled_requests_enabled   = true
     }
   }
 
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name               = "${local.name_prefix}-waf"
+    metric_name                = "${local.name_prefix}-waf"
     sampled_requests_enabled   = true
   }
 
@@ -809,8 +809,8 @@ resource "aws_launch_template" "app" {
     ebs {
       volume_size           = 30
       volume_type           = "gp3"
-      encrypted            = true
-      kms_key_id           = aws_kms_key.main.arn
+      encrypted             = true
+      kms_key_id            = aws_kms_key.main.arn
       delete_on_termination = true
     }
   }
@@ -916,9 +916,9 @@ resource "aws_db_instance" "postgres" {
 
   allocated_storage     = 20
   max_allocated_storage = 100
-  storage_type         = "gp3"
-  storage_encrypted    = true
-  kms_key_id          = aws_kms_key.main.arn
+  storage_type          = "gp3"
+  storage_encrypted     = true
+  kms_key_id            = aws_kms_key.main.arn
 
   db_name  = "appdb"
   username = "dbadmin"
@@ -927,14 +927,14 @@ resource "aws_db_instance" "postgres" {
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
-  multi_az               = true
-  publicly_accessible    = false
+  multi_az                = true
+  publicly_accessible     = false
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
-  deletion_protection = true
-  skip_final_snapshot = false
+  deletion_protection       = true
+  skip_final_snapshot       = false
   final_snapshot_identifier = "${local.name_prefix}-postgres-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
 
   enabled_cloudwatch_logs_exports = ["postgresql"]

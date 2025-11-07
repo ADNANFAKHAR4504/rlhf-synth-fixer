@@ -1,5 +1,5 @@
 # LocalStack test configuration
-aws_region = "us-east-1"  # LocalStack default region
+aws_region = "us-east-1" # LocalStack default region
 # project_name = "nova"      # Using default
 # environment = "prod"       # Using default
 
