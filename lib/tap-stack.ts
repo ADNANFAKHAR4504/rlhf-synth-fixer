@@ -1,13 +1,13 @@
 import * as cdk from 'aws-cdk-lib';
-import * as ecs from 'aws-cdk-lib/aws-ecs';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as applicationautoscaling from 'aws-cdk-lib/aws-applicationautoscaling';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
-import * as sns from 'aws-cdk-lib/aws-sns';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as ecs from 'aws-cdk-lib/aws-ecs';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import * as custom_resources from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
 
