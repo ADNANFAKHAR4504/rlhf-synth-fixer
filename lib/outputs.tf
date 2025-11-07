@@ -28,10 +28,6 @@ output "dynamodb_table_name" {
   value       = aws_dynamodb_table.metadata.name
 }
 
-output "dynamodb_table_arn" {
-  description = "DynamoDB table ARN"
-  value       = aws_dynamodb_table.metadata.arn
-}
 
 output "lambda_function_name" {
   description = "Lambda function name"
@@ -168,10 +164,6 @@ output "vpc_flow_logs_log_group_arn" {
 }
 
 # S3 Bucket Outputs
-output "data_bucket_arn" {
-  description = "ARN of the data S3 bucket"
-  value       = aws_s3_bucket.data.arn
-}
 
 output "logs_bucket_arn" {
   description = "ARN of the logs S3 bucket"
