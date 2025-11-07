@@ -1220,6 +1220,7 @@ Resources:
             DB_PORT=5432
             DB_NAME=customerportal
             DB_USER=$DB_USERNAME
+            DB_PASSWORD=$DB_PASSWORD
             ENVIRONMENT=${EnvironmentName}
             AWS_REGION=${AWS::Region}
             LOG_LEVEL=info
