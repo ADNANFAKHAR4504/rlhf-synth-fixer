@@ -117,7 +117,7 @@ Parameters:
     AllowedValues:
       - 2
       - 3
-    Description: Number of availability zones to deploy resources across (must be 2 or 3). Use 3 only if your region has 3+ AZs and provide custom AZs in AvailabilityZones parameter.
+    Description: Number of availability zones to deploy resources across (must be 2 or 3). RDS requires at least 2 AZs. Use 3 only if your region has 3+ AZs. You MUST provide custom AZs in AvailabilityZones parameter when using 2 or 3 AZs (e.g., 'us-east-1a,us-east-1b' for 2 AZs).
 
   # Application Parameters
   InstanceType:
@@ -1425,19 +1425,17 @@ Resources:
 
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Properties:
       DBSubnetGroupName: !Sub ${ProjectName}-${Environment}-db-subnet-group
-      DBSubnetGroupDescription: Subnet group for Aurora cluster across 3 AZs
+      DBSubnetGroupDescription: Subnet group for Aurora cluster across multiple AZs
       SubnetIds: !If
         - HasThreeAZsWithCustomAZs
         - - !Ref PrivateDBSubnet1
           - !Ref PrivateDBSubnet2
           - !Ref PrivateDBSubnet3
-        - !If
-            - HasAtLeastTwoAZsWithCustomAZs
-            - - !Ref PrivateDBSubnet1
-              - !Ref PrivateDBSubnet2
-            - - !Ref PrivateDBSubnet1
+        - - !Ref PrivateDBSubnet1
+          - !Ref PrivateDBSubnet2
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-DBSubnetGroup
@@ -1574,6 +1572,7 @@ Resources:
 
   AuroraCluster:
     Type: AWS::RDS::DBCluster
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Properties:
       DBClusterIdentifier: !Sub ${ProjectName}-${Environment}-aurora-cluster
       Engine: aurora-mysql
@@ -1614,6 +1613,7 @@ Resources:
 
   AuroraInstanceWriter:
     Type: AWS::RDS::DBInstance
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Properties:
       DBInstanceIdentifier: !Sub ${ProjectName}-${Environment}-aurora-writer
       DBClusterIdentifier: !Ref AuroraCluster
@@ -1653,6 +1653,7 @@ Resources:
 
   AuroraInstanceReader1:
     Type: AWS::RDS::DBInstance
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     DependsOn: AuroraInstanceWriter
     Properties:
       DBInstanceIdentifier: !Sub ${ProjectName}-${Environment}-aurora-reader-1
@@ -1691,6 +1692,7 @@ Resources:
 
   AuroraInstanceReader2:
     Type: AWS::RDS::DBInstance
+    Condition: HasThreeAZsWithCustomAZs
     DependsOn: AuroraInstanceReader1
     Properties:
       DBInstanceIdentifier: !Sub ${ProjectName}-${Environment}-aurora-reader-2
@@ -1927,6 +1929,7 @@ Resources:
   # Fixed database connections alarm with percentage calculation
   DatabaseConnectionAlarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Properties:
       AlarmName: !Sub ${ProjectName}-${Environment}-DB-HighConnections
       AlarmDescription: Alarm when database connections exceed threshold percentage
@@ -2297,18 +2300,21 @@ Outputs:
       Name: !Sub ${ProjectName}-${Environment}-LaunchTemplate-ID
 
   AuroraClusterEndpoint:
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Description: Aurora Cluster Writer Endpoint
     Value: !GetAtt AuroraCluster.Endpoint.Address
     Export:
       Name: !Sub ${ProjectName}-${Environment}-DB-Writer-Endpoint
 
   AuroraReaderEndpoint:
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Description: Aurora Cluster Reader Endpoint
     Value: !GetAtt AuroraCluster.ReadEndpoint.Address
     Export:
       Name: !Sub ${ProjectName}-${Environment}-DB-Reader-Endpoint
 
   AuroraClusterPort:
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Description: Aurora Cluster Port
     Value: !GetAtt AuroraCluster.Endpoint.Port
     Export:
