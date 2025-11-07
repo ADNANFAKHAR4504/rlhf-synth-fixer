@@ -39,6 +39,7 @@ describe("VPC Infrastructure Integration Tests", () => {
   let publicSubnetIds: string[];
   let privateSubnetIds: string[];
   let databaseSubnetIds: string[];
+  let natGatewayIds: string[];
 
   beforeAll(() => {
     vpcId = outputs.VPCId;
@@ -56,6 +57,11 @@ describe("VPC Infrastructure Integration Tests", () => {
       outputs.DatabaseSubnet1Id,
       outputs.DatabaseSubnet2Id,
       outputs.DatabaseSubnet3Id,
+    ].filter(Boolean);
+    natGatewayIds = [
+      outputs.NatGatewayAId,
+      outputs.NatGatewayBId,
+      outputs.NatGatewayCId,
     ].filter(Boolean);
   });
 
@@ -186,14 +192,12 @@ describe("VPC Infrastructure Integration Tests", () => {
     test("NAT Gateways should exist in public subnets", async () => {
       const result = await ec2Client.send(
         new DescribeNatGatewaysCommand({
-          Filter: [
-            { Name: "vpc-id", Values: [vpcId] },
-            { Name: "state", Values: ["pending", "available"] },
-          ],
+          NatGatewayIds: natGatewayIds,
         })
       );
 
-      expect(result.NatGateways!.length).toBeGreaterThanOrEqual(1);
+      expect(result.NatGateways).toBeDefined();
+      expect(result.NatGateways!.length).toBe(natGatewayIds.length);
       result.NatGateways!.forEach((nat) => {
         expect(["pending", "available"]).toContain(nat.State);
         expect(publicSubnetIds).toContain(nat.SubnetId);
@@ -203,13 +207,11 @@ describe("VPC Infrastructure Integration Tests", () => {
     test("NAT Gateways should have Elastic IPs", async () => {
       const result = await ec2Client.send(
         new DescribeNatGatewaysCommand({
-          Filter: [
-            { Name: "vpc-id", Values: [vpcId] },
-            { Name: "state", Values: ["pending", "available"] },
-          ],
+          NatGatewayIds: natGatewayIds,
         })
       );
 
+      expect(result.NatGateways).toBeDefined();
       result.NatGateways!.forEach((nat) => {
         expect(nat.NatGatewayAddresses).toBeDefined();
         expect(nat.NatGatewayAddresses!.length).toBeGreaterThan(0);
@@ -466,10 +468,7 @@ describe("VPC Infrastructure Integration Tests", () => {
     test("NAT Gateways should be in multiple AZs for redundancy", async () => {
       const result = await ec2Client.send(
         new DescribeNatGatewaysCommand({
-          Filter: [
-            { Name: "vpc-id", Values: [vpcId] },
-            { Name: "state", Values: ["pending", "available"] },
-          ],
+          NatGatewayIds: natGatewayIds,
         })
       );
 
