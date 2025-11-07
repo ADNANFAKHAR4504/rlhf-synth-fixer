@@ -1112,19 +1112,59 @@ Resources:
           Enabled: !If [EnableDetailedMonitoringCondition, true, false]
         UserData:
           Fn::Base64: !Sub |
-            #!/bin/bash -xe
+            #!/bin/bash -x
             # Log all commands for debugging
             exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
             
+            # Initialize exit code
+            EXIT_CODE=0
+            
+            # Function to send CloudFormation signal (always called, even on failure)
+            signal_cfn() {
+              local exit_code=$EXIT_CODE
+              if [ -n "$1" ]; then
+                exit_code=$1
+              fi
+              echo "Sending CloudFormation signal with exit code: $exit_code" | logger -t user-data
+              /opt/aws/bin/cfn-signal -e $exit_code --stack ${AWS::StackName} \
+                --resource AutoScalingGroup \
+                --region ${AWS::Region} || true
+            }
+            
+            # Trap to ensure signal is always sent
+            trap 'signal_cfn $EXIT_CODE' EXIT ERR
+            
+            # Function to wait for RDS to be available
+            wait_for_rds() {
+              local db_host=$1
+              local max_attempts=30
+              local attempt=1
+              
+              echo "Waiting for RDS database to be available at $db_host..." | logger -t user-data
+              
+              while [ $attempt -le $max_attempts ]; do
+                if nc -z -w5 $db_host 5432 2>/dev/null; then
+                  echo "RDS database is now available" | logger -t user-data
+                  return 0
+                fi
+                echo "Attempt $attempt/$max_attempts: RDS not yet available, waiting 10 seconds..." | logger -t user-data
+                sleep 10
+                attempt=$((attempt + 1))
+              done
+              
+              echo "WARNING: RDS database may not be fully available, but continuing..." | logger -t user-data
+              return 0
+            }
+            
             # Update system and install dependencies
-            yum update -y
-            yum install -y amazon-cloudwatch-agent nodejs npm git postgresql15 jq
+            yum update -y || EXIT_CODE=1
+            yum install -y amazon-cloudwatch-agent nodejs npm git postgresql15 jq nc || EXIT_CODE=1
             
             # Install AWS CLI v2
-            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-            unzip awscliv2.zip
-            ./aws/install
-            rm -rf awscliv2.zip aws/
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" || EXIT_CODE=1
+            unzip awscliv2.zip || EXIT_CODE=1
+            ./aws/install || EXIT_CODE=1
+            rm -rf awscliv2.zip aws/ || true
             
             # Configure CloudWatch Agent
             cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
@@ -1207,15 +1247,30 @@ Resources:
             
             # Fetch database credentials from Secrets Manager
             SECRET_ARN="${DBPassword}"
-            DB_CREDENTIALS=$(aws secretsmanager get-secret-value --secret-id $SECRET_ARN --region ${AWS::Region} --query SecretString --output text)
-            DB_PASSWORD=$(echo $DB_CREDENTIALS | jq -r .password)
-            DB_USERNAME=$(echo $DB_CREDENTIALS | jq -r .username)
+            DB_CREDENTIALS=$(aws secretsmanager get-secret-value --secret-id $SECRET_ARN --region ${AWS::Region} --query SecretString --output text 2>&1) || {
+              echo "ERROR: Failed to fetch database credentials from Secrets Manager" | logger -t user-data
+              EXIT_CODE=1
+            }
+            
+            DB_PASSWORD=$(echo $DB_CREDENTIALS | jq -r .password 2>/dev/null) || {
+              echo "ERROR: Failed to parse database password" | logger -t user-data
+              EXIT_CODE=1
+            }
+            
+            DB_USERNAME=$(echo $DB_CREDENTIALS | jq -r .username 2>/dev/null) || {
+              echo "ERROR: Failed to parse database username" | logger -t user-data
+              EXIT_CODE=1
+            }
+            
+            # Wait for RDS to be available
+            DB_HOST="${RDSInstance.Endpoint.Address}"
+            wait_for_rds $DB_HOST || EXIT_CODE=1
             
             # Create environment configuration
             cat > /opt/app/config/.env << EOF
             NODE_ENV=production
             PORT=80
-            DB_HOST=${RDSInstance.Endpoint.Address}
+            DB_HOST=$DB_HOST
             DB_PORT=5432
             DB_NAME=customerportal
             DB_USER=$DB_USERNAME
@@ -1361,7 +1416,10 @@ Resources:
             EOF
             
             # Install dependencies
-            npm install --production
+            npm install --production || {
+              echo "ERROR: Failed to install npm dependencies" | logger -t user-data
+              EXIT_CODE=1
+            }
             
             # Create systemd service
             cat > /etc/systemd/system/nodeapp.service << EOF
@@ -1391,16 +1449,27 @@ Resources:
             chmod 600 /opt/app/config/.env
             
             # Enable and start the service
-            systemctl daemon-reload
-            systemctl enable nodeapp
-            systemctl start nodeapp
+            systemctl daemon-reload || EXIT_CODE=1
+            systemctl enable nodeapp || EXIT_CODE=1
             
-            # Send completion signal
-            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} \
-              --resource AutoScalingGroup \
-              --region ${AWS::Region}
+            # Start service and wait a bit to verify it's running
+            systemctl start nodeapp || EXIT_CODE=1
+            sleep 5
             
-            echo "User data script completed successfully" | logger -t user-data
+            # Verify service is running
+            if systemctl is-active --quiet nodeapp; then
+              echo "Node.js application service started successfully" | logger -t user-data
+            else
+              echo "WARNING: Node.js application service may not be running properly" | logger -t user-data
+              systemctl status nodeapp | logger -t user-data || true
+            fi
+            
+            # Signal will be sent by trap handler
+            if [ $EXIT_CODE -eq 0 ]; then
+              echo "User data script completed successfully" | logger -t user-data
+            else
+              echo "User data script completed with errors (exit code: $EXIT_CODE)" | logger -t user-data
+            fi
         TagSpecifications:
           - ResourceType: instance
             Tags:
