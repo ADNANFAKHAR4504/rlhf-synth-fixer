@@ -1,16 +1,79 @@
+[MAIN]
+# Configuration for pylint
+
 [MESSAGES CONTROL]
+# Disable specific warning messages
 disable=
-    too-many-positional-arguments,
-    import-error,
-    duplicate-code,
-    too-many-instance-attributes,
-    too-few-public-methods,
-    unused-argument,
-    wrong-import-order,
-    unused-import
+    C0111, # missing-docstring
+    C0103, # invalid-name
+    C0303, # trailing-whitespace
+    W0511, # fixme
+    R0903, # too-few-public-methods
+    R0913, # too-many-arguments
+    R0914, # too-many-locals
+    R0915, # too-many-statements
+    W0613, # unused-argument
+    W0612, # unused-variable
+    W0611, # unused-import
+    C0415, # import-outside-toplevel
+    C0411, # wrong-import-order
+    E0611, # no-name-in-module (for moto mock imports)
+    R0902, # too-many-instance-attributes
+    W0621, # redefined-outer-name (for pytest fixtures)
+    W0718, # broad-exception-caught
 
 [FORMAT]
+# Maximum number of characters on a single line
 max-line-length=120
 
+# Expected format of line ending, e.g. empty (any line ending), LF or CRLF.
+expected-line-ending-format=LF
+
+# Indentation preference
+indent-string='    '  # 4 spaces
+indent-after-paren=4  # 4 spaces
+
+[BASIC]
+# Good variable names which should always be accepted
+good-names=i,j,k,ex,Run,_,id,ec2,s3,rds,iam,kms
+
 [DESIGN]
-max-args=10
+# Maximum number of arguments for function / method
+max-args=8
+
+# Maximum number of locals for function / method body
+max-locals=15
+
+# Maximum number of return / yield for function / method body
+max-returns=6
+
+# Maximum number of branch for function / method body
+max-branches=12
+
+# Maximum number of statements in function / method body
+max-statements=50
+
+# Maximum number of parents for a class (see R0901)
+max-parents=7
+
+# Maximum number of attributes for a class (see R0902)
+max-attributes=15
+
+# Minimum number of public methods for a class (see R0903)
+min-public-methods=0
+
+# Maximum number of public methods for a class (see R0904)
+max-public-methods=20
+
+[SIMILARITIES]
+# Minimum lines number of a similarity
+min-similarity-lines=4
+
+# Ignore comments when computing similarities
+ignore-comments=yes
+
+# Ignore docstrings when computing similarities
+ignore-docstrings=yes
+
+# Ignore imports when computing similarities
+ignore-imports=yes
