@@ -45,6 +45,9 @@ pulumi.runtime.setMocks({
   },
 });
 
+// Clear environment variable to ensure Pulumi config is used
+delete process.env.ENVIRONMENT_SUFFIX;
+
 // Set required configuration
 pulumi.runtime.setConfig('project:environmentSuffix', 'test');
 pulumi.runtime.setConfig('aws:region', 'us-east-1');
