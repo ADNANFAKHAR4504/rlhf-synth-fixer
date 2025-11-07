@@ -109,7 +109,7 @@ Parameters:
   AvailabilityZones:
     Type: String
     Default: ''
-    Description: Comma-separated list of availability zones to use for subnets (leave blank to auto-discover). REQUIRED when NumberOfAvailabilityZones is 3 to ensure 3 AZs are available.
+    Description: Comma-separated list of availability zones to use for subnets. REQUIRED when NumberOfAvailabilityZones is 2 or 3 (e.g., 'us-east-1a,us-east-1b' for 2 AZs or 'us-east-1a,us-east-1b,us-east-1c' for 3 AZs). Leave blank only if using 1 AZ (not recommended).
 
   NumberOfAvailabilityZones:
     Type: Number
@@ -258,7 +258,7 @@ Conditions:
       - !Ref EnableNATGatewayHA
       - 'true'
     - !Condition IsProduction
-    - !Condition HasAtLeastTwoAZs
+    - !Condition HasAtLeastTwoAZsWithCustomAZs
   HasKeyPairName: !Not
     - !Equals
       - !Ref KeyPairName
@@ -276,9 +276,15 @@ Conditions:
   HasAtLeastTwoAZs: !Or
     - !Condition HasTwoAZs
     - !Condition HasThreeAZs
+  HasAtLeastTwoAZsWithCustomAZs: !And
+    - !Condition HasAtLeastTwoAZs
+    - !Condition HasCustomAZs
+  HasThreeAZsWithCustomAZs: !And
+    - !Condition HasThreeAZs
+    - !Condition HasCustomAZs
   EnableHighAvailabilityNATInAZ3: !And
     - !Condition EnableHighAvailabilityNAT
-    - !Condition HasThreeAZs
+    - !Condition HasThreeAZsWithCustomAZs
 
 # ============================================================================
 # RESOURCES
@@ -368,7 +374,7 @@ Resources:
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
-    Condition: HasAtLeastTwoAZs
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select
@@ -379,10 +385,7 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 1
-        - !If
-            - HasCustomAZs
-            - !Split [',', !Ref AvailabilityZones]
-            - !GetAZs ''
+        - !Split [',', !Ref AvailabilityZones]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -402,7 +405,7 @@ Resources:
 
   PublicSubnet3:
     Type: AWS::EC2::Subnet
-    Condition: HasThreeAZs
+    Condition: HasThreeAZsWithCustomAZs
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select
@@ -413,10 +416,7 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 2
-        - !If
-            - HasCustomAZs
-            - !Split [',', !Ref AvailabilityZones]
-            - !GetAZs ''
+        - !Split [',', !Ref AvailabilityZones]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -469,7 +469,7 @@ Resources:
 
   PrivateAppSubnet2:
     Type: AWS::EC2::Subnet
-    Condition: HasAtLeastTwoAZs
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select
@@ -480,10 +480,7 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 1
-        - !If
-            - HasCustomAZs
-            - !Split [',', !Ref AvailabilityZones]
-            - !GetAZs ''
+        - !Split [',', !Ref AvailabilityZones]
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-2
@@ -502,7 +499,7 @@ Resources:
 
   PrivateAppSubnet3:
     Type: AWS::EC2::Subnet
-    Condition: HasThreeAZs
+    Condition: HasThreeAZsWithCustomAZs
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select
@@ -513,10 +510,7 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 2
-        - !If
-            - HasCustomAZs
-            - !Split [',', !Ref AvailabilityZones]
-            - !GetAZs ''
+        - !Split [',', !Ref AvailabilityZones]
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-3
@@ -568,7 +562,7 @@ Resources:
 
   PrivateDBSubnet2:
     Type: AWS::EC2::Subnet
-    Condition: HasAtLeastTwoAZs
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select
@@ -579,10 +573,7 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 1
-        - !If
-            - HasCustomAZs
-            - !Split [',', !Ref AvailabilityZones]
-            - !GetAZs ''
+        - !Split [',', !Ref AvailabilityZones]
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-2
@@ -601,7 +592,7 @@ Resources:
 
   PrivateDBSubnet3:
     Type: AWS::EC2::Subnet
-    Condition: HasThreeAZs
+    Condition: HasThreeAZsWithCustomAZs
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select
@@ -612,10 +603,7 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 2
-        - !If
-            - HasCustomAZs
-            - !Split [',', !Ref AvailabilityZones]
-            - !GetAZs ''
+        - !Split [',', !Ref AvailabilityZones]
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-3
@@ -786,14 +774,14 @@ Resources:
 
   PublicSubnetRouteTableAssociation2:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: HasTwoAZs
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Properties:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
 
   PublicSubnetRouteTableAssociation3:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: HasThreeAZs
+    Condition: HasThreeAZsWithCustomAZs
     Properties:
       SubnetId: !Ref PublicSubnet3
       RouteTableId: !Ref PublicRouteTable
@@ -887,7 +875,7 @@ Resources:
 
   PrivateAppSubnetRouteTableAssociation2:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: HasTwoAZs
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Properties:
       SubnetId: !Ref PrivateAppSubnet2
       RouteTableId: !If
@@ -897,7 +885,7 @@ Resources:
 
   PrivateAppSubnetRouteTableAssociation3:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: HasThreeAZs
+    Condition: HasThreeAZsWithCustomAZs
     Properties:
       SubnetId: !Ref PrivateAppSubnet3
       RouteTableId: !If
@@ -913,7 +901,7 @@ Resources:
 
   PrivateDBSubnetRouteTableAssociation2:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: HasTwoAZs
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Properties:
       SubnetId: !Ref PrivateDBSubnet2
       RouteTableId: !If
@@ -923,7 +911,7 @@ Resources:
 
   PrivateDBSubnetRouteTableAssociation3:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: HasThreeAZs
+    Condition: HasThreeAZsWithCustomAZs
     Properties:
       SubnetId: !Ref PrivateDBSubnet3
       RouteTableId: !If
@@ -1051,12 +1039,12 @@ Resources:
       SecurityGroups:
         - !Ref ALBSecurityGroup
       Subnets: !If
-        - HasThreeAZs
+        - HasThreeAZsWithCustomAZs
         - - !Ref PublicSubnet1
           - !Ref PublicSubnet2
           - !Ref PublicSubnet3
         - !If
-            - HasAtLeastTwoAZs
+            - HasAtLeastTwoAZsWithCustomAZs
             - - !Ref PublicSubnet1
               - !Ref PublicSubnet2
             - - !Ref PublicSubnet1
@@ -1387,12 +1375,12 @@ Resources:
       MaxSize: !Ref MaxInstances
       DesiredCapacity: !Ref DesiredInstances
       VPCZoneIdentifier: !If
-        - HasThreeAZs
+        - HasThreeAZsWithCustomAZs
         - - !Ref PrivateAppSubnet1
           - !Ref PrivateAppSubnet2
           - !Ref PrivateAppSubnet3
         - !If
-            - HasAtLeastTwoAZs
+            - HasAtLeastTwoAZsWithCustomAZs
             - - !Ref PrivateAppSubnet1
               - !Ref PrivateAppSubnet2
             - - !Ref PrivateAppSubnet1
@@ -1441,12 +1429,15 @@ Resources:
       DBSubnetGroupName: !Sub ${ProjectName}-${Environment}-db-subnet-group
       DBSubnetGroupDescription: Subnet group for Aurora cluster across 3 AZs
       SubnetIds: !If
-        - HasThreeAZs
+        - HasThreeAZsWithCustomAZs
         - - !Ref PrivateDBSubnet1
           - !Ref PrivateDBSubnet2
           - !Ref PrivateDBSubnet3
-        - - !Ref PrivateDBSubnet1
-          - !Ref PrivateDBSubnet2
+        - !If
+            - HasAtLeastTwoAZsWithCustomAZs
+            - - !Ref PrivateDBSubnet1
+              - !Ref PrivateDBSubnet2
+            - - !Ref PrivateDBSubnet1
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-DBSubnetGroup
@@ -2222,14 +2213,14 @@ Outputs:
       Name: !Sub ${ProjectName}-${Environment}-PublicSubnet1
 
   PublicSubnet2Id:
-    Condition: HasAtLeastTwoAZs
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Description: Public Subnet 2 ID
     Value: !Ref PublicSubnet2
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PublicSubnet2
 
   PublicSubnet3Id:
-    Condition: HasThreeAZs
+    Condition: HasThreeAZsWithCustomAZs
     Description: Public Subnet 3 ID
     Value: !Ref PublicSubnet3
     Export:
@@ -2242,14 +2233,14 @@ Outputs:
       Name: !Sub ${ProjectName}-${Environment}-PrivateAppSubnet1
 
   PrivateAppSubnet2Id:
-    Condition: HasAtLeastTwoAZs
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Description: Private App Subnet 2 ID
     Value: !Ref PrivateAppSubnet2
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PrivateAppSubnet2
 
   PrivateAppSubnet3Id:
-    Condition: HasThreeAZs
+    Condition: HasThreeAZsWithCustomAZs
     Description: Private App Subnet 3 ID
     Value: !Ref PrivateAppSubnet3
     Export:
@@ -2262,14 +2253,14 @@ Outputs:
       Name: !Sub ${ProjectName}-${Environment}-PrivateDBSubnet1
 
   PrivateDBSubnet2Id:
-    Condition: HasAtLeastTwoAZs
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Description: Private DB Subnet 2 ID
     Value: !Ref PrivateDBSubnet2
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PrivateDBSubnet2
 
   PrivateDBSubnet3Id:
-    Condition: HasThreeAZs
+    Condition: HasThreeAZsWithCustomAZs
     Description: Private DB Subnet 3 ID
     Value: !Ref PrivateDBSubnet3
     Export:
