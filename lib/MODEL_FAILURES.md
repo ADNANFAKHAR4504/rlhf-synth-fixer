@@ -16,14 +16,14 @@ ValidationError: addRotationSchedule() requires either rotationLambda or hostedR
 **Impact**: Synth-time validation failure - deployment blocked
 
 **Root Cause**: The MODEL_RESPONSE included incomplete rotation configuration:
-```typescript
+```ts
 dbSecret.addRotationSchedule('RotationSchedule', {
   automaticallyAfter: cdk.Duration.days(30),
 });
 ```
 
 **Fix Applied**: Removed automatic rotation for the synthetic training task. In the actual implementation (lib/constructs/database-construct.ts), the rotation configuration was commented out with a production recommendation:
-```typescript
+```ts
 // Note: Automatic rotation removed for synthetic task
 // In production, configure with:
 // secret.addRotationSchedule('RotationSchedule', {
@@ -44,14 +44,14 @@ InvalidParameterValue: Cannot upgrade/downgrade to/from version 15.3
 **Impact**: Deployment failure after 4 minutes - stack rollback
 
 **Root Cause**: The MODEL_RESPONSE specified an invalid/outdated Aurora version:
-```typescript
+```ts
 engine: rds.DatabaseClusterEngine.auroraPostgres({
   version: rds.AuroraPostgresEngineVersion.VER_15_3,
 }),
 ```
 
 **Fix Applied**: Changed to Aurora PostgreSQL version 15.7 (verified available in eu-central-2):
-```typescript
+```ts
 engine: rds.DatabaseClusterEngine.auroraPostgres({
   version: rds.AuroraPostgresEngineVersion.VER_15_7,
 }),
@@ -77,7 +77,7 @@ engine: rds.DatabaseClusterEngine.auroraPostgres({
 1. Removed unused `customDomain` destructuring from api-gateway-construct.ts
 2. Changed `functionAlias` from destructured variable to direct instantiation
 3. Added proper `EnvironmentConfig` interface in tap-stack.ts:
-```typescript
+```ts
 interface EnvironmentConfig {
   vpcCidr: string;
   dbInstanceType: ec2.InstanceType;
@@ -111,7 +111,7 @@ InvalidRequest: 'Days' in Transition action must be greater than or equal to 30 
 **Impact**: Would cause deployment failure when deploying to dev environment (7-day retention)
 
 **Proactive Fix Applied**: Used S3 INTELLIGENT_TIERING storage class instead of STANDARD_IA, which works with any retention period including 7 days:
-```typescript
+```ts
 lifecycleRules: [
   {
     id: `intelligent-tiering-${environmentSuffix}`,
