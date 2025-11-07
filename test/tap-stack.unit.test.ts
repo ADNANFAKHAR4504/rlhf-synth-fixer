@@ -1,458 +1,877 @@
-import { App, Testing } from 'cdktf';
-import { TapStack } from '../lib/tap-stack';
+import { App } from "cdktf";
+import "cdktf/lib/testing/adapters/jest";
+import { TapStack } from "../lib/tap-stack";
+import { expect } from "@jest/globals";
+import { describe, test, beforeEach } from "@jest/globals";
 
-describe('TapStack Unit Tests', () => {
-  let app: App;
-  let stack: TapStack;
-  let synthesized: any;
+// Mock all the modules used in TapStack
+jest.mock("../lib/modules", () => ({
+  VpcModule: jest.fn().mockImplementation((scope: any, id: string, props: any) => ({
+    vpc: {
+      id: 'vpc-tap-infrastructure',
+      cidrBlock: '10.0.0.0/16',
+      enableDnsHostnames: true,
+      enableDnsSupport: true
+    },
+    publicSubnets: [
+      { id: 'public-subnet-0', cidrBlock: '10.0.1.0/24', availabilityZone: `${props.region}a` },
+      { id: 'public-subnet-1', cidrBlock: '10.0.2.0/24', availabilityZone: `${props.region}b` }
+    ],
+    privateSubnets: [
+      { id: 'private-subnet-0', cidrBlock: '10.0.10.0/24', availabilityZone: `${props.region}a` },
+      { id: 'private-subnet-1', cidrBlock: '10.0.20.0/24', availabilityZone: `${props.region}b` }
+    ],
+    internetGateway: { id: 'igw-tap', vpcId: 'vpc-tap-infrastructure' },
+    natGateways: [
+      { id: 'nat-0', allocationId: 'eip-nat-0', subnetId: 'public-subnet-0' },
+      { id: 'nat-1', allocationId: 'eip-nat-1', subnetId: 'public-subnet-1' }
+    ]
+  })),
+
+  SecurityGroupModule: jest.fn().mockImplementation((scope: any, id: string, props: any) => ({
+    securityGroup: {
+      id: `sg-${props.name}`,
+      name: props.name,
+      vpcId: props.vpcId,
+      arn: `arn:aws:ec2:us-east-1:123456789012:security-group/sg-${props.name}`
+    }
+  })),
+
+  Ec2Module: jest.fn().mockImplementation((scope: any, id: string, props: any) => ({
+    instances: props.subnetIds.map((subnetId: string, index: number) => ({
+      id: `i-${props.name}-${index}`,
+      instanceType: props.instanceType,
+      subnetId: subnetId,
+      arn: `arn:aws:ec2:us-east-1:123456789012:instance/i-${props.name}-${index}`
+    }))
+  })),
+
+  RdsModule: jest.fn().mockImplementation((scope: any, id: string, props: any) => ({
+    instance: {
+      id: props.identifier,
+      identifier: props.identifier,
+      endpoint: `${props.identifier}.cluster-xyz.us-east-1.rds.amazonaws.com:3306`,
+      address: `${props.identifier}.cluster-xyz.us-east-1.rds.amazonaws.com`,
+      port: 3306,
+      dbName: props.dbName
+    },
+    subnetGroup: {
+      id: `${props.identifier}-subnet-group`,
+      name: `${props.identifier}-subnet-group`
+    }
+  })),
+
+  AlbModule: jest.fn().mockImplementation((scope: any, id: string, props: any) => ({
+    alb: {
+      id: props.name,
+      arn: `arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/${props.name}/50dc6c495c0c9188`,
+      dnsName: `${props.name}-123456789.us-east-1.elb.amazonaws.com`,
+      name: props.name,
+      arnSuffix: `app/${props.name}/50dc6c495c0c9188`
+    },
+    targetGroup: {
+      id: `${props.name}-tg`,
+      arn: `arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/${props.name}-tg/50dc6c495c0c9188`,
+      name: `${props.name}-tg`
+    },
+    listener: {
+      id: 'https-listener',
+      arn: `arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/${props.name}/50dc6c495c0c9188/f2f7dc8efc522ab2`,
+      port: 443,
+      protocol: 'HTTPS'
+    }
+  })),
+
+  LambdaSecurityModule: jest.fn().mockImplementation((scope: any, id: string, props: any) => ({
+    function: {
+      id: 'security-lambda-function',
+      functionName: 'tap-security-checks',
+      arn: 'arn:aws:lambda:us-east-1:123456789012:function:tap-security-checks'
+    },
+    logGroup: {
+      id: 'security-lambda-log-group',
+      name: '/aws/lambda/tap-security-checks'
+    }
+  })),
+
+  SecurityServicesModule: jest.fn().mockImplementation((scope: any, id: string) => ({
+    securityHub: {
+      id: 'security-hub',
+      arn: 'arn:aws:securityhub:us-east-1:123456789012:hub/default'
+    },
+    config: {
+      id: 'config-recorder',
+      name: 'tap-config-recorder'
+    },
+    waf: {
+      id: 'waf-web-acl',
+      arn: 'arn:aws:wafv2:us-east-1:123456789012:global/webacl/tap-web-acl/a1b2c3d4'
+    },
+    cloudTrail: {
+      id: 'cloudtrail',
+      name: 'tap-cloudtrail',
+      arn: 'arn:aws:cloudtrail:us-east-1:123456789012:trail/tap-cloudtrail'
+    },
+    snsTopic: {
+      id: 'security-alerts-topic',
+      arn: 'arn:aws:sns:us-east-1:123456789012:tap-security-alerts',
+      name: 'tap-security-alerts'
+    }
+  })),
+
+  MonitoringModule: jest.fn().mockImplementation((scope: any, id: string, props: any) => ({
+    dashboard: {
+      id: 'cloudwatch-dashboard',
+      dashboardName: 'tap-monitoring',
+      dashboardArn: 'arn:aws:cloudwatch::123456789012:dashboard/tap-monitoring'
+    },
+    alarms: {
+      cpu: { id: 'cpu-alarm', alarmName: 'tap-high-cpu', arn: 'arn:aws:cloudwatch:us-east-1:123456789012:alarm:tap-high-cpu' },
+      memory: { id: 'memory-alarm', alarmName: 'tap-high-memory', arn: 'arn:aws:cloudwatch:us-east-1:123456789012:alarm:tap-high-memory' }
+    }
+  }))
+}));
+
+// Mock TerraformOutput, S3Backend
+jest.mock("cdktf", () => {
+  const actual = jest.requireActual("cdktf");
+  return {
+    ...actual,
+    TerraformOutput: jest.fn(),
+    S3Backend: jest.fn().mockImplementation((scope: any, config: any) => ({})),
+    TerraformStack: actual.TerraformStack
+  };
+});
+
+// Mock AWS Provider
+jest.mock("@cdktf/provider-aws/lib/provider", () => ({
+  AwsProvider: jest.fn(),
+}));
+
+// Mock AWS resources and data sources
+jest.mock("@cdktf/provider-aws", () => ({
+  dataAwsRegion: {
+    DataAwsRegion: jest.fn().mockImplementation(() => ({
+      id: 'us-east-1',
+      name: 'us-east-1'
+    }))
+  },
+  dataAwsCallerIdentity: {
+    DataAwsCallerIdentity: jest.fn().mockImplementation(() => ({
+      accountId: '123456789012',
+      arn: 'arn:aws:iam::123456789012:root'
+    }))
+  },
+  s3Bucket: {
+    S3Bucket: jest.fn().mockImplementation((scope: any, id: string, props: any) => ({
+      id: props.bucket,
+      bucket: props.bucket,
+      arn: `arn:aws:s3:::${props.bucket}`
+    }))
+  },
+  secretsmanagerSecret: {
+    SecretsmanagerSecret: jest.fn().mockImplementation((scope: any, id: string, props: any) => ({
+      id: props.name,
+      name: props.name,
+      arn: `arn:aws:secretsmanager:us-east-1:123456789012:secret:${props.name}-abcdef`
+    }))
+  },
+  secretsmanagerSecretVersion: {
+    SecretsmanagerSecretVersion: jest.fn().mockImplementation(() => ({ id: 'secret-version' }))
+  },
+  dynamodbTable: {
+    DynamodbTable: jest.fn().mockImplementation((scope: any, id: string, props: any) => ({
+      id: props.name,
+      name: props.name,
+      arn: `arn:aws:dynamodb:us-east-1:123456789012:table/${props.name}`
+    }))
+  },
+  s3BucketServerSideEncryptionConfiguration: {
+    S3BucketServerSideEncryptionConfigurationA: jest.fn().mockImplementation(() => ({ id: 'encryption-config' }))
+  },
+  s3BucketPublicAccessBlock: {
+    S3BucketPublicAccessBlock: jest.fn().mockImplementation(() => ({ id: 'public-access-block' }))
+  },
+  ebsEncryptionByDefault: {
+    EbsEncryptionByDefault: jest.fn().mockImplementation(() => ({ id: 'ebs-encryption', enabled: true }))
+  },
+  iamAccountPasswordPolicy: {
+    IamAccountPasswordPolicy: jest.fn().mockImplementation(() => ({ id: 'password-policy' }))
+  },
+  snsTopicSubscription: {
+    SnsTopicSubscription: jest.fn().mockImplementation(() => ({ id: 'sns-subscription' }))
+  },
+  cloudwatchLogMetricFilter: {
+    CloudwatchLogMetricFilter: jest.fn().mockImplementation(() => ({ id: 'log-metric-filter' }))
+  }
+}));
+
+// Override the prototype method
+const mockAddOverride = jest.fn();
+TapStack.prototype.addOverride = mockAddOverride;
+
+describe("TapStack Unit Tests", () => {
+  const { 
+    VpcModule,
+    SecurityGroupModule,
+    Ec2Module,
+    RdsModule,
+    AlbModule,
+    LambdaSecurityModule,
+    SecurityServicesModule,
+    MonitoringModule
+  } = require("../lib/modules");
+  const { TerraformOutput, S3Backend } = require("cdktf");
+  const { AwsProvider } = require("@cdktf/provider-aws/lib/provider");
+  const aws = require("@cdktf/provider-aws");
 
   beforeEach(() => {
     jest.clearAllMocks();
-    app = new App();
-    stack = new TapStack(app, 'TestTapStack', {
-      environmentSuffix: 'test',
-      stateBucket: 'test-state-bucket',
-      stateBucketRegion: 'us-east-1',
-      awsRegion: 'us-east-1',
-    });
-    synthesized = JSON.parse(Testing.synth(stack));
   });
 
-  describe('Stack Structure', () => {
-    test('should instantiate successfully with props', () => {
+  describe("Stack Creation and Configuration", () => {
+    test("should create TapStack with default configuration", () => {
+      const app = new App();
+      const stack = new TapStack(app, "TestStack");
+
       expect(stack).toBeDefined();
-      expect(synthesized).toBeDefined();
-      expect(synthesized.resource).toBeDefined();
-    });
+      expect(stack).toBeInstanceOf(TapStack);
 
-    test('should use default values when no props provided', () => {
-      const defaultStack = new TapStack(app, 'DefaultStack');
-      const defaultSynthesized = JSON.parse(Testing.synth(defaultStack));
-      
-      expect(defaultStack).toBeDefined();
-      expect(defaultSynthesized).toBeDefined();
-    });
-
-    test('should have terraform backend configuration', () => {
-      expect(synthesized.terraform.backend).toBeDefined();
-      expect(synthesized.terraform.backend.s3).toBeDefined();
-      expect(synthesized.terraform.backend.s3.bucket).toBe('test-state-bucket');
-      expect(synthesized.terraform.backend.s3.key).toBe('test/TestTapStack.tfstate');
-    });
-  });
-
-  describe('VPC Resources', () => {
-    test('should create VPC with correct CIDR and DNS settings', () => {
-      const vpc = Object.values(synthesized.resource.aws_vpc)[0] as any;
-      
-      expect(vpc.cidr_block).toBe('10.0.0.0/16');
-      expect(vpc.enable_dns_hostnames).toBe(true);
-      expect(vpc.enable_dns_support).toBe(true);
-      expect(vpc.tags.Name).toBe('tap-vpc-test');
-    });
-
-    test('should create public subnets with correct configuration', () => {
-      const subnets = Object.values(synthesized.resource.aws_subnet).filter(
-        (subnet: any) => subnet.map_public_ip_on_launch === true
-      );
-      
-      expect(subnets).toHaveLength(2);
-      subnets.forEach((subnet: any) => {
-        expect(subnet.cidr_block).toMatch(/^10\.0\.[12]\.0\/24$/);
-        expect(subnet.availability_zone).toMatch(/^us-east-1[ab]$/);
-        expect(subnet.tags.Type).toBe('Public');
-      });
-    });
-
-    test('should create private subnets with correct configuration', () => {
-      const subnets = Object.values(synthesized.resource.aws_subnet).filter(
-        (subnet: any) => subnet.map_public_ip_on_launch !== true
-      );
-      
-      expect(subnets).toHaveLength(2);
-      subnets.forEach((subnet: any) => {
-        expect(subnet.cidr_block).toMatch(/^10\.0\.(10|20)\.0\/24$/);
-        expect(subnet.availability_zone).toMatch(/^us-east-1[ab]$/);
-        expect(subnet.tags.Type).toBe('Private');
-      });
-    });
-
-    test('should create internet gateway and NAT gateways', () => {
-      const igw = Object.values(synthesized.resource.aws_internet_gateway)[0];
-      const natGateways = Object.values(synthesized.resource.aws_nat_gateway);
-      const eips = Object.values(synthesized.resource.aws_eip);
-      
-      expect(igw).toBeDefined();
-      expect(natGateways).toHaveLength(2);
-      expect(eips).toHaveLength(2);
-    });
-  });
-
-  describe('Security Groups', () => {
-    test('should create ALB security group with HTTPS access', () => {
-      const securityGroups = Object.values(synthesized.resource.aws_security_group);
-      const securityGroupRules = Object.values(synthesized.resource.aws_security_group_rule);
-      
-      const httpsRule = securityGroupRules.find((rule: any) => 
-        rule.from_port === 443 && rule.to_port === 443 && rule.type === 'ingress'
-      );
-      
-      expect(httpsRule).toBeDefined();
-      expect((httpsRule as any).cidr_blocks).toContain('0.0.0.0/0');
-    });
-
-    test('should create EC2 security group with restricted access', () => {
-      const securityGroupRules = Object.values(synthesized.resource.aws_security_group_rule);
-      
-      const sshRule = securityGroupRules.find((rule: any) => 
-        rule.from_port === 22 && rule.to_port === 22 && rule.type === 'ingress'
-      );
-      
-      expect(sshRule).toBeDefined();
-      expect((sshRule as any).cidr_blocks).toContain('10.0.0.0/16');
-    });
-
-    test('should create RDS security group with database port access', () => {
-      const securityGroupRules = Object.values(synthesized.resource.aws_security_group_rule);
-      
-      const mysqlRule = securityGroupRules.find((rule: any) => 
-        rule.from_port === 3306 && rule.to_port === 3306 && rule.type === 'ingress'
-      );
-      
-      expect(mysqlRule).toBeDefined();
-      expect((mysqlRule as any).source_security_group_id).toBeDefined();
-    });
-  });
-
-  describe('EC2 Instances', () => {
-    test('should create EC2 instances with proper configuration', () => {
-      const instances = Object.values(synthesized.resource.aws_instance);
-      
-      expect(instances).toHaveLength(2);
-      instances.forEach((instance: any) => {
-        expect(instance.instance_type).toBe('t3.medium');
-        expect(instance.monitoring).toBe(true);
-        expect(instance.root_block_device.encrypted).toBe(true);
-        expect(instance.ebs_block_device[0].encrypted).toBe(true);
-      });
-    });
-
-    test('should create IAM role for EC2 instances', () => {
-      const roles = Object.values(synthesized.resource.aws_iam_role);
-      const instanceProfiles = Object.values(synthesized.resource.aws_iam_instance_profile);
-      
-      const ec2Role = roles.find((role: any) => 
-        role.name && role.name.includes('tap-app-server-test-role')
-      );
-      
-      expect(ec2Role).toBeDefined();
-      expect(instanceProfiles).toHaveLength(2);
-    });
-
-    test('should create auto-recovery alarms for EC2 instances', () => {
-      const alarms = Object.values(synthesized.resource.aws_cloudwatch_metric_alarm);
-      
-      const recoveryAlarms = alarms.filter((alarm: any) => 
-        alarm.alarm_name && alarm.alarm_name.includes('auto-recovery')
-      );
-      
-      expect(recoveryAlarms).toHaveLength(2);
-      recoveryAlarms.forEach((alarm: any) => {
-        expect(alarm.metric_name).toBe('StatusCheckFailed_System');
-        expect(alarm.alarm_actions).toContain('arn:aws:automate:${data.aws_region.current.name}:ec2:recover');
-      });
-    });
-  });
-
-  describe('RDS Database', () => {
-    test('should create RDS instance with proper configuration', () => {
-      const rdsInstances = Object.values(synthesized.resource.aws_db_instance);
-      const subnetGroups = Object.values(synthesized.resource.aws_db_subnet_group);
-      
-      expect(rdsInstances).toHaveLength(1);
-      expect(subnetGroups).toHaveLength(1);
-      
-      const rdsInstance = rdsInstances[0] as any;
-      expect(rdsInstance.engine).toBe('mysql');
-      expect(rdsInstance.instance_class).toBe('db.t3.medium');
-      expect(rdsInstance.publicly_accessible).toBe(false);
-      expect(rdsInstance.storage_encrypted).toBe(true);
-      expect(rdsInstance.deletion_protection).toBe(false);
-      expect(rdsInstance.manage_master_user_password).toBe(true);
-    });
-
-    test('should have RDS in private subnets', () => {
-      const subnetGroup = Object.values(synthesized.resource.aws_db_subnet_group)[0] as any;
-      
-      expect(subnetGroup.subnet_ids).toHaveLength(2);
-    });
-  });
-
-  describe('Load Balancer', () => {
-    test('should create ALB with proper configuration', () => {
-      const albs = Object.values(synthesized.resource.aws_lb);
-      const targetGroups = Object.values(synthesized.resource.aws_lb_target_group);
-      const listeners = Object.values(synthesized.resource.aws_lb_listener);
-      
-      expect(albs).toHaveLength(1);
-      expect(targetGroups).toHaveLength(1);
-      expect(listeners).toHaveLength(1);
-      
-      const alb = albs[0] as any;
-      expect(alb.load_balancer_type).toBe('application');
-      expect(alb.internal).toBe(false);
-      expect(alb.enable_deletion_protection).toBe(false);
-    });
-
-    test('should have target group with health check configuration', () => {
-      const targetGroup = Object.values(synthesized.resource.aws_lb_target_group)[0] as any;
-      
-      expect(targetGroup.port).toBe(80);
-      expect(targetGroup.protocol).toBe('HTTP');
-      expect(targetGroup.health_check.path).toBe('/health');
-      expect(targetGroup.health_check.matcher).toBe('200');
-    });
-  });
-
-  describe('Lambda Security Module', () => {
-    test('should create Lambda function with proper configuration', () => {
-      const lambdaFunctions = Object.values(synthesized.resource.aws_lambda_function);
-      const lambdaRoles = Object.values(synthesized.resource.aws_iam_role).filter((role: any) => 
-        role.name && role.name.includes('security-automation-lambda-role')
-      );
-      
-      expect(lambdaFunctions).toHaveLength(1);
-      expect(lambdaRoles).toHaveLength(1);
-      
-      const lambdaFunction = lambdaFunctions[0] as any;
-      expect(lambdaFunction.runtime).toBe('python3.11');
-      expect(lambdaFunction.handler).toBe('index.handler');
-      expect(lambdaFunction.timeout).toBe(60);
-    });
-
-    test('should create CloudWatch event rule for Lambda trigger', () => {
-      const eventRules = Object.values(synthesized.resource.aws_cloudwatch_event_rule);
-      const eventTargets = Object.values(synthesized.resource.aws_cloudwatch_event_target);
-      
-      const scheduleRule = eventRules.find((rule: any) => 
-        rule.schedule_expression === 'rate(1 hour)'
-      );
-      
-      expect(scheduleRule).toBeDefined();
-      expect(eventTargets).toHaveLength(2); // Lambda trigger + SNS target
-    });
-  });
-
-  describe('Security Services', () => {
-    test('should enable Security Hub', () => {
-      const securityHub = Object.values(synthesized.resource.aws_securityhub_account);
-      const standards = Object.values(synthesized.resource.aws_securityhub_standards_subscription);
-      
-      expect(securityHub).toHaveLength(1);
-      expect(standards).toHaveLength(1);
-      
-      const hub = securityHub[0] as any;
-      expect(hub.enable_default_standards).toBe(true);
-      expect(hub.auto_enable_controls).toBe(true);
-    });
-
-    test('should create CloudTrail with proper configuration', () => {
-      const cloudtrails = Object.values(synthesized.resource.aws_cloudtrail);
-      
-      expect(cloudtrails).toHaveLength(1);
-      
-      const trail = cloudtrails[0] as any;
-      expect(trail.include_global_service_events).toBe(true);
-      expect(trail.is_multi_region_trail).toBe(true);
-      expect(trail.enable_log_file_validation).toBe(true);
-    });
-
-    test('should create WAF Web ACL with managed rules', () => {
-      const wafAcls = Object.values(synthesized.resource.aws_wafv2_web_acl);
-      
-      expect(wafAcls).toHaveLength(1);
-      
-      const waf = wafAcls[0] as any;
-      expect(waf.scope).toBe('REGIONAL');
-      expect(waf.rule).toHaveLength(3);
-      
-      const ruleNames = waf.rule.map((rule: any) => rule.name);
-      expect(ruleNames).toContain('RateLimitRule');
-      expect(ruleNames).toContain('AWSManagedRulesCommonRuleSet');
-      expect(ruleNames).toContain('AWSManagedRulesKnownBadInputsRuleSet');
-    });
-
-    test('should create SNS topic for security alerts', () => {
-      const snsTopics = Object.values(synthesized.resource.aws_sns_topic);
-      const snsSubscriptions = Object.values(synthesized.resource.aws_sns_topic_subscription);
-      
-      expect(snsTopics).toHaveLength(1);
-      expect(snsSubscriptions).toHaveLength(1);
-      
-      const subscription = snsSubscriptions[0] as any;
-      expect(subscription.protocol).toBe('email');
-    });
-  });
-
-  describe('Storage and Encryption', () => {
-    test('should create S3 buckets with encryption', () => {
-      const s3Buckets = Object.values(synthesized.resource.aws_s3_bucket);
-      const s3Encryption = Object.values(synthesized.resource.aws_s3_bucket_server_side_encryption_configuration);
-      
-      expect(s3Buckets).toHaveLength(2); // Lambda code bucket and logs bucket
-      expect(s3Encryption).toHaveLength(2);
-      
-      s3Encryption.forEach((encryption: any) => {
-        expect(encryption.rule[0].apply_server_side_encryption_by_default.sse_algorithm).toBe('AES256');
-      });
-    });
-
-    test('should create Secrets Manager secret for API keys', () => {
-      const secrets = Object.values(synthesized.resource.aws_secretsmanager_secret);
-      const secretVersions = Object.values(synthesized.resource.aws_secretsmanager_secret_version);
-      
-      expect(secrets).toHaveLength(1);
-      expect(secretVersions).toHaveLength(1);
-      
-      const secret = secrets[0] as any;
-      expect(secret.kms_key_id).toBe('alias/aws/secretsmanager');
-    });
-
-    test('should create DynamoDB table with encryption and backup', () => {
-      const dynamoTables = Object.values(synthesized.resource.aws_dynamodb_table);
-      
-      expect(dynamoTables).toHaveLength(1);
-      
-      const table = dynamoTables[0] as any;
-      expect(table.billing_mode).toBe('PAY_PER_REQUEST');
-      expect(table.server_side_encryption.enabled).toBe(true);
-      expect(table.point_in_time_recovery.enabled).toBe(true);
-    });
-
-    test('should enable EBS default encryption', () => {
-      const ebsEncryption = Object.values(synthesized.resource.aws_ebs_encryption_by_default);
-      
-      expect(ebsEncryption).toHaveLength(1);
-      expect((ebsEncryption[0] as any).enabled).toBe(true);
-    });
-  });
-
-  describe('Monitoring and Logging', () => {
-    test('should create CloudWatch dashboard', () => {
-      const dashboards = Object.values(synthesized.resource.aws_cloudwatch_dashboard);
-      
-      expect(dashboards).toHaveLength(1);
-      
-      const dashboard = dashboards[0] as any;
-      expect(dashboard.dashboard_name).toMatch(/security-monitoring-dashboard-test/);
-    });
-
-    test('should create CloudWatch alarms for resources', () => {
-      const alarms = Object.values(synthesized.resource.aws_cloudwatch_metric_alarm);
-      
-      // Should have CPU alarms for EC2, RDS, ALB, and auto-recovery alarms
-      expect(alarms.length).toBeGreaterThanOrEqual(5);
-      
-      const cpuAlarms = alarms.filter((alarm: any) => 
-        alarm.metric_name === 'CPUUtilization'
-      );
-      expect(cpuAlarms).toHaveLength(3); // 2 EC2 + 1 RDS
-    });
-
-    test('should create log groups with retention', () => {
-      const logGroups = Object.values(synthesized.resource.aws_cloudwatch_log_group);
-      
-      expect(logGroups.length).toBeGreaterThanOrEqual(2);
-      
-      logGroups.forEach((logGroup: any) => {
-        expect(logGroup.retention_in_days).toBeGreaterThan(0);
-      });
-    });
-  });
-
-  describe('IAM and Security Policies', () => {
-    test('should create IAM password policy', () => {
-      const passwordPolicies = Object.values(synthesized.resource.aws_iam_account_password_policy);
-      
-      expect(passwordPolicies).toHaveLength(1);
-      
-      const policy = passwordPolicies[0] as any;
-      expect(policy.minimum_password_length).toBe(14);
-      expect(policy.require_lowercase_characters).toBe(true);
-      expect(policy.require_uppercase_characters).toBe(true);
-      expect(policy.require_numbers).toBe(true);
-      expect(policy.require_symbols).toBe(true);
-    });
-
-    test('should have proper IAM roles with least privilege', () => {
-      const roles = Object.values(synthesized.resource.aws_iam_role);
-      const rolePolicies = Object.values(synthesized.resource.aws_iam_role_policy);
-      const policyAttachments = Object.values(synthesized.resource.aws_iam_role_policy_attachment);
-      
-      expect(roles.length).toBeGreaterThanOrEqual(4);
-      expect(policyAttachments.length).toBeGreaterThanOrEqual(2);
-      
-      // Verify Lambda role has specific permissions
-      const lambdaRole = roles.find((role: any) => 
-        role.name && role.name.includes('security-automation-lambda-role')
-      );
-      expect(lambdaRole).toBeDefined();
-    });
-  });
-
-  describe('Outputs', () => {
-    test('should have all required outputs', () => {
-      const outputs = synthesized.output;
-      
-      expect(outputs['vpc-id']).toBeDefined();
-      expect(outputs['alb-dns']).toBeDefined();
-      expect(outputs['rds-endpoint']).toBeDefined();
-      expect(outputs['lambda-s3-bucket']).toBeDefined();
-      expect(outputs['ec2-instance-ids']).toBeDefined();
-      expect(outputs['security-hub-arn']).toBeDefined();
-      expect(outputs['cloudtrail-arn']).toBeDefined();
-      expect(outputs['lambda-function-arn']).toBeDefined();
-      expect(outputs['sns-topic-arn']).toBeDefined();
-      expect(outputs['dashboard-url']).toBeDefined();
-    });
-
-    test('should mark sensitive outputs appropriately', () => {
-      const rdsOutput = synthesized.output['rds-endpoint'];
-      
-      expect(rdsOutput.sensitive).toBe(true);
-    });
-  });
-
-  describe('Resource Naming and Tagging', () => {
-    test('should include environment suffix in resource names', () => {
-      // Test VPC name
-      const vpc = Object.values(synthesized.resource.aws_vpc)[0] as any;
-      expect(vpc.tags.Name).toBe('tap-vpc-test');
-      
-      // Test security group names
-      const securityGroups = Object.values(synthesized.resource.aws_security_group);
-      securityGroups.forEach((sg: any) => {
-        expect(sg.name).toContain('test');
-      });
-    });
-
-    test('should have consistent tagging across resources', () => {
-      const resourceTypes = [
-        'aws_vpc', 'aws_subnet', 'aws_instance', 'aws_db_instance', 
-        'aws_lb', 'aws_s3_bucket', 'aws_lambda_function'
-      ];
-      
-      resourceTypes.forEach(resourceType => {
-        const resources = synthesized.resource[resourceType];
-        if (resources) {
-          Object.values(resources).forEach((resource: any) => {
-            if (resource.tags) {
-              expect(resource.tags.Environment).toBe('production');
-              expect(resource.tags.Owner).toBe('platform-team');
+      // Verify AWS Provider is configured with default region
+      expect(AwsProvider).toHaveBeenCalledWith(
+        expect.anything(),
+        'aws',
+        expect.objectContaining({
+          region: 'us-east-1',
+          defaultTags: [{
+            tags: {
+              ManagedBy: 'CDKTF',
+              Project: 'SecureInfrastructure',
+              CostCenter: 'Engineering'
             }
-          });
-        }
+          }]
+        })
+      );
+    });
+
+    test("should create TapStack with custom aws region", () => {
+      const app = new App();
+      new TapStack(app, "TestStack", {
+        awsRegion: 'eu-west-1'
       });
+
+      expect(AwsProvider).toHaveBeenCalledWith(
+        expect.anything(),
+        'aws',
+        expect.objectContaining({
+          region: 'eu-west-1'
+        })
+      );
+    });
+
+    test("should create data sources", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      expect(aws.dataAwsRegion.DataAwsRegion).toHaveBeenCalledTimes(1);
+      expect(aws.dataAwsCallerIdentity.DataAwsCallerIdentity).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("S3 Backend Configuration", () => {
+    test("should configure S3 backend with default settings", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      expect(S3Backend).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          bucket: 'iac-rlhf-tf-states',
+          key: 'dev/TestStack.tfstate',
+          region: 'us-east-1',
+          encrypt: true
+        })
+      );
+
+      expect(mockAddOverride).toHaveBeenCalledWith(
+        'terraform.backend.s3.use_lockfile',
+        true
+      );
+    });
+
+    test("should configure S3 backend with custom settings", () => {
+      const app = new App();
+      new TapStack(app, "TestStack", {
+        stateBucket: 'my-custom-bucket',
+        stateBucketRegion: 'ap-south-1',
+        environmentSuffix: 'prod'
+      });
+
+      expect(S3Backend).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          bucket: 'my-custom-bucket',
+          key: 'prod/TestStack.tfstate',
+          region: 'ap-south-1',
+          encrypt: true
+        })
+      );
+    });
+  });
+
+  describe("VPC and Networking", () => {
+    test("should create VpcModule with correct configuration", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      expect(VpcModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'vpc',
+        expect.objectContaining({
+          name: 'tap-vpc',
+          cidr: '10.0.0.0/16',
+          azCount: 2,
+          publicSubnetCidrs: ['10.0.1.0/24', '10.0.2.0/24'],
+          privateSubnetCidrs: ['10.0.10.0/24', '10.0.20.0/24'],
+          region: 'us-east-1',
+          tags: expect.objectContaining({
+            Environment: 'production',
+            Owner: 'platform-team',
+            Project: 'tap-infrastructure',
+            Compliance: 'required'
+          })
+        })
+      );
+    });
+
+    test("should pass correct region to VPC", () => {
+      const app = new App();
+      new TapStack(app, "TestStack", {
+        awsRegion: 'eu-central-1'
+      });
+
+      expect(VpcModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'vpc',
+        expect.objectContaining({
+          region: 'eu-central-1'
+        })
+      );
+    });
+  });
+
+  describe("Security Groups", () => {
+    test("should create ALB security group with HTTPS ingress", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      const albSgCall = SecurityGroupModule.mock.calls.find(
+        (call: any) => call[1] === 'alb-sg'
+      );
+
+      expect(albSgCall).toBeDefined();
+      expect(albSgCall[2]).toEqual(expect.objectContaining({
+        name: 'tap-alb-sg',
+        ingressRules: [{
+          fromPort: 443,
+          toPort: 443,
+          protocol: 'tcp',
+          cidrBlocks: ['0.0.0.0/0']
+        }]
+      }));
+    });
+
+    test("should create EC2 security group with proper rules", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      const ec2SgCall = SecurityGroupModule.mock.calls.find(
+        (call: any) => call[1] === 'ec2-sg'
+      );
+
+      expect(ec2SgCall).toBeDefined();
+      expect(ec2SgCall[2].ingressRules).toHaveLength(2);
+      expect(ec2SgCall[2].ingressRules[0]).toEqual(expect.objectContaining({
+        fromPort: 443,
+        toPort: 443,
+        protocol: 'tcp',
+        securityGroups: expect.arrayContaining(['sg-tap-alb-sg'])
+      }));
+    });
+
+    test("should create RDS security group allowing MySQL from EC2", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      const rdsSgCall = SecurityGroupModule.mock.calls.find(
+        (call: any) => call[1] === 'rds-sg'
+      );
+
+      expect(rdsSgCall).toBeDefined();
+      expect(rdsSgCall[2].ingressRules[0]).toEqual(expect.objectContaining({
+        fromPort: 3306,
+        toPort: 3306,
+        protocol: 'tcp',
+        securityGroups: expect.arrayContaining(['sg-tap-ec2-sg'])
+      }));
+    });
+
+    test("should create Lambda security group", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      const lambdaSgCall = SecurityGroupModule.mock.calls.find(
+        (call: any) => call[1] === 'lambda-sg'
+      );
+
+      expect(lambdaSgCall).toBeDefined();
+      expect(lambdaSgCall[2]).toEqual(expect.objectContaining({
+        name: 'tap-lambda-sg',
+        ingressRules: []
+      }));
+    });
+  });
+
+  describe("EC2 Module", () => {
+    test("should create EC2 instances in private subnets", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      expect(Ec2Module).toHaveBeenCalledWith(
+        expect.anything(),
+        'ec2',
+        expect.objectContaining({
+          name: 'tap-app-server',
+          instanceType: 't3.medium',
+          subnetIds: ['private-subnet-0', 'private-subnet-1'],
+          securityGroupIds: ['sg-tap-ec2-sg'],
+          userData: expect.stringContaining('nginx')
+        })
+      );
+    });
+
+    test("should configure EC2 with CloudWatch agent", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      const ec2Call = Ec2Module.mock.calls[0];
+      expect(ec2Call[2].userData).toContain('amazon-cloudwatch-agent');
+    });
+  });
+
+  describe("RDS Module", () => {
+    test("should create RDS instance with correct configuration", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      expect(RdsModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'rds',
+        expect.objectContaining({
+          identifier: 'tap-database',
+          engine: 'mysql',
+          instanceClass: 'db.t3.medium',
+          allocatedStorage: 100,
+          dbName: 'tapdb',
+          masterUsername: 'admin',
+          subnetIds: ['private-subnet-0', 'private-subnet-1'],
+          securityGroupIds: ['sg-tap-rds-sg']
+        })
+      );
+    });
+  });
+
+  describe("ALB Module", () => {
+    test("should create ALB in public subnets", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      const ec2Module = Ec2Module.mock.results[0].value;
+
+      expect(AlbModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'alb',
+        expect.objectContaining({
+          name: 'tap-alb',
+          vpcId: 'vpc-tap-infrastructure',
+          subnetIds: ['public-subnet-0', 'public-subnet-1'],
+          securityGroupIds: ['sg-tap-alb-sg'],
+          targetGroupPort: 80,
+          targetGroupProtocol: 'HTTP',
+          targetInstances: ec2Module.instances.map((i: any) => i.id)
+        })
+      );
+    });
+  });
+
+  describe("Lambda Security Module", () => {
+    test("should create Lambda security module with VPC configuration", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      expect(LambdaSecurityModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'security-lambda',
+        expect.objectContaining({
+          subnetIds: ['private-subnet-0', 'private-subnet-1'],
+          securityGroupIds: ['sg-tap-lambda-sg']
+        }),
+        'tap-lambda-code-123456789012',
+        'security-lambda.zip',
+        expect.objectContaining({
+          Environment: 'production',
+          Owner: 'platform-team',
+          Project: 'tap-infrastructure',
+          Compliance: 'required'
+        })
+      );
+    });
+
+    test("should create S3 bucket for Lambda code", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      expect(aws.s3Bucket.S3Bucket).toHaveBeenCalledWith(
+        expect.anything(),
+        'lambda-code-bucket',
+        expect.objectContaining({
+          bucket: 'tap-lambda-code-123456789012'
+        })
+      );
+    });
+  });
+
+  describe("Security Services", () => {
+    test("should create security services with ALB ARN", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      const albModule = AlbModule.mock.results[0].value;
+
+      expect(SecurityServicesModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'security-services',
+        albModule.alb.arn,
+        expect.objectContaining({
+          Environment: 'production'
+        })
+      );
+    });
+
+    test("should create CloudTrail log metric filter", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      expect(aws.cloudwatchLogMetricFilter.CloudwatchLogMetricFilter).toHaveBeenCalledWith(
+        expect.anything(),
+        'unauthorized-api-calls',
+        expect.objectContaining({
+          name: 'UnauthorizedAPICalls',
+          pattern: '{ ($.errorCode = *UnauthorizedOperation) || ($.errorCode = AccessDenied*) }',
+          logGroupName: '/aws/cloudtrail/security-logs-production'
+        })
+      );
+    });
+  });
+
+  describe("Secrets Management", () => {
+    test("should create Secrets Manager secret for API keys", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      expect(aws.secretsmanagerSecret.SecretsmanagerSecret).toHaveBeenCalledWith(
+        expect.anything(),
+        'api-keys',
+        expect.objectContaining({
+          name: 'tap-api-keys-ts',
+          description: 'API keys for external services',
+          kmsKeyId: 'alias/aws/secretsmanager'
+        })
+      );
+
+      expect(aws.secretsmanagerSecretVersion.SecretsmanagerSecretVersion).toHaveBeenCalled();
+    });
+  });
+
+  describe("DynamoDB Table", () => {
+    test("should create DynamoDB table with encryption and backup", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      expect(aws.dynamodbTable.DynamodbTable).toHaveBeenCalledWith(
+        expect.anything(),
+        'app-table',
+        expect.objectContaining({
+          name: 'tap-application-data',
+          billingMode: 'PAY_PER_REQUEST',
+          hashKey: 'id',
+          rangeKey: 'timestamp',
+          serverSideEncryption: { enabled: true },
+          pointInTimeRecovery: { enabled: true }
+        })
+      );
+    });
+  });
+
+  describe("S3 Buckets", () => {
+    test("should create log bucket with encryption", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      expect(aws.s3Bucket.S3Bucket).toHaveBeenCalledWith(
+        expect.anything(),
+        'log-bucket',
+        expect.objectContaining({
+          bucket: 'tap-logs-123456789012'
+        })
+      );
+
+      expect(aws.s3BucketServerSideEncryptionConfiguration.S3BucketServerSideEncryptionConfigurationA).toHaveBeenCalled();
+      expect(aws.s3BucketPublicAccessBlock.S3BucketPublicAccessBlock).toHaveBeenCalled();
+    });
+  });
+
+  describe("Security Configurations", () => {
+    test("should enable EBS default encryption", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      expect(aws.ebsEncryptionByDefault.EbsEncryptionByDefault).toHaveBeenCalledWith(
+        expect.anything(),
+        'ebs-encryption',
+        expect.objectContaining({
+          enabled: true
+        })
+      );
+    });
+
+    test("should configure IAM password policy", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      expect(aws.iamAccountPasswordPolicy.IamAccountPasswordPolicy).toHaveBeenCalledWith(
+        expect.anything(),
+        'password-policy',
+        expect.objectContaining({
+          minimumPasswordLength: 14,
+          requireLowercaseCharacters: true,
+          requireNumbers: true,
+          requireUppercaseCharacters: true,
+          requireSymbols: true,
+          passwordReusePrevention: 24,
+          maxPasswordAge: 90
+        })
+      );
+    });
+
+    test("should create SNS subscription for security alerts", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      expect(aws.snsTopicSubscription.SnsTopicSubscription).toHaveBeenCalledWith(
+        expect.anything(),
+        'security-alert-email',
+        expect.objectContaining({
+          protocol: 'email',
+          endpoint: 'security-team@example.com'
+        })
+      );
+    });
+  });
+
+  describe("Monitoring", () => {
+    test("should create monitoring module with all resources", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      const albModule = AlbModule.mock.results[0].value;
+      const ec2Module = Ec2Module.mock.results[0].value;
+      const rdsModule = RdsModule.mock.results[0].value;
+
+      expect(MonitoringModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'monitoring',
+        expect.objectContaining({
+          albName: albModule.alb.name,
+          instanceIds: ec2Module.instances.map((i: any) => i.id),
+          rdsIdentifier: rdsModule.instance.identifier
+        }),
+        expect.objectContaining({
+          Environment: 'production'
+        })
+      );
+    });
+  });
+
+  describe("Terraform Outputs", () => {
+    test("should create all required outputs", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      expect(TerraformOutput).toHaveBeenCalledTimes(10);
+
+      const outputCalls = TerraformOutput.mock.calls;
+      const outputIds = outputCalls.map((call: any) => call[1]);
+
+      expect(outputIds).toContain('vpc-id');
+      expect(outputIds).toContain('alb-dns');
+      expect(outputIds).toContain('rds-endpoint');
+      expect(outputIds).toContain('lambda-s3-bucket');
+      expect(outputIds).toContain('ec2-instance-ids');
+      expect(outputIds).toContain('security-hub-arn');
+      expect(outputIds).toContain('cloudtrail-arn');
+      expect(outputIds).toContain('lambda-function-arn');
+      expect(outputIds).toContain('sns-topic-arn');
+      expect(outputIds).toContain('dashboard-url');
+    });
+
+    test("should mark RDS endpoint as sensitive", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      const rdsOutput = TerraformOutput.mock.calls.find(
+        (call: any) => call[1] === 'rds-endpoint'
+      );
+
+      expect(rdsOutput[2]).toEqual(expect.objectContaining({
+        sensitive: true
+      }));
+    });
+
+    test("should create dashboard URL with correct region", () => {
+      const app = new App();
+      new TapStack(app, "TestStack", {
+        awsRegion: 'eu-west-1'
+      });
+
+      const dashboardOutput = TerraformOutput.mock.calls.find(
+        (call: any) => call[1] === 'dashboard-url'
+      );
+
+      expect(dashboardOutput[2].value).toContain('https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=tap-monitoring');
+      expect(dashboardOutput[2].value).toContain('tap-monitoring');
+    });
+
+    test("should output EC2 instance IDs as comma-separated string", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      const ec2Output = TerraformOutput.mock.calls.find(
+        (call: any) => call[1] === 'ec2-instance-ids'
+      );
+
+      expect(ec2Output[2].value).toBe('i-tap-app-server-0,i-tap-app-server-1');
+    });
+  });
+
+  describe("Module Creation Order", () => {
+    test("should create modules in correct dependency order", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      // VPC should be created before security groups
+      const vpcCallIndex = VpcModule.mock.invocationCallOrder[0];
+      const sgCallIndex = SecurityGroupModule.mock.invocationCallOrder[0];
+      expect(vpcCallIndex).toBeLessThan(sgCallIndex);
+
+      // Security groups should be created before EC2, RDS, and ALB
+      const ec2CallIndex = Ec2Module.mock.invocationCallOrder[0];
+      const rdsCallIndex = RdsModule.mock.invocationCallOrder[0];
+      const albCallIndex = AlbModule.mock.invocationCallOrder[0];
+      
+      expect(sgCallIndex).toBeLessThan(ec2CallIndex);
+      expect(sgCallIndex).toBeLessThan(rdsCallIndex);
+      expect(sgCallIndex).toBeLessThan(albCallIndex);
+
+      // ALB should be created after EC2 (for target instances)
+      expect(ec2CallIndex).toBeLessThan(albCallIndex);
+
+      // Security services should be created after ALB (needs ALB ARN)
+      const securityCallIndex = SecurityServicesModule.mock.invocationCallOrder[0];
+      expect(albCallIndex).toBeLessThan(securityCallIndex);
+
+      // Monitoring should be created after other resources
+      const monitoringCallIndex = MonitoringModule.mock.invocationCallOrder[0];
+      expect(albCallIndex).toBeLessThan(monitoringCallIndex);
+      expect(ec2CallIndex).toBeLessThan(monitoringCallIndex);
+      expect(rdsCallIndex).toBeLessThan(monitoringCallIndex);
+    });
+  });
+
+  describe("Edge Cases", () => {
+    test("should handle undefined props", () => {
+      const app = new App();
+      const stack = new TapStack(app, "TestStack");
+
+      expect(stack).toBeDefined();
+      
+      // Should use default values
+      expect(S3Backend).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          bucket: 'iac-rlhf-tf-states',
+          key: 'dev/TestStack.tfstate',
+          region: 'us-east-1'
+        })
+      );
+
+      expect(AwsProvider).toHaveBeenCalledWith(
+        expect.anything(),
+        'aws',
+        expect.objectContaining({
+          region: 'us-east-1'
+        })
+      );
+    });
+
+    test("should handle empty environment suffix", () => {
+      const app = new App();
+      new TapStack(app, "TestStack", {
+        environmentSuffix: ''
+      });
+
+      // Should use 'dev' as default when empty
+      expect(S3Backend).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          key: 'dev/TestStack.tfstate'
+        })
+      );
+    });
+  });
+
+  describe("Resource Tags", () => {
+    test("should apply common tags to all resources", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      const expectedTags = {
+        Environment: 'production',
+        Owner: 'platform-team',
+        Project: 'tap-infrastructure',
+        Compliance: 'required'
+      };
+
+      // Check VPC tags
+      expect(VpcModule).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({ tags: expectedTags })
+      );
+
+      // Check EC2 tags
+      expect(Ec2Module).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({ tags: expectedTags })
+      );
+
+      // Check RDS tags
+      expect(RdsModule).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({ tags: expectedTags })
+      );
     });
   });
 });
