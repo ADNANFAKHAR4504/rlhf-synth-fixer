@@ -1,0 +1,30 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "j908t",
+  "team": "synth",
+  "startedAt": "2025-11-07T18:23:33+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Application Deployment",
+    "Web Application Deployment; Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "RDS",
+    "S3",
+    "Secrets Manager",
+    "CloudWatch",
+    "ALB",
+    "ECR",
+    "IAM",
+    "NAT Gateway",
+    "ACM",
+    "Auto Scaling"
+  ],
+  "training_quality": 8
+}
