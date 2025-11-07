@@ -389,9 +389,10 @@ def handler(event, context):
           protocol: elbv2.ApplicationProtocol.HTTP,
           targetType: elbv2.TargetType.IP,
           healthCheck: {
+            enabled: true,
             path: '/',
             interval: cdk.Duration.seconds(30),
-            timeout: cdk.Duration.seconds(10),
+            timeout: cdk.Duration.seconds(20),
             healthyThresholdCount: 2,
             unhealthyThresholdCount: 5,
             healthyHttpCodes: '200-499',
@@ -474,7 +475,7 @@ def handler(event, context):
             base: 0, // No base requirement for Spot
           },
         ],
-        healthCheckGracePeriod: cdk.Duration.seconds(120),
+        healthCheckGracePeriod: cdk.Duration.seconds(300),
         // Add network configuration if VPC is available
         ...(vpc && {
           vpcSubnets: {
