@@ -21,6 +21,7 @@ Metadata:
           - VPCCIDR
           - EnableNATGatewayHA
           - AvailabilityZones
+          - NumberOfAvailabilityZones
       - Label:
           default: Application Configuration
         Parameters:
@@ -109,6 +110,14 @@ Parameters:
     Type: String
     Default: ''
     Description: Comma-separated list of availability zones to use for subnets (leave blank to auto-discover)
+
+  NumberOfAvailabilityZones:
+    Type: Number
+    Default: 3
+    AllowedValues:
+      - 2
+      - 3
+    Description: Number of availability zones to deploy resources across (must be 2 or 3)
 
   # Application Parameters
   InstanceType:
@@ -249,6 +258,7 @@ Conditions:
       - !Ref EnableNATGatewayHA
       - 'true'
     - !Condition IsProduction
+    - !Condition HasTwoAZs
   HasKeyPairName: !Not
     - !Equals
       - !Ref KeyPairName
@@ -257,6 +267,14 @@ Conditions:
     - !Equals
       - !Ref AvailabilityZones
       - ''
+  HasThreeAZs: !Equals
+    - !Ref NumberOfAvailabilityZones
+    - 3
+  HasTwoAZs: !Or
+    - !Equals
+      - !Ref NumberOfAvailabilityZones
+      - 2
+    - !Condition HasThreeAZs
 
 # ============================================================================
 # RESOURCES
@@ -354,12 +372,20 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select
-        - 1
-        - !If
-            - HasCustomAZs
-            - !Split [',', !Ref AvailabilityZones]
-            - !GetAZs ''
+      AvailabilityZone: !If
+        - HasTwoAZs
+        - !Select
+          - 1
+          - !If
+              - HasCustomAZs
+              - !Split [',', !Ref AvailabilityZones]
+              - !GetAZs ''
+        - !Select
+          - 0
+          - !If
+              - HasCustomAZs
+              - !Split [',', !Ref AvailabilityZones]
+              - !GetAZs ''
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -387,12 +413,28 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select
-        - 2
+      AvailabilityZone: !If
+        - HasThreeAZs
+        - !Select
+          - 2
+          - !If
+              - HasCustomAZs
+              - !Split [',', !Ref AvailabilityZones]
+              - !GetAZs ''
         - !If
-            - HasCustomAZs
-            - !Split [',', !Ref AvailabilityZones]
-            - !GetAZs ''
+            - HasTwoAZs
+            - !Select
+              - 1
+              - !If
+                  - HasCustomAZs
+                  - !Split [',', !Ref AvailabilityZones]
+                  - !GetAZs ''
+            - !Select
+              - 0
+              - !If
+                  - HasCustomAZs
+                  - !Split [',', !Ref AvailabilityZones]
+                  - !GetAZs ''
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -453,12 +495,20 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select
-        - 1
-        - !If
-            - HasCustomAZs
-            - !Split [',', !Ref AvailabilityZones]
-            - !GetAZs ''
+      AvailabilityZone: !If
+        - HasTwoAZs
+        - !Select
+          - 1
+          - !If
+              - HasCustomAZs
+              - !Split [',', !Ref AvailabilityZones]
+              - !GetAZs ''
+        - !Select
+          - 0
+          - !If
+              - HasCustomAZs
+              - !Split [',', !Ref AvailabilityZones]
+              - !GetAZs ''
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-2
@@ -485,12 +535,28 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select
-        - 2
+      AvailabilityZone: !If
+        - HasThreeAZs
+        - !Select
+          - 2
+          - !If
+              - HasCustomAZs
+              - !Split [',', !Ref AvailabilityZones]
+              - !GetAZs ''
         - !If
-            - HasCustomAZs
-            - !Split [',', !Ref AvailabilityZones]
-            - !GetAZs ''
+            - HasTwoAZs
+            - !Select
+              - 1
+              - !If
+                  - HasCustomAZs
+                  - !Split [',', !Ref AvailabilityZones]
+                  - !GetAZs ''
+            - !Select
+              - 0
+              - !If
+                  - HasCustomAZs
+                  - !Split [',', !Ref AvailabilityZones]
+                  - !GetAZs ''
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-3
@@ -550,12 +616,20 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select
-        - 1
-        - !If
-            - HasCustomAZs
-            - !Split [',', !Ref AvailabilityZones]
-            - !GetAZs ''
+      AvailabilityZone: !If
+        - HasTwoAZs
+        - !Select
+          - 1
+          - !If
+              - HasCustomAZs
+              - !Split [',', !Ref AvailabilityZones]
+              - !GetAZs ''
+        - !Select
+          - 0
+          - !If
+              - HasCustomAZs
+              - !Split [',', !Ref AvailabilityZones]
+              - !GetAZs ''
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-2
@@ -582,12 +656,28 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select
-        - 2
+      AvailabilityZone: !If
+        - HasThreeAZs
+        - !Select
+          - 2
+          - !If
+              - HasCustomAZs
+              - !Split [',', !Ref AvailabilityZones]
+              - !GetAZs ''
         - !If
-            - HasCustomAZs
-            - !Split [',', !Ref AvailabilityZones]
-            - !GetAZs ''
+            - HasTwoAZs
+            - !Select
+              - 1
+              - !If
+                  - HasCustomAZs
+                  - !Split [',', !Ref AvailabilityZones]
+                  - !GetAZs ''
+            - !Select
+              - 0
+              - !If
+                  - HasCustomAZs
+                  - !Split [',', !Ref AvailabilityZones]
+                  - !GetAZs ''
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-3
