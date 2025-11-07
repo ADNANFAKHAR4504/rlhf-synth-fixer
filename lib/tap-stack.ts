@@ -2,7 +2,7 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack } from 'cdktf';
+import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
 import { NetworkingConstruct } from './networking-construct';
 import { SecurityConstruct } from './security-construct';
@@ -74,9 +74,25 @@ export class TapStack extends TerraformStack {
     });
 
     // Enable VPC Flow Logs with S3 storage
-    new FlowLogsConstruct(this, 'FlowLogs', {
+    const flowLogs = new FlowLogsConstruct(this, 'FlowLogs', {
       environmentSuffix,
       vpcId: networking.vpcId,
+    });
+
+    // Output key resource identifiers for integration tests
+    new TerraformOutput(this, 'VpcId', {
+      value: networking.vpcId,
+      description: 'The ID of the VPC',
+    });
+
+    new TerraformOutput(this, 'Region', {
+      value: awsRegion,
+      description: 'The AWS region',
+    });
+
+    new TerraformOutput(this, 'FlowLogsBucketName', {
+      value: flowLogs.flowLogsBucketName,
+      description: 'The name of the S3 bucket for VPC Flow Logs',
     });
   }
 }
