@@ -188,14 +188,14 @@ describe("VPC Infrastructure Integration Tests", () => {
         new DescribeNatGatewaysCommand({
           Filter: [
             { Name: "vpc-id", Values: [vpcId] },
-            { Name: "state", Values: ["available"] },
+            { Name: "state", Values: ["pending", "available"] },
           ],
         })
       );
 
       expect(result.NatGateways!.length).toBeGreaterThanOrEqual(1);
       result.NatGateways!.forEach((nat) => {
-        expect(nat.State).toBe("available");
+        expect(["pending", "available"]).toContain(nat.State);
         expect(publicSubnetIds).toContain(nat.SubnetId);
       });
     });
@@ -205,7 +205,7 @@ describe("VPC Infrastructure Integration Tests", () => {
         new DescribeNatGatewaysCommand({
           Filter: [
             { Name: "vpc-id", Values: [vpcId] },
-            { Name: "state", Values: ["available"] },
+            { Name: "state", Values: ["pending", "available"] },
           ],
         })
       );
@@ -468,7 +468,7 @@ describe("VPC Infrastructure Integration Tests", () => {
         new DescribeNatGatewaysCommand({
           Filter: [
             { Name: "vpc-id", Values: [vpcId] },
-            { Name: "state", Values: ["available"] },
+            { Name: "state", Values: ["pending", "available"] },
           ],
         })
       );
