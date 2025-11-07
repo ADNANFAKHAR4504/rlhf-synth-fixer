@@ -51,6 +51,10 @@ data "aws_elb_service_account" "main" {}
 resource "aws_s3_bucket_policy" "alb_logs" {
   bucket = aws_s3_bucket.alb_logs.id
 
+  depends_on = [
+    aws_s3_bucket_public_access_block.alb_logs
+  ]
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -81,6 +85,11 @@ resource "aws_lb" "payment" {
     bucket  = aws_s3_bucket.alb_logs.bucket
     enabled = true
   }
+
+  depends_on = [
+    aws_s3_bucket_policy.alb_logs,
+    aws_s3_bucket_public_access_block.alb_logs
+  ]
 
   tags = merge(
     local.common_tags,

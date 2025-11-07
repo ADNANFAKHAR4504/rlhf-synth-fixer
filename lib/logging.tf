@@ -3,6 +3,11 @@ resource "aws_cloudwatch_log_group" "application" {
   name              = "/aws/application/payment-${var.environment_suffix}"
   retention_in_days = 30
 
+  lifecycle {
+    prevent_destroy = false
+    ignore_changes  = []
+  }
+
   tags = merge(
     local.common_tags,
     {
@@ -14,6 +19,11 @@ resource "aws_cloudwatch_log_group" "application" {
 resource "aws_cloudwatch_log_group" "infrastructure" {
   name              = "/aws/infrastructure/payment-${var.environment_suffix}"
   retention_in_days = 30
+
+  lifecycle {
+    prevent_destroy = false
+    ignore_changes  = []
+  }
 
   tags = merge(
     local.common_tags,
