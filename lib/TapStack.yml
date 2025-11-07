@@ -2112,21 +2112,11 @@ Resources:
         - Key: iac-rlhf-amazon
           Value: 'true'
 
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    DependsOn:
-      - ConfigBucketPolicy
-    Properties:
-      Name: !Sub ${ProjectName}-${Environment}-Recorder
-      RoleARN: !GetAtt ConfigRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-
+  # Create DeliveryChannel FIRST (before ConfigRecorder)
   DeliveryChannel:
     Type: AWS::Config::DeliveryChannel
     DependsOn:
-      - ConfigRecorder
+      - ConfigBucketPolicy
     Properties:
       Name: !Sub ${ProjectName}-${Environment}-DeliveryChannel
       S3BucketName: !Ref ConfigBucket
@@ -2134,10 +2124,117 @@ Resources:
       ConfigSnapshotDeliveryProperties:
         DeliveryFrequency: TwentyFour_Hours
 
+  # Create ConfigRecorder AFTER DeliveryChannel
+  ConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    DependsOn:
+      - DeliveryChannel
+    Properties:
+      Name: !Sub ${ProjectName}-${Environment}-Recorder
+      RoleARN: !GetAtt ConfigRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+
+  # Lambda function to start the Config Recorder
+  ConfigRecorderStarterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ConfigRecorderControl
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - config:StartConfigurationRecorder
+                  - config:StopConfigurationRecorder
+                  - config:DescribeConfigurationRecorderStatus
+                Resource: '*'
+
+  ConfigRecorderStarterFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ${ProjectName}-${Environment}-ConfigStarter
+      Handler: index.handler
+      Runtime: python3.9
+      Role: !GetAtt ConfigRecorderStarterRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          import urllib.request
+
+          def send_response(event, context, response_status, response_data):
+              response_body = json.dumps({
+                  'Status': response_status,
+                  'Reason': f'See the details in CloudWatch Log Stream: {context.log_stream_name}',
+                  'PhysicalResourceId': context.log_stream_name,
+                  'StackId': event['StackId'],
+                  'RequestId': event['RequestId'],
+                  'LogicalResourceId': event['LogicalResourceId'],
+                  'Data': response_data
+              })
+              
+              response_url = event['ResponseURL']
+              req = urllib.request.Request(response_url, data=response_body.encode('utf-8'), method='PUT')
+              urllib.request.urlopen(req)
+
+          config_client = boto3.client('config')
+
+          def handler(event, context):
+              try:
+                  request_type = event['RequestType']
+                  recorder_name = event['ResourceProperties']['ConfigRecorderName']
+                  
+                  if request_type == 'Create' or request_type == 'Update':
+                      # Start the configuration recorder
+                      config_client.start_configuration_recorder(
+                          ConfigurationRecorderName=recorder_name
+                      )
+                      print(f"Started Config Recorder: {recorder_name}")
+                      send_response(event, context, 'SUCCESS', {})
+                  
+                  elif request_type == 'Delete':
+                      # Stop the configuration recorder before deletion
+                      try:
+                          config_client.stop_configuration_recorder(
+                              ConfigurationRecorderName=recorder_name
+                          )
+                          print(f"Stopped Config Recorder: {recorder_name}")
+                      except:
+                          pass  # Ignore errors on deletion
+                      send_response(event, context, 'SUCCESS', {})
+                  
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  send_response(event, context, 'FAILED', {
+                      'Error': str(e)
+                  })
+
+  # Custom Resource to START the Config Recorder after both resources are created
+  ConfigRecorderStarter:
+    Type: AWS::CloudFormation::CustomResource
+    DependsOn:
+      - DeliveryChannel
+    Properties:
+      ServiceToken: !GetAtt ConfigRecorderStarterFunction.Arn
+      ConfigRecorderName: !Ref ConfigRecorder
+
   # Config Rules for compliance
   S3BucketEncryptionRule:
     Type: AWS::Config::ConfigRule
-    DependsOn: ConfigRecorder
+    DependsOn: ConfigRecorderStarter
     Properties:
       ConfigRuleName: s3-bucket-encryption-enabled
       Description: Checks that S3 buckets have encryption enabled
@@ -2150,7 +2247,7 @@ Resources:
 
   S3BucketVersioningRule:
     Type: AWS::Config::ConfigRule
-    DependsOn: ConfigRecorder
+    DependsOn: ConfigRecorderStarter
     Properties:
       ConfigRuleName: s3-bucket-versioning-enabled
       Description: Checks that S3 buckets have versioning enabled
@@ -2163,7 +2260,7 @@ Resources:
 
   RDSEncryptionRule:
     Type: AWS::Config::ConfigRule
-    DependsOn: ConfigRecorder
+    DependsOn: ConfigRecorderStarter
     Properties:
       ConfigRuleName: rds-storage-encrypted
       Description: Checks that RDS instances have encrypted storage
@@ -2176,7 +2273,7 @@ Resources:
 
   RequiredTagsRule:
     Type: AWS::Config::ConfigRule
-    DependsOn: ConfigRecorder
+    DependsOn: ConfigRecorderStarter
     Properties:
       ConfigRuleName: required-tags
       Description: Checks that resources have required tags for governance
