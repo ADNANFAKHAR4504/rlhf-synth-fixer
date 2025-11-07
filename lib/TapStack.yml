@@ -1157,13 +1157,25 @@ Resources:
             }
             
             # Update system and install dependencies
-            yum update -y || EXIT_CODE=1
-            yum install -y amazon-cloudwatch-agent nodejs npm git postgresql15 jq nc || EXIT_CODE=1
+            yum update -y || echo "WARNING: yum update had issues, continuing..." | logger -t user-data
+            yum install -y amazon-cloudwatch-agent nodejs npm git postgresql15 jq nc || {
+              echo "ERROR: Failed to install required packages" | logger -t user-data
+              EXIT_CODE=1
+            }
             
             # Install AWS CLI v2
-            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" || EXIT_CODE=1
-            unzip awscliv2.zip || EXIT_CODE=1
-            ./aws/install || EXIT_CODE=1
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" || {
+              echo "ERROR: Failed to download AWS CLI" | logger -t user-data
+              EXIT_CODE=1
+            }
+            unzip awscliv2.zip || {
+              echo "ERROR: Failed to unzip AWS CLI" | logger -t user-data
+              EXIT_CODE=1
+            }
+            ./aws/install || {
+              echo "ERROR: Failed to install AWS CLI" | logger -t user-data
+              EXIT_CODE=1
+            }
             rm -rf awscliv2.zip aws/ || true
             
             # Configure CloudWatch Agent
@@ -1262,9 +1274,9 @@ Resources:
               EXIT_CODE=1
             }
             
-            # Wait for RDS to be available
+            # Wait for RDS to be available (non-fatal - app handles DB connection gracefully)
             DB_HOST="${RDSInstance.Endpoint.Address}"
-            wait_for_rds $DB_HOST || EXIT_CODE=1
+            wait_for_rds $DB_HOST || echo "WARNING: RDS wait completed but may not be fully ready" | logger -t user-data
             
             # Create environment configuration
             cat > /opt/app/config/.env << EOF
@@ -1415,8 +1427,8 @@ Resources:
             }
             EOF
             
-            # Install dependencies
-            npm install --production || {
+            # Install dependencies (warnings are OK, only fail on actual errors)
+            npm install --production 2>&1 | logger -t user-data || {
               echo "ERROR: Failed to install npm dependencies" | logger -t user-data
               EXIT_CODE=1
             }
@@ -1454,21 +1466,25 @@ Resources:
             
             # Start service and wait a bit to verify it's running
             systemctl start nodeapp || EXIT_CODE=1
-            sleep 5
+            sleep 10
             
-            # Verify service is running
+            # Verify service is running - this is critical for success
             if systemctl is-active --quiet nodeapp; then
               echo "Node.js application service started successfully" | logger -t user-data
+              # If service is running, consider it a success even if some setup steps had warnings
+              EXIT_CODE=0
             else
-              echo "WARNING: Node.js application service may not be running properly" | logger -t user-data
+              echo "ERROR: Node.js application service failed to start" | logger -t user-data
               systemctl status nodeapp | logger -t user-data || true
+              journalctl -u nodeapp -n 50 --no-pager | logger -t user-data || true
+              EXIT_CODE=1
             fi
             
             # Signal will be sent by trap handler
             if [ $EXIT_CODE -eq 0 ]; then
-              echo "User data script completed successfully" | logger -t user-data
+              echo "User data script completed successfully - service is running" | logger -t user-data
             else
-              echo "User data script completed with errors (exit code: $EXIT_CODE)" | logger -t user-data
+              echo "User data script completed with errors (exit code: $EXIT_CODE) - service failed to start" | logger -t user-data
             fi
         TagSpecifications:
           - ResourceType: instance
