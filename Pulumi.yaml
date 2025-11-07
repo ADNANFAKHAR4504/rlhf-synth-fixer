@@ -1,4 +1,4 @@
-name: pulumi-infra
+name: TapStack
 runtime:
   name: python
   options:
