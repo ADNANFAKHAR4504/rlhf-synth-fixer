@@ -3,6 +3,5 @@ runtime:
   name: python
   options:
     virtualenv: .venv
-    toolchain: pip
 description: Pulumi infrastructure for TAP
 main: tap.py
