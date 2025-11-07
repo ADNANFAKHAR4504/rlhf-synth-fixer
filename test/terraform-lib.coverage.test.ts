@@ -138,7 +138,7 @@ class TerraformTestEngine {
 
   // Find function calls for function coverage
   private findFunctions(content: string): any[] {
-    const functions = [];
+    const functions: any[] = [];
     
     // Common Terraform functions
     const functionNames = ['length', 'concat', 'merge', 'lookup', 'coalesce', 'format', 'join', 'split', 'replace', 'substr', 'upper', 'lower', 'base64encode', 'base64decode', 'jsonencode', 'jsondecode', 'yamlencode', 'yamldecode', 'tostring', 'tonumber', 'tobool', 'tolist', 'toset', 'tomap', 'templatefile', 'file', 'pathexpand'];
