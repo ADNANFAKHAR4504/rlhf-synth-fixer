@@ -162,9 +162,11 @@ class TapStack(Stack):
         # ============================================================
 
         # Database credentials secret
+        # Use short construct ID to avoid Lambda function name length limit (64 chars)
+        # AWS generates: {constructId}{rotationId}{hash}-PostgreSQLSingleUser-Lambda
         db_credentials = rds.DatabaseSecret(
             self,
-            f"DBCreds-{environment_suffix}",
+            f"DBCred{environment_suffix}",
             username="dbadmin",
             secret_name=f"db-creds-{environment_suffix}",
         )
@@ -207,8 +209,9 @@ class TapStack(Stack):
         )
 
         # Enable automatic secret rotation with hosted rotation
+        # Use short rotation ID to avoid Lambda function name length limit (64 chars)
         db_credentials.add_rotation_schedule(
-            "RotationSchedule",
+            "Rotate",
             automatically_after=Duration.days(30),
             hosted_rotation=secretsmanager.HostedRotation.postgre_sql_single_user(),
         )
