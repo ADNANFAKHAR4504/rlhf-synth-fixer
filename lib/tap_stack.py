@@ -611,8 +611,8 @@ echo "OK" > /var/www/html/health
 
         # Auto Scaling Group
         asg = aws.autoscaling.Group(
-            f"payment-asg-{self.environment_suffix}",
-            name=f"payment-asg-{self.environment_suffix}",
+            f"tap-payment-asg-{self.environment_suffix}",
+            name=f"tap-payment-asg-{self.environment_suffix}",
             vpc_zone_identifiers=[private_subnet_1.id, private_subnet_2.id],
             target_group_arns=[target_group.arn],
             health_check_type="ELB",
@@ -634,7 +634,7 @@ echo "OK" > /var/www/html/health
             tags=[
                 aws.autoscaling.GroupTagArgs(
                     key="Name",
-                    value=f"payment-asg-{self.environment_suffix}",
+                    value=f"tap-payment-asg-{self.environment_suffix}",
                     propagate_at_launch=True,
                 ),
                 aws.autoscaling.GroupTagArgs(
