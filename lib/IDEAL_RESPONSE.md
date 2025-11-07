@@ -55,13 +55,15 @@ This solution implements a production-grade Amazon EKS cluster optimized for cos
 1. **EKS Cluster Role**:
    - AmazonEKSClusterPolicy
    - AmazonEKSVPCResourceController
+   - Custom CloudWatch Logs policy for control plane logging
    - Allows EKS control plane to manage AWS resources
 
 2. **EKS Node Role**:
    - AmazonEKSWorkerNodePolicy
    - AmazonEKS_CNI_Policy
    - AmazonEC2ContainerRegistryReadOnly
-   - Allows nodes to join cluster and pull container images
+   - Custom VPC CNI prefix delegation policy for enhanced networking
+   - Allows nodes to join cluster, manage network interfaces, and pull container images
 
 3. **Cluster Autoscaler Role**:
    - Custom policy for auto-scaling operations
@@ -684,7 +686,129 @@ resource "aws_eks_node_group" "main" {
 }
 ```
 
-### 6. Cluster Autoscaler IAM Role (iam-autoscaler.tf)
+### 6. IAM Roles for EKS Cluster (iam-cluster.tf)
+
+```hcl
+# EKS Cluster IAM Role
+resource "aws_iam_role" "cluster" {
+  name_prefix = "eks-cluster-role-${var.environment_suffix}-"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "eks.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+
+  tags = {
+    Name = "eks-cluster-role-${var.environment_suffix}"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "cluster_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+  role       = aws_iam_role.cluster.name
+}
+
+resource "aws_iam_role_policy_attachment" "cluster_vpc_resource_controller" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSVPCResourceController"
+  role       = aws_iam_role.cluster.name
+}
+
+# Additional policy for CloudWatch Logs
+resource "aws_iam_role_policy" "cluster_cloudwatch" {
+  name_prefix = "eks-cluster-cloudwatch-"
+  role        = aws_iam_role.cluster.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogStreams"
+      ]
+      Resource = [
+        "${aws_cloudwatch_log_group.eks.arn}:*"
+      ]
+    }]
+  })
+}
+```
+
+### 7. IAM Roles for EKS Worker Nodes (iam-nodes.tf)
+
+```hcl
+# EKS Node IAM Role
+resource "aws_iam_role" "node" {
+  name_prefix = "eks-node-role-${var.environment_suffix}-"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+
+  tags = {
+    Name = "eks-node-role-${var.environment_suffix}"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "node_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+  role       = aws_iam_role.node.name
+}
+
+resource "aws_iam_role_policy_attachment" "node_cni_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+  role       = aws_iam_role.node.name
+}
+
+resource "aws_iam_role_policy_attachment" "node_container_registry" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+  role       = aws_iam_role.node.name
+}
+
+# Additional policy for VPC CNI prefix delegation
+resource "aws_iam_role_policy" "node_vpc_cni_prefix" {
+  name_prefix = "eks-node-vpc-cni-prefix-"
+  role        = aws_iam_role.node.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "ec2:AssignPrivateIpAddresses",
+        "ec2:AttachNetworkInterface",
+        "ec2:CreateNetworkInterface",
+        "ec2:DeleteNetworkInterface",
+        "ec2:DescribeInstances",
+        "ec2:DescribeTags",
+        "ec2:DescribeNetworkInterfaces",
+        "ec2:DescribeInstanceTypes",
+        "ec2:DetachNetworkInterface",
+        "ec2:ModifyNetworkInterfaceAttribute",
+        "ec2:UnassignPrivateIpAddresses"
+      ]
+      Resource = "*"
+    }]
+  })
+}
+```
+
+### 8. Cluster Autoscaler IAM Role (iam-autoscaler.tf)
 
 ```hcl
 # Cluster Autoscaler IAM Role for Service Account (IRSA)
@@ -749,7 +873,7 @@ resource "aws_iam_role_policy" "cluster_autoscaler" {
 }
 ```
 
-### 7. VPC CNI Addon with Prefix Delegation (vpc-cni-addon.tf)
+### 9. VPC CNI Addon with Prefix Delegation (vpc-cni-addon.tf)
 
 ```hcl
 # VPC CNI Add-on with prefix delegation
@@ -800,6 +924,110 @@ resource "aws_eks_addon" "kube_proxy" {
   tags = {
     Name = "kube-proxy-addon-${var.environment_suffix}"
   }
+}
+```
+
+### 10. Outputs Configuration (outputs.tf)
+
+```hcl
+output "cluster_name" {
+  description = "EKS cluster name"
+  value       = aws_eks_cluster.main.name
+}
+
+output "cluster_endpoint" {
+  description = "EKS cluster endpoint URL"
+  value       = aws_eks_cluster.main.endpoint
+}
+
+output "cluster_version" {
+  description = "EKS cluster Kubernetes version"
+  value       = aws_eks_cluster.main.version
+}
+
+output "cluster_security_group_id" {
+  description = "Security group ID attached to the EKS cluster"
+  value       = aws_security_group.cluster.id
+}
+
+output "cluster_oidc_issuer_url" {
+  description = "OIDC provider URL for the EKS cluster"
+  value       = aws_eks_cluster.main.identity[0].oidc[0].issuer
+}
+
+output "oidc_provider_url" {
+  description = "OIDC provider URL for IRSA (alias for cluster_oidc_issuer_url)"
+  value       = aws_eks_cluster.main.identity[0].oidc[0].issuer
+}
+
+output "oidc_provider_arn" {
+  description = "ARN of the OIDC provider for IRSA"
+  value       = aws_iam_openid_connect_provider.cluster.arn
+}
+
+output "cluster_certificate_authority_data" {
+  description = "Base64 encoded certificate data for cluster authentication"
+  value       = aws_eks_cluster.main.certificate_authority[0].data
+}
+
+output "cluster_autoscaler_role_arn" {
+  description = "IAM role ARN for cluster autoscaler"
+  value       = aws_iam_role.cluster_autoscaler.arn
+}
+
+output "cluster_autoscaler_policy_arn" {
+  description = "IAM policy ARN for cluster autoscaler (inline policy reference)"
+  value       = "${aws_iam_role.cluster_autoscaler.arn}/policy/${aws_iam_role_policy.cluster_autoscaler.name}"
+}
+
+output "node_group_id" {
+  description = "EKS managed node group ID"
+  value       = aws_eks_node_group.main.id
+}
+
+output "node_group_name" {
+  description = "EKS managed node group name"
+  value       = aws_eks_node_group.main.node_group_name
+}
+
+output "node_group_arn" {
+  description = "ARN of the EKS node group"
+  value       = aws_eks_node_group.main.arn
+}
+
+output "node_group_status" {
+  description = "Status of the EKS node group"
+  value       = aws_eks_node_group.main.status
+}
+
+output "node_role_arn" {
+  description = "IAM role ARN for EKS nodes"
+  value       = aws_iam_role.node.arn
+}
+
+output "vpc_id" {
+  description = "VPC ID where EKS cluster is deployed"
+  value       = aws_vpc.main.id
+}
+
+output "private_subnet_ids" {
+  description = "List of private subnet IDs"
+  value       = aws_subnet.private[*].id
+}
+
+output "public_subnet_ids" {
+  description = "List of public subnet IDs"
+  value       = aws_subnet.public[*].id
+}
+
+output "kubectl_config_command" {
+  description = "Command to configure kubectl for this cluster"
+  value       = "aws eks update-kubeconfig --region ${var.region} --name ${aws_eks_cluster.main.name}"
+}
+
+output "cloudwatch_log_group_name" {
+  description = "CloudWatch log group name for EKS control plane logs"
+  value       = aws_cloudwatch_log_group.eks.name
 }
 ```
 
