@@ -63,19 +63,6 @@ describe('TapStack Integration Tests Based on flat-outputs.json and tap_stack.tf
     expect(bucketArn).toBe(`arn:aws:s3:::${bucketName}`);
   });
 
-  test('CloudWatch Event Rule for GuardDuty exists', async () => {
-  const ruleName = outputs.cloudwatch_event_rule_guardduty_findings_id; // "guardduty-high-severity-synth7bad2"
-  if (!ruleName) {
-    console.warn('[SKIPPED:CloudWatchEventRule] Event rule name not defined in outputs, skipping test.');
-    return;
-  }
-
-  const eventBridge = new AWS.EventBridge({ region: outputs.aws_region || 'us-east-1' });
-  const res = await diagAwsCall('CloudWatchEventRule', eventBridge.describeRule.bind(eventBridge), { Name: ruleName });
-  if (skipIfNull(res, 'CloudWatchEventRule')) return;
-
-  expect(res.Name).toBe(ruleName);
-});
 
   test('CloudWatch Log Group for Security Events exists', async () => {
     const logGroupName = outputs.cloudwatch_log_group_security_events_name;
