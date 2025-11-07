@@ -479,7 +479,7 @@ describe('TapStack Integration Tests', () => {
       // Get usage plan by searching for the one associated with our API
       const response = await apiGatewayClient.send(
         new GetUsagePlanCommand({
-          usagePlanId: outputs.apiKeyId, // This might need adjustment
+          usagePlanId: outputs.usagePlanId,
         })
       );
       expect(response).toBeDefined();

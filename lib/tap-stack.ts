@@ -13,6 +13,8 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly apiKeyValue: pulumi.Output<string>;
   public readonly apiKeyId: pulumi.Output<string>;
   public readonly apiId: pulumi.Output<string>;
+  public readonly usagePlanId: pulumi.Output<string>;
+  public readonly apiEndpoint: pulumi.Output<string>;
 
   constructor(name: string, props?: TapStackProps) {
     super('custom:TapStack', name, {}, {});
@@ -264,6 +266,7 @@ export class TapStack extends pulumi.ComponentResource {
     new aws.iam.RolePolicy(
       `processor-policy-${environmentSuffix}`,
       {
+        name: `processor-policy-${environmentSuffix}`,
         role: processorRole.id,
         policy: pulumi
           .all([transactionsTable.arn, auditBucket.arn, processorDlq.arn])
@@ -687,19 +690,23 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Exports
     this.apiUrl = pulumi.interpolate`https://${api.id}.execute-api.${aws.getRegionOutput().name}.amazonaws.com/${stage.stageName}`;
+    this.apiEndpoint = pulumi.interpolate`https://${api.id}.execute-api.${aws.getRegionOutput().name}.amazonaws.com/${stage.stageName}/transaction`;
     this.tableName = transactionsTable.name;
     this.bucketName = auditBucket.bucket;
     this.apiKeyValue = apiKey.value;
     this.apiKeyId = apiKey.id;
     this.apiId = api.id;
+    this.usagePlanId = usagePlan.id;
 
     this.registerOutputs({
       apiUrl: this.apiUrl,
+      apiEndpoint: this.apiEndpoint,
       tableName: this.tableName,
       bucketName: this.bucketName,
       apiKeyValue: this.apiKeyValue,
       apiKeyId: this.apiKeyId,
       apiId: this.apiId,
+      usagePlanId: this.usagePlanId,
     });
   }
 }

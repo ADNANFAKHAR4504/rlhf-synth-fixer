@@ -41,8 +41,10 @@ const stack = new TapStack('pulumi-infra', {
 
 // Export stack outputs for use in tests and other tools
 export const apiUrl = stack.apiUrl;
+export const apiEndpoint = stack.apiEndpoint;
 export const tableName = stack.tableName;
 export const bucketName = stack.bucketName;
 export const apiKeyValue = stack.apiKeyValue;
 export const apiKeyId = stack.apiKeyId;
 export const apiId = stack.apiId;
+export const usagePlanId = stack.usagePlanId;
