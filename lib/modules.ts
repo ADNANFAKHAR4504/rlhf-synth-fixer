@@ -653,7 +653,7 @@ function handler(event) {
           statement: {
             rate_based_statement: {
               limit: 2000, // 2000 requests per 5 minutes
-              aggregateKeyType: 'IP', // FIXED: Changed to snake_case
+              aggregate_key_type: 'IP', // FIXED: Changed to snake_case
             },
           },
 
@@ -673,7 +673,7 @@ function handler(event) {
 
           statement: {
             managed_rule_group_statement: {
-              vendorName: 'AWS', // FIXED: Changed to snake_case
+              vendor_name: 'AWS', // FIXED: Changed to snake_case
               name: 'AWSManagedRulesCommonRuleSet',
             },
           },
