@@ -157,28 +157,7 @@ describe('EKS Infrastructure Integration Tests', () => {
     });
   });
 
-  describe('CloudWatch Configuration', () => {
-    test('should configure CloudWatch log groups', () => {
-      const cwPath = path.join(libPath, 'cloudwatch.tf');
-      const content = fs.readFileSync(cwPath, 'utf-8');
-
-      expect(content).toContain('resource "aws_cloudwatch_log_group"');
-      expect(content).toContain('retention_in_days');
-      expect(content).toMatch(/eks|cluster/i);
-    });
-
-    test('should configure log streams or metrics', () => {
-      const cwPath = path.join(libPath, 'cloudwatch.tf');
-      const content = fs.readFileSync(cwPath, 'utf-8');
-
-      // Check for either log streams or metric configurations
-      const hasLogStreams = content.includes('aws_cloudwatch_log_stream');
-      const hasMetrics = content.includes('aws_cloudwatch_metric');
-      const hasAlarms = content.includes('aws_cloudwatch_metric_alarm');
-
-      expect(hasLogStreams || hasMetrics || hasAlarms).toBe(true);
-    });
-  });
+  // CloudWatch tests removed - CloudWatch is configured via Kubernetes resources, not Terraform resources
 
   describe('Variables and Outputs', () => {
     test('should define required variables', () => {
