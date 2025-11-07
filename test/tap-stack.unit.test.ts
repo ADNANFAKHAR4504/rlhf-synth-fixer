@@ -365,7 +365,7 @@ describe("TapStack Unit Tests", () => {
         expect.anything(),
         'secrets',
         expect.objectContaining({
-          secretName: 'dev-app-secrets',
+          secretName: 'dev-new-app-secrets',
           description: 'Application secrets for serverless app',
           environment: 'dev',
           secretData: {
@@ -388,7 +388,7 @@ describe("TapStack Unit Tests", () => {
         expect.anything(),
         'secrets',
         expect.objectContaining({
-          secretName: 'prod-app-secrets',
+          secretName: 'prod-new-app-secrets',
           environment: 'prod'
         })
       );
@@ -1005,7 +1005,7 @@ describe("TapStack Unit Tests", () => {
       expect(apiModule.api.name).toBe('test-serverless-api');
 
       const secretsModule = SecretsModule.mock.results[0].value;
-      expect(secretsModule.secret.name).toBe('test-app-secrets');
+      expect(secretsModule.secret.name).toBe('test-new-app-secrets');
     });
   });
 
