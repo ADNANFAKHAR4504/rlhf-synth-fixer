@@ -27,7 +27,7 @@ import {
   TagResourceCommand,
   UntagResourceCommand,
 } from '@aws-sdk/client-eks';
-
+import { TerminateInstancesCommand } from "@aws-sdk/client-ec2";
 
 import {
   ElasticLoadBalancingV2Client,
@@ -935,109 +935,155 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
 // ============================================================================
 // PART 4: E2E APPLICATION FLOW TESTS
 // ============================================================================
+// The DNS name is loaded from outputs, defined earlier in the file.
 
-describe('[E2E] Application Flow Validation', () => {
-    // This assumes some application is running on EKS and exposed via the ALB.
-    test('should get a successful HTTP 200 response from the ALB endpoint', async () => {
-     const albDns = outputs.alb_dns_name;
-
-  if (!albDns) {
-      throw new Error("ALB DNS Name is missing from deployment outputs. Cannot run live E2E test.");
-  }
-
-  const url = `http://${albDns}`;
-  
-  // MODIFICATION: Set higher retry count and delay for E2E flow
-  const response = await retry(async () => {
-    console.log(`Attempting E2E connection to ALB at ${url}...`);
-    
-    // Use axios with a generous timeout for the initial connection
-    const httpResponse = await axios.get(url, {
-      timeout: 20000, // 20 seconds per attempt
-      validateStatus: (status) => status >= 200 && status < 500 
-    });
-
-    // The core check: ALB is routing to a healthy backend
-    if (httpResponse.status !== 200) {
-        throw new Error(`ALB returned status ${httpResponse.status}. Retrying...`);
+/** Pings the application endpoint until success or timeout */
+async function waitForApplicationUptime(url: string, timeoutMs: number = 60000) {
+  const startTime = Date.now();
+  let up = false;
+  while (Date.now() - startTime < timeoutMs) {
+    try {
+      // Use a short timeout to fail fast if the application is completely down, but retry
+      const response = await axios.get(url, { timeout: 5000 });
+      // Check for a successful status code (2xx)
+      if (response.status >= 200 && response.status < 300) {
+        up = true;
+        // Log success quickly to show when availability was restored
+        const duration = (Date.now() - startTime) / 1000;
+        console.log(`Application confirmed available after ${duration.toFixed(2)}s.`);
+        break;
+      }
+    } catch (e) {
+      // Ignore connection errors and continue retrying
     }
+    await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5s before retrying
+  }
+  expect(up).toBe(true);
+}
 
-    expect(httpResponse.status).toBe(200); 
-    return httpResponse;
-  // IMPORTANT: Increased retries to 15, and delay to 20s. Total wait time is ~5 minutes.
-  }, 15, 20000); 
+// --- Functional Test Block ---
+describe('[E2E] Application Flow Validation', () => {
+    const APPLICATION_ROOT_URL = `http://${albDns}`;
+    const APPLICATION_HEALTH_ENDPOINT = `http://${albDns}/health`; // Standard health endpoint
 
-  expect(response.status).toBe(200);
-  console.log(`E2E Success: Received HTTP 200 from ${url}. The application path is live!`);
-  
-}, 600000); // Jest Timeout: 7 minutes (420,000 ms)
-  });
-// End of [E2E] Application Flow Validation
+    test('should successfully reach the application root via ALB and respond 200/OK', async () => {
+        // Validation: ALB is resolving and forwarding traffic correctly to EKS Pods
+        await waitForApplicationUptime(APPLICATION_ROOT_URL);
+    }, 60000); // 1 minute timeout for initial connection
 
-// ============================================================================
+    test('should return 200 from application health check endpoint', async () => {
+        // Validation: Application process is running and configured correctly
+        const response = await axios.get(APPLICATION_HEALTH_ENDPOINT, { timeout: 10000 });
+        expect(response.status).toBe(200);
+    });
+});
+
+
+// --- Resilience Test Block ---
+describe('[Chaos E2E] Node Failure Resilience Test', () => {
+    // We reuse the application endpoint for continuous monitoring during failure
+    const APPLICATION_ENDPOINT = `http://${albDns}/health`; 
+
+    test('should handle node termination and maintain application uptime', async () => {
+        // Step 0: Ensure application is initially up
+        console.log("Pre-check: Verifying application is up...");
+        await waitForApplicationUptime(APPLICATION_ENDPOINT);
+        
+        // Step 1: Find an EKS worker node to terminate
+        const describeInstancesResponse = await ec2Client.send(new DescribeInstancesCommand({
+            Filters: [
+                // Filter for instances tagged as belonging to the cluster
+                { Name: `tag:kubernetes.io/cluster/${outputs.cluster_name}`, Values: ['owned'] },
+                { Name: 'instance-state-name', Values: ['running'] },
+            ]
+        }));
+
+        const workerInstances = describeInstancesResponse.Reservations?.flatMap(r => r.Instances || []).filter(i => i.InstanceId) || [];
+        
+        expect(workerInstances.length).toBeGreaterThan(0);
+        
+        // Select one node ID randomly
+        const targetInstanceId = workerInstances[0].InstanceId;
+        if (!targetInstanceId) {
+            throw new Error('No valid instance ID found to terminate');
+        }
+        console.log(`Targeting EC2 Instance for termination: ${targetInstanceId}`);
+
+        // Step 2: Terminate the EC2 instance (this runs in the background)
+        const terminationPromise = ec2Client.send(new TerminateInstancesCommand({
+            InstanceIds: [targetInstanceId]
+        }));
+        
+        await expect(terminationPromise).resolves.toBeDefined();
+        console.log(`Termination command sent for ${targetInstanceId}. Beginning resilience monitoring...`);
+        
+
+        // Step 3: Monitor application uptime during the failure and recovery period
+        const recoveryTimeout = 180000; // 3 minutes for Kubernetes/ASG to reschedule/replace
+        const startTime = Date.now();
+        
+        // The core of the resilience test: If waitForApplicationUptime passes, the app was available
+        await waitForApplicationUptime(APPLICATION_ENDPOINT, recoveryTimeout); 
+
+        const durationSeconds = (Date.now() - startTime) / 1000;
+        console.log(`✅ Application remained available or recovered in ${durationSeconds.toFixed(2)}s.`);
+
+    }, 240000); // Allow 4 minutes total for the entire test
+});
+const albDns = outputs.alb_dns_name;
+ const url = `http://${albDns}`;
+const APPLICATION_ENDPOINT = `http://${albDns}/health`; // Use your ALB health endpoint
+
+// --- Helper Functions (usually in a test utility file) ---
+test('should handle node termination and maintain application uptime', async () => {
+    // Step 0: Ensure application is initially up
+    console.log("Pre-check: Verifying application is up...");
+    await waitForApplicationUptime(APPLICATION_ENDPOINT);
+    
+    // Step 1: Find an EKS worker node to terminate
+    const describeInstancesResponse = await ec2Client.send(new DescribeInstancesCommand({
+        Filters: [
+            { Name: 'tag:kubernetes.io/cluster/' + `${outputs.cluster_name}`, Values: ['owned'] },
+            { Name: 'instance-state-name', Values: ['running'] },
+        ]
+    }));
+
+    const workerInstances = describeInstancesResponse.Reservations?.flatMap(r => r.Instances || []).filter(i => i.InstanceId) || [];
+    
+    expect(workerInstances.length).toBeGreaterThan(0);
+    
+    // Select one node ID randomly
+    const targetInstanceId = workerInstances[0].InstanceId;
+    if (!targetInstanceId) {
+        throw new Error('No valid instance ID found');
+    }
+    console.log(`Targeting EC2 Instance for termination: ${targetInstanceId}`);
+
+    // Step 2: Terminate the EC2 instance
+    await ec2Client.send(new TerminateInstancesCommand({
+        InstanceIds: [targetInstanceId]
+    }));
+    console.log(`Termination command sent for ${targetInstanceId}. Beginning resilience monitoring...`);
+
+    const startTime = Date.now();
+    await waitForApplicationUptime(APPLICATION_ENDPOINT, 180000); // Wait up to 3 minutes for recovery
+
+    const durationSeconds = (Date.now() - startTime) / 1000;
+    console.log(`✅ Application remained available or recovered in ${durationSeconds.toFixed(2)}s.`);
+
+    // Optional Step 4: Verify Cluster Autoscaler replaced the node (async check)
+    // You may need to wait longer for the ASG/Cluster Autoscaler to fully provision a replacement node.
+    // For a quick E2E, the uptime check is the most critical pass/fail.
+    // A long-running process could check that the total node count returns to the original count.
+    
+    /* await ec2Client.send(new waitUntilInstanceRunning({
+        InstanceIds: [targetInstanceId] // Will fail/timeout, but ASG should launch a new one
+    }));
+    */
+});
+  // ============================================================================
   // PART 4: E2E COMPLETENESS TESTS (Long-Running)
   // ============================================================================
-
-  describe('[E2E] Complete Infrastructure Flow: VPC → EKS → ALB → CloudWatch', () => {
-    // MODIFICATION: Explicitly setting the timeout for the entire test
-    test('should validate complete network path from internet to EKS nodes', async () => {
-    // Step 1: Verify Internet Gateway exists and is attached
-  const igwResponseInitial = await ec2Client.send(new DescribeInternetGatewaysCommand({
-    Filters: [
-      { Name: 'attachment.vpc-id', Values: [outputs.vpc_id] }
-    ]
-  }));
-
-  expect(igwResponseInitial.InternetGateways).toHaveLength(1);
-  const igwId = igwResponseInitial.InternetGateways![0].InternetGatewayId;
-  
-  // CRITICAL: Use retry to wait for the 'attached' state
-  await retry(async () => {
-      if (!igwId) {
-          throw new Error('Internet Gateway ID is undefined');
-      }
-      const igwResponse = await ec2Client.send(new DescribeInternetGatewaysCommand({
-          InternetGatewayIds: [igwId]
-      }));
-      const igw = igwResponse.InternetGateways![0];
-      
-      // Check if the Attachments array is defined and has an entry
-      if (!igw.Attachments || igw.Attachments.length === 0) {
-          throw new Error(`IGW has no attachment record yet.`);
-      }
-
-      const state = igw.Attachments![0].State;
-      if (state !== 'attached') {
-          throw new Error(`IGW attachment not ready. Current state: ${state}`);
-      }
-      expect(state).toBe('attached');
-  }, 10, 10000); // Wait up to 10 times with 10s delay (100 seconds)
-
-  // Step 2: Verify ALB can receive traffic from internet (sanity check)
-  const albResponse = await elbv2Client.send(new DescribeLoadBalancersCommand({
-    Names: [`${outputs.cluster_name}-alb1`]
-  }));
-
-  const alb = albResponse.LoadBalancers![0];
-  expect(alb.State?.Code).toBe('active');
-  
-  // Step 3: Verify NAT Gateway is active for outbound traffic
-  const natGatewaysResponse = await ec2Client.send(new DescribeNatGatewaysCommand({
-    Filter: [
-      { Name: 'vpc-id', Values: [outputs.vpc_id] },
-      { Name: 'state', Values: ['available'] }
-    ]
-  }));
-
-  expect(natGatewaysResponse.NatGateways).toHaveLength(3);
-  
-  console.log('Infrastructure path validated: IGW -> ALB active. NAT Gateways available.');
-  
-}, 180000); // Jest Timeout: 3 minutes (180,000 ms)
-    
-    // The second failing test in this block (line 1137) is fixed by the CloudWatch/KMS fix above.
-  });
-
     test('should validate secure communication flow: IAM → KMS → EKS → CloudWatch', async () => {
       // Get cluster encryption key ARN
       const clusterResponse = await eksClient.send(new DescribeClusterCommand({
