@@ -23,5 +23,7 @@
     "Route Tables",
     "Security Groups"
   ],
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing"
 }
