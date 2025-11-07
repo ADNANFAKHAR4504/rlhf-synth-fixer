@@ -211,7 +211,8 @@ describe('TapStack unit', () => {
     const lambdaPolicies = Object.values(policies).filter((policy: any) => {
       const policyDocStr = JSON.stringify(policy.Properties.PolicyDocument || {});
       const rolesStr = JSON.stringify(policy.Properties.Roles || []);
-      return policyDocStr.includes('dynamodb') || rolesStr.includes(lambdaRoleEntry?.[0]);
+      const roleId = lambdaRoleEntry?.[0] || '';
+      return policyDocStr.includes('dynamodb') || rolesStr.includes(roleId);
     });
 
     expect(lambdaPolicies.length).toBeGreaterThan(0);
