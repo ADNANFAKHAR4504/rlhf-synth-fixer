@@ -186,7 +186,8 @@ export class VpcModule extends Construct {
 // S3 Module with security best practices
 export class S3Module extends Construct {
   public readonly bucket: aws.s3Bucket.S3Bucket;
-  public readonly bucketAcl: aws.s3BucketAcl.S3BucketAcl;
+  public readonly bucketOwnershipControls: aws.s3BucketOwnershipControls.S3BucketOwnershipControls;
+
   public readonly bucketVersioning: aws.s3BucketVersioning.S3BucketVersioningA;
   public readonly bucketEncryption: aws.s3BucketServerSideEncryptionConfiguration.S3BucketServerSideEncryptionConfigurationA;
   public readonly bucketPublicAccessBlock: aws.s3BucketPublicAccessBlock.S3BucketPublicAccessBlock;
@@ -212,6 +213,18 @@ export class S3Module extends Construct {
         ManagedBy: 'CDKTF',
       },
     });
+
+    // Add Bucket Ownership Controls instead of ACL
+    this.bucketOwnershipControls = new aws.s3BucketOwnershipControls.S3BucketOwnershipControls(
+      this,
+      'ownership-controls',
+      {
+        bucket: this.bucket.id,
+        rule: {
+          objectOwnership: 'BucketOwnerEnforced', // This replaces ACLs
+        },
+      }
+    );
 
     // Enable versioning
     this.bucketVersioning = new aws.s3BucketVersioning.S3BucketVersioningA(
@@ -256,13 +269,6 @@ export class S3Module extends Construct {
           restrictPublicBuckets: true,
         }
       );
-
-    // Set bucket ACL to private
-    this.bucketAcl = new aws.s3BucketAcl.S3BucketAcl(this, 'acl', {
-      bucket: this.bucket.id,
-      acl: 'private',
-      dependsOn: [this.bucketPublicAccessBlock],
-    });
 
     // Add lifecycle rules if provided - FIXED: Added status field
     if (config.lifecycleRules && config.lifecycleRules.length > 0) {
@@ -556,7 +562,11 @@ export class CloudFrontModule extends Construct {
 
             forwardedValues: {
               queryString: true,
-              headers: ['*'],
+              headers: [
+                'Origin',
+                'Access-Control-Request-Method',
+                'Access-Control-Request-Headers',
+              ],
               cookies: {
                 forward: 'all',
               },
