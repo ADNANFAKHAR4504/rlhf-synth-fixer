@@ -180,16 +180,16 @@ describe('ECS Cost Optimization Integration Tests', () => {
       // The important thing is that the step scaling policy exists and is configured
       const stepAdjustments =
         stepPolicy?.StepScalingPolicyConfiguration?.StepAdjustments;
-      
+
       // Step adjustments should exist (at least 1, but AWS may combine multiple steps)
       expect(stepAdjustments).toBeDefined();
       expect(stepAdjustments?.length).toBeGreaterThanOrEqual(1);
-      
+
       // Verify that step adjustments contain scaling values
       // AWS may represent the steps differently, so we just verify they exist
       const adjustments = stepAdjustments?.map(a => a.ScalingAdjustment) || [];
       expect(adjustments.length).toBeGreaterThan(0);
-      
+
       // Verify the step scaling policy has the expected configuration
       expect(stepPolicy?.StepScalingPolicyConfiguration?.AdjustmentType).toBe('ChangeInCapacity');
       expect(stepPolicy?.StepScalingPolicyConfiguration?.Cooldown).toBeDefined();
