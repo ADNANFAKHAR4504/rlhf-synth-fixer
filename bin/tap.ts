@@ -9,7 +9,7 @@ const environment = app.node.tryGetContext('environment') || 'dev';
 const environmentSuffix =
   app.node.tryGetContext('environmentSuffix') || `${environment}-${Date.now()}`;
 
-new TapStack(app, `TapStack-${environmentSuffix}`, {
+new TapStack(app, `TapStack${environmentSuffix}`, {
   environmentSuffix,
   environment,
   env: {
