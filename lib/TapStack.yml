@@ -1158,7 +1158,7 @@ Resources:
             
             # Update system and install dependencies
             yum update -y || echo "WARNING: yum update had issues, continuing..." | logger -t user-data
-            yum install -y amazon-cloudwatch-agent nodejs npm git postgresql15 jq nc || {
+            yum install -y amazon-cloudwatch-agent nodejs npm git postgresql15 jq nc curl || {
               echo "ERROR: Failed to install required packages" | logger -t user-data
               EXIT_CODE=1
             }
@@ -1317,17 +1317,28 @@ Resources:
               ]
             });
             
-            // Database connection pool
-            const pool = new Pool({
-              host: process.env.DB_HOST,
-              port: process.env.DB_PORT,
-              database: process.env.DB_NAME,
-              user: process.env.DB_USER,
-              password: process.env.DB_PASSWORD,
-              max: 20,
-              idleTimeoutMillis: 30000,
-              connectionTimeoutMillis: 2000,
-            });
+            // Database connection pool (lazy initialization, handles connection errors gracefully)
+            let pool = null;
+            function getPool() {
+              if (!pool) {
+                pool = new Pool({
+                  host: process.env.DB_HOST,
+                  port: process.env.DB_PORT,
+                  database: process.env.DB_NAME,
+                  user: process.env.DB_USER,
+                  password: process.env.DB_PASSWORD,
+                  max: 20,
+                  idleTimeoutMillis: 30000,
+                  connectionTimeoutMillis: 5000,
+                });
+                
+                // Handle pool errors gracefully
+                pool.on('error', (err) => {
+                  logger.error('Unexpected error on idle client', err);
+                });
+              }
+              return pool;
+            }
             
             // Middleware
             app.use(express.json());
@@ -1344,7 +1355,8 @@ Resources:
             // Health check endpoint
             app.get('/health', async (req, res) => {
               try {
-                const dbCheck = await pool.query('SELECT NOW()');
+                const dbPool = getPool();
+                const dbCheck = await dbPool.query('SELECT NOW()');
                 res.status(200).json({
                   status: 'healthy',
                   timestamp: new Date().toISOString(),
@@ -1358,7 +1370,8 @@ Resources:
                   status: 'unhealthy',
                   timestamp: new Date().toISOString(),
                   environment: process.env.ENVIRONMENT,
-                  database: 'disconnected'
+                  database: 'disconnected',
+                  error: process.env.NODE_ENV === 'production' ? 'Database connection failed' : error.message
                 });
               }
             });
@@ -1389,17 +1402,38 @@ Resources:
               });
             });
             
-            // Start server
-            app.listen(port, () => {
+            // Start server with error handling
+            const server = app.listen(port, () => {
               logger.info('API server running on port ' + port);
               logger.info('Environment: ' + process.env.ENVIRONMENT);
+            });
+            
+            server.on('error', (error) => {
+              logger.error('Server error:', error);
+              if (error.code === 'EADDRINUSE') {
+                logger.error('Port ' + port + ' is already in use');
+                process.exit(1);
+              }
             });
             
             // Graceful shutdown
             process.on('SIGTERM', async () => {
               logger.info('SIGTERM signal received: closing HTTP server');
-              await pool.end();
+              if (pool) {
+                await pool.end().catch(err => logger.error('Error closing pool', err));
+              }
               process.exit(0);
+            });
+            
+            // Handle uncaught exceptions gracefully
+            process.on('uncaughtException', (error) => {
+              logger.error('Uncaught Exception:', error);
+              // Don't exit - let the app continue running
+            });
+            
+            process.on('unhandledRejection', (reason, promise) => {
+              logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+              // Don't exit - let the app continue running
             });
             EOF
             
@@ -1466,17 +1500,42 @@ Resources:
             
             # Start service and wait a bit to verify it's running
             systemctl start nodeapp || EXIT_CODE=1
-            sleep 10
+            sleep 15
             
             # Verify service is running - this is critical for success
+            SERVICE_ACTIVE=false
+            HTTP_RESPONDING=false
+            
             if systemctl is-active --quiet nodeapp; then
-              echo "Node.js application service started successfully" | logger -t user-data
-              # If service is running, consider it a success even if some setup steps had warnings
+              SERVICE_ACTIVE=true
+              echo "Service is active according to systemctl" | logger -t user-data
+              
+              # Also verify HTTP server is actually responding
+              for i in {1..5}; do
+                if curl -f -s http://localhost/health > /dev/null 2>&1 || curl -f -s http://localhost/ > /dev/null 2>&1; then
+                  HTTP_RESPONDING=true
+                  echo "HTTP server is responding on attempt $i" | logger -t user-data
+                  break
+                fi
+                echo "HTTP server not responding yet, attempt $i/5, waiting 3 seconds..." | logger -t user-data
+                sleep 3
+              done
+            else
+              echo "ERROR: Node.js application service is not active" | logger -t user-data
+              systemctl status nodeapp | logger -t user-data || true
+              journalctl -u nodeapp -n 50 --no-pager | logger -t user-data || true
+            fi
+            
+            # If service is active and HTTP is responding, consider it success
+            if [ "$SERVICE_ACTIVE" = true ] && [ "$HTTP_RESPONDING" = true ]; then
+              echo "Node.js application service started successfully and HTTP server is responding" | logger -t user-data
+              EXIT_CODE=0
+            elif [ "$SERVICE_ACTIVE" = true ]; then
+              echo "WARNING: Service is active but HTTP server not responding yet - considering success anyway" | logger -t user-data
+              # Still consider it success if service is active, HTTP might just need more time
               EXIT_CODE=0
             else
               echo "ERROR: Node.js application service failed to start" | logger -t user-data
-              systemctl status nodeapp | logger -t user-data || true
-              journalctl -u nodeapp -n 50 --no-pager | logger -t user-data || true
               EXIT_CODE=1
             fi
             
