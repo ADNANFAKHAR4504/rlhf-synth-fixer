@@ -24,10 +24,9 @@ const cloudwatchLogs = new AWS.CloudWatchLogs({ region });
 const guardduty = new AWS.GuardDuty({ region });
 const eventbridge = new AWS.EventBridge({ region });
 
-// Helper to safely call AWS SDK and log errors/warnings
-async function diagAwsCall(label: string, fn: (...args: any[]) => Promise<any>, ...args: any[]) {
+async function diagAwsCall(label: string, fn: () => Promise<any>) {
   try {
-    const res = await fn(...args);
+    const res = await fn();
     if (!res) {
       console.warn(`[SKIP:${label}] AWS call returned null/undefined, skipping.`);
       return null;
@@ -59,7 +58,7 @@ describe('TapStack Integration Tests Based on flat-outputs.json and tap_stack.tf
     expect(bucketName).toBeDefined();
     expect(bucketArn).toBeDefined();
 
-    const s3Info = await diagAwsCall('DataBucket', s3.headBucket.bind(s3), { Bucket: bucketName });
+    const s3Info = await diagAwsCall('DataBucket', () => s3.headBucket({ Bucket: bucketName }).promise());
     expect(s3Info).not.toBeNull();
     expect(bucketArn).toBe(`arn:aws:s3:::${bucketName}`);
   });
@@ -68,7 +67,7 @@ describe('TapStack Integration Tests Based on flat-outputs.json and tap_stack.tf
     const secretArn = outputs.db_credentials_secret_arn;
     expect(secretArn).toBeDefined();
 
-    const secretInfo = await diagAwsCall('SecretsManagerSecret', secretsManager.describeSecret.bind(secretsManager), { SecretId: secretArn });
+    const secretInfo = await diagAwsCall('SecretsManagerSecret', () => secretsManager.describeSecret({ SecretId: secretArn }).promise());
     if (skipIfNull(secretInfo, 'SecretsManagerSecret')) return;
 
     expect(secretInfo.ARN.toLowerCase()).toBe(secretArn.toLowerCase());
@@ -81,7 +80,7 @@ describe('TapStack Integration Tests Based on flat-outputs.json and tap_stack.tf
     expect(tableArn).toBeDefined();
 
     const dynamodb = new AWS.DynamoDB({ region });
-    const tableDesc = await diagAwsCall('DynamoDBTable', dynamodb.describeTable.bind(dynamodb), { TableName: tableName });
+    const tableDesc = await diagAwsCall('DynamoDBTable', () => dynamodb.describeTable({ TableName: tableName }).promise());
     if (skipIfNull(tableDesc, 'DynamoDBTable')) return;
 
     expect(tableDesc.Table.TableArn.toLowerCase()).toBe(tableArn.toLowerCase());
@@ -92,7 +91,7 @@ describe('TapStack Integration Tests Based on flat-outputs.json and tap_stack.tf
     const detectorId = outputs.guardduty_detector_id;
     expect(detectorId).toBeDefined();
 
-    const detectorInfo = await diagAwsCall('GuardDutyDetector', guardduty.getDetector.bind(guardduty), { DetectorId: detectorId });
+    const detectorInfo = await diagAwsCall('GuardDutyDetector', () => guardduty.getDetector({ DetectorId: detectorId }).promise());
     if (skipIfNull(detectorInfo, 'GuardDutyDetector')) return;
 
     expect(detectorInfo.Status.toLowerCase()).toBe('enabled');
@@ -102,7 +101,7 @@ describe('TapStack Integration Tests Based on flat-outputs.json and tap_stack.tf
     const topicArn = outputs.guardduty_alerts_topic_arn;
     expect(topicArn).toBeDefined();
 
-    const topicAttributes = await diagAwsCall('SNSTopicAttributes', sns.getTopicAttributes.bind(sns), { TopicArn: topicArn });
+    const topicAttributes = await diagAwsCall('SNSTopicAttributes', () => sns.getTopicAttributes({ TopicArn: topicArn }).promise());
     if (skipIfNull(topicAttributes, 'SNSTopicAttributes')) return;
 
     expect(topicAttributes.Attributes.TopicArn.toLowerCase()).toBe(topicArn.toLowerCase());
@@ -113,7 +112,7 @@ describe('TapStack Integration Tests Based on flat-outputs.json and tap_stack.tf
     expect(ruleArn).toBeDefined();
 
     const ruleName = ruleArn.split('/').pop() || '';
-    const ruleInfo = await diagAwsCall('EventBridgeRule', eventbridge.describeRule.bind(eventbridge), { Name: ruleName });
+    const ruleInfo = await diagAwsCall('EventBridgeRule', () => eventbridge.describeRule({ Name: ruleName }).promise());
     if (skipIfNull(ruleInfo, 'EventBridgeRule')) return;
 
     expect(ruleInfo.Arn.toLowerCase()).toBe(ruleArn.toLowerCase());
@@ -126,7 +125,7 @@ describe('TapStack Integration Tests Based on flat-outputs.json and tap_stack.tf
     expect(lambdaName).toBeDefined();
 
     const lambda = new AWS.Lambda({ region });
-    const func = await diagAwsCall('LambdaFunction', lambda.getFunction.bind(lambda), { FunctionName: lambdaName });
+    const func = await diagAwsCall('LambdaFunction', () => lambda.getFunction({ FunctionName: lambdaName }).promise());
     if (skipIfNull(func, 'LambdaFunction')) return;
 
     expect(func.Configuration.FunctionArn.toLowerCase()).toBe(lambdaArn.toLowerCase());
@@ -137,10 +136,10 @@ describe('TapStack Integration Tests Based on flat-outputs.json and tap_stack.tf
     const roleArn = outputs.lambda_execution_role_arn;
     expect(roleArn).toBeDefined();
 
-    const iam = new AWS.IAM({ region: 'us-east-1' }); // IAM is global
+    const iam = new AWS.IAM(); // IAM is a global service
     const roleName = roleArn.split('/').pop() || '';
 
-    const role = await diagAwsCall('IAMRole', iam.getRole.bind(iam), { RoleName: roleName });
+    const role = await diagAwsCall('IAMRole', () => iam.getRole({ RoleName: roleName }).promise());
     if (skipIfNull(role, 'IAMRole')) return;
 
     expect(role.Role.Arn.toLowerCase()).toBe(roleArn.toLowerCase());
@@ -152,7 +151,7 @@ describe('TapStack Integration Tests Based on flat-outputs.json and tap_stack.tf
     expect(sgId).toBeDefined();
     expect(sgName).toBeDefined();
 
-    const sgData = await diagAwsCall('SecurityGroup', ec2.describeSecurityGroups.bind(ec2), { GroupIds: [sgId] });
+    const sgData = await diagAwsCall('SecurityGroup', () => ec2.describeSecurityGroups({ GroupIds: [sgId] }).promise());
     if (skipIfNull(sgData, 'SecurityGroup')) return;
 
     expect(sgData.SecurityGroups[0].GroupId).toBe(sgId);
@@ -165,7 +164,7 @@ describe('TapStack Integration Tests Based on flat-outputs.json and tap_stack.tf
     expect(vpcId).toBeDefined();
     expect(vpcCidr).toBeDefined();
 
-    const vpcInfo = await diagAwsCall('VPC', ec2.describeVpcs.bind(ec2), { VpcIds: [vpcId] });
+    const vpcInfo = await diagAwsCall('VPC', () => ec2.describeVpcs({ VpcIds: [vpcId] }).promise());
     if (skipIfNull(vpcInfo, 'VPC')) return;
 
     expect(vpcInfo.Vpcs[0].VpcId).toBe(vpcId);
@@ -179,7 +178,7 @@ describe('TapStack Integration Tests Based on flat-outputs.json and tap_stack.tf
     expect(vpcId).toBeDefined();
 
     for (const subnetId of subnetIds) {
-      const subnet = await diagAwsCall('Subnet', ec2.describeSubnets.bind(ec2), { SubnetIds: [subnetId] });
+      const subnet = await diagAwsCall('Subnet', () => ec2.describeSubnets({ SubnetIds: [subnetId] }).promise());
       if (skipIfNull(subnet, 'Subnet')) continue;
 
       expect(subnet.Subnets[0].SubnetId).toBe(subnetId);
@@ -195,7 +194,7 @@ describe('TapStack Integration Tests Based on flat-outputs.json and tap_stack.tf
 
     for (const kmsArn of [kmsS3KeyArn, kmsCloudWatchArn]) {
       const keyId = kmsArn.split('/').pop() || '';
-      const keyInfo = await diagAwsCall('KMSKey', kms.describeKey.bind(kms), { KeyId: keyId });
+      const keyInfo = await diagAwsCall('KMSKey', () => kms.describeKey({ KeyId: keyId }).promise());
       if (skipIfNull(keyInfo, 'KMSKey')) continue;
 
       expect(keyInfo.KeyMetadata.Arn.toLowerCase()).toBe(kmsArn.toLowerCase());
@@ -209,7 +208,9 @@ describe('TapStack Integration Tests Based on flat-outputs.json and tap_stack.tf
 
     for (const logGroupArn of logGroups) {
       const logGroupName = logGroupArn.split(':log-group:').pop() || '';
-      const group = await diagAwsCall('CloudWatchLogGroup', cloudwatchLogs.describeLogGroups.bind(cloudwatchLogs), { logGroupNamePrefix: logGroupName });
+      const group = await diagAwsCall('CloudWatchLogGroup', () =>
+        cloudwatchLogs.describeLogGroups({ logGroupNamePrefix: logGroupName }).promise()
+      );
       if (skipIfNull(group, 'CloudWatchLogGroup')) continue;
 
       expect(group.logGroups.some((lg: any) => lg.arn === logGroupArn)).toBe(true);
@@ -222,7 +223,7 @@ describe('TapStack Integration Tests Based on flat-outputs.json and tap_stack.tf
     expect(flowLogId).toBeDefined();
     expect(vpcId).toBeDefined();
 
-    const flowLogs = await diagAwsCall('VPCFlowLogs', ec2.describeFlowLogs.bind(ec2), { FlowLogIds: [flowLogId] });
+    const flowLogs = await diagAwsCall('VPCFlowLogs', () => ec2.describeFlowLogs({ FlowLogIds: [flowLogId] }).promise());
     if (skipIfNull(flowLogs, 'VPCFlowLogs')) return;
 
     expect(flowLogs.FlowLogs[0].FlowLogId).toBe(flowLogId);

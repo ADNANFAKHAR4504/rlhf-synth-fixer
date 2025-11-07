@@ -29,7 +29,7 @@ terraform {
   }
 
   # Using local backend for worktree testing
-  backend "local" {}
+  backend "s3" {}
 }
 
 # Primary AWS provider for general resources
@@ -303,7 +303,7 @@ resource "aws_kms_key" "s3" {
 }
 
 resource "aws_kms_alias" "s3" {
-  name          = "alias/s3-${var.environment_suffix}"
+  name          = "alias/s3-${var.environment_suffix}-ab"
   target_key_id = aws_kms_key.s3.key_id
 }
 
@@ -355,7 +355,7 @@ resource "aws_kms_key" "cloudwatch" {
 }
 
 resource "aws_kms_alias" "cloudwatch" {
-  name          = "alias/cloudwatch-${var.environment_suffix}"
+  name          = "alias/cloudwatch-${var.environment_suffix}-ab"
   target_key_id = aws_kms_key.cloudwatch.key_id
 }
 
@@ -388,7 +388,7 @@ resource "aws_security_group" "lambda" {
 
 # IAM Role for Lambda Execution
 resource "aws_iam_role" "lambda" {
-  name = "lambda-execution-role-${var.environment_suffix}"
+  name = "lambda-execution-role-${var.environment_suffix}-ab"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -404,7 +404,7 @@ resource "aws_iam_role" "lambda" {
   })
 
   tags = merge(var.common_tags, {
-    Name = "lambda-execution-role-${var.environment_suffix}"
+    Name = "lambda-execution-role-${var.environment_suffix}-ab"
   })
 }
 
@@ -480,10 +480,10 @@ resource "aws_iam_role_policy" "lambda" {
 ```hcl
 # S3 Bucket for Data Storage
 resource "aws_s3_bucket" "data" {
-  bucket = "data-bucket-${var.environment_suffix}"
+  bucket = "data-bucket-${var.environment_suffix}-ab"
 
   tags = merge(var.common_tags, {
-    Name = "data-bucket-${var.environment_suffix}"
+    Name = "data-bucket-${var.environment_suffix}-ab"
   })
 }
 
@@ -521,10 +521,10 @@ resource "aws_s3_bucket_public_access_block" "data" {
 
 # S3 Bucket for Access Logs
 resource "aws_s3_bucket" "logs" {
-  bucket = "logs-bucket-${var.environment_suffix}"
+  bucket = "logs-bucket-${var.environment_suffix}-ab"
 
   tags = merge(var.common_tags, {
-    Name = "logs-bucket-${var.environment_suffix}"
+    Name = "logs-bucket-${var.environment_suffix}-ab"
   })
 }
 
@@ -570,7 +570,7 @@ resource "aws_s3_bucket_logging" "data" {
 
 # DynamoDB Table for Metadata
 resource "aws_dynamodb_table" "metadata" {
-  name         = "metadata-table-${var.environment_suffix}"
+  name         = "metadata-table-${var.environment_suffix}-ab"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "id"
 
@@ -589,7 +589,7 @@ resource "aws_dynamodb_table" "metadata" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "metadata-table-${var.environment_suffix}"
+    Name = "metadata-table-${var.environment_suffix}-ab"
   })
 }
 ```
@@ -600,7 +600,7 @@ resource "aws_dynamodb_table" "metadata" {
 # Lambda Function for Data Processing
 resource "aws_lambda_function" "processor" {
   filename      = "${path.module}/lambda/processor.zip"
-  function_name = "data-processor-${var.environment_suffix}"
+  function_name = "data-processor-${var.environment_suffix}-ab"
   role          = aws_iam_role.lambda.arn
   handler       = "index.handler"
   runtime       = "python3.11"
@@ -621,7 +621,7 @@ resource "aws_lambda_function" "processor" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "data-processor-${var.environment_suffix}"
+    Name = "data-processor-${var.environment_suffix}-ab"
   })
 
   depends_on = [
@@ -632,12 +632,12 @@ resource "aws_lambda_function" "processor" {
 
 # CloudWatch Log Group for Lambda
 resource "aws_cloudwatch_log_group" "lambda" {
-  name              = "/aws/lambda/data-processor-${var.environment_suffix}"
+  name              = "/aws/lambda/data-processor-${var.environment_suffix}-ab"
   retention_in_days = 90
   kms_key_id        = aws_kms_key.cloudwatch.arn
 
   tags = merge(var.common_tags, {
-    Name = "lambda-logs-${var.environment_suffix}"
+    Name = "lambda-logs-${var.environment_suffix}-ab"
   })
 }
 ```
@@ -647,12 +647,12 @@ resource "aws_cloudwatch_log_group" "lambda" {
 ```hcl
 # Secrets Manager Secret for Database Credentials
 resource "aws_secretsmanager_secret" "db_credentials" {
-  name                    = "db-credentials-${var.environment_suffix}"
+  name                    = "db-credentials-${var.environment_suffix}-ab"
   description             = "Database credentials for data processing"
   recovery_window_in_days = 0
 
   tags = merge(var.common_tags, {
-    Name = "db-credentials-${var.environment_suffix}"
+    Name = "db-credentials-${var.environment_suffix}-ab"
   })
 }
 
@@ -681,7 +681,7 @@ resource "aws_secretsmanager_secret_rotation" "db_credentials" {
 
 # IAM Role for Secrets Rotation Lambda
 resource "aws_iam_role" "secrets_rotation" {
-  name = "secrets-rotation-role-${var.environment_suffix}"
+  name = "secrets-rotation-role-${var.environment_suffix}-ab"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -697,7 +697,7 @@ resource "aws_iam_role" "secrets_rotation" {
   })
 
   tags = merge(var.common_tags, {
-    Name = "secrets-rotation-role-${var.environment_suffix}"
+    Name = "secrets-rotation-role-${var.environment_suffix}-ab"
   })
 }
 
@@ -735,7 +735,7 @@ resource "aws_iam_role_policy" "secrets_rotation" {
 # Lambda Function for Secrets Rotation
 resource "aws_lambda_function" "secrets_rotation" {
   filename      = "${path.module}/lambda/rotation.zip"
-  function_name = "secrets-rotation-${var.environment_suffix}"
+  function_name = "secrets-rotation-${var.environment_suffix}-ab"
   role          = aws_iam_role.secrets_rotation.arn
   handler       = "rotation.handler"
   runtime       = "python3.11"
@@ -748,7 +748,7 @@ resource "aws_lambda_function" "secrets_rotation" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "secrets-rotation-${var.environment_suffix}"
+    Name = "secrets-rotation-${var.environment_suffix}-ab"
   })
 }
 
@@ -836,18 +836,18 @@ resource "aws_sns_topic_policy" "guardduty_alerts" {
 
 # CloudWatch Log Group for VPC Flow Logs
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
-  name              = "/aws/vpc/flowlogs-${var.environment_suffix}"
+  name              = "/aws/vpc/flowlogs-${var.environment_suffix}-ab"
   retention_in_days = 90
   kms_key_id        = aws_kms_key.cloudwatch.arn
 
   tags = merge(var.common_tags, {
-    Name = "vpc-flow-logs-${var.environment_suffix}"
+    Name = "vpc-flow-logs-${var.environment_suffix}-ab"
   })
 }
 
 # IAM Role for VPC Flow Logs
 resource "aws_iam_role" "vpc_flow_logs" {
-  name = "vpc-flow-logs-role-${var.environment_suffix}"
+  name = "vpc-flow-logs-role-${var.environment_suffix}-ab"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -863,7 +863,7 @@ resource "aws_iam_role" "vpc_flow_logs" {
   })
 
   tags = merge(var.common_tags, {
-    Name = "vpc-flow-logs-role-${var.environment_suffix}"
+    Name = "vpc-flow-logs-role-${var.environment_suffix}-ab"
   })
 }
 
@@ -936,10 +936,6 @@ output "dynamodb_table_name" {
   value       = aws_dynamodb_table.metadata.name
 }
 
-output "dynamodb_table_arn" {
-  description = "DynamoDB table ARN"
-  value       = aws_dynamodb_table.metadata.arn
-}
 
 output "lambda_function_name" {
   description = "Lambda function name"
@@ -989,6 +985,156 @@ output "s3_vpc_endpoint_id" {
 output "dynamodb_vpc_endpoint_id" {
   description = "DynamoDB VPC endpoint ID"
   value       = aws_vpc_endpoint.dynamodb.id
+}
+
+# VPC Outputs
+output "vpc_cidr_block" {
+  description = "CIDR block of the VPC"
+  value       = aws_vpc.main.cidr_block
+}
+
+# Private Subnets Outputs
+output "private_subnet_cidr_blocks" {
+  description = "CIDR blocks of private subnets"
+  value       = aws_subnet.private[*].cidr_block
+}
+
+# Route Table Outputs
+output "private_route_table_id" {
+  description = "Route table ID for private subnets"
+  value       = aws_route_table.private.id
+}
+
+# VPC Endpoints Outputs
+output "s3_vpc_endpoint_dns_entry" {
+  description = "DNS entry for S3 VPC endpoint"
+  value       = aws_vpc_endpoint.s3.dns_entry
+}
+
+output "dynamodb_vpc_endpoint_dns_entry" {
+  description = "DNS entry for DynamoDB VPC endpoint"
+  value       = aws_vpc_endpoint.dynamodb.dns_entry
+}
+
+# Network ACL Outputs
+output "private_network_acl_id" {
+  description = "Network ACL ID for private subnets"
+  value       = aws_network_acl.private.id
+}
+
+# Security Group Outputs
+output "lambda_security_group_name" {
+  description = "Name of the Lambda security group"
+  value       = aws_security_group.lambda.name
+}
+
+# IAM Role Outputs
+output "lambda_execution_role_arn" {
+  description = "ARN of the Lambda execution role"
+  value       = aws_iam_role.lambda.arn
+}
+
+output "vpc_flow_logs_role_arn" {
+  description = "ARN of the VPC flow logs IAM role"
+  value       = aws_iam_role.vpc_flow_logs.arn
+}
+
+output "secrets_rotation_role_arn" {
+  description = "ARN of the secrets rotation IAM role"
+  value       = aws_iam_role.secrets_rotation.arn
+}
+
+# IAM Policy Outputs
+
+
+output "lambda_policy_id" {
+  description = "ID of the Lambda IAM role policy"
+  value       = aws_iam_role_policy.lambda.id
+}
+
+output "vpc_flow_logs_policy_id" {
+  description = "ID of the VPC flow logs IAM role policy"
+  value       = aws_iam_role_policy.vpc_flow_logs.id
+}
+
+output "secrets_rotation_policy_id" {
+  description = "ID of the secrets rotation IAM role policy"
+  value       = aws_iam_role_policy.secrets_rotation.id
+}
+
+# CloudWatch Log Groups Outputs
+output "lambda_log_group_arn" {
+  description = "ARN of the Lambda CloudWatch log group"
+  value       = aws_cloudwatch_log_group.lambda.arn
+}
+
+output "vpc_flow_logs_log_group_arn" {
+  description = "ARN of the VPC flow logs CloudWatch log group"
+  value       = aws_cloudwatch_log_group.vpc_flow_logs.arn
+}
+
+# S3 Bucket Outputs
+
+output "logs_bucket_arn" {
+  description = "ARN of the logs S3 bucket"
+  value       = aws_s3_bucket.logs.arn
+}
+
+# DynamoDB Table Outputs
+output "dynamodb_table_arn" {
+  description = "ARN of the DynamoDB table"
+  value       = aws_dynamodb_table.metadata.arn
+}
+
+# KMS Key Outputs
+output "kms_s3_key_arn" {
+  description = "ARN of the KMS key for S3 encryption"
+  value       = aws_kms_key.s3.arn
+}
+
+output "kms_cloudwatch_key_arn" {
+  description = "ARN of the KMS key for CloudWatch encryption"
+  value       = aws_kms_key.cloudwatch.arn
+}
+
+# SNS Topic Outputs
+output "guardduty_alerts_topic_arn" {
+  description = "ARN of the GuardDuty alerts SNS topic"
+  value       = aws_sns_topic.guardduty_alerts.arn
+}
+
+# EventBridge Outputs
+output "guardduty_findings_rule_arn" {
+  description = "ARN of the GuardDuty findings EventBridge rule"
+  value       = aws_cloudwatch_event_rule.guardduty_findings.arn
+}
+
+# VPC Flow Logs Outputs
+output "vpc_flow_logs_id" {
+  description = "ID of the VPC flow logs"
+  value       = aws_flow_log.main.id
+}
+
+# Secrets Manager Outputs
+output "db_credentials_secret_arn" {
+  description = "ARN of the Secrets Manager secret for database credentials"
+  value       = aws_secretsmanager_secret.db_credentials.arn
+}
+
+output "db_credentials_secret_version_id" {
+  description = "Version ID of the Secrets Manager secret for database credentials"
+  value       = aws_secretsmanager_secret_version.db_credentials.version_id
+}
+
+# Lambda Outputs
+output "secrets_rotation_lambda_arn" {
+  description = "ARN of the secrets rotation Lambda function"
+  value       = aws_lambda_function.secrets_rotation.arn
+}
+
+output "processor_lambda_arn" {
+  description = "ARN of the data processor Lambda function"
+  value       = aws_lambda_function.processor.arn
 }
 ```
 
