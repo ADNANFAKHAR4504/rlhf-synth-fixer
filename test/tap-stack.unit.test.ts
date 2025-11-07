@@ -183,6 +183,55 @@ describe('CloudSetupStack', () => {
     expect(subject.rdsEndpoint).toBeDefined();
     expect(subject.bucketName).toBeTruthy();
   });
+
+  test('falls back to dev suffix when environment suffix is empty', () => {
+    const { stack } = createStack('DefaultSuffixStack');
+    const subject = new CloudSetupStack(stack, 'DefaultSubject', {
+      domainName: 'defaults.example.com',
+      environmentSuffix: '',
+    });
+
+    const template = Template.fromStack(stack);
+    template.hasResourceProperties('AWS::EC2::VPC', Match.objectLike({
+      Tags: Match.arrayWith([
+        Match.objectLike({ Key: 'iac-rlhf-amazon', Value: 'dev' }),
+      ]),
+    }));
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      BucketName: `cloud-setup-dev-${Math.floor(FIXED_NOW / 1000)}`,
+    });
+
+    expect(subject.lambdaFunctionName).toBeDefined();
+  });
+
+  test('creates HTTP listener when no certificate ARN is provided', () => {
+    const { stack } = createStack('HttpListenerStack');
+    new CloudSetupStack(stack, 'HttpSubject', {
+      domainName: 'nocert.example.com',
+      environmentSuffix: 'http',
+    });
+
+    const template = Template.fromStack(stack);
+    template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
+      Port: 80,
+      Protocol: 'HTTP',
+    });
+  });
+
+  test('omits CloudFront aliases when no certificate ARN is supplied', () => {
+    const { stack } = createStack('EdgeDefaults');
+    new CloudSetupStack(stack, 'EdgeSubject', {
+      domainName: 'edge.example.com',
+      environmentSuffix: 'edge',
+    });
+
+    const template = Template.fromStack(stack);
+    const distributions = template.findResources('AWS::CloudFront::Distribution');
+    const distribution = Object.values(distributions)[0] as any;
+    expect(
+      distribution.Properties.DistributionConfig.Aliases
+    ).toBeUndefined();
+  });
 });
 
 describe('TapStack', () => {
@@ -244,6 +293,13 @@ describe('TapStack', () => {
       expect.stringMatching(/^existing-vpc-/),
       expect.objectContaining({ vpcId: 'vpc-lookup-001' })
     );
+  });
+
+  test('falls back to dev suffix when neither props nor context provide value', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'DefaultTapStack');
+    const child = stack.node.tryFindChild('CloudSetupUsEast1-dev');
+    expect(child).toBeDefined();
   });
 });
 
