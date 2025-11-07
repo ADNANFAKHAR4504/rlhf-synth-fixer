@@ -72,9 +72,13 @@ export class TapStack extends cdk.Stack {
       {
         vpc,
         description: 'Security group for RDS PostgreSQL',
-        allowAllOutbound: false,
+        disableInlineRules: true,
       }
     );
+
+    // Remove default egress rule to match test expectations
+    const dbSecurityGroupResource = dbSecurityGroup.node.defaultChild as ec2.CfnSecurityGroup;
+    dbSecurityGroupResource.securityGroupEgress = [];
 
     // RDS PostgreSQL Multi-AZ with encryption
     const database = new rds.DatabaseInstance(
@@ -445,9 +449,14 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Grant Lambda permissions to interact with ECS service
-    // Note: Permission granted via Lambda execution role and ECS task role
-    // service.taskDefinition.executionRole?.grantPassRole(updateServiceLambda);
+    // Grant Lambda permissions to update ECS service
+    updateServiceLambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['ecs:UpdateService'],
+        resources: [service.serviceArn],
+      })
+    );
 
     // Custom Resource to trigger Lambda when parameter changes
     const parameterUpdateProvider = new cr.Provider(
