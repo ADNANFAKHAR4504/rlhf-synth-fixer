@@ -1,5 +1,5 @@
 {
-  "platform": "cfn",
+  "platform": "cloudformation",
   "language": "yaml",
   "complexity": "hard",
   "turn_type": "single",
@@ -68,6 +68,11 @@
     "SSM Association"
   ],
   "training_quality": 9,
-  "background": "This task focuses on provisioning a fully secured, production-grade AWS environment using a single CloudFormation template. The objective is to build a multi-tier infrastructure that includes VPC networking, private/public subnets, NAT gateways, and service endpoints for controlled data access. It integrates EC2 instances managed via Launch Templates and Auto Scaling Groups, RDS and ElastiCache for persistence and caching, and IAM roles for least-privilege access. Logging and compliance are ensured through KMS-encrypted S3 buckets, CloudTrail trails, and AWS Config rules. Additionally, CloudWatch alarms, flow logs, and SSM automation are configured for continuous monitoring, patching, and operational visibility. The environment enforces strong security, high availability, and audit readiness across all deployed resources."
+  "background": "This task focuses on provisioning a fully secured, production-grade AWS environment using a single CloudFormation template. The objective is to build a multi-tier infrastructure that includes VPC networking, private/public subnets, NAT gateways, and service endpoints for controlled data access. It integrates EC2 instances managed via Launch Templates and Auto Scaling Groups, RDS and ElastiCache for persistence and caching, and IAM roles for least-privilege access. Logging and compliance are ensured through KMS-encrypted S3 buckets, CloudTrail trails, and AWS Config rules. Additionally, CloudWatch alarms, flow logs, and SSM automation are configured for continuous monitoring, patching, and operational visibility. The environment enforces strong security, high availability, and audit readiness across all deployed resources.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
 }
-
