@@ -1,0 +1,23 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-07T03:41:54+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [],
+  "po_id": "6dl6v",
+  "aws_services": [
+    "S3",
+    "DynamoDB",
+    "Lambda",
+    "API Gateway",
+    "SQS",
+    "CloudWatch",
+    "IAM",
+    "X-Ray"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 9
+}
