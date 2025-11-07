@@ -19,7 +19,6 @@ from aws_cdk import (
     aws_iam as iam,
     aws_kms as kms,
     aws_lambda as lambda_,
-    aws_logs as logs,
     aws_sns as sns,
     aws_sqs as sqs,
     aws_cloudwatch as cloudwatch,
@@ -528,17 +527,6 @@ def handler(event, context):
             **lambda_config
         )
         
-        # Create CloudWatch log groups with encryption
-        for function_name, function in functions.items():
-            logs.LogGroup(
-                self,
-                f"{function_name.title().replace('_', '')}Logs-{self.environment_suffix}",
-                log_group_name=f"/aws/lambda/{function.function_name}",
-                encryption_key=self.kms_key,
-                retention=logs.RetentionDays.ONE_WEEK,
-                removal_policy=RemovalPolicy.DESTROY
-            )
-        
         return functions
     
     def _create_lambda_role(self, function_name: str, additional_policies: list = None) -> iam.Role:
@@ -612,16 +600,6 @@ def handler(event, context):
                 throttling_rate_limit=1000,
                 throttling_burst_limit=2000
             )
-        )
-        
-        # Create API Gateway CloudWatch log group
-        api_log_group = logs.LogGroup(
-            self,
-            f"APIGatewayLogs-{self.environment_suffix}",
-            log_group_name=f"/aws/apigateway/{api.rest_api_name}",
-            encryption_key=self.kms_key,
-            retention=logs.RetentionDays.ONE_WEEK,
-            removal_policy=RemovalPolicy.DESTROY
         )
         
         # Request validators
