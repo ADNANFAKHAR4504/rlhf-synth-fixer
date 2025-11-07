@@ -152,12 +152,17 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       const routeTable = response.TransitGatewayRouteTables?.[0];
       expect(routeTable).toBeDefined();
       
-      const routes = routeTable?.Routes || [];
-      const hubVpcRoute = routes.find(r => r.DestinationCidrBlock === "10.0.0.0/16");
+      const searchCommand = new SearchTransitGatewayRoutesCommand({
+        TransitGatewayRouteTableId: devRtId,
+      });
+      const searchResponse = await usEast1Client.send(searchCommand);
+      const routes = searchResponse.Routes || [];
+      
+      const hubVpcRoute = routes.find((r: any) => r.DestinationCidrBlock === "10.0.0.0/16");
       expect(hubVpcRoute).toBeDefined();
       expect(hubVpcRoute?.State).toBe("active");
       
-      const euWest1Route = routes.find(r => r.DestinationCidrBlock === "10.1.0.0/16");
+      const euWest1Route = routes.find((r: any) => r.DestinationCidrBlock === "10.1.0.0/16");
       expect(euWest1Route).toBeDefined();
       expect(euWest1Route?.State).toBe("active");
     });
@@ -173,12 +178,17 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       const routeTable = response.TransitGatewayRouteTables?.[0];
       expect(routeTable).toBeDefined();
       
-      const routes = routeTable?.Routes || [];
-      const hubVpcRoute = routes.find(r => r.DestinationCidrBlock === "10.0.0.0/16");
+      const searchCommand = new SearchTransitGatewayRoutesCommand({
+        TransitGatewayRouteTableId: prodRtId,
+      });
+      const searchResponse = await usEast1Client.send(searchCommand);
+      const routes = searchResponse.Routes || [];
+      
+      const hubVpcRoute = routes.find((r: any) => r.DestinationCidrBlock === "10.0.0.0/16");
       expect(hubVpcRoute).toBeDefined();
       expect(hubVpcRoute?.State).toBe("active");
       
-      const apSoutheast1Route = routes.find(r => r.DestinationCidrBlock === "10.2.0.0/16");
+      const apSoutheast1Route = routes.find((r: any) => r.DestinationCidrBlock === "10.2.0.0/16");
       expect(apSoutheast1Route).toBeDefined();
       expect(apSoutheast1Route?.State).toBe("active");
     });
@@ -198,7 +208,7 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       const routes = searchResponse.Routes || [];
       expect(routes.length).toBeGreaterThan(0);
       
-      const activeRoutes = routes.filter(r => r.State === "active");
+      const activeRoutes = routes.filter((r: any) => r.State === "active");
       expect(activeRoutes.length).toBeGreaterThan(0);
     });
   });
@@ -207,14 +217,14 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
     test("Dev route table blocks traffic to prod CIDR (10.2.0.0/16) via blackhole route", async () => {
       const devRtId = outputs.dev_transit_gateway_route_table_id?.value as string;
       
-      const command = new DescribeTransitGatewayRouteTablesCommand({
-        TransitGatewayRouteTableIds: [devRtId],
+      const searchCommand = new SearchTransitGatewayRoutesCommand({
+        TransitGatewayRouteTableId: devRtId,
       });
-      const response = await usEast1Client.send(command);
+      const searchResponse = await usEast1Client.send(searchCommand);
+      const routes = searchResponse.Routes || [];
       
-      const routes = response.TransitGatewayRouteTables?.[0].Routes || [];
       const prodBlackhole = routes.find(
-        r => r.DestinationCidrBlock === "10.2.0.0/16" && r.State === "blackhole"
+        (r: any) => r.DestinationCidrBlock === "10.2.0.0/16" && r.State === "blackhole"
       );
       
       expect(prodBlackhole).toBeDefined();
@@ -224,14 +234,14 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
     test("Prod route table blocks traffic to dev CIDR (10.1.0.0/16) via blackhole route", async () => {
       const prodRtId = outputs.prod_transit_gateway_route_table_id?.value as string;
       
-      const command = new DescribeTransitGatewayRouteTablesCommand({
-        TransitGatewayRouteTableIds: [prodRtId],
+      const searchCommand = new SearchTransitGatewayRoutesCommand({
+        TransitGatewayRouteTableId: prodRtId,
       });
-      const response = await usEast1Client.send(command);
+      const searchResponse = await usEast1Client.send(searchCommand);
+      const routes = searchResponse.Routes || [];
       
-      const routes = response.TransitGatewayRouteTables?.[0].Routes || [];
       const devBlackhole = routes.find(
-        r => r.DestinationCidrBlock === "10.1.0.0/16" && r.State === "blackhole"
+        (r: any) => r.DestinationCidrBlock === "10.1.0.0/16" && r.State === "blackhole"
       );
       
       expect(devBlackhole).toBeDefined();
@@ -396,7 +406,7 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       const bucketName = outputs.flow_logs_bucket_name?.value as string;
       
       const flowLogCommand = new DescribeFlowLogsCommand({
-        Filters: [{ Name: "resource-id", Values: [hubVpcId] }],
+        Filter: [{ Name: "resource-id", Values: [hubVpcId] }],
       });
       const flowLogResponse = await usEast1Client.send(flowLogCommand);
       
@@ -414,19 +424,19 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       const bucketName = outputs.flow_logs_bucket_name?.value as string;
       
       const hubCommand = new DescribeFlowLogsCommand({
-        Filters: [{ Name: "resource-id", Values: [hubVpcId] }],
+        Filter: [{ Name: "resource-id", Values: [hubVpcId] }],
       });
       const hubResponse = await usEast1Client.send(hubCommand);
       expect(hubResponse.FlowLogs?.[0].LogDestination).toContain(bucketName);
       
       const euWest1Command = new DescribeFlowLogsCommand({
-        Filters: [{ Name: "resource-id", Values: [euWest1VpcId] }],
+        Filter: [{ Name: "resource-id", Values: [euWest1VpcId] }],
       });
       const euWest1Response = await euWest1Client.send(euWest1Command);
       expect(euWest1Response.FlowLogs?.[0].LogDestination).toContain(bucketName);
       
       const apSoutheast1Command = new DescribeFlowLogsCommand({
-        Filters: [{ Name: "resource-id", Values: [apSoutheast1VpcId] }],
+        Filter: [{ Name: "resource-id", Values: [apSoutheast1VpcId] }],
       });
       const apSoutheast1Response = await apSoutheast1Client.send(apSoutheast1Command);
       expect(apSoutheast1Response.FlowLogs?.[0].LogDestination).toContain(bucketName);
@@ -436,7 +446,7 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       const hubVpcId = outputs.hub_vpc_id?.value as string;
       
       const command = new DescribeFlowLogsCommand({
-        Filters: [{ Name: "resource-id", Values: [hubVpcId] }],
+        Filter: [{ Name: "resource-id", Values: [hubVpcId] }],
       });
       const response = await usEast1Client.send(command);
       
@@ -513,7 +523,7 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       });
       const routeTableResponse = await usEast1Client.send(routeTableCommand);
       const internetRoute = routeTableResponse.RouteTables?.[0].Routes?.find(
-        r => r.DestinationCidrBlock === "0.0.0.0/0"
+        (r: any) => r.DestinationCidrBlock === "0.0.0.0/0"
       );
       expect(internetRoute).toBeDefined();
     });
@@ -527,13 +537,13 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       const zoneResponse = await route53Client.send(zoneCommand);
       expect(zoneResponse.HostedZone?.Name).toBe("prod.internal.");
       
-      const tgwCommand = new DescribeTransitGatewayRouteTablesCommand({
-        TransitGatewayRouteTableIds: [prodRtId],
+      const tgwSearchCommand = new SearchTransitGatewayRoutesCommand({
+        TransitGatewayRouteTableId: prodRtId,
       });
-      const tgwResponse = await usEast1Client.send(tgwCommand);
-      const routes = tgwResponse.TransitGatewayRouteTables?.[0].Routes || [];
+      const tgwResponse = await usEast1Client.send(tgwSearchCommand);
+      const routes = tgwResponse.Routes || [];
       const devBlackhole = routes.find(
-        r => r.DestinationCidrBlock === "10.1.0.0/16" && r.State === "blackhole"
+        (r: any) => r.DestinationCidrBlock === "10.1.0.0/16" && r.State === "blackhole"
       );
       expect(devBlackhole).toBeDefined();
       
@@ -545,7 +555,7 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       });
       const routeTableResponse = await usEast1Client.send(routeTableCommand);
       const internetRoute = routeTableResponse.RouteTables?.[0].Routes?.find(
-        r => r.DestinationCidrBlock === "0.0.0.0/0"
+        (r: any) => r.DestinationCidrBlock === "0.0.0.0/0"
       );
       expect(internetRoute).toBeDefined();
     });
