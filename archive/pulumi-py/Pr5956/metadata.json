@@ -12,17 +12,22 @@
     "Cloud Environment Setup"
   ],
   "aws_services": [
-    "S3 Bucket",
+    "S3",
     "Lambda",
     "EventBridge",
-    "CloudWatch LogGroup",
-    "CloudWatch Alarm",
-    "SNS Topic",
-    "KMS Key",
-    "IAM Role",
-    "IAM Policy",
+    "CloudWatch",
+    "SNS",
+    "KMS",
+    "IAM",
     "CodePipeline",
     "CodeBuild",
     "CodeDeploy"
-  ]
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
 }
