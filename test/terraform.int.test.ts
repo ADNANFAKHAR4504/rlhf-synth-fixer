@@ -80,7 +80,7 @@ describe('RDS PostgreSQL Stack Integration Tests', () => {
     const res = await diagAwsCall('PrivateSubnets', ec2.describeSubnets.bind(ec2), { SubnetIds: subnetIds });
     if (skipIfNull(res?.Subnets, 'PrivateSubnets')) return;
     expect(res.Subnets.length).toBe(subnetIds.length);
-    res.Subnets.forEach(subnet => {
+    res.Subnets.forEach((subnet: AWS.EC2.Subnet) => {
       expect(subnetIds).toContain(subnet.SubnetId);
       expect(subnet.VpcId).toBe(vpcId);
     });
@@ -94,7 +94,7 @@ describe('RDS PostgreSQL Stack Integration Tests', () => {
     const res = await diagAwsCall('AppSubnets', ec2.describeSubnets.bind(ec2), { SubnetIds: subnetIds });
     if (skipIfNull(res?.Subnets, 'AppSubnets')) return;
     expect(res.Subnets.length).toBe(subnetIds.length);
-    res.Subnets.forEach(subnet => {
+    res.Subnets.forEach((subnet: AWS.EC2.Subnet) => {
       expect(subnetIds).toContain(subnet.SubnetId);
       expect(subnet.VpcId).toBe(vpcId);
     });
