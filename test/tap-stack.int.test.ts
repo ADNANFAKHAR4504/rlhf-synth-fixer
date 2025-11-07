@@ -1,16 +1,8 @@
 import {
-  ECSClient,
-  DescribeServicesCommand,
-  UpdateServiceCommand,
-  ListTasksCommand,
-  DescribeTasksCommand,
-} from '@aws-sdk/client-ecs';
-import {
   ApplicationAutoScalingClient,
   DescribeScalableTargetsCommand,
   DescribeScalingPoliciesCommand,
-  DescribeScheduledActionsCommand,
-  PutScalingPolicyCommand,
+  DescribeScheduledActionsCommand
 } from '@aws-sdk/client-application-auto-scaling';
 import {
   CloudWatchClient,
@@ -18,9 +10,15 @@ import {
   PutMetricDataCommand,
 } from '@aws-sdk/client-cloudwatch';
 import {
-  SNSClient,
+  DescribeServicesCommand,
+  DescribeTasksCommand,
+  ECSClient,
+  ListTasksCommand
+} from '@aws-sdk/client-ecs';
+import {
   ListSubscriptionsByTopicCommand,
   PublishCommand,
+  SNSClient,
 } from '@aws-sdk/client-sns';
 import fs from 'fs';
 import path from 'path';
@@ -176,13 +174,13 @@ describe('ECS Cost Optimization Integration Tests', () => {
         p => p.PolicyType === 'StepScaling'
       );
       expect(stepPolicy).toBeDefined();
-      
+
       // AWS may combine or represent step adjustments differently
       // Check that we have at least the expected step adjustments
       const stepAdjustments =
         stepPolicy?.StepScalingPolicyConfiguration?.StepAdjustments;
       expect(stepAdjustments?.length).toBeGreaterThanOrEqual(2);
-      
+
       // Verify the step adjustments contain the expected values
       const adjustments = stepAdjustments?.map(a => a.ScalingAdjustment) || [];
       expect(adjustments).toContain(2);
