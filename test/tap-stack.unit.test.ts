@@ -174,21 +174,19 @@ describe('TapStack', () => {
       expect(scalingRole.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('application-autoscaling.amazonaws.com');
     });
 
-    test('scaling role has managed policy for ECS auto-scaling', () => {
-      template.hasResourceProperties('AWS::IAM::Role', {
-        ManagedPolicyArns: Match.arrayWith([
-          {
-            'Fn::Join': [
-              '',
-              [
-                'arn:',
-                { Ref: 'AWS::Partition' },
-                ':iam::aws:policy/service-role/ApplicationAutoScalingForECSService',
-              ],
-            ],
-          },
-        ]),
-      });
+    test('scaling role has inline policy with required ECS and CloudWatch permissions', () => {
+      const roles = template.findResources('AWS::IAM::Role');
+      const scalingRole = Object.values(roles).find((r: any) =>
+        r.Properties?.AssumeRolePolicyDocument?.Statement?.[0]?.Principal?.Service === 'application-autoscaling.amazonaws.com'
+      ) as any;
+      expect(scalingRole).toBeDefined();
+      expect(scalingRole.Properties.Policies).toBeDefined();
+      const policy = scalingRole.Properties.Policies[0];
+      const actions = policy.PolicyDocument.Statement[0].Action;
+      expect(actions).toContain('ecs:DescribeServices');
+      expect(actions).toContain('ecs:UpdateService');
+      expect(actions).toContain('cloudwatch:PutMetricAlarm');
+      expect(actions).toContain('cloudwatch:DescribeAlarms');
     });
 
     test('scaling role has inline policy for scaling operations', () => {

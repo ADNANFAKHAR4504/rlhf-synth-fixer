@@ -56,5 +56,3 @@ cdk.json — standard CDK config pointing to app.py.
 
 Tone
 Direct and implementation-focused. Concise, human, and ready to hand to an engineer.
-
-

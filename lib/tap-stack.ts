@@ -217,11 +217,6 @@ def handler(event, context):
       assumedBy: new iam.ServicePrincipal(
         'application-autoscaling.amazonaws.com'
       ),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/ApplicationAutoScalingForECSService'
-        ),
-      ],
       inlinePolicies: {
         ScalingPolicy: new iam.PolicyDocument({
           statements: [
@@ -230,9 +225,12 @@ def handler(event, context):
               actions: [
                 'ecs:DescribeServices',
                 'ecs:UpdateService',
+                'ecs:DescribeTasks',
+                'ecs:ListTasks',
                 'cloudwatch:PutMetricAlarm',
                 'cloudwatch:DescribeAlarms',
                 'cloudwatch:GetMetricStatistics',
+                'cloudwatch:PutMetricData',
               ],
               resources: ['*'],
             }),
