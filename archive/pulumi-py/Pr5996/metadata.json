@@ -28,5 +28,12 @@
     "SNS Topic",
     "KMS Key",
     "VPC Flow Logs"
-  ]
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
 }
