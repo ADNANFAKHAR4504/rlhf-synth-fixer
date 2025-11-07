@@ -74,7 +74,7 @@ export class TapStack extends cdk.Stack {
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
       ],
-      natGateways: 3, // One NAT Gateway per AZ for high availability
+      natGateways: 1, // One NAT Gateway to save costs and EIP addresses
     });
 
     // Apply tags to VPC
