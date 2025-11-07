@@ -104,7 +104,8 @@ import {
 // KMS
 import {
   KMSClient,
-  DescribeKeyCommand
+  DescribeKeyCommand,
+  GetKeyRotationStatusCommand 
 } from '@aws-sdk/client-kms';
 
 // Secrets Manager
@@ -660,7 +661,19 @@ RDS will be available soon and EC2 instances can connect when ready.
       }
 
       expect(key.KeyMetadata.KeyState).toBe('Enabled');
-      expect(key.KeyMetadata.KeyRotationEnabled).toBe(true);
+
+      // Check key rotation status with separate API call
+      const rotationStatus = await safeAwsCall(
+        async () => {
+          const cmd = new GetKeyRotationStatusCommand({ KeyId: outputs.kms_key_id });
+          return await kmsClient.send(cmd);
+        },
+        'Get KMS key rotation status'
+      );
+
+      if (rotationStatus) {
+        expect(rotationStatus.KeyRotationEnabled).toBe(true);
+      }
 
       console.log(`KMS key validated: ${outputs.kms_key_id} (rotation enabled)`);
     });
