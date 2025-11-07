@@ -106,9 +106,9 @@ Parameters:
       dev/staging)
 
   AvailabilityZones:
-    Type: List<AWS::EC2::AvailabilityZone::Name>
-    Default: us-east-1a,us-east-1b,us-east-1c
-    Description: Comma-separated list of availability zones to use for subnets
+    Type: String
+    Default: ''
+    Description: Comma-separated list of availability zones to use for subnets (leave blank to auto-discover)
 
   # Application Parameters
   InstanceType:
@@ -253,6 +253,10 @@ Conditions:
     - !Equals
       - !Ref KeyPairName
       - ''
+  HasCustomAZs: !Not
+    - !Equals
+      - !Ref AvailabilityZones
+      - ''
 
 # ============================================================================
 # RESOURCES
@@ -319,7 +323,10 @@ Resources:
         # Dynamically calculate subnet CIDR
       AvailabilityZone: !Select
         - 0
-        - !Ref AvailabilityZones
+        - !If
+            - HasCustomAZs
+            - !Split [',', !Ref AvailabilityZones]
+            - !GetAZs ''
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -349,7 +356,10 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 1
-        - !Ref AvailabilityZones
+        - !If
+            - HasCustomAZs
+            - !Split [',', !Ref AvailabilityZones]
+            - !GetAZs ''
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -379,7 +389,10 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 2
-        - !Ref AvailabilityZones
+        - !If
+            - HasCustomAZs
+            - !Split [',', !Ref AvailabilityZones]
+            - !GetAZs ''
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -410,7 +423,10 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 0
-        - !Ref AvailabilityZones
+        - !If
+            - HasCustomAZs
+            - !Split [',', !Ref AvailabilityZones]
+            - !GetAZs ''
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-1
@@ -439,7 +455,10 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 1
-        - !Ref AvailabilityZones
+        - !If
+            - HasCustomAZs
+            - !Split [',', !Ref AvailabilityZones]
+            - !GetAZs ''
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-2
@@ -468,7 +487,10 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 2
-        - !Ref AvailabilityZones
+        - !If
+            - HasCustomAZs
+            - !Split [',', !Ref AvailabilityZones]
+            - !GetAZs ''
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-3
@@ -498,7 +520,10 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 0
-        - !Ref AvailabilityZones
+        - !If
+            - HasCustomAZs
+            - !Split [',', !Ref AvailabilityZones]
+            - !GetAZs ''
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-1
@@ -527,7 +552,10 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 1
-        - !Ref AvailabilityZones
+        - !If
+            - HasCustomAZs
+            - !Split [',', !Ref AvailabilityZones]
+            - !GetAZs ''
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-2
@@ -556,7 +584,10 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 2
-        - !Ref AvailabilityZones
+        - !If
+            - HasCustomAZs
+            - !Split [',', !Ref AvailabilityZones]
+            - !GetAZs ''
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-3
