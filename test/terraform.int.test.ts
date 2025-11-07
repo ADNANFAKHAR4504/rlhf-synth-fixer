@@ -262,7 +262,7 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
 
       const cluster = clusterResponse.cluster!;
       expect(cluster.status).toBe('ACTIVE');
-      expect(cluster.version).toBe('1.28');
+      expect(cluster.version).toBe('1.33');
       
       // Validate VPC configuration
       const vpcConfig = cluster.resourcesVpcConfig!;
@@ -990,9 +990,41 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
     });
   });
 
-  // ============================================================================
-  // PART 4: E2E TESTS (3+ Services Interactive)
-  // ============================================================================
+// ============================================================================
+// PART 4: E2E APPLICATION FLOW TESTS
+// ============================================================================
+
+describe('[E2E] Application Flow Validation', () => {
+    
+    test('should get a successful HTTP 200 response from the ALB endpoint', async () => {
+        // Use your outputs.alb_dns_name
+        const albDns = outputs.alb_dns_name;
+        
+        if (!albDns) {
+            throw new Error("ALB DNS Name is missing from deployment outputs.");
+        }
+
+        const url = `http://${albDns}`;
+        
+        // to handle cold start delays (which are common in EKS/ALB)
+        const response = await retry(async () => {
+            console.log(`Attempting to reach ALB at ${url}...`);
+            // The timeout is now part of the axios configuration
+            const httpResponse = await axios.get(url, { 
+                timeout: 15000 // 15 seconds for each attempt
+            });
+            
+            // Check for the desired status code
+            expect(httpResponse.status).toBe(200);
+            return httpResponse;
+        }, 5, 10000); // 5 retries, 10-second initial delay (5 attempts * 15s timeout + 5 delays = ~90s total)
+
+        expect(response.status).toBe(200);
+        console.log(`Successfully received HTTP 200 from ${url}. The E2E path is green!`);
+
+    }, 180000); // Set a longer Jest timeout for E2E tests (3 minutes)
+
+}); // End of [E2E] Application Flow Validation
 
   describe('[E2E] Complete Infrastructure Flow: VPC → EKS → ALB → CloudWatch', () => {
     test('should validate complete network path from internet to EKS nodes', async () => {
@@ -1004,8 +1036,23 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       }));
       
       expect(igwResponse.InternetGateways).toHaveLength(1);
+      const igwId = igwResponse.InternetGateways![0].InternetGatewayId;
+      // expect(igw.Attachments![0].State).toBe('attached');
+
+      await retry(async () => {
+      const igwResponse = await ec2Client.send(new DescribeInternetGatewaysCommand({
+        InternetGatewayIds: [igwId!]
+      }));
+
       const igw = igwResponse.InternetGateways![0];
-      expect(igw.Attachments![0].State).toBe('attached');
+      const attachmentState = igw.Attachments![0].State;
+    
+    if (attachmentState !== 'attached') {
+        throw new Error(`IGW state not ready. Current: ${attachmentState}`);
+    }
+    
+      expect(attachmentState).toBe('attached');
+    }, 5, 5000); // Wait up to 5 times with 5s delay for attachment
       
       // Step 2: Verify ALB can receive traffic from internet
       const albResponse = await elbv2Client.send(new DescribeLoadBalancersCommand({
@@ -1049,6 +1096,12 @@ describe('Platform Migration EKS Infrastructure Integration Tests', () => {
       const logGroupsResponse = await cloudWatchLogsClient.send(new DescribeLogGroupsCommand({
         logGroupNamePrefix: logGroupName
       }));
+      
+      const logGroup = logGroupsResponse.logGroups?.find(lg => 
+        lg.logGroupName === logGroupName
+      );
+      expect(logGroup).toBeDefined();
+      expect(logGroup!.kmsKeyId).toBeDefined();
       
       expect(logGroupsResponse.logGroups).toHaveLength(1);
     });
