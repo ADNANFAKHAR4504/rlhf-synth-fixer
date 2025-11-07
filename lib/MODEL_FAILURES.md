@@ -9,7 +9,7 @@ This document analyzes the critical fixes required to transform the initial MODE
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-```python
+```py
 # Line 98 in MODEL_RESPONSE
 nat_gateways=3,
 ```
@@ -17,7 +17,7 @@ nat_gateways=3,
 The model configured 3 NAT Gateways (one per availability zone), which exceeded AWS account EIP (Elastic IP) quota limits. New AWS accounts have a default limit of 5 Elastic IPs per region, and deploying 3 NAT Gateways would consume 3 of these, leaving insufficient headroom for other resources.
 
 **IDEAL_RESPONSE Fix**:
-```python
+```py
 # Line 91 in IDEAL_RESPONSE
 nat_gateways=1,  # Optimized to 1 NAT Gateway to avoid EIP quota limits
 ```
@@ -38,7 +38,7 @@ nat_gateways=1,  # Optimized to 1 NAT Gateway to avoid EIP quota limits
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**:
-```python
+```py
 # Lines 179-181 in MODEL_RESPONSE
 db_credentials = rds.DatabaseSecret(
     self,
@@ -53,7 +53,7 @@ The secret name `aurora-credentials-{environment_suffix}` was too long. When ena
 - Example: `SecretsManageraurora-credentials-dev-<random-chars>` → 64+ characters
 
 **IDEAL_RESPONSE Fix**:
-```python
+```py
 # Lines 186-191 in IDEAL_RESPONSE
 db_credentials = rds.DatabaseSecret(
     self,
@@ -79,7 +79,7 @@ db_credentials = rds.DatabaseSecret(
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**:
-```python
+```py
 # Lines 343-345, 377-379 in MODEL_RESPONSE
 # Frontend container
 port_mappings=[
@@ -101,7 +101,7 @@ port_mappings=[
 The model configured containers to expose ports 3000 (frontend) and 5000 (backend), which are appropriate for React and Flask applications but incompatible with the nginx placeholder images used for deployment. Nginx listens on port 80 by default, causing ALB health checks to fail.
 
 **IDEAL_RESPONSE Fix**:
-```python
+```py
 # Lines 351-356, 378-383 in IDEAL_RESPONSE
 # Frontend container
 port_mappings=[
@@ -136,7 +136,7 @@ port_mappings=[
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**:
-```python
+```py
 # Lines 424, 443 in MODEL_RESPONSE
 # Frontend target group
 health_check=elbv2.HealthCheck(
@@ -156,7 +156,7 @@ health_check=elbv2.HealthCheck(
 The model configured ALB health checks to probe `/health` endpoints, which would be appropriate for custom React/Flask applications but don't exist in the nginx placeholder images. Nginx serves a default page at `/` but returns 404 for `/health`, causing all health checks to fail.
 
 **IDEAL_RESPONSE Fix**:
-```python
+```py
 # Lines 419-425, 438-444 in IDEAL_RESPONSE
 # Frontend target group
 health_check=elbv2.HealthCheck(
@@ -189,7 +189,7 @@ health_check=elbv2.HealthCheck(
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**:
-```python
+```py
 # Lines 610-615 in MODEL_RESPONSE
 # VPC Link to connect API Gateway to ALB
 vpc_link = apigateway.VpcLink(
@@ -214,7 +214,7 @@ integration = apigateway.Integration(
 The model created a VPC Link to connect API Gateway to the ALB, which is unnecessary since the ALB is internet-facing (public). VPC Links are only required for private ALBs or NLBs. Creating an unnecessary VPC Link adds cost (~$0.0255/hour = ~$18/month), deployment complexity, and a potential point of failure.
 
 **IDEAL_RESPONSE Fix**:
-```python
+```py
 # Lines 626-634 in IDEAL_RESPONSE
 # Integration with ALB using HTTP proxy (no VPC Link needed for public ALB)
 integration = apigateway.Integration(
@@ -244,7 +244,7 @@ integration = apigateway.Integration(
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**:
-```python
+```py
 # Lines 222-225 in MODEL_RESPONSE
 db_credentials.add_rotation_schedule(
     "RotationSchedule",
@@ -256,7 +256,7 @@ db_credentials.add_rotation_schedule(
 The model enabled secret rotation but omitted the `hosted_rotation` parameter, which specifies the rotation Lambda function template. Without this parameter, CDK defaults to requiring a custom rotation Lambda function, which the stack doesn't provide. This causes deployment to succeed initially but rotation setup to fail.
 
 **IDEAL_RESPONSE Fix**:
-```python
+```py
 # Lines 210-214 in IDEAL_RESPONSE
 db_credentials.add_rotation_schedule(
     "RotationSchedule",

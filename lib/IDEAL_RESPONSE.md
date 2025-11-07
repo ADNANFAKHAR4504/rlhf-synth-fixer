@@ -18,7 +18,7 @@ All resources are deployed across 3 availability zones for high availability and
 
 ### File: lib/tap_stack.py
 
-```python
+```py
 """
 TapStack: Three-tier web application infrastructure for media streaming platform.
 
@@ -109,7 +109,7 @@ class TapStack(Stack):
             vpc_name=f"media-streaming-vpc-{environment_suffix}",
             ip_addresses=ec2.IpAddresses.cidr("10.0.0.0/16"),
             max_azs=3,
-            nat_gateways=1,  # Optimized to 1 NAT Gateway to avoid EIP quota limits
+            nat_gateways=1,  # Reduced from 3 to 1 to avoid EIP quota limits
             subnet_configuration=[
                 ec2.SubnetConfiguration(
                     name=f"Public-{environment_suffix}",
@@ -182,12 +182,14 @@ class TapStack(Stack):
         # 3. DATABASE TIER (Aurora PostgreSQL)
         # ============================================================
 
-        # Database credentials secret - shortened name to avoid Lambda function name length issues
+        # Database credentials secret
+        # Use short construct ID to avoid Lambda function name length limit (64 chars)
+        # AWS generates: {constructId}{rotationId}{hash}-PostgreSQLSingleUser-Lambda
         db_credentials = rds.DatabaseSecret(
             self,
-            f"DBCreds-{environment_suffix}",
+            f"DBCred{environment_suffix}",
             username="dbadmin",
-            secret_name=f"db-creds-{environment_suffix}",  # Shortened from aurora-credentials
+            secret_name=f"db-creds-{environment_suffix}",
         )
 
         # Aurora PostgreSQL cluster
@@ -228,8 +230,9 @@ class TapStack(Stack):
         )
 
         # Enable automatic secret rotation with hosted rotation
+        # Use short rotation ID to avoid Lambda function name length limit (64 chars)
         db_credentials.add_rotation_schedule(
-            "RotationSchedule",
+            "Rotate",
             automatically_after=Duration.days(30),
             hosted_rotation=secretsmanager.HostedRotation.postgre_sql_single_user(),
         )
@@ -350,7 +353,7 @@ class TapStack(Stack):
             ),
             port_mappings=[
                 ecs.PortMapping(
-                    container_port=80,  # Standard nginx port
+                    container_port=80,  # nginx default port
                     protocol=ecs.Protocol.TCP,
                 )
             ],
@@ -370,14 +373,14 @@ class TapStack(Stack):
         backend_container = backend_task_def.add_container(
             "backend",
             container_name="backend",
-            image=ecs.ContainerImage.from_registry("public.ecr.aws/docker/library/nginx:alpine"),
+            image=ecs.ContainerImage.from_registry("public.ecr.aws/docker/library/nginx:alpine"),  # Use nginx for placeholder
             logging=ecs.LogDrivers.aws_logs(
                 stream_prefix="backend",
                 log_group=backend_log_group,
             ),
             port_mappings=[
                 ecs.PortMapping(
-                    container_port=80,  # Standard nginx port
+                    container_port=80,  # nginx default port
                     protocol=ecs.Protocol.TCP,
                 )
             ],
@@ -417,7 +420,7 @@ class TapStack(Stack):
             protocol=elbv2.ApplicationProtocol.HTTP,
             target_type=elbv2.TargetType.IP,
             health_check=elbv2.HealthCheck(
-                path="/",  # Nginx default page for placeholder
+                path="/",  # nginx default page
                 interval=Duration.seconds(30),
                 timeout=Duration.seconds(5),
                 healthy_threshold_count=2,
@@ -436,7 +439,7 @@ class TapStack(Stack):
             protocol=elbv2.ApplicationProtocol.HTTP,
             target_type=elbv2.TargetType.IP,
             health_check=elbv2.HealthCheck(
-                path="/",  # Default path for nginx placeholder
+                path="/",  # Default path for placeholder image
                 interval=Duration.seconds(30),
                 timeout=Duration.seconds(5),
                 healthy_threshold_count=2,
@@ -795,140 +798,3 @@ class TapStack(Stack):
             export_name=f"db-secret-arn-{environment_suffix}",
         )
 ```
-
-## Key Features
-
-### 1. Network Foundation (VPC)
-- VPC with CIDR 10.0.0.0/16 across 3 availability zones
-- 3 public subnets for internet-facing resources (ALB, NAT Gateway)
-- 3 private subnets for application and database tiers
-- **Optimized NAT Gateway configuration** (1 NAT Gateway instead of 3) to avoid AWS EIP quota limits
-- Security groups implementing least privilege access
-
-### 2. Container Platform (ECS Fargate)
-- Serverless container orchestration with ECS Fargate
-- Frontend and backend services running nginx placeholder images (ready for custom images)
-- Container port standardized to 80 for nginx compatibility
-- Task definitions with appropriate CPU (512) and memory (1024 MiB) allocations
-- Blue-green deployment capability with circuit breaker enabled
-- CloudWatch Logs integration with 30-day retention
-
-### 3. Load Balancing (ALB)
-- Application Load Balancer in public subnets
-- Path-based routing: /api/* routes to backend service, /* routes to frontend service
-- Health checks every 30 seconds on root path (/) for nginx compatibility
-- Target groups with connection draining (30 seconds)
-- HTTP listener on port 80 (ready for HTTPS with certificate)
-
-### 4. Database Tier (Aurora PostgreSQL)
-- Aurora PostgreSQL 14.6 cluster with one writer and one reader instance
-- Deployed in private subnets with restricted security group access
-- **Shortened secret name** (db-creds-dev) to prevent Lambda function name length issues during rotation
-- Automatic credential rotation enabled (30-day cycle) with hosted rotation
-- Encryption at rest enabled
-- 7-day automated backup retention
-- T3.MEDIUM instances for cost optimization
-
-### 5. API Gateway Integration
-- REST API Gateway as entry point for requests
-- **Direct HTTP integration with public ALB** (no VPC Link required)
-- Request throttling: 1000 requests per second with 2000 burst limit
-- CORS configuration enabled for cross-origin requests
-- Usage plan with daily quota of 100,000 requests
-- Full request/response logging and metrics enabled
-
-### 6. Content Delivery (CloudFront)
-- CloudFront distribution with ALB as origin
-- Custom cache policy for static assets (24-hour default TTL)
-- Custom error pages configured for 404, 500, 502, 503 errors
-- Compression enabled (Gzip and Brotli)
-- HTTPS viewer protocol policy with HTTP to HTTPS redirect
-
-### 7. Auto-Scaling Configuration
-- ECS service auto-scaling for both frontend and backend
-- CPU-based target tracking (70% target utilization)
-- Scale between 2-10 tasks per service
-- 60-second cooldown periods to prevent rapid scaling
-
-### 8. Container Registry (ECR)
-- Separate ECR repositories for frontend and backend images
-- Image vulnerability scanning enabled on push
-- Lifecycle policy retains only last 10 images
-- Empty on delete enabled for CI/CD compatibility
-
-### 9. IAM Security
-- Dedicated task execution role for ECS to pull images and write logs
-- Separate task roles for frontend and backend with least privilege
-- Backend task role granted read access to database credentials
-- All roles use service principals with no inline policies
-
-### 10. Monitoring and Observability
-- CloudWatch dashboard with comprehensive metrics:
-  - ALB request count and target response time
-  - ECS service CPU utilization for both frontend and backend
-  - Aurora database connections and CPU utilization
-  - API Gateway request count and latency
-- Centralized logging with CloudWatch Log Groups
-- Container Insights enabled for ECS cluster
-- 30-day log retention for all services
-
-### 11. Configuration Management
-- SSM Parameter Store for non-sensitive configuration:
-  - Database endpoint
-  - ALB DNS name
-- Secrets Manager for database credentials with automatic rotation
-
-## Requirements Coverage
-
-All 10 core requirements from the PROMPT are fully implemented:
-
-1. **Network Foundation**: VPC with 6 subnets (3 public, 3 private) across 3 AZs, 1 NAT Gateway, security groups
-2. **Container Platform**: ECS Fargate cluster with frontend and backend services, health checks, blue-green deployment
-3. **Load Balancing**: ALB with path-based routing (/api/* to backend, /* to frontend), target groups, health checks
-4. **Database Tier**: Aurora PostgreSQL with writer and reader, private subnets, Secrets Manager with rotation, encryption, backups
-5. **API Gateway**: REST API with ALB integration, throttling (1000 req/sec), CORS enabled, usage plan
-6. **Content Delivery**: CloudFront distribution with ALB origin, caching policies, custom error pages, compression
-7. **Auto-Scaling**: ECS auto-scaling (2-10 tasks), CPU-based target tracking (70%), cooldown periods
-8. **Container Registry**: ECR repositories with image scanning, lifecycle policies (10 images)
-9. **IAM Security**: Task execution roles, task roles with least privilege, database access grants
-10. **Monitoring**: CloudWatch dashboard with response time, error rates, database connections, ECS metrics, ALB health
-
-## Technical Specifications
-
-- **Platform**: AWS CDK with Python
-- **Region**: ap-southeast-1 (deployment successful)
-- **Resource Naming**: All resources include environment_suffix for uniqueness
-- **Destroyability**: RemovalPolicy.DESTROY on all resources for CI/CD
-- **Encryption**: Enabled at rest (database, logs) and in transit (security groups)
-- **High Availability**: Multi-AZ deployment across 3 availability zones
-- **Cost Optimization**: T3 instance types, 1 NAT Gateway, lifecycle policies
-
-## Deployment Outputs
-
-After successful deployment, the stack provides these outputs:
-
-- **CloudFrontURL**: https://dmz7lv730sh70.cloudfront.net
-- **APIGatewayEndpoint**: https://3sjcp171sj.execute-api.ap-southeast-1.amazonaws.com/prod/
-- **RDSClusterEndpoint**: media-streaming-db-dev.cluster-c3cmk4aikwrf.ap-southeast-1.rds.amazonaws.com
-- **ALBDNSName**: media-streaming-alb-dev-179477330.ap-southeast-1.elb.amazonaws.com
-- **FrontendRepoURI**: 342597974367.dkr.ecr.ap-southeast-1.amazonaws.com/media-streaming-frontend-dev
-- **BackendRepoURI**: 342597974367.dkr.ecr.ap-southeast-1.amazonaws.com/media-streaming-backend-dev
-- **DBSecretArn**: arn:aws:secretsmanager:ap-southeast-1:342597974367:secret:db-creds-dev-TtNwnd
-
-## Production Readiness
-
-This implementation follows AWS best practices and is production-ready with:
-
-- Multi-AZ high availability architecture
-- Auto-scaling based on CPU metrics
-- Comprehensive monitoring and logging
-- Secure credential management with automatic rotation
-- Network isolation with security groups
-- Cost-optimized resource allocation
-- Blue-green deployment capability
-- Global content delivery with CloudFront
-- API rate limiting and throttling
-- Centralized configuration management
-- Automated backups and encryption
-
-All resources are configured for easy teardown to support CI/CD pipelines and testing workflows.
