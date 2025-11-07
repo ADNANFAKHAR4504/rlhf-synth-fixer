@@ -13,8 +13,10 @@ locals {
   private_subnet_ids = var.create_vpc ? aws_subnet.private[*].id : var.private_subnet_ids
   public_subnet_ids  = var.create_vpc ? aws_subnet.public[*].id : var.public_subnet_ids
 
-  # Get first N availability zones
-  azs = slice(data.aws_availability_zones.available.names, 0, var.availability_zones_count)
+  # Availability zone calculations
+  available_az_names = try(data.aws_availability_zones.available.names, [])
+  az_count           = min(var.availability_zones_count, length(local.available_az_names))
+  azs                = slice(local.available_az_names, 0, local.az_count)
 
   # Common tags to apply to all resources
   common_tags = merge(
