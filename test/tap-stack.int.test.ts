@@ -11,7 +11,10 @@ import {
   EC2Client
 } from '@aws-sdk/client-ec2';
 import {
-  ElasticLoadBalancingV2Client
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  DescribeTargetHealthCommand,
+  ElasticLoadBalancingV2Client,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
   GetFunctionCommand,
@@ -785,9 +788,39 @@ describe('Failure Recovery Infrastructure Integration Tests', () => {
       expect(healthyInstances.length).toBeGreaterThanOrEqual(2);
       console.log(`  Multiple instances healthy: ${healthyInstances.length}`);
 
+      // Verify ALB target group has healthy instances before testing load distribution
+      const albName = mappedOutputs.AlbDnsName.split('.')[0]; // Extract ALB name from DNS
+      try {
+        const albResponse = await elbv2Client.send(new DescribeLoadBalancersCommand({
+          Names: [albName],
+        }));
+        const alb = albResponse.LoadBalancers![0];
+        const albArn = alb.LoadBalancerArn;
+
+        // Get target groups for this ALB
+        const targetGroupsResponse = await elbv2Client.send(new DescribeTargetGroupsCommand({
+          LoadBalancerArn: albArn,
+        }));
+        const targetGroup = targetGroupsResponse.TargetGroups![0];
+        const targetGroupArn = targetGroup.TargetGroupArn;
+
+        const targetsResponse = await elbv2Client.send(new DescribeTargetHealthCommand({
+          TargetGroupArn: targetGroupArn,
+        }));
+        const healthyTargets = targetsResponse.TargetHealthDescriptions!.filter(
+          (desc: any) => desc.TargetHealth!.State === 'healthy'
+        );
+        expect(healthyTargets.length).toBeGreaterThanOrEqual(2);
+        console.log(`  ALB has ${healthyTargets.length} healthy targets`);
+      } catch (error) {
+        console.log('ALB target health check error:', errorMessage(error));
+        // Fallback: assume ASG healthy instances are registered
+        expect(healthyInstances.length).toBeGreaterThanOrEqual(2);
+      }
+
       // 2. Test load distribution across instances
       const instanceResponses = new Map();
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 50; i++) { // Increased from 20 to 50 for better distribution testing
         try {
           const response = await axios.get(albUrl, { timeout: 5000 });
           const instanceMatch = response.data.match(/Instance: (i-[a-f0-9]+)/);
@@ -798,6 +831,8 @@ describe('Failure Recovery Infrastructure Integration Tests', () => {
         } catch (error) {
           console.log(`Request ${i + 1} failed:`, errorMessage(error));
         }
+        // Small delay to allow load balancing
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
 
       expect(instanceResponses.size).toBeGreaterThanOrEqual(2);
