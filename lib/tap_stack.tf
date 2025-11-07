@@ -804,21 +804,23 @@ resource "aws_api_gateway_stage" "prod" {
   rest_api_id   = aws_api_gateway_rest_api.payment_api.id
   stage_name    = "prod"
 
-  access_log_destination_arn = aws_cloudwatch_log_group.api_gateway.arn
-  access_log_format = jsonencode({
-    requestId      = "$context.requestId"
-    ip             = "$context.identity.sourceIp"
-    caller         = "$context.identity.caller"
-    user           = "$context.identity.user"
-    requestTime    = "$context.requestTime"
-    httpMethod     = "$context.httpMethod"
-    resourcePath   = "$context.resourcePath"
-    status         = "$context.status"
-    protocol       = "$context.protocol"
-    responseLength = "$context.responseLength"
-    error          = "$context.error.message"
-    errorType      = "$context.error.messageString"
-  })
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.api_gateway.arn
+    format = jsonencode({
+      requestId      = "$context.requestId"
+      ip             = "$context.identity.sourceIp"
+      caller         = "$context.identity.caller"
+      user           = "$context.identity.user"
+      requestTime    = "$context.requestTime"
+      httpMethod     = "$context.httpMethod"
+      resourcePath   = "$context.resourcePath"
+      status         = "$context.status"
+      protocol       = "$context.protocol"
+      responseLength = "$context.responseLength"
+      error          = "$context.error.message"
+      errorType      = "$context.error.messageString"
+    })
+  }
 
   tags = merge(local.common_tags, {
     Name = "payment-api-prod-${var.environment_suffix}"
