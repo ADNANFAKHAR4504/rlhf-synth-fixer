@@ -581,21 +581,23 @@ def handler(event, context):
       cdk.Tags.of(targetTrackingMemory).add('Service', 'FinancialServices');
       cdk.Tags.of(targetTrackingMemory).add('Environment', environmentSuffix);
 
+      const stepScalingMetric = new cloudwatch.Metric({
+        namespace: 'AWS/ECS',
+        metricName: 'CPUUtilization',
+        dimensionsMap: {
+          ServiceName: serviceName,
+          ClusterName: clusterName,
+        },
+        statistic: 'Average',
+        period: cdk.Duration.minutes(1),
+      });
+
       const stepScalingAlarm = new cloudwatch.Alarm(
         this,
         `StepScalingAlarm${index}`,
         {
           alarmName: `ecs-${serviceName}-step-scaling-${environmentSuffix}`,
-          metric: new cloudwatch.Metric({
-            namespace: 'AWS/ECS',
-            metricName: 'CPUUtilization',
-            dimensionsMap: {
-              ServiceName: serviceName,
-              ClusterName: clusterName,
-            },
-            statistic: 'Average',
-            period: cdk.Duration.minutes(1),
-          }),
+          metric: stepScalingMetric,
           threshold: 70,
           evaluationPeriods: 1,
           treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
@@ -607,7 +609,7 @@ def handler(event, context):
         `StepScaling${index}`,
         {
           scalingTarget: scalableTarget,
-          metric: stepScalingAlarm.metric,
+          metric: stepScalingMetric,
           adjustmentType:
             applicationautoscaling.AdjustmentType.CHANGE_IN_CAPACITY,
           cooldown: cdk.Duration.seconds(60),
@@ -631,7 +633,10 @@ def handler(event, context):
         }
       );
 
-      // Step scaling policy is automatically triggered when alarm breaches threshold
+      // Connect alarm to step scaling policy
+      stepScalingAlarm.addAlarmAction(
+        new cloudwatch_actions.SnsAction(snsTopic)
+      );
 
       cdk.Tags.of(stepScaling).add('Service', 'FinancialServices');
       cdk.Tags.of(stepScaling).add('Environment', environmentSuffix);
