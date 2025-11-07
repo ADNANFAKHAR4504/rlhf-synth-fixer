@@ -1,0 +1,43 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-04T23:57:31+00:00",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "vpc",
+    "networking",
+    "security"
+  ],
+  "po_id": "101000832",
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "InternetGateway",
+    "NatGateway",
+    "Eip",
+    "RouteTable",
+    "Route",
+    "RouteTableAssociation",
+    "NetworkAcl",
+    "NetworkAclRule",
+    "NetworkAclAssociation",
+    "FlowLog",
+    "S3Bucket",
+    "S3Encryption",
+    "S3Lifecycle",
+    "S3PublicAccessBlock",
+    "S3BucketPolicy"
+  ],
+  "region": "eu-west-3",
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

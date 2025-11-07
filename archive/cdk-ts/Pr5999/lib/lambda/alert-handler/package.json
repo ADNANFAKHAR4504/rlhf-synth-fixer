@@ -1,0 +1,13 @@
+    //   Message: {
+    //     Subject: { Data: `Fraud Alert - Transaction ${alert.transactionId}` },
+    //     Body: { Text: { Data: JSON.stringify(alert, null, 2) } }
+    //   }
+    // }));
+  } catch (error) {
+    console.error(`Error processing fraud alert from record ${record.Sns.MessageId}:`, error);
+    throw error;
+  }
+}
+```
+
+## File: lib/lambda/alert-handler/package.json
