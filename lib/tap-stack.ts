@@ -359,7 +359,7 @@ systemctl enable nginx
         name: 'UnauthorizedAPICalls',
         pattern:
           '{ ($.errorCode = *UnauthorizedOperation) || ($.errorCode = AccessDenied*) }',
-        logGroupName: securityServices.cloudTrailLogGroup.name,
+        logGroupName: '/aws/cloudtrail/security-logs-production',
         metricTransformation: {
           name: 'UnauthorizedAPICalls',
           namespace: 'CloudTrailMetrics',

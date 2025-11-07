@@ -592,7 +592,7 @@ export class SecurityServicesModule extends Construct {
   public readonly wafWebAcl: aws.wafv2WebAcl.Wafv2WebAcl;
   public readonly cloudTrail: aws.cloudtrail.Cloudtrail;
   public readonly snsTopic: aws.snsTopic.SnsTopic;
-  public readonly cloudTrailLogGroup: aws.cloudwatchLogGroup.CloudwatchLogGroup;
+  
 
   constructor(
     scope: Construct,
