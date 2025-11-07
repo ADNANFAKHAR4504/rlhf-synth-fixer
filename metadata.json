@@ -1,6 +1,6 @@
 {
   "po_id": "wajbh",
-  "platform": "CDKTF",
+  "platform": "cdktf",
   "language": "ts",
   "complexity": "hard",
   "team": "synth",
