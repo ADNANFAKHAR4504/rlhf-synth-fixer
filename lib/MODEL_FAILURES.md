@@ -3,6 +3,23 @@
 ## Overview
 This document tracks model failures, quality issues, and areas for improvement in the EKS infrastructure implementation. It serves as a reference for continuous improvement and quality assurance.
 
+## Actual Differences vs IDEAL_RESPONSE
+
+| Gap | MODEL_RESPONSE | IDEAL_RESPONSE | Impact / Notes |
+| --- | --- | --- | --- |
+| **Architecture** | Provisions an Amazon EKS cluster with three managed node groups, ALBs, and Kubernetes add-ons (`lib/MODEL_RESPONSE.md`, multiple `aws_eks_*` and `aws_autoscaling_group` resources). | Builds a fully serverless payment pipeline using API Gateway, multiple Lambda functions, DynamoDB tables, and SQS FIFO queues (`lib/IDEAL_RESPONSE.md`, sections `__main__.py`, `Pulumi.yaml`). | Wrong service stack: container cluster vs required serverless payment system, so business requirements are unmet. |
+| **IaC Tooling** | Terraform HCL files in `lib/` (e.g., `provider.tf`, `variables.tf`). | Pulumi Python program (`__main__.py`) with `Pulumi.yaml` runtime `python`. | Request explicitly asked for Pulumi Python; using Terraform prevents teams from reusing provided Pulumi libraries/tests. |
+| **Region Defaults** | `variable "aws_region"` defaults to `ap-southeast-1` (`lib/MODEL_RESPONSE.md:112-118`). | Pulumi config defaults region to `us-east-2` (`lib/IDEAL_RESPONSE.md` under `Pulumi.yaml`). | Deploying to the wrong region violates compliance/latency expectations. |
+| **Event + Data Layer** | No DynamoDB tables, SQS queues, or DLQs are defined. | Implements `transactions_table`, `fraud_alerts_table`, `transaction_queue`, `notification_queue`, and matching DLQs to guarantee payment durability (see `lib/IDEAL_RESPONSE.md` lines ~180-360). | Missing persistence and queuing breaks critical payment processing flows. |
+| **Security Boundary** | `aws_security_group.eks_cluster` allows `0.0.0.0/0` ingress on port 443 for the cluster API (`lib/MODEL_RESPONSE.md:621-707`). | Serverless design relies on API Gateway-managed TLS and does not require exposing a mutable security group to the internet. | Publicly exposing the EKS control plane contravenes the least-privilege guidance supplied in the IDEAL solution. |
+| **Cost Profile** | Minimum capacity described in the variables uses on-demand `m5.large`, `t3.large`, and `g4dn.xlarge` nodes plus the EKS control plane (~$720+/month assuming 2×m5.large, 2×t3.large, 1×g4dn.xlarge at on-demand rates and $73/mo control-plane fee). | Serverless stack is pay-per-use; the IDEAL_RESPONSE budgets under \$150/mo for equivalent baseline traffic (Lambda + API Gateway + DynamoDB autoscaling). | Over-provisioned compute increases monthly spend by roughly \$570+ before traffic-driven costs, failing the cost-optimization goal. |
+
+### Key Deltas With References
+- **Compute profile**: `MODEL_RESPONSE` pins the system/app/gpu node group instance types to `m5.large`, `t3.large|t3a.large|t2.large`, and `g4dn.xlarge` respectively (`lib/MODEL_RESPONSE.md:1997-2008`), whereas `IDEAL_RESPONSE` runs entirely on Lambda (no EC2 node groups). Aside from violating the serverless requirement, the EKS choice keeps a constant EC2 bill even when no traffic exists.
+- **Security group coverage**: `MODEL_RESPONSE`'s `aws_security_group.eks_cluster` resource opens port 443 to `0.0.0.0/0` (`lib/MODEL_RESPONSE.md:621-707`). The IDEAL Pulumi stack never creates that rule because API Gateway terminates TLS, so traffic never needs direct access to a mutable security group. This delta explains the “missing port 443 rule” note—the correct fix is to delete the SG rule in favor of API Gateway-managed endpoints.
+- **Data + queue layer**: No DynamoDB tables (`transactions_table`, `fraud_alerts_table`) or SQS FIFO queues exist anywhere in `MODEL_RESPONSE`, while `IDEAL_RESPONSE` defines them in `__main__.py` lines ~180-360. These components are required for idempotent payment storage and async notification flows.
+- **Cost impact**: Using pricing from the AWS calculator, two `m5.large` on-demand instances (~\$70/mo each), two mixed `t3.large` spot/on-demand nodes (~\$40/mo blended), one `g4dn.xlarge` (~\$550/mo), plus the \$73/mo EKS control plane totals ~\$803/mo before workload traffic. Replacing that with Lambda + API Gateway + DynamoDB autoscaling (the IDEAL stack) is estimated at \$150/mo for the same baseline traffic, so the regression costs roughly **\$653/mo** more than necessary.
+
 ## 1. Configuration Discrepancies
 
 ### Issue: Region Mismatch
