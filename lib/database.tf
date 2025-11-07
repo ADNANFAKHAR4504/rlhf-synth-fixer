@@ -19,7 +19,7 @@ resource "aws_rds_cluster" "aurora" {
   engine_version                  = var.aurora_engine_version == "" ? null : var.aurora_engine_version
   database_name                   = var.database_name
   master_username                 = var.database_master_username
-  master_password                 = random_password.rds_password.result
+  master_password                 = data.aws_secretsmanager_random_password.rds_password.random_password
   db_subnet_group_name            = aws_db_subnet_group.aurora.name
   vpc_security_group_ids          = [aws_security_group.rds.id]
   storage_encrypted               = true

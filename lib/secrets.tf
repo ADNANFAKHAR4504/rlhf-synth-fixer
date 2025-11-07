@@ -1,7 +1,9 @@
-# Generate random password for RDS
-resource "random_password" "rds_password" {
-  length  = 32
-  special = true
+# Generate random password for RDS via AWS Secrets Manager (excludes unsupported characters)
+data "aws_secretsmanager_random_password" "rds_password" {
+  password_length     = 32
+  exclude_characters  = "/@\" "
+  exclude_numbers     = false
+  exclude_punctuation = false
 }
 
 # Store RDS credentials in Secrets Manager
@@ -22,13 +24,13 @@ resource "aws_secretsmanager_secret_version" "rds_credentials" {
   secret_id = aws_secretsmanager_secret.rds_credentials.id
   secret_string = jsonencode({
     username          = var.database_master_username
-    password          = random_password.rds_password.result
+    password          = data.aws_secretsmanager_random_password.rds_password.random_password
     engine            = "postgres"
     host              = aws_rds_cluster.aurora.endpoint
     reader_endpoint   = aws_rds_cluster.aurora.reader_endpoint
     port              = 5432
     dbname            = var.database_name
-    connection_string = "postgresql://${var.database_master_username}:${random_password.rds_password.result}@${aws_rds_cluster.aurora.endpoint}:5432/${var.database_name}"
+    connection_string = "postgresql://${var.database_master_username}:${data.aws_secretsmanager_random_password.rds_password.random_password}@${aws_rds_cluster.aurora.endpoint}:5432/${var.database_name}"
   })
 }
 
