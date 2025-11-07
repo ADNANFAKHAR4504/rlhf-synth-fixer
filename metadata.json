@@ -24,5 +24,7 @@
     "RDS",
     "Secrets Manager"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342"
 }

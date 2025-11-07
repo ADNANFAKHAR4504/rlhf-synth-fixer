@@ -768,7 +768,7 @@
           "Fn::Sub": "postgres-db-${EnvironmentSuffix}"
         },
         "Engine": "postgres",
-        "EngineVersion": "14.13",
+  "EngineVersion": "14.19",
         "DBInstanceClass": "db.t3.medium",
         "AllocatedStorage": "100",
         "StorageType": "gp3",
