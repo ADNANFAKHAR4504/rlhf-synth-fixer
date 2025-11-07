@@ -1,32 +1,18 @@
 #!/usr/bin/env python3
-"""
-CDK Application Entry Point for TapStack
-Serverless webhook processing system for Stripe, PayPal, and Square
-"""
-import os
 import aws_cdk as cdk
-from lib.tap_stack import TapStack, TapStackProps
+from lib.rds_migration_stack import RdsMigrationStack
 
 
 app = cdk.App()
 
-# Get environment suffix from context or environment variable
-environment_suffix = (
-    app.node.try_get_context('environmentSuffix')
-    or os.environ.get('ENVIRONMENT_SUFFIX')
-    or 'dev'
-)
-
-# Create TapStack
-TapStack(
+RdsMigrationStack(
     app,
-    f"TapStack{environment_suffix}",
-    props=TapStackProps(environment_suffix=environment_suffix),
+    "RdsMigrationStack",
     env=cdk.Environment(
-        account=os.environ.get('CDK_DEFAULT_ACCOUNT'),
-        region=os.environ.get('CDK_DEFAULT_REGION', 'us-east-1'),
+        account=app.node.try_get_context("account"),
+        region=app.node.try_get_context("region") or "us-east-1",
     ),
-    description=f"Serverless webhook processing system - {environment_suffix}",
+    description="RDS PostgreSQL database migration to staging environment with enhanced security and monitoring",
 )
 
 app.synth()
