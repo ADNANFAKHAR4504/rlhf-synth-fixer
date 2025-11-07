@@ -11,12 +11,22 @@
     "Failure Recovery Automation"
   ],
   "aws_services": [
-    "VPC",
-    "Subnet",
     "RDS",
-    "IAM",
-    "SNS",
+    "VPC",
+    "Lambda",
     "CloudWatch",
-    "Lambda"
-  ]
+    "Route53",
+    "SNS",
+    "KMS",
+    "S3",
+    "IAM",
+    "EC2"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
 }
