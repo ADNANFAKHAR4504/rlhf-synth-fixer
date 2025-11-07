@@ -18,5 +18,11 @@
     "CloudWatch LogGroup",
     "VPC"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-creator",
+  "dockerS3Location": ""
 }
