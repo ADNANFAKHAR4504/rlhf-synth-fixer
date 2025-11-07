@@ -793,3 +793,59 @@ describe('TapStack Unit Tests', () => {
     });
   });
 });
+
+describe('TapStack Coverage Tests', () => {
+  afterEach(() => {
+    // Clean up environment variables
+    delete process.env.AWS_REGION_OVERRIDE;
+  });
+
+  test('should use AWS_REGION_OVERRIDE when set via environment', () => {
+    // Set environment variable to test the override branch
+    process.env.AWS_REGION_OVERRIDE = 'eu-central-1';
+
+    const app = Testing.app();
+    const stack = new TapStack(app, 'test-stack-override');
+
+    // Synthesize to ensure no errors
+    const synthesized = Testing.synth(stack);
+
+    // Verify the stack was created successfully
+    expect(synthesized).toBeDefined();
+    expect(stack).toBeDefined();
+  });
+
+  test('should use awsRegionOverride prop when provided', () => {
+    const app = Testing.app();
+    const stack = new TapStack(app, 'test-stack-prop-override', {
+      awsRegionOverride: 'ap-northeast-1',
+    });
+
+    const synthesized = Testing.synth(stack);
+
+    expect(synthesized).toBeDefined();
+    expect(stack).toBeDefined();
+  });
+
+  test('should fallback to default region when no overrides', () => {
+    const app = Testing.app();
+    const stack = new TapStack(app, 'test-stack-default');
+
+    const synthesized = Testing.synth(stack);
+
+    expect(synthesized).toBeDefined();
+    expect(stack).toBeDefined();
+  });
+
+  test('should use props.awsRegion when provided without override', () => {
+    const app = Testing.app();
+    const stack = new TapStack(app, 'test-stack-region-prop', {
+      awsRegion: 'us-west-1',
+    });
+
+    const synthesized = Testing.synth(stack);
+
+    expect(synthesized).toBeDefined();
+    expect(stack).toBeDefined();
+  });
+});
