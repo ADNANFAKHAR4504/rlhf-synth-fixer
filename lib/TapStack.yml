@@ -2112,29 +2112,29 @@ Resources:
         - Key: iac-rlhf-amazon
           Value: 'true'
 
-  # Create DeliveryChannel FIRST (before ConfigRecorder)
-  DeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    DependsOn:
-      - ConfigBucketPolicy
-    Properties:
-      Name: !Sub ${ProjectName}-${Environment}-DeliveryChannel
-      S3BucketName: !Ref ConfigBucket
-      SnsTopicARN: !Ref SNSTopic
-      ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: TwentyFour_Hours
-
-  # Create ConfigRecorder AFTER DeliveryChannel
+  # Create ConfigRecorder FIRST
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
     DependsOn:
-      - DeliveryChannel
+      - ConfigBucketPolicy
     Properties:
       Name: !Sub ${ProjectName}-${Environment}-Recorder
       RoleARN: !GetAtt ConfigRole.Arn
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
+
+  # Create DeliveryChannel AFTER ConfigRecorder
+  DeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    DependsOn:
+      - ConfigRecorder
+    Properties:
+      Name: !Sub ${ProjectName}-${Environment}-DeliveryChannel
+      S3BucketName: !Ref ConfigBucket
+      SnsTopicARN: !Ref SNSTopic
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: TwentyFour_Hours
 
   # Lambda function to start the Config Recorder
   ConfigRecorderStarterRole:
