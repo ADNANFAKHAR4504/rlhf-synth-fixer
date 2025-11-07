@@ -27,5 +27,11 @@
     "Security Groups"
   ],
   "training_quality": 9,
-  "background": "Production-ready secure AWS infrastructure with comprehensive compliance monitoring, encryption at rest and in transit, multi-tier VPC architecture across 2 availability zones, CloudTrail audit logging with 90-day retention, automated patching via Systems Manager, and least-privilege IAM roles. All resources are tagged, encrypted, and deployable/destroyable for testing pipelines."
+  "background": "Production-ready secure AWS infrastructure with comprehensive compliance monitoring, encryption at rest and in transit, multi-tier VPC architecture across 2 availability zones, CloudTrail audit logging with 90-day retention, automated patching via Systems Manager, and least-privilege IAM roles. All resources are tagged, encrypted, and deployable/destroyable for testing pipelines.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
 }
