@@ -1,0 +1,6 @@
+environment_suffix = "syntha70u7"
+primary_region     = "us-east-1"
+dr_region          = "us-east-2"
+db_master_username = "dbadmin"
+db_name            = "payments"
+domain_name        = "payments-api.example.com"
