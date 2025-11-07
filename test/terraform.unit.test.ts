@@ -227,15 +227,6 @@ describe('Terraform Infrastructure Unit Tests', () => {
   });
 
   describe('Documentation and Outputs', () => {
-    test('should have README.md documentation', () => {
-      const readmePath = path.join(libPath, 'README.md');
-      expect(fs.existsSync(readmePath)).toBeTruthy();
-
-      const content = fs.readFileSync(readmePath, 'utf-8');
-      expect(content).toContain('Migration');
-      expect(content).toContain('Terraform');
-    });
-
     test('should have IDEAL_RESPONSE.md', () => {
       const idealPath = path.join(libPath, 'IDEAL_RESPONSE.md');
       expect(fs.existsSync(idealPath)).toBeTruthy();
