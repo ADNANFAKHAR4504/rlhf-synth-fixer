@@ -19,7 +19,8 @@ import { HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stackName = `TapStack${environmentSuffix}`;
-const region = process.env.AWS_REGION || 'us-east-2';
+// Region must match the region configured in bin/tap.ts
+const region = 'us-east-2';
 
 // AWS SDK Clients
 const cfnClient = new CloudFormationClient({ region });
