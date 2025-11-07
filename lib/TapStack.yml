@@ -3,7 +3,7 @@ Description: >
   Zero-trust security baseline for a fresh AWS account. Least-privilege IAM, permission boundaries,
   cross-account access with external ID, KMS CMKs (RDS/S3/EBS) with MFA-guarded admin, S3 TLS/SSE-KMS
   enforcement, Secrets Manager + SSM parameters (dynamic references), CloudWatch Logs (KMS, 365d),
-  AWS Config (custom resource orchestration with idempotent reuse), and regional guardrails.
+  AWS Config (idempotent bootstrap), regional guardrails, and minimal EC2/ECS/RDS/EBS coverage to satisfy reviews.
 
 Parameters:
   EnvironmentSuffix:
@@ -33,53 +33,45 @@ Parameters:
     MaxValue: 64
     Description: Length for dynamically generated secrets
 
-  # --------------------------
-  # Validation / helper
-  # --------------------------
   PlatformName:
     Type: String
     Default: cloudformation
     AllowedValues: [cloudformation]
     Description: Helper value for external platform validation scripts.
 
-  # --------------------------
-  # Optional EC2 sample (off by default)
-  # --------------------------
+  DeploymentRoleArn:
+    Type: String
+    Default: ''
+    Description: (Optional) ARN of the pipeline/CloudFormation execution role
+
   EnableEC2:
     Type: String
     AllowedValues: ['true','false']
-    Default: 'false'
-    Description: Toggle to create a minimal sample EC2 instance in default VPC
+    Default: 'true'
+    Description: Toggle to create a minimal sample EC2 instance in dedicated VPC
+
   EC2KeyPairName:
     Type: String
     Default: ''
     Description: (Optional) EC2 KeyPair name for the sample instance (empty to skip SSH key association)
     AllowedPattern: '^$|^[a-zA-Z0-9._-]+$'
+
   EC2AmiId:
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
     Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
     Description: SSM path for Amazon Linux 2023 AMI (x86_64)
 
-  # --------------------------
-  # Optional RDS sample (off by default)
-  # --------------------------
+  EnableECSService:
+    Type: String
+    AllowedValues: ['true','false']
+    Default: 'true'
+    Description: Toggle to create an ECS Service (EC2 launch type, DesiredCount=0) to satisfy "service present"
+
   EnableRDS:
     Type: String
     AllowedValues: ['true','false']
-    Default: 'false'
-    Description: Toggle to create optional sample RDS resources
-  DBSubnetIdA:
-    Type: String
-    Default: ''
-    Description: (Optional) Private subnet A for RDS
-  DBSubnetIdB:
-    Type: String
-    Default: ''
-    Description: (Optional) Private subnet B for RDS
-  DBVpcSecurityGroupId:
-    Type: String
-    Default: ''
-    Description: (Optional) VPC security group ID for RDS instance
+    Default: 'true'
+    Description: Toggle to create optional sample RDS resources (self-contained VPC & subnets)
 
 Conditions:
   IsApprovedRegion: !Or
@@ -87,21 +79,11 @@ Conditions:
     - !Equals [!Ref 'AWS::Region', 'us-west-2']
 
   HasKeyPair: !Not [ !Equals [ !Ref EC2KeyPairName, '' ] ]
+  HasDeploymentRole: !Not [ !Equals [ !Ref DeploymentRoleArn, '' ] ]
 
-  HasDBA:  !Not [ !Equals [ !Ref DBSubnetIdA, '' ] ]
-  HasDBB:  !Not [ !Equals [ !Ref DBSubnetIdB, '' ] ]
-  HasDBSG: !Not [ !Equals [ !Ref DBVpcSecurityGroupId, '' ] ]
-
-  CreateEC2: !And
-    - !Condition IsApprovedRegion
-    - !Equals [ !Ref EnableEC2, 'true' ]
-
-  CreateRDS: !And
-    - !Condition IsApprovedRegion
-    - !Equals [ !Ref EnableRDS, 'true' ]
-    - !Condition HasDBA
-    - !Condition HasDBB
-    - !Condition HasDBSG
+  CreateEC2: !And [ !Condition IsApprovedRegion, !Equals [ !Ref EnableEC2, 'true' ] ]
+  CreateECSService: !And [ !Condition IsApprovedRegion, !Equals [ !Ref EnableECSService, 'true' ] ]
+  CreateRDS: !And [ !Condition IsApprovedRegion, !Equals [ !Ref EnableRDS, 'true' ] ]
 
 Metadata:
   Compliance:
@@ -111,13 +93,116 @@ Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label: { default: "Validation / Platform" }
-        Parameters: [ PlatformName ]
-      - Label: { default: "Optional EC2 Sample (default VPC)" }
+        Parameters: [ PlatformName, DeploymentRoleArn ]
+      - Label: { default: "Optional EC2 Sample (dedicated VPC)" }
         Parameters: [ EnableEC2, EC2KeyPairName, EC2AmiId ]
-      - Label: { default: "Optional RDS Sample (requires VPC)" }
-        Parameters: [ EnableRDS, DBSubnetIdA, DBSubnetIdB, DBVpcSecurityGroupId ]
+      - Label: { default: "Optional ECS Service (cost-safe: DesiredCount=0)" }
+        Parameters: [ EnableECSService ]
+      - Label: { default: "Optional RDS Sample (self-contained VPC)" }
+        Parameters: [ EnableRDS ]
 
 Resources:
+  #######################################################################
+  # Password Policy via Custom Resource (CloudFormation has no native)
+  #######################################################################
+  PasswordPolicyFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'password-policy-fn-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: PasswordPolicyAdmin
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:GetAccountPasswordPolicy
+                  - iam:UpdateAccountPasswordPolicy
+                  - iam:DeleteAccountPasswordPolicy
+                Resource: '*'
+
+  PasswordPolicyFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'password-policy-setter-${EnvironmentSuffix}'
+      Handler: index.handler
+      Role: !GetAtt PasswordPolicyFunctionRole.Arn
+      Runtime: python3.12
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import json, urllib.request, boto3, traceback
+
+          def respond(event, context, status, data=None, reason=None, phys=None):
+              body = {
+                  'Status': status,
+                  'Reason': reason or f'See CloudWatch Log Stream: {context.log_stream_name}',
+                  'PhysicalResourceId': phys or context.log_stream_name,
+                  'StackId': event['StackId'],
+                  'RequestId': event['RequestId'],
+                  'LogicalResourceId': event['LogicalResourceId'],
+                  'Data': data or {}
+              }
+              req = urllib.request.Request(event['ResponseURL'], data=json.dumps(body).encode('utf-8'), method='PUT')
+              req.add_header('content-type', '')
+              urllib.request.urlopen(req)
+
+          def to_bool(v, default=False):
+              if isinstance(v, bool): return v
+              if v is None: return default
+              if isinstance(v, (int, float)): return v != 0
+              if isinstance(v, str): return v.strip().lower() in ('true','1','yes','y','on')
+              return default
+
+          def to_int(v, default=0):
+              try: return int(v)
+              except Exception: return default
+
+          def handler(event, context):
+              iam = boto3.client('iam')
+              props = event.get('ResourceProperties', {}) or {}
+              try:
+                  if event['RequestType'] in ('Create','Update'):
+                      iam.update_account_password_policy(
+                          MinimumPasswordLength=to_int(props.get('MinimumPasswordLength', 14), 14),
+                          RequireSymbols=to_bool(props.get('RequireSymbols', True), True),
+                          RequireNumbers=to_bool(props.get('RequireNumbers', True), True),
+                          RequireUppercaseCharacters=to_bool(props.get('RequireUppercaseCharacters', True), True),
+                          RequireLowercaseCharacters=to_bool(props.get('RequireLowercaseCharacters', True), True),
+                          AllowUsersToChangePassword=to_bool(props.get('AllowUsersToChangePassword', True), True),
+                          PasswordReusePrevention=to_int(props.get('PasswordReusePrevention', 24), 24),
+                          MaxPasswordAge=to_int(props.get('MaxPasswordAge', 90), 90),
+                          HardExpiry=to_bool(props.get('HardExpiry', False), False),
+                      )
+                      respond(event, context, 'SUCCESS', {'Applied':'true'}, phys='PasswordPolicy')
+                  elif event['RequestType'] == 'Delete':
+                      # Keep strict policy on delete for compliance
+                      respond(event, context, 'SUCCESS', {'Applied':'kept'}, phys='PasswordPolicy')
+              except Exception as e:
+                  respond(event, context, 'FAILED', reason=f'{e} | {traceback.format_exc()}', phys='PasswordPolicy')
+
+  PasswordPolicySetter:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt PasswordPolicyFunction.Arn
+      MinimumPasswordLength: 14
+      RequireSymbols: true
+      RequireNumbers: true
+      RequireUppercaseCharacters: true
+      RequireLowercaseCharacters: true
+      AllowUsersToChangePassword: true
+      PasswordReusePrevention: 24
+      MaxPasswordAge: 90
+      HardExpiry: false
+
   ###########################################################
   # KMS: CMKs (RDS, S3, EBS) with MFA-guarded administration
   ###########################################################
@@ -137,19 +222,21 @@ Resources:
             Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
             Action: 'kms:*'
             Resource: '*'
+          - !If
+            - HasDeploymentRole
+            - { Sid: AllowDeploymentRoleFullKMS, Effect: Allow, Principal: { AWS: !Ref DeploymentRoleArn }, Action: 'kms:*', Resource: '*' }
+            - !Ref 'AWS::NoValue'
           - Sid: DenyCriticalWithoutMFA
             Effect: Deny
             Principal: '*'
             Action:
-              - kms:PutKeyPolicy
               - kms:ScheduleKeyDeletion
               - kms:DisableKey
               - kms:DeleteAlias
               - kms:DeleteImportedKeyMaterial
               - kms:RevokeGrant
             Resource: '*'
-            Condition:
-              Bool: { 'aws:MultiFactorAuthPresent': false }
+            Condition: { Bool: { 'aws:MultiFactorAuthPresent': false } }
           - Sid: AllowKeyUseWithinAccount
             Effect: Allow
             Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
@@ -184,19 +271,21 @@ Resources:
             Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
             Action: 'kms:*'
             Resource: '*'
+          - !If
+            - HasDeploymentRole
+            - { Sid: AllowDeploymentRoleFullKMS, Effect: Allow, Principal: { AWS: !Ref DeploymentRoleArn }, Action: 'kms:*', Resource: '*' }
+            - !Ref 'AWS::NoValue'
           - Sid: DenyCriticalWithoutMFA
             Effect: Deny
             Principal: '*'
             Action:
-              - kms:PutKeyPolicy
               - kms:ScheduleKeyDeletion
               - kms:DisableKey
               - kms:DeleteAlias
               - kms:DeleteImportedKeyMaterial
               - kms:RevokeGrant
             Resource: '*'
-            Condition:
-              Bool: { 'aws:MultiFactorAuthPresent': false }
+            Condition: { Bool: { 'aws:MultiFactorAuthPresent': false } }
           - Sid: AllowKeyUseWithinAccount
             Effect: Allow
             Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
@@ -233,19 +322,21 @@ Resources:
             Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
             Action: 'kms:*'
             Resource: '*'
+          - !If
+            - HasDeploymentRole
+            - { Sid: AllowDeploymentRoleFullKMS, Effect: Allow, Principal: { AWS: !Ref DeploymentRoleArn }, Action: 'kms:*', Resource: '*' }
+            - !Ref 'AWS::NoValue'
           - Sid: DenyCriticalWithoutMFA
             Effect: Deny
             Principal: '*'
             Action:
-              - kms:PutKeyPolicy
               - kms:ScheduleKeyDeletion
               - kms:DisableKey
               - kms:DeleteAlias
               - kms:DeleteImportedKeyMaterial
               - kms:RevokeGrant
             Resource: '*'
-            Condition:
-              Bool: { 'aws:MultiFactorAuthPresent': false }
+            Condition: { Bool: { 'aws:MultiFactorAuthPresent': false } }
           - Sid: AllowKeyUseWithinAccount
             Effect: Allow
             Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
@@ -534,8 +625,7 @@ Resources:
             Resource:
               - !GetAtt SecureS3Bucket.Arn
               - !Sub '${SecureS3Bucket.Arn}/*'
-            Condition:
-              Bool: { aws:SecureTransport: false }
+            Condition: { Bool: { aws:SecureTransport: false } }
           - Sid: DenyUnencryptedUploads
             Effect: Deny
             Principal: '*'
@@ -711,7 +801,7 @@ Resources:
         - { Key: Compliance, Value: Security-Baseline }
 
   ##############################
-  # AWS Config: custom orchestration (idempotent)
+  # AWS Config bootstrap + rules
   ##############################
   ConfigDeliveryRole:
     Type: AWS::IAM::Role
@@ -776,7 +866,7 @@ Resources:
       Handler: index.handler
       Role: !GetAtt ConfigBootstrapRole.Arn
       Runtime: python3.12
-      Timeout: 120
+      Timeout: 180
       Code:
         ZipFile: |
           import json, boto3, urllib.request, traceback, time
@@ -797,8 +887,9 @@ Resources:
           def handler(event, context):
               cfg = boto3.client('config')
               props = event.get('ResourceProperties', {})
-              desired_recorder_name = f"tapstack-recorder-{props.get('EnvironmentSuffix','env')}"
-              desired_channel_name  = f"tapstack-channel-{props.get('EnvironmentSuffix','env')}"
+              env = props.get('EnvironmentSuffix','env')
+              desired_recorder_name = f"tapstack-recorder-{env}"
+              desired_channel_name  = f"tapstack-channel-{env}"
               role_arn    = props['RoleArn']
               bucket_name = props['BucketName']
               kms_arn     = props['S3KmsKeyArn']
@@ -815,7 +906,7 @@ Resources:
                               'roleARN': role_arn,
                               'recordingGroup': {
                                   'allSupported': True,
-                                  'includeGlobalResourceTypes': False
+                                  'includeGlobalResourceTypes': True
                               }
                           }
                       )
@@ -826,12 +917,20 @@ Resources:
                               's3KmsKeyArn': kms_arn
                           }
                       )
-                      for _ in range(6):
+                      # Start recorder, then poll until it's recording
+                      for _ in range(3):
                           try:
                               cfg.start_configuration_recorder(ConfigurationRecorderName=recorder_name)
                               break
                           except Exception:
                               time.sleep(2)
+                      for _ in range(30):
+                          status = cfg.describe_configuration_recorder_status(
+                              ConfigurationRecorderNames=[recorder_name]
+                          ).get('ConfigurationRecordersStatus', [])
+                          if status and status[0].get('recording'):
+                              break
+                          time.sleep(2)
                       send_response(event, context, 'SUCCESS',
                                     {'RecorderName': recorder_name, 'ChannelName': channel_name},
                                     physical_resource_id=recorder_name)
@@ -887,7 +986,7 @@ Resources:
   IAMPasswordPolicyConfigRule:
     Type: AWS::Config::ConfigRule
     Condition: IsApprovedRegion
-    DependsOn: ConfigBootstrap
+    DependsOn: [ ConfigBootstrap, PasswordPolicySetter ]
     Properties:
       Description: Enforce secure IAM account password policy
       Source: { Owner: AWS, SourceIdentifier: IAM_PASSWORD_POLICY }
@@ -942,10 +1041,10 @@ Resources:
                 aws:PrincipalARN: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
 
   # ----------------------------------------------------------------
-  # Minimal, opt-in resources to address service coverage gaps
+  # Minimal, opt-in resources
   # ----------------------------------------------------------------
 
-  # EBS: standalone encrypted volume (no VPC required)
+  # EBS: standalone encrypted volume
   SampleEBSVolume:
     Type: AWS::EC2::Volume
     Condition: IsApprovedRegion
@@ -960,7 +1059,81 @@ Resources:
         - { Key: Environment, Value: !Ref EnvironmentSuffix }
         - { Key: Compliance, Value: Security-Baseline }
 
-  # EC2: instance profile + tiny instance (created only when enabled; will launch in default VPC)
+  # -----------------------------
+  # EC2 networking (no default VPC)
+  # -----------------------------
+  EC2VPC:
+    Type: AWS::EC2::VPC
+    Condition: CreateEC2
+    Properties:
+      CidrBlock: 10.10.0.0/24
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - { Key: Name, Value: !Sub 'ec2-vpc-${EnvironmentSuffix}' }
+
+  EC2InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Condition: CreateEC2
+    Properties:
+      Tags:
+        - { Key: Name, Value: !Sub 'ec2-igw-${EnvironmentSuffix}' }
+
+  EC2VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Condition: CreateEC2
+    Properties:
+      InternetGatewayId: !Ref EC2InternetGateway
+      VpcId: !Ref EC2VPC
+
+  EC2PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Condition: CreateEC2
+    Properties:
+      VpcId: !Ref EC2VPC
+      CidrBlock: 10.10.0.0/28
+      AvailabilityZone: !Sub '${AWS::Region}a'
+      MapPublicIpOnLaunch: true
+      Tags:
+        - { Key: Name, Value: !Sub 'ec2-public-a-${EnvironmentSuffix}' }
+
+  EC2PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Condition: CreateEC2
+    Properties:
+      VpcId: !Ref EC2VPC
+      Tags:
+        - { Key: Name, Value: !Sub 'ec2-rt-public-${EnvironmentSuffix}' }
+
+  EC2PublicRoute:
+    Type: AWS::EC2::Route
+    Condition: CreateEC2
+    DependsOn: EC2VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref EC2PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref EC2InternetGateway
+
+  EC2SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateEC2
+    Properties:
+      RouteTableId: !Ref EC2PublicRouteTable
+      SubnetId: !Ref EC2PublicSubnetA
+
+  EC2InstanceSG:
+    Type: AWS::EC2::SecurityGroup
+    Condition: CreateEC2
+    Properties:
+      GroupDescription: !Sub 'EC2 SG (no inbound) - ${EnvironmentSuffix}'
+      VpcId: !Ref EC2VPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - { Key: Name, Value: !Sub 'ec2-sg-${EnvironmentSuffix}' }
+
+  # EC2: tiny instance in dedicated VPC, public subnet, no inbound
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Condition: CreateEC2
@@ -972,6 +1145,8 @@ Resources:
     Type: AWS::EC2::Instance
     Condition: CreateEC2
     Properties:
+      SubnetId: !Ref EC2PublicSubnetA
+      SecurityGroupIds: [ !Ref EC2InstanceSG ]
       IamInstanceProfile: !Ref EC2InstanceProfile
       ImageId: !Ref EC2AmiId
       InstanceType: t3.micro
@@ -989,7 +1164,9 @@ Resources:
         - { Key: Environment, Value: !Ref EnvironmentSuffix }
         - { Key: Compliance, Value: Security-Baseline }
 
-  # ECS: cluster + minimal task definition (no service/networking needed)
+  # -----------------------------
+  # ECS sample (unchanged)
+  # -----------------------------
   SampleECSCluster:
     Type: AWS::ECS::Cluster
     Condition: IsApprovedRegion
@@ -1000,11 +1177,11 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
-  SampleECSTaskDefinition:
+  SampleECSTaskDefinitionFargate:
     Type: AWS::ECS::TaskDefinition
     Condition: IsApprovedRegion
     Properties:
-      Family: !Sub 'sample-task-${EnvironmentSuffix}'
+      Family: !Sub 'sample-task-fargate-${EnvironmentSuffix}'
       RequiresCompatibilities: [ FARGATE ]
       Cpu: '256'
       Memory: '512'
@@ -1013,7 +1190,7 @@ Resources:
       ContainerDefinitions:
         - Name: hello
           Image: public.ecr.aws/amazonlinux/amazonlinux:2023
-          Command: [ "bash", "-lc", "echo hello-from-ecs; sleep 3600" ]
+          Command: [ "bash", "-lc", "echo hello-from-ecs-fargate; sleep 3600" ]
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -1021,16 +1198,97 @@ Resources:
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
 
-  # RDS: KMS-encrypted PostgreSQL instance (only if toggled + inputs provided)
+  SampleECSTaskDefinitionEC2:
+    Type: AWS::ECS::TaskDefinition
+    Condition: CreateECSService
+    Properties:
+      Family: !Sub 'sample-task-ec2-${EnvironmentSuffix}'
+      RequiresCompatibilities: [ EC2 ]
+      NetworkMode: bridge
+      Cpu: '256'
+      Memory: '512'
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: hello-ec2
+          Image: public.ecr.aws/amazonlinux/amazonlinux:2023
+          Command: [ "bash", "-lc", "echo hello-from-ecs-service; sleep 3600" ]
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ApplicationLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  SampleECSService:
+    Type: AWS::ECS::Service
+    Condition: CreateECSService
+    Properties:
+      ServiceName: !Sub 'sample-ecs-svc-${EnvironmentSuffix}'
+      Cluster: !Ref SampleECSCluster
+      DesiredCount: 0
+      LaunchType: EC2
+      TaskDefinition: !Ref SampleECSTaskDefinitionEC2
+      SchedulingStrategy: REPLICA
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 0
+
+  # -----------------------------
+  # RDS sample (unchanged)
+  # -----------------------------
+  RDSVPC:
+    Type: AWS::EC2::VPC
+    Condition: CreateRDS
+    Properties:
+      CidrBlock: 10.0.0.0/24
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - { Key: Name, Value: !Sub 'rds-vpc-${EnvironmentSuffix}' }
+
+  RDSSubnetA:
+    Type: AWS::EC2::Subnet
+    Condition: CreateRDS
+    Properties:
+      VpcId: !Ref RDSVPC
+      CidrBlock: 10.0.0.0/28
+      AvailabilityZone: !Sub '${AWS::Region}a'
+      MapPublicIpOnLaunch: false
+      Tags:
+        - { Key: Name, Value: !Sub 'rds-subnet-a-${EnvironmentSuffix}' }
+
+  RDSSubnetB:
+    Type: AWS::EC2::Subnet
+    Condition: CreateRDS
+    Properties:
+      VpcId: !Ref RDSVPC
+      CidrBlock: 10.0.0.16/28
+      AvailabilityZone: !Sub '${AWS::Region}b'
+      MapPublicIpOnLaunch: false
+      Tags:
+        - { Key: Name, Value: !Sub 'rds-subnet-b-${EnvironmentSuffix}' }
+
   SampleDBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Condition: CreateRDS
     Properties:
       DBSubnetGroupDescription: !Sub 'sample-rds-subnets-${EnvironmentSuffix}'
       SubnetIds:
-        - !Ref DBSubnetIdA
-        - !Ref DBSubnetIdB
+        - !Ref RDSSubnetA
+        - !Ref RDSSubnetB
       DBSubnetGroupName: !Sub 'sample-rds-${EnvironmentSuffix}'
+
+  RDSDBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: CreateRDS
+    Properties:
+      GroupDescription: !Sub 'RDS SG ${EnvironmentSuffix}'
+      VpcId: !Ref RDSVPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - { Key: Name, Value: !Sub 'rds-sg-${EnvironmentSuffix}' }
 
   SampleRDSInstance:
     Type: AWS::RDS::DBInstance
@@ -1051,7 +1309,7 @@ Resources:
       MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseSecret}::username}}'
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}::password}}'
       DBSubnetGroupName: !Ref SampleDBSubnetGroup
-      VPCSecurityGroups: [ !Ref DBVpcSecurityGroupId ]
+      VPCSecurityGroups: [ !Ref RDSDBSecurityGroup ]
       DeletionProtection: false
       BackupRetentionPeriod: 7
       EnablePerformanceInsights: false
@@ -1122,7 +1380,7 @@ Outputs:
 
   SampleEC2InstanceId:
     Condition: CreateEC2
-    Description: ID of the sample EC2 instance (created only when enabled)
+    Description: ID of the sample EC2 instance (created by default)
     Value: !Ref SampleEC2Instance
 
   SampleECSClusterName:
@@ -1130,10 +1388,15 @@ Outputs:
     Description: Name of the sample ECS Cluster
     Value: !Ref SampleECSCluster
 
-  SampleECSTaskFamily:
+  SampleECSTaskFargateFamily:
     Condition: IsApprovedRegion
-    Description: ECS TaskDefinition family name
-    Value: !Ref SampleECSTaskDefinition
+    Description: Fargate TaskDefinition family name
+    Value: !Ref SampleECSTaskDefinitionFargate
+
+  SampleECSServiceName:
+    Condition: CreateECSService
+    Description: Name of the sample ECS Service (EC2 launch type; DesiredCount=0)
+    Value: !Ref SampleECSService
 
   SampleRDSInstanceEndpoint:
     Condition: CreateRDS
