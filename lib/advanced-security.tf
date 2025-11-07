@@ -3,11 +3,11 @@
 
 # Falco Runtime Security
 resource "helm_release" "falco" {
-  name       = "falco"
-  repository = "https://falcosecurity.github.io/charts"
-  chart      = "falco"
-  version    = "3.8.4"
-  namespace  = "falco-system"
+  name             = "falco"
+  repository       = "https://falcosecurity.github.io/charts"
+  chart            = "falco"
+  version          = "3.8.4"
+  namespace        = "falco-system"
   create_namespace = true
 
   values = [
@@ -27,7 +27,7 @@ resource "helm_release" "falco" {
           enabled = true
           url     = "http://falcosidekick:2801"
         }
-        jsonOutput = true
+        jsonOutput                = true
         jsonIncludeOutputProperty = true
 
         rulesFile = [
@@ -69,28 +69,28 @@ resource "helm_release" "falco" {
         "custom-rules.yaml" = yamlencode({
           customRules = [
             {
-              rule = "Unauthorized Process in Container"
-              desc = "Detect unauthorized process execution in containers"
+              rule      = "Unauthorized Process in Container"
+              desc      = "Detect unauthorized process execution in containers"
               condition = "spawned_process and container and not container.image.repository in (allowed_images)"
-              output = "Unauthorized process started in container (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)"
-              priority = "WARNING"
-              tags = ["container", "process", "security"]
+              output    = "Unauthorized process started in container (user=%user.name command=%proc.cmdline container=%container.name image=%container.image.repository)"
+              priority  = "WARNING"
+              tags      = ["container", "process", "security"]
             },
             {
-              rule = "Sensitive File Access"
-              desc = "Detect access to sensitive files"
+              rule      = "Sensitive File Access"
+              desc      = "Detect access to sensitive files"
               condition = "open_read and sensitive_files and not trusted_binaries"
-              output = "Sensitive file opened for reading (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name)"
-              priority = "WARNING"
-              tags = ["filesystem", "security"]
+              output    = "Sensitive file opened for reading (user=%user.name command=%proc.cmdline file=%fd.name container=%container.name)"
+              priority  = "WARNING"
+              tags      = ["filesystem", "security"]
             },
             {
-              rule = "Cryptocurrency Mining Detected"
-              desc = "Detect cryptocurrency mining activity"
+              rule      = "Cryptocurrency Mining Detected"
+              desc      = "Detect cryptocurrency mining activity"
               condition = "spawned_process and ((proc.name in (crypto_miners)) or (proc.cmdline contains \"stratum+tcp\"))"
-              output = "Cryptocurrency mining detected (user=%user.name command=%proc.cmdline container=%container.name)"
-              priority = "CRITICAL"
-              tags = ["cryptomining", "malware"]
+              output    = "Cryptocurrency mining detected (user=%user.name command=%proc.cmdline container=%container.name)"
+              priority  = "CRITICAL"
+              tags      = ["cryptomining", "malware"]
             }
           ]
         })
@@ -113,19 +113,19 @@ resource "helm_release" "falcosidekick" {
     yamlencode({
       config = {
         slack = {
-          webhookurl = var.slack_webhook_url
+          webhookurl      = var.slack_webhook_url
           minimumpriority = "warning"
         }
 
         aws = {
           cloudwatchlogs = {
-            loggroup = aws_cloudwatch_log_group.falco_alerts.name
+            loggroup  = aws_cloudwatch_log_group.falco_alerts.name
             logstream = "falco-alerts"
-            region = var.aws_region
+            region    = var.aws_region
           }
 
           securityhub = {
-            region = var.aws_region
+            region          = var.aws_region
             minimumpriority = "warning"
           }
         }
@@ -160,26 +160,26 @@ resource "helm_release" "falcosidekick" {
 
 # Open Policy Agent (OPA) Gatekeeper
 resource "helm_release" "opa_gatekeeper" {
-  name       = "gatekeeper"
-  repository = "https://open-policy-agent.github.io/gatekeeper/charts"
-  chart      = "gatekeeper"
-  version    = "3.14.0"
-  namespace  = "gatekeeper-system"
+  name             = "gatekeeper"
+  repository       = "https://open-policy-agent.github.io/gatekeeper/charts"
+  chart            = "gatekeeper"
+  version          = "3.14.0"
+  namespace        = "gatekeeper-system"
   create_namespace = true
 
   values = [
     yamlencode({
       replicas = 3
 
-      auditInterval = 60
+      auditInterval             = 60
       constraintViolationsLimit = 20
-      auditFromCache = true
+      auditFromCache            = true
 
       validatingWebhookTimeoutSeconds = 10
-      validatingWebhookFailurePolicy = "Fail"
+      validatingWebhookFailurePolicy  = "Fail"
 
       mutatingWebhookTimeoutSeconds = 5
-      mutatingWebhookFailurePolicy = "Fail"
+      mutatingWebhookFailurePolicy  = "Fail"
 
       resources = {
         limits = {
@@ -202,10 +202,10 @@ resource "helm_release" "opa_gatekeeper" {
       }]
 
       podSecurityContext = {
-        fsGroup = 999
+        fsGroup            = 999
         supplementalGroups = [999]
-        runAsNonRoot = true
-        runAsUser = 1000
+        runAsNonRoot       = true
+        runAsUser          = 1000
       }
     })
   ]
@@ -247,7 +247,7 @@ resource "kubernetes_manifest" "k8srequiredlabels_template" {
       }
       targets = [{
         target = "admission.k8s.gatekeeper.sh"
-        rego = <<-EOT
+        rego   = <<-EOT
           package k8srequiredlabels
 
           violation[{"msg": msg, "details": {"missing_labels": missing}}] {
@@ -314,7 +314,7 @@ resource "kubernetes_manifest" "pod_security_template" {
       }
       targets = [{
         target = "admission.k8s.gatekeeper.sh"
-        rego = <<-EOT
+        rego   = <<-EOT
           package k8spodsecurity
 
           violation[{"msg": msg}] {
@@ -366,7 +366,7 @@ resource "kubernetes_manifest" "network_policy_template" {
       }
       targets = [{
         target = "admission.k8s.gatekeeper.sh"
-        rego = <<-EOT
+        rego   = <<-EOT
           package k8snetworkpolicyrequired
 
           violation[{"msg": msg}] {
@@ -388,11 +388,11 @@ resource "kubernetes_manifest" "network_policy_template" {
 
 # Kyverno for additional policy management
 resource "helm_release" "kyverno" {
-  name       = "kyverno"
-  repository = "https://kyverno.github.io/kyverno"
-  chart      = "kyverno"
-  version    = "3.1.0"
-  namespace  = "kyverno"
+  name             = "kyverno"
+  repository       = "https://kyverno.github.io/kyverno"
+  chart            = "kyverno"
+  version          = "3.1.0"
+  namespace        = "kyverno"
   create_namespace = true
 
   values = [
@@ -447,7 +447,7 @@ resource "kubernetes_manifest" "verify_images_policy" {
         match = {
           any = [{
             resources = {
-              kinds = ["Pod"]
+              kinds      = ["Pod"]
               namespaces = ["production", "staging"]
             }
           }]
@@ -556,7 +556,7 @@ resource "aws_cloudwatch_event_target" "sns" {
 
 # SNS Topic for security alerts
 resource "aws_sns_topic" "security_alerts" {
-  name = "${var.cluster_name}-${var.environment_suffix}-security-alerts"
+  name              = "${var.cluster_name}-${var.environment_suffix}-security-alerts"
   kms_master_key_id = aws_kms_key.eks.id
 
   tags = {

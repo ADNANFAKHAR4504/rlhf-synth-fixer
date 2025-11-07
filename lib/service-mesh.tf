@@ -92,7 +92,7 @@ resource "aws_acmpca_certificate_authority" "mesh_ca" {
   }
 
   permanent_deletion_time_in_days = 7
-  enabled                          = true
+  enabled                         = true
 
   tags = {
     Name        = "${var.cluster_name}-${var.environment_suffix}-mesh-ca"

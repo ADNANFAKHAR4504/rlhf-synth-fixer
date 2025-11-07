@@ -7,7 +7,7 @@ resource "kubernetes_namespace" "argocd" {
     name = "argocd"
     labels = {
       "app.kubernetes.io/managed-by" = "Terraform"
-      "environment"                   = var.environment_suffix
+      "environment"                  = var.environment_suffix
     }
   }
 }
@@ -30,7 +30,7 @@ resource "helm_release" "argocd" {
 
       configs = {
         params = {
-          "server.insecure" = false
+          "server.insecure"     = false
           "server.disable.auth" = false
         }
 
@@ -43,8 +43,8 @@ resource "helm_release" "argocd" {
         }
 
         cm = {
-          "kustomize.buildOptions" = "--enable-helm --enable-alpha-plugins"
-          "application.instanceLabelKey" = "argocd.argoproj.io/instance"
+          "kustomize.buildOptions"                                 = "--enable-helm --enable-alpha-plugins"
+          "application.instanceLabelKey"                           = "argocd.argoproj.io/instance"
           "resource.customizations.health.argoproj.io_Application" = <<-EOT
             hs = {}
             hs.status = "Progressing"
@@ -62,32 +62,32 @@ resource "helm_release" "argocd" {
 
       server = {
         autoscaling = {
-          enabled     = true
-          minReplicas = 2
-          maxReplicas = 5
+          enabled                        = true
+          minReplicas                    = 2
+          maxReplicas                    = 5
           targetCPUUtilizationPercentage = 70
         }
 
         service = {
           type = "LoadBalancer"
           annotations = {
-            "service.beta.kubernetes.io/aws-load-balancer-type"            = "nlb"
+            "service.beta.kubernetes.io/aws-load-balancer-type"             = "nlb"
             "service.beta.kubernetes.io/aws-load-balancer-backend-protocol" = "tcp"
-            "service.beta.kubernetes.io/aws-load-balancer-ssl-cert"        = aws_acm_certificate.argocd.arn
-            "service.beta.kubernetes.io/aws-load-balancer-ssl-ports"       = "443"
+            "service.beta.kubernetes.io/aws-load-balancer-ssl-cert"         = aws_acm_certificate.argocd.arn
+            "service.beta.kubernetes.io/aws-load-balancer-ssl-ports"        = "443"
           }
         }
 
         ingress = {
-          enabled = true
+          enabled          = true
           ingressClassName = "alb"
           annotations = {
-            "alb.ingress.kubernetes.io/scheme"      = "internet-facing"
-            "alb.ingress.kubernetes.io/target-type" = "ip"
+            "alb.ingress.kubernetes.io/scheme"          = "internet-facing"
+            "alb.ingress.kubernetes.io/target-type"     = "ip"
             "alb.ingress.kubernetes.io/certificate-arn" = aws_acm_certificate.argocd.arn
             "alb.ingress.kubernetes.io/ssl-policy"      = "ELBSecurityPolicy-TLS13-1-2-2021-06"
             "alb.ingress.kubernetes.io/listen-ports" = jsonencode([
-              {HTTP = 80}, {HTTPS = 443}
+              { HTTP = 80 }, { HTTPS = 443 }
             ])
             "alb.ingress.kubernetes.io/actions.ssl-redirect" = jsonencode({
               Type = "redirect"
@@ -104,13 +104,13 @@ resource "helm_release" "argocd" {
           paths = ["/"]
           tls = [{
             secretName = "argocd-server-tls"
-            hosts = ["argocd.${var.cluster_name}.${var.domain_name}"]
+            hosts      = ["argocd.${var.cluster_name}.${var.domain_name}"]
           }]
         }
 
         rbacConfig = {
           "policy.default" = "role:readonly"
-          "policy.csv" = <<-EOT
+          "policy.csv"     = <<-EOT
             p, role:admin, applications, *, */*, allow
             p, role:admin, clusters, *, *, allow
             p, role:admin, repositories, *, *, allow
@@ -135,9 +135,9 @@ resource "helm_release" "argocd" {
 
       repoServer = {
         autoscaling = {
-          enabled     = true
-          minReplicas = 2
-          maxReplicas = 5
+          enabled                        = true
+          minReplicas                    = 2
+          maxReplicas                    = 5
           targetCPUUtilizationPercentage = 70
         }
       }
@@ -160,7 +160,7 @@ resource "helm_release" "argocd" {
               clientID     = "$dex.github.clientID"
               clientSecret = "$dex.github.clientSecret"
               orgs = [{
-                name = var.github_org
+                name  = var.github_org
                 teams = ["argocd-admins", "developers"]
               }]
             }
@@ -203,8 +203,8 @@ resource "kubernetes_manifest" "app_of_apps" {
     apiVersion = "argoproj.io/v1alpha1"
     kind       = "Application"
     metadata = {
-      name      = "app-of-apps"
-      namespace = kubernetes_namespace.argocd.metadata[0].name
+      name       = "app-of-apps"
+      namespace  = kubernetes_namespace.argocd.metadata[0].name
       finalizers = ["resources-finalizer.argocd.argoproj.io"]
     }
     spec = {
@@ -508,7 +508,7 @@ resource "helm_release" "sealed_secrets" {
         }
       }
       rbac = {
-        create = true
+        create     = true
         pspEnabled = false
       }
       serviceAccount = {

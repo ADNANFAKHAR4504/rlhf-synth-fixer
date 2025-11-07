@@ -3,11 +3,11 @@
 
 # Kubecost for Kubernetes cost monitoring
 resource "helm_release" "kubecost" {
-  name       = "kubecost"
-  repository = "https://kubecost.github.io/cost-analyzer"
-  chart      = "cost-analyzer"
-  version    = "1.106.3"
-  namespace  = "kubecost"
+  name             = "kubecost"
+  repository       = "https://kubecost.github.io/cost-analyzer"
+  chart            = "cost-analyzer"
+  version          = "1.106.3"
+  namespace        = "kubecost"
   create_namespace = true
 
   values = [
@@ -19,7 +19,7 @@ resource "helm_release" "kubecost" {
         }
 
         grafana = {
-          enabled = true
+          enabled    = true
           domainName = "kubecost.${var.cluster_name}.${var.domain_name}"
         }
       }
@@ -31,16 +31,16 @@ resource "helm_release" "kubecost" {
         awsSpotDataBucket = aws_s3_bucket.spot_data.id
         awsSpotDataPrefix = "spot-data"
 
-        athenaProjectID         = "${var.cluster_name}-cost-analysis"
-        athenaBucketName        = aws_s3_bucket.cost_reports.id
-        athenaRegion            = var.aws_region
-        athenaDatabase          = aws_glue_catalog_database.cost_reports.name
-        athenaTable             = "cost_and_usage_report"
-        athenaWorkgroup         = aws_athena_workgroup.cost_analysis.name
+        athenaProjectID  = "${var.cluster_name}-cost-analysis"
+        athenaBucketName = aws_s3_bucket.cost_reports.id
+        athenaRegion     = var.aws_region
+        athenaDatabase   = aws_glue_catalog_database.cost_reports.name
+        athenaTable      = "cost_and_usage_report"
+        athenaWorkgroup  = aws_athena_workgroup.cost_analysis.name
       }
 
       costModel = {
-        spotPricingEnabled = true
+        spotPricingEnabled  = true
         networkCostsEnabled = true
 
         customPricing = {
@@ -82,7 +82,7 @@ resource "helm_release" "kubecost" {
         }
 
         etl = {
-          enabled = true
+          enabled                           = true
           maxPrometheusQueryDurationMinutes = 1440
         }
       }
@@ -101,11 +101,11 @@ resource "helm_release" "kubecost" {
       }
 
       ingress = {
-        enabled = true
+        enabled   = true
         className = "alb"
         annotations = {
-          "alb.ingress.kubernetes.io/scheme"      = "internet-facing"
-          "alb.ingress.kubernetes.io/target-type" = "ip"
+          "alb.ingress.kubernetes.io/scheme"          = "internet-facing"
+          "alb.ingress.kubernetes.io/target-type"     = "ip"
           "alb.ingress.kubernetes.io/certificate-arn" = aws_acm_certificate.kubecost.arn
         }
         hosts = ["kubecost.${var.cluster_name}.${var.domain_name}"]
@@ -316,11 +316,11 @@ resource "aws_iam_role_policy" "kubecost" {
 
 # KEDA for advanced autoscaling
 resource "helm_release" "keda" {
-  name       = "keda"
-  repository = "https://kedacore.github.io/charts"
-  chart      = "keda"
-  version    = "2.12.1"
-  namespace  = "keda"
+  name             = "keda"
+  repository       = "https://kedacore.github.io/charts"
+  chart            = "keda"
+  version          = "2.12.1"
+  namespace        = "keda"
   create_namespace = true
 
   values = [
@@ -401,10 +401,10 @@ resource "kubernetes_manifest" "predictive_scaler" {
         {
           type = "aws-cloudwatch"
           metadata = {
-            awsRegion    = var.aws_region
-            namespace    = "AWS/EKS"
-            metricName   = "node_cpu_utilization"
-            dimensions   = jsonencode({
+            awsRegion  = var.aws_region
+            namespace  = "AWS/EKS"
+            metricName = "node_cpu_utilization"
+            dimensions = jsonencode({
               ClusterName = aws_eks_cluster.main.name
             })
             targetMetricValue = "70"
@@ -452,20 +452,20 @@ resource "kubernetes_manifest" "predictive_scaler" {
 
 # Karpenter for advanced node autoscaling
 resource "helm_release" "karpenter" {
-  name       = "karpenter"
-  repository = "oci://public.ecr.aws/karpenter"
-  chart      = "karpenter"
-  version    = "v0.33.0"
-  namespace  = "karpenter"
+  name             = "karpenter"
+  repository       = "oci://public.ecr.aws/karpenter"
+  chart            = "karpenter"
+  version          = "v0.33.0"
+  namespace        = "karpenter"
   create_namespace = true
 
   values = [
     yamlencode({
       settings = {
         aws = {
-          clusterName           = aws_eks_cluster.main.name
+          clusterName            = aws_eks_cluster.main.name
           defaultInstanceProfile = aws_iam_instance_profile.karpenter_node.name
-          interruptionQueueName = aws_sqs_queue.karpenter_interruption.name
+          interruptionQueueName  = aws_sqs_queue.karpenter_interruption.name
         }
       }
 
@@ -710,20 +710,20 @@ resource "aws_cloudwatch_event_target" "karpenter_interruption" {
 
 # Lambda for cost anomaly detection
 resource "aws_lambda_function" "cost_anomaly_detector" {
-  filename         = "${path.module}/lambda/cost-anomaly-detector.zip"
-  function_name    = "${var.cluster_name}-${var.environment_suffix}-cost-anomaly"
-  role            = aws_iam_role.cost_anomaly_lambda.arn
-  handler         = "index.handler"
-  runtime         = "python3.11"
-  timeout         = 60
+  filename      = "${path.module}/lambda/cost-anomaly-detector.zip"
+  function_name = "${var.cluster_name}-${var.environment_suffix}-cost-anomaly"
+  role          = aws_iam_role.cost_anomaly_lambda.arn
+  handler       = "index.handler"
+  runtime       = "python3.11"
+  timeout       = 60
 
   environment {
     variables = {
-      SNS_TOPIC_ARN = aws_sns_topic.cost_alerts.arn
+      SNS_TOPIC_ARN        = aws_sns_topic.cost_alerts.arn
       THRESHOLD_PERCENTAGE = "20"
-      ATHENA_DATABASE = aws_glue_catalog_database.cost_reports.name
-      ATHENA_WORKGROUP = aws_athena_workgroup.cost_analysis.name
-      S3_OUTPUT_LOCATION = "s3://${aws_s3_bucket.cost_reports.id}/athena-results/"
+      ATHENA_DATABASE      = aws_glue_catalog_database.cost_reports.name
+      ATHENA_WORKGROUP     = aws_athena_workgroup.cost_analysis.name
+      S3_OUTPUT_LOCATION   = "s3://${aws_s3_bucket.cost_reports.id}/athena-results/"
     }
   }
 

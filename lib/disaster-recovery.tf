@@ -47,10 +47,10 @@ resource "aws_subnet" "dr_private" {
   availability_zone = data.aws_availability_zones.dr_available.names[count.index]
 
   tags = {
-    Name                              = "${var.cluster_name}-${var.environment_suffix}-dr-private-${count.index + 1}"
+    Name                                                                     = "${var.cluster_name}-${var.environment_suffix}-dr-private-${count.index + 1}"
     "kubernetes.io/cluster/${var.cluster_name}-${var.environment_suffix}-dr" = "shared"
-    "kubernetes.io/role/internal-elb" = "1"
-    Environment                       = var.environment_suffix
+    "kubernetes.io/role/internal-elb"                                        = "1"
+    Environment                                                              = var.environment_suffix
   }
 }
 
@@ -64,19 +64,19 @@ resource "aws_subnet" "dr_public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name                              = "${var.cluster_name}-${var.environment_suffix}-dr-public-${count.index + 1}"
+    Name                                                                     = "${var.cluster_name}-${var.environment_suffix}-dr-public-${count.index + 1}"
     "kubernetes.io/cluster/${var.cluster_name}-${var.environment_suffix}-dr" = "shared"
-    "kubernetes.io/role/elb"         = "1"
-    Environment                       = var.environment_suffix
+    "kubernetes.io/role/elb"                                                 = "1"
+    Environment                                                              = var.environment_suffix
   }
 }
 
 # VPC Peering between primary and DR regions
 resource "aws_vpc_peering_connection" "primary_to_dr" {
-  vpc_id        = aws_vpc.main.id
-  peer_vpc_id   = aws_vpc.dr_main.id
-  peer_region   = var.dr_aws_region
-  auto_accept   = false
+  vpc_id      = aws_vpc.main.id
+  peer_vpc_id = aws_vpc.dr_main.id
+  peer_region = var.dr_aws_region
+  auto_accept = false
 
   tags = {
     Name        = "${var.cluster_name}-${var.environment_suffix}-primary-to-dr"
@@ -275,11 +275,11 @@ resource "aws_db_subnet_group" "dr_rds" {
 }
 
 resource "aws_db_instance" "dr_read_replica" {
-  provider               = aws.dr_region
-  identifier             = "${var.cluster_name}-${var.environment_suffix}-dr-replica"
-  replicate_source_db    = aws_db_instance.main.arn
-  instance_class         = "db.t3.medium"
-  publicly_accessible    = false
+  provider                   = aws.dr_region
+  identifier                 = "${var.cluster_name}-${var.environment_suffix}-dr-replica"
+  replicate_source_db        = aws_db_instance.main.arn
+  instance_class             = "db.t3.medium"
+  publicly_accessible        = false
   auto_minor_version_upgrade = false
   backup_retention_period    = 7
   backup_window              = "03:00-04:00"
@@ -485,8 +485,8 @@ resource "aws_route53_record" "dr" {
 
 # AWS Backup for automated cross-region backups
 resource "aws_backup_vault" "dr" {
-  provider = aws.dr_region
-  name     = "${var.cluster_name}-${var.environment_suffix}-dr-vault"
+  provider    = aws.dr_region
+  name        = "${var.cluster_name}-${var.environment_suffix}-dr-vault"
   kms_key_arn = aws_kms_key.dr_eks.arn
 
   tags = {
@@ -590,13 +590,13 @@ resource "aws_cloudwatch_dashboard" "dr_monitoring" {
 
 # Lambda for automated failover orchestration
 resource "aws_lambda_function" "dr_failover" {
-  provider         = aws.dr_region
-  filename         = "${path.module}/lambda/dr-failover.zip"
-  function_name    = "${var.cluster_name}-${var.environment_suffix}-dr-failover"
-  role            = aws_iam_role.dr_lambda.arn
-  handler         = "index.handler"
-  runtime         = "python3.11"
-  timeout         = 900
+  provider      = aws.dr_region
+  filename      = "${path.module}/lambda/dr-failover.zip"
+  function_name = "${var.cluster_name}-${var.environment_suffix}-dr-failover"
+  role          = aws_iam_role.dr_lambda.arn
+  handler       = "index.handler"
+  runtime       = "python3.11"
+  timeout       = 900
 
   environment {
     variables = {
