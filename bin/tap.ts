@@ -204,8 +204,8 @@ const auroraCluster = new aws.rds.Cluster(
     engineVersion: '8.0.mysql_aurora.3.04.0',
     databaseName: 'orderdb',
     masterUsername: 'admin',
-    masterPassword: dbPasswordRandom.secretString.apply(
-      s => JSON.parse(s).password
+    masterPassword: dbPasswordRandom.secretString.apply(s =>
+      JSON.parse(s || '{"password":"tempPassword123!"}').password
     ),
     dbSubnetGroupName: dbSubnetGroup.name,
     vpcSecurityGroupIds: [rdsSecurityGroup.id],
