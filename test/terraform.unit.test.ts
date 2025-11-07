@@ -134,16 +134,6 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(content).toContain('special = true');
     });
 
-    test('should have aws_db_instance payment_db configured', () => {
-      const databasePath = path.join(libPath, 'database.tf');
-      const content = fs.readFileSync(databasePath, 'utf-8');
-
-      expect(content).toContain('resource "aws_db_instance" "payment_db"');
-      expect(content).toContain('multi_az            = true');
-      expect(content).toContain('encrypted           = true');
-      expect(content).toContain('parameter_group_name = aws_db_parameter_group.postgres_ssl.name');
-    });
-  });
 
   describe('Monitoring Configuration', () => {
     test('should have GuardDuty detector feature for S3 protection', () => {
@@ -243,37 +233,53 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(content).toContain('resource "aws_security_group_rule" "app_to_db"');
       expect(content).toContain('resource "aws_security_group_rule" "db_from_app"');
     });
+  test('should have aws_db_instance payment_db configured', () => {
+  const databasePath = path.join(libPath, 'database.tf');
+  const content = fs.readFileSync(databasePath, 'utf-8');
 
-    test('should have IAM roles and policies for EC2 and Config', () => {
-      const securityPath = path.join(libPath, 'security.tf');
-      const content = fs.readFileSync(securityPath, 'utf-8');
+  expect(content).toContain('resource "aws_db_instance" "payment_db"');
+  expect(content).toContain('multi_az            = true');
 
-      expect(content).toContain('resource "aws_iam_role" "ec2_payment_processing"');
-      expect(content).toContain('resource "aws_iam_role_policy" "ec2_session_policy"');
-      expect(content).toContain('resource "aws_iam_instance_profile" "ec2_payment_processing"');
-      expect(content).toContain('resource "aws_iam_role" "config"');
-      expect(content).toContain('resource "aws_iam_role_policy" "config_s3"');
-    });
+  // Relaxed whitespace for storage_encrypted check
+  expect(content).toMatch(/storage_encrypted\s*=\s*true/);
+
+  expect(content).toContain('parameter_group_name = aws_db_parameter_group.postgres_ssl.name');
+});
+
+test('should have IAM roles and policies for EC2 and Config', () => {
+  const securityPath = path.join(libPath, 'security.tf');
+  const content = fs.readFileSync(securityPath, 'utf-8');
+
+  // Use regex with whitespace tolerance and split checks for safer validation
+  expect(content).toMatch(/resource\s+"aws_iam_role"\s+"config"/);
+  expect(content).toContain('resource "aws_iam_role_policy" "config_s3"');
+  expect(content).toContain('resource "aws_iam_role" "ec2_payment_processing"');
+  expect(content).toContain('resource "aws_iam_role_policy" "ec2_session_policy"');
+  expect(content).toContain('resource "aws_iam_instance_profile" "ec2_payment_processing"');
+});
+
+test('should use environment_suffix consistently in resource names', () => {
+  const allTfFiles = fs.readdirSync(libPath).filter(f => f.endsWith('.tf'));
+  allTfFiles.forEach(file => {
+    const filePath = path.join(libPath, file);
+    const content = fs.readFileSync(filePath, 'utf-8');
+
+    // Use regex to find var.environment_suffix usage, ignoring exact string format
+    expect(/var\.environment_suffix/.test(content)).toBe(true);
   });
+});
 
-  describe('Tagging and Naming Conventions', () => {
-    test('should use environment_suffix consistently in resource names', () => {
-      const allTfFiles = fs.readdirSync(libPath).filter(f => f.endsWith('.tf'));
-      allTfFiles.forEach(file => {
-        const filePath = path.join(libPath, file);
-        const content = fs.readFileSync(filePath, 'utf-8');
-        expect(content.includes('${var.environment_suffix}') || content.includes('var.environment_suffix')).toBeTruthy();
-      });
-    });
+test('should merge tags variable in all resources', () => {
+  const allTfFiles = fs.readdirSync(libPath).filter(f => f.endsWith('.tf'));
+  allTfFiles.forEach(file => {
+    const filePath = path.join(libPath, file);
+    const content = fs.readFileSync(filePath, 'utf-8');
 
-    test('should merge tags variable in all resources', () => {
-      const allTfFiles = fs.readdirSync(libPath).filter(f => f.endsWith('.tf'));
-      allTfFiles.forEach(file => {
-        const filePath = path.join(libPath, file);
-        const content = fs.readFileSync(filePath, 'utf-8');
-        expect(content.includes('merge(var.tags')).toBeTruthy();
-      });
-    });
+    // Use regex to check for merge(var.tags, ...) pattern with optional spaces
+    expect(/merge\(\s*var\.tags/.test(content)).toBe(true);
+  });
+});
+
   });
 });
 
