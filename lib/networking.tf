@@ -30,7 +30,7 @@ resource "aws_internet_gateway" "main" {
 
 # Public Subnets
 resource "aws_subnet" "public" {
-  count = var.create_vpc ? var.availability_zones_count : 0
+  count = var.create_vpc ? local.az_count : 0
 
   vpc_id                  = aws_vpc.main[0].id
   cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index)
@@ -48,10 +48,10 @@ resource "aws_subnet" "public" {
 
 # Private Subnets
 resource "aws_subnet" "private" {
-  count = var.create_vpc ? var.availability_zones_count : 0
+  count = var.create_vpc ? local.az_count : 0
 
   vpc_id            = aws_vpc.main[0].id
-  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + var.availability_zones_count)
+  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + local.az_count)
   availability_zone = local.azs[count.index]
 
   tags = merge(
@@ -65,7 +65,7 @@ resource "aws_subnet" "private" {
 
 # Elastic IPs for NAT Gateways
 resource "aws_eip" "nat" {
-  count = var.create_vpc ? var.availability_zones_count : 0
+  count = var.create_vpc ? local.az_count : 0
 
   domain = "vpc"
 
@@ -81,7 +81,7 @@ resource "aws_eip" "nat" {
 
 # NAT Gateways
 resource "aws_nat_gateway" "main" {
-  count = var.create_vpc ? var.availability_zones_count : 0
+  count = var.create_vpc ? local.az_count : 0
 
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
@@ -117,7 +117,7 @@ resource "aws_route_table" "public" {
 
 # Public Route Table Association
 resource "aws_route_table_association" "public" {
-  count = var.create_vpc ? var.availability_zones_count : 0
+  count = var.create_vpc ? local.az_count : 0
 
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public[0].id
@@ -125,7 +125,7 @@ resource "aws_route_table_association" "public" {
 
 # Private Route Tables (one per AZ for NAT Gateway)
 resource "aws_route_table" "private" {
-  count = var.create_vpc ? var.availability_zones_count : 0
+  count = var.create_vpc ? local.az_count : 0
 
   vpc_id = aws_vpc.main[0].id
 
@@ -144,7 +144,7 @@ resource "aws_route_table" "private" {
 
 # Private Route Table Association
 resource "aws_route_table_association" "private" {
-  count = var.create_vpc ? var.availability_zones_count : 0
+  count = var.create_vpc ? local.az_count : 0
 
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private[count.index].id
