@@ -122,7 +122,7 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       const euWest1VpcAssociated = vpcAssociations.some(
         vpc => vpc.VPCId === euWest1VpcId
       );
-      
+
       expect(euWest1VpcAssociated).toBe(true);
     });
 
@@ -143,7 +143,7 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       const apSoutheast1VpcAssociated = vpcAssociations.some(
         vpc => vpc.VPCId === apSoutheast1VpcId
       );
-      
+
       expect(apSoutheast1VpcAssociated).toBe(true);
     });
   });
