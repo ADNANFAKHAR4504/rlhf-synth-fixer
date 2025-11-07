@@ -11,8 +11,8 @@ import * as path from 'path';
 const libDir = path.resolve(__dirname, '../lib');
 
 describe('Terraform Configuration - Payment Processing Migration Infrastructure', () => {
-  let tfConfig = {};
-  let tfvars = {};
+  let tfConfig: Record<string, { content: string }> = {};
+  let tfvars: Record<string, string> = {};
 
   beforeAll(() => {
     // Load and parse all Terraform files
