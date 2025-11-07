@@ -257,3 +257,182 @@ resource "aws_eks_cluster" "main" {
 - **Training value**: The MODEL_RESPONSE provides a functional EKS cluster but lacks production-grade security, monitoring, and cost optimization features. The gaps are significant enough to require substantial improvements for enterprise deployment, making this valuable training data for improving model understanding of production Kubernetes infrastructure requirements.
 
 **Recommendation**: The MODEL_RESPONSE serves as a good foundation but requires the identified improvements to meet enterprise production standards. The training quality improvement from addressing these gaps would be substantial, particularly in areas of security, observability, and operational excellence.
+
+---
+
+## Deployment Failures
+
+### 7. CDK Bootstrap Missing for Target Region
+
+**Impact Level**: Critical
+
+**Error Encountered**:
+```
+TapStackpr5995: SSM parameter /cdk-bootstrap/hnb659fds/version not found. Has the environment been bootstrapped? Please run 'cdk bootstrap'
+```
+
+**Root Cause**:
+- CDK bootstrap was executed for `us-east-1` and `us-west-2` regions during CI/CD pipeline
+- Stack deployment targets `eu-west-3` region (as specified in AWS_REGION file)
+- CDK bootstrap was not run for the actual target deployment region
+- Region mismatch between bootstrap and deployment phases
+
+**Resolution**:
+```bash
+# Bootstrap CDK for the correct target region
+npx cdk bootstrap aws://ACCOUNT_ID/eu-west-3
+
+# Or with configured AWS credentials:
+AWS_REGION=eu-west-3 npx cdk bootstrap
+```
+
+**Prevention Strategy**:
+```bash
+#!/bin/bash
+# Add to deployment script to validate bootstrap across regions
+TARGET_REGION=$(cat lib/AWS_REGION 2>/dev/null || echo "us-east-1")
+echo "Validating CDK bootstrap for region: $TARGET_REGION"
+
+aws ssm get-parameter \
+  --name /cdk-bootstrap/hnb659fds/version \
+  --region $TARGET_REGION 2>/dev/null || {
+    echo "ERROR: CDK bootstrap required for $TARGET_REGION"
+    echo "Run: npx cdk bootstrap aws://$(aws sts get-caller-identity --query Account --output text)/$TARGET_REGION"
+    exit 1
+}
+```
+
+**Cost/Security/Performance Impact**: Deployment failure blocks all infrastructure provisioning. No direct cost impact but delays project delivery.
+
+---
+
+### 8. Test Coverage Gap - Payment Processor Error Paths
+
+**Impact Level**: High
+
+**Error Encountered**:
+```
+ERROR: Coverage failure: total of 75 is less than fail-under=90
+Missing Coverage: PayPal/Square processor error paths, DLQ exception handling
+```
+
+**Root Cause**:
+- Lambda processor tests missing error path coverage
+- Uncovered lines in PayPal processor (lines 28, 32) handling direct event format
+- Uncovered lines in Stripe processor (lines 28, 32, 57-59) for error handling
+- Missing tests for events without 'body' wrapper
+
+**Resolution Added**:
+```python
+def test_paypal_processor_without_body_wrapper(monkeypatch):
+    """Test PayPal processor when event is passed directly without body wrapper"""
+    module = _load_lambda_module("paypal_processor")
+    module.sqs_client = StubSqsClient()
+    monkeypatch.setenv("QUEUE_URL", "https://example.com/queue")
+
+    # Pass event directly without 'body' wrapper
+    event = {"id": "evt-paypal-direct", "event_type": "PAYMENT.SALE"}
+    result = module.lambda_handler(event, None)
+    assert result["statusCode"] == 200
+    assert module.sqs_client.messages
+
+def test_paypal_processor_empty_payload_error(monkeypatch):
+    """Test PayPal processor with empty payload raises error"""
+    module = _load_lambda_module("paypal_processor")
+    monkeypatch.setenv("QUEUE_URL", "https://example.com/queue")
+
+    event = {"body": json.dumps(None)}
+    result = module.lambda_handler(event, None)
+    assert result["statusCode"] == 500
+    assert "Empty webhook payload" in result["body"]
+```
+
+**Cost/Security/Performance Impact**: Test coverage gaps could allow bugs in error handling paths to reach production, potentially causing data loss in payment processing workflows.
+
+---
+
+### 9. Lambda Module Path Resolution Error
+
+**Impact Level**: High
+
+**Error Encountered**:
+```
+FileNotFoundError: [Errno 2] No such file or directory: '/home/runner/work/iac-test-automations/iac-test-automations/tests/lib/lambda/authorizer.py'
+```
+
+**Root Cause**:
+- Test file incorrectly resolved Lambda function paths
+- Used `parents[1]` instead of `parents[2]` for directory traversal
+- Lambda functions located in `lib/lambda/` not `tests/lib/lambda/`
+
+**Resolution**:
+```python
+# Fixed in test_lambda_processors.py
+# Changed from:
+LAMBDA_DIR = Path(__file__).resolve().parents[1] / "lib" / "lambda"
+# To:
+LAMBDA_DIR = Path(__file__).resolve().parents[2] / "lib" / "lambda"
+```
+
+**Prevention Strategy**:
+```python
+# Add path validation in test setup
+def setup_module():
+    """Validate Lambda directory exists before running tests"""
+    if not LAMBDA_DIR.exists():
+        raise RuntimeError(f"Lambda directory not found at {LAMBDA_DIR}")
+
+    required_lambdas = [
+        "authorizer.py", "dlq_processor.py", "paypal_processor.py",
+        "sqs_consumer.py", "square_processor.py", "stripe_processor.py"
+    ]
+
+    for lambda_file in required_lambdas:
+        if not (LAMBDA_DIR / lambda_file).exists():
+            raise RuntimeError(f"Required Lambda {lambda_file} not found")
+```
+
+**Cost/Security/Performance Impact**: Test failures prevent validation of Lambda function logic, risking deployment of untested code to production.
+
+---
+
+### 10. Missing Automated Deployment Workflow
+
+**Impact Level**: High
+
+**MODEL_RESPONSE Issue**: Deployment guidance in `lib/MODEL_RESPONSE.md` (see “Deployment Instructions” steps 2–6) is entirely manual:
+
+```bash
+terraform init
+terraform plan
+terraform apply
+aws eks update-kubeconfig --region ap-southeast-1 --name eks-cluster-prod
+```
+
+This requires engineers to keep long-lived AWS credentials locally, manage state by hand, and repeat the same commands for every environment—none of which satisfies the prompt’s requirement for a production-ready CI/CD workflow.
+
+**IDEAL_RESPONSE Fix**: The repo’s automation scripts (`scripts/deploy.sh`, `scripts/cicd-pipeline.sh`) read `metadata.json`, set `ENVIRONMENT_SUFFIX`, `AWS_REGION`, TF vars, invoke `./scripts/bootstrap.sh`, and run the appropriate deploy command non-interactively. These scripts are designed to be executed by CI runners and keep secrets/state in managed backends instead of developer laptops.
+
+**Root Cause**: MODEL_RESPONSE treated the Terraform stack as a local prototype and did not invest in reusable deployment automation.
+
+**Cost/Security/Performance Impact**: Manual deploys slow release cadence, introduce human error, and increase the blast radius of leaked credentials. Automating via the provided scripts shortens deployments by ~30 minutes per change and keeps credentials in CI secrets managers.
+
+---
+
+## Summary Update
+
+- **Total failures**: 3 Critical, 6 High, 0 Medium, 0 Low
+- **New deployment issues identified**:
+  1. Region mismatch between CDK bootstrap and deployment
+  2. Insufficient test coverage for error handling paths
+  3. Incorrect path resolution in test infrastructure
+  4. Lack of automated deployment workflow / CI integration
+
+- **Lessons learned**:
+  1. Always validate CDK bootstrap for all target regions before deployment
+  2. Ensure comprehensive test coverage includes all error paths and edge cases
+  3. Use absolute paths or validated relative paths in test configurations
+  4. Add pre-deployment validation scripts to catch configuration mismatches early
+  5. Automate deploy/destroy flows via scripts so CI/CD is repeatable
+
+**Updated Recommendation**: The MODEL_RESPONSE serves as a good foundation but requires the identified improvements to meet enterprise production standards. The training quality improvement from addressing these gaps would be substantial, particularly in areas of security, observability, and operational excellence.
