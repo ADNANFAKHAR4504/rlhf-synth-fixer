@@ -2,7 +2,7 @@ Hey team,
 
 We need to build a payment processing infrastructure that maintains exact parity across development, staging, and production environments. A fintech startup has been struggling with configuration drift where manual changes in production aren't replicated to lower environments, causing testing failures and deployment issues. They need a solution that ensures consistency across all environments while respecting environment-specific configurations.
 
-The business wants a multi-environment AWS infrastructure that spans three separate accounts (dev: 123456789012, staging: 123456789013, prod: 123456789014) all deployed to the us-east-1 region. Each environment needs its own VPC with consistent CIDR blocks, an RDS Aurora PostgreSQL cluster, Lambda functions for payment validation, API Gateway endpoints with custom domains, S3 buckets for transaction logs, and SQS queues for async processing. The challenge is making sure these resources scale appropriately for each environment without duplicating code or creating configuration drift.
+The business wants a multi-environment AWS infrastructure that spans three separate accounts (dev: 123456789012, staging: 123456789013, prod: 123456789014) all deployed to the eu-central-2 region. Each environment needs its own VPC with consistent CIDR blocks, an RDS Aurora PostgreSQL cluster, Lambda functions for payment validation, API Gateway endpoints with custom domains, S3 buckets for transaction logs, and SQS queues for async processing. The challenge is making sure these resources scale appropriately for each environment without duplicating code or creating configuration drift.
 
 I've been asked to create this infrastructure using **AWS CDK with TypeScript**. The approach needs to use a base stack class that can be instantiated for each environment, with environment-specific parameters controlling things like instance sizes, memory allocations, retention policies, and resource limits. The key is ensuring that when we make changes to the infrastructure, those changes propagate consistently across all three environments while still allowing for environment-specific tuning.
 
@@ -90,7 +90,7 @@ Create a multi-environment payment processing infrastructure using **AWS CDK wit
 - Use **CDK Pipelines** for deployment automation
 - Resource names must include **environmentSuffix** for uniqueness across parallel deployments
 - Follow naming convention: `{resource-type}-${environmentSuffix}`
-- Deploy to **us-east-1** region
+- Deploy to **eu-central-2** region
 - Node.js 18+ runtime for Lambda functions
 - AWS CLI configured with cross-account assume role permissions
 

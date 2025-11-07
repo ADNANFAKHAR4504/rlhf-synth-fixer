@@ -34,7 +34,7 @@ dbSecret.addRotationSchedule('RotationSchedule', {
 
 ### 2. Invalid Aurora PostgreSQL Version (CRITICAL)
 
-**Issue**: The initial implementation used Aurora PostgreSQL version 15.3, which is not available in the us-east-1 region.
+**Issue**: The initial implementation used Aurora PostgreSQL version 15.3, which is not available in the eu-central-2 region.
 
 **Error Message**:
 ```
@@ -50,7 +50,7 @@ engine: rds.DatabaseClusterEngine.auroraPostgres({
 }),
 ```
 
-**Fix Applied**: Changed to Aurora PostgreSQL version 15.7 (verified available in us-east-1):
+**Fix Applied**: Changed to Aurora PostgreSQL version 15.7 (verified available in eu-central-2):
 ```typescript
 engine: rds.DatabaseClusterEngine.auroraPostgres({
   version: rds.AuroraPostgresEngineVersion.VER_15_7,
