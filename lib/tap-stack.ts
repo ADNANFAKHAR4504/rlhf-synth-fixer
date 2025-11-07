@@ -118,7 +118,7 @@ export class TapStack extends cdk.Stack {
         // Use a placeholder DNS name format for referenced ALBs
         // In real scenarios, this should be looked up from AWS
         albDnsName = `${loadBalancerFullName}.elb.amazonaws.com`;
-        
+
         alb =
           elbv2.ApplicationLoadBalancer.fromApplicationLoadBalancerAttributes(
             this,
