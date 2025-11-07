@@ -4,7 +4,7 @@ This implementation creates a complete serverless payment processing infrastruct
 
 ## File: __main__.py
 
-```python
+```py
 """Main Pulumi program for serverless payment processing infrastructure."""
 import pulumi
 import pulumi_aws as aws
