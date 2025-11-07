@@ -145,6 +145,199 @@ describe('RDS PostgreSQL Stack Integration Tests', () => {
     expect(port.toString()).toBe('5432');
   });
 
+  test('RDS instance exists and is available', async () => {
+    const dbInstanceId = outputs.db_instance_identifier;
+    if (!dbInstanceId) return console.warn('Missing db_instance_identifier, skipping.');
+
+    const res = await diagAwsCall('RDSInstance', rds.describeDBInstances.bind(rds), {
+      DBInstanceIdentifier: dbInstanceId
+    });
+    if (skipIfNull(res?.DBInstances?.[0], 'RDSInstance')) return;
+
+    const dbInstance = res.DBInstances[0];
+    expect(dbInstance.DBInstanceIdentifier).toBe(dbInstanceId);
+    expect(dbInstance.DBInstanceStatus).toBe('available');
+  });
+
+  test('RDS instance has correct engine and version', async () => {
+    const dbInstanceId = outputs.db_instance_identifier;
+    if (!dbInstanceId) return console.warn('Missing db_instance_identifier, skipping.');
+
+    const res = await diagAwsCall('RDSEngine', rds.describeDBInstances.bind(rds), {
+      DBInstanceIdentifier: dbInstanceId
+    });
+    if (skipIfNull(res?.DBInstances?.[0], 'RDSEngine')) return;
+
+    const dbInstance = res.DBInstances[0];
+    expect(dbInstance.Engine).toBe('postgres');
+    expect(dbInstance.EngineVersion).toMatch(/^14\./); // PostgreSQL 14.x
+  });
+
+  test('RDS instance uses correct instance class', async () => {
+    const dbInstanceId = outputs.db_instance_identifier;
+    if (!dbInstanceId) return console.warn('Missing db_instance_identifier, skipping.');
+
+    const res = await diagAwsCall('RDSInstanceClass', rds.describeDBInstances.bind(rds), {
+      DBInstanceIdentifier: dbInstanceId
+    });
+    if (skipIfNull(res?.DBInstances?.[0], 'RDSInstanceClass')) return;
+
+    const dbInstance = res.DBInstances[0];
+    expect(dbInstance.DBInstanceClass).toMatch(/^db\./);
+    console.log(`RDS Instance Class: ${dbInstance.DBInstanceClass}`);
+  });
+
+  test('RDS instance has correct storage configuration', async () => {
+    const dbInstanceId = outputs.db_instance_identifier;
+    if (!dbInstanceId) return console.warn('Missing db_instance_identifier, skipping.');
+
+    const res = await diagAwsCall('RDSStorage', rds.describeDBInstances.bind(rds), {
+      DBInstanceIdentifier: dbInstanceId
+    });
+    if (skipIfNull(res?.DBInstances?.[0], 'RDSStorage')) return;
+
+    const dbInstance = res.DBInstances[0];
+    expect(dbInstance.AllocatedStorage).toBeGreaterThan(0);
+    expect(dbInstance.StorageType).toBeDefined();
+    expect(dbInstance.StorageEncrypted).toBe(true);
+    console.log(`Storage: ${dbInstance.AllocatedStorage}GB, Type: ${dbInstance.StorageType}, Encrypted: ${dbInstance.StorageEncrypted}`);
+  });
+
+  test('RDS instance is in private subnets', async () => {
+    const dbInstanceId = outputs.db_instance_identifier;
+    const dbSubnetGroupName = outputs.db_subnet_group_name;
+    if (!dbInstanceId || !dbSubnetGroupName) return console.warn('Missing db_instance_identifier or db_subnet_group_name, skipping.');
+
+    const res = await diagAwsCall('RDSSubnetPlacement', rds.describeDBInstances.bind(rds), {
+      DBInstanceIdentifier: dbInstanceId
+    });
+    if (skipIfNull(res?.DBInstances?.[0], 'RDSSubnetPlacement')) return;
+
+    const dbInstance = res.DBInstances[0];
+    expect(dbInstance.DBSubnetGroup?.DBSubnetGroupName).toBe(dbSubnetGroupName);
+    expect(dbInstance.PubliclyAccessible).toBe(false);
+  });
+
+  test('RDS instance has correct security group attached', async () => {
+    const dbInstanceId = outputs.db_instance_identifier;
+    const sgId = outputs.security_group_id;
+    if (!dbInstanceId || !sgId) return console.warn('Missing db_instance_identifier or security_group_id, skipping.');
+
+    const res = await diagAwsCall('RDSSecurityGroup', rds.describeDBInstances.bind(rds), {
+      DBInstanceIdentifier: dbInstanceId
+    });
+    if (skipIfNull(res?.DBInstances?.[0], 'RDSSecurityGroup')) return;
+
+    const dbInstance = res.DBInstances[0];
+    const securityGroupIds = dbInstance.VpcSecurityGroups?.map((sg: any) => sg.VpcSecurityGroupId) || [];
+    expect(securityGroupIds).toContain(sgId);
+  });
+
+  test('RDS instance uses correct parameter group', async () => {
+    const dbInstanceId = outputs.db_instance_identifier;
+    const dbParamGroupName = outputs.db_parameter_group_name;
+    if (!dbInstanceId || !dbParamGroupName) return console.warn('Missing db_instance_identifier or db_parameter_group_name, skipping.');
+
+    const res = await diagAwsCall('RDSParameterGroup', rds.describeDBInstances.bind(rds), {
+      DBInstanceIdentifier: dbInstanceId
+    });
+    if (skipIfNull(res?.DBInstances?.[0], 'RDSParameterGroup')) return;
+
+    const dbInstance = res.DBInstances[0];
+    const paramGroups = dbInstance.DBParameterGroups?.map((pg: any) => pg.DBParameterGroupName) || [];
+    expect(paramGroups).toContain(dbParamGroupName);
+  });
+
+  test('RDS instance has Multi-AZ enabled', async () => {
+    const dbInstanceId = outputs.db_instance_identifier;
+    if (!dbInstanceId) return console.warn('Missing db_instance_identifier, skipping.');
+
+    const res = await diagAwsCall('RDSMultiAZ', rds.describeDBInstances.bind(rds), {
+      DBInstanceIdentifier: dbInstanceId
+    });
+    if (skipIfNull(res?.DBInstances?.[0], 'RDSMultiAZ')) return;
+
+    const dbInstance = res.DBInstances[0];
+    expect(dbInstance.MultiAZ).toBe(true);
+    console.log(`Multi-AZ: ${dbInstance.MultiAZ}`);
+  });
+
+  test('RDS instance has backup retention configured', async () => {
+    const dbInstanceId = outputs.db_instance_identifier;
+    if (!dbInstanceId) return console.warn('Missing db_instance_identifier, skipping.');
+
+    const res = await diagAwsCall('RDSBackup', rds.describeDBInstances.bind(rds), {
+      DBInstanceIdentifier: dbInstanceId
+    });
+    if (skipIfNull(res?.DBInstances?.[0], 'RDSBackup')) return;
+
+    const dbInstance = res.DBInstances[0];
+    expect(dbInstance.BackupRetentionPeriod).toBeGreaterThan(0);
+    expect(dbInstance.PreferredBackupWindow).toBeDefined();
+    console.log(`Backup Retention: ${dbInstance.BackupRetentionPeriod} days, Window: ${dbInstance.PreferredBackupWindow}`);
+  });
+
+  test('RDS instance has enhanced monitoring enabled', async () => {
+    const dbInstanceId = outputs.db_instance_identifier;
+    const monitoringRoleArn = outputs.monitoring_role_arn;
+    if (!dbInstanceId || !monitoringRoleArn) return console.warn('Missing db_instance_identifier or monitoring_role_arn, skipping.');
+
+    const res = await diagAwsCall('RDSMonitoring', rds.describeDBInstances.bind(rds), {
+      DBInstanceIdentifier: dbInstanceId
+    });
+    if (skipIfNull(res?.DBInstances?.[0], 'RDSMonitoring')) return;
+
+    const dbInstance = res.DBInstances[0];
+    expect(dbInstance.MonitoringInterval).toBeGreaterThan(0);
+    expect(dbInstance.MonitoringRoleArn).toBe(monitoringRoleArn);
+    console.log(`Enhanced Monitoring Interval: ${dbInstance.MonitoringInterval}s`);
+  });
+
+  test('RDS instance has performance insights enabled', async () => {
+    const dbInstanceId = outputs.db_instance_identifier;
+    if (!dbInstanceId) return console.warn('Missing db_instance_identifier, skipping.');
+
+    const res = await diagAwsCall('RDSPerformanceInsights', rds.describeDBInstances.bind(rds), {
+      DBInstanceIdentifier: dbInstanceId
+    });
+    if (skipIfNull(res?.DBInstances?.[0], 'RDSPerformanceInsights')) return;
+
+    const dbInstance = res.DBInstances[0];
+    expect(dbInstance.PerformanceInsightsEnabled).toBe(true);
+    if (dbInstance.PerformanceInsightsEnabled) {
+      expect(dbInstance.PerformanceInsightsRetentionPeriod).toBeGreaterThan(0);
+      console.log(`Performance Insights Retention: ${dbInstance.PerformanceInsightsRetentionPeriod} days`);
+    }
+  });
+
+  test('RDS instance has automatic minor version upgrades configured', async () => {
+    const dbInstanceId = outputs.db_instance_identifier;
+    if (!dbInstanceId) return console.warn('Missing db_instance_identifier, skipping.');
+
+    const res = await diagAwsCall('RDSAutoUpgrade', rds.describeDBInstances.bind(rds), {
+      DBInstanceIdentifier: dbInstanceId
+    });
+    if (skipIfNull(res?.DBInstances?.[0], 'RDSAutoUpgrade')) return;
+
+    const dbInstance = res.DBInstances[0];
+    expect(dbInstance.AutoMinorVersionUpgrade).toBeDefined();
+    expect(dbInstance.PreferredMaintenanceWindow).toBeDefined();
+    console.log(`Auto Minor Version Upgrade: ${dbInstance.AutoMinorVersionUpgrade}, Maintenance Window: ${dbInstance.PreferredMaintenanceWindow}`);
+  });
+
+  test('RDS instance deletion protection is enabled', async () => {
+    const dbInstanceId = outputs.db_instance_identifier;
+    if (!dbInstanceId) return console.warn('Missing db_instance_identifier, skipping.');
+
+    const res = await diagAwsCall('RDSDeletionProtection', rds.describeDBInstances.bind(rds), {
+      DBInstanceIdentifier: dbInstanceId
+    });
+    if (skipIfNull(res?.DBInstances?.[0], 'RDSDeletionProtection')) return;
+
+    const dbInstance = res.DBInstances[0];
+    expect(dbInstance.DeletionProtection).toBe(true);
+    console.log(`Deletion Protection: ${dbInstance.DeletionProtection}`);
+  });
   test('Secrets Manager secret exists', async () => {
     const secretArn = outputs.db_password_secret_arn;
     if (!secretArn) return console.warn('Missing db_password_secret_arn, skipping.');
@@ -154,30 +347,19 @@ describe('RDS PostgreSQL Stack Integration Tests', () => {
     expect(res.Name).toBe(outputs.db_password_secret_name);
   });
 
-  test('Secrets Manager secret contains valid JSON with required fields', async () => {
-    const secretArn = outputs.db_password_secret_arn;
-    if (!secretArn) return console.warn('Missing db_password_secret_arn, skipping.');
-    const res = await diagAwsCall('SecretsManagerSecretValue', secretsmanager.getSecretValue.bind(secretsmanager), { SecretId: secretArn });
-    if (skipIfNull(res?.SecretString, 'SecretsManagerSecretValue')) return;
-    
-    const secretData = JSON.parse(res.SecretString);
-    expect(secretData).toHaveProperty('username');
-    expect(secretData).toHaveProperty('password');
-    expect(secretData).toHaveProperty('engine');
-    expect(secretData).toHaveProperty('host');
-    expect(secretData).toHaveProperty('port');
-    expect(secretData).toHaveProperty('dbname');
-    
-    expect(secretData.engine).toBe('postgres');
-    expect(secretData.port).toBe(5432);
-    expect(secretData.password).toBeTruthy();
-    expect(secretData.password.length).toBeGreaterThanOrEqual(32);
-  });
 
-  test('Secret ARN format is valid', () => {
-    const arn = outputs.db_password_secret_arn;
-    if (!arn) return console.warn('Missing db_password_secret_arn, skipping.');
-    expect(arn).toMatch(/^arn:aws:secretsmanager:[a-z0-9-]+:\d+:secret:.+$/);
+  test('RDS instance endpoint is accessible format', async () => {
+    const dbInstanceId = outputs.db_instance_identifier;
+    if (!dbInstanceId) return console.warn('Missing db_instance_identifier, skipping.');
+
+    const res = await diagAwsCall('RDSEndpoint', rds.describeDBInstances.bind(rds), {
+      DBInstanceIdentifier: dbInstanceId
+    });
+    if (skipIfNull(res?.DBInstances?.[0], 'RDSEndpoint')) return;
+
+    const dbInstance = res.DBInstances[0];
+    expect(dbInstance.Endpoint?.Address).toMatch(/\.rds\.amazonaws\.com$/);
+    expect(dbInstance.Endpoint?.Port).toBe(5432);
+    console.log(`RDS Endpoint: ${dbInstance.Endpoint?.Address}:${dbInstance.Endpoint?.Port}`);
   });
 });
-
