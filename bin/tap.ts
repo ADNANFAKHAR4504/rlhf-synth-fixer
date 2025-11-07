@@ -11,8 +11,10 @@ import * as awsx from '@pulumi/awsx';
 
 // Get configuration
 const config = new pulumi.Config();
+// For unit tests, prioritize Pulumi config over environment variables
+// This allows tests to override the environment suffix via Pulumi mocks
 const environmentSuffix =
-  process.env.ENVIRONMENT_SUFFIX || config.get('environmentSuffix') || 'dev';
+  config.get('environmentSuffix') || process.env.ENVIRONMENT_SUFFIX || 'dev';
 const region = aws.config.region || 'us-east-1';
 
 // VPC Configuration - 3 AZs with public and private subnets
