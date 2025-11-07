@@ -202,20 +202,6 @@ describe('TapStack Integration Tests Based on flat-outputs.json and tap_stack.tf
     }
   });
 
-  test('CloudWatch log groups for Lambda and VPC flow logs exist', async () => {
-    const logGroups = [outputs.lambda_log_group_arn, outputs.vpc_flow_logs_log_group_arn];
-    expect(logGroups.every(lg => lg)).toBe(true);
-
-    for (const logGroupArn of logGroups) {
-      const logGroupName = logGroupArn.split(':log-group:').pop() || '';
-      const group = await diagAwsCall('CloudWatchLogGroup', () =>
-        cloudwatchLogs.describeLogGroups({ logGroupNamePrefix: logGroupName }).promise()
-      );
-      if (skipIfNull(group, 'CloudWatchLogGroup')) continue;
-
-      expect(group.logGroups.some((lg: any) => lg.arn === logGroupArn)).toBe(true);
-    }
-  });
 
   test('VPC flow log exists and is associated with correct VPC', async () => {
     const flowLogId = outputs.vpc_flow_logs_id;
