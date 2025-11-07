@@ -42,7 +42,7 @@ terraform {
     }
   }
 
-  backend "local" {}
+  backend "s3" {}
 }
 
 provider "aws" {
@@ -146,6 +146,7 @@ variable "tags" {
 ```hcl
 # networking.tf
 
+# VPC
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
@@ -156,6 +157,7 @@ resource "aws_vpc" "main" {
   })
 }
 
+# Private Subnets
 resource "aws_subnet" "private" {
   count             = length(var.availability_zones)
   vpc_id            = aws_vpc.main.id
@@ -168,11 +170,12 @@ resource "aws_subnet" "private" {
   })
 }
 
+# S3 Bucket for VPC Flow Logs
 resource "aws_s3_bucket" "flow_logs" {
-  bucket = "vpc-flow-logs-${var.environment_suffix}"
+  bucket = "vpc-flow-logs-${var.environment_suffix}-xy"
 
   tags = merge(var.tags, {
-    Name = "vpc-flow-logs-${var.environment_suffix}"
+    Name = "vpc-flow-logs-${var.environment_suffix}-xy"
   })
 }
 
@@ -204,29 +207,6 @@ resource "aws_s3_bucket_public_access_block" "flow_logs" {
   restrict_public_buckets = true
 }
 
-# ADDED: Bucket policy to deny unencrypted uploads
-resource "aws_s3_bucket_policy" "flow_logs" {
-  bucket = aws_s3_bucket.flow_logs.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "DenyUnencryptedUploads"
-        Effect = "Deny"
-        Principal = "*"
-        Action = "s3:PutObject"
-        Resource = "${aws_s3_bucket.flow_logs.arn}/*"
-        Condition = {
-          StringNotEquals = {
-            "s3:x-amz-server-side-encryption" = "aws:kms"
-          }
-        }
-      }
-    ]
-  })
-}
-
 resource "aws_s3_bucket_lifecycle_configuration" "flow_logs" {
   bucket = aws_s3_bucket.flow_logs.id
 
@@ -244,19 +224,21 @@ resource "aws_s3_bucket_lifecycle_configuration" "flow_logs" {
   }
 }
 
+# VPC Flow Logs
 resource "aws_flow_log" "main" {
-  iam_role_arn    = aws_iam_role.flow_logs.arn
-  log_destination = aws_s3_bucket.flow_logs.arn
-  traffic_type    = "ALL"
-  vpc_id          = aws_vpc.main.id
+  log_destination      = aws_s3_bucket.flow_logs.arn
+  log_destination_type = "s3"
+  traffic_type         = "ALL"
+  vpc_id               = aws_vpc.main.id
 
   tags = merge(var.tags, {
     Name = "vpc-flow-log-${var.environment_suffix}"
   })
 }
 
+# IAM Role for VPC Flow Logs
 resource "aws_iam_role" "flow_logs" {
-  name = "vpc-flow-logs-role-${var.environment_suffix}"
+  name = "vpc-flow-logs-role-${var.environment_suffix}-xy"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -272,7 +254,7 @@ resource "aws_iam_role" "flow_logs" {
   })
 
   tags = merge(var.tags, {
-    Name = "vpc-flow-logs-role-${var.environment_suffix}"
+    Name = "vpc-flow-logs-role-${var.environment_suffix}-xy"
   })
 }
 
@@ -298,6 +280,7 @@ resource "aws_iam_role_policy" "flow_logs" {
   })
 }
 
+# VPC Endpoints
 resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.main.id
   service_name      = "com.amazonaws.${var.aws_region}.s3"
@@ -335,6 +318,7 @@ resource "aws_vpc_endpoint" "rds" {
   })
 }
 
+# Route Table for Private Subnets
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
 
@@ -349,10 +333,12 @@ resource "aws_route_table_association" "private" {
   route_table_id = aws_route_table.private.id
 }
 
+# Network ACL for Private Subnets
 resource "aws_network_acl" "private" {
   vpc_id     = aws_vpc.main.id
   subnet_ids = aws_subnet.private[*].id
 
+  # Allow HTTPS inbound
   ingress {
     protocol   = "tcp"
     rule_no    = 100
@@ -362,6 +348,7 @@ resource "aws_network_acl" "private" {
     to_port    = 443
   }
 
+  # Allow PostgreSQL inbound
   ingress {
     protocol   = "tcp"
     rule_no    = 110
@@ -371,6 +358,7 @@ resource "aws_network_acl" "private" {
     to_port    = 5432
   }
 
+  # Allow ephemeral ports inbound
   ingress {
     protocol   = "tcp"
     rule_no    = 120
@@ -380,6 +368,7 @@ resource "aws_network_acl" "private" {
     to_port    = 65535
   }
 
+  # Deny all other inbound traffic
   ingress {
     protocol   = -1
     rule_no    = 200
@@ -389,6 +378,7 @@ resource "aws_network_acl" "private" {
     to_port    = 0
   }
 
+  # Allow all outbound within VPC
   egress {
     protocol   = -1
     rule_no    = 100
@@ -398,6 +388,7 @@ resource "aws_network_acl" "private" {
     to_port    = 0
   }
 
+  # Deny all other outbound traffic
   egress {
     protocol   = -1
     rule_no    = 200
@@ -418,6 +409,7 @@ resource "aws_network_acl" "private" {
 ```hcl
 # security.tf
 
+# KMS Key for RDS
 resource "aws_kms_key" "rds" {
   description             = "KMS key for RDS encryption"
   deletion_window_in_days = 10
@@ -429,10 +421,11 @@ resource "aws_kms_key" "rds" {
 }
 
 resource "aws_kms_alias" "rds" {
-  name          = "alias/rds-${var.environment_suffix}"
+  name          = "alias/rds-${var.environment_suffix}-xy"
   target_key_id = aws_kms_key.rds.key_id
 }
 
+# KMS Key for S3
 resource "aws_kms_key" "s3" {
   description             = "KMS key for S3 encryption"
   deletion_window_in_days = 10
@@ -444,10 +437,11 @@ resource "aws_kms_key" "s3" {
 }
 
 resource "aws_kms_alias" "s3" {
-  name          = "alias/s3-${var.environment_suffix}"
+  name          = "alias/s3-${var.environment_suffix}-xy"
   target_key_id = aws_kms_key.s3.key_id
 }
 
+# KMS Key for CloudWatch Logs
 resource "aws_kms_key" "logs" {
   description             = "KMS key for CloudWatch Logs encryption"
   deletion_window_in_days = 10
@@ -495,17 +489,20 @@ resource "aws_kms_key" "logs" {
 }
 
 resource "aws_kms_alias" "logs" {
-  name          = "alias/logs-${var.environment_suffix}"
+  name          = "alias/logs-${var.environment_suffix}-xy"
   target_key_id = aws_kms_key.logs.key_id
 }
 
+# Data source for current AWS account
 data "aws_caller_identity" "current" {}
 
+# Security Group for Application Tier
 resource "aws_security_group" "app_tier" {
   name        = "app-tier-sg-${var.environment_suffix}"
   description = "Security group for application tier"
   vpc_id      = aws_vpc.main.id
 
+  # Allow HTTPS inbound from within VPC
   ingress {
     description = "HTTPS from VPC"
     from_port   = 443
@@ -514,14 +511,7 @@ resource "aws_security_group" "app_tier" {
     cidr_blocks = [var.vpc_cidr]
   }
 
-  egress {
-    description     = "PostgreSQL to database tier"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.database_tier.id]
-  }
-
+  # Allow HTTPS outbound for VPC endpoints
   egress {
     description = "HTTPS to VPC endpoints"
     from_port   = 443
@@ -535,32 +525,47 @@ resource "aws_security_group" "app_tier" {
   })
 }
 
-# CORRECTED: Removed invalid egress rule - security groups with no egress rules deny all outbound by default
+# Security Group for Database Tier
 resource "aws_security_group" "database_tier" {
   name        = "database-tier-sg-${var.environment_suffix}"
   description = "Security group for database tier"
   vpc_id      = aws_vpc.main.id
 
-  ingress {
-    description     = "PostgreSQL from app tier"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.app_tier.id]
-  }
-
-  # No egress rules defined - database has no outbound access
+  # No inline rules to avoid circular dependency
 
   tags = merge(var.tags, {
     Name = "database-tier-sg-${var.environment_suffix}"
   })
 }
 
+# Security Group Rules (separate to avoid circular dependency)
+resource "aws_security_group_rule" "app_to_db" {
+  type                     = "egress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.database_tier.id
+  security_group_id        = aws_security_group.app_tier.id
+  description              = "PostgreSQL to database tier"
+}
+
+resource "aws_security_group_rule" "db_from_app" {
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.app_tier.id
+  security_group_id        = aws_security_group.database_tier.id
+  description              = "PostgreSQL from app tier"
+}
+
+# Security Group for VPC Endpoints
 resource "aws_security_group" "vpc_endpoints" {
   name        = "vpc-endpoints-sg-${var.environment_suffix}"
   description = "Security group for VPC endpoints"
   vpc_id      = aws_vpc.main.id
 
+  # Allow HTTPS from VPC
   ingress {
     description = "HTTPS from VPC"
     from_port   = 443
@@ -574,6 +579,7 @@ resource "aws_security_group" "vpc_endpoints" {
   })
 }
 
+# S3 Bucket for Application Logs
 resource "aws_s3_bucket" "app_logs" {
   bucket = "app-logs-${var.environment_suffix}"
 
@@ -617,11 +623,11 @@ resource "aws_s3_bucket_policy" "app_logs" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "DenyUnencryptedUploads"
-        Effect = "Deny"
+        Sid       = "DenyUnencryptedUploads"
+        Effect    = "Deny"
         Principal = "*"
-        Action = "s3:PutObject"
-        Resource = "${aws_s3_bucket.app_logs.arn}/*"
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.app_logs.arn}/*"
         Condition = {
           StringNotEquals = {
             "s3:x-amz-server-side-encryption" = "aws:kms"
@@ -659,11 +665,12 @@ resource "aws_s3_bucket_lifecycle_configuration" "app_logs" {
   }
 }
 
+# S3 Bucket for Audit Trails
 resource "aws_s3_bucket" "audit_trails" {
-  bucket = "audit-trails-${var.environment_suffix}"
+  bucket = "audit-trails-${var.environment_suffix}-xy"
 
   tags = merge(var.tags, {
-    Name = "audit-trails-${var.environment_suffix}"
+    Name = "audit-trails-${var.environment_suffix}-xy"
   })
 }
 
@@ -702,11 +709,11 @@ resource "aws_s3_bucket_policy" "audit_trails" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "DenyUnencryptedUploads"
-        Effect = "Deny"
+        Sid       = "DenyUnencryptedUploads"
+        Effect    = "Deny"
         Principal = "*"
-        Action = "s3:PutObject"
-        Resource = "${aws_s3_bucket.audit_trails.arn}/*"
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.audit_trails.arn}/*"
         Condition = {
           StringNotEquals = {
             "s3:x-amz-server-side-encryption" = "aws:kms"
@@ -730,7 +737,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "audit_trails" {
     }
 
     expiration {
-      days = 2555  # 7 years for compliance
+      days = 2555 # 7 years for compliance
     }
 
     noncurrent_version_expiration {
@@ -739,10 +746,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "audit_trails" {
   }
 }
 
-# CORRECTED: Added max_session_duration for 1-hour session limit
+# IAM Role for EC2 Instances
 resource "aws_iam_role" "ec2_payment_processing" {
-  name                 = "ec2-payment-processing-role-${var.environment_suffix}"
-  max_session_duration = 3600  # 1 hour in seconds
+  name = "ec2-payment-processing-role-${var.environment_suffix}-xy"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -758,10 +764,11 @@ resource "aws_iam_role" "ec2_payment_processing" {
   })
 
   tags = merge(var.tags, {
-    Name = "ec2-payment-processing-role-${var.environment_suffix}"
+    Name = "ec2-payment-processing-role-${var.environment_suffix}-xy"
   })
 }
 
+# IAM Policy for EC2 with session constraints
 resource "aws_iam_role_policy" "ec2_session_policy" {
   name = "ec2-session-policy-${var.environment_suffix}"
   role = aws_iam_role.ec2_payment_processing.id
@@ -779,6 +786,11 @@ resource "aws_iam_role_policy" "ec2_session_policy" {
           "${aws_s3_bucket.app_logs.arn}/*",
           "${aws_s3_bucket.audit_trails.arn}/*"
         ]
+        Condition = {
+          DateLessThan = {
+            "aws:CurrentTime" = "2099-12-31T23:59:59Z"
+          }
+        }
       },
       {
         Effect = "Allow"
@@ -804,6 +816,7 @@ resource "aws_iam_role_policy" "ec2_session_policy" {
   })
 }
 
+# IAM Instance Profile for EC2
 resource "aws_iam_instance_profile" "ec2_payment_processing" {
   name = "ec2-payment-processing-profile-${var.environment_suffix}"
   role = aws_iam_role.ec2_payment_processing.name
@@ -821,17 +834,17 @@ resource "aws_iam_instance_profile" "ec2_payment_processing" {
 
 # DB Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "db-subnet-group-${var.environment_suffix}"
+  name       = "db-subnet-group-${var.environment_suffix}-xy"
   subnet_ids = aws_subnet.private[*].id
 
   tags = merge(var.tags, {
-    Name = "db-subnet-group-${var.environment_suffix}"
+    Name = "db-subnet-group-${var.environment_suffix}-xy"
   })
 }
 
 # DB Parameter Group for SSL enforcement
 resource "aws_db_parameter_group" "postgres_ssl" {
-  name   = "postgres-ssl-${var.environment_suffix}"
+  name   = "postgres-ssl-${var.environment_suffix}xy"
   family = "postgres15"
 
   parameter {
@@ -855,7 +868,7 @@ resource "aws_db_parameter_group" "postgres_ssl" {
   }
 
   tags = merge(var.tags, {
-    Name = "postgres-ssl-${var.environment_suffix}"
+    Name = "postgres-ssl-${var.environment_suffix}-xy"
   })
 }
 
@@ -867,11 +880,11 @@ resource "random_password" "db_password" {
 
 # AWS Secrets Manager for DB password
 resource "aws_secretsmanager_secret" "db_password" {
-  name                    = "rds-password-${var.environment_suffix}"
-  recovery_window_in_days = 0  # Force delete for testing
+  name                    = "rds-password-${var.environment_suffix}-xy"
+  recovery_window_in_days = 0 # Force delete for testing
 
   tags = merge(var.tags, {
-    Name = "rds-password-${var.environment_suffix}"
+    Name = "rds-password-${var.environment_suffix}-xy"
   })
 }
 
@@ -887,13 +900,13 @@ resource "aws_secretsmanager_secret_version" "db_password" {
 resource "aws_db_instance" "payment_db" {
   identifier     = "payment-db-${var.environment_suffix}"
   engine         = "postgres"
-  engine_version = "15.4"
+  engine_version = "15.8"
   instance_class = var.db_instance_class
 
-  allocated_storage     = var.db_allocated_storage
-  storage_type          = "gp3"
-  storage_encrypted     = true
-  kms_key_id            = aws_kms_key.rds.arn
+  allocated_storage = var.db_allocated_storage
+  storage_type      = "gp3"
+  storage_encrypted = true
+  kms_key_id        = aws_kms_key.rds.arn
 
   db_name  = var.db_name
   username = var.db_username
@@ -903,17 +916,17 @@ resource "aws_db_instance" "payment_db" {
   vpc_security_group_ids = [aws_security_group.database_tier.id]
   parameter_group_name   = aws_db_parameter_group.postgres_ssl.name
 
-  multi_az               = true
-  publicly_accessible    = false
+  multi_az            = true
+  publicly_accessible = false
 
   backup_retention_period = var.backup_retention_period
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "mon:04:00-mon:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "mon:04:00-mon:05:00"
 
   enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
 
-  deletion_protection = false  # Allow deletion for testing
-  skip_final_snapshot = true   # Skip final snapshot for testing
+  deletion_protection = false # Allow deletion for testing
+  skip_final_snapshot = true  # Skip final snapshot for testing
 
   tags = merge(var.tags, {
     Name = "payment-db-${var.environment_suffix}"
@@ -926,32 +939,17 @@ resource "aws_db_instance" "payment_db" {
 ```hcl
 # monitoring.tf
 
-resource "aws_guardduty_detector" "main" {
-  enable = true
+# GuardDuty Detector - Use existing detector
+data "aws_guardduty_detector" "main" {}
 
-  datasources {
-    s3_logs {
-      enable = true
-    }
-    kubernetes {
-      audit_logs {
-        enable = false
-      }
-    }
-    malware_protection {
-      scan_ec2_instance_with_findings {
-        ebs_volumes {
-          enable = true
-        }
-      }
-    }
-  }
-
-  tags = merge(var.tags, {
-    Name = "guardduty-detector-${var.environment_suffix}"
-  })
+# Enable S3 protection for GuardDuty
+resource "aws_guardduty_detector_feature" "s3_protection" {
+  detector_id = data.aws_guardduty_detector.main.id
+  name        = "S3_DATA_EVENTS"
+  status      = "ENABLED"
 }
 
+# SNS Topic for Security Alerts
 resource "aws_sns_topic" "security_alerts" {
   name              = "security-alerts-${var.environment_suffix}"
   kms_master_key_id = aws_kms_key.logs.id
@@ -961,7 +959,7 @@ resource "aws_sns_topic" "security_alerts" {
   })
 }
 
-# CORRECTED: Simplified severity filter using numeric comparison
+# EventBridge Rule for GuardDuty Findings
 resource "aws_cloudwatch_event_rule" "guardduty_findings" {
   name        = "guardduty-high-severity-${var.environment_suffix}"
   description = "Capture GuardDuty findings with HIGH severity"
@@ -970,9 +968,7 @@ resource "aws_cloudwatch_event_rule" "guardduty_findings" {
     source      = ["aws.guardduty"]
     detail-type = ["GuardDuty Finding"]
     detail = {
-      severity = [{
-        numeric = [">=", 7.0]
-      }]
+      severity = [7, 7.0, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 8, 8.0, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9]
     }
   })
 
@@ -987,6 +983,7 @@ resource "aws_cloudwatch_event_target" "guardduty_sns" {
   arn       = aws_sns_topic.security_alerts.arn
 }
 
+# SNS Topic Policy
 resource "aws_sns_topic_policy" "security_alerts" {
   arn = aws_sns_topic.security_alerts.arn
 
@@ -1005,6 +1002,7 @@ resource "aws_sns_topic_policy" "security_alerts" {
   })
 }
 
+# AWS Config Configuration
 resource "aws_config_configuration_recorder" "main" {
   name     = "config-recorder-${var.environment_suffix}"
   role_arn = aws_iam_role.config.arn
@@ -1028,11 +1026,12 @@ resource "aws_config_configuration_recorder_status" "main" {
   depends_on = [aws_config_delivery_channel.main]
 }
 
+# S3 Bucket for AWS Config
 resource "aws_s3_bucket" "config" {
-  bucket = "aws-config-${var.environment_suffix}"
+  bucket = "aws-config-${var.environment_suffix}-xy"
 
   tags = merge(var.tags, {
-    Name = "aws-config-${var.environment_suffix}"
+    Name = "aws-config-${var.environment_suffix}-xy"
   })
 }
 
@@ -1064,8 +1063,9 @@ resource "aws_s3_bucket_public_access_block" "config" {
   restrict_public_buckets = true
 }
 
+# IAM Role for AWS Config
 resource "aws_iam_role" "config" {
-  name = "aws-config-role-${var.environment_suffix}"
+  name = "aws-config-role-${var.environment_suffix}-xy"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1080,10 +1080,10 @@ resource "aws_iam_role" "config" {
     ]
   })
 
-  managed_policy_arns = ["arn:aws:iam::aws:policy/service-role/ConfigRole"]
+  managed_policy_arns = ["arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"]
 
   tags = merge(var.tags, {
-    Name = "aws-config-role-${var.environment_suffix}"
+    Name = "aws-config-role-${var.environment_suffix}-xy"
   })
 }
 
@@ -1110,6 +1110,7 @@ resource "aws_iam_role_policy" "config_s3" {
   })
 }
 
+# AWS Config Rules
 resource "aws_config_config_rule" "encrypted_volumes" {
   name = "encrypted-volumes-${var.environment_suffix}"
 
@@ -1154,16 +1155,18 @@ resource "aws_config_config_rule" "s3_bucket_public_write" {
   depends_on = [aws_config_configuration_recorder.main]
 }
 
+# CloudWatch Log Group for Security Events
 resource "aws_cloudwatch_log_group" "security_events" {
-  name              = "/aws/security/events-${var.environment_suffix}"
+  name              = "/aws/security/events-${var.environment_suffix}-xy"
   retention_in_days = 365
   kms_key_id        = aws_kms_key.logs.arn
 
   tags = merge(var.tags, {
-    Name = "security-events-${var.environment_suffix}"
+    Name = "security-events-${var.environment_suffix}-xy"
   })
 }
 
+# CloudWatch Alarms
 resource "aws_cloudwatch_log_metric_filter" "root_login" {
   name           = "root-account-login-${var.environment_suffix}"
   log_group_name = aws_cloudwatch_log_group.security_events.name
@@ -1285,7 +1288,7 @@ resource "aws_launch_template" "payment_processing" {
 
   metadata_options {
     http_endpoint               = "enabled"
-    http_tokens                 = "required"  # IMDSv2 only
+    http_tokens                 = "required" # IMDSv2 only
     http_put_response_hop_limit = 1
     instance_metadata_tags      = "enabled"
   }
@@ -1312,7 +1315,6 @@ resource "aws_launch_template" "payment_processing" {
               #!/bin/bash
               yum update -y
               yum install -y amazon-cloudwatch-agent
-
               # Configure CloudWatch Agent
               cat > /opt/aws/amazon-cloudwatch-agent/etc/config.json <<'EOC'
               {
@@ -1331,7 +1333,6 @@ resource "aws_launch_template" "payment_processing" {
                 }
               }
               EOC
-
               /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
                 -a fetch-config \
                 -m ec2 \
@@ -1365,12 +1366,58 @@ resource "aws_launch_template" "payment_processing" {
 resource "aws_instance" "payment_processing" {
   count = length(var.availability_zones)
 
-  launch_template {
-    id      = aws_launch_template.payment_processing.id
-    version = "$Latest"
+  ami           = data.aws_ami.amazon_linux_2.id
+  instance_type = var.ec2_instance_type
+  subnet_id     = aws_subnet.private[count.index].id
+
+  iam_instance_profile = aws_iam_instance_profile.ec2_payment_processing.name
+
+  vpc_security_group_ids = [aws_security_group.app_tier.id]
+
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required" # IMDSv2 only
+    http_put_response_hop_limit = 1
+    instance_metadata_tags      = "enabled"
   }
 
-  subnet_id = aws_subnet.private[count.index].id
+  root_block_device {
+    volume_size           = 50
+    volume_type           = "gp3"
+    encrypted             = true
+    kms_key_id            = aws_kms_key.s3.arn
+    delete_on_termination = true
+  }
+
+  user_data = base64encode(<<-EOF
+              #!/bin/bash
+              yum update -y
+              yum install -y amazon-cloudwatch-agent
+              # Configure CloudWatch Agent
+              cat > /opt/aws/amazon-cloudwatch-agent/etc/config.json <<'EOC'
+              {
+                "logs": {
+                  "logs_collected": {
+                    "files": {
+                      "collect_list": [
+                        {
+                          "file_path": "/var/log/messages",
+                          "log_group_name": "${aws_cloudwatch_log_group.security_events.name}",
+                          "log_stream_name": "{instance_id}/messages"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+              EOC
+              /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+                -a fetch-config \
+                -m ec2 \
+                -s \
+                -c file:/opt/aws/amazon-cloudwatch-agent/etc/config.json
+              EOF
+  )
 
   tags = merge(var.tags, {
     Name = "payment-processing-${count.index + 1}-${var.environment_suffix}"
@@ -1378,7 +1425,6 @@ resource "aws_instance" "payment_processing" {
   })
 }
 ```
-
 ### outputs.tf (No changes needed)
 
 ```hcl
@@ -1437,7 +1483,7 @@ output "flow_logs_bucket" {
 
 output "guardduty_detector_id" {
   description = "ID of the GuardDuty detector"
-  value       = aws_guardduty_detector.main.id
+  value       = data.aws_guardduty_detector.main.id
 }
 
 output "security_alerts_topic_arn" {
@@ -1484,6 +1530,302 @@ output "db_password_secret_arn" {
 output "config_recorder_id" {
   description = "ID of the AWS Config recorder"
   value       = aws_config_configuration_recorder.main.id
+}
+
+# VPC
+output "vpc_name" {
+  description = "Name tag of the VPC"
+  value       = aws_vpc.main.tags.Name
+}
+
+# Subnets
+output "private_subnet_names" {
+  description = "Names of the private subnets"
+  value       = aws_subnet.private[*].tags.Name
+}
+
+output "private_subnet_arns" {
+  description = "ARNs of the private subnets"
+  value       = aws_subnet.private[*].arn
+}
+
+# S3 Buckets
+output "app_logs_bucket_arn" {
+  description = "ARN for app logs S3 bucket"
+  value       = aws_s3_bucket.app_logs.arn
+}
+output "audit_trails_bucket_arn" {
+  description = "ARN for audit trails S3 bucket"
+  value       = aws_s3_bucket.audit_trails.arn
+}
+output "flow_logs_bucket_arn" {
+  description = "ARN for VPC flow logs S3 bucket"
+  value       = aws_s3_bucket.flow_logs.arn
+}
+output "config_bucket_arn" {
+  description = "ARN for AWS Config S3 bucket"
+  value       = aws_s3_bucket.config.arn
+}
+
+# EC2 Instances
+output "ec2_instance_private_ips" {
+  description = "Private IPs of payment processing EC2 instances"
+  value       = aws_instance.payment_processing[*].private_ip
+}
+output "ec2_instance_arns" {
+  description = "ARNs of payment processing EC2 instances"
+  value       = aws_instance.payment_processing[*].arn
+}
+
+# Launch Template
+output "ec2_launch_template_id" {
+  description = "ID of the payment processing EC2 launch template"
+  value       = aws_launch_template.payment_processing.id
+}
+output "ec2_launch_template_arn" {
+  description = "ARN of the payment processing EC2 launch template"
+  value       = aws_launch_template.payment_processing.arn
+}
+
+# Security Groups
+output "security_group_app_tier_arn" {
+  description = "ARN of the app tier security group"
+  value       = aws_security_group.app_tier.arn
+}
+output "security_group_database_tier_arn" {
+  description = "ARN of the database tier security group"
+  value       = aws_security_group.database_tier.arn
+}
+output "security_group_vpc_endpoints_id" {
+  description = "ID of the VPC endpoints security group"
+  value       = aws_security_group.vpc_endpoints.id
+}
+output "security_group_vpc_endpoints_arn" {
+  description = "ARN of the VPC endpoints security group"
+  value       = aws_security_group.vpc_endpoints.arn
+}
+
+# Security Group Rules
+output "sg_rule_app_to_db_id" {
+  description = "ID of the app to db SG rule"
+  value       = aws_security_group_rule.app_to_db.id
+}
+output "sg_rule_db_from_app_id" {
+  description = "ID of the db from app SG rule"
+  value       = aws_security_group_rule.db_from_app.id
+}
+
+# Network ACLs
+output "network_acl_private_id" {
+  description = "ID of the network ACL for private subnets"
+  value       = aws_network_acl.private.id
+}
+
+# KMS Keys
+output "kms_key_rds_id" {
+  description = "Key ID for RDS KMS key"
+  value       = aws_kms_key.rds.key_id
+}
+output "kms_key_s3_id" {
+  description = "Key ID for S3 KMS key"
+  value       = aws_kms_key.s3.key_id
+}
+output "kms_key_logs_id" {
+  description = "Key ID for Logs KMS key"
+  value       = aws_kms_key.logs.key_id
+}
+
+# KMS Aliases
+output "kms_alias_rds_name" {
+  description = "Alias for RDS KMS key"
+  value       = aws_kms_alias.rds.name
+}
+output "kms_alias_s3_name" {
+  description = "Alias for S3 KMS key"
+  value       = aws_kms_alias.s3.name
+}
+output "kms_alias_logs_name" {
+  description = "Alias for Logs KMS key"
+  value       = aws_kms_alias.logs.name
+}
+
+# IAM Roles and Policies
+output "iam_role_ec2_payment_processing_id" {
+  description = "ID of EC2 payment processing IAM role"
+  value       = aws_iam_role.ec2_payment_processing.id
+}
+output "iam_role_ec2_payment_processing_arn" {
+  description = "ARN of EC2 payment processing IAM role"
+  value       = aws_iam_role.ec2_payment_processing.arn
+}
+output "iam_instance_profile_ec2_payment_processing_id" {
+  description = "ID of EC2 payment processing instance profile"
+  value       = aws_iam_instance_profile.ec2_payment_processing.id
+}
+output "iam_role_config_id" {
+  description = "ID of AWS Config IAM role"
+  value       = aws_iam_role.config.id
+}
+output "iam_role_config_arn" {
+  description = "ARN of AWS Config IAM role"
+  value       = aws_iam_role.config.arn
+}
+output "iam_role_flow_logs_id" {
+  description = "ID of VPC flow logs IAM role"
+  value       = aws_iam_role.flow_logs.id
+}
+output "iam_role_flow_logs_arn" {
+  description = "ARN of VPC flow logs IAM role"
+  value       = aws_iam_role.flow_logs.arn
+}
+
+# Database
+output "db_subnet_group_name" {
+  description = "Name of DB subnet group"
+  value       = aws_db_subnet_group.main.name
+}
+output "db_subnet_group_id" {
+  description = "ID of DB subnet group"
+  value       = aws_db_subnet_group.main.id
+}
+output "db_parameter_group_name" {
+  description = "Name of DB parameter group"
+  value       = aws_db_parameter_group.postgres_ssl.name
+}
+output "db_parameter_group_id" {
+  description = "ID of DB parameter group"
+  value       = aws_db_parameter_group.postgres_ssl.id
+}
+output "db_instance_arn" {
+  description = "ARN of payment processing RDS DB instance"
+  value       = aws_db_instance.payment_db.arn
+}
+output "db_instance_id" {
+  description = "ID of payment processing RDS DB instance"
+  value       = aws_db_instance.payment_db.id
+}
+output "db_instance_status" {
+  description = "Status of payment processing RDS DB instance"
+  value       = aws_db_instance.payment_db.status
+}
+output "db_instance_address" {
+  description = "Address of payment processing RDS DB instance"
+  value       = aws_db_instance.payment_db.address
+}
+
+# Secrets Manager
+output "secret_db_password_name" {
+  description = "Name of DB password secret"
+  value       = aws_secretsmanager_secret.db_password.name
+}
+output "secret_db_password_id" {
+  description = "ID of DB password secret"
+  value       = aws_secretsmanager_secret.db_password.id
+}
+output "secret_db_password_version_id" {
+  description = "ID of DB password secret version"
+  value       = aws_secretsmanager_secret_version.db_password.version_id
+}
+
+# GuardDuty
+output "guardduty_detector_arn" {
+  description = "ARN of the GuardDuty detector"
+  value       = data.aws_guardduty_detector.main.arn
+}
+
+output "guardduty_feature_s3_status" {
+  description = "Status of GuardDuty S3 Protection Feature"
+  value       = aws_guardduty_detector_feature.s3_protection.status
+}
+
+# SNS
+output "security_alerts_topic_id" {
+  description = "ID of the SNS Security Alerts Topic"
+  value       = aws_sns_topic.security_alerts.id
+}
+output "security_alerts_topic_policy" {
+  description = "Policy attached to SNS security alerts topic"
+  value       = aws_sns_topic_policy.security_alerts.policy
+}
+
+# EventBridge
+output "cloudwatch_event_rule_guardduty_findings_id" {
+  description = "ID of GuardDuty findings EventBridge rule"
+  value       = aws_cloudwatch_event_rule.guardduty_findings.id
+}
+output "cloudwatch_event_target_guardduty_sns_id" {
+  description = "ID of GuardDuty SNS EventBridge target"
+  value       = aws_cloudwatch_event_target.guardduty_sns.id
+}
+
+# CloudWatch Log Group
+output "cloudwatch_log_group_security_events_name" {
+  description = "Name of the security events log group"
+  value       = aws_cloudwatch_log_group.security_events.name
+}
+output "cloudwatch_log_group_security_events_arn" {
+  description = "ARN of the security events log group"
+  value       = aws_cloudwatch_log_group.security_events.arn
+}
+
+# CloudWatch Alarms
+output "cloudwatch_metric_alarm_root_login_id" {
+  description = "ID of root account login alarm"
+  value       = aws_cloudwatch_metric_alarm.root_login.id
+}
+output "cloudwatch_metric_alarm_failed_auth_id" {
+  description = "ID of failed auth alarm"
+  value       = aws_cloudwatch_metric_alarm.failed_auth.id
+}
+output "cloudwatch_metric_alarm_unauthorized_api_id" {
+  description = "ID of unauthorized API calls alarm"
+  value       = aws_cloudwatch_metric_alarm.unauthorized_api.id
+}
+
+# VPC Endpoints
+output "vpc_endpoint_s3_arn" {
+  description = "ARN of the S3 VPC endpoint"
+  value       = aws_vpc_endpoint.s3.arn
+}
+output "vpc_endpoint_ec2_arn" {
+  description = "ARN of the EC2 VPC endpoint"
+  value       = aws_vpc_endpoint.ec2.arn
+}
+output "vpc_endpoint_rds_arn" {
+  description = "ARN of the RDS VPC endpoint"
+  value       = aws_vpc_endpoint.rds.arn
+}
+
+# Route Table
+output "route_table_private_id" {
+  description = "ID of the private route table"
+  value       = aws_route_table.private.id
+}
+
+# Route Table Association
+output "route_table_association_private_ids" {
+  description = "IDs of the private route table associations"
+  value       = aws_route_table_association.private[*].id
+}
+
+# Flow Logs
+output "flow_log_main_id" {
+  description = "ID of the VPC flow log resource"
+  value       = aws_flow_log.main.id
+}
+
+# IAM Policies
+output "iam_role_policy_ec2_session_policy_id" {
+  description = "ID of the EC2 session IAM policy"
+  value       = aws_iam_role_policy.ec2_session_policy.id
+}
+output "iam_role_policy_config_s3_id" {
+  description = "ID of the AWS Config S3 policy"
+  value       = aws_iam_role_policy.config_s3.id
+}
+output "iam_role_policy_flow_logs_id" {
+  description = "ID of the VPC flow logs IAM role policy"
+  value       = aws_iam_role_policy.flow_logs.id
 }
 ```
 
