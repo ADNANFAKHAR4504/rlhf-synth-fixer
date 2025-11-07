@@ -32,18 +32,18 @@ if [ "$PLATFORM" = "cdk" ]; then
   POSSIBLE_REGIONS=${POSSIBLE_REGIONS:-"us-west-2,us-east-1,us-east-2,eu-west-1,ap-southeast-1,ap-northeast-1"}
   
   echo "Getting all CloudFormation stacks..."
-  echo "Searching for stacks containing: TapStack${ENVIRONMENT_SUFFIX}"
+  echo "Searching for stacks containing: TapStack-${ENVIRONMENT_SUFFIX} or TapStack${ENVIRONMENT_SUFFIX}"
   echo "Searching in regions: $POSSIBLE_REGIONS"
-  
+
   # Convert comma-separated regions to array
   IFS=',' read -ra REGIONS <<< "$POSSIBLE_REGIONS"
-  
+
   # Search across all regions
   > cf-stacks.txt  # Clear the file
   for region in "${REGIONS[@]}"; do
     echo "Searching in region: $region"
     aws cloudformation list-stacks --region "$region" --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --output json 2>/dev/null | \
-      jq -r ".StackSummaries[] | select(.StackName | contains(\"TapStack${ENVIRONMENT_SUFFIX}\")) | .StackName" >> cf-stacks.txt || true
+      jq -r ".StackSummaries[] | select(.StackName | contains(\"TapStack-${ENVIRONMENT_SUFFIX}\") or contains(\"TapStack${ENVIRONMENT_SUFFIX}\")) | .StackName" >> cf-stacks.txt || true
   done
   
   echo "Found stacks:"
