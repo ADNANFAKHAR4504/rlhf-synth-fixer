@@ -912,9 +912,9 @@ class TestE2ECloudTrailToS3(unittest.TestCase):
         """
         E2E: Trigger AWS API call, CloudTrail automatically captures it and writes to S3.
         
-        Entry Point: Create/Delete Security Group (single AWS API action)
+        Entry Point: Create/Delete S3 object tag (single AWS API action)
         Automatic Flow: 
-          - Service 1: AWS API
+          - Service 1: AWS API (S3 PutObjectTagging)
           - Service 2: CloudTrail writes to S3 automatically
           - Service 3: S3 stores with versioning automatically
         Verify: New CloudTrail log file appears in S3 with the event
@@ -944,27 +944,31 @@ class TestE2ECloudTrailToS3(unittest.TestCase):
             print(f"[INFO] No existing CloudTrail logs")
         
         # ENTRY POINT: Trigger AWS API call (single action - all else is automatic)
-        sg_name = f"integration-test-{int(time.time())}"
-        sg_id = None
+        test_key = f"e2e-test/cloudtrail-test-{int(time.time())}.txt"
         
         try:
-            print(f"\n[ENTRY POINT] Creating security group: {sg_name}")
+            print(f"\n[ENTRY POINT] Performing S3 API operations: {test_key}")
             print(f"[INFO] This single action will automatically trigger:")
             print(f"        1. CloudTrail captures the API event")
             print(f"        2. CloudTrail writes log to S3")
             print(f"        3. S3 stores with versioning")
             
-            response = ec2_client.create_security_group(
-                GroupName=sg_name,
-                Description='Integration test for CloudTrail E2E flow'
+            # First, create an object
+            s3_client.put_object(
+                Bucket=bucket_name,
+                Key=test_key,
+                Body=b'E2E CloudTrail test object',
+                ServerSideEncryption='AES256'
             )
-            sg_id = response['GroupId']
-            print(f"[SUCCESS] Security group created: {sg_id}")
+            print(f"[SUCCESS] S3 object created: {test_key}")
             
-            # Delete immediately to generate another event
-            ec2_client.delete_security_group(GroupId=sg_id)
-            print(f"[SUCCESS] Security group deleted (generates CloudTrail events)")
-            sg_id = None  # Mark as deleted
+            # Tag the object to generate another CloudTrail event
+            s3_client.put_object_tagging(
+                Bucket=bucket_name,
+                Key=test_key,
+                Tagging={'TagSet': [{'Key': 'TestType', 'Value': 'E2ECloudTrail'}]}
+            )
+            print(f"[SUCCESS] S3 object tagged (generates CloudTrail events)")
             
             # Wait for CloudTrail to process and write to S3
             print(f"\n[INFO] Waiting up to 3 minutes for CloudTrail to automatically write to S3...")
@@ -1015,10 +1019,11 @@ class TestE2ECloudTrailToS3(unittest.TestCase):
                                     record_count = len(log_json['Records'])
                                     print(f"[SUCCESS] Valid CloudTrail log with {record_count} event(s)")
                                     
-                                    # Check if our security group event is in there
+                                    # Check if our S3 events are in there
                                     for record in log_json['Records']:
-                                        if record.get('eventName') == 'CreateSecurityGroup':
-                                            print(f"[SUCCESS] Found our CreateSecurityGroup event in CloudTrail log!")
+                                        event_name = record.get('eventName')
+                                        if event_name in ['PutObject', 'PutObjectTagging']:
+                                            print(f"[SUCCESS] Found our {event_name} event in CloudTrail log!")
                                             break
                                 else:
                                     print(f"[INFO] Log file structure validated")
@@ -1038,7 +1043,7 @@ class TestE2ECloudTrailToS3(unittest.TestCase):
                 print(f"[PASS] E2E: AWS API Call -> CloudTrail -> S3")
                 print(f"{'='*80}")
                 print(f"\nE2E Flow Validated:")
-                print(f"  Entry Point:  EC2 CreateSecurityGroup API call")
+                print(f"  Entry Point:  S3 PutObject/PutObjectTagging API calls")
                 print(f"  Service 1:    CloudTrail captured the event automatically")
                 print(f"  Service 2:    CloudTrail wrote log file to S3 automatically")
                 print(f"  Service 3:    S3 stored with versioning automatically")
@@ -1047,7 +1052,7 @@ class TestE2ECloudTrailToS3(unittest.TestCase):
                 print(f"[INFO] E2E Infrastructure Validated")
                 print(f"{'='*80}")
                 print(f"\nE2E Flow Status:")
-                print(f"  Entry Point:  EC2 CreateSecurityGroup API call executed")
+                print(f"  Entry Point:  S3 API calls executed")
                 print(f"  Service 1:    CloudTrail is enabled and capturing events")
                 print(f"  Service 2:    S3 bucket configured with {initial_count} existing logs")
                 print(f"  Service 3:    S3 versioning enabled")
@@ -1058,13 +1063,12 @@ class TestE2ECloudTrailToS3(unittest.TestCase):
             print(f"[ERROR] Test failed: {str(e)}")
             raise
         finally:
-            # Cleanup: Delete security group if still exists
-            if sg_id:
-                try:
-                    ec2_client.delete_security_group(GroupId=sg_id)
-                    print(f"[CLEANUP] Deleted security group: {sg_id}")
-                except Exception as e:
-                    print(f"[WARNING] Could not delete security group: {e}")
+            # Cleanup: Delete test S3 object
+            try:
+                s3_client.delete_object(Bucket=bucket_name, Key=test_key)
+                print(f"[CLEANUP] Deleted test object: {test_key}")
+            except Exception as e:
+                print(f"[WARNING] Could not delete test object: {e}")
 
 
 if __name__ == '__main__':
