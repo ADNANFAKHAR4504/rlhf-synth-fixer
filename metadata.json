@@ -15,7 +15,6 @@
     "EC2",
     "S3",
     "IAM",
-    "CloudWatch Logs",
-    "VPC Flow Logs"
+    "CloudWatch Logs"
   ]
 }
