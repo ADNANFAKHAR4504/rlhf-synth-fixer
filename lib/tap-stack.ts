@@ -367,6 +367,43 @@ def handler(event, context):
     // Note: Fargate capacity providers (FARGATE and FARGATE_SPOT) are enabled by default
     // on ECS clusters. No need to explicitly enable them.
 
+    // Create a shared target group for all services in test environment
+    let sharedTargetGroup: elbv2.IApplicationTargetGroup | undefined;
+    let listener: elbv2.ApplicationListener | undefined;
+    if (alb && !albArn && vpc) {
+      // Create a single target group for all services in test environment
+      sharedTargetGroup = new elbv2.ApplicationTargetGroup(
+        this,
+        'SharedTargetGroup',
+        {
+          vpc: vpc,
+          port: containerPort,
+          protocol: elbv2.ApplicationProtocol.HTTP,
+          targetType: elbv2.TargetType.IP,
+          healthCheck: {
+            path: '/',
+            interval: cdk.Duration.seconds(30),
+            timeout: cdk.Duration.seconds(5),
+            healthyThresholdCount: 2,
+            unhealthyThresholdCount: 3,
+          },
+          deregistrationDelay: cdk.Duration.seconds(60),
+        }
+      );
+
+      cdk.Tags.of(sharedTargetGroup).add('Service', 'FinancialServices');
+      cdk.Tags.of(sharedTargetGroup).add('Environment', environmentSuffix);
+
+      // Create listener with the shared target group
+      listener = alb.addListener('DefaultListener', {
+        port: 80,
+        protocol: elbv2.ApplicationProtocol.HTTP,
+        defaultTargetGroups: [sharedTargetGroup],
+      });
+      cdk.Tags.of(listener).add('Service', 'FinancialServices');
+      cdk.Tags.of(listener).add('Environment', environmentSuffix);
+    }
+
     serviceNames.forEach((serviceName: string, index: number) => {
       // Create task definition
       const taskDefinition = new ecs.FargateTaskDefinition(
@@ -394,9 +431,10 @@ def handler(event, context):
       cdk.Tags.of(taskDefinition).add('Service', 'FinancialServices');
       cdk.Tags.of(taskDefinition).add('Environment', environmentSuffix);
 
-      // Create or reference target group
+      // Use shared target group for test environment, or reference provided target groups
       let targetGroup: elbv2.IApplicationTargetGroup | undefined;
       if (targetGroupArns && targetGroupArns[index]) {
+        // Use provided target group ARN
         targetGroup = elbv2.ApplicationTargetGroup.fromTargetGroupAttributes(
           this,
           `TargetGroup${index}`,
@@ -404,39 +442,9 @@ def handler(event, context):
             targetGroupArn: targetGroupArns[index],
           }
         );
-      } else if (alb && vpc) {
-        targetGroup = new elbv2.ApplicationTargetGroup(
-          this,
-          `TargetGroup${index}`,
-          {
-            vpc: vpc,
-            port: containerPort,
-            protocol: elbv2.ApplicationProtocol.HTTP,
-            targetType: elbv2.TargetType.IP,
-            healthCheck: {
-              path: '/',
-              interval: cdk.Duration.seconds(30),
-              timeout: cdk.Duration.seconds(5),
-              healthyThresholdCount: 2,
-              unhealthyThresholdCount: 3,
-            },
-            deregistrationDelay: cdk.Duration.seconds(60),
-          }
-        );
-
-        cdk.Tags.of(targetGroup).add('Service', 'FinancialServices');
-        cdk.Tags.of(targetGroup).add('Environment', environmentSuffix);
-
-        // Add target group to ALB listener (create listener if needed)
-        if (index === 0) {
-          const listener = alb.addListener(`Listener${index}`, {
-            port: 80,
-            protocol: elbv2.ApplicationProtocol.HTTP,
-            defaultTargetGroups: [targetGroup],
-          });
-          cdk.Tags.of(listener).add('Service', 'FinancialServices');
-          cdk.Tags.of(listener).add('Environment', environmentSuffix);
-        }
+      } else if (sharedTargetGroup) {
+        // Use shared target group for test environment
+        targetGroup = sharedTargetGroup;
       }
 
       // Create Fargate service with capacity provider strategy
