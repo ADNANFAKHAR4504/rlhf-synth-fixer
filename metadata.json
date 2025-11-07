@@ -11,6 +11,22 @@
     "Cloud Environment Setup"
   ],
   "aws_services": [
-    "cloudwatch"
-  ]
+    "API Gateway",
+    "CloudFront",
+    "CloudWatch",
+    "DynamoDB",
+    "IAM",
+    "KMS",
+    "Lambda",
+    "RDS",
+    "Route53",
+    "S3",
+    "SNS",
+    "SQS",
+    "Step Functions",
+    "SSM",
+    "EC2",
+    "Secrets Manager"
+  ],
+  "training_quality": 8
 }
