@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = 'integration';
@@ -180,7 +180,7 @@ describe('TapStack Integration Tests', () => {
       template.hasResourceProperties(
         'AWS::ElasticLoadBalancingV2::TargetGroup',
         {
-          HealthCheckPath: '/health',
+          HealthCheckPath: '/',
           HealthCheckIntervalSeconds: 30,
           HealthCheckTimeoutSeconds: 5,
           HealthyThresholdCount: 2,

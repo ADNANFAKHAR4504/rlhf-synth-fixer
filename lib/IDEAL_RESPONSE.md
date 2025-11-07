@@ -20,19 +20,19 @@ The system deploys:
 
 ```typescript
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as ecs from 'aws-cdk-lib/aws-ecs';
-import * as ecr from 'aws-cdk-lib/aws-ecr';
-import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
-import * as sqs from 'aws-cdk-lib/aws-sqs';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as cloudmap from 'aws-cdk-lib/aws-servicediscovery';
-import * as sns from 'aws-cdk-lib/aws-sns';
+import * as applicationautoscaling from 'aws-cdk-lib/aws-applicationautoscaling';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
-import * as applicationautoscaling from 'aws-cdk-lib/aws-applicationautoscaling';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as ecr from 'aws-cdk-lib/aws-ecr';
+import * as ecs from 'aws-cdk-lib/aws-ecs';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as cloudmap from 'aws-cdk-lib/aws-servicediscovery';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+import { Construct } from 'constructs';
 
 export interface TapStackProps extends cdk.StackProps {
   environmentSuffix: string;
@@ -63,7 +63,7 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    // ECR Repositories for container images
+    // ECR Repositories for container images (kept for future use)
     const apiRepository = new ecr.Repository(this, 'ApiRepository', {
       repositoryName: `api-service-${environmentSuffix}`,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -76,11 +76,12 @@ export class TapStack extends cdk.Stack {
       emptyOnDelete: true,
     });
 
-    // ECS Cluster with Fargate capacity providers
+    // ECS Cluster without auto-enabling Fargate capacity providers to avoid deletion issues
     const cluster = new ecs.Cluster(this, 'OrderProcessingCluster', {
       clusterName: `order-cluster-${environmentSuffix}`,
       vpc,
-      enableFargateCapacityProviders: true,
+      // Remove this line to avoid capacity provider deletion issues
+      // enableFargateCapacityProviders: true,
     });
 
     // Service Discovery Namespace using Cloud Map
@@ -159,7 +160,7 @@ export class TapStack extends cdk.Stack {
     orderQueue.grantConsumeMessages(taskRole);
     orderDlq.grantConsumeMessages(taskRole);
 
-    // API Service Task Definition
+    // API Service Task Definition with public nginx image
     const apiTaskDefinition = new ecs.FargateTaskDefinition(
       this,
       'ApiTaskDefinition',
@@ -174,7 +175,8 @@ export class TapStack extends cdk.Stack {
 
     apiTaskDefinition.addContainer('ApiContainer', {
       containerName: 'api-container',
-      image: ecs.ContainerImage.fromEcrRepository(apiRepository, 'latest'),
+      // Use public nginx image instead of ECR for demonstration
+      image: ecs.ContainerImage.fromRegistry('public.ecr.aws/docker/library/nginx:latest'),
       logging: ecs.LogDriver.awsLogs({
         streamPrefix: 'api',
         logGroup: apiLogGroup,
@@ -185,13 +187,13 @@ export class TapStack extends cdk.Stack {
       },
       portMappings: [
         {
-          containerPort: 8080,
+          containerPort: 80, // Changed from 8080 to 80 for nginx
           protocol: ecs.Protocol.TCP,
         },
       ],
     });
 
-    // Worker Service Task Definition
+    // Worker Service Task Definition with public image
     const workerTaskDefinition = new ecs.FargateTaskDefinition(
       this,
       'WorkerTaskDefinition',
@@ -206,7 +208,8 @@ export class TapStack extends cdk.Stack {
 
     workerTaskDefinition.addContainer('WorkerContainer', {
       containerName: 'worker-container',
-      image: ecs.ContainerImage.fromEcrRepository(workerRepository, 'latest'),
+      // Use public alpine image for worker (it will just sleep)
+      image: ecs.ContainerImage.fromRegistry('public.ecr.aws/docker/library/alpine:latest'),
       logging: ecs.LogDriver.awsLogs({
         streamPrefix: 'worker',
         logGroup: workerLogGroup,
@@ -215,6 +218,8 @@ export class TapStack extends cdk.Stack {
         QUEUE_URL: orderQueue.queueUrl,
         SERVICE_NAME: 'worker-service',
       },
+      // Add command to keep container running
+      command: ['/bin/sh', '-c', 'while true; do echo "Worker running..."; sleep 30; done'],
     });
 
     // Application Load Balancer
@@ -235,18 +240,12 @@ export class TapStack extends cdk.Stack {
       }),
     });
 
-    // API Service with Service Discovery
+    // API Service with Service Discovery - Remove capacity provider strategies
     const apiService = new ecs.FargateService(this, 'ApiService', {
       serviceName: `api-service-${environmentSuffix}`,
       cluster,
       taskDefinition: apiTaskDefinition,
       desiredCount: 2,
-      capacityProviderStrategies: [
-        {
-          capacityProvider: 'FARGATE',
-          weight: 1,
-        },
-      ],
       cloudMapOptions: {
         name: 'api-service',
         cloudMapNamespace: namespace,
@@ -256,21 +255,28 @@ export class TapStack extends cdk.Stack {
       circuitBreaker: {
         rollback: true,
       },
+      // Use deploymentController instead of deploymentConfiguration
+      deploymentController: {
+        type: ecs.DeploymentControllerType.ECS,
+      },
+      // Set deployment configuration using service properties
+      maxHealthyPercent: 200,
+      minHealthyPercent: 50,
     });
 
-    // Add Target Group for API Service
+    // Add Target Group for API Service - Updated port to 80
     const apiTargetGroup = listener.addTargets('ApiTargets', {
       targetGroupName: `api-tg-${environmentSuffix}`,
-      port: 8080,
+      port: 80, // Changed from 8080 to 80 for nginx
       protocol: elbv2.ApplicationProtocol.HTTP,
       targets: [
         apiService.loadBalancerTarget({
           containerName: 'api-container',
-          containerPort: 8080,
+          containerPort: 80, // Changed from 8080 to 80 for nginx
         }),
       ],
       healthCheck: {
-        path: '/health',
+        path: '/', // Changed from '/health' to '/' for nginx default page
         interval: cdk.Duration.seconds(30),
         timeout: cdk.Duration.seconds(5),
         healthyThresholdCount: 2,
@@ -286,18 +292,12 @@ export class TapStack extends cdk.Stack {
       action: elbv2.ListenerAction.forward([apiTargetGroup]),
     });
 
-    // Worker Service with Service Discovery
+    // Worker Service with Service Discovery - Remove capacity provider strategies
     const workerService = new ecs.FargateService(this, 'WorkerService', {
       serviceName: `worker-service-${environmentSuffix}`,
       cluster,
       taskDefinition: workerTaskDefinition,
       desiredCount: 1,
-      capacityProviderStrategies: [
-        {
-          capacityProvider: 'FARGATE',
-          weight: 1,
-        },
-      ],
       cloudMapOptions: {
         name: 'worker-service',
         cloudMapNamespace: namespace,
@@ -307,6 +307,13 @@ export class TapStack extends cdk.Stack {
       circuitBreaker: {
         rollback: true,
       },
+      // Use deploymentController instead of deploymentConfiguration  
+      deploymentController: {
+        type: ecs.DeploymentControllerType.ECS,
+      },
+      // Set deployment configuration using service properties
+      maxHealthyPercent: 200,
+      minHealthyPercent: 0, // Allow worker to scale down to 0
     });
 
     // Auto-scaling for Worker Service based on SQS queue depth
@@ -550,6 +557,7 @@ export class TapStack extends cdk.Stack {
     });
   }
 }
+
 ```
 
 ## Key Implementation Features

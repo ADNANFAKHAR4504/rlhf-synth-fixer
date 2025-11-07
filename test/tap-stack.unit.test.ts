@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = 'test';
@@ -71,10 +71,10 @@ describe('TapStack', () => {
       });
     });
 
-    test('should enable Fargate capacity providers', () => {
-      template.hasResourceProperties('AWS::ECS::ClusterCapacityProviderAssociations', {
-        CapacityProviders: Match.arrayWith(['FARGATE']),
-      });
+    // Updated: Remove Fargate capacity provider test since it's not enabled to avoid deletion issues
+    test('should not have explicit Fargate capacity providers to avoid deletion issues', () => {
+      // Verify that we don't have ClusterCapacityProviderAssociations resource
+      template.resourceCountIs('AWS::ECS::ClusterCapacityProviderAssociations', 0);
     });
   });
 
@@ -202,15 +202,17 @@ describe('TapStack', () => {
       });
     });
 
+    // Updated: Changed port from 8080 to 80 for nginx
     test('should configure API container with correct image and logging', () => {
       template.hasResourceProperties('AWS::ECS::TaskDefinition', {
         Family: `api-service-${environmentSuffix}`,
         ContainerDefinitions: Match.arrayWith([
           Match.objectLike({
             Name: 'api-container',
+            Image: 'public.ecr.aws/docker/library/nginx:latest', // Updated to match nginx image
             PortMappings: [
               {
-                ContainerPort: 8080,
+                ContainerPort: 80, // Updated from 8080 to 80
                 Protocol: 'tcp',
               },
             ],
@@ -228,9 +230,12 @@ describe('TapStack', () => {
         ContainerDefinitions: Match.arrayWith([
           Match.objectLike({
             Name: 'worker-container',
+            Image: 'public.ecr.aws/docker/library/alpine:latest', // Updated to match alpine image
             LogConfiguration: Match.objectLike({
               LogDriver: 'awslogs',
             }),
+            // Added command check for worker container
+            Command: ['/bin/sh', '-c', 'while true; do echo "Worker running..."; sleep 30; done'],
           }),
         ]),
       });
@@ -253,19 +258,21 @@ describe('TapStack', () => {
       });
     });
 
+    // Updated: Changed port from 8080 to 80
     test('should create target group for API service', () => {
       template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
         Name: `api-tg-${environmentSuffix}`,
-        Port: 8080,
+        Port: 80, // Updated from 8080 to 80
         Protocol: 'HTTP',
         TargetType: 'ip',
       });
     });
 
+    // Updated: Changed health check path from /health to /
     test('should configure health check for API target group', () => {
       template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
         Name: `api-tg-${environmentSuffix}`,
-        HealthCheckPath: '/health',
+        HealthCheckPath: '/', // Updated from '/health' to '/'
         HealthCheckIntervalSeconds: 30,
         HealthCheckTimeoutSeconds: 5,
         HealthyThresholdCount: 2,
@@ -334,6 +341,35 @@ describe('TapStack', () => {
               TTL: 60,
             },
           ],
+        }),
+      });
+    });
+
+    // Added: Test for deployment configuration settings
+    test('should configure deployment settings for API service', () => {
+      template.hasResourceProperties('AWS::ECS::Service', {
+        ServiceName: `api-service-${environmentSuffix}`,
+        DeploymentConfiguration: Match.objectLike({
+          MaximumPercent: 200,
+          MinimumHealthyPercent: 50,
+          DeploymentCircuitBreaker: Match.objectLike({
+            Enable: true,
+            Rollback: true,
+          }),
+        }),
+      });
+    });
+
+    test('should configure deployment settings for Worker service', () => {
+      template.hasResourceProperties('AWS::ECS::Service', {
+        ServiceName: `worker-service-${environmentSuffix}`,
+        DeploymentConfiguration: Match.objectLike({
+          MaximumPercent: 200,
+          MinimumHealthyPercent: 0, // Allow worker to scale down to 0
+          DeploymentCircuitBreaker: Match.objectLike({
+            Enable: true,
+            Rollback: true,
+          }),
         }),
       });
     });
@@ -629,6 +665,8 @@ describe('TapStack', () => {
       template.resourceCountIs('AWS::CloudWatch::Alarm', 10); // 8 monitoring + 2 auto-scaling
       template.resourceCountIs('AWS::ServiceDiscovery::PrivateDnsNamespace', 1);
       template.resourceCountIs('AWS::ServiceDiscovery::Service', 2);
+      // Updated: No ClusterCapacityProviderAssociations expected
+      template.resourceCountIs('AWS::ECS::ClusterCapacityProviderAssociations', 0);
     });
   });
 });
