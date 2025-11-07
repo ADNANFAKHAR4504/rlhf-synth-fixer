@@ -2116,7 +2116,6 @@ Resources:
     Type: AWS::Config::ConfigurationRecorder
     DependsOn:
       - ConfigBucketPolicy
-      - DeliveryChannel
     Properties:
       Name: !Sub ${ProjectName}-${Environment}-Recorder
       RoleARN: !GetAtt ConfigRole.Arn
@@ -2132,6 +2131,8 @@ Resources:
 
   DeliveryChannel:
     Type: AWS::Config::DeliveryChannel
+    DependsOn:
+      - ConfigRecorder
     Properties:
       Name: !Sub ${ProjectName}-${Environment}-DeliveryChannel
       S3BucketName: !Ref ConfigBucket
