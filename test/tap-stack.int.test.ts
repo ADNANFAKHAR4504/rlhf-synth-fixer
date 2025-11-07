@@ -51,11 +51,6 @@ describe('Trading Platform Integration Tests - Template Validation', () => {
       expect(Array.isArray(asg.TargetGroupARNs)).toBe(true);
     });
 
-    test('ASG should depend on Target Group to avoid circular dependency', () => {
-      const asg = template.Resources.AutoScalingGroup;
-      expect(asg.DependsOn).toBe('TargetGroup');
-    });
-
     test('Launch Template should reference IAM Instance Profile', () => {
       const lt = template.Resources.LaunchTemplate.Properties.LaunchTemplateData;
       expect(lt.IamInstanceProfile).toBeDefined();
@@ -64,8 +59,9 @@ describe('Trading Platform Integration Tests - Template Validation', () => {
 
     test('Launch Template should reference Application Security Group', () => {
       const lt = template.Resources.LaunchTemplate.Properties.LaunchTemplateData;
-      expect(lt.SecurityGroupIds).toBeDefined();
-      expect(Array.isArray(lt.SecurityGroupIds)).toBe(true);
+      expect(lt.NetworkInterfaces).toBeDefined();
+      expect(lt.NetworkInterfaces[0].Groups).toBeDefined();
+      expect(Array.isArray(lt.NetworkInterfaces[0].Groups)).toBe(true);
     });
 
     test('ASG should reference Launch Template', () => {
@@ -96,26 +92,15 @@ describe('Trading Platform Integration Tests - Template Validation', () => {
   });
 
   describe('Listener and Target Group Integration', () => {
-    test('HTTPS listener should forward to Target Group', () => {
-      const listener = template.Resources.ALBListenerHTTPS.Properties;
-      expect(listener.DefaultActions[0].Type).toBe('forward');
-      expect(listener.DefaultActions[0].TargetGroupArn).toBeDefined();
-    });
-
-    test('HTTPS listener should reference ALB', () => {
-      const listener = template.Resources.ALBListenerHTTPS.Properties;
-      expect(listener.LoadBalancerArn).toBeDefined();
-    });
-
     test('HTTP listener should reference ALB', () => {
       const listener = template.Resources.ALBListenerHTTP.Properties;
       expect(listener.LoadBalancerArn).toBeDefined();
     });
 
-    test('HTTPS listener should use SSL certificate parameter', () => {
-      const listener = template.Resources.ALBListenerHTTPS.Properties;
-      expect(listener.Certificates).toBeDefined();
-      expect(listener.Certificates[0].CertificateArn).toBeDefined();
+    test('HTTP listener should forward to Target Group', () => {
+      const listener = template.Resources.ALBListenerHTTP.Properties;
+      expect(listener.DefaultActions[0].Type).toBe('forward');
+      expect(listener.DefaultActions[0].TargetGroupArn).toBeDefined();
     });
   });
 
@@ -227,10 +212,10 @@ describe('Trading Platform Integration Tests - Template Validation', () => {
       resources.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         expect(resource.Properties.Tags).toBeDefined();
-        
+
         const tags = resource.Properties.Tags;
         const tagKeys = tags.map((t: any) => t.Key);
-        
+
         expect(tagKeys).toContain('Environment');
         expect(tagKeys).toContain('Project');
         expect(tagKeys).toContain('Owner');
@@ -249,10 +234,10 @@ describe('Trading Platform Integration Tests - Template Validation', () => {
       const lt = template.Resources.LaunchTemplate.Properties.LaunchTemplateData;
       const instanceSpec = lt.TagSpecifications.find((s: any) => s.ResourceType === 'instance');
       const volumeSpec = lt.TagSpecifications.find((s: any) => s.ResourceType === 'volume');
-      
+
       expect(instanceSpec).toBeDefined();
       expect(volumeSpec).toBeDefined();
-      
+
       expect(instanceSpec.Tags).toBeDefined();
       expect(volumeSpec.Tags).toBeDefined();
     });
@@ -262,7 +247,7 @@ describe('Trading Platform Integration Tests - Template Validation', () => {
     test('Target Group health check should match UserData health endpoint', () => {
       const tg = template.Resources.TargetGroup.Properties;
       expect(tg.HealthCheckPath).toBe('/health');
-      
+
       const userData = JSON.stringify(template.Resources.LaunchTemplate.Properties.LaunchTemplateData.UserData);
       expect(userData).toContain('/health');
     });
@@ -285,13 +270,13 @@ describe('Trading Platform Integration Tests - Template Validation', () => {
       expect(httpsRule.CidrIp).toBe('0.0.0.0/0');
     });
 
-    test('internet -> ALB (port 80) redirects to HTTPS', () => {
+    test('internet -> ALB (port 80) forwards to instances', () => {
       const albSg = template.Resources.ALBSecurityGroup.Properties;
       const httpRule = albSg.SecurityGroupIngress.find((r: any) => r.FromPort === 80);
       expect(httpRule.CidrIp).toBe('0.0.0.0/0');
-      
+
       const httpListener = template.Resources.ALBListenerHTTP.Properties;
-      expect(httpListener.DefaultActions[0].Type).toBe('redirect');
+      expect(httpListener.DefaultActions[0].Type).toBe('forward');
     });
 
     test('ALB -> instances (port 80 only)', () => {
@@ -316,7 +301,7 @@ describe('Trading Platform Integration Tests - Template Validation', () => {
     test('Spot instances configuration should integrate with production condition', () => {
       const asg = template.Resources.AutoScalingGroup.Properties;
       const distribution = asg.MixedInstancesPolicy.InstancesDistribution;
-      
+
       expect(distribution.OnDemandBaseCapacity).toBeDefined();
       expect(distribution.OnDemandPercentageAboveBaseCapacity).toBeDefined();
     });

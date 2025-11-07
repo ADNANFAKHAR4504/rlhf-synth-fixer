@@ -1,3 +1,4 @@
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Optimized Trading Platform Infrastructure - Refactored for performance, cost, and maintainability'
 

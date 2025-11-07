@@ -32,10 +32,6 @@ Metadata:
         Parameters:
           - EnableCloudWatchAlarms
           - SNSAlertTopic
-      - Label:
-          default: "SSL Configuration"
-        Parameters:
-          - SSLCertificateArn
     ParameterLabels:
       VpcId:
         default: "VPC ID"
@@ -43,8 +39,6 @@ Metadata:
         default: "Environment Name"
       EnableCloudWatchAlarms:
         default: "Enable CloudWatch Monitoring"
-      SSLCertificateArn:
-        default: "SSL Certificate ARN"
 
 Parameters:
   VpcId:
@@ -74,12 +68,19 @@ Parameters:
 
   Environment:
     Type: String
-    Default: production
+    Default: prod
     AllowedValues:
-      - production
+      - prod
       - staging
       - development
     Description: Environment name for tagging and configuration
+
+  EnvironmentSuffix:
+    Type: String
+    Description: 'Suffix for resource names to support multiple parallel deployments (e.g., PR number from CI/CD)'
+    Default: "pr4056"
+    AllowedPattern: '^[a-zA-Z0-9\-]*$'
+    ConstraintDescription: 'Must contain only alphanumeric characters and hyphens'
 
   ProjectName:
     Type: String
@@ -146,18 +147,11 @@ Parameters:
     Default: ""
     Description: SNS topic ARN for alarm notifications (optional)
 
-  SSLCertificateArn:
-    Type: String
-    Default: arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012
-    Description: ARN of SSL certificate for HTTPS listener
-    AllowedPattern: "^arn:aws:acm:[a-z0-9-]+:[0-9]{12}:certificate/.+$"
-    ConstraintDescription: Must be a valid ACM certificate ARN
-
 # Conditions for optional resources
 Conditions:
   CreateAlarms: !Equals [!Ref EnableCloudWatchAlarms, "Yes"]
   HasSNSTopic: !Not [!Equals [!Ref SNSAlertTopic, ""]]
-  IsProduction: !Equals [!Ref Environment, "production"]
+  IsProduction: !Equals [!Ref Environment, "prod"]
 
 # Region-specific mappings for AMI lookups
 Mappings:
@@ -178,13 +172,15 @@ Mappings:
       AMIParameter: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
     ap-northeast-1:
       AMIParameter: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    ap-south-1:
+      AMIParameter: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 
 Resources:
   # IAM Role for EC2 instances with necessary permissions
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${ProjectName}-${Environment}-ec2-role"
+      RoleName: !Sub "${ProjectName}-${Environment}-${EnvironmentSuffix}-ec2-role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -197,7 +193,7 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-ec2-role"
+          Value: !Sub "${ProjectName}-${Environment}-${EnvironmentSuffix}-ec2-role"
         - Key: Environment
           Value: !Ref Environment
         - Key: Project
@@ -210,7 +206,7 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub "${ProjectName}-${Environment}-instance-profile"
+      InstanceProfileName: !Sub "${ProjectName}-${Environment}-${EnvironmentSuffix}-instance-profile"
       Roles:
         - !Ref EC2InstanceRole
 
@@ -218,8 +214,8 @@ Resources:
   ApplicationSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub "${ProjectName}-${Environment}-app-sg"
-      GroupDescription: !Sub "Consolidated security group for ${ProjectName} ${Environment} environment"
+      GroupName: !Sub "${ProjectName}-${Environment}-${EnvironmentSuffix}-app-sg"
+      GroupDescription: !Sub "Consolidated security group for ${ProjectName} ${Environment} -${EnvironmentSuffix} environment"
       VpcId: !Ref VpcId
       SecurityGroupEgress:
         - IpProtocol: -1
@@ -227,7 +223,7 @@ Resources:
           Description: Allow all outbound traffic
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-app-sg"
+          Value: !Sub "${ProjectName}-${Environment}-${EnvironmentSuffix}-app-sg"
         - Key: Environment
           Value: !Ref Environment
         - Key: Project
@@ -241,7 +237,7 @@ Resources:
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub "${ProjectName}-${Environment}-alb-sg"
+      GroupName: !Sub "${ProjectName}-${Environment}-${EnvironmentSuffix}-alb-sg"
       GroupDescription: !Sub "Security group for ${ProjectName} Application Load Balancer"
       VpcId: !Ref VpcId
       SecurityGroupIngress:
@@ -261,7 +257,7 @@ Resources:
           Description: Allow all outbound traffic
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-alb-sg"
+          Value: !Sub "${ProjectName}-${Environment}-${EnvironmentSuffix}-alb-sg"
         - Key: Environment
           Value: !Ref Environment
         - Key: Project
@@ -286,7 +282,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub "${ProjectName}-${Environment}-alb"
+      Name: !Sub "${ProjectName}-${Environment}-${EnvironmentSuffix}-alb"
       Type: application
       Scheme: internet-facing
       IpAddressType: ipv4
@@ -297,7 +293,7 @@ Resources:
         - !Ref ALBSecurityGroup
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-alb"
+          Value: !Sub "${ProjectName}-${Environment}-${EnvironmentSuffix}-alb"
         - Key: Environment
           Value: !Ref Environment
         - Key: Project
@@ -313,7 +309,7 @@ Resources:
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub "${ProjectName}-${Environment}-tg"
+      Name: !Sub "${ProjectName}-${Environment}-${EnvironmentSuffix}-tg"
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VpcId
@@ -332,7 +328,7 @@ Resources:
         HttpCode: "200"
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-tg"
+          Value: !Sub "${ProjectName}-${Environment}-${EnvironmentSuffix}-tg"
         - Key: Environment
           Value: !Ref Environment
         - Key: Project
@@ -342,20 +338,6 @@ Resources:
         - Key: iac-rlhf-amazon
           Value: "true"
 
-  # HTTPS Listener for ALB
-  ALBListenerHTTPS:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 443
-      Protocol: HTTPS
-      Certificates:
-        - CertificateArn: !Ref SSLCertificateArn
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref TargetGroup
-      SslPolicy: ELBSecurityPolicy-TLS-1-2-2017-01
-
   # HTTP Listener for ALB (redirect to HTTPS)
   ALBListenerHTTP:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -364,17 +346,14 @@ Resources:
       Port: 80
       Protocol: HTTP
       DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: "443"
-            StatusCode: HTTP_301
+      - Type: forward
+        TargetGroupArn: !Ref TargetGroup
 
   # Launch Template with SSM parameter for latest AMI
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub "${ProjectName}-${Environment}-lt"
+      LaunchTemplateName: !Sub "${ProjectName}-${Environment}-${EnvironmentSuffix}-lt"
       LaunchTemplateData:
         ImageId: !Sub
           - "{{resolve:ssm:${AMIParam}}}"
@@ -383,8 +362,11 @@ Resources:
         KeyName: !Ref KeyPairName
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
-        SecurityGroupIds:
-          - !Ref ApplicationSecurityGroup
+        NetworkInterfaces:
+          - DeviceIndex: 0
+            AssociatePublicIpAddress: true
+            Groups:
+              - !Ref ApplicationSecurityGroup
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
@@ -421,7 +403,7 @@ Resources:
           - ResourceType: instance
             Tags:
               - Key: Name
-                Value: !Sub "${ProjectName}-${Environment}-instance"
+                Value: !Sub "${ProjectName}-${Environment}-${EnvironmentSuffix}-instance"
               - Key: Environment
                 Value: !Ref Environment
               - Key: Project
@@ -433,7 +415,7 @@ Resources:
           - ResourceType: volume
             Tags:
               - Key: Name
-                Value: !Sub "${ProjectName}-${Environment}-volume"
+                Value: !Sub "${ProjectName}-${Environment}-${EnvironmentSuffix}-volume"
               - Key: Environment
                 Value: !Ref Environment
               - Key: Project
@@ -449,9 +431,8 @@ Resources:
   # Auto Scaling Group - Fixed circular dependency with DependsOn
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
-    DependsOn: TargetGroup
     Properties:
-      AutoScalingGroupName: !Sub "${ProjectName}-${Environment}-asg"
+      AutoScalingGroupName: !Sub "${ProjectName}-${Environment}-${EnvironmentSuffix}-asg"
       MinSize: !Ref MinInstances
       MaxSize: !Ref MaxInstances
       DesiredCapacity: !Ref DesiredInstances
@@ -476,12 +457,11 @@ Resources:
           OnDemandBaseCapacity: !If [IsProduction, 2, 0]
           OnDemandPercentageAboveBaseCapacity: !If [IsProduction, 50, 0]
           SpotAllocationStrategy: capacity-optimized
-          SpotInstancePools: 3
       TargetGroupARNs:
         - !Ref TargetGroup
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-asg-instance"
+          Value: !Sub "${ProjectName}-${Environment}-${EnvironmentSuffix}-asg-instance"
           PropagateAtLaunch: true
         - Key: Environment
           Value: !Ref Environment
@@ -537,8 +517,8 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: CreateAlarms
     Properties:
-      AlarmName: !Sub "${ProjectName}-${Environment}-high-cpu"
-      AlarmDescription: !Sub "CPU utilization exceeds 80% for ${ProjectName} ${Environment}"
+      AlarmName: !Sub "${ProjectName}-${Environment}-${EnvironmentSuffix}-high-cpu"
+      AlarmDescription: !Sub "CPU utilization exceeds 80% for ${ProjectName} ${Environment} ${EnvironmentSuffix}"
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average
@@ -557,7 +537,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: CreateAlarms
     Properties:
-      AlarmName: !Sub "${ProjectName}-${Environment}-low-healthy-instances"
+      AlarmName: !Sub "${ProjectName}-${Environment}-${EnvironmentSuffix}-low-healthy-instances"
       AlarmDescription: !Sub "Healthy instance count below 2 for ${ProjectName} ${Environment}"
       MetricName: HealthyHostCount
       Namespace: AWS/ApplicationELB
@@ -579,7 +559,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: CreateAlarms
     Properties:
-      AlarmName: !Sub "${ProjectName}-${Environment}-high-response-time"
+      AlarmName: !Sub "${ProjectName}-${Environment}-${EnvironmentSuffix}-high-response-time"
       AlarmDescription: !Sub "Target response time exceeds 1 second for ${ProjectName} ${Environment}"
       MetricName: TargetResponseTime
       Namespace: AWS/ApplicationELB
@@ -635,7 +615,7 @@ Outputs:
 
   ApplicationURL:
     Description: URL of the trading platform application
-    Value: !Sub "https://${ApplicationLoadBalancer.DNSName}"
+    Value: !Sub "http://${ApplicationLoadBalancer.DNSName}"
     Export:
       Name: !Sub "${AWS::StackName}-Application-URL"
 

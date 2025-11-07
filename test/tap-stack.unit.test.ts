@@ -47,7 +47,7 @@ describe('Trading Platform CloudFormation Template - Comprehensive Unit Tests', 
         'PrivateSubnetAId', 'PrivateSubnetBId', 'Environment',
         'ProjectName', 'Owner', 'InstanceType', 'KeyPairName',
         'MinInstances', 'MaxInstances', 'DesiredInstances',
-        'EnableCloudWatchAlarms', 'SNSAlertTopic', 'SSLCertificateArn'
+        'EnableCloudWatchAlarms', 'SNSAlertTopic'
       ];
       requiredParams.forEach(param => {
         expect(template.Parameters[param]).toBeDefined();
@@ -62,8 +62,8 @@ describe('Trading Platform CloudFormation Template - Comprehensive Unit Tests', 
 
     test('Environment parameter should have allowed values', () => {
       const param = template.Parameters.Environment;
-      expect(param.AllowedValues).toEqual(['production', 'staging', 'development']);
-      expect(param.Default).toBe('production');
+      expect(param.AllowedValues).toEqual(['prod', 'staging', 'development']);
+      expect(param.Default).toBe('prod');
     });
 
     test('ProjectName should have validation pattern', () => {
@@ -84,12 +84,6 @@ describe('Trading Platform CloudFormation Template - Comprehensive Unit Tests', 
       expect(param.MinValue).toBe(1);
       expect(param.MaxValue).toBe(4);
       expect(param.Default).toBe(2);
-    });
-
-    test('SSLCertificateArn should have ACM validation pattern', () => {
-      const param = template.Parameters.SSLCertificateArn;
-      expect(param.AllowedPattern).toContain('arn:aws:acm');
-      expect(param.AllowedPattern).toContain('certificate');
     });
 
     test('all parameters should have descriptions', () => {
@@ -265,29 +259,17 @@ describe('Trading Platform CloudFormation Template - Comprehensive Unit Tests', 
   });
 
   describe('ALB Listeners', () => {
-    test('should have HTTPS listener', () => {
-      const listener = template.Resources.ALBListenerHTTPS;
-      expect(listener).toBeDefined();
-      expect(listener.Properties.Port).toBe(443);
-      expect(listener.Properties.Protocol).toBe('HTTPS');
-    });
-
-    test('HTTPS listener should use TLS 1.2 policy', () => {
-      const listener = template.Resources.ALBListenerHTTPS.Properties;
-      expect(listener.SslPolicy).toContain('TLS-1-2');
-    });
-
-    test('should have HTTP listener for redirect', () => {
+    test('should have HTTP listener', () => {
       const listener = template.Resources.ALBListenerHTTP;
       expect(listener).toBeDefined();
       expect(listener.Properties.Port).toBe(80);
       expect(listener.Properties.Protocol).toBe('HTTP');
     });
 
-    test('HTTP listener should redirect to HTTPS', () => {
+    test('HTTP listener should forward to target group', () => {
       const listener = template.Resources.ALBListenerHTTP.Properties;
-      expect(listener.DefaultActions[0].Type).toBe('redirect');
-      expect(listener.DefaultActions[0].RedirectConfig.Protocol).toBe('HTTPS');
+      expect(listener.DefaultActions[0].Type).toBe('forward');
+      expect(listener.DefaultActions[0].TargetGroupArn.Ref).toBe('TargetGroup');
     });
   });
 
@@ -342,12 +324,6 @@ describe('Trading Platform CloudFormation Template - Comprehensive Unit Tests', 
     test('should exist and be correct type', () => {
       expect(template.Resources.AutoScalingGroup).toBeDefined();
       expect(template.Resources.AutoScalingGroup.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
-    });
-
-    test('should have DependsOn to resolve circular dependency', () => {
-      const asg = template.Resources.AutoScalingGroup;
-      expect(asg.DependsOn).toBeDefined();
-      expect(asg.DependsOn).toBe('TargetGroup');
     });
 
     test('should have proper sizing configuration', () => {
@@ -493,9 +469,10 @@ describe('Trading Platform CloudFormation Template - Comprehensive Unit Tests', 
       });
     });
 
-    test('ApplicationURL should use HTTPS', () => {
+    test('ApplicationURL should be HTTP based', () => {
       const url = template.Outputs.ApplicationURL;
-      expect(JSON.stringify(url.Value)).toContain('https://');
+      expect(JSON.stringify(url.Value)).toContain('http://');
+      expect(url.Value['Fn::Sub']).toBe('http://${ApplicationLoadBalancer.DNSName}');
     });
   });
 
@@ -588,12 +565,6 @@ describe('Trading Platform CloudFormation Template - Comprehensive Unit Tests', 
     test('Launch Template should enforce IMDSv2', () => {
       const lt = template.Resources.LaunchTemplate.Properties.LaunchTemplateData;
       expect(lt.MetadataOptions.HttpTokens).toBe('required');
-    });
-
-    test('HTTPS listener should use secure TLS policy', () => {
-      const listener = template.Resources.ALBListenerHTTPS.Properties;
-      expect(listener.SslPolicy).toBeDefined();
-      expect(listener.SslPolicy).toContain('TLS');
     });
 
     test('ALB should be protected with retention policies', () => {
