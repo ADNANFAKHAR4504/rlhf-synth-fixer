@@ -627,7 +627,7 @@ export class SecurityServicesModule extends Construct {
 
     // Create S3 bucket for CloudTrail and Config
     const bucket = new aws.s3Bucket.S3Bucket(this, 'security-bucket', {
-      bucket: `security-logs-${tags['Environment'] || 'dev'}-${Date.now()}`,
+      bucket: `security-logs-${tags['Environment'] || 'dev'}}`,
       tags,
     });
 
@@ -752,7 +752,7 @@ export class SecurityServicesModule extends Construct {
     });
 
     this.cloudTrail = new aws.cloudtrail.Cloudtrail(this, 'trail', {
-      name: `security-trail-ts-${tags['Environment'] || 'dev'}`,
+      name: `security-trail-${tags['Environment'] || 'dev'}`,
       s3BucketName: bucket.id,
       includeGlobalServiceEvents: true,
       isMultiRegionTrail: true,

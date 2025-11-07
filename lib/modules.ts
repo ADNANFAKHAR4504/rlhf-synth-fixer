@@ -601,6 +601,12 @@ export class SecurityServicesModule extends Construct {
   ) {
     super(scope, id);
 
+    // Get account ID for unique naming
+    const accountData = new aws.dataAwsCallerIdentity.DataAwsCallerIdentity(
+      this,
+      'account'
+    );
+
     // Enable Security Hub
     this.securityHub = new aws.securityhubAccount.SecurityhubAccount(
       this,
@@ -622,9 +628,10 @@ export class SecurityServicesModule extends Construct {
       }
     );
 
-    // Create S3 bucket for CloudTrail and Config
+    // Create S3 bucket for CloudTrail and Config with unique name
     const bucket = new aws.s3Bucket.S3Bucket(this, 'security-bucket', {
-      bucket: `security-logs-${tags['Environment'] || 'dev'}}`,
+      bucket: `security-logs-${tags['Environment'] || 'dev'}-${accountData.accountId}`,
+      forceDestroy: false, // Prevent accidental deletion
       tags,
     });
 
@@ -715,38 +722,43 @@ export class SecurityServicesModule extends Construct {
       }
     );
 
-    // Bucket policy for CloudTrail
-    new aws.s3BucketPolicy.S3BucketPolicy(this, 'cloudtrail-bucket-policy', {
-      bucket: bucket.id,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Sid: 'AWSCloudTrailAclCheck',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'cloudtrail.amazonaws.com',
+    // Bucket policy for CloudTrail - with explicit dependencies
+    const bucketPolicy = new aws.s3BucketPolicy.S3BucketPolicy(
+      this,
+      'cloudtrail-bucket-policy',
+      {
+        bucket: bucket.id,
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Sid: 'AWSCloudTrailAclCheck',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'cloudtrail.amazonaws.com',
+              },
+              Action: 's3:GetBucketAcl',
+              Resource: bucket.arn,
             },
-            Action: 's3:GetBucketAcl',
-            Resource: bucket.arn,
-          },
-          {
-            Sid: 'AWSCloudTrailWrite',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'cloudtrail.amazonaws.com',
-            },
-            Action: 's3:PutObject',
-            Resource: `${bucket.arn}/*`,
-            Condition: {
-              StringEquals: {
-                's3:x-amz-acl': 'bucket-owner-full-control',
+            {
+              Sid: 'AWSCloudTrailWrite',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'cloudtrail.amazonaws.com',
+              },
+              Action: 's3:PutObject',
+              Resource: `${bucket.arn}/*`,
+              Condition: {
+                StringEquals: {
+                  's3:x-amz-acl': 'bucket-owner-full-control',
+                },
               },
             },
-          },
-        ],
-      }),
-    });
+          ],
+        }),
+        dependsOn: [bucket], // Explicit dependency
+      }
+    );
 
     this.cloudTrail = new aws.cloudtrail.Cloudtrail(this, 'trail', {
       name: `security-trail-${tags['Environment'] || 'dev'}`,
@@ -769,6 +781,7 @@ export class SecurityServicesModule extends Construct {
         },
       ],
       tags,
+      dependsOn: [bucketPolicy], // CloudTrail depends on bucket policy
     });
 
     // CloudWatch Event Rule for policy changes
