@@ -1,11 +1,11 @@
 # Secrets Manager Secret for Database Credentials
 resource "aws_secretsmanager_secret" "db_credentials" {
-  name                    = "db-credentials-${var.environment_suffix}"
+  name                    = "db-credentials-${var.environment_suffix}-ab"
   description             = "Database credentials for data processing"
   recovery_window_in_days = 0
 
   tags = merge(var.common_tags, {
-    Name = "db-credentials-${var.environment_suffix}"
+    Name = "db-credentials-${var.environment_suffix}-ab"
   })
 }
 
@@ -34,7 +34,7 @@ resource "aws_secretsmanager_secret_rotation" "db_credentials" {
 
 # IAM Role for Secrets Rotation Lambda
 resource "aws_iam_role" "secrets_rotation" {
-  name = "secrets-rotation-role-${var.environment_suffix}"
+  name = "secrets-rotation-role-${var.environment_suffix}-ab"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -50,7 +50,7 @@ resource "aws_iam_role" "secrets_rotation" {
   })
 
   tags = merge(var.common_tags, {
-    Name = "secrets-rotation-role-${var.environment_suffix}"
+    Name = "secrets-rotation-role-${var.environment_suffix}-ab"
   })
 }
 

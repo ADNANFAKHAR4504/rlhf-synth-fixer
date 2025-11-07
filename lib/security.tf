@@ -10,7 +10,7 @@ resource "aws_kms_key" "s3" {
 }
 
 resource "aws_kms_alias" "s3" {
-  name          = "alias/s3-${var.environment_suffix}"
+  name          = "alias/s3-${var.environment_suffix}-ab"
   target_key_id = aws_kms_key.s3.key_id
 }
 
@@ -62,7 +62,7 @@ resource "aws_kms_key" "cloudwatch" {
 }
 
 resource "aws_kms_alias" "cloudwatch" {
-  name          = "alias/cloudwatch-${var.environment_suffix}"
+  name          = "alias/cloudwatch-${var.environment_suffix}-ab"
   target_key_id = aws_kms_key.cloudwatch.key_id
 }
 
@@ -95,7 +95,7 @@ resource "aws_security_group" "lambda" {
 
 # IAM Role for Lambda Execution
 resource "aws_iam_role" "lambda" {
-  name = "lambda-execution-role-${var.environment_suffix}"
+  name = "lambda-execution-role-${var.environment_suffix}-ab"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -111,7 +111,7 @@ resource "aws_iam_role" "lambda" {
   })
 
   tags = merge(var.common_tags, {
-    Name = "lambda-execution-role-${var.environment_suffix}"
+    Name = "lambda-execution-role-${var.environment_suffix}-ab"
   })
 }
 

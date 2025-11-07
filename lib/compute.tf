@@ -33,11 +33,11 @@ resource "aws_lambda_function" "processor" {
 
 # CloudWatch Log Group for Lambda
 resource "aws_cloudwatch_log_group" "lambda" {
-  name              = "/aws/lambda/data-processor-${var.environment_suffix}"
+  name              = "/aws/lambda/data-processor-${var.environment_suffix}-ab"
   retention_in_days = 90
   kms_key_id        = aws_kms_key.cloudwatch.arn
 
   tags = merge(var.common_tags, {
-    Name = "lambda-logs-${var.environment_suffix}"
+    Name = "lambda-logs-${var.environment_suffix}-ab"
   })
 }

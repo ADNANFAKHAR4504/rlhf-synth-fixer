@@ -70,18 +70,18 @@ resource "aws_sns_topic_policy" "guardduty_alerts" {
 
 # CloudWatch Log Group for VPC Flow Logs
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
-  name              = "/aws/vpc/flowlogs-${var.environment_suffix}"
+  name              = "/aws/vpc/flowlogs-${var.environment_suffix}-ab"
   retention_in_days = 90
   kms_key_id        = aws_kms_key.cloudwatch.arn
 
   tags = merge(var.common_tags, {
-    Name = "vpc-flow-logs-${var.environment_suffix}"
+    Name = "vpc-flow-logs-${var.environment_suffix}-ab"
   })
 }
 
 # IAM Role for VPC Flow Logs
 resource "aws_iam_role" "vpc_flow_logs" {
-  name = "vpc-flow-logs-role-${var.environment_suffix}"
+  name = "vpc-flow-logs-role-${var.environment_suffix}-ab"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -97,7 +97,7 @@ resource "aws_iam_role" "vpc_flow_logs" {
   })
 
   tags = merge(var.common_tags, {
-    Name = "vpc-flow-logs-role-${var.environment_suffix}"
+    Name = "vpc-flow-logs-role-${var.environment_suffix}-ab"
   })
 }
 
