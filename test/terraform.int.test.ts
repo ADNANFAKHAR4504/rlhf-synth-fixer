@@ -105,6 +105,8 @@ function loadDeploymentOutputs(): DeploymentOutputs {
 
 const outputs = loadDeploymentOutputs();
 const region = process.env.AWS_REGION || 'us-west-2';
+const albDns = outputs.alb_dns_name; 
+const url = `http://${albDns}`;
 
 // Initialize AWS SDK clients
 const ec2Client = new EC2Client({ region });
@@ -1030,8 +1032,7 @@ describe('[Chaos E2E] Node Failure Resilience Test', () => {
 
     }, 240000); // Allow 4 minutes total for the entire test
 });
-const albDns = outputs.alb_dns_name;
- const url = `http://${albDns}`;
+ 
 const APPLICATION_ENDPOINT = `http://${albDns}/health`; // Use your ALB health endpoint
 
 // --- Helper Functions (usually in a test utility file) ---
