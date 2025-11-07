@@ -1,4 +1,5 @@
 # Pulumi Python Implementation - Serverless Payment Processing
+# There is no language mismatch in this file, This is the python(py) Implementation
 
 This implementation creates a complete serverless payment processing infrastructure with API Gateway, Lambda functions, DynamoDB tables, SQS FIFO queues, and comprehensive monitoring.
 
