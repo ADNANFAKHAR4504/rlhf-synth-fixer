@@ -34,9 +34,59 @@ import * as path from 'path';
 
 // Load deployment outputs
 const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
-const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+const rawOutputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
 
-const region = process.env.AWS_REGION || 'ca-central-1';
+// Extract environment suffix from outputs
+// Outputs have format like "TableNamepr5999", "TopicArnpr5999", etc.
+// We need to extract the suffix (e.g., "pr5999") from the keys
+const outputKeys = Object.keys(rawOutputs);
+let environmentSuffix = 'dev';
+
+// Known base output key patterns
+const knownBases = [
+  'TableName',
+  'TopicArn',
+  'ApiEndpoint',
+  'ApiKeyId',
+  'TransactionQueueUrl',
+  'FraudDetectionStack',
+];
+
+// Extract suffix by finding a known base pattern
+for (const key of outputKeys) {
+  for (const base of knownBases) {
+    if (key.startsWith(base) && key.length > base.length) {
+      environmentSuffix = key.substring(base.length);
+      break;
+    }
+  }
+  if (environmentSuffix !== 'dev') break;
+}
+
+// Normalize outputs by removing suffix from keys for easier access
+const outputs: Record<string, string> = {};
+for (const [key, value] of Object.entries(rawOutputs)) {
+  // Remove the suffix from the key (e.g., "TableNamepr5999" -> "TableName")
+  if (key.endsWith(environmentSuffix)) {
+    const baseKey = key.substring(0, key.length - environmentSuffix.length);
+    outputs[baseKey] = value as string;
+  } else {
+    // If suffix extraction failed, use key as-is
+    outputs[key] = value as string;
+  }
+}
+
+// Get region from AWS_REGION file or environment variable
+let region = 'us-east-1';
+try {
+  const regionPath = path.join(__dirname, '../lib/AWS_REGION');
+  if (fs.existsSync(regionPath)) {
+    region = fs.readFileSync(regionPath, 'utf-8').trim();
+  }
+} catch (e) {
+  // Fallback to environment variable or default
+}
+region = process.env.AWS_REGION || region;
 
 describe('Fraud Detection System Integration Tests', () => {
   const dynamoClient = new DynamoDBClient({ region });
@@ -169,10 +219,7 @@ describe('Fraud Detection System Integration Tests', () => {
 
   describe('Lambda Functions', () => {
     test('Should have transaction validator Lambda deployed', async () => {
-      const functionName = outputs.TableName.replace(
-        'TransactionHistory',
-        'transaction-validator'
-      );
+      const functionName = `transaction-validator-${environmentSuffix}`;
       const command = new GetFunctionCommand({
         FunctionName: functionName,
       });
@@ -185,10 +232,7 @@ describe('Fraud Detection System Integration Tests', () => {
     });
 
     test('Should have FIFO processor Lambda deployed', async () => {
-      const functionName = outputs.TableName.replace(
-        'TransactionHistory',
-        'fifo-processor'
-      );
+      const functionName = `fifo-processor-${environmentSuffix}`;
       const command = new GetFunctionCommand({
         FunctionName: functionName,
       });
@@ -200,10 +244,7 @@ describe('Fraud Detection System Integration Tests', () => {
     });
 
     test('Should have alert handler Lambda deployed', async () => {
-      const functionName = outputs.TableName.replace(
-        'TransactionHistory',
-        'fraud-alert-handler'
-      );
+      const functionName = `fraud-alert-handler-${environmentSuffix}`;
       const command = new GetFunctionCommand({
         FunctionName: functionName,
       });
@@ -214,10 +255,7 @@ describe('Fraud Detection System Integration Tests', () => {
     });
 
     test('Should have batch processor Lambda deployed', async () => {
-      const functionName = outputs.TableName.replace(
-        'TransactionHistory',
-        'batch-processor'
-      );
+      const functionName = `batch-processor-${environmentSuffix}`;
       const command = new GetFunctionCommand({
         FunctionName: functionName,
       });
@@ -228,10 +266,7 @@ describe('Fraud Detection System Integration Tests', () => {
     });
 
     test('Should have SQS event source mapping for FIFO processor', async () => {
-      const functionName = outputs.TableName.replace(
-        'TransactionHistory',
-        'fifo-processor'
-      );
+      const functionName = `fifo-processor-${environmentSuffix}`;
       const command = new ListEventSourceMappingsCommand({
         FunctionName: functionName,
       });
@@ -272,9 +307,9 @@ describe('Fraud Detection System Integration Tests', () => {
 
   describe('EventBridge Rules', () => {
     test('Should have batch processing rule configured', async () => {
-      const rulePrefix = outputs.TableName.replace('TransactionHistory', 'batch-processing');
+      const ruleName = `batch-processing-${environmentSuffix}`;
       const command = new ListRulesCommand({
-        NamePrefix: rulePrefix,
+        NamePrefix: ruleName,
       });
       const response = await eventBridgeClient.send(command);
 
@@ -284,16 +319,16 @@ describe('Fraud Detection System Integration Tests', () => {
     });
 
     test('Should have Lambda target for batch processing rule', async () => {
-      const rulePrefix = outputs.TableName.replace('TransactionHistory', 'batch-processing');
+      const ruleName = `batch-processing-${environmentSuffix}`;
       const listRulesCommand = new ListRulesCommand({
-        NamePrefix: rulePrefix,
+        NamePrefix: ruleName,
       });
       const rulesResponse = await eventBridgeClient.send(listRulesCommand);
 
       expect(rulesResponse.Rules?.[0]?.Name).toBeDefined();
 
       const listTargetsCommand = new ListTargetsByRuleCommand({
-        Rule: rulesResponse.Rules?.[0]?.Name,
+        Rule: rulesResponse.Rules?.[0]?.Name!,
       });
       const targetsResponse = await eventBridgeClient.send(listTargetsCommand);
 
