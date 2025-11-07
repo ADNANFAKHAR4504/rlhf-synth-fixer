@@ -127,9 +127,9 @@ export class AlarmsConstruct extends Construct {
 
     // Composite alarm - High error rate AND high latency
     const criticalPerformanceAlarm = new cloudwatch.CompositeAlarm(this, 'CriticalPerformance', {
-      alarmName: 'critical-performance-degradation',
+      compositeAlarmName: 'critical-performance-degradation',
       alarmDescription: 'Both high error rate and high latency detected',
-      compositeAlarmRule: cloudwatch.AlarmRule.allOf(
+      alarmRule: cloudwatch.AlarmRule.allOf(
         cloudwatch.AlarmRule.fromAlarm(paymentFailureAlarm, cloudwatch.AlarmState.ALARM),
         cloudwatch.AlarmRule.fromAlarm(apiLatencyAlarm, cloudwatch.AlarmState.ALARM),
       ),
