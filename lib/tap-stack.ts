@@ -365,7 +365,7 @@ systemctl enable nginx
           namespace: 'CloudTrailMetrics',
           value: '1',
         },
-        // dependsOn: [securityServices.cloudTrail],
+        dependsOn: [securityServices.cloudTrail],
       }
     );
 
@@ -402,10 +402,10 @@ systemctl enable nginx
       description: 'Security Hub ARN',
     });
 
-    // new TerraformOutput(this, 'cloudtrail-arn', {
-    //   value: securityServices.cloudTrail.arn,
-    //   description: 'CloudTrail ARN',
-    // });
+    new TerraformOutput(this, 'cloudtrail-arn', {
+      value: securityServices.cloudTrail.arn,
+      description: 'CloudTrail ARN',
+    });
 
     new TerraformOutput(this, 'lambda-function-arn', {
       value: lambdaSecurityModule.function.arn,

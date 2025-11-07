@@ -628,46 +628,46 @@ export class SecurityServicesModule extends Construct {
       }
     );
 
-    // // Create S3 bucket for CloudTrail and Config with unique name
-    // const bucket = new aws.s3Bucket.S3Bucket(this, 'security-bucket', {
-    //   bucket: `security-logs-${tags['Environment'] || 'dev'}-${accountData.accountId}`,
-    //   forceDestroy: false, // Prevent accidental deletion
-    //   tags,
-    // });
+    // Create S3 bucket for CloudTrail and Config with unique name
+    const bucket = new aws.s3Bucket.S3Bucket(this, 'security-bucket', {
+      bucket: `security-logs-${tags['Environment'] || 'dev'}-${accountData.accountId}`,
+      forceDestroy: false, // Prevent accidental deletion
+      tags,
+    });
 
-    // new aws.s3BucketPublicAccessBlock.S3BucketPublicAccessBlock(
-    //   this,
-    //   'bucket-pab',
-    //   {
-    //     bucket: bucket.id,
-    //     blockPublicAcls: true,
-    //     blockPublicPolicy: true,
-    //     ignorePublicAcls: true,
-    //     restrictPublicBuckets: true,
-    //   }
-    // );
+    new aws.s3BucketPublicAccessBlock.S3BucketPublicAccessBlock(
+      this,
+      'bucket-pab',
+      {
+        bucket: bucket.id,
+        blockPublicAcls: true,
+        blockPublicPolicy: true,
+        ignorePublicAcls: true,
+        restrictPublicBuckets: true,
+      }
+    );
 
-    // new aws.s3BucketServerSideEncryptionConfiguration.S3BucketServerSideEncryptionConfigurationA(
-    //   this,
-    //   'bucket-encryption',
-    //   {
-    //     bucket: bucket.id,
-    //     rule: [
-    //       {
-    //         applyServerSideEncryptionByDefault: {
-    //           sseAlgorithm: 'AES256',
-    //         },
-    //       },
-    //     ],
-    //   }
-    // );
+    new aws.s3BucketServerSideEncryptionConfiguration.S3BucketServerSideEncryptionConfigurationA(
+      this,
+      'bucket-encryption',
+      {
+        bucket: bucket.id,
+        rule: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'AES256',
+            },
+          },
+        ],
+      }
+    );
 
-    // new aws.s3BucketVersioning.S3BucketVersioningA(this, 'bucket-versioning', {
-    //   bucket: bucket.id,
-    //   versioningConfiguration: {
-    //     status: 'Enabled',
-    //   },
-    // });
+    new aws.s3BucketVersioning.S3BucketVersioningA(this, 'bucket-versioning', {
+      bucket: bucket.id,
+      versioningConfiguration: {
+        status: 'Enabled',
+      },
+    });
 
     // Create SNS Topic for notifications
     this.snsTopic = new aws.snsTopic.SnsTopic(this, 'security-alerts', {
@@ -675,114 +675,114 @@ export class SecurityServicesModule extends Construct {
       tags,
     });
 
-    // // CloudTrail
-    // const cloudtrailRole = new aws.iamRole.IamRole(this, 'cloudtrail-role', {
-    //   name: `cloudtrail-cloudwatch-role-${tags['Environment'] || 'dev'}`,
-    //   assumeRolePolicy: JSON.stringify({
-    //     Version: '2012-10-17',
-    //     Statement: [
-    //       {
-    //         Action: 'sts:AssumeRole',
-    //         Effect: 'Allow',
-    //         Principal: {
-    //           Service: 'cloudtrail.amazonaws.com',
-    //         },
-    //       },
-    //     ],
-    //   }),
-    //   tags,
-    // });
+    // CloudTrail
+    const cloudtrailRole = new aws.iamRole.IamRole(this, 'cloudtrail-role', {
+      name: `cloudtrail-cloudwatch-role-${tags['Environment'] || 'dev'}`,
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+          },
+        ],
+      }),
+      tags,
+    });
 
-    // new aws.iamRolePolicy.IamRolePolicy(this, 'cloudtrail-policy', {
-    //   name: 'cloudtrail-cloudwatch-policy',
-    //   role: cloudtrailRole.name,
-    //   policy: JSON.stringify({
-    //     Version: '2012-10-17',
-    //     Statement: [
-    //       {
-    //         Effect: 'Allow',
-    //         Action: [
-    //           'logs:CreateLogStream',
-    //           'logs:PutLogEvents',
-    //           'logs:CreateLogGroup',
-    //         ],
-    //         Resource: '*',
-    //       },
-    //     ],
-    //   }),
-    // });
+    new aws.iamRolePolicy.IamRolePolicy(this, 'cloudtrail-policy', {
+      name: 'cloudtrail-cloudwatch-policy',
+      role: cloudtrailRole.name,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: [
+              'logs:CreateLogStream',
+              'logs:PutLogEvents',
+              'logs:CreateLogGroup',
+            ],
+            Resource: '*',
+          },
+        ],
+      }),
+    });
 
-    // const cloudwatchLogGroup = new aws.cloudwatchLogGroup.CloudwatchLogGroup(
-    //   this,
-    //   'cloudtrail-logs',
-    //   {
-    //     name: `/aws/cloudtrail/security-logs-${tags['Environment'] || 'dev'}`,
-    //     retentionInDays: 90,
-    //     tags,
-    //   }
-    // );
+    const cloudwatchLogGroup = new aws.cloudwatchLogGroup.CloudwatchLogGroup(
+      this,
+      'cloudtrail-logs',
+      {
+        name: `/aws/cloudtrail/security-logs-${tags['Environment'] || 'dev'}`,
+        retentionInDays: 90,
+        tags,
+      }
+    );
 
-    // // Bucket policy for CloudTrail - with explicit dependencies
-    // const bucketPolicy = new aws.s3BucketPolicy.S3BucketPolicy(
-    //   this,
-    //   'cloudtrail-bucket-policy',
-    //   {
-    //     bucket: bucket.id,
-    //     policy: JSON.stringify({
-    //       Version: '2012-10-17',
-    //       Statement: [
-    //         {
-    //           Sid: 'AWSCloudTrailAclCheck',
-    //           Effect: 'Allow',
-    //           Principal: {
-    //             Service: 'cloudtrail.amazonaws.com',
-    //           },
-    //           Action: 's3:GetBucketAcl',
-    //           Resource: bucket.arn,
-    //         },
-    //         {
-    //           Sid: 'AWSCloudTrailWrite',
-    //           Effect: 'Allow',
-    //           Principal: {
-    //             Service: 'cloudtrail.amazonaws.com',
-    //           },
-    //           Action: 's3:PutObject',
-    //           Resource: `${bucket.arn}/*`,
-    //           Condition: {
-    //             StringEquals: {
-    //               's3:x-amz-acl': 'bucket-owner-full-control',
-    //             },
-    //           },
-    //         },
-    //       ],
-    //     }),
-    //     dependsOn: [bucket], // Explicit dependency
-    //   }
-    // );
+    // Bucket policy for CloudTrail - with explicit dependencies
+    const bucketPolicy = new aws.s3BucketPolicy.S3BucketPolicy(
+      this,
+      'cloudtrail-bucket-policy',
+      {
+        bucket: bucket.id,
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Sid: 'AWSCloudTrailAclCheck',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'cloudtrail.amazonaws.com',
+              },
+              Action: 's3:GetBucketAcl',
+              Resource: bucket.arn,
+            },
+            {
+              Sid: 'AWSCloudTrailWrite',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'cloudtrail.amazonaws.com',
+              },
+              Action: 's3:PutObject',
+              Resource: `${bucket.arn}/*`,
+              Condition: {
+                StringEquals: {
+                  's3:x-amz-acl': 'bucket-owner-full-control',
+                },
+              },
+            },
+          ],
+        }),
+        dependsOn: [bucket], // Explicit dependency
+      }
+    );
 
-    // this.cloudTrail = new aws.cloudtrail.Cloudtrail(this, 'trail', {
-    //   name: `security-trail-${tags['Environment'] || 'dev'}`,
-    //   s3BucketName: bucket.id,
-    //   includeGlobalServiceEvents: true,
-    //   isMultiRegionTrail: true,
-    //   enableLogFileValidation: true,
-    //   cloudWatchLogsGroupArn: `${cloudwatchLogGroup.arn}:*`,
-    //   cloudWatchLogsRoleArn: cloudtrailRole.arn,
-    //   eventSelector: [
-    //     {
-    //       readWriteType: 'All',
-    //       includeManagementEvents: true,
-    //       dataResource: [
-    //         {
-    //           type: 'AWS::S3::Object',
-    //           values: ['arn:aws:s3'],
-    //         },
-    //       ],
-    //     },
-    //   ],
-    //   tags,
-    //   dependsOn: [bucketPolicy], // CloudTrail depends on bucket policy
-    // });
+    this.cloudTrail = new aws.cloudtrail.Cloudtrail(this, 'trail', {
+      name: `security-trail-${tags['Environment'] || 'dev'}`,
+      s3BucketName: bucket.id,
+      includeGlobalServiceEvents: true,
+      isMultiRegionTrail: true,
+      enableLogFileValidation: true,
+      cloudWatchLogsGroupArn: `${cloudwatchLogGroup.arn}:*`,
+      cloudWatchLogsRoleArn: cloudtrailRole.arn,
+      eventSelector: [
+        {
+          readWriteType: 'All',
+          includeManagementEvents: true,
+          dataResource: [
+            {
+              type: 'AWS::S3::Object',
+              values: ['arn:aws:s3'],
+            },
+          ],
+        },
+      ],
+      tags,
+      dependsOn: [bucketPolicy], // CloudTrail depends on bucket policy
+    });
 
     // CloudWatch Event Rule for policy changes
     const policyChangeRule = new aws.cloudwatchEventRule.CloudwatchEventRule(
