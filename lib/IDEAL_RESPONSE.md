@@ -1,6 +1,6 @@
 # Ideal Response - Production-Ready Amazon EKS Cluster Infrastructure
 
-This implementation strictly follows ALL prompt requirements and provides a production-grade Amazon EKS cluster infrastructure using Terraform with HCL. The solution includes VPC networking, EKS cluster with OIDC provider, multiple node groups using Bottlerocket AMI, IRSA roles for essential Kubernetes services, EKS add-ons, security groups, and CloudWatch Container Insights.
+This implementation strictly follows ALL prompt requirements and provides a production-grade Amazon EKS cluster infrastructure using Terraform with HCL. The solution includes VPC networking, EKS cluster with OIDC provider, multiple node groups using Bottlerocket AMI, IRSA roles for essential Kubernetes services, EKS add-ons, security groups, and CloudWatch Container Insights
 
 ## Architecture Overview
 
