@@ -590,6 +590,36 @@ resource "aws_lambda_function" "notification_sender" {
 # API Gateway
 # ================================
 
+# IAM role for API Gateway CloudWatch logging
+resource "aws_iam_role" "api_gateway_cloudwatch_role" {
+  name = "api-gateway-cloudwatch-role-${var.environment_suffix}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "apigateway.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "api_gateway_cloudwatch_logs" {
+  role       = aws_iam_role.api_gateway_cloudwatch_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+}
+
+# API Gateway account settings
+resource "aws_api_gateway_account" "api_gateway_account" {
+  cloudwatch_role_arn = aws_iam_role.api_gateway_cloudwatch_role.arn
+}
+
 resource "aws_api_gateway_rest_api" "payment_api" {
   name        = "payment-api-${var.environment_suffix}"
   description = "Serverless Payment Webhook Processing API"
@@ -841,6 +871,8 @@ resource "aws_api_gateway_stage" "prod" {
       errorType      = "$context.error.messageString"
     })
   }
+
+  depends_on = [aws_api_gateway_account.api_gateway_account]
 
   tags = merge(local.common_tags, {
     Name = "payment-api-prod-${var.environment_suffix}"
