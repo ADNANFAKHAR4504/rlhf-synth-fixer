@@ -48,6 +48,12 @@ class TapStack(pulumi.ComponentResource):
     ):
         super().__init__('tap:stack:TapStack', name, None, opts)
 
+        # Configure AWS provider with explicit region
+        self.aws_provider = aws.Provider(
+            f"aws-provider-{args.environment_suffix or 'prod'}",
+            region="eu-west-3"
+        )
+
         self.environment_suffix = args.environment_suffix
         self.tags = args.tags
 
@@ -58,8 +64,8 @@ class TapStack(pulumi.ComponentResource):
             **self.tags
         }
 
-        # Get availability zones dynamically
-        azs_result = aws.get_availability_zones(state="available")
+        # Get availability zones dynamically from eu-west-3
+        azs_result = aws.get_availability_zones(state="available", opts=pulumi.InvokeOptions(provider=self.aws_provider))
         azs = azs_result.names[:3]  # Use first 3 AZs
 
         # Create VPC
@@ -69,7 +75,7 @@ class TapStack(pulumi.ComponentResource):
             enable_dns_hostnames=True,
             enable_dns_support=True,
             tags={**common_tags, "Name": f"vpc-{self.environment_suffix}"},
-            opts=ResourceOptions(parent=self),
+            opts=ResourceOptions(parent=self, provider=self.aws_provider),
         )
 
         # Create Internet Gateway
@@ -77,7 +83,7 @@ class TapStack(pulumi.ComponentResource):
             f"igw-{self.environment_suffix}",
             vpc_id=self.vpc.id,
             tags={**common_tags, "Name": f"igw-{self.environment_suffix}"},
-            opts=ResourceOptions(parent=self),
+            opts=ResourceOptions(parent=self, provider=self.aws_provider),
         )
 
         # Define subnet CIDRs
@@ -94,7 +100,7 @@ class TapStack(pulumi.ComponentResource):
                 availability_zone=az,
                 map_public_ip_on_launch=True,
                 tags={**common_tags, "Name": f"public-subnet-{az}-{self.environment_suffix}", "Type": "Public"},
-                opts=ResourceOptions(parent=self),
+                opts=ResourceOptions(parent=self, provider=self.aws_provider),
             )
             self.public_subnets.append(subnet)
 
@@ -108,7 +114,7 @@ class TapStack(pulumi.ComponentResource):
                 availability_zone=az,
                 map_public_ip_on_launch=False,
                 tags={**common_tags, "Name": f"private-subnet-{az}-{self.environment_suffix}", "Type": "Private"},
-                opts=ResourceOptions(parent=self),
+                opts=ResourceOptions(parent=self, provider=self.aws_provider),
             )
             self.private_subnets.append(subnet)
 
@@ -119,7 +125,7 @@ class TapStack(pulumi.ComponentResource):
                 f"eip-nat-{i+1}-{self.environment_suffix}",
                 domain="vpc",
                 tags={**common_tags, "Name": f"eip-nat-{az}-{self.environment_suffix}"},
-                opts=ResourceOptions(parent=self),
+                opts=ResourceOptions(parent=self, provider=self.aws_provider),
             )
             self.eips.append(eip)
 
@@ -131,7 +137,7 @@ class TapStack(pulumi.ComponentResource):
                 subnet_id=subnet.id,
                 allocation_id=eip.id,
                 tags={**common_tags, "Name": f"nat-gateway-{az}-{self.environment_suffix}"},
-                opts=ResourceOptions(parent=self),
+                opts=ResourceOptions(parent=self, provider=self.aws_provider),
             )
             self.nat_gateways.append(nat)
 
@@ -140,7 +146,7 @@ class TapStack(pulumi.ComponentResource):
             f"public-route-table-{self.environment_suffix}",
             vpc_id=self.vpc.id,
             tags={**common_tags, "Name": f"Public-RouteTable-{self.environment_suffix}"},
-            opts=ResourceOptions(parent=self),
+            opts=ResourceOptions(parent=self, provider=self.aws_provider),
         )
 
         # Create route to Internet Gateway
@@ -149,7 +155,7 @@ class TapStack(pulumi.ComponentResource):
             route_table_id=self.public_route_table.id,
             destination_cidr_block="0.0.0.0/0",
             gateway_id=self.igw.id,
-            opts=ResourceOptions(parent=self),
+            opts=ResourceOptions(parent=self, provider=self.aws_provider),
         )
 
         # Associate public subnets with public route table
@@ -159,7 +165,7 @@ class TapStack(pulumi.ComponentResource):
                 f"public-rt-assoc-{i+1}-{self.environment_suffix}",
                 subnet_id=subnet.id,
                 route_table_id=self.public_route_table.id,
-                opts=ResourceOptions(parent=self),
+                opts=ResourceOptions(parent=self, provider=self.aws_provider),
             )
             self.public_rt_associations.append(assoc)
 
@@ -174,7 +180,7 @@ class TapStack(pulumi.ComponentResource):
                 f"private-route-table-{i+1}-{self.environment_suffix}",
                 vpc_id=self.vpc.id,
                 tags={**common_tags, "Name": f"Private-RouteTable-{az}"},
-                opts=ResourceOptions(parent=self),
+                opts=ResourceOptions(parent=self, provider=self.aws_provider),
             )
             self.private_route_tables.append(rt)
 
@@ -184,7 +190,7 @@ class TapStack(pulumi.ComponentResource):
                 route_table_id=rt.id,
                 destination_cidr_block="0.0.0.0/0",
                 nat_gateway_id=nat.id,
-                opts=ResourceOptions(parent=self),
+                opts=ResourceOptions(parent=self, provider=self.aws_provider),
             )
             self.private_routes.append(route)
 
@@ -193,7 +199,7 @@ class TapStack(pulumi.ComponentResource):
                 f"private-rt-assoc-{i+1}-{self.environment_suffix}",
                 subnet_id=subnet.id,
                 route_table_id=rt.id,
-                opts=ResourceOptions(parent=self),
+                opts=ResourceOptions(parent=self, provider=self.aws_provider),
             )
             self.private_rt_associations.append(assoc)
 
@@ -221,7 +227,7 @@ class TapStack(pulumi.ComponentResource):
                 )
             ],
             tags={**common_tags, "Name": f"https-only-sg-{self.environment_suffix}"},
-            opts=ResourceOptions(parent=self),
+            opts=ResourceOptions(parent=self, provider=self.aws_provider),
         )
 
         # Create IAM role for VPC Flow Logs
@@ -240,7 +246,7 @@ class TapStack(pulumi.ComponentResource):
                 ]
             }""",
             tags={**common_tags, "Name": f"vpc-flow-log-role-{self.environment_suffix}"},
-            opts=ResourceOptions(parent=self),
+            opts=ResourceOptions(parent=self, provider=self.aws_provider),
         )
 
         # Create IAM policy for VPC Flow Logs
@@ -263,7 +269,7 @@ class TapStack(pulumi.ComponentResource):
                     }
                 ]
             }""",
-            opts=ResourceOptions(parent=self),
+            opts=ResourceOptions(parent=self, provider=self.aws_provider),
         )
 
         # Create CloudWatch Log Group for VPC Flow Logs
@@ -272,7 +278,7 @@ class TapStack(pulumi.ComponentResource):
             name=pulumi.Output.concat("/aws/vpc/flow-logs-", self.environment_suffix),
             retention_in_days=7,
             tags={**common_tags, "Name": f"vpc-flow-logs-{self.environment_suffix}"},
-            opts=ResourceOptions(parent=self),
+            opts=ResourceOptions(parent=self, provider=self.aws_provider),
         )
 
         # Create VPC Flow Log
@@ -287,7 +293,7 @@ class TapStack(pulumi.ComponentResource):
             iam_role_arn=self.flow_log_role.arn,
             max_aggregation_interval=600,  # 10 minutes (closest to 5 min requirement)
             tags={**common_tags, "Name": f"vpc-flow-log-{self.environment_suffix}"},
-            opts=pulumi.ResourceOptions(parent=self, depends_on=[self.flow_log_policy, self.log_group]),
+            opts=pulumi.ResourceOptions(parent=self, provider=self.aws_provider, depends_on=[self.flow_log_policy, self.log_group]),
         )
 
         # Register outputs

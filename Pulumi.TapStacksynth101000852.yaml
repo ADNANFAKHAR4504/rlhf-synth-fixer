@@ -1,4 +1,0 @@
-encryptionsalt: v1:zinn2thPiPs=:v1:6K42hKz8cmJREAmt:2kxcR28cRnSpKHxE6En8yPmykXFjAQ==
-config:
-  aws:region: us-east-1
-  pulumi-infra:env: synth101000852

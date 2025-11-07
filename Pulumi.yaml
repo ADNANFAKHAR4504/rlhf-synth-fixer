@@ -1,4 +1,4 @@
-name: pulumi-infra
+name: TapStack
 runtime:
   name: python
 description: Production-ready VPC infrastructure for payment processing system
