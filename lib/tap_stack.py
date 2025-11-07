@@ -198,7 +198,7 @@ class TapStack(pulumi.ComponentResource):
         db_subnet_1 = aws.ec2.Subnet(
             f"tap-payment-db-subnet-1-{self.environment_suffix}",
             vpc_id=vpc.id,
-            cidr_block="10.0.21.0/24",
+            cidr_block="10.0.31.0/24",
             availability_zone=azs.names[0],
             tags={**common_tags, "Name": f"tap-payment-db-subnet-1-{self.environment_suffix}", "Type": "Database"},
             opts=ResourceOptions(parent=self),
@@ -207,7 +207,7 @@ class TapStack(pulumi.ComponentResource):
         db_subnet_2 = aws.ec2.Subnet(
             f"tap-payment-db-subnet-2-{self.environment_suffix}",
             vpc_id=vpc.id,
-            cidr_block="10.0.22.0/24",
+            cidr_block="10.0.32.0/24",
             availability_zone=azs.names[1],
             tags={**common_tags, "Name": f"tap-payment-db-subnet-2-{self.environment_suffix}", "Type": "Database"},
             opts=ResourceOptions(parent=self),
