@@ -11,7 +11,7 @@ terraform {
   }
 
   # Using local backend for now - will be updated to S3 backend in CI/CD
-  backend "local" {}
+  backend "s3" {}
 }
 
 # Primary AWS provider for general resources
