@@ -5,7 +5,7 @@
 variable "aws_region" {
   description = "AWS region for deployment"
   type        = string
-  default     = "ap-northeast-1"
+  default     = "us-west-2"
 }
 
 variable "project_name" {
@@ -34,10 +34,10 @@ variable "db_username" {
 }
 
 variable "db_password" {
-  description = "Database master password"
+  description = "Database master password (leave empty to auto-generate)"
   type        = string
   sensitive   = true
-  default     = "ChangeMe!Str0ng#2024" # Should be passed via environment variable or secrets manager
+  default     = ""
 }
 
 variable "db_instance_class" {
@@ -249,6 +249,44 @@ resource "aws_security_group" "rds" {
 }
 
 # ====================
+# Password Generation & Secrets Manager
+# ====================
+
+# Generate random password
+resource "random_password" "db_password" {
+  length           = 32
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
+  min_special      = 5
+  min_upper        = 5
+  min_lower        = 5
+  min_numeric      = 5
+}
+
+# Store password in Secrets Manager
+resource "aws_secretsmanager_secret" "db_password" {
+  name_prefix             = "${var.project_name}-db-password-"
+  description             = "RDS PostgreSQL master password"
+  recovery_window_in_days = 7
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-db-password"
+  })
+}
+
+resource "aws_secretsmanager_secret_version" "db_password" {
+  secret_id = aws_secretsmanager_secret.db_password.id
+  secret_string = jsonencode({
+    username = var.db_username
+    password = random_password.db_password.result
+    engine   = "postgres"
+    host     = aws_db_instance.postgres.address
+    port     = aws_db_instance.postgres.port
+    dbname   = var.db_name
+  })
+}
+
+# ====================
 # RDS Resources
 # ====================
 
@@ -390,7 +428,7 @@ resource "aws_db_instance" "postgres" {
   # Database Configuration
   db_name  = var.db_name
   username = var.db_username
-  password = var.db_password
+  password = var.db_password != "" ? var.db_password : random_password.db_password.result
   port     = 5432
 
   # Network Configuration
@@ -702,6 +740,16 @@ output "connection_string" {
   description = "PostgreSQL connection string (without password)"
   value       = "postgresql://${var.db_username}:PASSWORD@${aws_db_instance.postgres.address}:${aws_db_instance.postgres.port}/${var.db_name}"
   sensitive   = true
+}
+
+output "db_password_secret_arn" {
+  description = "The ARN of the Secrets Manager secret containing the database password"
+  value       = aws_secretsmanager_secret.db_password.arn
+}
+
+output "db_password_secret_name" {
+  description = "The name of the Secrets Manager secret containing the database password"
+  value       = aws_secretsmanager_secret.db_password.name
 }
 
 output "monitoring_role_arn" {

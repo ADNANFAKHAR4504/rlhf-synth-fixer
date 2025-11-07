@@ -13,6 +13,6 @@ terraform {
 
 # Primary AWS provider for general resources
 provider "aws" {
-  alias  = "ap_northeast_1"
+  alias  = "us_west_2"
   region = var.aws_region
 }

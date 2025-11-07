@@ -17,6 +17,7 @@ const ec2 = new AWS.EC2({ region: outputs.aws_region });
 const rds = new AWS.RDS({ region: outputs.aws_region });
 const cloudwatch = new AWS.CloudWatch({ region: outputs.aws_region });
 const sns = new AWS.SNS({ region: outputs.aws_region });
+const secretsmanager = new AWS.SecretsManager({ region: outputs.aws_region });
 
 // Helper to diagnose AWS SDK calls
 async function diagAwsCall(label: string, fn: any, ...args: any[]) {
@@ -58,7 +59,9 @@ describe('RDS PostgreSQL Stack Integration Tests', () => {
       "app_subnet_ids",
       "monitoring_role_arn",
       "cloudwatch_dashboard_url",
-      "db_instance_port"
+      "db_instance_port",
+      "db_password_secret_arn",
+      "db_password_secret_name"
     ].forEach(key => {
       expect(outputs[key]).toBeDefined();
     });
@@ -140,6 +143,41 @@ describe('RDS PostgreSQL Stack Integration Tests', () => {
     const port = outputs.db_instance_port;
     if (!port) return console.warn('Missing db_instance_port, skipping.');
     expect(port.toString()).toBe('5432');
+  });
+
+  test('Secrets Manager secret exists', async () => {
+    const secretArn = outputs.db_password_secret_arn;
+    if (!secretArn) return console.warn('Missing db_password_secret_arn, skipping.');
+    const res = await diagAwsCall('SecretsManagerSecret', secretsmanager.describeSecret.bind(secretsmanager), { SecretId: secretArn });
+    if (skipIfNull(res, 'SecretsManagerSecret')) return;
+    expect(res.ARN).toBe(secretArn);
+    expect(res.Name).toBe(outputs.db_password_secret_name);
+  });
+
+  test('Secrets Manager secret contains valid JSON with required fields', async () => {
+    const secretArn = outputs.db_password_secret_arn;
+    if (!secretArn) return console.warn('Missing db_password_secret_arn, skipping.');
+    const res = await diagAwsCall('SecretsManagerSecretValue', secretsmanager.getSecretValue.bind(secretsmanager), { SecretId: secretArn });
+    if (skipIfNull(res?.SecretString, 'SecretsManagerSecretValue')) return;
+    
+    const secretData = JSON.parse(res.SecretString);
+    expect(secretData).toHaveProperty('username');
+    expect(secretData).toHaveProperty('password');
+    expect(secretData).toHaveProperty('engine');
+    expect(secretData).toHaveProperty('host');
+    expect(secretData).toHaveProperty('port');
+    expect(secretData).toHaveProperty('dbname');
+    
+    expect(secretData.engine).toBe('postgres');
+    expect(secretData.port).toBe(5432);
+    expect(secretData.password).toBeTruthy();
+    expect(secretData.password.length).toBeGreaterThanOrEqual(32);
+  });
+
+  test('Secret ARN format is valid', () => {
+    const arn = outputs.db_password_secret_arn;
+    if (!arn) return console.warn('Missing db_password_secret_arn, skipping.');
+    expect(arn).toMatch(/^arn:aws:secretsmanager:[a-z0-9-]+:\d+:secret:.+$/);
   });
 });
 
