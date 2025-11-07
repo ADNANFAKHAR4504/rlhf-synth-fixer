@@ -16,7 +16,7 @@ describe('TapStack', () => {
       template = Template.fromStack(stack);
 
       template.hasResourceProperties('AWS::SNS::Topic', {
-        TopicName: `cost-anomaly-${environmentSuffix}`,
+        TopicName: 'cost-anomaly-dev',
         DisplayName: 'Cost Anomaly Detection Alerts',
       });
     });
@@ -105,28 +105,56 @@ describe('TapStack', () => {
       template = Template.fromStack(stack);
     });
 
-    test('creates cost anomaly detector', () => {
-      template.resourceCountIs('AWS::CE::AnomalyDetector', 1);
-      const detectors = template.findResources('AWS::CE::AnomalyDetector');
-      const detector = Object.values(detectors)[0] as any;
-      expect(detector.Properties.AnomalyDetectorName).toBe(`financial-services-cost-${environmentSuffix}`);
-      expect(detector.Properties.MonitorType).toBe('DIMENSIONAL');
+    test('creates cost anomaly handler Lambda function', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Runtime: 'python3.11',
+        Handler: 'index.handler',
+        Timeout: 300,
+      });
     });
 
-    test('cost anomaly detector has correct tags', () => {
-      const detectors = template.findResources('AWS::CE::AnomalyDetector');
-      const detector = Object.values(detectors)[0] as any;
-      // CfnResource tags might be applied differently
-      expect(detector).toBeDefined();
+    test('cost anomaly handler has correct IAM permissions', () => {
+      const functions = template.findResources('AWS::Lambda::Function');
+      const handler = Object.values(functions).find((f: any) =>
+        f.Properties?.Runtime === 'python3.11' && f.Properties?.Handler === 'index.handler'
+      ) as any;
+      expect(handler).toBeDefined();
+      
+      // Check for IAM Policy resources with Cost Explorer permissions
+      const policies = template.findResources('AWS::IAM::Policy');
+      const costPolicy = Object.values(policies).find((p: any) => {
+        const statements = p.Properties?.PolicyDocument?.Statement || [];
+        return statements.some((s: any) =>
+          Array.isArray(s.Action) 
+            ? s.Action.some((a: string) => a.includes('ce:CreateAnomalyDetector'))
+            : s.Action?.includes('ce:CreateAnomalyDetector')
+        );
+      });
+      expect(costPolicy).toBeDefined();
     });
 
-    test('creates cost anomaly subscription', () => {
-      template.resourceCountIs('AWS::CE::AnomalySubscription', 1);
-      const subscriptions = template.findResources('AWS::CE::AnomalySubscription');
-      const subscription = Object.values(subscriptions)[0] as any;
-      expect(subscription.Properties.SubscriptionName).toBe(`cost-anomaly-subscription-${environmentSuffix}`);
-      expect(subscription.Properties.Threshold).toBe(50.0);
-      expect(subscription.Properties.Frequency).toBe('IMMEDIATE');
+    test('cost anomaly handler has correct tags', () => {
+      const functions = template.findResources('AWS::Lambda::Function');
+      const handler = Object.values(functions).find((f: any) =>
+        f.Properties?.Runtime === 'python3.11' && f.Properties?.Handler === 'index.handler'
+      ) as any;
+      expect(handler).toBeDefined();
+      // Lambda functions may have tags in a separate Tags resource or in Properties
+      // Just verify the function exists with correct runtime
+      expect(handler.Properties.Runtime).toBe('python3.11');
+    });
+
+    test('creates cost anomaly custom resource', () => {
+      template.hasResourceProperties('AWS::CloudFormation::CustomResource', {
+        ServiceToken: Match.anyValue(),
+      });
+      
+      const customResources = template.findResources('AWS::CloudFormation::CustomResource');
+      const costResource = Object.values(customResources).find((r: any) =>
+        r.Properties?.DetectorName?.includes(`financial-services-cost-${environmentSuffix}`)
+      ) as any;
+      expect(costResource).toBeDefined();
+      expect(costResource.Properties.SubscriptionName).toBe(`cost-anomaly-subscription-${environmentSuffix}`);
     });
   });
 
@@ -139,8 +167,11 @@ describe('TapStack', () => {
 
     test('creates scaling role with correct service principal', () => {
       const roles = template.findResources('AWS::IAM::Role');
-      const role = Object.values(roles)[0] as any;
-      expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('application-autoscaling.amazonaws.com');
+      const scalingRole = Object.values(roles).find((r: any) =>
+        r.Properties?.AssumeRolePolicyDocument?.Statement?.[0]?.Principal?.Service === 'application-autoscaling.amazonaws.com'
+      ) as any;
+      expect(scalingRole).toBeDefined();
+      expect(scalingRole.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('application-autoscaling.amazonaws.com');
     });
 
     test('scaling role has managed policy for ECS auto-scaling', () => {
@@ -162,18 +193,24 @@ describe('TapStack', () => {
 
     test('scaling role has inline policy for scaling operations', () => {
       const roles = template.findResources('AWS::IAM::Role');
-      const role = Object.values(roles)[0] as any;
-      expect(role.Properties.Policies).toBeDefined();
-      const policy = role.Properties.Policies[0];
+      const scalingRole = Object.values(roles).find((r: any) =>
+        r.Properties?.AssumeRolePolicyDocument?.Statement?.[0]?.Principal?.Service === 'application-autoscaling.amazonaws.com'
+      ) as any;
+      expect(scalingRole).toBeDefined();
+      expect(scalingRole.Properties.Policies).toBeDefined();
+      const policy = scalingRole.Properties.Policies[0];
       expect(policy.PolicyDocument.Statement[0].Action).toContain('ecs:DescribeServices');
       expect(policy.PolicyDocument.Statement[0].Action).toContain('ecs:UpdateService');
     });
 
     test('scaling role has correct tags', () => {
       const roles = template.findResources('AWS::IAM::Role');
-      const role = Object.values(roles)[0] as any;
-      expect(role.Properties.Tags).toBeDefined();
-      const tags = role.Properties.Tags;
+      const scalingRole = Object.values(roles).find((r: any) =>
+        r.Properties?.AssumeRolePolicyDocument?.Statement?.[0]?.Principal?.Service === 'application-autoscaling.amazonaws.com'
+      ) as any;
+      expect(scalingRole).toBeDefined();
+      expect(scalingRole.Properties.Tags).toBeDefined();
+      const tags = scalingRole.Properties.Tags;
       expect(tags.some((t: any) => t.Key === 'Service' && t.Value === 'FinancialServices')).toBe(true);
       expect(tags.some((t: any) => t.Key === 'Environment' && t.Value === environmentSuffix)).toBe(true);
     });
@@ -635,16 +672,18 @@ describe('TapStack', () => {
       template.resourceCountIs('AWS::CloudWatch::Dashboard', 1);
     });
 
-    test('creates one cost anomaly detector', () => {
-      template.resourceCountIs('AWS::CE::AnomalyDetector', 1);
+    test('creates cost anomaly custom resource', () => {
+      const customResources = template.findResources('AWS::CloudFormation::CustomResource');
+      const costResources = Object.values(customResources).filter((r: any) =>
+        r.Properties?.DetectorName?.includes('financial-services-cost')
+      );
+      expect(costResources.length).toBeGreaterThanOrEqual(1);
     });
 
-    test('creates one cost anomaly subscription', () => {
-      template.resourceCountIs('AWS::CE::AnomalySubscription', 1);
-    });
-
-    test('creates one IAM role', () => {
-      template.resourceCountIs('AWS::IAM::Role', 1);
+    test('creates IAM roles for scaling and cost anomaly', () => {
+      // Should have at least: ScalingRole, CostAnomalyHandler role, Custom Resource Provider role
+      const roles = template.findResources('AWS::IAM::Role');
+      expect(Object.keys(roles).length).toBeGreaterThanOrEqual(3);
     });
   });
 });

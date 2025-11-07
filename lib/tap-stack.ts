@@ -4,6 +4,8 @@ import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as custom_resources from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {
@@ -52,48 +54,164 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(snsTopic).add('Service', 'FinancialServices');
     cdk.Tags.of(snsTopic).add('Environment', environmentSuffix);
 
-    const costAnomalyDetector = new cdk.CfnResource(
+    // Cost Anomaly Detection is not supported directly in CloudFormation
+    // Use a Custom Resource Lambda to create/update/delete via Cost Explorer API
+    const costAnomalyHandler = new lambda.Function(this, 'CostAnomalyHandler', {
+      runtime: lambda.Runtime.PYTHON_3_11,
+      handler: 'index.handler',
+      timeout: cdk.Duration.minutes(5),
+      code: lambda.Code.fromInline(`
+import json
+import boto3
+import cfnresponse
+
+ce = boto3.client('ce')
+
+def handler(event, context):
+    request_type = event['RequestType']
+    props = event['ResourceProperties']
+    
+    detector_name = props['DetectorName']
+    subscription_name = props['SubscriptionName']
+    sns_topic_arn = props['SnsTopicArn']
+    
+    try:
+        if request_type == 'Delete':
+            # Delete subscription first, then detector
+            try:
+                subscriptions = ce.get_anomaly_subscriptions()
+                for sub in subscriptions.get('AnomalySubscriptions', []):
+                    if sub['SubscriptionName'] == subscription_name:
+                        ce.delete_anomaly_subscription(
+                            SubscriptionArn=sub['SubscriptionArn']
+                        )
+            except Exception as e:
+                print(f"Error deleting subscription: {e}")
+            
+            try:
+                detectors = ce.list_anomaly_detectors()
+                for det in detectors.get('AnomalyDetectors', []):
+                    if det['AnomalyDetectorName'] == detector_name:
+                        ce.delete_anomaly_detector(
+                            AnomalyDetectorArn=det['AnomalyDetectorArn']
+                        )
+            except Exception as e:
+                print(f"Error deleting detector: {e}")
+            
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+            return
+        
+        # Create or update detector
+        detector_arn = None
+        detectors = ce.list_anomaly_detectors()
+        for det in detectors.get('AnomalyDetectors', []):
+            if det['AnomalyDetectorName'] == detector_name:
+                detector_arn = det['AnomalyDetectorArn']
+                break
+        
+        if not detector_arn:
+            response = ce.create_anomaly_detector(
+                AnomalyDetectorName=detector_name,
+                MonitorType='DIMENSIONAL',
+                MonitorSpecification={
+                    'Dimension': 'SERVICE',
+                    'MatchOptions': ['EQUALS'],
+                    'Values': ['Amazon Elastic Container Service']
+                }
+            )
+            detector_arn = response['AnomalyDetectorArn']
+        
+        # Create or update subscription
+        subscription_arn = None
+        subscriptions = ce.get_anomaly_subscriptions()
+        for sub in subscriptions.get('AnomalySubscriptions', []):
+            if sub['SubscriptionName'] == subscription_name:
+                subscription_arn = sub['SubscriptionArn']
+                # Update existing subscription
+                ce.update_anomaly_subscription(
+                    SubscriptionArn=subscription_arn,
+                    MonitorArnList=[detector_arn],
+                    Subscribers=[
+                        {
+                            'Type': 'SNS',
+                            'Address': sns_topic_arn
+                        }
+                    ],
+                    Threshold=50.0,
+                    Frequency='IMMEDIATE'
+                )
+                break
+        
+        if not subscription_arn:
+            response = ce.create_anomaly_subscription(
+                AnomalySubscription={
+                    'SubscriptionName': subscription_name,
+                    'MonitorArnList': [detector_arn],
+                    'Subscribers': [
+                        {
+                            'Type': 'SNS',
+                            'Address': sns_topic_arn
+                        }
+                    ],
+                    'Threshold': 50.0,
+                    'Frequency': 'IMMEDIATE'
+                }
+            )
+            subscription_arn = response['SubscriptionArn']
+        
+        cfnresponse.send(event, context, cfnresponse.SUCCESS, {
+            'DetectorArn': detector_arn,
+            'SubscriptionArn': subscription_arn
+        })
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=str(e))
+`),
+    });
+
+    costAnomalyHandler.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'ce:CreateAnomalyDetector',
+          'ce:DeleteAnomalyDetector',
+          'ce:ListAnomalyDetectors',
+          'ce:CreateAnomalySubscription',
+          'ce:UpdateAnomalySubscription',
+          'ce:DeleteAnomalySubscription',
+          'ce:GetAnomalySubscriptions',
+        ],
+        resources: ['*'],
+      })
+    );
+
+    const costAnomalyProvider = new custom_resources.Provider(
       this,
-      'CostAnomalyDetector',
+      'CostAnomalyProvider',
       {
-        type: 'AWS::CE::AnomalyDetector',
-        properties: {
-          AnomalyDetectorName: `financial-services-cost-${environmentSuffix}`,
-          MonitorType: 'DIMENSIONAL',
-          MonitorSpecification: JSON.stringify({
-            Dimension: 'SERVICE',
-            MatchOptions: ['EQUALS'],
-            Values: ['Amazon Elastic Container Service'],
-          }),
-        },
+        onEventHandler: costAnomalyHandler,
       }
     );
 
-    cdk.Tags.of(costAnomalyDetector).add('Service', 'FinancialServices');
-    cdk.Tags.of(costAnomalyDetector).add('Environment', environmentSuffix);
-
-    const costAnomalySubscription = new cdk.CfnResource(
+    const costAnomalyResource = new cdk.CustomResource(
       this,
-      'CostAnomalySubscription',
+      'CostAnomalyResource',
       {
-        type: 'AWS::CE::AnomalySubscription',
+        serviceToken: costAnomalyProvider.serviceToken,
         properties: {
+          DetectorName: `financial-services-cost-${environmentSuffix}`,
           SubscriptionName: `cost-anomaly-subscription-${environmentSuffix}`,
-          MonitorArnList: [costAnomalyDetector.ref],
-          Subscribers: [
-            {
-              Type: 'SNS',
-              Address: snsTopic.topicArn,
-            },
-          ],
-          Threshold: 50.0,
-          Frequency: 'IMMEDIATE',
+          SnsTopicArn: snsTopic.topicArn,
         },
       }
     );
 
-    cdk.Tags.of(costAnomalySubscription).add('Service', 'FinancialServices');
-    cdk.Tags.of(costAnomalySubscription).add('Environment', environmentSuffix);
+    cdk.Tags.of(costAnomalyHandler).add('Service', 'FinancialServices');
+    cdk.Tags.of(costAnomalyHandler).add('Environment', environmentSuffix);
+    cdk.Tags.of(costAnomalyProvider).add('Service', 'FinancialServices');
+    cdk.Tags.of(costAnomalyProvider).add('Environment', environmentSuffix);
+    cdk.Tags.of(costAnomalyResource).add('Service', 'FinancialServices');
+    cdk.Tags.of(costAnomalyResource).add('Environment', environmentSuffix);
 
     const scalingRole = new iam.Role(this, 'ScalingRole', {
       assumedBy: new iam.ServicePrincipal(
