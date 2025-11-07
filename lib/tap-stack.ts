@@ -1,4 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
+import * as ecs from 'aws-cdk-lib/aws-ecs';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as applicationautoscaling from 'aws-cdk-lib/aws-applicationautoscaling';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
@@ -14,6 +17,9 @@ interface TapStackProps extends cdk.StackProps {
   serviceNames?: string[];
   albArn?: string;
   targetGroupArns?: string[];
+  vpcId?: string;
+  containerImage?: string;
+  containerPort?: number;
 }
 
 export class TapStack extends cdk.Stack {
@@ -43,8 +49,117 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('targetGroupArns')?.split(',') ||
       [];
 
+    const vpcId = props?.vpcId || this.node.tryGetContext('vpcId') || undefined;
+
+    const containerImage =
+      props?.containerImage ||
+      this.node.tryGetContext('containerImage') ||
+      'public.ecr.aws/aws-containers/hello-app-runner:latest';
+
+    const containerPort =
+      props?.containerPort || this.node.tryGetContext('containerPort') || 8080;
+
     cdk.Tags.of(this).add('Service', 'FinancialServices');
     cdk.Tags.of(this).add('Environment', environmentSuffix);
+
+    // Get VPC from provided VPC ID or create cluster with new VPC for test environment
+    let vpc: ec2.IVpc | undefined;
+    if (vpcId) {
+      vpc = ec2.Vpc.fromLookup(this, 'Vpc', {
+        vpcId: vpcId,
+      });
+    }
+
+    // Reference existing ECS cluster or create it for test environment
+    let cluster: ecs.ICluster;
+    if (vpc) {
+      // If VPC is available, we can properly reference the cluster
+      cluster = ecs.Cluster.fromClusterAttributes(this, 'ExistingCluster', {
+        clusterName: clusterName,
+        vpc: vpc,
+        securityGroups: [],
+      });
+    } else {
+      // For test environment without VPC, create a new cluster
+      // Note: This requires VPC, so we'll create a basic VPC for test
+      const testVpc = new ec2.Vpc(this, 'TestVpc', {
+        maxAzs: 3,
+        natGateways: 1,
+      });
+      vpc = testVpc;
+
+      cluster = new ecs.Cluster(this, 'Cluster', {
+        clusterName: clusterName,
+        vpc: testVpc,
+      });
+
+      cdk.Tags.of(cluster).add('Service', 'FinancialServices');
+      cdk.Tags.of(cluster).add('Environment', environmentSuffix);
+    }
+
+    // Reference or create ALB
+    let alb: elbv2.IApplicationLoadBalancer | undefined;
+    if (albArn) {
+      // For existing ALB, reference it by ARN
+      // Note: fromApplicationLoadBalancerAttributes requires securityGroupId
+      // For test environment, we'll create a new ALB if VPC is available
+      // Otherwise, ALB operations will be skipped
+      if (vpc) {
+        alb =
+          elbv2.ApplicationLoadBalancer.fromApplicationLoadBalancerAttributes(
+            this,
+            'ExistingALB',
+            {
+              loadBalancerArn: albArn as string,
+              securityGroupId: 'sg-placeholder', // Placeholder - actual SG will be looked up at runtime
+            }
+          );
+      }
+    } else if (vpc) {
+      // Create ALB for test environment if VPC is available
+      const albSecurityGroup = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
+        vpc: vpc,
+        description: 'Security group for ALB',
+        allowAllOutbound: true,
+      });
+
+      albSecurityGroup.addIngressRule(
+        ec2.Peer.anyIpv4(),
+        ec2.Port.tcp(80),
+        'Allow HTTP from anywhere'
+      );
+
+      alb = new elbv2.ApplicationLoadBalancer(this, 'ALB', {
+        vpc: vpc,
+        internetFacing: true,
+        securityGroup: albSecurityGroup,
+      });
+
+      cdk.Tags.of(alb).add('Service', 'FinancialServices');
+      cdk.Tags.of(alb).add('Environment', environmentSuffix);
+    }
+
+    // Create security group for ECS tasks if VPC is available
+    let taskSecurityGroup: ec2.ISecurityGroup | undefined;
+    if (vpc) {
+      taskSecurityGroup = new ec2.SecurityGroup(this, 'TaskSecurityGroup', {
+        vpc: vpc,
+        description: 'Security group for ECS tasks',
+        allowAllOutbound: true,
+      });
+
+      // Allow traffic from ALB security group if ALB exists
+      if (alb) {
+        taskSecurityGroup.addIngressRule(
+          ec2.Peer.ipv4(vpc.vpcCidrBlock),
+          ec2.Port.tcp(containerPort),
+          'Allow traffic from ALB'
+        );
+      }
+
+      cdk.Tags.of(taskSecurityGroup).add('Service', 'FinancialServices');
+      cdk.Tags.of(taskSecurityGroup).add('Environment', environmentSuffix);
+    }
 
     const snsTopic = new sns.Topic(this, 'CostAnomalyTopic', {
       topicName: `cost-anomaly-${environmentSuffix}`,
@@ -249,12 +364,124 @@ def handler(event, context):
     cdk.Tags.of(dashboard).add('Service', 'FinancialServices');
     cdk.Tags.of(dashboard).add('Environment', environmentSuffix);
 
-    serviceNames.forEach((serviceName: string, index: number) => {
-      // Note: Capacity provider strategy for existing services should be configured
-      // via AWS Console, CLI, or a custom resource Lambda function.
-      // The strategy should use FARGATE (weight: 1, base: 1) and FARGATE_SPOT (weight: 3, base: 0)
-      // to bias toward Spot when safe while maintaining at least one on-demand task.
+    // Note: Fargate capacity providers (FARGATE and FARGATE_SPOT) are enabled by default
+    // on ECS clusters. No need to explicitly enable them.
 
+    serviceNames.forEach((serviceName: string, index: number) => {
+      // Create task definition
+      const taskDefinition = new ecs.FargateTaskDefinition(
+        this,
+        `TaskDefinition${index}`,
+        {
+          family: serviceName,
+          cpu: 256,
+          memoryLimitMiB: 512,
+        }
+      );
+
+      const container = taskDefinition.addContainer(`Container${index}`, {
+        image: ecs.ContainerImage.fromRegistry(containerImage),
+        logging: ecs.LogDrivers.awsLogs({
+          streamPrefix: serviceName,
+        }),
+      });
+
+      container.addPortMappings({
+        containerPort: containerPort,
+        protocol: ecs.Protocol.TCP,
+      });
+
+      cdk.Tags.of(taskDefinition).add('Service', 'FinancialServices');
+      cdk.Tags.of(taskDefinition).add('Environment', environmentSuffix);
+
+      // Create or reference target group
+      let targetGroup: elbv2.IApplicationTargetGroup | undefined;
+      if (targetGroupArns && targetGroupArns[index]) {
+        targetGroup = elbv2.ApplicationTargetGroup.fromTargetGroupAttributes(
+          this,
+          `TargetGroup${index}`,
+          {
+            targetGroupArn: targetGroupArns[index],
+          }
+        );
+      } else if (alb && vpc) {
+        targetGroup = new elbv2.ApplicationTargetGroup(
+          this,
+          `TargetGroup${index}`,
+          {
+            vpc: vpc,
+            port: containerPort,
+            protocol: elbv2.ApplicationProtocol.HTTP,
+            targetType: elbv2.TargetType.IP,
+            healthCheck: {
+              path: '/',
+              interval: cdk.Duration.seconds(30),
+              timeout: cdk.Duration.seconds(5),
+              healthyThresholdCount: 2,
+              unhealthyThresholdCount: 3,
+            },
+            deregistrationDelay: cdk.Duration.seconds(60),
+          }
+        );
+
+        cdk.Tags.of(targetGroup).add('Service', 'FinancialServices');
+        cdk.Tags.of(targetGroup).add('Environment', environmentSuffix);
+
+        // Add target group to ALB listener (create listener if needed)
+        if (index === 0) {
+          const listener = alb.addListener(`Listener${index}`, {
+            port: 80,
+            protocol: elbv2.ApplicationProtocol.HTTP,
+            defaultTargetGroups: [targetGroup],
+          });
+          cdk.Tags.of(listener).add('Service', 'FinancialServices');
+          cdk.Tags.of(listener).add('Environment', environmentSuffix);
+        }
+      }
+
+      // Create Fargate service with capacity provider strategy
+      const serviceProps: ecs.FargateServiceProps = {
+        cluster: cluster,
+        serviceName: serviceName,
+        taskDefinition: taskDefinition,
+        desiredCount: 2,
+        capacityProviderStrategies: [
+          {
+            capacityProvider: 'FARGATE',
+            weight: 1,
+            base: 1, // Maintain at least one on-demand task
+          },
+          {
+            capacityProvider: 'FARGATE_SPOT',
+            weight: 3,
+            base: 0, // No base requirement for Spot
+          },
+        ],
+        healthCheckGracePeriod: cdk.Duration.seconds(60),
+        // Add network configuration if VPC is available
+        ...(vpc && {
+          vpcSubnets: {
+            subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          },
+          securityGroups: taskSecurityGroup ? [taskSecurityGroup] : undefined,
+          assignPublicIp: false,
+        }),
+      };
+
+      const service = new ecs.FargateService(
+        this,
+        `Service${index}`,
+        serviceProps
+      );
+
+      if (targetGroup) {
+        service.attachToApplicationTargetGroup(targetGroup);
+      }
+
+      cdk.Tags.of(service).add('Service', 'FinancialServices');
+      cdk.Tags.of(service).add('Environment', environmentSuffix);
+
+      // Create scalable target for the service
       const scalableTarget = new applicationautoscaling.ScalableTarget(
         this,
         `ScalableTarget${index}`,
