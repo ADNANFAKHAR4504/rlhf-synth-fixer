@@ -66,10 +66,11 @@ export class TapStack extends TerraformStack {
     });
 
     // Create Transit Gateway for multi-region connectivity
+    // Note: Transit Gateway attachments require exactly one subnet per AZ
     new TransitGatewayConstruct(this, 'TransitGateway', {
       environmentSuffix,
       vpcId: networking.vpcId,
-      subnetIds: networking.privateSubnetIds,
+      subnetIds: networking.appSubnetIds,
     });
 
     // Enable VPC Flow Logs with S3 storage
