@@ -1,5 +1,5 @@
 {
-  "platform": "Pulumi",
+  "platform": "pulumi",
   "language": "ts",
   "complexity": "hard",
   "team": "synth",
@@ -22,5 +22,6 @@
     "SNS",
     "KMS"
   ],
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "rajendra-s-aws"
 }
