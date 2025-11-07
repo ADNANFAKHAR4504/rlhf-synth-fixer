@@ -11,7 +11,7 @@ import * as awsx from '@pulumi/awsx';
 
 // Get configuration
 const config = new pulumi.Config();
-const environmentSuffix = config.require('environmentSuffix');
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || config.get('environmentSuffix') || 'dev';
 const region = aws.config.region || 'us-east-1';
 
 // VPC Configuration - 3 AZs with public and private subnets
