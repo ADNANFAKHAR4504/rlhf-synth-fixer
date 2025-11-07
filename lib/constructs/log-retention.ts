@@ -1,6 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as logs from 'aws-cdk-lib/aws-logs';
+// import * as logs from 'aws-cdk-lib/aws-logs';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
@@ -42,11 +42,7 @@ export class LogRetentionConstruct extends Construct {
         ExportPolicy: new iam.PolicyDocument({
           statements: [
             new iam.PolicyStatement({
-              actions: [
-                's3:PutObject',
-                's3:GetObject',
-                's3:ListBucket',
-              ],
+              actions: ['s3:PutObject', 's3:GetObject', 's3:ListBucket'],
               resources: [
                 logArchiveBucket.bucketArn,
                 `${logArchiveBucket.bucketArn}/*`,
@@ -56,6 +52,8 @@ export class LogRetentionConstruct extends Construct {
         }),
       },
     });
+    // Mark as intentionally used for ESLint
+    void exportRole;
 
     // Lambda function for automated log export (simplified for example)
     const exportFunction = new lambda.Function(this, 'LogExporter', {
@@ -76,12 +74,12 @@ def handler(event, context):
     yesterday = datetime.now() - timedelta(days=1)
     start_time = int(yesterday.replace(hour=0, minute=0, second=0).timestamp() * 1000)
     end_time = int(yesterday.replace(hour=23, minute=59, second=59).timestamp() * 1000)
-    
+
     log_groups = [
         '/aws/application/payment-platform',
         '/aws/apigateway/payment-api'
     ]
-    
+
     for log_group in log_groups:
         try:
             response = logs_client.create_export_task(
@@ -94,7 +92,7 @@ def handler(event, context):
             print(f'Started export task {response["taskId"]} for {log_group}')
         except Exception as e:
             print(f'Error exporting {log_group}: {str(e)}')
-    
+
     return {
         'statusCode': 200,
         'body': json.dumps('Log export initiated')
@@ -106,13 +104,12 @@ def handler(event, context):
     });
 
     // Grant permissions to export logs
-    exportFunction.addToRolePolicy(new iam.PolicyStatement({
-      actions: [
-        'logs:CreateExportTask',
-        'logs:DescribeLogGroups',
-      ],
-      resources: ['*'],
-    }));
+    exportFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['logs:CreateExportTask', 'logs:DescribeLogGroups'],
+        resources: ['*'],
+      })
+    );
 
     // Schedule daily log exports at 1 AM UTC
     const exportRule = new events.Rule(this, 'DailyExportRule', {

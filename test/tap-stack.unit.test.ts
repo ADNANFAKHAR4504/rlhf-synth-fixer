@@ -18,7 +18,9 @@ describe('TapStack Unit Tests', () => {
   describe('Stack Properties', () => {
     test('should create stack with correct naming', () => {
       const stackName = tapTemplate.toJSON().Description;
-      expect(stackName).toContain('Payment monitoring infrastructure for payment (test)');
+      expect(stackName).toContain(
+        'Payment monitoring infrastructure for payment (test)'
+      );
     });
 
     test('should apply correct tags', () => {
@@ -41,12 +43,16 @@ describe('TapStack Unit Tests', () => {
 
   describe('Child Stack Creation', () => {
     test('should create PaymentMonitoringStack as nested stack', () => {
-      const nestedStacks = tapTemplate.findResources('AWS::CloudFormation::Stack');
+      const nestedStacks = tapTemplate.findResources(
+        'AWS::CloudFormation::Stack'
+      );
       expect(Object.keys(nestedStacks).length).toBeGreaterThan(0);
 
       const nestedStack = Object.values(nestedStacks)[0] as any;
       expect(nestedStack.Properties.TemplateURL).toBeDefined();
-      expect(nestedStack.Properties.StackName).toContain('payment-monitoring-test');
+      expect(nestedStack.Properties.StackName).toContain(
+        'payment-monitoring-test'
+      );
     });
   });
 
@@ -60,7 +66,9 @@ describe('TapStack Unit Tests', () => {
       const template = Template.fromStack(stack);
       const nestedStacks = template.findResources('AWS::CloudFormation::Stack');
       const nestedStack = Object.values(nestedStacks)[0] as any;
-      expect(nestedStack.Properties.StackName).toContain('payment-monitoring-staging');
+      expect(nestedStack.Properties.StackName).toContain(
+        'payment-monitoring-staging'
+      );
     });
 
     test('should use projectName from props', () => {
@@ -72,7 +80,9 @@ describe('TapStack Unit Tests', () => {
       const template = Template.fromStack(stack);
       const nestedStacks = template.findResources('AWS::CloudFormation::Stack');
       const nestedStack = Object.values(nestedStacks)[0] as any;
-      expect(nestedStack.Properties.StackName).toContain('custom-payment-monitoring-dev');
+      expect(nestedStack.Properties.StackName).toContain(
+        'custom-payment-monitoring-dev'
+      );
     });
 
     test('should fall back to context values', () => {
@@ -86,7 +96,9 @@ describe('TapStack Unit Tests', () => {
       const template = Template.fromStack(stack);
       const nestedStacks = template.findResources('AWS::CloudFormation::Stack');
       const nestedStack = Object.values(nestedStacks)[0] as any;
-      expect(nestedStack.Properties.StackName).toContain('context-project-monitoring-context-env');
+      expect(nestedStack.Properties.StackName).toContain(
+        'context-project-monitoring-context-env'
+      );
     });
 
     test('should use default values when no props or context provided', () => {
@@ -95,7 +107,9 @@ describe('TapStack Unit Tests', () => {
       const template = Template.fromStack(stack);
       const nestedStacks = template.findResources('AWS::CloudFormation::Stack');
       const nestedStack = Object.values(nestedStacks)[0] as any;
-      expect(nestedStack.Properties.StackName).toContain('payment-monitoring-dev');
+      expect(nestedStack.Properties.StackName).toContain(
+        'payment-monitoring-dev'
+      );
     });
   });
 
@@ -111,9 +125,13 @@ describe('TapStack Unit Tests', () => {
     test('should have correct output descriptions', () => {
       const outputs = tapTemplate.toJSON().Outputs || {};
 
-      expect(outputs.OperationalTopicArn.Description).toContain('operational alerts');
+      expect(outputs.OperationalTopicArn.Description).toContain(
+        'operational alerts'
+      );
       expect(outputs.SecurityTopicArn.Description).toContain('security alerts');
-      expect(outputs.LogProcessorFunctionName.Description).toContain('Log processor Lambda');
+      expect(outputs.LogProcessorFunctionName.Description).toContain(
+        'Log processor Lambda'
+      );
     });
   });
 });

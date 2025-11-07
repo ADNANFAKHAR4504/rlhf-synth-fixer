@@ -1,4 +1,4 @@
-import * as cdk from 'aws-cdk-lib';
+// lib/constructs/dashboards.ts
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import { Construct } from 'constructs';
 
@@ -10,14 +10,19 @@ export class DashboardsConstruct extends Construct {
   constructor(scope: Construct, id: string, props: DashboardsConstructProps) {
     super(scope, id);
 
-    const dashboard = new cloudwatch.Dashboard(this, 'PaymentPlatformDashboard', {
-      dashboardName: 'payment-platform-monitoring',
-      start: '-PT3H', // Last 3 hours
-      periodOverride: cloudwatch.PeriodOverride.AUTO,
-      defaultInterval: cdk.Duration.seconds(60), // 60s auto-refresh
-    });
+    // NOTE: CloudWatch/CDK allows either `start`/`end` OR `defaultInterval`, not both.
+    // We keep a relative start window ("last 3 hours") and remove defaultInterval.
+    const dashboard = new cloudwatch.Dashboard(
+      this,
+      'PaymentPlatformDashboard',
+      {
+        dashboardName: 'payment-platform-monitoring',
+        start: '-PT3H', // Last 3 hours default view
+        periodOverride: cloudwatch.PeriodOverride.AUTO,
+      }
+    );
 
-    // Payment Metrics Widget
+    // Payment Transaction Metrics
     const paymentMetrics = new cloudwatch.GraphWidget({
       title: 'Payment Transaction Metrics',
       left: [
@@ -57,7 +62,7 @@ export class DashboardsConstruct extends Construct {
       height: 6,
     });
 
-    // API Latency Percentiles Widget
+    // API Latency Percentiles
     const apiLatency = new cloudwatch.GraphWidget({
       title: 'API Latency Percentiles',
       left: [
@@ -161,9 +166,9 @@ export class DashboardsConstruct extends Construct {
         new cloudwatch.Metric({
           namespace: 'AWS/ECS',
           metricName: 'CPUUtilization',
-          dimensionsMap: { 
+          dimensionsMap: {
             ServiceName: 'payment-service',
-            ClusterName: 'payment-cluster'
+            ClusterName: 'payment-cluster',
           },
           statistic: 'Average',
           label: 'CPU Utilization',
@@ -171,9 +176,9 @@ export class DashboardsConstruct extends Construct {
         new cloudwatch.Metric({
           namespace: 'AWS/ECS',
           metricName: 'MemoryUtilization',
-          dimensionsMap: { 
+          dimensionsMap: {
             ServiceName: 'payment-service',
-            ClusterName: 'payment-cluster'
+            ClusterName: 'payment-cluster',
           },
           statistic: 'Average',
           label: 'Memory Utilization',
@@ -183,7 +188,7 @@ export class DashboardsConstruct extends Construct {
       height: 6,
     });
 
-    // Alarm Status Widget
+    // Alarm Status
     const alarmStatus = new cloudwatch.AlarmStatusWidget({
       title: 'Alarm Status',
       alarms: Array.from(props.alarms.values()),
@@ -191,7 +196,7 @@ export class DashboardsConstruct extends Construct {
       height: 4,
     });
 
-    // Custom Business Metrics
+    // Business KPIs
     const businessMetrics = new cloudwatch.GraphWidget({
       title: 'Business KPIs by Merchant',
       left: [

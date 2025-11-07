@@ -29,7 +29,9 @@ describe('TapStack Integration Tests', () => {
       const cfnTemplate = template.toJSON();
 
       expect(cfnTemplate.AWSTemplateFormatVersion).toBe('2010-09-09');
-      expect(cfnTemplate.Description).toContain('Payment monitoring infrastructure');
+      expect(cfnTemplate.Description).toContain(
+        'Payment monitoring infrastructure'
+      );
       expect(cfnTemplate.Resources).toBeDefined();
       expect(cfnTemplate.Outputs).toBeDefined();
     });
@@ -43,8 +45,12 @@ describe('TapStack Integration Tests', () => {
 
       // Check that topics have proper display names and topic names
       Object.values(topics).forEach((topic: any) => {
-        expect(topic.Properties.DisplayName).toMatch(/^Payment Platform - (Operational|Security) Alerts$/);
-        expect(topic.Properties.TopicName).toMatch(/^payment-platform-(operational|security)-alerts$/);
+        expect(topic.Properties.DisplayName).toMatch(
+          /^Payment Platform - (Operational|Security) Alerts$/
+        );
+        expect(topic.Properties.TopicName).toMatch(
+          /^payment-platform-(operational|security)-alerts$/
+        );
       });
     });
 
@@ -54,7 +60,9 @@ describe('TapStack Integration Tests', () => {
       expect(Object.keys(functions).length).toBe(1);
 
       const lambdaFunction = Object.values(functions)[0] as any;
-      expect(lambdaFunction.Properties.FunctionName).toBe('payment-log-processor');
+      expect(lambdaFunction.Properties.FunctionName).toBe(
+        'payment-log-processor'
+      );
       expect(lambdaFunction.Properties.Runtime).toBe('nodejs18.x');
       expect(lambdaFunction.Properties.Architecture).toBe('arm64');
       expect(lambdaFunction.Properties.Timeout).toBe(60);
@@ -67,7 +75,9 @@ describe('TapStack Integration Tests', () => {
       expect(Object.keys(alarms).length).toBeGreaterThan(0);
 
       // Check specific alarm configurations
-      const alarmNames = Object.values(alarms).map((alarm: any) => alarm.Properties.AlarmName);
+      const alarmNames = Object.values(alarms).map(
+        (alarm: any) => alarm.Properties.AlarmName
+      );
 
       expect(alarmNames).toEqual(
         expect.arrayContaining([
@@ -88,7 +98,9 @@ describe('TapStack Integration Tests', () => {
 
       Object.values(logGroups).forEach((logGroup: any) => {
         expect(logGroup.Properties.RetentionInDays).toBe(30);
-        expect(logGroup.Properties.LogGroupName).toMatch(/^\/aws\/(application\/payment-platform|apigateway\/payment-api)$/);
+        expect(logGroup.Properties.LogGroupName).toMatch(
+          /^\/aws\/(application\/payment-platform|apigateway\/payment-api)$/
+        );
       });
     });
 
@@ -97,7 +109,9 @@ describe('TapStack Integration Tests', () => {
 
       expect(Object.keys(metricFilters).length).toBe(5); // Various error filters
 
-      const filterNames = Object.values(metricFilters).map((filter: any) => filter.Properties.FilterName);
+      const filterNames = Object.values(metricFilters).map(
+        (filter: any) => filter.Properties.FilterName
+      );
       expect(filterNames).toEqual(
         expect.arrayContaining([
           'PaymentErrorFilter',
@@ -110,7 +124,9 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('should create log subscription filters', () => {
-      const subscriptionFilters = template.findResources('AWS::Logs::SubscriptionFilter');
+      const subscriptionFilters = template.findResources(
+        'AWS::Logs::SubscriptionFilter'
+      );
 
       expect(Object.keys(subscriptionFilters).length).toBe(1);
 
@@ -126,8 +142,8 @@ describe('TapStack Integration Tests', () => {
       expect(Object.keys(policies).length).toBeGreaterThan(0);
 
       // Check for CloudWatch metrics permissions
-      const policyStatements = Object.values(policies).flatMap((policy: any) =>
-        policy.Properties.PolicyDocument.Statement
+      const policyStatements = Object.values(policies).flatMap(
+        (policy: any) => policy.Properties.PolicyDocument.Statement
       );
 
       const cloudwatchPutMetric = policyStatements.find((stmt: any) =>
@@ -144,7 +160,9 @@ describe('TapStack Integration Tests', () => {
 
       Object.values(roles).forEach((role: any) => {
         expect(role.Properties.AssumeRolePolicyDocument).toBeDefined();
-        expect(role.Properties.AssumeRolePolicyDocument.Statement).toBeDefined();
+        expect(
+          role.Properties.AssumeRolePolicyDocument.Statement
+        ).toBeDefined();
       });
     });
   });
@@ -155,7 +173,9 @@ describe('TapStack Integration Tests', () => {
 
       expect(outputs.OperationalTopicArn).toBeDefined();
       expect(outputs.OperationalTopicArn.Value).toMatch(/Ref/);
-      expect(outputs.OperationalTopicArn.Description).toContain('operational alerts');
+      expect(outputs.OperationalTopicArn.Description).toContain(
+        'operational alerts'
+      );
 
       expect(outputs.SecurityTopicArn).toBeDefined();
       expect(outputs.SecurityTopicArn.Value).toMatch(/Ref/);
@@ -163,16 +183,22 @@ describe('TapStack Integration Tests', () => {
 
       expect(outputs.LogProcessorFunctionName).toBeDefined();
       expect(outputs.LogProcessorFunctionName.Value).toMatch(/Ref/);
-      expect(outputs.LogProcessorFunctionName.Description).toContain('Log processor Lambda');
+      expect(outputs.LogProcessorFunctionName.Description).toContain(
+        'Log processor Lambda'
+      );
     });
 
     test('should have exportable output names', () => {
       const outputs = template.toJSON().Outputs || {};
 
       // Outputs should be named appropriately for cross-stack references
-      expect(outputs.OperationalTopicArn.Export?.Name).toMatch(/OperationalTopicArn/);
+      expect(outputs.OperationalTopicArn.Export?.Name).toMatch(
+        /OperationalTopicArn/
+      );
       expect(outputs.SecurityTopicArn.Export?.Name).toMatch(/SecurityTopicArn/);
-      expect(outputs.LogProcessorFunctionName.Export?.Name).toMatch(/LogProcessorFunctionName/);
+      expect(outputs.LogProcessorFunctionName.Export?.Name).toMatch(
+        /LogProcessorFunctionName/
+      );
     });
   });
 
@@ -181,13 +207,17 @@ describe('TapStack Integration Tests', () => {
       const nestedStacks = template.findResources('AWS::CloudFormation::Stack');
       const nestedStack = Object.values(nestedStacks)[0] as any;
 
-      expect(nestedStack.Properties.StackName).toContain('payment-monitoring-test');
+      expect(nestedStack.Properties.StackName).toContain(
+        'payment-monitoring-test'
+      );
     });
 
     test('should apply environment-specific tags', () => {
       const resources = template.toJSON().Resources || {};
       const taggedResource = Object.values(resources).find((resource: any) =>
-        resource.Properties?.Tags?.some((tag: any) => tag.Key === 'Environment' && tag.Value === 'test')
+        resource.Properties?.Tags?.some(
+          (tag: any) => tag.Key === 'Environment' && tag.Value === 'test'
+        )
       );
 
       expect(taggedResource).toBeDefined();
@@ -203,8 +233,8 @@ describe('TapStack Integration Tests', () => {
       expect(Object.keys(topics).length).toBe(2); // Operational and Security topics
 
       // Check that alarms reference SNS topics
-      const alarmActions = Object.values(alarms).flatMap((alarm: any) =>
-        alarm.Properties?.AlarmActions || []
+      const alarmActions = Object.values(alarms).flatMap(
+        (alarm: any) => alarm.Properties?.AlarmActions || []
       );
 
       expect(alarmActions.length).toBeGreaterThan(0);
@@ -215,7 +245,9 @@ describe('TapStack Integration Tests', () => {
 
     test('should have proper Lambda-to-log-group dependencies', () => {
       const lambdaFunctions = template.findResources('AWS::Lambda::Function');
-      const subscriptionFilters = template.findResources('AWS::Logs::SubscriptionFilter');
+      const subscriptionFilters = template.findResources(
+        'AWS::Logs::SubscriptionFilter'
+      );
 
       expect(Object.keys(lambdaFunctions).length).toBe(1);
       expect(Object.keys(subscriptionFilters).length).toBe(1);

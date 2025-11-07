@@ -16,19 +16,23 @@ export class AlarmsConstruct extends Construct {
     super(scope, id);
 
     // Payment failure rate alarm
-    const paymentFailureAlarm = new cloudwatch.Alarm(this, 'PaymentFailureRate', {
-      alarmName: 'payment-failure-rate-high',
-      alarmDescription: 'Payment failure rate exceeds 1%',
-      metric: new cloudwatch.Metric({
-        namespace: 'PaymentPlatform',
-        metricName: 'PaymentFailureRate',
-        statistic: 'Average',
-        period: cdk.Duration.minutes(5),
-      }),
-      threshold: 1,
-      evaluationPeriods: 2,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
+    const paymentFailureAlarm = new cloudwatch.Alarm(
+      this,
+      'PaymentFailureRate',
+      {
+        alarmName: 'payment-failure-rate-high',
+        alarmDescription: 'Payment failure rate exceeds 1%',
+        metric: new cloudwatch.Metric({
+          namespace: 'PaymentPlatform',
+          metricName: 'PaymentFailureRate',
+          statistic: 'Average',
+          period: cdk.Duration.minutes(5),
+        }),
+        threshold: 1,
+        evaluationPeriods: 2,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }
+    );
     paymentFailureAlarm.addAlarmAction(
       new cloudwatchActions.SnsAction(props.operationalTopic)
     );
@@ -126,14 +130,24 @@ export class AlarmsConstruct extends Construct {
     this.alarms.set('authFailure', authFailureAlarm);
 
     // Composite alarm - High error rate AND high latency
-    const criticalPerformanceAlarm = new cloudwatch.CompositeAlarm(this, 'CriticalPerformance', {
-      compositeAlarmName: 'critical-performance-degradation',
-      alarmDescription: 'Both high error rate and high latency detected',
-      alarmRule: cloudwatch.AlarmRule.allOf(
-        cloudwatch.AlarmRule.fromAlarm(paymentFailureAlarm, cloudwatch.AlarmState.ALARM),
-        cloudwatch.AlarmRule.fromAlarm(apiLatencyAlarm, cloudwatch.AlarmState.ALARM),
-      ),
-    });
+    const criticalPerformanceAlarm = new cloudwatch.CompositeAlarm(
+      this,
+      'CriticalPerformance',
+      {
+        compositeAlarmName: 'critical-performance-degradation',
+        alarmDescription: 'Both high error rate and high latency detected',
+        alarmRule: cloudwatch.AlarmRule.allOf(
+          cloudwatch.AlarmRule.fromAlarm(
+            paymentFailureAlarm,
+            cloudwatch.AlarmState.ALARM
+          ),
+          cloudwatch.AlarmRule.fromAlarm(
+            apiLatencyAlarm,
+            cloudwatch.AlarmState.ALARM
+          )
+        ),
+      }
+    );
     criticalPerformanceAlarm.addAlarmAction(
       new cloudwatchActions.SnsAction(props.operationalTopic)
     );
