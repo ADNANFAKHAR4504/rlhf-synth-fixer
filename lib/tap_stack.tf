@@ -106,8 +106,8 @@ resource "aws_dynamodb_table" "payment_transactions" {
   }
 
   server_side_encryption {
-    enabled     = true
-    kms_key_id  = aws_kms_key.payment_system.arn
+    enabled    = true
+    kms_key_id = aws_kms_key.payment_system.arn
   }
 
   point_in_time_recovery {
@@ -141,7 +141,7 @@ resource "aws_sqs_queue" "notification_queue" {
 resource "aws_sqs_queue" "webhook_processor_dlq" {
   name                      = "webhook-processor-dlq-${local.resource_suffix}"
   message_retention_seconds = 1209600 # 14 days
-  kms_master_key_id        = aws_kms_key.payment_system.arn
+  kms_master_key_id         = aws_kms_key.payment_system.arn
 
   tags = merge(local.common_tags, {
     Name = "webhook-processor-dlq-${local.resource_suffix}"
@@ -151,7 +151,7 @@ resource "aws_sqs_queue" "webhook_processor_dlq" {
 resource "aws_sqs_queue" "transaction_reader_dlq" {
   name                      = "transaction-reader-dlq-${local.resource_suffix}"
   message_retention_seconds = 1209600 # 14 days
-  kms_master_key_id        = aws_kms_key.payment_system.arn
+  kms_master_key_id         = aws_kms_key.payment_system.arn
 
   tags = merge(local.common_tags, {
     Name = "transaction-reader-dlq-${local.resource_suffix}"
@@ -161,7 +161,7 @@ resource "aws_sqs_queue" "transaction_reader_dlq" {
 resource "aws_sqs_queue" "notification_sender_dlq" {
   name                      = "notification-sender-dlq-${local.resource_suffix}"
   message_retention_seconds = 1209600 # 14 days
-  kms_master_key_id        = aws_kms_key.payment_system.arn
+  kms_master_key_id         = aws_kms_key.payment_system.arn
 
   tags = merge(local.common_tags, {
     Name = "notification-sender-dlq-${local.resource_suffix}"
@@ -464,14 +464,14 @@ resource "aws_iam_role_policy" "notification_sender_policy" {
 
 # Webhook Processor Lambda
 resource "aws_lambda_function" "webhook_processor" {
-  filename         = "webhook_processor.zip"
-  function_name    = "webhook-processor-${local.resource_suffix}"
-  role            = aws_iam_role.webhook_processor_role.arn
-  handler         = "index.handler"
-  runtime         = "python3.11"
-  memory_size     = 512
-  timeout         = 30
-  
+  filename      = "webhook_processor.zip"
+  function_name = "webhook-processor-${local.resource_suffix}"
+  role          = aws_iam_role.webhook_processor_role.arn
+  handler       = "index.handler"
+  runtime       = "python3.11"
+  memory_size   = 512
+  timeout       = 30
+
   reserved_concurrent_executions = 100
 
   dead_letter_config {
@@ -501,14 +501,14 @@ resource "aws_lambda_function" "webhook_processor" {
 
 # Transaction Reader Lambda
 resource "aws_lambda_function" "transaction_reader" {
-  filename         = "transaction_reader.zip"
-  function_name    = "transaction-reader-${local.resource_suffix}"
-  role            = aws_iam_role.transaction_reader_role.arn
-  handler         = "index.handler"
-  runtime         = "python3.11"
-  memory_size     = 512
-  timeout         = 30
-  
+  filename      = "transaction_reader.zip"
+  function_name = "transaction-reader-${local.resource_suffix}"
+  role          = aws_iam_role.transaction_reader_role.arn
+  handler       = "index.handler"
+  runtime       = "python3.11"
+  memory_size   = 512
+  timeout       = 30
+
   reserved_concurrent_executions = 50
 
   dead_letter_config {
@@ -537,14 +537,14 @@ resource "aws_lambda_function" "transaction_reader" {
 
 # Notification Sender Lambda
 resource "aws_lambda_function" "notification_sender" {
-  filename         = "notification_sender.zip"
-  function_name    = "notification-sender-${local.resource_suffix}"
-  role            = aws_iam_role.notification_sender_role.arn
-  handler         = "index.handler"
-  runtime         = "python3.11"
-  memory_size     = 512
-  timeout         = 30
-  
+  filename      = "notification_sender.zip"
+  function_name = "notification-sender-${local.resource_suffix}"
+  role          = aws_iam_role.notification_sender_role.arn
+  handler       = "index.handler"
+  runtime       = "python3.11"
+  memory_size   = 512
+  timeout       = 30
+
   reserved_concurrent_executions = 50
 
   dead_letter_config {
@@ -592,8 +592,8 @@ resource "aws_api_gateway_rest_api" "payment_api" {
 # API Gateway Request Validators
 resource "aws_api_gateway_request_validator" "payment_validator" {
   name                        = "payment-validator"
-  rest_api_id                = aws_api_gateway_rest_api.payment_api.id
-  validate_request_body      = true
+  rest_api_id                 = aws_api_gateway_rest_api.payment_api.id
+  validate_request_body       = true
   validate_request_parameters = true
 }
 
@@ -604,15 +604,15 @@ resource "aws_api_gateway_model" "webhook_payment_model" {
   content_type = "application/json"
 
   schema = jsonencode({
-    type = "object"
+    type     = "object"
     required = ["transaction_id", "amount", "currency", "status"]
     properties = {
       transaction_id = {
-        type = "string"
+        type    = "string"
         pattern = "^[a-zA-Z0-9_-]+$"
       }
       amount = {
-        type = "number"
+        type    = "number"
         minimum = 0
       }
       currency = {
@@ -624,7 +624,7 @@ resource "aws_api_gateway_model" "webhook_payment_model" {
         enum = ["pending", "completed", "failed"]
       }
       timestamp = {
-        type = "string"
+        type   = "string"
         format = "date-time"
       }
     }
@@ -637,11 +637,11 @@ resource "aws_api_gateway_model" "notification_model" {
   content_type = "application/json"
 
   schema = jsonencode({
-    type = "object"
+    type     = "object"
     required = ["email", "template"]
     properties = {
       email = {
-        type = "string"
+        type   = "string"
         format = "email"
       }
       template = {
@@ -649,7 +649,7 @@ resource "aws_api_gateway_model" "notification_model" {
         enum = ["payment_confirmation", "payment_failed", "payment_pending"]
       }
       custom_message = {
-        type = "string"
+        type      = "string"
         maxLength = 500
       }
     }
@@ -838,7 +838,7 @@ resource "aws_api_gateway_method_settings" "all" {
 
   settings {
     metrics_enabled    = true
-    logging_level     = "INFO"
+    logging_level      = "INFO"
     data_trace_enabled = true
   }
 }
