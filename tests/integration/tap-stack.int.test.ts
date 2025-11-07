@@ -59,9 +59,9 @@ describe("VPC Infrastructure Integration Tests", () => {
       outputs.DatabaseSubnet3Id,
     ].filter(Boolean);
     natGatewayIds = [
-      outputs.NatGatewayAId,
-      outputs.NatGatewayBId,
-      outputs.NatGatewayCId,
+      outputs.NatGateway1Id,
+      outputs.NatGateway2Id,
+      outputs.NatGateway3Id,
     ].filter(Boolean);
   });
 
