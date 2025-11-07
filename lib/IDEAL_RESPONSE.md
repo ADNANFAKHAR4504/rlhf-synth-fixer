@@ -62,17 +62,6 @@ pulumi.export("private_subnet_ids", [subnet.id for subnet in stack.private_subne
 pulumi.export("nat_gateway_ids", [nat.id for nat in stack.nat_gateways])
 pulumi.export("security_group_id", stack.security_group.id)
 pulumi.export("flow_log_id", stack.flow_log.id)
-)
-
-# Export stack outputs for integration testing
-pulumi.export("vpc_id", stack.vpc.id)
-pulumi.export("vpc_cidr", stack.vpc.cidr_block)
-pulumi.export("internet_gateway_id", stack.igw.id)
-pulumi.export("public_subnet_ids", [subnet.id for subnet in stack.public_subnets])
-pulumi.export("private_subnet_ids", [subnet.id for subnet in stack.private_subnets])
-pulumi.export("nat_gateway_ids", [nat.id for nat in stack.nat_gateways])
-pulumi.export("security_group_id", stack.security_group.id)
-pulumi.export("flow_log_id", stack.flow_log.id)
 ```
 
 ## File: lib/__init__.py
