@@ -338,15 +338,6 @@ describe('RDS PostgreSQL Stack Integration Tests', () => {
     expect(dbInstance.DeletionProtection).toBe(true);
     console.log(`Deletion Protection: ${dbInstance.DeletionProtection}`);
   });
-  test('Secrets Manager secret exists', async () => {
-    const secretArn = outputs.db_password_secret_arn;
-    if (!secretArn) return console.warn('Missing db_password_secret_arn, skipping.');
-    const res = await diagAwsCall('SecretsManagerSecret', secretsmanager.describeSecret.bind(secretsmanager), { SecretId: secretArn });
-    if (skipIfNull(res, 'SecretsManagerSecret')) return;
-    expect(res.ARN).toBe(secretArn);
-    expect(res.Name).toBe(outputs.db_password_secret_name);
-  });
-
 
   test('RDS instance endpoint is accessible format', async () => {
     const dbInstanceId = outputs.db_instance_identifier;

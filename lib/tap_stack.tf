@@ -493,7 +493,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_utilization" {
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
   namespace           = "AWS/RDS"
-  period              = "60"  # 1-minute granularity
+  period              = "60" # 1-minute granularity
   statistic           = "Average"
   threshold           = "75"
   alarm_description   = "This metric monitors RDS CPU utilization"
@@ -513,7 +513,7 @@ resource "aws_cloudwatch_metric_alarm" "db_connections" {
   evaluation_periods  = "2"
   metric_name         = "DatabaseConnections"
   namespace           = "AWS/RDS"
-  period              = "60"  # 1-minute granularity
+  period              = "60" # 1-minute granularity
   statistic           = "Average"
   threshold           = "180"
   alarm_description   = "Alert when DB connections exceed 180"
@@ -533,7 +533,7 @@ resource "aws_cloudwatch_metric_alarm" "read_latency" {
   evaluation_periods  = "2"
   metric_name         = "ReadLatency"
   namespace           = "AWS/RDS"
-  period              = "60"  # 1-minute granularity
+  period              = "60" # 1-minute granularity
   statistic           = "Average"
   threshold           = "0.2"
   alarm_description   = "Alert when read latency exceeds 200ms"
@@ -553,7 +553,7 @@ resource "aws_cloudwatch_metric_alarm" "write_latency" {
   evaluation_periods  = "2"
   metric_name         = "WriteLatency"
   namespace           = "AWS/RDS"
-  period              = "60"  # 1-minute granularity
+  period              = "60" # 1-minute granularity
   statistic           = "Average"
   threshold           = "0.2"
   alarm_description   = "Alert when write latency exceeds 200ms"
@@ -573,7 +573,7 @@ resource "aws_cloudwatch_metric_alarm" "free_storage" {
   evaluation_periods  = "1"
   metric_name         = "FreeStorageSpace"
   namespace           = "AWS/RDS"
-  period              = "60"  # 1-minute granularity
+  period              = "60" # 1-minute granularity
   statistic           = "Average"
   threshold           = "10737418240" # 10 GB in bytes
   alarm_description   = "Alert when free storage falls below 10GB"
@@ -606,7 +606,7 @@ resource "aws_cloudwatch_dashboard" "rds_monitoring" {
           stacked = false
           region  = var.aws_region
           title   = "Database Performance Metrics"
-          period  = 60  # 1-minute granularity
+          period  = 60 # 1-minute granularity
           dimensions = {
             DBInstanceIdentifier = aws_db_instance.postgres.id
           }
@@ -623,7 +623,7 @@ resource "aws_cloudwatch_dashboard" "rds_monitoring" {
           stacked = false
           region  = var.aws_region
           title   = "Database Latency"
-          period  = 60  # 1-minute granularity
+          period  = 60 # 1-minute granularity
           dimensions = {
             DBInstanceIdentifier = aws_db_instance.postgres.id
           }
@@ -641,7 +641,7 @@ resource "aws_cloudwatch_dashboard" "rds_monitoring" {
           stacked = false
           region  = var.aws_region
           title   = "Storage and IOPS"
-          period  = 60  # 1-minute granularity
+          period  = 60 # 1-minute granularity
           dimensions = {
             DBInstanceIdentifier = aws_db_instance.postgres.id
           }
