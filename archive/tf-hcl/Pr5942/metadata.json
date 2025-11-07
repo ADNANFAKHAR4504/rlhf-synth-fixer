@@ -11,6 +11,22 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": ["VPC","EC2 (Security Groups, Subnets)", "CloudTrail", "S3", "KMS", "CloudWatch", "CloudWatch Logs", "Lambda", "SNS","IAM"],
-  "training_quality": 9.5
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "Lambda",
+    "CloudTrail",
+    "CloudWatch",
+    "KMS",
+    "SNS",
+    "IAM"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
 }
