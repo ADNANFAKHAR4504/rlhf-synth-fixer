@@ -26,10 +26,10 @@ resource "aws_subnet" "private" {
 
 # S3 Bucket for VPC Flow Logs
 resource "aws_s3_bucket" "flow_logs" {
-  bucket = "vpc-flow-logs-${var.environment_suffix}"
+  bucket = "vpc-flow-logs-${var.environment_suffix}-xy"
 
   tags = merge(var.tags, {
-    Name = "vpc-flow-logs-${var.environment_suffix}"
+    Name = "vpc-flow-logs-${var.environment_suffix}-xy"
   })
 }
 
@@ -92,7 +92,7 @@ resource "aws_flow_log" "main" {
 
 # IAM Role for VPC Flow Logs
 resource "aws_iam_role" "flow_logs" {
-  name = "vpc-flow-logs-role-${var.environment_suffix}"
+  name = "vpc-flow-logs-role-${var.environment_suffix}-xy"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -108,7 +108,7 @@ resource "aws_iam_role" "flow_logs" {
   })
 
   tags = merge(var.tags, {
-    Name = "vpc-flow-logs-role-${var.environment_suffix}"
+    Name = "vpc-flow-logs-role-${var.environment_suffix}-xy"
   })
 }
 

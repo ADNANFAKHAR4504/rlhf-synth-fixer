@@ -2,17 +2,17 @@
 
 # DB Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "db-subnet-group-${var.environment_suffix}"
+  name       = "db-subnet-group-${var.environment_suffix}-xy"
   subnet_ids = aws_subnet.private[*].id
 
   tags = merge(var.tags, {
-    Name = "db-subnet-group-${var.environment_suffix}"
+    Name = "db-subnet-group-${var.environment_suffix}-xy"
   })
 }
 
 # DB Parameter Group for SSL enforcement
 resource "aws_db_parameter_group" "postgres_ssl" {
-  name   = "postgres-ssl-${var.environment_suffix}"
+  name   = "postgres-ssl-${var.environment_suffix}xy"
   family = "postgres15"
 
   parameter {
@@ -36,7 +36,7 @@ resource "aws_db_parameter_group" "postgres_ssl" {
   }
 
   tags = merge(var.tags, {
-    Name = "postgres-ssl-${var.environment_suffix}"
+    Name = "postgres-ssl-${var.environment_suffix}-xy"
   })
 }
 
@@ -48,11 +48,11 @@ resource "random_password" "db_password" {
 
 # AWS Secrets Manager for DB password
 resource "aws_secretsmanager_secret" "db_password" {
-  name                    = "rds-password-${var.environment_suffix}"
+  name                    = "rds-password-${var.environment_suffix}-xy"
   recovery_window_in_days = 0 # Force delete for testing
 
   tags = merge(var.tags, {
-    Name = "rds-password-${var.environment_suffix}"
+    Name = "rds-password-${var.environment_suffix}-xy"
   })
 }
 

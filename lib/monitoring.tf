@@ -89,10 +89,10 @@ resource "aws_config_configuration_recorder_status" "main" {
 
 # S3 Bucket for AWS Config
 resource "aws_s3_bucket" "config" {
-  bucket = "aws-config-${var.environment_suffix}"
+  bucket = "aws-config-${var.environment_suffix}-xy"
 
   tags = merge(var.tags, {
-    Name = "aws-config-${var.environment_suffix}"
+    Name = "aws-config-${var.environment_suffix}-xy"
   })
 }
 
@@ -126,7 +126,7 @@ resource "aws_s3_bucket_public_access_block" "config" {
 
 # IAM Role for AWS Config
 resource "aws_iam_role" "config" {
-  name = "aws-config-role-${var.environment_suffix}"
+  name = "aws-config-role-${var.environment_suffix}-xy"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -144,7 +144,7 @@ resource "aws_iam_role" "config" {
   managed_policy_arns = ["arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"]
 
   tags = merge(var.tags, {
-    Name = "aws-config-role-${var.environment_suffix}"
+    Name = "aws-config-role-${var.environment_suffix}-xy"
   })
 }
 
@@ -218,12 +218,12 @@ resource "aws_config_config_rule" "s3_bucket_public_write" {
 
 # CloudWatch Log Group for Security Events
 resource "aws_cloudwatch_log_group" "security_events" {
-  name              = "/aws/security/events-${var.environment_suffix}"
+  name              = "/aws/security/events-${var.environment_suffix}-xy"
   retention_in_days = 365
   kms_key_id        = aws_kms_key.logs.arn
 
   tags = merge(var.tags, {
-    Name = "security-events-${var.environment_suffix}"
+    Name = "security-events-${var.environment_suffix}-xy"
   })
 }
 

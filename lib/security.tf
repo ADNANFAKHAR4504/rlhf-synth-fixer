@@ -12,7 +12,7 @@ resource "aws_kms_key" "rds" {
 }
 
 resource "aws_kms_alias" "rds" {
-  name          = "alias/rds-${var.environment_suffix}"
+  name          = "alias/rds-${var.environment_suffix}-xy"
   target_key_id = aws_kms_key.rds.key_id
 }
 
@@ -28,7 +28,7 @@ resource "aws_kms_key" "s3" {
 }
 
 resource "aws_kms_alias" "s3" {
-  name          = "alias/s3-${var.environment_suffix}"
+  name          = "alias/s3-${var.environment_suffix}-xy"
   target_key_id = aws_kms_key.s3.key_id
 }
 
@@ -80,7 +80,7 @@ resource "aws_kms_key" "logs" {
 }
 
 resource "aws_kms_alias" "logs" {
-  name          = "alias/logs-${var.environment_suffix}"
+  name          = "alias/logs-${var.environment_suffix}-xy"
   target_key_id = aws_kms_key.logs.key_id
 }
 
@@ -258,10 +258,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "app_logs" {
 
 # S3 Bucket for Audit Trails
 resource "aws_s3_bucket" "audit_trails" {
-  bucket = "audit-trails-${var.environment_suffix}"
+  bucket = "audit-trails-${var.environment_suffix}-xy"
 
   tags = merge(var.tags, {
-    Name = "audit-trails-${var.environment_suffix}"
+    Name = "audit-trails-${var.environment_suffix}-xy"
   })
 }
 
@@ -339,7 +339,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "audit_trails" {
 
 # IAM Role for EC2 Instances
 resource "aws_iam_role" "ec2_payment_processing" {
-  name = "ec2-payment-processing-role-${var.environment_suffix}"
+  name = "ec2-payment-processing-role-${var.environment_suffix}-xy"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -355,7 +355,7 @@ resource "aws_iam_role" "ec2_payment_processing" {
   })
 
   tags = merge(var.tags, {
-    Name = "ec2-payment-processing-role-${var.environment_suffix}"
+    Name = "ec2-payment-processing-role-${var.environment_suffix}-xy"
   })
 }
 
