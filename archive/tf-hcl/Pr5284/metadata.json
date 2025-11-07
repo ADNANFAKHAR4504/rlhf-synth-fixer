@@ -29,5 +29,11 @@
     "EventBridge"
   ],
   "training_quality": 9,
-  "background": "Financial services company implementing PCI-DSS compliant zero-trust security framework across multi-account AWS environment with comprehensive IAM controls, encryption at rest, regional restrictions, continuous compliance monitoring, and secure access patterns"
+  "background": "Financial services company implementing PCI-DSS compliant zero-trust security framework across multi-account AWS environment with comprehensive IAM controls, encryption at rest, regional restrictions, continuous compliance monitoring, and secure access patterns",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "devang-devops",
+  "dockerS3Location": ""
 }
