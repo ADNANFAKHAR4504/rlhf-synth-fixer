@@ -29,6 +29,7 @@ import {
   DescribeEndpointsCommand,
   DescribeReplicationTasksCommand,
   DescribeReplicationSubnetGroupsCommand,
+  ReplicationEndpointTypeValue,
 } from '@aws-sdk/client-database-migration-service';
 import {
   CloudWatchLogsClient,
@@ -421,8 +422,8 @@ describe('TapStack Integration Tests', () => {
         const response = await dms.send(command);
 
         if (response.Endpoints) {
-          const sourceEndpoint = response.Endpoints.find(e => e.EndpointType === 'SOURCE');
-          const targetEndpoint = response.Endpoints.find(e => e.EndpointType === 'TARGET');
+          const sourceEndpoint = response.Endpoints.find(e => e.EndpointType === ReplicationEndpointTypeValue.SOURCE);
+          const targetEndpoint = response.Endpoints.find(e => e.EndpointType === ReplicationEndpointTypeValue.TARGET);
 
           expect(sourceEndpoint).toBeDefined();
           expect(sourceEndpoint?.EngineName).toBe('postgres');
