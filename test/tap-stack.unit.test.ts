@@ -47,7 +47,7 @@ pulumi.runtime.setMocks({
 
 // Set required configuration
 pulumi.runtime.setConfig('project:environmentSuffix', 'test');
-// Note: We intentionally don't set aws:region here to test the fallback to 'us-east-1'
+// Intentionally NOT setting aws:region to test the fallback logic in bin/tap.ts line 18
 // pulumi.runtime.setConfig('aws:region', 'us-east-1');
 
 // Import infrastructure after mocks are set up
@@ -91,6 +91,7 @@ describe('Order Processing API Infrastructure - Unit Tests', () => {
         done();
       });
     });
+
   });
 
   describe('VPC Configuration', () => {
