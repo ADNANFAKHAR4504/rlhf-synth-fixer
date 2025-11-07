@@ -682,7 +682,7 @@ describe('Failure Recovery Infrastructure Integration Tests', () => {
       expect(mappedOutputs.SnsTopicArn).toMatch(/^arn:aws:sns:/);
       console.log('  Monitoring and alerting configured');
 
-      console.log('🎉 Complete failure recovery infrastructure validation PASSED');
+      console.log('Complete failure recovery infrastructure validation PASSED');
     }, 60000);
 
     test('should demonstrate full request flow: ALB → EC2 → RDS → S3 → Lambda', async () => {
@@ -764,7 +764,7 @@ describe('Failure Recovery Infrastructure Integration Tests', () => {
         Key: logKey,
       }));
 
-      console.log('🎉 Full request flow validation COMPLETED');
+      console.log('Full request flow validation COMPLETED');
     }, 90000);
 
     test('should validate infrastructure resilience and failure scenarios', async () => {
@@ -829,7 +829,7 @@ describe('Failure Recovery Infrastructure Integration Tests', () => {
       expect(s3Objects).toBeDefined();
       console.log('  S3 bucket accessible for backup operations');
 
-      console.log('🎉 Infrastructure resilience validation COMPLETED');
+      console.log('Infrastructure resilience validation COMPLETED');
     }, 120000);
 
     test('should validate monitoring and alerting integration', async () => {
@@ -957,7 +957,7 @@ describe('Failure Recovery Infrastructure Integration Tests', () => {
       expect(privateSubnets.length).toBeGreaterThanOrEqual(2);
       console.log('  Multi-AZ network security verified');
 
-      console.log('🎉 Security configuration validation COMPLETED');
+      console.log('Security configuration validation COMPLETED');
     }, 60000);
 
     test('should validate cross-service data flow and integration', async () => {
