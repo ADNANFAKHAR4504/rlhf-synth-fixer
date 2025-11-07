@@ -482,6 +482,7 @@ def handler(event, context):
       cdk.Tags.of(service).add('Environment', environmentSuffix);
 
       // Create scalable target for the service
+      // Must depend on the service being created first
       const scalableTarget = new applicationautoscaling.ScalableTarget(
         this,
         `ScalableTarget${index}`,
@@ -494,6 +495,9 @@ def handler(event, context):
           role: scalingRole,
         }
       );
+
+      // Ensure scalable target depends on the service being created
+      scalableTarget.node.addDependency(service);
 
       cdk.Tags.of(scalableTarget).add('Service', 'FinancialServices');
       cdk.Tags.of(scalableTarget).add('Environment', environmentSuffix);
