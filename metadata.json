@@ -24,5 +24,6 @@
     "IAM",
     "EventBridge"
   ],
+  "author": "aj-turing",
   "training_quality": 10
 }

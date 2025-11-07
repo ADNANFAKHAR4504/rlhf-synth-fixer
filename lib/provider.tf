@@ -11,7 +11,7 @@ terraform {
   }
 
   # Using local backend for worktree testing
-  backend "local" {}
+  backend "s3" {}
 }
 
 # Primary AWS provider for general resources
