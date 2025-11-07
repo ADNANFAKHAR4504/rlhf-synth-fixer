@@ -58,7 +58,7 @@ describe('Payment Processing VPC Integration Tests', () => {
 
   describe('VPC Configuration', () => {
     test('VPC exists with correct CIDR block', async () => {
-      const vpcId = outputs.VpcId;
+      const vpcId = outputs!.VpcId;
       expect(vpcId).toBeDefined();
 
       const response = await ec2Client.send(
@@ -87,7 +87,7 @@ describe('Payment Processing VPC Integration Tests', () => {
     });
 
     test('VPC has mandatory tags', async () => {
-      const vpcId = outputs.VpcId;
+      const vpcId = outputs!.VpcId;
       const response = await ec2Client.send(
         new DescribeVpcsCommand({ VpcIds: [vpcId] })
       );
@@ -105,7 +105,7 @@ describe('Payment Processing VPC Integration Tests', () => {
 
   describe('Subnet Configuration', () => {
     test('public subnets exist and are configured correctly', async () => {
-      const subnetIds = outputs.PublicSubnetIds.split(',');
+      const subnetIds = outputs!.PublicSubnetIds.split(',');
       expect(subnetIds).toHaveLength(3);
 
       const response = await ec2Client.send(
@@ -119,7 +119,7 @@ describe('Payment Processing VPC Integration Tests', () => {
     });
 
     test('private subnets exist and are configured correctly', async () => {
-      const subnetIds = outputs.PrivateSubnetIds.split(',');
+      const subnetIds = outputs!.PrivateSubnetIds.split(',');
       expect(subnetIds).toHaveLength(3);
 
       const response = await ec2Client.send(
@@ -133,8 +133,8 @@ describe('Payment Processing VPC Integration Tests', () => {
     });
 
     test('subnets span 3 availability zones', async () => {
-      const publicSubnetIds = outputs.PublicSubnetIds.split(',');
-      const privateSubnetIds = outputs.PrivateSubnetIds.split(',');
+      const publicSubnetIds = outputs!.PublicSubnetIds.split(',');
+      const privateSubnetIds = outputs!.PrivateSubnetIds.split(',');
       const allSubnetIds = [...publicSubnetIds, ...privateSubnetIds];
 
       const response = await ec2Client.send(
@@ -151,7 +151,7 @@ describe('Payment Processing VPC Integration Tests', () => {
 
   describe('NAT Gateway Configuration', () => {
     test('NAT Gateway exists in public subnet', async () => {
-      const vpcId = outputs.VpcId;
+      const vpcId = outputs!.VpcId;
       const response = await ec2Client.send(
         new DescribeNatGatewaysCommand({
           Filter: [
@@ -164,7 +164,7 @@ describe('Payment Processing VPC Integration Tests', () => {
       // Expect at least 1 NAT Gateway (currently configured for 1 to save costs)
       expect(response.NatGateways!.length).toBeGreaterThanOrEqual(1);
 
-      const publicSubnetIds = outputs.PublicSubnetIds.split(',');
+      const publicSubnetIds = outputs!.PublicSubnetIds.split(',');
       response.NatGateways!.forEach((natGateway) => {
         expect(publicSubnetIds).toContain(natGateway.SubnetId);
       });
@@ -173,7 +173,7 @@ describe('Payment Processing VPC Integration Tests', () => {
 
   describe('Internet Gateway Configuration', () => {
     test('Internet Gateway exists and is attached to VPC', async () => {
-      const vpcId = outputs.VpcId;
+      const vpcId = outputs!.VpcId;
       const response = await ec2Client.send(
         new DescribeInternetGatewaysCommand({
           Filters: [{ Name: 'attachment.vpc-id', Values: [vpcId] }],
@@ -187,7 +187,7 @@ describe('Payment Processing VPC Integration Tests', () => {
 
   describe('Security Groups', () => {
     test('ALB security group allows HTTP and HTTPS traffic', async () => {
-      const sgId = outputs.ALBSecurityGroupId;
+      const sgId = outputs!.ALBSecurityGroupId;
       const response = await ec2Client.send(
         new DescribeSecurityGroupsCommand({ GroupIds: [sgId] })
       );
@@ -207,8 +207,8 @@ describe('Payment Processing VPC Integration Tests', () => {
     });
 
     test('ECS security group allows traffic from ALB on port 8080', async () => {
-      const sgId = outputs.ECSSecurityGroupId;
-      const albSgId = outputs.ALBSecurityGroupId;
+      const sgId = outputs!.ECSSecurityGroupId;
+      const albSgId = outputs!.ALBSecurityGroupId;
 
       const response = await ec2Client.send(
         new DescribeSecurityGroupsCommand({ GroupIds: [sgId] })
@@ -228,8 +228,8 @@ describe('Payment Processing VPC Integration Tests', () => {
     });
 
     test('RDS security group allows traffic from ECS on port 5432', async () => {
-      const sgId = outputs.RDSSecurityGroupId;
-      const ecsSgId = outputs.ECSSecurityGroupId;
+      const sgId = outputs!.RDSSecurityGroupId;
+      const ecsSgId = outputs!.ECSSecurityGroupId;
 
       const response = await ec2Client.send(
         new DescribeSecurityGroupsCommand({ GroupIds: [sgId] })
@@ -250,9 +250,9 @@ describe('Payment Processing VPC Integration Tests', () => {
 
     test('all security groups have mandatory tags', async () => {
       const sgIds = [
-        outputs.ALBSecurityGroupId,
-        outputs.ECSSecurityGroupId,
-        outputs.RDSSecurityGroupId,
+        outputs!.ALBSecurityGroupId,
+        outputs!.ECSSecurityGroupId,
+        outputs!.RDSSecurityGroupId,
       ];
 
       const response = await ec2Client.send(
@@ -274,7 +274,7 @@ describe('Payment Processing VPC Integration Tests', () => {
 
   describe('VPC Flow Logs', () => {
     test('VPC Flow Logs are enabled', async () => {
-      const vpcId = outputs.VpcId;
+      const vpcId = outputs!.VpcId;
       const response = await ec2Client.send(
         new DescribeFlowLogsCommand({
           Filter: [{ Name: 'resource-id', Values: [vpcId] }],
@@ -290,7 +290,7 @@ describe('Payment Processing VPC Integration Tests', () => {
     });
 
     test('Flow Log S3 bucket exists', async () => {
-      const bucketName = outputs.FlowLogBucketName;
+      const bucketName = outputs!.FlowLogBucketName;
       expect(bucketName).toBeDefined();
 
       await expect(
@@ -301,7 +301,7 @@ describe('Payment Processing VPC Integration Tests', () => {
 
   describe('VPC Endpoints', () => {
     test('S3 VPC endpoint exists', async () => {
-      const vpcId = outputs.VpcId;
+      const vpcId = outputs!.VpcId;
       const response = await ec2Client.send(
         new DescribeVpcEndpointsCommand({
           Filters: [
@@ -316,7 +316,7 @@ describe('Payment Processing VPC Integration Tests', () => {
     });
 
     test('DynamoDB VPC endpoint exists', async () => {
-      const vpcId = outputs.VpcId;
+      const vpcId = outputs!.VpcId;
       const response = await ec2Client.send(
         new DescribeVpcEndpointsCommand({
           Filters: [
