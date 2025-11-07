@@ -10,8 +10,7 @@ export class DashboardsConstruct extends Construct {
   constructor(scope: Construct, id: string, props: DashboardsConstructProps) {
     super(scope, id);
 
-    // NOTE: CloudWatch/CDK allows either `start`/`end` OR `defaultInterval`, not both.
-    // We keep a relative start window ("last 3 hours") and remove defaultInterval.
+    // Keep a relative start window ("last 3 hours"); do NOT also set defaultInterval.
     const dashboard = new cloudwatch.Dashboard(
       this,
       'PaymentPlatformDashboard',
@@ -225,21 +224,24 @@ export class DashboardsConstruct extends Construct {
     dashboard.addWidgets(ecsMetrics, businessMetrics);
     dashboard.addWidgets(alarmStatus);
 
-    // Contributor Insights Rules
+    // ───────────────────────────────────────────────
+    // Contributor Insights Rules (fixed rule bodies)
+    // ───────────────────────────────────────────────
+    const apiAccessLogGroup = '/aws/apigateway/payment-api';
+
     new cloudwatch.CfnInsightRule(this, 'TopAPICallers', {
       ruleName: 'PaymentAPI-TopCallers',
       ruleState: 'ENABLED',
       ruleBody: JSON.stringify({
-        Schema: {
-          Name: 'CloudWatchLogRule',
-          Version: 1,
-        },
-        AggregateOn: 'Count',
+        Schema: { Name: 'CloudWatchLogRule', Version: 1 },
+        LogFormat: 'JSON',
+        LogGroupNames: [apiAccessLogGroup],
         Contribution: {
           Keys: ['$.clientIp'],
+          // Only include events that have a clientIp
+          Filters: [{ Match: '$.clientIp', IsPresent: true }],
         },
-        LogFormat: 'JSON',
-        LogGroupNames: ['/aws/apigateway/payment-api'],
+        AggregateOn: 'Count',
       }),
     });
 
@@ -247,17 +249,15 @@ export class DashboardsConstruct extends Construct {
       ruleName: 'PaymentAPI-TopErrorEndpoints',
       ruleState: 'ENABLED',
       ruleBody: JSON.stringify({
-        Schema: {
-          Name: 'CloudWatchLogRule',
-          Version: 1,
-        },
-        AggregateOn: 'Count',
+        Schema: { Name: 'CloudWatchLogRule', Version: 1 },
+        LogFormat: 'JSON',
+        LogGroupNames: [apiAccessLogGroup],
         Contribution: {
           Keys: ['$.path'],
+          // Only 4xx/5xx responses
+          Filters: [{ Match: '$.statusCode', GreaterThan: 399 }],
         },
-        Filter: '{ $.statusCode >= 400 }',
-        LogFormat: 'JSON',
-        LogGroupNames: ['/aws/apigateway/payment-api'],
+        AggregateOn: 'Count',
       }),
     });
   }
