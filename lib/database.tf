@@ -1,10 +1,3 @@
-# Discover supported Aurora PostgreSQL engine version (falls back gracefully)
-data "aws_rds_engine_version" "aurora_postgresql" {
-  engine               = "aurora-postgresql"
-  preferred_versions   = ["15.3", "15.2", "14.9", "14.7", "13.11"]
-  include_all          = false
-}
-
 # RDS Subnet Group
 resource "aws_db_subnet_group" "aurora" {
   name_prefix = "${local.name_prefix}-aurora-"
@@ -23,7 +16,7 @@ resource "aws_db_subnet_group" "aurora" {
 resource "aws_rds_cluster" "aurora" {
   cluster_identifier              = "${local.name_prefix}-aurora-cluster"
   engine                          = "aurora-postgresql"
-  engine_version                  = data.aws_rds_engine_version.aurora_postgresql.version
+  engine_version                  = var.aurora_engine_version == "" ? null : var.aurora_engine_version
   database_name                   = var.database_name
   master_username                 = var.database_master_username
   master_password                 = random_password.rds_password.result

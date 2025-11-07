@@ -100,6 +100,12 @@ variable "database_master_username" {
   default     = "dbadmin"
 }
 
+variable "aurora_engine_version" {
+  description = "Specific Aurora PostgreSQL engine version to deploy. Leave empty to use AWS default/latest."
+  type        = string
+  default     = ""
+}
+
 variable "db_instance_class" {
   description = "Instance class for RDS Aurora instances"
   type        = string
