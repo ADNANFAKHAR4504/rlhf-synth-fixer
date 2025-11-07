@@ -12,7 +12,7 @@ import {
   Route53Client,
   GetHostedZoneCommand,
   TestDNSAnswerCommand,
-} from "@aws-sdk/client-route53";
+} from "@aws-sdk/client-route-53";
 import { S3Client, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { SSMClient, DescribeInstanceInformationCommand } from "@aws-sdk/client-ssm";
 import { CloudWatchClient, DescribeAlarmsCommand, PutMetricAlarmCommand } from "@aws-sdk/client-cloudwatch";
