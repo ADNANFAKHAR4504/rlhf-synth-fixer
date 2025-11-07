@@ -1637,7 +1637,7 @@ Resources:
     Type: AWS::AutoScaling::AutoScalingGroup
     CreationPolicy:
       ResourceSignal:
-        Count: !Ref DesiredCapacity
+        Count: 2
         Timeout: PT15M
     UpdatePolicy:
       AutoScalingReplacingUpdate:
