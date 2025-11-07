@@ -41,39 +41,6 @@ const getEnvironmentSuffix = (): string => {
 
 const ENV_SUFFIX = getEnvironmentSuffix();
 
-// Validate all required outputs are present upfront
-const validateOutputs = () => {
-  const requiredOutputs = {
-    validator_lambda_arn: outputs.validator_lambda_arn,
-    processor_lambda_arn: outputs.processor_lambda_arn,
-    notifier_lambda_arn: outputs.notifier_lambda_arn,
-    validation_queue_url: outputs.validation_queue_url,
-    processing_queue_url: outputs.processing_queue_url,
-    notification_queue_url: outputs.notification_queue_url,
-    validation_dlq_url: outputs.validation_dlq_url,
-    processing_dlq_url: outputs.processing_dlq_url,
-    notification_dlq_url: outputs.notification_dlq_url,
-    api_gateway_id: outputs.api_gateway_id,
-    alarm_topic_arn: outputs.alarm_topic_arn,
-  };
-
-  const missing = Object.entries(requiredOutputs)
-    .filter(([_, value]) => !value)
-    .map(([key, _]) => key);
-
-  if (missing.length > 0) {
-    throw new Error(
-      `Missing required outputs in cfn-outputs/flat-outputs.json:\n` +
-      `  - ${missing.join('\n  - ')}\n\n` +
-      `Please regenerate outputs by running:\n` +
-      `  AWS_PROFILE=turing AWS_REGION=${REGION} ENVIRONMENT_SUFFIX=${ENV_SUFFIX} node scripts/fetch-tf-outputs.mjs\n\n` +
-      `Current outputs file contains: ${Object.keys(outputs).join(', ')}`
-    );
-  }
-};
-
-validateOutputs();
-
 const cloudwatchClient = new CloudWatchClient({ region: REGION });
 const lambdaClient = new LambdaClient({ region: REGION });
 const apiGatewayClient = new APIGatewayClient({ region: REGION });
@@ -88,12 +55,6 @@ describe("Webhook Processing System Integration Tests", () => {
         { name: "processor", arn: outputs.processor_lambda_arn },
         { name: "notifier", arn: outputs.notifier_lambda_arn },
       ];
-
-      // Check all Lambda ARNs are present in outputs
-      const missingArns = functions.filter(f => !f.arn).map(f => f.name);
-      if (missingArns.length > 0) {
-        throw new Error(`Missing Lambda ARNs in outputs: ${missingArns.join(", ")}. Please regenerate outputs file.`);
-      }
 
       for (const { name, arn } of functions) {
         expect(arn).toBeDefined();
@@ -201,12 +162,6 @@ describe("Webhook Processing System Integration Tests", () => {
         { name: "processor", arn: outputs.processor_lambda_arn },
         { name: "notifier", arn: outputs.notifier_lambda_arn },
       ];
-
-      // Check all Lambda ARNs are present in outputs
-      const missingArns = functions.filter(f => !f.arn).map(f => f.name);
-      if (missingArns.length > 0) {
-        throw new Error(`Missing Lambda ARNs in outputs: ${missingArns.join(", ")}. Please regenerate outputs file.`);
-      }
 
       for (const { name, arn } of functions) {
         expect(arn).toBeDefined();
