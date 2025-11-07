@@ -1,12 +1,6 @@
 # Provisioning of Infrastructure Environments
 
-> **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using Terraform with HCL**
-> 
-> Platform: **tf**  
-> Language: **hcl**  
-> Region: **us-east-1**
->
-> **Do not substitute or change the platform or language.** All infrastructure code must be written using the specified platform and language combination.
+Important note: This task needs to be implemented using Terraform with HCL. The platform is tf, the language is hcl, and the region is us-east-1. Please don't substitute or change the platform or language - all infrastructure code should be written using Terraform HCL.
 
 ---
 
