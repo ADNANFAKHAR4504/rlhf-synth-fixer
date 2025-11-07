@@ -749,7 +749,7 @@ export class SecurityServicesModule extends Construct {
     });
 
     this.cloudTrail = new aws.cloudtrail.Cloudtrail(this, 'trail', {
-      name: `security-trail-ts-${tags['Environment'] || 'dev'}`,
+      name: `security-trail-${tags['Environment'] || 'dev'}`,
       s3BucketName: bucket.id,
       includeGlobalServiceEvents: true,
       isMultiRegionTrail: true,
