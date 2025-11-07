@@ -2,7 +2,7 @@
 
 This implementation creates a production-ready VPC infrastructure with multi-tier networking for a financial trading platform.
 
-## File: lib/tap-stack.yaml
+## File: lib/TapStack.yml
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
