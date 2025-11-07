@@ -64,7 +64,6 @@ describe('TapStack Unit Tests', () => {
         Runtime: 'nodejs18.x',
         MemorySize: 1024,
         Timeout: 300,
-        ReservedConcurrentExecutions: 100,
         Architectures: ['arm64'],
         TracingConfig: {
           Mode: 'Active',
@@ -78,7 +77,6 @@ describe('TapStack Unit Tests', () => {
         Runtime: 'nodejs18.x',
         MemorySize: 512,
         Timeout: 300,
-        ReservedConcurrentExecutions: 100,
         Architectures: ['arm64'],
       });
     });
@@ -99,7 +97,6 @@ describe('TapStack Unit Tests', () => {
         Runtime: 'nodejs18.x',
         MemorySize: 512,
         Timeout: 300,
-        ReservedConcurrentExecutions: 100,
       });
     });
 

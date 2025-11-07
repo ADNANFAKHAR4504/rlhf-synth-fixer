@@ -1,39 +1,39 @@
 import {
-  DynamoDBClient,
-  DescribeTableCommand,
-  PutItemCommand,
-  ScanCommand,
-} from '@aws-sdk/client-dynamodb';
-import {
-  SNSClient,
-  GetTopicAttributesCommand,
-  ListSubscriptionsByTopicCommand,
-} from '@aws-sdk/client-sns';
-import {
-  SQSClient,
-  GetQueueAttributesCommand,
-  SendMessageCommand,
-} from '@aws-sdk/client-sqs';
-import {
-  LambdaClient,
-  GetFunctionCommand,
-  ListEventSourceMappingsCommand,
-} from '@aws-sdk/client-lambda';
-import {
   APIGatewayClient,
   GetRestApiCommand,
   GetStageCommand,
 } from '@aws-sdk/client-api-gateway';
 import {
+  DescribeTableCommand,
+  DynamoDBClient,
+  PutItemCommand,
+  ScanCommand,
+} from '@aws-sdk/client-dynamodb';
+import {
   EventBridgeClient,
   ListRulesCommand,
   ListTargetsByRuleCommand,
 } from '@aws-sdk/client-eventbridge';
+import {
+  GetFunctionCommand,
+  LambdaClient,
+  ListEventSourceMappingsCommand,
+} from '@aws-sdk/client-lambda';
+import {
+  GetTopicAttributesCommand,
+  ListSubscriptionsByTopicCommand,
+  SNSClient,
+} from '@aws-sdk/client-sns';
+import {
+  GetQueueAttributesCommand,
+  SendMessageCommand,
+  SQSClient,
+} from '@aws-sdk/client-sqs';
 import * as fs from 'fs';
 import * as path from 'path';
 
 // Load deployment outputs
-const outputsPath = path.join(__dirname, '../../cfn-outputs/flat-outputs.json');
+const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
 const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
 
 const region = process.env.AWS_REGION || 'ca-central-1';

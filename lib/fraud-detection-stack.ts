@@ -143,7 +143,6 @@ export class FraudDetectionStack extends Construct {
         code: lambda.Code.fromAsset('lib/lambda/transaction-validator'),
         memorySize: 1024,
         timeout: cdk.Duration.minutes(5),
-        reservedConcurrentExecutions: 100,
         tracing: lambda.Tracing.ACTIVE,
         deadLetterQueue: validatorDLQ,
         environment: {
@@ -180,7 +179,6 @@ export class FraudDetectionStack extends Construct {
         code: lambda.Code.fromAsset('lib/lambda/fifo-processor'),
         memorySize: 512,
         timeout: cdk.Duration.minutes(5),
-        reservedConcurrentExecutions: 100,
         tracing: lambda.Tracing.ACTIVE,
         deadLetterQueue: processorDLQ,
         environment: {
@@ -258,7 +256,6 @@ export class FraudDetectionStack extends Construct {
         code: lambda.Code.fromAsset('lib/lambda/batch-processor'),
         memorySize: 512,
         timeout: cdk.Duration.minutes(5),
-        reservedConcurrentExecutions: 100,
         tracing: lambda.Tracing.ACTIVE,
         deadLetterQueue: batchProcessorDLQ,
         environment: {
