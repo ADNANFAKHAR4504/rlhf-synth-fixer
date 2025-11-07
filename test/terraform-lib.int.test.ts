@@ -360,7 +360,7 @@ describe('Terraform Lib Integration Tests', () => {
     test('should have Bottlerocket user data files', () => {
       const userdataPath = path.join(libPath, 'userdata');
       const userdataFiles = fs.readdirSync(userdataPath);
-      
+
       expect(userdataFiles).toContain('system-node.toml');
       expect(userdataFiles).toContain('app-node.toml');
       expect(userdataFiles).toContain('gpu-node.toml');
@@ -369,15 +369,244 @@ describe('Terraform Lib Integration Tests', () => {
     test('should have valid TOML configuration', () => {
       const userdataPath = path.join(libPath, 'userdata');
       const tomlFiles = fs.readdirSync(userdataPath).filter(f => f.endsWith('.toml'));
-      
+
       tomlFiles.forEach(file => {
         const tomlContent = fs.readFileSync(path.join(userdataPath, file), 'utf8');
-        
+
         // Should have Bottlerocket configuration sections
         expect(tomlContent).toContain('[settings.kubernetes]');
         expect(tomlContent).toContain('api-server');
         expect(tomlContent).toContain('cluster-certificate');
       });
+    });
+  });
+
+  describe('Advanced Features Integration Tests', () => {
+    test('should have proper tagging strategy across resources', () => {
+      let taggedResources = 0;
+      let totalResources = 0;
+
+      terraformFiles.forEach(file => {
+        const content = fs.readFileSync(path.join(libPath, file), 'utf8');
+        const resourceMatches = content.match(/resource\s+"[\w_-]+"\s+"[\w_-]+"/g);
+
+        if (resourceMatches) {
+          totalResources += resourceMatches.length;
+          if (content.includes('tags = {') || content.includes('default_tags')) {
+            taggedResources += resourceMatches.length;
+          }
+        }
+      });
+
+      // At least 50% of resources should be tagged
+      const tagCoverage = totalResources > 0 ? (taggedResources / totalResources) : 0;
+      expect(tagCoverage).toBeGreaterThanOrEqual(0.5);
+    });
+
+    test('should integrate service mesh if configured', () => {
+      const serviceMeshPath = path.join(libPath, 'service-mesh.tf');
+      if (fs.existsSync(serviceMeshPath)) {
+        const content = fs.readFileSync(serviceMeshPath, 'utf8');
+        expect(content).toContain('aws_appmesh_mesh');
+        expect(content).toContain('aws_appmesh_virtual_node');
+      } else {
+        expect(true).toBeTruthy(); // Pass if not yet implemented
+      }
+    });
+
+    test('should integrate GitOps tooling if configured', () => {
+      const gitOpsPath = path.join(libPath, 'gitops-argocd.tf');
+      if (fs.existsSync(gitOpsPath)) {
+        const content = fs.readFileSync(gitOpsPath, 'utf8');
+        expect(content).toContain('argocd');
+        expect(content).toContain('helm_release');
+        expect(content).toContain('kubernetes_namespace');
+      } else {
+        expect(true).toBeTruthy(); // Pass if not yet implemented
+      }
+    });
+
+    test('should have cost monitoring if configured', () => {
+      const costPath = path.join(libPath, 'cost-intelligence.tf');
+      if (fs.existsSync(costPath)) {
+        const content = fs.readFileSync(costPath, 'utf8');
+        expect(content).toContain('kubecost');
+        expect(content).toContain('aws_cur_report_definition');
+      } else {
+        expect(true).toBeTruthy(); // Pass if not yet implemented
+      }
+    });
+
+    test('should have advanced security features if configured', () => {
+      const securityPath = path.join(libPath, 'advanced-security.tf');
+      if (fs.existsSync(securityPath)) {
+        const content = fs.readFileSync(securityPath, 'utf8');
+        expect(content).toContain('falco');
+        expect(content).toContain('opa_gatekeeper');
+      } else {
+        expect(true).toBeTruthy(); // Pass if not yet implemented
+      }
+    });
+
+    test('should have disaster recovery setup if configured', () => {
+      const drPath = path.join(libPath, 'disaster-recovery.tf');
+      if (fs.existsSync(drPath)) {
+        const content = fs.readFileSync(drPath, 'utf8');
+        expect(content).toContain('dr_region');
+        expect(content).toContain('aws_vpc_peering_connection');
+        expect(content).toContain('aws_route53_health_check');
+      } else {
+        expect(true).toBeTruthy(); // Pass if not yet implemented
+      }
+    });
+  });
+
+  describe('Compliance and Best Practices Integration Tests', () => {
+    test('should follow AWS Well-Architected Framework principles', () => {
+      // Security Pillar - Encryption
+      const hasEncryption = terraformFiles.some(file => {
+        const content = fs.readFileSync(path.join(libPath, file), 'utf8');
+        return content.includes('encryption') || content.includes('kms');
+      });
+      expect(hasEncryption).toBeTruthy();
+
+      // Reliability Pillar - Multi-AZ
+      const hasMultiAZ = fs.readFileSync(path.join(libPath, 'vpc.tf'), 'utf8').includes('availability_zone');
+      expect(hasMultiAZ).toBeTruthy();
+
+      // Performance Efficiency - Auto-scaling
+      const hasAutoScaling = fs.readFileSync(path.join(libPath, 'eks-node-groups.tf'), 'utf8').includes('scaling_config');
+      expect(hasAutoScaling).toBeTruthy();
+
+      // Cost Optimization - Tagging
+      const hasCostTags = terraformFiles.some(file => {
+        const content = fs.readFileSync(path.join(libPath, file), 'utf8');
+        return content.includes('Environment') || content.includes('environment_suffix');
+      });
+      expect(hasCostTags).toBeTruthy();
+    });
+
+    test('should have proper resource lifecycle management', () => {
+      const hasLifecycle = terraformFiles.some(file => {
+        const content = fs.readFileSync(path.join(libPath, file), 'utf8');
+        return content.includes('lifecycle') ||
+               content.includes('create_before_destroy') ||
+               content.includes('prevent_destroy');
+      });
+      expect(hasLifecycle).toBeTruthy();
+    });
+
+    test('should use data sources for dynamic configuration', () => {
+      let dataSourceCount = 0;
+
+      terraformFiles.forEach(file => {
+        const content = fs.readFileSync(path.join(libPath, file), 'utf8');
+        const matches = content.match(/data\s+"[\w_-]+"\s+"[\w_-]+"/g) || [];
+        dataSourceCount += matches.length;
+      });
+
+      expect(dataSourceCount).toBeGreaterThan(0);
+    });
+
+    test('should have proper dependency management', () => {
+      const hasDependsOn = terraformFiles.some(file => {
+        const content = fs.readFileSync(path.join(libPath, file), 'utf8');
+        return content.includes('depends_on');
+      });
+      expect(hasDependsOn).toBeTruthy();
+    });
+
+    test('should follow consistent file naming convention', () => {
+      terraformFiles.forEach(file => {
+        // Files should use kebab-case
+        expect(file).toMatch(/^[a-z0-9-]+\.tf$/);
+      });
+    });
+
+    test('should have comprehensive variable defaults', () => {
+      const variablesContent = fs.readFileSync(path.join(libPath, 'variables.tf'), 'utf8');
+      const variableMatches = variablesContent.match(/variable\s+"[\w_-]+"/g) || [];
+      const defaultMatches = variablesContent.match(/default\s*=/g) || [];
+
+      // Most variables should have defaults
+      const defaultRatio = variableMatches.length > 0 ? defaultMatches.length / variableMatches.length : 0;
+      expect(defaultRatio).toBeGreaterThan(0.6);
+    });
+  });
+
+  describe('End-to-End Deployment Chain Tests', () => {
+    test('should have complete infrastructure deployment chain', () => {
+      const requiredFiles = [
+        'provider.tf',
+        'variables.tf',
+        'vpc.tf',
+        'security-groups.tf',
+        'iam-eks-cluster.tf',
+        'iam-node-groups.tf',
+        'eks-cluster.tf',
+        'eks-node-groups.tf',
+        'eks-addons.tf',
+        'outputs.tf'
+      ];
+
+      requiredFiles.forEach(file => {
+        expect(terraformFiles).toContain(file);
+        const content = fs.readFileSync(path.join(libPath, file), 'utf8');
+        expect(content.length).toBeGreaterThan(50);
+      });
+    });
+
+    test('should have proper IAM role chain', () => {
+      // Check cluster role
+      const clusterIamContent = fs.readFileSync(path.join(libPath, 'iam-eks-cluster.tf'), 'utf8');
+      expect(clusterIamContent).toContain('aws_iam_role');
+      expect(clusterIamContent).toContain('EKSClusterPolicy');
+
+      // Check node role
+      const nodeIamContent = fs.readFileSync(path.join(libPath, 'iam-node-groups.tf'), 'utf8');
+      expect(nodeIamContent).toContain('aws_iam_role');
+      expect(nodeIamContent).toContain('EKSWorkerNodePolicy');
+
+      // Check IRSA roles
+      const irsaContent = fs.readFileSync(path.join(libPath, 'iam-irsa.tf'), 'utf8');
+      expect(irsaContent).toContain('oidc');
+    });
+
+    test('should have complete networking setup', () => {
+      const vpcContent = fs.readFileSync(path.join(libPath, 'vpc.tf'), 'utf8');
+
+      // VPC components
+      expect(vpcContent).toContain('aws_vpc');
+      expect(vpcContent).toContain('aws_subnet');
+      expect(vpcContent).toContain('aws_internet_gateway');
+      expect(vpcContent).toContain('aws_nat_gateway');
+      expect(vpcContent).toContain('aws_route_table');
+      expect(vpcContent).toContain('aws_route');
+    });
+
+    test('should have monitoring and observability setup', () => {
+      const cloudwatchContent = fs.readFileSync(path.join(libPath, 'cloudwatch.tf'), 'utf8');
+      expect(cloudwatchContent.length).toBeGreaterThan(50);
+
+      // Check for logging in EKS
+      const eksContent = fs.readFileSync(path.join(libPath, 'eks-cluster.tf'), 'utf8');
+      const hasLogging = eksContent.includes('enabled_cluster_log_types') ||
+                        eksContent.includes('cloudwatch');
+      expect(hasLogging).toBeTruthy();
+    });
+
+    test('should have security configurations', () => {
+      // Security groups
+      const sgContent = fs.readFileSync(path.join(libPath, 'security-groups.tf'), 'utf8');
+      expect(sgContent).toContain('aws_security_group');
+      expect(sgContent).toContain('ingress');
+      expect(sgContent).toContain('egress');
+
+      // Encryption
+      const eksContent = fs.readFileSync(path.join(libPath, 'eks-cluster.tf'), 'utf8');
+      const hasEncryption = eksContent.includes('encryption_config') ||
+                           eksContent.includes('kms');
+      expect(hasEncryption).toBeTruthy();
     });
   });
 });

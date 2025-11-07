@@ -1,438 +1,240 @@
-# Model Response Failures Analysis - EKS Infrastructure
+# Model Response Failures Analysis – EKS Infrastructure
 
-This document analyzes failures and improvements needed to transform the MODEL_RESPONSE EKS infrastructure implementation into the IDEAL_RESPONSE production-ready solution.
+The current `MODEL_RESPONSE.md` delivers only the base VPC + EKS building blocks. The production target described in `lib/` now includes GitOps, service mesh, advanced security, cost intelligence, and regional DR features that are absent from the model. The sections below highlight the most critical deltas.
 
 ## Critical Failures
 
-### 1. Region Configuration Inconsistency
+### 1. Missing GitOps, Progressive Delivery, and TLS-managed ingress
+**Impact Level**: Critical  
+**MODEL_RESPONSE Issue**: The model stops defining inputs right after the basic `namespaces` variable and never introduces GitOps concepts (`gitops_repo_url`, `github_org`, `domain_name`) or any Helm-based deployments. There are only AWS/Kubernetes/TLS providers:
 
-**Impact Level**: High
-
-**MODEL_RESPONSE Issue**: The default region is set to `ap-southeast-1` in variables.tf:
 ```hcl
-variable "aws_region" {
-  description = "AWS region for resource deployment"
-  type        = string
-  default     = "ap-southeast-1"
+variable "namespaces" {
+  description = "Kubernetes namespaces to create"
+  type        = list(string)
+  default     = ["dev", "staging", "production"]
 }
 ```
 
-**IDEAL_RESPONSE Fix**: Uses a more common production region `us-east-1` and includes proper region validation:
+Without those inputs there is no way to deploy Argo CD, GitHub SSO, App-of-Apps, or HTTPS ingress.
+
+**IDEAL_RESPONSE Fix**: The production implementation adds the missing variables (`lib/variables.tf:188-258`) and provisions Argo CD plus all supporting services through Helm (`lib/gitops-argocd.tf:4-420`):
+
 ```hcl
-variable "aws_region" {
-  description = "AWS region for resource deployment"
-  type        = string
-  default     = "us-east-1"
-  validation {
-    condition     = can(regex("^[a-z]{2}-[a-z]+-[0-9]{1}$", var.aws_region))
-    error_message = "AWS region must be a valid region format."
-  }
-}
-```
+resource "helm_release" "argocd" {
+  name       = "argocd"
+  repository = "https://argoproj.github.io/argo-helm"
+  chart      = "argo-cd"
+  namespace  = kubernetes_namespace.argocd.metadata[0].name
 
-**Root Cause**: MODEL_RESPONSE selected a less commonly used region without considering global deployment patterns and didn't include input validation.
-
-**Cost/Security/Performance Impact**: Deploying to ap-southeast-1 instead of us-east-1 can increase latency for US-based users and may have different pricing structures.
-
----
-
-### 2. Missing VPC Endpoint Cost Optimization
-
-**Impact Level**: Medium
-
-**MODEL_RESPONSE Issue**: The VPC configuration is basic without VPC endpoints for cost optimization:
-```hcl
-# Basic VPC configuration without endpoints
-resource "aws_vpc" "main" {
-  cidr_block           = var.vpc_cidr
-  enable_dns_hostnames = var.enable_dns_hostnames
-  enable_dns_support   = var.enable_dns_support
-}
-```
-
-**IDEAL_RESPONSE Fix**: Includes VPC endpoints for S3, ECR, and other AWS services to reduce NAT gateway costs:
-```hcl
-# VPC endpoints for cost optimization
-resource "aws_vpc_endpoint" "s3" {
-  vpc_id            = aws_vpc.main.id
-  service_name      = "com.amazonaws.${var.aws_region}.s3"
-  vpc_endpoint_type = "Gateway"
-  route_table_ids   = [aws_route_table.private[*].id]
-}
-
-resource "aws_vpc_endpoint" "ecr_api" {
-  vpc_id              = aws_vpc.main.id
-  service_name        = "com.amazonaws.${var.aws_region}.ecr.api"
-  vpc_endpoint_type   = "Interface"
-  subnet_ids          = aws_subnet.private[*].id
-  security_group_ids  = [aws_security_group.vpc_endpoint.id]
-}
-```
-
-**Root Cause**: MODEL_RESPONSE focused on basic EKS functionality but missed important cost optimization strategies for enterprise deployments.
-
-**Cost/Security/Performance Impact**: Without VPC endpoints, all AWS service calls go through NAT gateways, increasing costs by approximately $45-90/month depending on traffic volume.
-
----
-
-### 3. Insufficient Node Group Customization
-
-**Impact Level**: Medium
-
-**MODEL_RESPONSE Issue**: Node groups use basic configuration without proper launch templates and customization:
-```hcl
-resource "aws_eks_node_group" "system_nodes" {
-  cluster_name    = aws_eks_cluster.main.name
-  node_group_name = "${var.cluster_name}-${var.environment_suffix}-system"
-  node_role_arn   = aws_iam_role.node_group.arn
-  subnet_ids      = aws_subnet.private[*].id
-  
-  instance_types = ["m5.large"]
-  
-  scaling_config {
-    desired_size = 2
-    max_size     = 4
-    min_size     = 1
-  }
-}
-```
-
-**IDEAL_RESPONSE Fix**: Uses launch templates with Bottlerocket AMI, proper user data, and advanced configuration:
-```hcl
-resource "aws_launch_template" "system_nodes" {
-  name_prefix   = "${var.cluster_name}-${var.environment_suffix}-system-"
-  description   = "Launch template for EKS system nodes"
-  image_id      = data.aws_ami.bottlerocket_x86.id
-  instance_type = "m5.large"
-  
-  user_data = base64encode(templatefile("${path.module}/userdata/system-node.toml", {
-    cluster_name = aws_eks_cluster.main.name
-    api_server   = aws_eks_cluster.main.endpoint
-    b64_ca       = aws_eks_cluster.main.certificate_authority[0].data
-  }))
-  
-  vpc_security_group_ids = [aws_security_group.node_group.id]
-  
-  block_device_mappings {
-    device_name = "/dev/xvda"
-    ebs {
-      volume_size           = 20
-      volume_type          = "gp3"
-      encrypted            = true
-      delete_on_termination = true
-    }
-  }
-}
-```
-
-**Root Cause**: MODEL_RESPONSE used basic EKS node group configuration without leveraging launch templates for advanced customization and security features.
-
-**AWS Documentation Reference**: [EKS Launch Templates](https://docs.aws.amazon.com/eks/latest/userguide/launch-templates.html)
-
-**Cost/Security/Performance Impact**: Missing launch templates means no encrypted EBS volumes, no custom AMI support (Bottlerocket), and limited customization options. Security impact is moderate due to missing encryption.
-
----
-
-### 4. Basic CloudWatch Integration
-
-**Impact Level**: Medium
-
-**MODEL_RESPONSE Issue**: CloudWatch configuration is minimal without comprehensive monitoring:
-```hcl
-resource "aws_cloudwatch_log_group" "eks_cluster" {
-  name              = "/aws/eks/${aws_eks_cluster.main.name}/cluster"
-  retention_in_days = 7
-}
-```
-
-**IDEAL_RESPONSE Fix**: Comprehensive CloudWatch setup with Container Insights, custom metrics, and proper retention:
-```hcl
-resource "aws_cloudwatch_log_group" "eks_cluster" {
-  name              = "/aws/eks/${aws_eks_cluster.main.name}/cluster"
-  retention_in_days = 30
-  kms_key_id       = aws_kms_key.eks.arn
-  
-  tags = {
-    Name        = "${var.cluster_name}-${var.environment_suffix}-logs"
-    Environment = var.environment_suffix
-  }
-}
-
-# Enable Container Insights
-resource "aws_eks_addon" "container_insights" {
-  cluster_name = aws_eks_cluster.main.name
-  addon_name   = "amazon-cloudwatch-observability"
-  
-  resolve_conflicts = "OVERWRITE"
-}
-
-# CloudWatch dashboard for monitoring
-resource "aws_cloudwatch_dashboard" "eks_monitoring" {
-  dashboard_name = "${var.cluster_name}-${var.environment_suffix}-monitoring"
-  
-  dashboard_body = jsonencode({
-    widgets = [
-      {
-        type   = "metric"
-        width  = 12
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/EKS", "cluster_failed_request_count", "ClusterName", aws_eks_cluster.main.name]
-          ]
-          period = 300
-          stat   = "Sum"
-          region = var.aws_region
-          title  = "EKS API Server Errors"
+  values = [
+    yamlencode({
+      server = {
+        autoscaling = { minReplicas = 2, maxReplicas = 5 }
+        ingress = {
+          enabled           = true
+          hosts             = ["argocd.${var.cluster_name}.${var.domain_name}"]
+          annotations       = { "alb.ingress.kubernetes.io/certificate-arn" = aws_acm_certificate.argocd.arn }
         }
       }
-    ]
-  })
+      dex = {
+        config = yamlencode({ connectors = [{ type = "github", orgs = [{ name = var.github_org }]}] })
+      }
+    })
+  ]
 }
 ```
 
-**Root Cause**: MODEL_RESPONSE implemented basic logging but missed comprehensive observability features required for production environments.
-
-**Cost/Security/Performance Impact**: Limited monitoring capabilities make troubleshooting difficult and increase MTTR. Extended log retention (30 days vs 7) provides better audit trail but increases costs by ~$2-5/month.
+**Root Cause**: The model focused solely on Terraform core resources and omitted any GitOps or Helm automation.  
+**Operational Impact**: No declarative deployment workflow, no Git-based promotion across environments, no TLS ingress for the control plane UI, and no progressive delivery or notifications.
 
 ---
 
-## High Priority Issues
+### 2. No service mesh, Cloud Map discovery, or mTLS enforcement
+**Impact Level**: High  
+**MODEL_RESPONSE Issue**: The model provisions only basic security groups (`lib/MODEL_RESPONSE.md` sections for `lib/security-groups.tf`) and has zero references to AWS App Mesh, ACM PCA, or Service Discovery. That means workloads default to best-effort networking with no L7 routing or identity.
 
-### 5. Missing KMS Encryption Configuration
+**IDEAL_RESPONSE Fix**: `lib/service-mesh.tf` introduces a full App Mesh topology with Cloud Map-backed virtual nodes and ACM PCA certificates:
 
-**Impact Level**: High
-
-**MODEL_RESPONSE Issue**: No KMS encryption specified for EKS cluster encryption at rest.
-
-**IDEAL_RESPONSE Fix**: Dedicated KMS key for EKS encryption:
 ```hcl
-resource "aws_kms_key" "eks" {
-  description             = "EKS Secret Encryption Key for ${var.cluster_name}-${var.environment_suffix}"
-  deletion_window_in_days = 7
-  enable_key_rotation     = true
-  
-  tags = {
-    Name = "${var.cluster_name}-${var.environment_suffix}-eks-key"
+resource "aws_appmesh_mesh" "main" {
+  name = "${var.cluster_name}-${var.environment_suffix}-mesh"
+  spec {
+    egress_filter { type = "ALLOW_ALL" }
+    service_discovery { ip_preference = "IPv4_PREFERRED" }
   }
 }
 
-resource "aws_eks_cluster" "main" {
-  # ... other configuration
-  
-  encryption_config {
-    provider {
-      key_arn = aws_kms_key.eks.arn
+resource "aws_appmesh_virtual_node" "app" {
+  for_each = toset(["frontend", "backend", "database"])
+  spec {
+    listener {
+      tls {
+        mode = "STRICT"
+        certificate {
+          acm { certificate_arn = aws_acm_certificate.service[each.key].arn }
+        }
+      }
     }
+    service_discovery {
+      aws_cloud_map {
+        namespace_name = aws_service_discovery_private_dns_namespace.main.name
+        service_name   = each.key
+      }
+    }
+  }
+}
+```
+
+**Root Cause**: Service-to-service concerns were never considered in the model.  
+**Operational Impact**: No mTLS, no deterministic discovery, and no traffic policies—risking compromised lateral movement and making blue/green or canary routing impossible.
+
+---
+
+### 3. Missing advanced runtime security, policy enforcement, and alerting
+**Impact Level**: Critical  
+**MODEL_RESPONSE Issue**: Security is limited to IAM roles and security groups. There is no Falco runtime visibility, no Gatekeeper/Kyverno policies, no GuardDuty/Security Hub enablement, no Slack/SNS alert fan-out, and no cosign image verification.
+
+**IDEAL_RESPONSE Fix**: `lib/advanced-security.tf` deploys Helm-based Falco/Falcosidekick, OPA Gatekeeper, Kyverno policies, GuardDuty, Security Hub, EventBridge, SNS, and IRSA bindings:
+
+```hcl
+resource "helm_release" "falco" {
+  repository = "https://falcosecurity.github.io/charts"
+  chart      = "falco"
+  namespace  = "falco-system"
+  values = [
+    yamlencode({
+      falco = { grpcOutput = { enabled = true }, httpOutput = { enabled = true, url = "http://falcosidekick:2801" } }
+      customRules = { "custom-rules.yaml" = yamlencode({ customRules = [{ rule = "Unauthorized Process in Container", ... }] }) }
+    })
+  ]
+}
+
+resource "kubernetes_manifest" "verify_images_policy" {
+  manifest = {
+    apiVersion = "kyverno.io/v1"
+    kind       = "ClusterPolicy"
+    spec = {
+      validationFailureAction = "enforce"
+      rules = [{
+        name = "verify-image-signature"
+        verifyImages = [{
+          imageReferences = ["*"]
+          attestors       = [{ entries = [{ keys = { publicKeys = var.cosign_public_key } }]}]
+        }]
+      }]
+    }
+  }
+}
+```
+
+**Root Cause**: Runtime security, compliance, and supply-chain controls were out-of-scope in the model.  
+**Operational Impact**: No intrusion detection, no policy-as-code guardrails, no automated alert routing, and no signature enforcement—leaving workloads exposed.
+
+---
+
+### 4. No cost intelligence, CUR pipeline, or predictive autoscaling
+**Impact Level**: High  
+**MODEL_RESPONSE Issue**: The model relies solely on CloudWatch Container Insights; there is no Kubecost deployment, no Cost & Usage Report (CUR) buckets, no Athena/Glue metadata, no spot telemetry, and no KEDA predictive scaling objects.
+
+**IDEAL_RESPONSE Fix**: `lib/cost-intelligence.tf` provisions Kubecost with IRSA, ALB ingress, ACM certs, CUR S3 buckets, Glue/Athena resources, and KEDA ScaledObjects:
+
+```hcl
+resource "helm_release" "kubecost" {
+  repository = "https://kubecost.github.io/cost-analyzer"
+  chart      = "cost-analyzer"
+  namespace  = "kubecost"
+  values = [
+    yamlencode({
+      kubecostProductConfigs = {
+        clusterName        = "${var.cluster_name}-${var.environment_suffix}"
+        awsSpotDataBucket  = aws_s3_bucket.spot_data.id
+        athenaWorkgroup    = aws_athena_workgroup.cost_analysis.name
+      }
+      ingress = {
+        enabled = true
+        annotations = {
+          "alb.ingress.kubernetes.io/certificate-arn" = aws_acm_certificate.kubecost.arn
+        }
+      }
+    })
+  ]
+}
+
+resource "helm_release" "keda" {
+  repository = "https://kedacore.github.io/charts"
+  chart      = "keda"
+  namespace  = "keda"
+}
+
+resource "kubernetes_manifest" "predictive_scaler" {
+  manifest = {
+    apiVersion = "keda.sh/v1alpha1"
+    kind       = "ScaledObject"
+    spec = {
+      triggers = [{
+        type = "prometheus"
+        metadata = {
+          metricName = "http_requests_rate"
+          query      = "sum(rate(http_requests_total[1m])) + predict_linear(http_requests_total[30m], 300)"
+        }
+      }]
+    }
+  }
+}
+```
+
+**Root Cause**: Financial operations and proactive scaling were never designed for the model.  
+**Operational Impact**: No showback, no usage optimization insights, no automated alerts to `cost_alerts_email`, and no predictive scaling—raising the risk of cost overruns or saturation.
+
+---
+
+### 5. No multi-region disaster recovery strategy
+**Impact Level**: Critical  
+**MODEL_RESPONSE Issue**: Only a single AWS provider/region is configured, there are no DR variables, and no secondary VPC/EKS resources. Loss of the primary region would be catastrophic.
+
+**IDEAL_RESPONSE Fix**: `lib/disaster-recovery.tf` adds a provider alias, DR VPC/subnets, VPC peering, dedicated security groups, CloudWatch/KMS resources, and an entire secondary EKS control plane:
+
+```hcl
+provider "aws" {
+  alias  = "dr_region"
+  region = var.dr_aws_region
+}
+
+resource "aws_vpc" "dr_main" {
+  provider = aws.dr_region
+  cidr_block = var.dr_vpc_cidr
+}
+
+resource "aws_eks_cluster" "dr_cluster" {
+  provider = aws.dr_region
+  name     = "${var.cluster_name}-${var.environment_suffix}-dr"
+  vpc_config {
+    subnet_ids         = aws_subnet.dr_private[*].id
+    security_group_ids = [aws_security_group.dr_cluster.id]
+  }
+  encryption_config {
+    provider { key_arn = aws_kms_key.dr_eks.arn }
     resources = ["secrets"]
   }
 }
 ```
 
-**Root Cause**: Security best practices not fully implemented in MODEL_RESPONSE.
-
-**Cost/Security/Performance Impact**: Missing encryption poses security risk for sensitive Kubernetes secrets. KMS key costs ~$1/month but is essential for compliance.
+**Root Cause**: DR was out-of-scope for the model and no secondary-region abstractions exist.  
+**Operational Impact**: RTO/RPO targets cannot be met; there is no warm standby cluster, no peering routes, and no replicated logging or encryption in a second region.
 
 ---
 
-### 6. Incomplete IRSA Configuration
-
+### 6. No hooks for alert routing, webhook secrets, or cosign keys
 **Impact Level**: High  
+**MODEL_RESPONSE Issue**: Because the model lacks the advanced variables section, there is nowhere to supply `slack_webhook_url`, `security_alerts_email`, `cost_alerts_email`, or `cosign_public_key`. That prevents wiring Falco/Falcosidekick, SNS subscriptions, or Kyverno signature verification even if someone tried to bolt them on later.
 
-**MODEL_RESPONSE Issue**: IRSA roles are defined but lack specific trust policies and permissions needed for production workloads.
+**IDEAL_RESPONSE Fix**: `lib/variables.tf:188-258` defines those sensitive inputs, and the downstream modules consume them (e.g., Slack + email subscriptions in `lib/advanced-security.tf:213-370` and Kubecost alerting in `lib/cost-intelligence.tf:430-520`).
 
-**IDEAL_RESPONSE Fix**: Complete IRSA implementation with proper trust relationships and least-privilege permissions for cluster-autoscaler, ALB controller, external-secrets, and EBS CSI driver.
+**Root Cause**: The model never anticipated external integrations or supply-chain security requirements.  
+**Operational Impact**: No automated alert delivery, no cosign enforcement toggle, and no way to parameterize org-specific settings—forcing engineers to hardcode values or skip the controls entirely.
 
-**Root Cause**: MODEL_RESPONSE provided skeleton IRSA configuration without production-ready policies.
-
-**Cost/Security/Performance Impact**: Improperly configured IRSA roles can lead to security vulnerabilities or non-functional Kubernetes controllers.
+---
 
 ## Summary
-
-- **Total failures**: 2 Critical, 4 High, 0 Medium, 0 Low
-- **Primary knowledge gaps**: 
-  1. Production security best practices (KMS encryption, proper IRSA policies)
-  2. Cost optimization strategies (VPC endpoints, proper monitoring retention)
-  3. Advanced EKS features (launch templates, Bottlerocket AMI, Container Insights)
-- **Training value**: The MODEL_RESPONSE provides a functional EKS cluster but lacks production-grade security, monitoring, and cost optimization features. The gaps are significant enough to require substantial improvements for enterprise deployment, making this valuable training data for improving model understanding of production Kubernetes infrastructure requirements.
-
-**Recommendation**: The MODEL_RESPONSE serves as a good foundation but requires the identified improvements to meet enterprise production standards. The training quality improvement from addressing these gaps would be substantial, particularly in areas of security, observability, and operational excellence.
-
----
-
-## Deployment Failures
-
-### 7. CDK Bootstrap Missing for Target Region
-
-**Impact Level**: Critical
-
-**Error Encountered**:
-```
-TapStackpr5995: SSM parameter /cdk-bootstrap/hnb659fds/version not found. Has the environment been bootstrapped? Please run 'cdk bootstrap'
-```
-
-**Root Cause**:
-- CDK bootstrap was executed for `us-east-1` and `us-west-2` regions during CI/CD pipeline
-- Stack deployment targets `eu-west-3` region (as specified in AWS_REGION file)
-- CDK bootstrap was not run for the actual target deployment region
-- Region mismatch between bootstrap and deployment phases
-
-**Resolution**:
-```bash
-# Bootstrap CDK for the correct target region
-npx cdk bootstrap aws://ACCOUNT_ID/eu-west-3
-
-# Or with configured AWS credentials:
-AWS_REGION=eu-west-3 npx cdk bootstrap
-```
-
-**Prevention Strategy**:
-```bash
-#!/bin/bash
-# Add to deployment script to validate bootstrap across regions
-TARGET_REGION=$(cat lib/AWS_REGION 2>/dev/null || echo "us-east-1")
-echo "Validating CDK bootstrap for region: $TARGET_REGION"
-
-aws ssm get-parameter \
-  --name /cdk-bootstrap/hnb659fds/version \
-  --region $TARGET_REGION 2>/dev/null || {
-    echo "ERROR: CDK bootstrap required for $TARGET_REGION"
-    echo "Run: npx cdk bootstrap aws://$(aws sts get-caller-identity --query Account --output text)/$TARGET_REGION"
-    exit 1
-}
-```
-
-**Cost/Security/Performance Impact**: Deployment failure blocks all infrastructure provisioning. No direct cost impact but delays project delivery.
-
----
-
-### 8. Test Coverage Gap - Payment Processor Error Paths
-
-**Impact Level**: High
-
-**Error Encountered**:
-```
-ERROR: Coverage failure: total of 75 is less than fail-under=90
-Missing Coverage: PayPal/Square processor error paths, DLQ exception handling
-```
-
-**Root Cause**:
-- Lambda processor tests missing error path coverage
-- Uncovered lines in PayPal processor (lines 28, 32) handling direct event format
-- Uncovered lines in Stripe processor (lines 28, 32, 57-59) for error handling
-- Missing tests for events without 'body' wrapper
-
-**Resolution Added**:
-```python
-def test_paypal_processor_without_body_wrapper(monkeypatch):
-    """Test PayPal processor when event is passed directly without body wrapper"""
-    module = _load_lambda_module("paypal_processor")
-    module.sqs_client = StubSqsClient()
-    monkeypatch.setenv("QUEUE_URL", "https://example.com/queue")
-
-    # Pass event directly without 'body' wrapper
-    event = {"id": "evt-paypal-direct", "event_type": "PAYMENT.SALE"}
-    result = module.lambda_handler(event, None)
-    assert result["statusCode"] == 200
-    assert module.sqs_client.messages
-
-def test_paypal_processor_empty_payload_error(monkeypatch):
-    """Test PayPal processor with empty payload raises error"""
-    module = _load_lambda_module("paypal_processor")
-    monkeypatch.setenv("QUEUE_URL", "https://example.com/queue")
-
-    event = {"body": json.dumps(None)}
-    result = module.lambda_handler(event, None)
-    assert result["statusCode"] == 500
-    assert "Empty webhook payload" in result["body"]
-```
-
-**Cost/Security/Performance Impact**: Test coverage gaps could allow bugs in error handling paths to reach production, potentially causing data loss in payment processing workflows.
-
----
-
-### 9. Lambda Module Path Resolution Error
-
-**Impact Level**: High
-
-**Error Encountered**:
-```
-FileNotFoundError: [Errno 2] No such file or directory: '/home/runner/work/iac-test-automations/iac-test-automations/tests/lib/lambda/authorizer.py'
-```
-
-**Root Cause**:
-- Test file incorrectly resolved Lambda function paths
-- Used `parents[1]` instead of `parents[2]` for directory traversal
-- Lambda functions located in `lib/lambda/` not `tests/lib/lambda/`
-
-**Resolution**:
-```python
-# Fixed in test_lambda_processors.py
-# Changed from:
-LAMBDA_DIR = Path(__file__).resolve().parents[1] / "lib" / "lambda"
-# To:
-LAMBDA_DIR = Path(__file__).resolve().parents[2] / "lib" / "lambda"
-```
-
-**Prevention Strategy**:
-```python
-# Add path validation in test setup
-def setup_module():
-    """Validate Lambda directory exists before running tests"""
-    if not LAMBDA_DIR.exists():
-        raise RuntimeError(f"Lambda directory not found at {LAMBDA_DIR}")
-
-    required_lambdas = [
-        "authorizer.py", "dlq_processor.py", "paypal_processor.py",
-        "sqs_consumer.py", "square_processor.py", "stripe_processor.py"
-    ]
-
-    for lambda_file in required_lambdas:
-        if not (LAMBDA_DIR / lambda_file).exists():
-            raise RuntimeError(f"Required Lambda {lambda_file} not found")
-```
-
-**Cost/Security/Performance Impact**: Test failures prevent validation of Lambda function logic, risking deployment of untested code to production.
-
----
-
-### 10. Missing Automated Deployment Workflow
-
-**Impact Level**: High
-
-**MODEL_RESPONSE Issue**: Deployment guidance in `lib/MODEL_RESPONSE.md` (see “Deployment Instructions” steps 2–6) is entirely manual:
-
-```bash
-terraform init
-terraform plan
-terraform apply
-aws eks update-kubeconfig --region ap-southeast-1 --name eks-cluster-prod
-```
-
-This requires engineers to keep long-lived AWS credentials locally, manage state by hand, and repeat the same commands for every environment—none of which satisfies the prompt’s requirement for a production-ready CI/CD workflow.
-
-**IDEAL_RESPONSE Fix**: The repo’s automation scripts (`scripts/deploy.sh`, `scripts/cicd-pipeline.sh`) read `metadata.json`, set `ENVIRONMENT_SUFFIX`, `AWS_REGION`, TF vars, invoke `./scripts/bootstrap.sh`, and run the appropriate deploy command non-interactively. These scripts are designed to be executed by CI runners and keep secrets/state in managed backends instead of developer laptops.
-
-**Root Cause**: MODEL_RESPONSE treated the Terraform stack as a local prototype and did not invest in reusable deployment automation.
-
-**Cost/Security/Performance Impact**: Manual deploys slow release cadence, introduce human error, and increase the blast radius of leaked credentials. Automating via the provided scripts shortens deployments by ~30 minutes per change and keeps credentials in CI secrets managers.
-
----
-
-## Summary Update
-
-- **Total failures**: 3 Critical, 6 High, 0 Medium, 0 Low
-- **New deployment issues identified**:
-  1. Region mismatch between CDK bootstrap and deployment
-  2. Insufficient test coverage for error handling paths
-  3. Incorrect path resolution in test infrastructure
-  4. Lack of automated deployment workflow / CI integration
-
-- **Lessons learned**:
-  1. Always validate CDK bootstrap for all target regions before deployment
-  2. Ensure comprehensive test coverage includes all error paths and edge cases
-  3. Use absolute paths or validated relative paths in test configurations
-  4. Add pre-deployment validation scripts to catch configuration mismatches early
-  5. Automate deploy/destroy flows via scripts so CI/CD is repeatable
-
-**Updated Recommendation**: The MODEL_RESPONSE serves as a good foundation but requires the identified improvements to meet enterprise production standards. The training quality improvement from addressing these gaps would be substantial, particularly in areas of security, observability, and operational excellence.
+To evolve the model into the current production baseline we must backfill GitOps (Argo CD, Rollouts, Image Updater, Notifications, Sealed Secrets), App Mesh + Cloud Map + ACM PCA, the full advanced security stack (Falco, Gatekeeper, Kyverno, GuardDuty/Security Hub/SNS), Kubecost + CUR + KEDA, and the secondary-region DR deployment. Additionally, expose the new variables so operators can inject org-specific domains, GitHub orgs, Slack webhooks, cosign keys, and DR regions. Without these upgrades the model fails the prompt’s security, availability, and operational excellence criteria.

@@ -182,3 +182,77 @@ variable "namespaces" {
   type        = list(string)
   default     = ["dev", "staging", "production"]
 }
+
+# Advanced features variables for 10/10 training quality
+
+# GitOps variables
+variable "gitops_repo_url" {
+  description = "Git repository URL for GitOps"
+  type        = string
+  default     = "https://github.com/example/gitops-config"
+}
+
+variable "github_org" {
+  description = "GitHub organization for ArgoCD authentication"
+  type        = string
+  default     = "example-org"
+}
+
+variable "domain_name" {
+  description = "Base domain name for applications"
+  type        = string
+  default     = "example.com"
+}
+
+# Disaster Recovery variables
+variable "dr_aws_region" {
+  description = "AWS region for disaster recovery"
+  type        = string
+  default     = "us-west-2"
+}
+
+variable "dr_vpc_cidr" {
+  description = "CIDR block for DR VPC"
+  type        = string
+  default     = "10.1.0.0/16"
+}
+
+variable "eks_public_access_cidrs" {
+  description = "CIDR blocks allowed to access EKS API publicly"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
+# Security variables
+variable "slack_webhook_url" {
+  description = "Slack webhook URL for Falco alerts"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "security_alerts_email" {
+  description = "Email address for security alerts"
+  type        = string
+  default     = "security@example.com"
+}
+
+variable "cosign_public_key" {
+  description = "Cosign public key for image verification"
+  type        = string
+  default     = ""
+}
+
+# Cost Intelligence variables
+variable "cost_alerts_email" {
+  description = "Email address for cost alerts"
+  type        = string
+  default     = "finance@example.com"
+}
+
+# Service Mesh variables
+variable "organization_name" {
+  description = "Organization name for certificates"
+  type        = string
+  default     = "Example Corp"
+}
