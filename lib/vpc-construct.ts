@@ -37,10 +37,13 @@ export class VpcConstruct extends Construct {
 
     // Add VPC Endpoints for AWS services to allow private subnet access without NAT Gateway
     // Secrets Manager endpoint
-    this.vpc.addInterfaceEndpoint(`SecretsManagerEndpoint-${props.environmentSuffix}`, {
-      service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
-      subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
-    });
+    this.vpc.addInterfaceEndpoint(
+      `SecretsManagerEndpoint-${props.environmentSuffix}`,
+      {
+        service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
+        subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+      }
+    );
 
     // S3 endpoint (Gateway endpoint - free)
     this.vpc.addGatewayEndpoint(`S3Endpoint-${props.environmentSuffix}`, {
