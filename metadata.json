@@ -26,6 +26,7 @@
     "CloudWatch Alarms",
     "VPC Endpoints"
   ],
+  "author": "aj-turing",
   "region": "us-east-1",
   "training_quality": 10
 }
