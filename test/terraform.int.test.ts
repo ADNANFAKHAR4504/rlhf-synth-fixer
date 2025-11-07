@@ -1,22 +1,21 @@
-import * as path from "path";
-import * as fs from "fs";
+import { CloudWatchClient, DescribeAlarmsCommand } from "@aws-sdk/client-cloudwatch";
 import {
-  EC2Client,
-  DescribeTransitGatewayRouteTablesCommand,
-  DescribeRouteTablesCommand,
-  DescribeVpcEndpointsCommand,
   DescribeFlowLogsCommand,
+  DescribeRouteTablesCommand,
+  DescribeTransitGatewayRouteTablesCommand,
+  DescribeVpcEndpointsCommand,
+  EC2Client,
   SearchTransitGatewayRoutesCommand,
 } from "@aws-sdk/client-ec2";
+import { LambdaClient } from "@aws-sdk/client-lambda";
 import {
-  Route53Client,
   GetHostedZoneCommand,
-  TestDNSAnswerCommand,
+  Route53Client
 } from "@aws-sdk/client-route-53";
-import { S3Client, ListObjectsV2Command } from "@aws-sdk/client-s3";
-import { SSMClient, DescribeInstanceInformationCommand } from "@aws-sdk/client-ssm";
-import { CloudWatchClient, DescribeAlarmsCommand, PutMetricAlarmCommand } from "@aws-sdk/client-cloudwatch";
-import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
+import { S3Client } from "@aws-sdk/client-s3";
+import { SSMClient } from "@aws-sdk/client-ssm";
+import * as fs from "fs";
+import * as path from "path";
 
 interface TerraformOutputs {
   [key: string]: {
@@ -75,7 +74,7 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
 
   beforeAll(() => {
     outputs = loadTerraformOutputs();
-    
+
     usEast1Client = new EC2Client({ region: "us-east-1" });
     euWest1Client = new EC2Client({ region: "eu-west-1" });
     apSoutheast1Client = new EC2Client({ region: "ap-southeast-1" });
@@ -90,15 +89,15 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
     test("Application in hub VPC can resolve dev.internal DNS queries", async () => {
       const devZoneId = outputs.dev_route53_zone_id?.value as string;
       const hubVpcId = outputs.hub_vpc_id?.value as string;
-      
+
       expect(devZoneId).toBeDefined();
       expect(hubVpcId).toBeDefined();
 
       const zoneCommand = new GetHostedZoneCommand({ Id: devZoneId });
       const zoneResponse = await route53Client.send(zoneCommand);
-      
+
       expect(zoneResponse.HostedZone?.Name).toBe("dev.internal.");
-      
+
       const vpcAssociations = zoneResponse.VPCs || [];
       const hubVpcAssociated = vpcAssociations.some(
         vpc => vpc.VPCId === hubVpcId && vpc.VPCRegion === "us-east-1"
@@ -109,10 +108,10 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
     test("Application in eu-west-1 spoke can resolve dev.internal DNS queries", async () => {
       const devZoneId = outputs.dev_route53_zone_id?.value as string;
       const euWest1VpcId = outputs.eu_west_1_vpc_id?.value as string;
-      
+
       const zoneCommand = new GetHostedZoneCommand({ Id: devZoneId });
       const zoneResponse = await route53Client.send(zoneCommand);
-      
+
       const vpcAssociations = zoneResponse.VPCs || [];
       const euWest1VpcAssociated = vpcAssociations.some(
         vpc => vpc.VPCId === euWest1VpcId && vpc.VPCRegion === "eu-west-1"
@@ -123,12 +122,12 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
     test("Application in ap-southeast-1 spoke can resolve prod.internal DNS queries", async () => {
       const prodZoneId = outputs.prod_route53_zone_id?.value as string;
       const apSoutheast1VpcId = outputs.ap_southeast_1_vpc_id?.value as string;
-      
+
       const zoneCommand = new GetHostedZoneCommand({ Id: prodZoneId });
       const zoneResponse = await route53Client.send(zoneCommand);
-      
+
       expect(zoneResponse.HostedZone?.Name).toBe("prod.internal.");
-      
+
       const vpcAssociations = zoneResponse.VPCs || [];
       const apSoutheast1VpcAssociated = vpcAssociations.some(
         vpc => vpc.VPCId === apSoutheast1VpcId && vpc.VPCRegion === "ap-southeast-1"
@@ -140,29 +139,29 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
   describe("Cross-Region Connectivity Flow - Applications communicating across regions via Transit Gateway", () => {
     test("Dev application in eu-west-1 can reach dev resources in us-east-1 via Transit Gateway", async () => {
       const devRtId = outputs.dev_transit_gateway_route_table_id?.value as string;
-      
+
       expect(devRtId).toBeDefined();
-      
+
       const command = new DescribeTransitGatewayRouteTablesCommand({
         TransitGatewayRouteTableIds: [devRtId],
       });
       const response = await usEast1Client.send(command);
-      
+
       const routeTable = response.TransitGatewayRouteTables?.[0];
       expect(routeTable).toBeDefined();
-      
+
       const searchCommand = new SearchTransitGatewayRoutesCommand({
         TransitGatewayRouteTableId: devRtId,
         Filters: [{ Name: "state", Values: ["active"] }],
       });
       const searchResponse = await usEast1Client.send(searchCommand);
       const routes = searchResponse.Routes || [];
-      
+
       // Verify hub VPC route exists (from VPC attachment)
       const hubVpcRoute = routes.find((r: any) => r.DestinationCidrBlock === "10.0.0.0/16");
       expect(hubVpcRoute).toBeDefined();
       expect(hubVpcRoute?.State).toBe("active");
-      
+
       // Verify there are active routes that enable connectivity
       expect(routes.length).toBeGreaterThan(0);
       const activeRoutes = routes.filter((r: any) => r.State === "active");
@@ -171,27 +170,27 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
 
     test("Prod application in ap-southeast-1 can reach prod resources in us-east-1 via Transit Gateway", async () => {
       const prodRtId = outputs.prod_transit_gateway_route_table_id?.value as string;
-      
+
       const command = new DescribeTransitGatewayRouteTablesCommand({
         TransitGatewayRouteTableIds: [prodRtId],
       });
       const response = await usEast1Client.send(command);
-      
+
       const routeTable = response.TransitGatewayRouteTables?.[0];
       expect(routeTable).toBeDefined();
-      
+
       const searchCommand = new SearchTransitGatewayRoutesCommand({
         TransitGatewayRouteTableId: prodRtId,
         Filters: [{ Name: "state", Values: ["active"] }],
       });
       const searchResponse = await usEast1Client.send(searchCommand);
       const routes = searchResponse.Routes || [];
-      
+
       // Verify hub VPC route exists (from VPC attachment)
       const hubVpcRoute = routes.find((r: any) => r.DestinationCidrBlock === "10.0.0.0/16");
       expect(hubVpcRoute).toBeDefined();
       expect(hubVpcRoute?.State).toBe("active");
-      
+
       // Verify there are active routes that enable connectivity
       expect(routes.length).toBeGreaterThan(0);
       const activeRoutes = routes.filter((r: any) => r.State === "active");
@@ -200,23 +199,23 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
 
     test("Transit Gateway routes allow bidirectional communication between hub and spokes", async () => {
       const devRtId = outputs.dev_transit_gateway_route_table_id?.value as string;
-      
+
       // Search for all active routes in the dev route table
       const searchCommand = new SearchTransitGatewayRoutesCommand({
         TransitGatewayRouteTableId: devRtId,
         Filters: [{ Name: "state", Values: ["active"] }],
       });
       const searchResponse = await usEast1Client.send(searchCommand);
-      
+
       expect(searchResponse.Routes).toBeDefined();
       const routes = searchResponse.Routes || [];
       expect(routes.length).toBeGreaterThan(0);
-      
+
       // Verify hub VPC route exists for connectivity
       const hubVpcRoute = routes.find((r: any) => r.DestinationCidrBlock === "10.0.0.0/16");
       expect(hubVpcRoute).toBeDefined();
       expect(hubVpcRoute?.State).toBe("active");
-      
+
       const activeRoutes = routes.filter((r: any) => r.State === "active");
       expect(activeRoutes.length).toBeGreaterThan(0);
     });
@@ -225,36 +224,36 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
   describe("Environment Isolation Flow - Dev and Prod applications cannot communicate", () => {
     test("Dev route table blocks traffic to prod CIDR (10.2.0.0/16) via blackhole route", async () => {
       const devRtId = outputs.dev_transit_gateway_route_table_id?.value as string;
-      
+
       const searchCommand = new SearchTransitGatewayRoutesCommand({
         TransitGatewayRouteTableId: devRtId,
         Filters: [{ Name: "state", Values: ["active", "blackhole"] }],
       });
       const searchResponse = await usEast1Client.send(searchCommand);
       const routes = searchResponse.Routes || [];
-      
+
       const prodBlackhole = routes.find(
         (r: any) => r.DestinationCidrBlock === "10.2.0.0/16" && r.State === "blackhole"
       );
-      
+
       expect(prodBlackhole).toBeDefined();
       expect(prodBlackhole?.State).toBe("blackhole");
     });
 
     test("Prod route table blocks traffic to dev CIDR (10.1.0.0/16) via blackhole route", async () => {
       const prodRtId = outputs.prod_transit_gateway_route_table_id?.value as string;
-      
+
       const searchCommand = new SearchTransitGatewayRoutesCommand({
         TransitGatewayRouteTableId: prodRtId,
         Filters: [{ Name: "state", Values: ["active", "blackhole"] }],
       });
       const searchResponse = await usEast1Client.send(searchCommand);
       const routes = searchResponse.Routes || [];
-      
+
       const devBlackhole = routes.find(
         (r: any) => r.DestinationCidrBlock === "10.1.0.0/16" && r.State === "blackhole"
       );
-      
+
       expect(devBlackhole).toBeDefined();
       expect(devBlackhole?.State).toBe("blackhole");
     });
@@ -262,19 +261,19 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
     test("Dev and prod route tables are completely isolated", async () => {
       const devRtId = outputs.dev_transit_gateway_route_table_id?.value as string;
       const prodRtId = outputs.prod_transit_gateway_route_table_id?.value as string;
-      
+
       expect(devRtId).not.toBe(prodRtId);
-      
+
       const devCommand = new DescribeTransitGatewayRouteTablesCommand({
         TransitGatewayRouteTableIds: [devRtId],
       });
       const devResponse = await usEast1Client.send(devCommand);
-      
+
       const prodCommand = new DescribeTransitGatewayRouteTablesCommand({
         TransitGatewayRouteTableIds: [prodRtId],
       });
       const prodResponse = await usEast1Client.send(prodCommand);
-      
+
       expect(devResponse.TransitGatewayRouteTables?.length).toBe(1);
       expect(prodResponse.TransitGatewayRouteTables?.length).toBe(1);
       expect(devResponse.TransitGatewayRouteTables?.[0].TransitGatewayRouteTableId).not.toBe(
@@ -287,7 +286,7 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
     test("Dev private subnet routes internet traffic through NAT instance", async () => {
       const hubVpcId = outputs.hub_vpc_id?.value as string;
       const natInstanceIds = outputs.nat_instance_ids?.value as { [key: string]: string };
-      
+
       const command = new DescribeRouteTablesCommand({
         Filters: [
           { Name: "vpc-id", Values: [hubVpcId] },
@@ -296,18 +295,18 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
         ],
       });
       const response = await usEast1Client.send(command);
-      
+
       const routeTables = response.RouteTables || [];
       expect(routeTables.length).toBeGreaterThan(0);
-      
+
       const devRouteTable = routeTables[0];
       const internetRoute = devRouteTable.Routes?.find(
         r => r.DestinationCidrBlock === "0.0.0.0/0"
       );
-      
+
       expect(internetRoute).toBeDefined();
       expect(internetRoute?.NetworkInterfaceId || internetRoute?.InstanceId).toBeDefined();
-      
+
       if (internetRoute?.NetworkInterfaceId) {
         expect(internetRoute.NetworkInterfaceId).toBeTruthy();
       }
@@ -316,7 +315,7 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
     test("Prod private subnet routes internet traffic through NAT instance", async () => {
       const hubVpcId = outputs.hub_vpc_id?.value as string;
       const natInstanceIds = outputs.nat_instance_ids?.value as { [key: string]: string };
-      
+
       const command = new DescribeRouteTablesCommand({
         Filters: [
           { Name: "vpc-id", Values: [hubVpcId] },
@@ -325,15 +324,15 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
         ],
       });
       const response = await usEast1Client.send(command);
-      
+
       const routeTables = response.RouteTables || [];
       expect(routeTables.length).toBeGreaterThan(0);
-      
+
       const prodRouteTable = routeTables[0];
       const internetRoute = prodRouteTable.Routes?.find(
         r => r.DestinationCidrBlock === "0.0.0.0/0"
       );
-      
+
       expect(internetRoute).toBeDefined();
       expect(internetRoute?.NetworkInterfaceId || internetRoute?.InstanceId).toBeDefined();
     });
@@ -342,7 +341,7 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
   describe("SSM Connectivity Flow - Managing instances in private subnets via VPC endpoints", () => {
     test("SSM can connect to instances in hub VPC private subnets via VPC endpoints", async () => {
       const hubVpcId = outputs.hub_vpc_id?.value as string;
-      
+
       const command = new DescribeVpcEndpointsCommand({
         Filters: [
           { Name: "vpc-id", Values: [hubVpcId] },
@@ -350,10 +349,10 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
         ],
       });
       const response = await usEast1Client.send(command);
-      
+
       const endpoints = response.VpcEndpoints || [];
       expect(endpoints.length).toBeGreaterThan(0);
-      
+
       const ssmEndpoint = endpoints[0];
       expect(ssmEndpoint.State).toBe("available");
       expect(ssmEndpoint.PrivateDnsEnabled).toBe(true);
@@ -362,7 +361,7 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
 
     test("SSM Messages endpoint enables session manager connectivity in hub VPC", async () => {
       const hubVpcId = outputs.hub_vpc_id?.value as string;
-      
+
       const command = new DescribeVpcEndpointsCommand({
         Filters: [
           { Name: "vpc-id", Values: [hubVpcId] },
@@ -370,7 +369,7 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
         ],
       });
       const response = await usEast1Client.send(command);
-      
+
       const endpoints = response.VpcEndpoints || [];
       expect(endpoints.length).toBeGreaterThan(0);
       expect(endpoints[0].State).toBe("available");
@@ -379,7 +378,7 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
 
     test("EC2 Messages endpoint enables agent communication in hub VPC", async () => {
       const hubVpcId = outputs.hub_vpc_id?.value as string;
-      
+
       const command = new DescribeVpcEndpointsCommand({
         Filters: [
           { Name: "vpc-id", Values: [hubVpcId] },
@@ -387,7 +386,7 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
         ],
       });
       const response = await usEast1Client.send(command);
-      
+
       const endpoints = response.VpcEndpoints || [];
       expect(endpoints.length).toBeGreaterThan(0);
       expect(endpoints[0].State).toBe("available");
@@ -396,7 +395,7 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
 
     test("SSM endpoints are available in spoke VPCs for cross-region management", async () => {
       const euWest1VpcId = outputs.eu_west_1_vpc_id?.value as string;
-      
+
       const command = new DescribeVpcEndpointsCommand({
         Filters: [
           { Name: "vpc-id", Values: [euWest1VpcId] },
@@ -404,7 +403,7 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
         ],
       });
       const response = await euWest1Client.send(command);
-      
+
       const endpoints = response.VpcEndpoints || [];
       expect(endpoints.length).toBeGreaterThan(0);
       expect(endpoints[0].State).toBe("available");
@@ -415,12 +414,12 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
     test("Flow logs are actively writing network traffic to S3 bucket", async () => {
       const hubVpcId = outputs.hub_vpc_id?.value as string;
       const bucketName = outputs.flow_logs_bucket_name?.value as string;
-      
+
       const flowLogCommand = new DescribeFlowLogsCommand({
         Filter: [{ Name: "resource-id", Values: [hubVpcId] }],
       });
       const flowLogResponse = await usEast1Client.send(flowLogCommand);
-      
+
       expect(flowLogResponse.FlowLogs?.length).toBeGreaterThan(0);
       const flowLog = flowLogResponse.FlowLogs?.[0];
       expect(flowLog?.FlowLogStatus).toBe("ACTIVE");
@@ -433,19 +432,19 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       const euWest1VpcId = outputs.eu_west_1_vpc_id?.value as string;
       const apSoutheast1VpcId = outputs.ap_southeast_1_vpc_id?.value as string;
       const bucketName = outputs.flow_logs_bucket_name?.value as string;
-      
+
       const hubCommand = new DescribeFlowLogsCommand({
         Filter: [{ Name: "resource-id", Values: [hubVpcId] }],
       });
       const hubResponse = await usEast1Client.send(hubCommand);
       expect(hubResponse.FlowLogs?.[0].LogDestination).toContain(bucketName);
-      
+
       const euWest1Command = new DescribeFlowLogsCommand({
         Filter: [{ Name: "resource-id", Values: [euWest1VpcId] }],
       });
       const euWest1Response = await euWest1Client.send(euWest1Command);
       expect(euWest1Response.FlowLogs?.[0].LogDestination).toContain(bucketName);
-      
+
       const apSoutheast1Command = new DescribeFlowLogsCommand({
         Filter: [{ Name: "resource-id", Values: [apSoutheast1VpcId] }],
       });
@@ -455,12 +454,12 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
 
     test("Flow logs use Parquet format for efficient querying", async () => {
       const hubVpcId = outputs.hub_vpc_id?.value as string;
-      
+
       const command = new DescribeFlowLogsCommand({
         Filter: [{ Name: "resource-id", Values: [hubVpcId] }],
       });
       const response = await usEast1Client.send(command);
-      
+
       const flowLog = response.FlowLogs?.[0];
       expect(flowLog?.DestinationOptions?.FileFormat).toBe("parquet");
       expect(flowLog?.MaxAggregationInterval).toBe(60);
@@ -473,10 +472,10 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
         AlarmNamePrefix: "us-east-1-dev-nat-1-status",
       });
       const response = await cloudWatchClient.send(command);
-      
+
       const alarms = response.MetricAlarms || [];
       expect(alarms.length).toBeGreaterThan(0);
-      
+
       const natAlarm = alarms[0];
       expect(natAlarm.AlarmName).toContain("nat");
       expect(natAlarm.AlarmActions?.length).toBeGreaterThan(0);
@@ -488,10 +487,10 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
         AlarmNamePrefix: "us-east-1-dev-nat-1-status",
       });
       const alarmsResponse = await cloudWatchClient.send(alarmsCommand);
-      
+
       const alarm = alarmsResponse.MetricAlarms?.[0];
       expect(alarm).toBeDefined();
-      
+
       const snsTopicArn = alarm?.AlarmActions?.[0];
       expect(snsTopicArn).toBeDefined();
       expect(snsTopicArn).toContain("arn:aws:sns");
@@ -499,12 +498,12 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
 
     test("Backup NAT instances are available for failover in each environment", async () => {
       const natInstanceIds = outputs.nat_instance_ids?.value as { [key: string]: string };
-      
+
       expect(natInstanceIds.dev_1).toBeDefined();
       expect(natInstanceIds.dev_2).toBeDefined();
       expect(natInstanceIds.prod_1).toBeDefined();
       expect(natInstanceIds.prod_2).toBeDefined();
-      
+
       expect(natInstanceIds.dev_1).not.toBe(natInstanceIds.dev_2);
       expect(natInstanceIds.prod_1).not.toBe(natInstanceIds.prod_2);
     });
@@ -515,17 +514,17 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       const devZoneId = outputs.dev_route53_zone_id?.value as string;
       const devRtId = outputs.dev_transit_gateway_route_table_id?.value as string;
       const hubVpcId = outputs.hub_vpc_id?.value as string;
-      
+
       const zoneCommand = new GetHostedZoneCommand({ Id: devZoneId });
       const zoneResponse = await route53Client.send(zoneCommand);
       expect(zoneResponse.HostedZone?.Name).toBe("dev.internal.");
-      
+
       const tgwCommand = new DescribeTransitGatewayRouteTablesCommand({
         TransitGatewayRouteTableIds: [devRtId],
       });
       const tgwResponse = await usEast1Client.send(tgwCommand);
       expect(tgwResponse.TransitGatewayRouteTables?.length).toBe(1);
-      
+
       const routeTableCommand = new DescribeRouteTablesCommand({
         Filters: [
           { Name: "vpc-id", Values: [hubVpcId] },
@@ -543,11 +542,11 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       const prodZoneId = outputs.prod_route53_zone_id?.value as string;
       const prodRtId = outputs.prod_transit_gateway_route_table_id?.value as string;
       const hubVpcId = outputs.hub_vpc_id?.value as string;
-      
+
       const zoneCommand = new GetHostedZoneCommand({ Id: prodZoneId });
       const zoneResponse = await route53Client.send(zoneCommand);
       expect(zoneResponse.HostedZone?.Name).toBe("prod.internal.");
-      
+
       const tgwSearchCommand = new SearchTransitGatewayRoutesCommand({
         TransitGatewayRouteTableId: prodRtId,
         Filters: [{ Name: "state", Values: ["active", "blackhole"] }],
@@ -558,7 +557,7 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
         (r: any) => r.DestinationCidrBlock === "10.1.0.0/16" && r.State === "blackhole"
       );
       expect(devBlackhole).toBeDefined();
-      
+
       const routeTableCommand = new DescribeRouteTablesCommand({
         Filters: [
           { Name: "vpc-id", Values: [hubVpcId] },
