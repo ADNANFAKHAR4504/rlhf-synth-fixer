@@ -762,6 +762,109 @@ resource "aws_security_group" "alb" {
   )
 }
 
+# Target Group for ALB (placeholder for future services)
+resource "aws_lb_target_group" "main" {
+  name     = "${var.cluster_name}-tg"
+  port     = 30080
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main.id
+  
+  # Since we're using NodePort with Kubernetes, target type should be instance
+  target_type = "instance"
+  
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    timeout             = 5
+    interval            = 30
+    path                = "/"
+    matcher             = "200-399"
+    protocol            = "HTTP"
+  }
+  
+  deregistration_delay = 30
+  
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${var.cluster_name}-tg"
+    }
+  )
+}
+
+# ALB Listener for HTTP traffic
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = "80"
+  protocol          = "HTTP"
+  
+  # Default action - returns a fixed response
+  # You can change this to forward to target group when you have services running
+  default_action {
+    type = "fixed-response"
+    
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "EKS Cluster ${var.cluster_name} is running. Deploy your applications to see them here."
+      status_code  = "200"
+    }
+  }
+  
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${var.cluster_name}-listener-http"
+    }
+  )
+}
+
+# Alternative: If you want to forward to the target group instead of fixed response,
+# uncomment this listener and comment out the one above
+/*
+resource "aws_lb_listener" "http_forward" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = "80"
+  protocol          = "HTTP"
+  
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.main.arn
+  }
+  
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${var.cluster_name}-listener-http"
+    }
+  )
+}
+*/
+
+# Optional: Add a listener rule for path-based routing
+# This can be used when you deploy actual services
+resource "aws_lb_listener_rule" "example" {
+  listener_arn = aws_lb_listener.http.arn
+  priority     = 100
+  
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.main.arn
+  }
+  
+  condition {
+    path_pattern {
+      values = ["/app/*"]
+    }
+  }
+  
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${var.cluster_name}-rule-example"
+    }
+  )
+}
 # Allow ALB to communicate with nodes
 resource "aws_security_group_rule" "nodes_ingress_alb" {
   type                     = "ingress"
@@ -828,4 +931,14 @@ output "vpc_id" {
 output "alb_dns_name" {
   description = "DNS name of the Application Load Balancer"
   value       = aws_lb.main.dns_name
+}
+
+output "alb_target_group_arn" {
+  description = "ARN of the target group"
+  value       = aws_lb_target_group.main.arn
+}
+
+output "alb_listener_arn" {
+  description = "ARN of the ALB HTTP listener"
+  value       = aws_lb_listener.http.arn
 }
