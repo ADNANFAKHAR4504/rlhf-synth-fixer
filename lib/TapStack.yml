@@ -1032,6 +1032,7 @@ Resources:
 
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Properties:
       Name: !Sub ${ProjectName}-${Environment}-ALB
       Type: application
@@ -1043,11 +1044,8 @@ Resources:
         - - !Ref PublicSubnet1
           - !Ref PublicSubnet2
           - !Ref PublicSubnet3
-        - !If
-            - HasAtLeastTwoAZsWithCustomAZs
-            - - !Ref PublicSubnet1
-              - !Ref PublicSubnet2
-            - - !Ref PublicSubnet1
+        - - !Ref PublicSubnet1
+          - !Ref PublicSubnet2
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-ALB
@@ -1064,6 +1062,7 @@ Resources:
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Properties:
       Name: !Sub ${ProjectName}-${Environment}-TG
       Port: 80
@@ -1105,6 +1104,7 @@ Resources:
 
   HTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 443
@@ -1118,6 +1118,7 @@ Resources:
 
   HTTPListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
@@ -1360,6 +1361,7 @@ Resources:
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     UpdatePolicy:
       AutoScalingRollingUpdate:
         MaxBatchSize: 2
@@ -1379,11 +1381,8 @@ Resources:
         - - !Ref PrivateAppSubnet1
           - !Ref PrivateAppSubnet2
           - !Ref PrivateAppSubnet3
-        - !If
-            - HasAtLeastTwoAZsWithCustomAZs
-            - - !Ref PrivateAppSubnet1
-              - !Ref PrivateAppSubnet2
-            - - !Ref PrivateAppSubnet1
+        - - !Ref PrivateAppSubnet1
+          - !Ref PrivateAppSubnet2
       TargetGroupARNs:
         - !Ref ALBTargetGroup
       HealthCheckType: ELB
@@ -1411,6 +1410,7 @@ Resources:
   # Target tracking scaling policy for better performance
   TargetTrackingScalingPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Properties:
       AutoScalingGroupName: !Ref AutoScalingGroup
       PolicyType: TargetTrackingScaling
@@ -1910,6 +1910,7 @@ Resources:
 
   HighCPUAlarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Properties:
       AlarmName: !Sub ${ProjectName}-${Environment}-HighCPU
       AlarmDescription: Triggers when CPU exceeds threshold for 2 consecutive periods
@@ -1960,6 +1961,7 @@ Resources:
 
   UnhealthyTargetsAlarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Properties:
       AlarmName: !Sub ${ProjectName}-${Environment}-UnhealthyTargets
       AlarmDescription: Alarm when any target becomes unhealthy
@@ -1980,6 +1982,7 @@ Resources:
 
   TargetResponseTimeAlarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Properties:
       AlarmName: !Sub ${ProjectName}-${Environment}-HighResponseTime
       AlarmDescription: Alarm when target response time exceeds 2 seconds
@@ -2270,24 +2273,28 @@ Outputs:
       Name: !Sub ${ProjectName}-${Environment}-PrivateDBSubnet3
 
   ALBDNSName:
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Description: Application Load Balancer DNS Name
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
       Name: !Sub ${ProjectName}-${Environment}-ALB-DNS
 
   ALBArn:
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Description: Application Load Balancer ARN
     Value: !Ref ApplicationLoadBalancer
     Export:
       Name: !Sub ${ProjectName}-${Environment}-ALB-ARN
 
   ALBHostedZone:
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Description: ALB Hosted Zone ID for Route53 alias records
     Value: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
     Export:
       Name: !Sub ${ProjectName}-${Environment}-ALB-HostedZone
 
   AutoScalingGroupName:
+    Condition: HasAtLeastTwoAZsWithCustomAZs
     Description: Auto Scaling Group Name
     Value: !Ref AutoScalingGroup
     Export:
