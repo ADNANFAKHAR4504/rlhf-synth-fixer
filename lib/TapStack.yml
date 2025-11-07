@@ -20,6 +20,7 @@ Metadata:
         Parameters:
           - VPCCIDR
           - EnableNATGatewayHA
+          - AvailabilityZones
       - Label:
           default: Application Configuration
         Parameters:
@@ -103,6 +104,11 @@ Parameters:
       - 'false'
     Description: Enable NAT Gateway in all AZs for HA (false uses single NAT for
       dev/staging)
+
+  AvailabilityZones:
+    Type: List<AWS::EC2::AvailabilityZone::Name>
+    Default: us-east-1a,us-east-1b,us-east-1c
+    Description: Comma-separated list of availability zones to use for subnets
 
   # Application Parameters
   InstanceType:
@@ -313,7 +319,7 @@ Resources:
         # Dynamically calculate subnet CIDR
       AvailabilityZone: !Select
         - 0
-        - !GetAZs ''
+        - !Ref AvailabilityZones
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -343,7 +349,7 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 1
-        - !GetAZs ''
+        - !Ref AvailabilityZones
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -373,7 +379,7 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 2
-        - !GetAZs ''
+        - !Ref AvailabilityZones
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -404,7 +410,7 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 0
-        - !GetAZs ''
+        - !Ref AvailabilityZones
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-1
@@ -433,7 +439,7 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 1
-        - !GetAZs ''
+        - !Ref AvailabilityZones
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-2
@@ -462,7 +468,7 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 2
-        - !GetAZs ''
+        - !Ref AvailabilityZones
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-3
@@ -492,7 +498,7 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 0
-        - !GetAZs ''
+        - !Ref AvailabilityZones
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-1
@@ -521,7 +527,7 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 1
-        - !GetAZs ''
+        - !Ref AvailabilityZones
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-2
@@ -550,7 +556,7 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 2
-        - !GetAZs ''
+        - !Ref AvailabilityZones
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-3
