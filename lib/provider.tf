@@ -14,9 +14,9 @@ terraform {
     }
   }
 
-  # Local backend for development/testing
-  backend "local" {
-    path = "terraform.tfstate"
+  # S3 backend for remote state management
+  backend "s3" {
+    # Backend configuration will be provided via -backend-config flags during init
   }
 }
 
