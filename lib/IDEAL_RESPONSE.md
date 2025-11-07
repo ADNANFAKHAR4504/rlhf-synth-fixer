@@ -1,6 +1,6 @@
 # Library Source Code Reference
 
-This document enumerates every file under `lib/`, presented as Markdown with embedded code blocks. To avoid infinite recursion, this file is excluded from the listing.
+This document enumerates every file under `lib/`, presented as Markdown with embedded code blocks. To avoid infinite recursion, this file is excluded from the listing
 
 ## `.terraform.lock.hcl`
 
