@@ -22,18 +22,33 @@ import {
   PublishCommand,
 } from '@aws-sdk/client-sns';
 import fs from 'fs';
+import path from 'path';
 
-const outputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-);
+// Try to read outputs file, create empty object if it doesn't exist
+let outputs: Record<string, string> = {};
+const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
+
+try {
+  if (fs.existsSync(outputsPath)) {
+    outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+  } else {
+    console.warn(
+      `⚠️  Outputs file not found at ${outputsPath}. Using defaults.`
+    );
+  }
+} catch (error) {
+  console.warn(
+    `⚠️  Failed to read outputs file: ${error}. Using defaults.`
+  );
+}
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const clusterName = outputs.clusterName || 'financial-services-cluster';
-const serviceNames = outputs.serviceNames
-  ? outputs.serviceNames.split(',')
+const clusterName = outputs.ClusterName || outputs.clusterName || 'financial-services-cluster';
+const serviceNames = outputs.ServiceNames || outputs.serviceNames
+  ? (outputs.ServiceNames || outputs.serviceNames).split(',')
   : Array.from({ length: 12 }, (_, i) => `service-${i + 1}`);
-const albDns = outputs.albDns;
-const snsTopicArn = outputs.costAnomalyTopicArn;
+const albDns = outputs.AlbDns || outputs.albDns;
+const snsTopicArn = outputs.CostAnomalyTopicArn || outputs.costAnomalyTopicArn;
 
 const ecsClient = new ECSClient({ region: 'us-east-1' });
 const autoscalingClient = new ApplicationAutoScalingClient({

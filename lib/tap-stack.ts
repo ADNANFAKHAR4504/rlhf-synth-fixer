@@ -836,5 +836,28 @@ def handler(event, context):
         width: 24,
       })
     );
+
+    // CloudFormation outputs for integration tests
+    new cdk.CfnOutput(this, 'ClusterName', {
+      value: clusterName,
+      description: 'ECS Cluster Name',
+    });
+
+    new cdk.CfnOutput(this, 'ServiceNames', {
+      value: serviceNames.join(','),
+      description: 'Comma-separated list of ECS service names',
+    });
+
+    if (alb) {
+      new cdk.CfnOutput(this, 'AlbDns', {
+        value: alb.loadBalancerDnsName,
+        description: 'Application Load Balancer DNS Name',
+      });
+    }
+
+    new cdk.CfnOutput(this, 'CostAnomalyTopicArn', {
+      value: snsTopic.topicArn,
+      description: 'SNS Topic ARN for Cost Anomaly Detection',
+    });
   }
 }
