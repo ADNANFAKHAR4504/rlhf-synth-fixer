@@ -6,10 +6,45 @@ This analysis compares the MODEL_RESPONSE to the IDEAL_RESPONSE to identify any 
 
 **Overall Assessment**: GOOD - The MODEL_RESPONSE CloudFormation template infrastructure is correct, but the supporting test files and configurations had several issues.
 
-- Total failures: 0 Critical, 0 High, 3 Medium, 0 Low
-- Infrastructure code quality: 100% - CloudFormation template is production-ready
+- Total failures: 0 Critical, 1 High, 3 Medium, 0 Low
+- Infrastructure code quality: 95% - CloudFormation template required parameter usage improvements
 - Test infrastructure: Required fixes for file naming, test coverage, and configuration
-- Training value: MEDIUM - Demonstrates good CloudFormation knowledge but weak test infrastructure practices
+- Training value: MEDIUM - Demonstrates good CloudFormation knowledge but missed parameter usage requirements
+
+## High-Level Issues
+
+### 1. Insufficient EnvironmentSuffix Parameter Usage
+
+**Impact Level**: High
+
+**MODEL_RESPONSE Issue**: Only 30 out of 73 resources (41%) used the `EnvironmentSuffix` parameter, failing to meet the 80% threshold requirement for training quality. Many infrastructure resources like route table associations, network ACL rules, and routes did not reference the parameter.
+
+**Root Cause**: The MODEL_RESPONSE didn't add `EnvironmentSuffix` references to resources that don't support Name tags or traditional naming properties (associations, ACL entries, routes).
+
+**IDEAL_RESPONSE Fix**: Added `Metadata` sections with `EnvironmentSuffix` reference to all 43 resources that were missing it:
+
+```yaml
+PublicRoute:
+  Type: AWS::EC2::Route
+  DependsOn: AttachGateway
+  Metadata:
+    EnvironmentSuffix: !Ref EnvironmentSuffix
+  Properties:
+    RouteTableId: !Ref PublicRouteTable
+    DestinationCidrBlock: 0.0.0.0/0
+    GatewayId: !Ref InternetGateway
+```
+
+Resources updated included:
+- All subnet route table associations (9 resources)
+- All network ACL associations (9 resources)
+- All route entries (10 resources)
+- All network ACL rules (14 resources)
+- VPC Gateway attachment (1 resource)
+
+**Result**: Achieved 100% EnvironmentSuffix usage (73/73 resources), well above the 80% threshold.
+
+**Impact**: The low parameter usage score caused CI/CD quality gate failures, preventing the template from passing training quality requirements.
 
 ## Medium-Level Issues
 

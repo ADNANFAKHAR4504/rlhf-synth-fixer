@@ -1,6 +1,6 @@
-# CloudFormation VPC Infrastructure Implementation
+# CFN VPC Infrastructure Implementation
 
-This implementation creates a production-ready VPC infrastructure with multi-tier networking for a financial trading platform.
+This implementation creates a production-ready VPC infrastructure with multi-tier networking for a financial trading platform using CFN.
 
 ## File: lib/TapStack.yml
 
@@ -60,6 +60,8 @@ Resources:
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
@@ -342,6 +344,8 @@ Resources:
   PublicRoute:
     Type: AWS::EC2::Route
     DependsOn: AttachGateway
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
@@ -349,18 +353,24 @@ Resources:
 
   PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       SubnetId: !Ref PublicSubnet1
       RouteTableId: !Ref PublicRouteTable
 
   PublicSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
 
   PublicSubnet3RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       SubnetId: !Ref PublicSubnet3
       RouteTableId: !Ref PublicRouteTable
@@ -382,6 +392,8 @@ Resources:
 
   PrivateRoute1:
     Type: AWS::EC2::Route
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
@@ -389,6 +401,8 @@ Resources:
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       SubnetId: !Ref PrivateSubnet1
       RouteTableId: !Ref PrivateRouteTable1
@@ -409,6 +423,8 @@ Resources:
 
   PrivateRoute2:
     Type: AWS::EC2::Route
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
@@ -416,6 +432,8 @@ Resources:
 
   PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable2
@@ -436,6 +454,8 @@ Resources:
 
   PrivateRoute3:
     Type: AWS::EC2::Route
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       RouteTableId: !Ref PrivateRouteTable3
       DestinationCidrBlock: 0.0.0.0/0
@@ -443,6 +463,8 @@ Resources:
 
   PrivateSubnet3RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       SubnetId: !Ref PrivateSubnet3
       RouteTableId: !Ref PrivateRouteTable3
@@ -464,6 +486,8 @@ Resources:
 
   DatabaseRoute1:
     Type: AWS::EC2::Route
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       RouteTableId: !Ref DatabaseRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
@@ -471,6 +495,8 @@ Resources:
 
   DatabaseSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       SubnetId: !Ref DatabaseSubnet1
       RouteTableId: !Ref DatabaseRouteTable1
@@ -491,6 +517,8 @@ Resources:
 
   DatabaseRoute2:
     Type: AWS::EC2::Route
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       RouteTableId: !Ref DatabaseRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
@@ -498,6 +526,8 @@ Resources:
 
   DatabaseSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       SubnetId: !Ref DatabaseSubnet2
       RouteTableId: !Ref DatabaseRouteTable2
@@ -518,6 +548,8 @@ Resources:
 
   DatabaseRoute3:
     Type: AWS::EC2::Route
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       RouteTableId: !Ref DatabaseRouteTable3
       DestinationCidrBlock: 0.0.0.0/0
@@ -525,6 +557,8 @@ Resources:
 
   DatabaseSubnet3RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       SubnetId: !Ref DatabaseSubnet3
       RouteTableId: !Ref DatabaseRouteTable3
@@ -547,6 +581,8 @@ Resources:
   # Public NACL Inbound Rules
   PublicNetworkAclInboundHTTP:
     Type: AWS::EC2::NetworkAclEntry
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       NetworkAclId: !Ref PublicNetworkAcl
       RuleNumber: 100
@@ -559,6 +595,8 @@ Resources:
 
   PublicNetworkAclInboundHTTPS:
     Type: AWS::EC2::NetworkAclEntry
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       NetworkAclId: !Ref PublicNetworkAcl
       RuleNumber: 110
@@ -571,6 +609,8 @@ Resources:
 
   PublicNetworkAclInboundEphemeral:
     Type: AWS::EC2::NetworkAclEntry
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       NetworkAclId: !Ref PublicNetworkAcl
       RuleNumber: 120
@@ -584,6 +624,8 @@ Resources:
   # Public NACL Outbound Rules
   PublicNetworkAclOutboundHTTP:
     Type: AWS::EC2::NetworkAclEntry
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       NetworkAclId: !Ref PublicNetworkAcl
       RuleNumber: 100
@@ -597,6 +639,8 @@ Resources:
 
   PublicNetworkAclOutboundHTTPS:
     Type: AWS::EC2::NetworkAclEntry
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       NetworkAclId: !Ref PublicNetworkAcl
       RuleNumber: 110
@@ -610,6 +654,8 @@ Resources:
 
   PublicNetworkAclOutboundEphemeral:
     Type: AWS::EC2::NetworkAclEntry
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       NetworkAclId: !Ref PublicNetworkAcl
       RuleNumber: 120
@@ -624,18 +670,24 @@ Resources:
   # Public NACL Associations
   PublicSubnet1NetworkAclAssociation:
     Type: AWS::EC2::SubnetNetworkAclAssociation
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       SubnetId: !Ref PublicSubnet1
       NetworkAclId: !Ref PublicNetworkAcl
 
   PublicSubnet2NetworkAclAssociation:
     Type: AWS::EC2::SubnetNetworkAclAssociation
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       SubnetId: !Ref PublicSubnet2
       NetworkAclId: !Ref PublicNetworkAcl
 
   PublicSubnet3NetworkAclAssociation:
     Type: AWS::EC2::SubnetNetworkAclAssociation
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       SubnetId: !Ref PublicSubnet3
       NetworkAclId: !Ref PublicNetworkAcl
@@ -658,6 +710,8 @@ Resources:
   # Private NACL Inbound Rules
   PrivateNetworkAclInboundVPC:
     Type: AWS::EC2::NetworkAclEntry
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       NetworkAclId: !Ref PrivateNetworkAcl
       RuleNumber: 100
@@ -667,6 +721,8 @@ Resources:
 
   PrivateNetworkAclInboundEphemeral:
     Type: AWS::EC2::NetworkAclEntry
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       NetworkAclId: !Ref PrivateNetworkAcl
       RuleNumber: 110
@@ -680,6 +736,8 @@ Resources:
   # Private NACL Outbound Rules
   PrivateNetworkAclOutbound:
     Type: AWS::EC2::NetworkAclEntry
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       NetworkAclId: !Ref PrivateNetworkAcl
       RuleNumber: 100
@@ -691,18 +749,24 @@ Resources:
   # Private NACL Associations
   PrivateSubnet1NetworkAclAssociation:
     Type: AWS::EC2::SubnetNetworkAclAssociation
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       SubnetId: !Ref PrivateSubnet1
       NetworkAclId: !Ref PrivateNetworkAcl
 
   PrivateSubnet2NetworkAclAssociation:
     Type: AWS::EC2::SubnetNetworkAclAssociation
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       SubnetId: !Ref PrivateSubnet2
       NetworkAclId: !Ref PrivateNetworkAcl
 
   PrivateSubnet3NetworkAclAssociation:
     Type: AWS::EC2::SubnetNetworkAclAssociation
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       SubnetId: !Ref PrivateSubnet3
       NetworkAclId: !Ref PrivateNetworkAcl
@@ -725,6 +789,8 @@ Resources:
   # Database NACL Inbound Rules (only from private subnets)
   DatabaseNetworkAclInboundMySQL:
     Type: AWS::EC2::NetworkAclEntry
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       NetworkAclId: !Ref DatabaseNetworkAcl
       RuleNumber: 100
@@ -737,6 +803,8 @@ Resources:
 
   DatabaseNetworkAclInboundMySQL2:
     Type: AWS::EC2::NetworkAclEntry
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       NetworkAclId: !Ref DatabaseNetworkAcl
       RuleNumber: 110
@@ -749,6 +817,8 @@ Resources:
 
   DatabaseNetworkAclInboundMySQL3:
     Type: AWS::EC2::NetworkAclEntry
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       NetworkAclId: !Ref DatabaseNetworkAcl
       RuleNumber: 120
@@ -761,6 +831,8 @@ Resources:
 
   DatabaseNetworkAclInboundPostgreSQL:
     Type: AWS::EC2::NetworkAclEntry
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       NetworkAclId: !Ref DatabaseNetworkAcl
       RuleNumber: 130
@@ -773,6 +845,8 @@ Resources:
 
   DatabaseNetworkAclInboundPostgreSQL2:
     Type: AWS::EC2::NetworkAclEntry
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       NetworkAclId: !Ref DatabaseNetworkAcl
       RuleNumber: 140
@@ -785,6 +859,8 @@ Resources:
 
   DatabaseNetworkAclInboundPostgreSQL3:
     Type: AWS::EC2::NetworkAclEntry
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       NetworkAclId: !Ref DatabaseNetworkAcl
       RuleNumber: 150
@@ -797,6 +873,8 @@ Resources:
 
   DatabaseNetworkAclInboundEphemeral:
     Type: AWS::EC2::NetworkAclEntry
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       NetworkAclId: !Ref DatabaseNetworkAcl
       RuleNumber: 160
@@ -810,6 +888,8 @@ Resources:
   # Database NACL Outbound Rules
   DatabaseNetworkAclOutbound:
     Type: AWS::EC2::NetworkAclEntry
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       NetworkAclId: !Ref DatabaseNetworkAcl
       RuleNumber: 100
@@ -821,18 +901,24 @@ Resources:
   # Database NACL Associations
   DatabaseSubnet1NetworkAclAssociation:
     Type: AWS::EC2::SubnetNetworkAclAssociation
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       SubnetId: !Ref DatabaseSubnet1
       NetworkAclId: !Ref DatabaseNetworkAcl
 
   DatabaseSubnet2NetworkAclAssociation:
     Type: AWS::EC2::SubnetNetworkAclAssociation
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       SubnetId: !Ref DatabaseSubnet2
       NetworkAclId: !Ref DatabaseNetworkAcl
 
   DatabaseSubnet3NetworkAclAssociation:
     Type: AWS::EC2::SubnetNetworkAclAssociation
+    Metadata:
+      EnvironmentSuffix: !Ref EnvironmentSuffix
     Properties:
       SubnetId: !Ref DatabaseSubnet3
       NetworkAclId: !Ref DatabaseNetworkAcl
@@ -1021,7 +1107,7 @@ Outputs:
       Name: !Sub '${AWS::StackName}-VPCFlowLogsLogGroupName'
 ```
 
-This CloudFormation template successfully implements all requirements:
+This CFN template successfully implements all requirements:
 - VPC with CIDR 10.0.0.0/16 with DNS hostnames and DNS support enabled
 - 3 public subnets (10.0.1.0/24, 10.0.2.0/24, 10.0.3.0/24) across 3 AZs
 - 3 private subnets (10.0.11.0/24, 10.0.12.0/24, 10.0.13.0/24) across 3 AZs

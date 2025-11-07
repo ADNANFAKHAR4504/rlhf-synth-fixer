@@ -88,6 +88,11 @@
         },
         "AttachGateway": {
             "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
@@ -779,6 +784,11 @@
         "PublicRoute": {
             "Type": "AWS::EC2::Route",
             "DependsOn": "AttachGateway",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "RouteTableId": {
                     "Ref": "PublicRouteTable"
@@ -791,6 +801,11 @@
         },
         "PublicSubnet1RouteTableAssociation": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "SubnetId": {
                     "Ref": "PublicSubnet1"
@@ -802,6 +817,11 @@
         },
         "PublicSubnet2RouteTableAssociation": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "SubnetId": {
                     "Ref": "PublicSubnet2"
@@ -813,6 +833,11 @@
         },
         "PublicSubnet3RouteTableAssociation": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "SubnetId": {
                     "Ref": "PublicSubnet3"
@@ -858,6 +883,11 @@
         },
         "PrivateRoute1": {
             "Type": "AWS::EC2::Route",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "RouteTableId": {
                     "Ref": "PrivateRouteTable1"
@@ -870,6 +900,11 @@
         },
         "PrivateSubnet1RouteTableAssociation": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "SubnetId": {
                     "Ref": "PrivateSubnet1"
@@ -915,6 +950,11 @@
         },
         "PrivateRoute2": {
             "Type": "AWS::EC2::Route",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "RouteTableId": {
                     "Ref": "PrivateRouteTable2"
@@ -927,6 +967,11 @@
         },
         "PrivateSubnet2RouteTableAssociation": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "SubnetId": {
                     "Ref": "PrivateSubnet2"
@@ -972,6 +1017,11 @@
         },
         "PrivateRoute3": {
             "Type": "AWS::EC2::Route",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "RouteTableId": {
                     "Ref": "PrivateRouteTable3"
@@ -984,6 +1034,11 @@
         },
         "PrivateSubnet3RouteTableAssociation": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "SubnetId": {
                     "Ref": "PrivateSubnet3"
@@ -1029,6 +1084,11 @@
         },
         "DatabaseRoute1": {
             "Type": "AWS::EC2::Route",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "RouteTableId": {
                     "Ref": "DatabaseRouteTable1"
@@ -1041,6 +1101,11 @@
         },
         "DatabaseSubnet1RouteTableAssociation": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "SubnetId": {
                     "Ref": "DatabaseSubnet1"
@@ -1086,6 +1151,11 @@
         },
         "DatabaseRoute2": {
             "Type": "AWS::EC2::Route",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "RouteTableId": {
                     "Ref": "DatabaseRouteTable2"
@@ -1098,6 +1168,11 @@
         },
         "DatabaseSubnet2RouteTableAssociation": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "SubnetId": {
                     "Ref": "DatabaseSubnet2"
@@ -1143,6 +1218,11 @@
         },
         "DatabaseRoute3": {
             "Type": "AWS::EC2::Route",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "RouteTableId": {
                     "Ref": "DatabaseRouteTable3"
@@ -1155,6 +1235,11 @@
         },
         "DatabaseSubnet3RouteTableAssociation": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "SubnetId": {
                     "Ref": "DatabaseSubnet3"
@@ -1200,6 +1285,11 @@
         },
         "PublicNetworkAclInboundHTTP": {
             "Type": "AWS::EC2::NetworkAclEntry",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "NetworkAclId": {
                     "Ref": "PublicNetworkAcl"
@@ -1216,6 +1306,11 @@
         },
         "PublicNetworkAclInboundHTTPS": {
             "Type": "AWS::EC2::NetworkAclEntry",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "NetworkAclId": {
                     "Ref": "PublicNetworkAcl"
@@ -1232,6 +1327,11 @@
         },
         "PublicNetworkAclInboundEphemeral": {
             "Type": "AWS::EC2::NetworkAclEntry",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "NetworkAclId": {
                     "Ref": "PublicNetworkAcl"
@@ -1248,6 +1348,11 @@
         },
         "PublicNetworkAclOutboundHTTP": {
             "Type": "AWS::EC2::NetworkAclEntry",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "NetworkAclId": {
                     "Ref": "PublicNetworkAcl"
@@ -1265,6 +1370,11 @@
         },
         "PublicNetworkAclOutboundHTTPS": {
             "Type": "AWS::EC2::NetworkAclEntry",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "NetworkAclId": {
                     "Ref": "PublicNetworkAcl"
@@ -1282,6 +1392,11 @@
         },
         "PublicNetworkAclOutboundEphemeral": {
             "Type": "AWS::EC2::NetworkAclEntry",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "NetworkAclId": {
                     "Ref": "PublicNetworkAcl"
@@ -1299,6 +1414,11 @@
         },
         "PublicSubnet1NetworkAclAssociation": {
             "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "SubnetId": {
                     "Ref": "PublicSubnet1"
@@ -1310,6 +1430,11 @@
         },
         "PublicSubnet2NetworkAclAssociation": {
             "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "SubnetId": {
                     "Ref": "PublicSubnet2"
@@ -1321,6 +1446,11 @@
         },
         "PublicSubnet3NetworkAclAssociation": {
             "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "SubnetId": {
                     "Ref": "PublicSubnet3"
@@ -1366,6 +1496,11 @@
         },
         "PrivateNetworkAclInboundVPC": {
             "Type": "AWS::EC2::NetworkAclEntry",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "NetworkAclId": {
                     "Ref": "PrivateNetworkAcl"
@@ -1378,6 +1513,11 @@
         },
         "PrivateNetworkAclInboundEphemeral": {
             "Type": "AWS::EC2::NetworkAclEntry",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "NetworkAclId": {
                     "Ref": "PrivateNetworkAcl"
@@ -1394,6 +1534,11 @@
         },
         "PrivateNetworkAclOutbound": {
             "Type": "AWS::EC2::NetworkAclEntry",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "NetworkAclId": {
                     "Ref": "PrivateNetworkAcl"
@@ -1407,6 +1552,11 @@
         },
         "PrivateSubnet1NetworkAclAssociation": {
             "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "SubnetId": {
                     "Ref": "PrivateSubnet1"
@@ -1418,6 +1568,11 @@
         },
         "PrivateSubnet2NetworkAclAssociation": {
             "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "SubnetId": {
                     "Ref": "PrivateSubnet2"
@@ -1429,6 +1584,11 @@
         },
         "PrivateSubnet3NetworkAclAssociation": {
             "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "SubnetId": {
                     "Ref": "PrivateSubnet3"
@@ -1474,6 +1634,11 @@
         },
         "DatabaseNetworkAclInboundMySQL": {
             "Type": "AWS::EC2::NetworkAclEntry",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "NetworkAclId": {
                     "Ref": "DatabaseNetworkAcl"
@@ -1490,6 +1655,11 @@
         },
         "DatabaseNetworkAclInboundMySQL2": {
             "Type": "AWS::EC2::NetworkAclEntry",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "NetworkAclId": {
                     "Ref": "DatabaseNetworkAcl"
@@ -1506,6 +1676,11 @@
         },
         "DatabaseNetworkAclInboundMySQL3": {
             "Type": "AWS::EC2::NetworkAclEntry",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "NetworkAclId": {
                     "Ref": "DatabaseNetworkAcl"
@@ -1522,6 +1697,11 @@
         },
         "DatabaseNetworkAclInboundPostgreSQL": {
             "Type": "AWS::EC2::NetworkAclEntry",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "NetworkAclId": {
                     "Ref": "DatabaseNetworkAcl"
@@ -1538,6 +1718,11 @@
         },
         "DatabaseNetworkAclInboundPostgreSQL2": {
             "Type": "AWS::EC2::NetworkAclEntry",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "NetworkAclId": {
                     "Ref": "DatabaseNetworkAcl"
@@ -1554,6 +1739,11 @@
         },
         "DatabaseNetworkAclInboundPostgreSQL3": {
             "Type": "AWS::EC2::NetworkAclEntry",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "NetworkAclId": {
                     "Ref": "DatabaseNetworkAcl"
@@ -1570,6 +1760,11 @@
         },
         "DatabaseNetworkAclInboundEphemeral": {
             "Type": "AWS::EC2::NetworkAclEntry",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "NetworkAclId": {
                     "Ref": "DatabaseNetworkAcl"
@@ -1586,6 +1781,11 @@
         },
         "DatabaseNetworkAclOutbound": {
             "Type": "AWS::EC2::NetworkAclEntry",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "NetworkAclId": {
                     "Ref": "DatabaseNetworkAcl"
@@ -1599,6 +1799,11 @@
         },
         "DatabaseSubnet1NetworkAclAssociation": {
             "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "SubnetId": {
                     "Ref": "DatabaseSubnet1"
@@ -1610,6 +1815,11 @@
         },
         "DatabaseSubnet2NetworkAclAssociation": {
             "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "SubnetId": {
                     "Ref": "DatabaseSubnet2"
@@ -1621,6 +1831,11 @@
         },
         "DatabaseSubnet3NetworkAclAssociation": {
             "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+            "Metadata": {
+                "EnvironmentSuffix": {
+                    "Ref": "EnvironmentSuffix"
+                }
+            },
             "Properties": {
                 "SubnetId": {
                     "Ref": "DatabaseSubnet3"
