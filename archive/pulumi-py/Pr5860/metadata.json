@@ -7,7 +7,9 @@
   "team": "synth",
   "startedAt": "2025-11-05T13:49:03",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": ["Cloud Environment Setup"],
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
   "aws_services": [
     "API Gateway",
     "Lambda",
@@ -20,5 +22,10 @@
   ],
   "training_quality": 10,
   "author": "iamarpit-turing",
-  "reviewer": "emmanuel-turing"
+  "reviewer": "emmanuel-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
