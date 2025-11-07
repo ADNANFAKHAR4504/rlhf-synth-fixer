@@ -25,5 +25,10 @@
   ],
   "region": "ap-southeast-1",
   "training_quality": 10,
-  "author": "rajendra-s-aws"
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
