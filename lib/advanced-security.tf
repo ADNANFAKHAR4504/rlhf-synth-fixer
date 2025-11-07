@@ -515,7 +515,7 @@ resource "aws_securityhub_standards_subscription" "pci_dss" {
 resource "aws_cloudwatch_log_group" "falco_alerts" {
   name              = "/aws/eks/${var.cluster_name}-${var.environment_suffix}/falco-alerts"
   retention_in_days = 90
-  kms_key_id        = aws_kms_key.eks.arn
+  kms_key_id        = var.enable_cluster_encryption ? aws_kms_key.eks[0].arn : null
 
   tags = {
     Name        = "${var.cluster_name}-${var.environment_suffix}-falco-alerts"
@@ -557,7 +557,7 @@ resource "aws_cloudwatch_event_target" "sns" {
 # SNS Topic for security alerts
 resource "aws_sns_topic" "security_alerts" {
   name              = "${var.cluster_name}-${var.environment_suffix}-security-alerts"
-  kms_master_key_id = aws_kms_key.eks.id
+  kms_master_key_id = var.enable_cluster_encryption ? aws_kms_key.eks[0].id : null
 
   tags = {
     Name        = "${var.cluster_name}-${var.environment_suffix}-security-alerts"

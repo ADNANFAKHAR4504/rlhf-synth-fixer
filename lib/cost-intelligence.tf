@@ -837,7 +837,7 @@ resource "aws_lambda_permission" "cost_anomaly_eventbridge" {
 # SNS Topic for cost alerts
 resource "aws_sns_topic" "cost_alerts" {
   name              = "${var.cluster_name}-${var.environment_suffix}-cost-alerts"
-  kms_master_key_id = aws_kms_key.eks.id
+  kms_master_key_id = var.enable_cluster_encryption ? aws_kms_key.eks[0].id : null
 
   tags = {
     Name        = "${var.cluster_name}-${var.environment_suffix}-cost-alerts"

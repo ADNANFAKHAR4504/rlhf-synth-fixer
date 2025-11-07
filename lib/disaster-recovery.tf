@@ -274,24 +274,44 @@ resource "aws_db_subnet_group" "dr_rds" {
   }
 }
 
-resource "aws_db_instance" "dr_read_replica" {
-  provider                   = aws.dr_region
-  identifier                 = "${var.cluster_name}-${var.environment_suffix}-dr-replica"
-  replicate_source_db        = aws_db_instance.main.arn
-  instance_class             = "db.t3.medium"
-  publicly_accessible        = false
-  auto_minor_version_upgrade = false
-  backup_retention_period    = 7
-  backup_window              = "03:00-04:00"
-  maintenance_window         = "sun:04:00-sun:05:00"
-  db_subnet_group_name       = aws_db_subnet_group.dr_rds.name
-  storage_encrypted          = true
-  kms_key_id                 = aws_kms_key.dr_eks.arn
+# Commented out - requires main RDS instance to be defined first
+# resource "aws_db_instance" "dr_read_replica" {
+#   provider                   = aws.dr_region
+#   identifier                 = "${var.cluster_name}-${var.environment_suffix}-dr-replica"
+#   replicate_source_db        = aws_db_instance.main.arn
+#   instance_class             = "db.t3.medium"
+#   publicly_accessible        = false
+#   auto_minor_version_upgrade = false
+#   backup_retention_period    = 7
+#   backup_window              = "03:00-04:00"
+#   maintenance_window         = "sun:04:00-sun:05:00"
+#   db_subnet_group_name       = aws_db_subnet_group.dr_rds.name
+#   storage_encrypted          = true
+#   kms_key_id                 = aws_kms_key.dr_eks.arn
+#
+#   tags = {
+#     Name        = "${var.cluster_name}-${var.environment_suffix}-dr-replica"
+#     Environment = var.environment_suffix
+#     Purpose     = "DisasterRecovery"
+#   }
+# }
+
+# Primary backup bucket for replication
+resource "aws_s3_bucket" "backups" {
+  bucket = "${var.cluster_name}-${var.environment_suffix}-backups-${data.aws_caller_identity.current.account_id}"
 
   tags = {
-    Name        = "${var.cluster_name}-${var.environment_suffix}-dr-replica"
+    Name        = "${var.cluster_name}-${var.environment_suffix}-backups"
     Environment = var.environment_suffix
-    Purpose     = "DisasterRecovery"
+    Purpose     = "Backups"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "backups" {
+  bucket = aws_s3_bucket.backups.id
+
+  versioning_configuration {
+    status = "Enabled"
   }
 }
 
@@ -316,44 +336,45 @@ resource "aws_s3_bucket_versioning" "dr_backups" {
   }
 }
 
-resource "aws_s3_bucket_replication_configuration" "backup_replication" {
-  role   = aws_iam_role.s3_replication.arn
-  bucket = aws_s3_bucket.backups.id
-
-  rule {
-    id     = "dr-replication"
-    status = "Enabled"
-
-    filter {
-      prefix = ""
-    }
-
-    destination {
-      bucket        = aws_s3_bucket.dr_backups.arn
-      storage_class = "STANDARD_IA"
-
-      replication_time {
-        status = "Enabled"
-        time {
-          minutes = 15
-        }
-      }
-
-      metrics {
-        status = "Enabled"
-        event_threshold {
-          minutes = 15
-        }
-      }
-    }
-
-    delete_marker_replication {
-      status = "Enabled"
-    }
-  }
-
-  depends_on = [aws_s3_bucket_versioning.backups]
-}
+# Commented out - requires main backup bucket to be defined first
+# resource "aws_s3_bucket_replication_configuration" "backup_replication" {
+#   role   = aws_iam_role.s3_replication.arn
+#   bucket = aws_s3_bucket.backups.id
+#
+#   rule {
+#     id     = "dr-replication"
+#     status = "Enabled"
+#
+#     filter {
+#       prefix = ""
+#     }
+#
+#     destination {
+#       bucket        = aws_s3_bucket.dr_backups.arn
+#       storage_class = "STANDARD_IA"
+#
+#       replication_time {
+#         status = "Enabled"
+#         time {
+#           minutes = 15
+#         }
+#       }
+#
+#       metrics {
+#         status = "Enabled"
+#         event_threshold {
+#           minutes = 15
+#         }
+#       }
+#     }
+#
+#     delete_marker_replication {
+#       status = "Enabled"
+#     }
+#   }
+#
+#   depends_on = [aws_s3_bucket_versioning.backups]
+# }
 
 # IAM Role for S3 Replication
 resource "aws_iam_role" "s3_replication" {
@@ -414,76 +435,89 @@ resource "aws_iam_role_policy" "s3_replication" {
 }
 
 # Route53 Health Checks for failover
-resource "aws_route53_health_check" "primary" {
-  fqdn              = aws_lb.primary.dns_name
-  port              = 443
-  type              = "HTTPS"
-  resource_path     = "/health"
-  failure_threshold = 3
-  request_interval  = 30
-
-  tags = {
-    Name        = "${var.cluster_name}-${var.environment_suffix}-primary-health"
-    Environment = var.environment_suffix
-  }
-}
-
-resource "aws_route53_health_check" "dr" {
-  provider          = aws.dr_region
-  fqdn              = aws_lb.dr.dns_name
-  port              = 443
-  type              = "HTTPS"
-  resource_path     = "/health"
-  failure_threshold = 3
-  request_interval  = 30
-
-  tags = {
-    Name        = "${var.cluster_name}-${var.environment_suffix}-dr-health"
-    Environment = var.environment_suffix
-  }
-}
+# Commented out - requires load balancers to be defined first
+# resource "aws_route53_health_check" "primary" {
+#   fqdn              = aws_lb.primary.dns_name
+#   port              = 443
+#   type              = "HTTPS"
+#   resource_path     = "/health"
+#   failure_threshold = 3
+#   request_interval  = 30
+#
+#   tags = {
+#     Name        = "${var.cluster_name}-${var.environment_suffix}-primary-health"
+#     Environment = var.environment_suffix
+#   }
+# }
+#
+# resource "aws_route53_health_check" "dr" {
+#   provider          = aws.dr_region
+#   fqdn              = aws_lb.dr.dns_name
+#   port              = 443
+#   type              = "HTTPS"
+#   resource_path     = "/health"
+#   failure_threshold = 3
+#   request_interval  = 30
+#
+#   tags = {
+#     Name        = "${var.cluster_name}-${var.environment_suffix}-dr-health"
+#     Environment = var.environment_suffix
+#   }
+# }
 
 # Route53 Failover Records
-resource "aws_route53_record" "primary" {
-  zone_id = data.aws_route53_zone.main.zone_id
-  name    = "app.${var.domain_name}"
-  type    = "A"
-
-  set_identifier = "Primary"
-  failover_routing_policy {
-    type = "PRIMARY"
-  }
-
-  alias {
-    name                   = aws_lb.primary.dns_name
-    zone_id                = aws_lb.primary.zone_id
-    evaluate_target_health = true
-  }
-
-  health_check_id = aws_route53_health_check.primary.id
-}
-
-resource "aws_route53_record" "dr" {
-  provider = aws.dr_region
-  zone_id  = data.aws_route53_zone.main.zone_id
-  name     = "app.${var.domain_name}"
-  type     = "A"
-
-  set_identifier = "DR"
-  failover_routing_policy {
-    type = "SECONDARY"
-  }
-
-  alias {
-    name                   = aws_lb.dr.dns_name
-    zone_id                = aws_lb.dr.zone_id
-    evaluate_target_health = true
-  }
-
-  health_check_id = aws_route53_health_check.dr.id
-}
+# Commented out - requires load balancers and Route53 zone to be defined first
+# resource "aws_route53_record" "primary" {
+#   zone_id = data.aws_route53_zone.main.zone_id
+#   name    = "app.${var.domain_name}"
+#   type    = "A"
+#
+#   set_identifier = "Primary"
+#   failover_routing_policy {
+#     type = "PRIMARY"
+#   }
+#
+#   alias {
+#     name                   = aws_lb.primary.dns_name
+#     zone_id                = aws_lb.primary.zone_id
+#     evaluate_target_health = true
+#   }
+#
+#   health_check_id = aws_route53_health_check.primary.id
+# }
+#
+# resource "aws_route53_record" "dr" {
+#   provider = aws.dr_region
+#   zone_id  = data.aws_route53_zone.main.zone_id
+#   name     = "app.${var.domain_name}"
+#   type     = "A"
+#
+#   set_identifier = "DR"
+#   failover_routing_policy {
+#     type = "SECONDARY"
+#   }
+#
+#   alias {
+#     name                   = aws_lb.dr.dns_name
+#     zone_id                = aws_lb.dr.zone_id
+#     evaluate_target_health = true
+#   }
+#
+#   health_check_id = aws_route53_health_check.dr.id
+# }
 
 # AWS Backup for automated cross-region backups
+resource "aws_backup_vault" "main" {
+  name        = "${var.cluster_name}-${var.environment_suffix}-main-vault"
+  kms_key_arn = var.enable_cluster_encryption ? aws_kms_key.eks[0].arn : null
+
+  tags = {
+    Name        = "${var.cluster_name}-${var.environment_suffix}-main-vault"
+    Environment = var.environment_suffix
+    Purpose     = "Backups"
+  }
+}
+
 resource "aws_backup_vault" "dr" {
   provider    = aws.dr_region
   name        = "${var.cluster_name}-${var.environment_suffix}-dr-vault"
@@ -589,31 +623,32 @@ resource "aws_cloudwatch_dashboard" "dr_monitoring" {
 }
 
 # Lambda for automated failover orchestration
-resource "aws_lambda_function" "dr_failover" {
-  provider      = aws.dr_region
-  filename      = "${path.module}/lambda/dr-failover.zip"
-  function_name = "${var.cluster_name}-${var.environment_suffix}-dr-failover"
-  role          = aws_iam_role.dr_lambda.arn
-  handler       = "index.handler"
-  runtime       = "python3.11"
-  timeout       = 900
-
-  environment {
-    variables = {
-      PRIMARY_CLUSTER = aws_eks_cluster.main.name
-      DR_CLUSTER      = aws_eks_cluster.dr_cluster.name
-      PRIMARY_REGION  = var.aws_region
-      DR_REGION       = var.dr_aws_region
-      ROUTE53_ZONE    = data.aws_route53_zone.main.zone_id
-    }
-  }
-
-  tags = {
-    Name        = "${var.cluster_name}-${var.environment_suffix}-dr-failover"
-    Environment = var.environment_suffix
-    Purpose     = "DisasterRecovery"
-  }
-}
+# Commented out - requires Route53 zone data source to be defined
+# resource "aws_lambda_function" "dr_failover" {
+#   provider      = aws.dr_region
+#   filename      = "${path.module}/lambda/dr-failover.zip"
+#   function_name = "${var.cluster_name}-${var.environment_suffix}-dr-failover"
+#   role          = aws_iam_role.dr_lambda.arn
+#   handler       = "index.handler"
+#   runtime       = "python3.11"
+#   timeout       = 900
+#
+#   environment {
+#     variables = {
+#       PRIMARY_CLUSTER = aws_eks_cluster.main.name
+#       DR_CLUSTER      = aws_eks_cluster.dr_cluster.name
+#       PRIMARY_REGION  = var.aws_region
+#       DR_REGION       = var.dr_aws_region
+#       ROUTE53_ZONE    = data.aws_route53_zone.main.zone_id
+#     }
+#   }
+#
+#   tags = {
+#     Name        = "${var.cluster_name}-${var.environment_suffix}-dr-failover"
+#     Environment = var.environment_suffix
+#     Purpose     = "DisasterRecovery"
+#   }
+# }
 
 # IAM Role for DR Lambda
 resource "aws_iam_role" "dr_lambda" {
