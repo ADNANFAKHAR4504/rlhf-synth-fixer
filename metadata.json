@@ -11,6 +11,20 @@
     "Cloud Environment Setup"
   ],
   "aws_services": [
-    "DynamoDB"
-  ]
+    "EC2",
+    "VPC",
+    "ELB",
+    "AutoScaling",
+    "RDS",
+    "S3",
+    "CloudWatch",
+    "SNS",
+    "KMS",
+    "Lambda",
+    "SecretsManager",
+    "Route53",
+    "CertificateManager",
+    "IAM"
+  ],
+  "training_quality": 10
 }
