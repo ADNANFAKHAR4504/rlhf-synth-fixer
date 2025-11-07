@@ -154,6 +154,7 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       
       const searchCommand = new SearchTransitGatewayRoutesCommand({
         TransitGatewayRouteTableId: devRtId,
+        Filters: [],
       });
       const searchResponse = await usEast1Client.send(searchCommand);
       const routes = searchResponse.Routes || [];
@@ -180,6 +181,7 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       
       const searchCommand = new SearchTransitGatewayRoutesCommand({
         TransitGatewayRouteTableId: prodRtId,
+        Filters: [],
       });
       const searchResponse = await usEast1Client.send(searchCommand);
       const routes = searchResponse.Routes || [];
@@ -219,6 +221,7 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       
       const searchCommand = new SearchTransitGatewayRoutesCommand({
         TransitGatewayRouteTableId: devRtId,
+        Filters: [],
       });
       const searchResponse = await usEast1Client.send(searchCommand);
       const routes = searchResponse.Routes || [];
@@ -236,6 +239,7 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       
       const searchCommand = new SearchTransitGatewayRoutesCommand({
         TransitGatewayRouteTableId: prodRtId,
+        Filters: [],
       });
       const searchResponse = await usEast1Client.send(searchCommand);
       const routes = searchResponse.Routes || [];
@@ -539,6 +543,7 @@ describe("Hub-and-Spoke Network Architecture - Real-World Application Flows", ()
       
       const tgwSearchCommand = new SearchTransitGatewayRoutesCommand({
         TransitGatewayRouteTableId: prodRtId,
+        Filters: [],
       });
       const tgwResponse = await usEast1Client.send(tgwSearchCommand);
       const routes = tgwResponse.Routes || [];
