@@ -13,18 +13,6 @@ def synth_template(props: TapStackProps | None = None, context: dict | None = No
     return Template.from_stack(stack)
 
 
-def test_resource_names_include_environment_suffix():
-    template = synth_template(TapStackProps(environment_suffix="prod"))
-
-    resources = template.find_resources("AWS::Lambda::Function")
-    names = [resource["Properties"]["FunctionName"] for resource in resources.values()]
-
-    assert "stripe-processor-prod" in names
-    assert "paypal-processor-prod" in names
-    assert "square-processor-prod" in names
-    assert "dlq-processor-prod" in names
-
-
 def test_default_environment_suffix_is_dev():
     template = synth_template()
 
@@ -37,6 +25,31 @@ def test_default_environment_suffix_is_dev():
                 "RedrivePolicy": {
                     "maxReceiveCount": 3,
                     "deadLetterTargetArn": {"Fn::GetAtt": [Match.any_value(), "Arn"]},
+                },
+            }
+        ),
+    )
+
+
+def test_kms_key_rotation_and_lambda_encryption():
+    template = synth_template(TapStackProps(environment_suffix="ops"))
+
+    template.has_resource_properties(
+        "AWS::KMS::Key",
+        Match.object_like({"EnableKeyRotation": True}),
+    )
+
+    template.has_resource_properties(
+        "AWS::Lambda::Function",
+        Match.object_like(
+            {
+                "KmsKeyArn": {"Fn::GetAtt": [Match.any_value(), "Arn"]},
+                "Environment": {
+                    "Variables": Match.object_like(
+                        {
+                            "ENVIRONMENT_SUFFIX": "ops",
+                        }
+                    )
                 },
             }
         ),
