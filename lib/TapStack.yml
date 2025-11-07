@@ -718,16 +718,6 @@ Resources:
         - Key: iac-rlhf-amazon
           Value: 'true'
 
-  # Automatic rotation for database password
-  DBPasswordRotationLambda:
-    Type: AWS::SecretsManager::RotationSchedule
-    DependsOn: DBPasswordAttachment
-    Properties:
-      SecretId: !Ref DBPassword
-      RotationLambdaARN: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SecretsManagerRDSPostgreSQLRotation'
-      RotationRules:
-        AutomaticallyAfterDays: !If [IsProduction, 30, 90]
-
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
