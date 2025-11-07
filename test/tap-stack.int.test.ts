@@ -234,7 +234,6 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
       expect(outputs['vpc-id']).toBeTruthy();
 
       if (isMockData) {
-        console.log('Using mock data for integration tests');
         expect(outputs['vpc-id']).toMatch(/^vpc-[a-f0-9]{8}$/);
         expect(outputs['lambda-function-name']).toMatch(/^[a-z0-9-]+-api-handler$/);
         expect(outputs['api-endpoint']).toMatch(/^https:\/\/[a-z0-9]+\.execute-api\.[a-z0-9-]+\.amazonaws\.com\/.+$/);
@@ -243,7 +242,6 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
 
     test('should have VPC configured with DNS support and proper CIDR block', async () => {
       if (isMockData) {
-        console.log('Using mock data - validating VPC structure');
         expect(outputs['vpc-id']).toMatch(/^vpc-[a-f0-9]{8}$/);
         return;
       }
@@ -264,7 +262,6 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
 
     test('should have S3 bucket with encryption, versioning, and public access block', async () => {
       if (isMockData) {
-        console.log('Using mock data - validating S3 configuration');
         expect(outputs['s3-bucket-name']).toMatch(/^[a-z0-9-]+-serverless-content-[0-9]+$/);
         return;
       }
@@ -303,13 +300,11 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
         expect(lifecycleResponse.Rules?.length).toBeGreaterThan(0);
       } catch (error: any) {
         // Lifecycle rules might not be configured
-        console.log('Lifecycle rules not configured or not accessible');
       }
     }, 30000);
 
     test('should have Lambda function configured with VPC, environment variables, and tracing', async () => {
       if (isMockData) {
-        console.log('Using mock data - validating Lambda configuration');
         expect(outputs['lambda-function-name']).toMatch(/^[a-z0-9-]+-api-handler$/);
         return;
       }
@@ -343,7 +338,6 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
 
     test('should have API Gateway configured with CORS and Lambda integration', async () => {
       if (isMockData) {
-        console.log('Using mock data - validating API Gateway configuration');
         expect(outputs['api-endpoint']).toMatch(/^https:\/\/[a-z0-9]+\.execute-api\.[a-z0-9-]+\.amazonaws\.com\/.+$/);
         return;
       }
@@ -371,7 +365,6 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
 
     test('should have CloudFront distribution with OAC and security headers', async () => {
       if (isMockData) {
-        console.log('Using mock data - validating CloudFront configuration');
         expect(outputs['cloudfront-distribution-id']).toMatch(/^E[A-Z0-9]{13}$/);
         return;
       }
@@ -405,7 +398,6 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
 
     test('should have CloudWatch alarms configured for Lambda monitoring', async () => {
       if (isMockData) {
-        console.log('Using mock data - validating CloudWatch alarms');
         return;
       }
 
@@ -440,7 +432,6 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
   describe('[Service-Level] Lambda Function Interactive Operations', () => {
     test('should support Lambda function invocation and configuration updates', async () => {
       if (isMockData) {
-        console.log('Using mock data - validating Lambda operations');
         return;
       }
 
@@ -466,10 +457,8 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
         if (invokeResponse.Payload) {
           const responsePayload = JSON.parse(new TextDecoder().decode(invokeResponse.Payload));
           expect(responsePayload).toBeDefined();
-          console.log('Lambda invocation successful');
         }
       } catch (error: any) {
-        console.log('Lambda invocation error (expected if function expects specific input):', error.message);
       }
 
       // ACTION: Add and remove tags
@@ -494,13 +483,11 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
           TagKeys: [testTagKey]
         }));
       } catch (error: any) {
-        console.log('Lambda tagging operations completed:', error.message);
       }
     }, 45000);
 
     test('should validate Lambda alias and provisioned concurrency if configured', async () => {
       if (isMockData) {
-        console.log('Using mock data - validating Lambda alias');
         return;
       }
 
@@ -528,12 +515,10 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
               
               expect(provisionedResponse.RequestedProvisionedConcurrentExecutions).toBeGreaterThan(0);
             } catch (error) {
-              console.log('No provisioned concurrency configured (expected for non-critical functions)');
             }
           }
         }
       } catch (error: any) {
-        console.log('Lambda alias operations completed:', error.message);
       }
     }, 30000);
   });
@@ -541,7 +526,6 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
   describe('[Service-Level] S3 Bucket Interactive Operations', () => {
     test('should support S3 object operations and lifecycle', async () => {
       if (isMockData) {
-        console.log('Using mock data - validating S3 operations');
         return;
       }
 
@@ -583,16 +567,13 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
           Key: testKey
         }));
 
-        console.log('S3 object operations completed successfully');
       } catch (error: any) {
-        console.log('S3 operations error:', error.message);
         throw error;
       }
     }, 45000);
 
     test('should validate S3 bucket CORS configuration for CloudFront', async () => {
       if (isMockData) {
-        console.log('Using mock data - validating S3 CORS');
         return;
       }
 
@@ -612,7 +593,6 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
         expect(rule.AllowedOrigins).toContain('*');
         expect(rule.ExposeHeaders).toContain('ETag');
       } catch (error: any) {
-        console.log('CORS configuration not set or accessible');
       }
     }, 30000);
   });
@@ -620,7 +600,6 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
   describe('[Service-Level] API Gateway Interactive Operations', () => {
     test('should support API Gateway stage updates and route configuration', async () => {
       if (isMockData) {
-        console.log('Using mock data - validating API Gateway operations');
         return;
       }
 
@@ -651,9 +630,7 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
         expect(defaultRoute).toBeDefined();
         expect(defaultRoute?.Target).toContain('integrations/');
 
-        console.log('API Gateway operations completed successfully');
       } catch (error: any) {
-        console.log('API Gateway operations error:', error.message);
       }
     }, 30000);
   });
@@ -661,7 +638,6 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
   describe('[Service-Level] CloudFront Distribution Operations', () => {
     test('should support CloudFront cache invalidation', async () => {
       if (isMockData) {
-        console.log('Using mock data - validating CloudFront operations');
         return;
       }
 
@@ -683,9 +659,7 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
         expect(invalidationResponse.Invalidation?.Status).toBe('InProgress');
         expect(invalidationResponse.Invalidation?.Id).toBeDefined();
         
-        console.log('CloudFront invalidation created successfully');
       } catch (error: any) {
-        console.log('CloudFront invalidation error:', error.message);
       }
     }, 30000);
   });
@@ -697,7 +671,6 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
   describe('[Cross-Service] Lambda ↔ S3 Integration', () => {
     test('should validate Lambda has proper IAM permissions to access S3', async () => {
       if (isMockData) {
-        console.log('Using mock data - validating Lambda-S3 integration');
         return;
       }
 
@@ -738,13 +711,11 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
         expect(s3Statement).toBeDefined();
         expect(s3Statement.Resource).toContain(bucketName);
       } catch (error) {
-        console.log('Inline S3 policy check:', error);
       }
     }, 45000);
 
     test('should validate Lambda can write CloudWatch logs', async () => {
       if (isMockData) {
-        console.log('Using mock data - validating Lambda-CloudWatch integration');
         return;
       }
 
@@ -770,10 +741,8 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
         }));
 
         if (logStreamsResponse.logStreams && logStreamsResponse.logStreams.length > 0) {
-          console.log(`Found ${logStreamsResponse.logStreams.length} log streams for Lambda function`);
         }
       } catch (error: any) {
-        console.log('CloudWatch logs validation:', error.message);
       }
     }, 30000);
   });
@@ -781,7 +750,6 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
   describe('[Cross-Service] API Gateway ↔ Lambda Integration', () => {
     test('should validate API Gateway can invoke Lambda function', async () => {
       if (isMockData) {
-        console.log('Using mock data - validating API Gateway-Lambda integration');
         return;
       }
 
@@ -822,7 +790,6 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
         expect(apiGatewayStatement.Effect).toBe('Allow');
         expect(apiGatewayStatement.Action).toBe('lambda:InvokeFunction');
       } catch (error) {
-        console.log('Lambda policy check:', error);
       }
     }, 45000);
   });
@@ -830,7 +797,6 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
   describe('[Cross-Service] CloudFront ↔ S3 Integration', () => {
     test('should validate CloudFront OAC has access to S3 bucket', async () => {
       if (isMockData) {
-        console.log('Using mock data - validating CloudFront-S3 integration');
         return;
       }
 
@@ -860,7 +826,6 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
         const distributionArn = distributionResponse.Distribution?.ARN;
         expect(cloudfrontStatement.Condition?.StringEquals?.['AWS:SourceArn']).toBe(distributionArn);
       } catch (error: any) {
-        console.log('S3 bucket policy validation:', error.message);
       }
     }, 45000);
   });
@@ -868,7 +833,6 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
   describe('[Cross-Service] Lambda ↔ Secrets Manager Integration', () => {
     test('should validate Lambda can access secrets', async () => {
       if (isMockData) {
-        console.log('Using mock data - validating Lambda-Secrets integration');
         return;
       }
 
@@ -900,7 +864,6 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
         expect(secretsStatement).toBeDefined();
         expect(secretsStatement.Resource).toBe(secretArn);
       } catch (error) {
-        console.log('Secrets Manager policy check:', error);
       }
     }, 30000);
   });
@@ -908,7 +871,6 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
   describe('[Cross-Service] Monitoring ↔ Lambda Integration', () => {
     test('should publish custom metrics and validate dashboard', async () => {
       if (isMockData) {
-        console.log('Using mock data - validating monitoring integration');
         return;
       }
 
@@ -967,7 +929,6 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
           DashboardBody: dashboardBody
         }));
 
-        console.log('Custom metrics and dashboard created successfully');
 
         // Cleanup
         await cloudWatchClient.send(new DeleteDashboardsCommand({
@@ -975,7 +936,6 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
         }));
 
       } catch (error: any) {
-        console.log('CloudWatch metrics integration:', error.message);
       }
     }, 60000);
   });
@@ -987,7 +947,6 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
   describe('[E2E] Complete Application Flow Tests', () => {
     test('should validate complete request flow: CloudFront → S3 static content', async () => {
       if (isMockData) {
-        console.log('Using mock data - skipping E2E CloudFront test');
         return;
       }
 
@@ -1004,19 +963,15 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
         expect([200, 301, 302, 403, 404].includes(response.status)).toBe(true);
         
         if (response.status === 200) {
-          console.log('✅ CloudFront successfully serving content');
         } else {
-          console.log(`CloudFront returned status ${response.status} (expected for empty bucket or redirect)`);
         }
       } catch (error: any) {
-        console.log('CloudFront access test:', error.message);
         // This might fail if the distribution is still deploying
       }
     }, 30000);
 
     test('should validate complete API flow: API Gateway → Lambda → DynamoDB/S3', async () => {
       if (isMockData) {
-        console.log('Using mock data - skipping E2E API test');
         return;
       }
 
@@ -1032,18 +987,13 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
         });
 
         expect(response.status).toBe(200);
-        console.log('✅ API Gateway → Lambda flow successful');
         
         // If the Lambda returns data, validate it
         if (response.data) {
           expect(response.data).toBeDefined();
-          console.log('Lambda response received:', typeof response.data === 'object' ? 
-            JSON.stringify(response.data).substring(0, 100) : response.data);
         }
       } catch (error: any) {
-        if (error.response?.status === 404) {
-          console.log('Health endpoint not implemented (404) - testing default route');
-          
+        if (error.response?.status === 404) {          
           // Try the default route
           try {
             const defaultResponse = await axios.post(apiEndpoint, 
@@ -1056,19 +1006,15 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
             );
             
             expect([200, 201, 202].includes(defaultResponse.status)).toBe(true);
-            console.log('✅ Default API route working');
           } catch (innerError) {
-            console.log('API default route test:', innerError);
           }
         } else {
-          console.log('API Gateway test error:', error.message);
         }
       }
     }, 45000);
 
     test('should validate complete monitoring flow: Lambda → CloudWatch → Alarms', async () => {
       if (isMockData) {
-        console.log('Using mock data - skipping E2E monitoring test');
         return;
       }
 
@@ -1092,8 +1038,6 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
       }
 
       await Promise.allSettled(invocations);
-      console.log('Lambda invocations completed for metric generation');
-
       // Step 2: Wait for metrics to be available
       await new Promise(resolve => setTimeout(resolve, 5000));
 
@@ -1112,12 +1056,10 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
         }));
 
         if (metricsResponse.Datapoints && metricsResponse.Datapoints.length > 0) {
-          console.log('✅ CloudWatch metrics successfully tracking Lambda invocations');
           const totalInvocations = metricsResponse.Datapoints.reduce((sum, dp) => sum + (dp.Sum || 0), 0);
           expect(totalInvocations).toBeGreaterThan(0);
         }
       } catch (error: any) {
-        console.log('CloudWatch metrics query:', error.message);
       }
 
       // Step 4: Verify alarms are in OK state
@@ -1127,14 +1069,12 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
 
       const alarms = alarmsResponse.MetricAlarms || [];
       alarms.forEach(alarm => {
-        console.log(`Alarm ${alarm.AlarmName}: ${alarm.StateValue}`);
         expect(['OK', 'INSUFFICIENT_DATA'].includes(alarm.StateValue!)).toBe(true);
       });
     }, 90000);
 
     test('should validate complete security flow: IAM → Lambda → Secrets → S3', async () => {
       if (isMockData) {
-        console.log('Using mock data - skipping E2E security test');
         return;
       }
 
@@ -1156,9 +1096,7 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
           }));
           
           expect(secretResponse.ARN).toBe(secretArn);
-          console.log('✅ Lambda has access to its designated secret');
         } catch (error) {
-          console.log('Secret access test (expected to fail from test runner):', error);
         }
       }
 
@@ -1186,18 +1124,15 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
           !rule.UserIdGroupPairs?.some(pair => pair.GroupId === lambdaSG.GroupId)
         );
         expect(customIngressRules?.length || 0).toBe(0);
-        console.log('✅ Security groups properly configured with minimal permissions');
       }
     }, 90000);
 
     test('[TRADITIONAL E2E] Complete user request flow: Browser → CloudFront → API Gateway → Lambda', async () => {
       if (isMockData) {
-        console.log('Using mock data - skipping live E2E test');
         return;
       }
 
       const apiEndpoint = outputs['api-endpoint'];
-      console.log(`\n🚀 Testing E2E flow to: ${apiEndpoint}`);
 
       try {
         // Step 1: Test API Gateway endpoint directly
@@ -1212,7 +1147,6 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
           }
         });
 
-        console.log(`✅ API Gateway Response: ${apiResponse.status} ${apiResponse.statusText}`);
         expect([200, 201, 202, 204].includes(apiResponse.status)).toBe(true);
 
         // Step 2: Test CloudFront distribution if it's serving the API
@@ -1226,12 +1160,9 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
           });
 
           if (cfResponse.status === 200) {
-            console.log('✅ CloudFront successfully proxying to API');
           } else {
-            console.log(`CloudFront API proxy returned ${cfResponse.status} (may not be configured for API)`);
           }
         } catch (cfError) {
-          console.log('CloudFront API test skipped (may not be configured for API proxying)');
         }
 
         // Step 3: Validate response headers for security
@@ -1242,21 +1173,17 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
 
         securityHeaders.forEach(header => {
           if (apiResponse.headers[header]) {
-            console.log(`✅ Security header present: ${header}`);
           }
         });
 
         // Step 4: If response has body, validate it
         if (apiResponse.data) {
-          console.log('✅ API returned data successfully');
           if (typeof apiResponse.data === 'object') {
             expect(apiResponse.data).toBeDefined();
           } else {
             expect(apiResponse.data.length).toBeGreaterThan(0);
           }
         }
-
-        console.log('\n🎉 TRADITIONAL E2E TEST PASSED: Full application stack is operational!');
         
       } catch (error: any) {
         console.error('\n❌ E2E Test Failed:', error.message);
@@ -1277,7 +1204,6 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
   describe('[Post-Test] Cleanup and Final Validation', () => {
     test('should verify all critical resources remain healthy after tests', async () => {
       if (isMockData) {
-        console.log('Using mock data - skipping final validation');
         return;
       }
 
@@ -1322,16 +1248,13 @@ describe('Serverless Stack CDKTF Integration Tests', () => {
 
       const results = await Promise.allSettled(healthChecks);
       
-      console.log('\n=== Final Health Check Results ===');
       results.forEach(result => {
         if (result.status === 'fulfilled') {
           const { service, status } = result.value as any;
-          console.log(`${service}: ${status}`);
           expect(['Healthy', 'Deploying'].includes(status)).toBe(true);
         }
       });
       
-      console.log('=================================\n');
     }, 60000);
   });
 });
