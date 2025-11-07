@@ -789,7 +789,7 @@ describe('Failure Recovery Infrastructure Integration Tests', () => {
       console.log(`  Multiple instances healthy: ${healthyInstances.length}`);
 
       // Verify ALB target group has healthy instances before testing load distribution
-      const albName = mappedOutputs.AlbDnsName.split('.')[0]; // Extract ALB name from DNS
+      const albName = mappedOutputs.AlbDnsName.split('-').slice(0, 4).join('-');
       try {
         const albResponse = await elbv2Client.send(new DescribeLoadBalancersCommand({
           Names: [albName],
@@ -880,7 +880,7 @@ describe('Failure Recovery Infrastructure Integration Tests', () => {
           MetricName: 'RequestCount',
           Dimensions: [{
             Name: 'LoadBalancer',
-            Value: mappedOutputs.AlbDnsName.split('-').slice(0, 3).join('-'), // Extract ALB name
+            Value: mappedOutputs.AlbDnsName.split('-').slice(0, 4).join('-'), // Extract ALB name
           }],
           StartTime: startTime,
           EndTime: endTime,
