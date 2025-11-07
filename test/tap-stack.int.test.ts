@@ -28,7 +28,16 @@ describe('Payment Processing VPC Integration Tests', () => {
     if (!fs.existsSync(outputsPath)) {
       throw new Error(`Outputs file not found at ${outputsPath}. Run deployment first.`);
     }
-    outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+    const rawOutputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+
+    // Handle nested CDKTF outputs format: {"StackName": {"OutputKey": "value"}}
+    // If outputs are nested under a stack name, flatten them
+    const stackKeys = Object.keys(rawOutputs);
+    if (stackKeys.length === 1 && typeof rawOutputs[stackKeys[0]] === 'object') {
+      outputs = rawOutputs[stackKeys[0]];
+    } else {
+      outputs = rawOutputs;
+    }
 
     // Extract VPC ID and region from outputs
     vpcId = outputs.VpcId || outputs.vpc_id;
