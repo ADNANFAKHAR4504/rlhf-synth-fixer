@@ -662,8 +662,6 @@ export class SecurityServicesModule extends Construct {
       },
     });
 
-
-
     // Create SNS Topic for notifications
     this.snsTopic = new aws.snsTopic.SnsTopic(this, 'security-alerts', {
       name: `security-alerts-topic-${tags['Environment'] || 'dev'}`,
@@ -749,7 +747,6 @@ export class SecurityServicesModule extends Construct {
         ],
       }),
     });
-
 
     this.cloudTrail = new aws.cloudtrail.Cloudtrail(this, 'trail', {
       name: `security-trail-${tags['Environment'] || 'dev'}`,
