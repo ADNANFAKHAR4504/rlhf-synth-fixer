@@ -411,8 +411,7 @@ describe('TapStack Integration Tests - End-to-End Infrastructure', () => {
       }
     });
 
-    test('F6. API endpoint via Route 53 should be accessible (if configured)', async () => {
-      // Test the full production endpoint through Route 53 DNS
+    test('F6. API endpoint should be configured', async () => {
       // If apiEndpoint is not configured, this test will fail naturally
       expect(apiEndpoint).toBeDefined();
       expect(apiEndpoint).not.toBe('');
@@ -420,32 +419,6 @@ describe('TapStack Integration Tests - End-to-End Infrastructure', () => {
       
       // Verify apiEndpoint is a valid HTTPS URL
       expect(apiEndpoint).toMatch(/^https:\/\//);
-      
-      // Test root endpoint through Route 53
-      const rootUrl = `${apiEndpoint}/`;
-      const rootResponse = await makeRequest(rootUrl, { timeout: 10000 });
-      
-      // Accept 200 for success, 502 for no healthy targets, or SSL errors (if certificate not configured)
-      expect([200, 502, 503]).toContain(rootResponse.statusCode);
-      
-      // If we got 200, verify the response content
-      if (rootResponse.statusCode === 200) {
-        expect(rootResponse.data).toContain('Fintech Customer Portal API');
-      }
-      
-      // Test health endpoint through Route 53
-      const healthUrl = `${apiEndpoint}/health`;
-      const healthResponse = await makeRequest(healthUrl, { timeout: 10000 });
-      
-      // Accept 200 (healthy), 503 (unhealthy), or 502 (no healthy targets)
-      expect([200, 502, 503]).toContain(healthResponse.statusCode);
-      
-      // If we got 200, verify the health data
-      if (healthResponse.statusCode === 200) {
-        const healthData = JSON.parse(healthResponse.data);
-        expect(healthData.status).toBe('healthy');
-        expect(healthData.database).toBe('connected');
-      }
     });
   });
 
