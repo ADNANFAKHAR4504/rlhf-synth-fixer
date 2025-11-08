@@ -2154,7 +2154,7 @@
             "Type": "AWS::CloudWatch::Dashboard",
             "Properties": {
                 "DashboardName": {
-                    "Fn::Sub": "${EnvironmentName}-ecs-dashboard"
+                    "Fn::Sub": "${EnvironmentName}-ecs-dashboard-${AWS::Region}"
                 },
                 "DashboardBody": {
                     "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/ECS\", \"CPUUtilization\", \"ClusterName\", \"${ECSCluster}\", \"ServiceName\", \"${ApiService}\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"API Service CPU\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/ECS\", \"CPUUtilization\", \"ClusterName\", \"${ECSCluster}\", \"ServiceName\", \"${WorkerService}\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Worker Service CPU\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/ApplicationELB\", \"TargetResponseTime\", \"LoadBalancer\", \"${ApplicationLoadBalancer}\"]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"ALB Target Response Time\"\n      }\n    }\n  ]\n}\n"

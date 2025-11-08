@@ -1178,7 +1178,7 @@ Resources:
   MonitoringDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardName: !Sub ${EnvironmentName}-ecs-dashboard
+      DashboardName: !Sub ${EnvironmentName}-ecs-dashboard-${AWS::Region}
       DashboardBody: !Sub |
         {
           "widgets": [
