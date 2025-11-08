@@ -1,7 +1,7 @@
 const AWS = require('aws-sdk');
 
 // Environment configuration
-const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'pr5606';
+const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'pr6126';
 const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
 
 // Initialize AWS clients
@@ -20,8 +20,9 @@ async function discoverResources() {
     const apis = await apigateway.getRestApis().promise();
     const webhookApi = apis.items.find(
       (api: any) =>
-        api.name.includes('webhook-processor') ||
-        api.name.includes('webhook-api')
+        (api.name.includes('webhook-processor') ||
+        api.name.includes('webhook-api')) &&
+        api.name.includes(ENVIRONMENT_SUFFIX)
     );
 
     if (!webhookApi) {
@@ -407,9 +408,9 @@ describe('Webhook Processing System Integration Tests', () => {
       );
 
       clearTimeout(timeoutId);
-      expect(response.status).toBe(500);
+      expect(response.status).toBe(400);
       const responseData = await response.json();
-      expect(responseData).toHaveProperty('error', 'Internal server error');
+      expect(responseData).toHaveProperty('error', 'Invalid JSON payload');
       expect(responseData).toHaveProperty('correlationId');
     });
   });

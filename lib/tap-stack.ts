@@ -308,7 +308,7 @@ export class TapStack extends TerraformStack {
           },
           {
             Effect: 'Allow',
-            Action: ['dynamodb:Query', 'dynamodb:GetItem'],
+            Action: ['dynamodb:Query', 'dynamodb:GetItem', 'dynamodb:Scan'],
             Resource: transactionTable.arn,
           },
         ],
@@ -338,40 +338,27 @@ export class TapStack extends TerraformStack {
     });
 
     // Webhook Ingestion Lambda Code
-    const ingestionCode = `const AWS = require('aws-sdk');
-const { v4: uuidv4 } = require('uuid');
+    const ingestionCode = `const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
+const { randomUUID } = require('crypto');
 
-const sqs = new AWS.SQS();
+const sqs = new SQSClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
 exports.handler = async (event) => {
-  console.log('Received webhook:', JSON.stringify(event, null, 2));
-  
   try {
-    const correlationId = uuidv4();
-    
-    // Extract provider from path parameters
+    const correlationId = randomUUID();
     const provider = event.pathParameters?.provider || 'unknown';
     
-    // Parse webhook payload
     let payload;
     try {
       payload = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
     } catch (parseError) {
-      console.error('Failed to parse webhook payload:', parseError);
       return {
-        statusCode: 500,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*'
-        },
-        body: JSON.stringify({
-          error: 'Internal server error',
-          correlationId: correlationId
-        })
+        statusCode: 400,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: 'Invalid JSON payload', correlationId })
       };
     }
     
-    // Send message to SQS for processing
     const message = {
       correlationId,
       provider,
@@ -380,176 +367,130 @@ exports.handler = async (event) => {
       headers: event.headers || {}
     };
     
-    await sqs.sendMessage({
+    await sqs.send(new SendMessageCommand({
       QueueUrl: process.env.QUEUE_URL,
       MessageBody: JSON.stringify(message),
       MessageAttributes: {
-        provider: {
-          DataType: 'String',
-          StringValue: provider
-        },
-        correlationId: {
-          DataType: 'String',
-          StringValue: correlationId
-        }
+        'provider': { DataType: 'String', StringValue: provider },
+        'correlationId': { DataType: 'String', StringValue: correlationId }
       }
-    }).promise();
-    
-    console.log('Message sent to SQS:', correlationId);
+    }));
     
     return {
       statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      },
-      body: JSON.stringify({
-        message: 'Webhook received',
-        correlationId: correlationId
-      })
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify({ message: 'Webhook received', correlationId })
     };
-    
   } catch (error) {
-    console.error('Error processing webhook:', error);
     return {
       statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      },
-      body: JSON.stringify({
-        error: 'Internal server error',
-        correlationId: uuidv4()
-      })
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify({ error: 'Internal server error', correlationId: randomUUID() })
     };
   }
 };`;
 
     // Webhook Processing Lambda Code
-    const processingCode = `const AWS = require('aws-sdk');
-const { v4: uuidv4 } = require('uuid');
+    const processingCode = `const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { randomUUID } = require('crypto');
 
-const s3 = new AWS.S3();
-const dynamodb = new AWS.DynamoDB.DocumentClient();
+const dynamodb = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1' });
+const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
 
 exports.handler = async (event) => {
-  console.log('Processing SQS messages:', JSON.stringify(event, null, 2));
-  
   const results = [];
   
   for (const record of event.Records) {
     try {
       const message = JSON.parse(record.body);
-      const transactionId = uuidv4();
+      const transactionId = randomUUID();
+      const { correlationId, provider, payload, timestamp } = message;
       
-      console.log('Processing message:', message.correlationId);
+      const s3Key = \`webhooks/\${provider}/\${transactionId}.json\`;
+      const s3Object = { correlationId, provider, payload, timestamp, transactionId };
       
-      // Store raw payload in S3
-      const s3Key = \`webhooks/\${message.provider}/\${transactionId}.json\`;
-      
-      await s3.putObject({
+      await s3.send(new PutObjectCommand({
         Bucket: process.env.BUCKET_NAME,
         Key: s3Key,
-        Body: JSON.stringify(message),
-        ContentType: 'application/json',
-        ServerSideEncryption: 'AES256'
-      }).promise();
+        Body: JSON.stringify(s3Object, null, 2),
+        ContentType: 'application/json'
+      }));
       
-      // Store transaction record in DynamoDB
-      await dynamodb.put({
+      await dynamodb.send(new PutItemCommand({
         TableName: process.env.TABLE_NAME,
         Item: {
-          transactionId,
-          correlationId: message.correlationId,
-          provider: message.provider,
-          status: 'processed',
-          s3Key,
-          processedAt: new Date().toISOString(),
-          createdAt: new Date().toISOString()
+          transactionId: { S: transactionId },
+          timestamp: { S: timestamp },
+          correlationId: { S: correlationId },
+          provider: { S: provider },
+          status: { S: 'processed' },
+          s3Key: { S: s3Key },
+          processedAt: { S: new Date().toISOString() }
         }
-      }).promise();
+      }));
       
-      console.log('Successfully processed:', transactionId);
-      results.push({ success: true, transactionId });
-      
+      results.push({ messageId: record.messageId, status: 'success', transactionId, correlationId });
     } catch (error) {
-      console.error('Error processing record:', error);
-      results.push({ success: false, error: error.message });
+      results.push({ messageId: record.messageId, status: 'error', error: error.message });
     }
   }
   
-  return {
-    batchItemFailures: results
-      .filter(r => !r.success)
-      .map((_, index) => ({ itemIdentifier: event.Records[index].messageId }))
-  };
+  return results;
 };`;
 
     // Status Query Lambda Code
-    const statusCode = `const AWS = require('aws-sdk');
+    const statusCode = `const { DynamoDBClient, QueryCommand } = require('@aws-sdk/client-dynamodb');
 
-const dynamodb = new AWS.DynamoDB.DocumentClient();
+const dynamodb = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
 exports.handler = async (event) => {
-  console.log('Status query:', JSON.stringify(event, null, 2));
-  
   try {
     const transactionId = event.pathParameters?.transactionId;
     
     if (!transactionId) {
       return {
         statusCode: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*'
-        },
-        body: JSON.stringify({
-          error: 'Transaction ID is required'
-        })
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: 'Transaction ID is required' })
       };
     }
     
-    // Query DynamoDB for transaction
-    const result = await dynamodb.get({
+    const result = await dynamodb.send(new QueryCommand({
       TableName: process.env.TABLE_NAME,
-      Key: {
-        transactionId: transactionId
-      }
-    }).promise();
+      KeyConditionExpression: 'transactionId = :tid',
+      ExpressionAttributeValues: { ':tid': { S: transactionId } }
+    }));
     
-    if (!result.Item) {
+    if (!result.Items || result.Items.length === 0) {
       return {
         statusCode: 404,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*'
-        },
-        body: JSON.stringify({
-          error: 'Transaction not found'
-        })
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: 'Transaction not found' })
       };
     }
+    
+    const item = result.Items[0];
+    const transaction = {
+      transactionId: item.transactionId.S,
+      correlationId: item.correlationId.S,
+      provider: item.provider.S,
+      status: item.status.S,
+      s3Key: item.s3Key.S,
+      processedAt: item.processedAt.S,
+      timestamp: item.timestamp?.S
+    };
     
     return {
       statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      },
-      body: JSON.stringify(result.Item)
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify(transaction)
     };
-    
   } catch (error) {
-    console.error('Error querying status:', error);
     return {
       statusCode: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      },
-      body: JSON.stringify({
-        error: 'Internal server error'
-      })
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify({ error: 'Internal server error' })
     };
   }
 };`;
@@ -559,16 +500,13 @@ exports.handler = async (event) => {
     fs.writeFileSync(path.join(processingDir, 'index.js'), processingCode);
     fs.writeFileSync(path.join(statusDir, 'index.js'), statusCode);
 
-    // Write package.json files with required dependencies
+    // Write package.json files - no external dependencies needed for Node.js 18.x
     const packageJson = {
       name: 'webhook-lambda',
       version: '1.0.0',
       main: 'index.js',
       engines: {
         node: '>=18.0.0',
-      },
-      dependencies: {
-        uuid: '^9.0.1',
       },
     };
 
@@ -585,47 +523,12 @@ exports.handler = async (event) => {
       JSON.stringify(packageJson, null, 2)
     );
 
-    // Create node_modules directories and install uuid package manually
-    // This ensures the Lambda functions have the required dependencies
+    // Create node_modules directories - no external dependencies needed
     const createNodeModules = (dir: string) => {
       const nodeModulesDir = path.join(dir, 'node_modules');
-      const uuidDir = path.join(nodeModulesDir, 'uuid');
-
       if (!fs.existsSync(nodeModulesDir)) {
         fs.mkdirSync(nodeModulesDir, { recursive: true });
       }
-
-      if (!fs.existsSync(uuidDir)) {
-        fs.mkdirSync(uuidDir, { recursive: true });
-      }
-
-      // Create a minimal uuid implementation
-      const uuidImplementation = `
-// Minimal UUID v4 implementation for Lambda
-function v4() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
-
-module.exports = { v4 };
-`;
-
-      fs.writeFileSync(path.join(uuidDir, 'index.js'), uuidImplementation);
-
-      // Create package.json for uuid module
-      const uuidPackageJson = {
-        name: 'uuid',
-        version: '9.0.1',
-        main: 'index.js',
-      };
-
-      fs.writeFileSync(
-        path.join(uuidDir, 'package.json'),
-        JSON.stringify(uuidPackageJson, null, 2)
-      );
     };
 
     // Create node_modules for each Lambda function
@@ -917,7 +820,7 @@ module.exports = { v4 };
       restApiId: api.id,
       resourceId: transactionResource.id,
       httpMethod: 'GET',
-      authorization: 'AWS_IAM',
+      authorization: 'NONE',
     });
 
     const statusIntegration = new ApiGatewayIntegration(
