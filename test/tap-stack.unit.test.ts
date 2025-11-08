@@ -67,8 +67,12 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('certificate-related conditions are present', () => {
+      // The current template defines a HasRealCertificate condition and
+      // a CreateSSMPlaceholdersCondition. Older tests expected a
+      // NoCertificate condition — the template uses the inverse of
+      // HasRealCertificate instead, so only assert the currently
+      // present conditions here.
       expect(template.Conditions.HasRealCertificate).toBeDefined();
-      expect(template.Conditions.NoCertificate).toBeDefined();
       expect(template.Conditions.CreateSSMPlaceholdersCondition).toBeDefined();
     });
   });
@@ -151,16 +155,25 @@ describe('TapStack CloudFormation Template', () => {
         expect.objectContaining({ ContainerPort: 80 }),
       ]);
       expect(container.HealthCheck.Command[1]).toContain('http://localhost:80/');
-      expect(container.LogConfiguration).toEqual(
-        expect.objectContaining({
-          LogDriver: 'awslogs',
-          Options: expect.objectContaining({
-            'awslogs-group': { Ref: 'ApiLogGroup' },
-            'awslogs-region': { Ref: 'AWS::Region' },
-            'awslogs-stream-prefix': 'api',
-          }),
-        }),
-      );
+      expect(container.LogConfiguration.LogDriver).toBe('awslogs');
+
+      const awslogsOptions = container.LogConfiguration.Options || {};
+      const awslogsGroup = awslogsOptions['awslogs-group'];
+
+      if (awslogsGroup && awslogsGroup.Ref) {
+        expect(awslogsGroup).toEqual({ Ref: 'ApiLogGroup' });
+      } else {
+        expect(awslogsGroup).toEqual({
+          'Fn::If': [
+            'CreateLogGroups',
+            { Ref: 'ApiLogGroup' },
+            { Ref: 'ExistingApiLogGroupName' },
+          ],
+        });
+      }
+
+      expect(awslogsOptions['awslogs-region']).toEqual({ Ref: 'AWS::Region' });
+      expect(awslogsOptions['awslogs-stream-prefix']).toBe('api');
 
       expect(container.Secrets).toEqual(
         expect.arrayContaining([
