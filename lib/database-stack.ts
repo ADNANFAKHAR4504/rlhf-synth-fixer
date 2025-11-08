@@ -233,8 +233,9 @@ export class DatabaseStack extends Construct {
 
     // DR Regional Cluster (read-only replica)
     // Changed construct ID to force Terraform to treat this as a new resource
+    // Also changed cluster identifier to avoid AWS name reservation conflicts
     const drCluster = new RdsCluster(this, 'dr-cluster-v2', {
-      clusterIdentifier: `payment-dr-${environmentSuffix}`,
+      clusterIdentifier: `payment-dr-${environmentSuffix}-v2`,
       engine: 'aurora-postgresql',
       engineVersion: '14.6',
       dbSubnetGroupName: drSubnetGroup.name,
@@ -256,7 +257,7 @@ export class DatabaseStack extends Construct {
 
     // DR cluster instance
     new RdsClusterInstance(this, 'dr-instance-1-v2', {
-      identifier: `payment-dr-${environmentSuffix}-1`,
+      identifier: `payment-dr-${environmentSuffix}-v2-1`,
       clusterIdentifier: drCluster.id,
       instanceClass: 'db.r5.large',
       engine: 'aurora-postgresql',
