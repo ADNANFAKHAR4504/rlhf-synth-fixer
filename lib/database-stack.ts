@@ -23,6 +23,8 @@ export interface DatabaseStackProps {
 
 export interface DatabaseStackOutputs {
   globalClusterId: string;
+  primaryClusterId: string;
+  drClusterId: string;
   primaryClusterEndpoint: string;
   primaryClusterReaderEndpoint: string;
   drClusterEndpoint: string;
@@ -265,6 +267,8 @@ export class DatabaseStack extends Construct {
 
     this.outputs = {
       globalClusterId: globalCluster.id,
+      primaryClusterId: primaryCluster.clusterIdentifier,
+      drClusterId: drCluster.clusterIdentifier,
       primaryClusterEndpoint: primaryCluster.endpoint,
       primaryClusterReaderEndpoint: primaryCluster.readerEndpoint,
       drClusterEndpoint: drCluster.endpoint,

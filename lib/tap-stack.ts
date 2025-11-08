@@ -147,8 +147,8 @@ export class TapStack extends TerraformStack {
       drAlbArn: drLb.outputs.albArn,
       primaryAsgName: primaryCompute.outputs.asgName,
       drAsgName: drCompute.outputs.asgName,
-      primaryDbClusterId: databaseStack.outputs.globalClusterId,
-      drDbClusterId: databaseStack.outputs.globalClusterId,
+      primaryDbClusterId: databaseStack.outputs.primaryClusterId,
+      drDbClusterId: databaseStack.outputs.drClusterId,
       primaryTargetGroupArn: primaryLb.outputs.targetGroupArn,
       drTargetGroupArn: drLb.outputs.targetGroupArn,
       primaryProvider: primaryProvider,
@@ -196,6 +196,46 @@ export class TapStack extends TerraformStack {
     new TerraformOutput(this, 'dr_sns_topic', {
       value: monitoringStack.outputs.drSnsTopicArn,
       description: 'DR SNS topic ARN for alarms',
+    });
+
+    new TerraformOutput(this, 'global_cluster_id', {
+      value: databaseStack.outputs.globalClusterId,
+      description: 'Global cluster identifier',
+    });
+
+    new TerraformOutput(this, 'primary_cluster_id', {
+      value: databaseStack.outputs.primaryClusterId,
+      description: 'Primary cluster identifier',
+    });
+
+    new TerraformOutput(this, 'dr_cluster_id', {
+      value: databaseStack.outputs.drClusterId,
+      description: 'DR cluster identifier',
+    });
+
+    new TerraformOutput(this, 'primary_vpc_id', {
+      value: primaryNetworking.outputs.vpcId,
+      description: 'Primary VPC ID',
+    });
+
+    new TerraformOutput(this, 'dr_vpc_id', {
+      value: drNetworking.outputs.vpcId,
+      description: 'DR VPC ID',
+    });
+
+    new TerraformOutput(this, 'primary_target_group_arn', {
+      value: primaryLb.outputs.targetGroupArn,
+      description: 'Primary target group ARN',
+    });
+
+    new TerraformOutput(this, 'primary_asg_name', {
+      value: primaryCompute.outputs.asgName,
+      description: 'Primary Auto Scaling Group name',
+    });
+
+    new TerraformOutput(this, 'dr_asg_name', {
+      value: drCompute.outputs.asgName,
+      description: 'DR Auto Scaling Group name',
     });
   }
 }
