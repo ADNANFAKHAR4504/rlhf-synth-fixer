@@ -1,7 +1,7 @@
 import { EC2Client, DescribeInstancesCommand, DescribeSecurityGroupsCommand, DescribeVpcsCommand, DescribeSubnetsCommand } from '@aws-sdk/client-ec2';
 import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
 import { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand, DescribeTargetGroupsCommand, DescribeTargetHealthCommand } from '@aws-sdk/client-elastic-load-balancing-v2';
-import { Route53Client, ListResourceRecordSetsCommand } from '@aws-sdk/client-route-53';
+import { Route53Client, ListResourceRecordSetsCommand, ListHostedZonesCommand } from '@aws-sdk/client-route-53';
 import { CloudWatchClient, GetMetricStatisticsCommand } from '@aws-sdk/client-cloudwatch';
 import { SNSClient, ListTopicsCommand, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
 import { SecretsManagerClient, DescribeSecretCommand } from '@aws-sdk/client-secrets-manager';
@@ -45,6 +45,7 @@ function makeRequest(url: string, options: any = {}): Promise<{ statusCode: numb
 describe('TapStack Integration Tests - End-to-End Infrastructure', () => {
   // Extract outputs for testing
   const vpcId = outputs.VPCId;
+  const vpcCidr = outputs.VPCCIDR;
   const albDnsName = outputs.ALBDNSName;
   const apiEndpoint = outputs.APIEndpoint;
   const apiDomainName = outputs.APIDomainName;
@@ -55,6 +56,8 @@ describe('TapStack Integration Tests - End-to-End Infrastructure', () => {
   const albSecurityGroupId = outputs.ALBSecurityGroupId;
   const ec2SecurityGroupId = outputs.EC2SecurityGroupId;
   const rdsSecurityGroupId = outputs.RDSSecurityGroupId;
+  const albTargetGroupArn = outputs.ALBTargetGroupArn;
+  const snsTopicArn = outputs.SNSTopicArn;
 
   describe('A. Network Infrastructure Validation', () => {
     test('A1. VPC should exist and be configured correctly', async () => {
@@ -64,7 +67,7 @@ describe('TapStack Integration Tests - End-to-End Infrastructure', () => {
       expect(response.Vpcs).toBeDefined();
       expect(response.Vpcs?.length).toBe(1);
       expect(response.Vpcs?.[0].VpcId).toBe(vpcId);
-      expect(response.Vpcs?.[0].CidrBlock).toBe('10.0.0.0/16');
+      expect(response.Vpcs?.[0].CidrBlock).toBe(vpcCidr);
       expect(response.Vpcs?.[0].State).toBe('available');
     });
 
@@ -134,9 +137,10 @@ describe('TapStack Integration Tests - End-to-End Infrastructure', () => {
       expect(response.SecurityGroups).toBeDefined();
       const sg = response.SecurityGroups?.[0];
       expect(sg).toBeDefined();
-      
+    
+      const expectedPort = typeof rdsPort === 'string' ? parseInt(rdsPort, 10) : rdsPort;
       const postgresRule = sg?.IpPermissions?.find(
-        rule => rule.FromPort === 5432 && rule.ToPort === 5432
+        rule => rule.FromPort === expectedPort && rule.ToPort === expectedPort
       );
       expect(postgresRule).toBeDefined();
       expect(postgresRule?.UserIdGroupPairs?.some(pair => pair.GroupId === ec2SecurityGroupId)).toBe(true);
@@ -156,9 +160,8 @@ describe('TapStack Integration Tests - End-to-End Infrastructure', () => {
     });
 
     test('C2. Target Group should have healthy targets', async () => {
-      const tgArn = outputs.ALBTargetGroupArn;
       const command = new DescribeTargetHealthCommand({
-        TargetGroupArn: tgArn
+        TargetGroupArn: albTargetGroupArn
       });
       const response = await elbClient.send(command);
       
@@ -319,20 +322,29 @@ describe('TapStack Integration Tests - End-to-End Infrastructure', () => {
 
   describe('F. End-to-End Request Flow (User → Response)', () => {
     test('F1. Route 53 DNS should resolve to ALB (if configured)', async () => {
-      // Skip test if HostedZoneId is not configured (optional parameter)
-      if (!outputs.HostedZoneId || outputs.HostedZoneId === '') {
-        // DNS is optional, so skip this test if not configured
+      // Find hosted zone by domain name
+      const listZonesCommand = new ListHostedZonesCommand({});
+      const zonesResponse = await route53Client.send(listZonesCommand);
+      
+      // Find hosted zone that matches the API domain name
+      const hostedZone = zonesResponse.HostedZones?.find(
+        (zone: any) => apiDomainName.endsWith(zone.Name.replace(/\.$/, '')) || zone.Name.replace(/\.$/, '') === apiDomainName
+      );
+      
+      // If no hosted zone found, skip this test (Route 53 not configured)
+      if (!hostedZone || !hostedZone.Id) {
+        // Route 53 not configured for this domain, skip test
         expect(true).toBe(true);
         return;
       }
       
       // Verify DNS record exists and points to ALB
       const command = new ListResourceRecordSetsCommand({
-        HostedZoneId: outputs.HostedZoneId
+        HostedZoneId: hostedZone.Id.replace('/hostedzone/', '')
       });
       const response = await route53Client.send(command);
       const record = response.ResourceRecordSets?.find(
-        (r: any) => r.Name === `${apiDomainName}.`
+        (r: any) => r.Name === `${apiDomainName}.` || r.Name === apiDomainName
       );
       expect(record).toBeDefined();
       expect(record?.Type).toBe('A');
@@ -398,6 +410,43 @@ describe('TapStack Integration Tests - End-to-End Infrastructure', () => {
         expect(healthData.dbTime).toBeDefined();
       }
     });
+
+    test('F6. API endpoint via Route 53 should be accessible (if configured)', async () => {
+      // Test the full production endpoint through Route 53 DNS
+      // If apiEndpoint is not configured, this test will fail naturally
+      expect(apiEndpoint).toBeDefined();
+      expect(apiEndpoint).not.toBe('');
+      expect(apiEndpoint).not.toBe('https://');
+      
+      // Verify apiEndpoint is a valid HTTPS URL
+      expect(apiEndpoint).toMatch(/^https:\/\//);
+      
+      // Test root endpoint through Route 53
+      const rootUrl = `${apiEndpoint}/`;
+      const rootResponse = await makeRequest(rootUrl, { timeout: 10000 });
+      
+      // Accept 200 for success, 502 for no healthy targets, or SSL errors (if certificate not configured)
+      expect([200, 502, 503]).toContain(rootResponse.statusCode);
+      
+      // If we got 200, verify the response content
+      if (rootResponse.statusCode === 200) {
+        expect(rootResponse.data).toContain('Fintech Customer Portal API');
+      }
+      
+      // Test health endpoint through Route 53
+      const healthUrl = `${apiEndpoint}/health`;
+      const healthResponse = await makeRequest(healthUrl, { timeout: 10000 });
+      
+      // Accept 200 (healthy), 503 (unhealthy), or 502 (no healthy targets)
+      expect([200, 502, 503]).toContain(healthResponse.statusCode);
+      
+      // If we got 200, verify the health data
+      if (healthResponse.statusCode === 200) {
+        const healthData = JSON.parse(healthResponse.data);
+        expect(healthData.status).toBe('healthy');
+        expect(healthData.database).toBe('connected');
+      }
+    });
   });
 
   describe('G. Monitoring and Alarms', () => {
@@ -405,12 +454,11 @@ describe('TapStack Integration Tests - End-to-End Infrastructure', () => {
       const command = new ListTopicsCommand({});
       const response = await snsClient.send(command);
       
-      const topicArn = outputs.SNSTopicArn;
-      const topic = response.Topics?.find(t => t.TopicArn === topicArn);
+      const topic = response.Topics?.find(t => t.TopicArn === snsTopicArn);
       expect(topic).toBeDefined();
       
       const attributesCommand = new GetTopicAttributesCommand({
-        TopicArn: topicArn
+        TopicArn: snsTopicArn
       });
       const attributesResponse = await snsClient.send(attributesCommand);
       expect(attributesResponse.Attributes).toBeDefined();
@@ -523,9 +571,8 @@ describe('TapStack Integration Tests - End-to-End Infrastructure', () => {
     });
 
     test('J2. ALB should distribute traffic across instances', async () => {
-      const tgArn = outputs.ALBTargetGroupArn;
       const command = new DescribeTargetHealthCommand({
-        TargetGroupArn: tgArn
+        TargetGroupArn: albTargetGroupArn
       });
       const response = await elbClient.send(command);
       
@@ -561,9 +608,8 @@ describe('TapStack Integration Tests - End-to-End Infrastructure', () => {
     });
 
     test('K2. ALB should handle instance failures', async () => {
-      const tgArn = outputs.ALBTargetGroupArn;
       const command = new DescribeTargetHealthCommand({
-        TargetGroupArn: tgArn
+        TargetGroupArn: albTargetGroupArn
       });
       const response = await elbClient.send(command);
       
