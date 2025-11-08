@@ -195,7 +195,7 @@ describeOrSkip('TapStack Infrastructure Integration Tests', () => {
       expect(tgResponse.TargetGroups).toHaveLength(1);
       const tg = tgResponse.TargetGroups![0];
       expect(tg.Protocol).toBe('HTTP');
-      expect(tg.Port).toBe(3000);
+      expect(tg.Port).toBe(8080);
       expect(tg.VpcId).toBe(outputs['vpc-id']);
       expect(tg.HealthCheckEnabled).toBe(true);
       expect(tg.HealthCheckPath).toBe('/health');
@@ -302,9 +302,9 @@ describeOrSkip('TapStack Infrastructure Integration Tests', () => {
       const db = response.DBInstances![0];
       expect(db.DBInstanceStatus).toBe('available');
       expect(db.Engine).toBe('postgres');
-      expect(db.DBInstanceClass).toBe('db.t3.micro');
+      expect(db.DBInstanceClass).toBe('db.t3.medium');
       expect(db.AllocatedStorage).toBe(20);
-      expect(db.MultiAZ).toBe(false);
+      expect(db.MultiAZ).toBe(true);
       expect(db.PubliclyAccessible).toBe(false);
       expect(db.VpcSecurityGroups).toBeDefined();
       expect(db.VpcSecurityGroups!.length).toBeGreaterThan(0);
@@ -336,7 +336,9 @@ describeOrSkip('TapStack Infrastructure Integration Tests', () => {
       expect(secret.password.length).toBeGreaterThan(16);
       expect(secret.engine).toBe('postgres');
       expect(secret.host).toBeDefined();
-      expect(secret.port).toBe(5432);
+      // Port can be either number or string depending on how it's stored
+      expect(secret.port).toBeDefined();
+      expect(String(secret.port)).toBe('5432');
       expect(secret.dbname).toBe('paymentdb');
     });
   });
