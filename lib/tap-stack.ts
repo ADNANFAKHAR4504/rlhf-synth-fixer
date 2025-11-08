@@ -910,10 +910,6 @@ module.exports = { v4 };
       resourceId: providerResource.id,
       httpMethod: 'POST',
       authorization: 'NONE',
-      requestValidatorId: requestValidator.id,
-      requestParameters: {
-        'method.request.path.provider': true,
-      },
     });
 
     const webhookIntegration = new ApiGatewayIntegration(
@@ -935,10 +931,6 @@ module.exports = { v4 };
       resourceId: transactionResource.id,
       httpMethod: 'GET',
       authorization: 'AWS_IAM',
-      requestValidatorId: requestValidator.id,
-      requestParameters: {
-        'method.request.path.transactionId': true,
-      },
     });
 
     const statusIntegration = new ApiGatewayIntegration(
@@ -960,7 +952,7 @@ module.exports = { v4 };
       action: 'lambda:InvokeFunction',
       functionName: ingestionLambda.functionName,
       principal: 'apigateway.amazonaws.com',
-      sourceArn: `${api.executionArn}/*/*`,
+      sourceArn: `${api.executionArn}/*/*/*`,
     });
 
     new LambdaPermission(this, 'status-api-permission', {
@@ -968,7 +960,7 @@ module.exports = { v4 };
       action: 'lambda:InvokeFunction',
       functionName: statusLambda.functionName,
       principal: 'apigateway.amazonaws.com',
-      sourceArn: `${api.executionArn}/*/*`,
+      sourceArn: `${api.executionArn}/*/*/*`,
     });
 
     // API Deployment
