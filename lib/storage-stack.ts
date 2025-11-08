@@ -64,13 +64,17 @@ export class StorageStack extends Construct {
       provider: primaryProvider,
     });
 
-    new S3BucketVersioningA(this, 'primary-bucket-versioning', {
-      bucket: primaryBucket.id,
-      versioningConfiguration: {
-        status: 'Enabled',
-      },
-      provider: primaryProvider,
-    });
+    const primaryVersioning = new S3BucketVersioningA(
+      this,
+      'primary-bucket-versioning',
+      {
+        bucket: primaryBucket.id,
+        versioningConfiguration: {
+          status: 'Enabled',
+        },
+        provider: primaryProvider,
+      }
+    );
 
     // DR S3 Bucket (us-east-2)
     const drBucket = new S3Bucket(this, 'dr-bucket', {
@@ -93,7 +97,7 @@ export class StorageStack extends Construct {
       provider: drProvider,
     });
 
-    new S3BucketVersioningA(this, 'dr-bucket-versioning', {
+    const drVersioning = new S3BucketVersioningA(this, 'dr-bucket-versioning', {
       bucket: drBucket.id,
       versioningConfiguration: {
         status: 'Enabled',
@@ -133,6 +137,7 @@ export class StorageStack extends Construct {
         },
       ],
       provider: primaryProvider,
+      dependsOn: [primaryVersioning, drVersioning],
     });
 
     // Lifecycle policies for cost optimization

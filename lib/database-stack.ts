@@ -145,7 +145,7 @@ export class DatabaseStack extends Construct {
     const globalCluster = new RdsGlobalCluster(this, 'global-cluster', {
       globalClusterIdentifier: `payment-global-${environmentSuffix}`,
       engine: 'aurora-postgresql',
-      engineVersion: '13.7',
+      engineVersion: '14.6',
       databaseName: 'payments',
       storageEncrypted: true,
       deletionProtection: false,
@@ -155,7 +155,7 @@ export class DatabaseStack extends Construct {
     const primaryCluster = new RdsCluster(this, 'primary-cluster', {
       clusterIdentifier: `payment-primary-${environmentSuffix}`,
       engine: 'aurora-postgresql',
-      engineVersion: '13.7',
+      engineVersion: '14.6',
       databaseName: 'payments',
       masterUsername: 'dbadmin',
       masterPassword: `Payment${environmentSuffix}SecurePass123!`,
@@ -184,7 +184,7 @@ export class DatabaseStack extends Construct {
         clusterIdentifier: primaryCluster.id,
         instanceClass: 'db.r5.large',
         engine: 'aurora-postgresql',
-        engineVersion: '13.7',
+        engineVersion: '14.6',
         publiclyAccessible: false,
         tags: {
           ...commonTags,
@@ -199,7 +199,7 @@ export class DatabaseStack extends Construct {
       clusterIdentifier: primaryCluster.id,
       instanceClass: 'db.r5.large',
       engine: 'aurora-postgresql',
-      engineVersion: '13.7',
+      engineVersion: '14.6',
       publiclyAccessible: false,
       tags: {
         ...commonTags,
@@ -213,7 +213,7 @@ export class DatabaseStack extends Construct {
     const drCluster = new RdsCluster(this, 'dr-cluster', {
       clusterIdentifier: `payment-dr-${environmentSuffix}`,
       engine: 'aurora-postgresql',
-      engineVersion: '13.7',
+      engineVersion: '14.6',
       dbSubnetGroupName: drSubnetGroup.name,
       vpcSecurityGroupIds: [drDbSg.id],
       globalClusterIdentifier: globalCluster.id,
@@ -233,7 +233,7 @@ export class DatabaseStack extends Construct {
       clusterIdentifier: drCluster.id,
       instanceClass: 'db.r5.large',
       engine: 'aurora-postgresql',
-      engineVersion: '13.7',
+      engineVersion: '14.6',
       publiclyAccessible: false,
       tags: {
         ...commonTags,
