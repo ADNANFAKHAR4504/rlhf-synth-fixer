@@ -618,14 +618,10 @@ export class TapStack extends TerraformStack {
         );
 
         // Wait for certificate validation to complete
-        certValidation = new AcmCertificateValidation(
-          this,
-          'cert-validation',
-          {
-            certificateArn: certificate.arn,
-            validationRecordFqdns: [certValidationRecord.fqdn],
-          }
-        );
+        certValidation = new AcmCertificateValidation(this, 'cert-validation', {
+          certificateArn: certificate.arn,
+          validationRecordFqdns: [certValidationRecord.fqdn],
+        });
 
         certificateArn = certificate.arn;
       }
@@ -679,7 +675,9 @@ export class TapStack extends TerraformStack {
     // Create HTTPS Listener (only if HTTPS is enabled and certificate is available)
     let httpsListener: LbListener | undefined;
     if (enableHttps && certificateArn) {
-      const listenerDependencies = certValidation ? [certValidation] : undefined;
+      const listenerDependencies = certValidation
+        ? [certValidation]
+        : undefined;
 
       httpsListener = new LbListener(this, 'https-listener', {
         loadBalancerArn: alb.arn,
@@ -867,7 +865,6 @@ export class TapStack extends TerraformStack {
       cluster: ecsCluster.id,
       taskDefinition: taskDefinition.arn,
       desiredCount: 3,
-      launchType: 'FARGATE',
       platformVersion: 'LATEST',
       capacityProviderStrategy: [
         {
@@ -1017,14 +1014,14 @@ export class TapStack extends TerraformStack {
 
     if (customDomain) {
       new TerraformOutput(this, 'application-url', {
-        value: enableHttps ? `https://${customDomain}` : `http://${customDomain}`,
+        value: enableHttps
+          ? `https://${customDomain}`
+          : `http://${customDomain}`,
         description: 'Application URL (custom domain)',
       });
     } else {
       new TerraformOutput(this, 'application-url', {
-        value: enableHttps
-          ? `https://${alb.dnsName}`
-          : `http://${alb.dnsName}`,
+        value: enableHttps ? `https://${alb.dnsName}` : `http://${alb.dnsName}`,
         description: 'Application URL (ALB DNS name)',
       });
     }
