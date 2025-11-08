@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'TapStack - Secure and compliant AWS infrastructure with complete foundational components'
+Description: 'TapStack - Secure and compliant AWS infrastructure with complete foundational components (us-east-1 only)'
 
 Metadata:
   cfn-lint:
