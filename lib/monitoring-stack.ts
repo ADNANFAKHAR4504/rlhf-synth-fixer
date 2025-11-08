@@ -158,7 +158,7 @@ export class MonitoringStack extends Construct {
       provider: primaryProvider,
     });
 
-    // Database Replication Lag - Primary
+    // Database Replication Lag - DR
     new CloudwatchMetricAlarm(this, 'db-replication-lag', {
       alarmName: `payment-db-replication-lag-${environmentSuffix}`,
       comparisonOperator: 'GreaterThanThreshold',
@@ -170,13 +170,13 @@ export class MonitoringStack extends Construct {
       threshold: 1000,
       alarmDescription:
         'Alert when global database replication lag exceeds 1000ms',
-      alarmActions: [primarySnsTopic.arn, drSnsTopic.arn],
+      alarmActions: [drSnsTopic.arn],
       dimensions: {
         DBClusterIdentifier: drDbClusterId,
       },
       tags: {
         ...commonTags,
-        'DR-Role': 'global',
+        'DR-Role': 'dr',
       },
       provider: drProvider,
     });
