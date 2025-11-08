@@ -1,17 +1,17 @@
 package main
 
 import (
-	// "archive/zip"
-	// "bytes"
-	// "crypto/sha256"
-	// "encoding/base64"
-	// "fmt"
-	// "os"
-	// "path/filepath"
+// "archive/zip"
+// "bytes"
+// "crypto/sha256"
+// "encoding/base64"
+// "fmt"
+// "os"
+// "path/filepath"
 
-	// "github.com/pulumi/pulumi/sdk/v3/go/pulumi"
-	// "github.com/pulumi/pulumi-aws/sdk/v6/go/aws"
-	// "github.com/pulumi/pulumi-aws/sdk/v6/go/aws/s3"
+// "github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+// "github.com/pulumi/pulumi-aws/sdk/v6/go/aws"
+// "github.com/pulumi/pulumi-aws/sdk/v6/go/aws/s3"
 )
 
 // Minimal Pulumi app entrypoint.
