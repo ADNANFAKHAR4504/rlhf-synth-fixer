@@ -1,7 +1,6 @@
 import { ApiGatewayDeployment } from '@cdktf/provider-aws/lib/api-gateway-deployment';
 import { ApiGatewayIntegration } from '@cdktf/provider-aws/lib/api-gateway-integration';
 import { ApiGatewayMethod } from '@cdktf/provider-aws/lib/api-gateway-method';
-import { ApiGatewayRequestValidator } from '@cdktf/provider-aws/lib/api-gateway-request-validator';
 import { ApiGatewayResource } from '@cdktf/provider-aws/lib/api-gateway-resource';
 import { ApiGatewayRestApi } from '@cdktf/provider-aws/lib/api-gateway-rest-api';
 import { ApiGatewayStage } from '@cdktf/provider-aws/lib/api-gateway-stage';
@@ -859,18 +858,6 @@ module.exports = { v4 };
       name: `webhook-processor-api-${environmentSuffix}`,
       description: 'Webhook processing API',
     });
-
-    // Request validator
-    const requestValidator = new ApiGatewayRequestValidator(
-      this,
-      'request-validator',
-      {
-        name: 'request-validator',
-        restApiId: api.id,
-        validateRequestBody: true,
-        validateRequestParameters: true,
-      }
-    );
 
     // Webhook resource /webhook
     const webhookResource = new ApiGatewayResource(this, 'webhook-resource', {
