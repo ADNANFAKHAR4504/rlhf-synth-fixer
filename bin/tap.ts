@@ -34,6 +34,10 @@ new TapStack(app, stackName, {
   stateBucketRegion: stateBucketRegion,
   awsRegion: awsRegion,
   defaultTags: defaultTags,
+  // HTTPS Configuration for CI/CD deployments
+  // Set to false for automated testing without domain/certificate
+  // Set to true with existingCertificateArn for production with pre-validated cert
+  enableHttps: false,
 });
 
 // Synthesize the app to generate the Terraform configuration

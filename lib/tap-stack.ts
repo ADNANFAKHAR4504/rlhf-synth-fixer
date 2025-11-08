@@ -45,6 +45,10 @@ interface TapStackProps {
   stateBucketRegion?: string;
   awsRegion?: string;
   defaultTags?: AwsProviderDefaultTags;
+  // SSL/TLS Configuration
+  enableHttps?: boolean; // Set to false for testing without domain
+  customDomain?: string; // e.g., "myapp.yourdomain.com" - if not provided, uses ALB DNS
+  existingCertificateArn?: string; // Use existing ACM certificate instead of creating new one
 }
 
 export class TapStack extends TerraformStack {
@@ -62,6 +66,11 @@ export class TapStack extends TerraformStack {
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
+
+    // SSL/TLS Configuration
+    const enableHttps = props?.enableHttps !== false; // Default to true for production
+    const customDomain = props?.customDomain;
+    const existingCertificateArn = props?.existingCertificateArn;
 
     // Configure AWS Provider
     new AwsProvider(this, 'aws', {
@@ -547,52 +556,84 @@ export class TapStack extends TerraformStack {
     });
 
     // ========================================
-    // Route53 Hosted Zone for DNS Management
+    // Route53 Hosted Zone and SSL Certificate (Conditional)
     // ========================================
 
-    // Create Route53 hosted zone for domain
-    const hostedZone = new Route53Zone(this, 'hosted-zone', {
-      name: `payment-app-${environmentSuffix}.example.com`,
-      tags: {
-        Name: `payment-zone-${environmentSuffix}`,
-        Environment: 'production',
-        Project: 'payment-app',
-      },
-    });
+    let hostedZone: Route53Zone | undefined;
+    let certificate: AcmCertificate | undefined;
+    let certValidation: AcmCertificateValidation | undefined;
+    let certificateArn: string | undefined;
+
+    if (enableHttps) {
+      if (existingCertificateArn) {
+        // Use existing certificate ARN (no validation needed)
+        certificateArn = existingCertificateArn;
+      } else if (customDomain) {
+        // Create new certificate with custom domain and Route53 validation
+        // Extract root domain for hosted zone (e.g., "yourdomain.com" from "myapp.yourdomain.com")
+        const domainParts = customDomain.split('.');
+        const rootDomain =
+          domainParts.length >= 2
+            ? domainParts.slice(-2).join('.')
+            : customDomain;
+
+        // Create Route53 hosted zone for domain
+        hostedZone = new Route53Zone(this, 'hosted-zone', {
+          name: rootDomain,
+          tags: {
+            Name: `payment-zone-${environmentSuffix}`,
+            Environment: 'production',
+            Project: 'payment-app',
+          },
+        });
+
+        // Create ACM Certificate with DNS validation
+        certificate = new AcmCertificate(this, 'alb-certificate', {
+          domainName: customDomain,
+          validationMethod: 'DNS',
+          tags: {
+            Name: `alb-cert-${environmentSuffix}`,
+            Environment: 'production',
+            Project: 'payment-app',
+          },
+          lifecycle: {
+            createBeforeDestroy: true,
+          },
+        });
+
+        // Create DNS validation record in Route53
+        const certValidationRecord = new Route53Record(
+          this,
+          'cert-validation-record',
+          {
+            zoneId: hostedZone.zoneId,
+            name: `\${tolist(${certificate.fqn}.domain_validation_options)[0].resource_record_name}`,
+            type: `\${tolist(${certificate.fqn}.domain_validation_options)[0].resource_record_type}`,
+            records: [
+              `\${tolist(${certificate.fqn}.domain_validation_options)[0].resource_record_value}`,
+            ],
+            ttl: 60,
+            allowOverwrite: true,
+          }
+        );
+
+        // Wait for certificate validation to complete
+        certValidation = new AcmCertificateValidation(
+          this,
+          'cert-validation',
+          {
+            certificateArn: certificate.arn,
+            validationRecordFqdns: [certValidationRecord.fqdn],
+          }
+        );
+
+        certificateArn = certificate.arn;
+      }
+    }
 
     // ========================================
-    // Application Load Balancer and SSL Certificate
+    // Application Load Balancer
     // ========================================
-
-    // Create ACM Certificate with DNS validation
-    const certificate = new AcmCertificate(this, 'alb-certificate', {
-      domainName: `payment-app-${environmentSuffix}.example.com`,
-      validationMethod: 'DNS',
-      tags: {
-        Name: `alb-cert-${environmentSuffix}`,
-        Environment: 'production',
-        Project: 'payment-app',
-      },
-      lifecycle: {
-        createBeforeDestroy: true,
-      },
-    });
-
-    // Create DNS validation record in Route53
-    const certValidationRecord = new Route53Record(this, 'cert-validation-record', {
-      zoneId: hostedZone.zoneId,
-      name: `\${tolist(${certificate.fqn}.domain_validation_options)[0].resource_record_name}`,
-      type: `\${tolist(${certificate.fqn}.domain_validation_options)[0].resource_record_type}`,
-      records: [`\${tolist(${certificate.fqn}.domain_validation_options)[0].resource_record_value}`],
-      ttl: 60,
-      allowOverwrite: true,
-    });
-
-    // Wait for certificate validation to complete
-    const certValidation = new AcmCertificateValidation(this, 'cert-validation', {
-      certificateArn: certificate.arn,
-      validationRecordFqdns: [certValidationRecord.fqdn],
-    });
 
     // Create Application Load Balancer
     const alb = new Lb(this, 'alb', {
@@ -635,89 +676,103 @@ export class TapStack extends TerraformStack {
       },
     });
 
-    // Create HTTPS Listener (depends on certificate validation)
-    const httpsListener = new LbListener(this, 'https-listener', {
-      loadBalancerArn: alb.arn,
-      port: 443,
-      protocol: 'HTTPS',
-      sslPolicy: 'ELBSecurityPolicy-TLS-1-2-2017-01',
-      certificateArn: certificate.arn,
-      defaultAction: [
-        {
-          type: 'forward',
-          targetGroupArn: targetGroup.arn,
-        },
-      ],
-      tags: {
-        Name: `https-listener-${environmentSuffix}`,
-        Environment: 'production',
-        Project: 'payment-app',
-      },
-      dependsOn: [certValidation],
-    });
+    // Create HTTPS Listener (only if HTTPS is enabled and certificate is available)
+    let httpsListener: LbListener | undefined;
+    if (enableHttps && certificateArn) {
+      const listenerDependencies = certValidation ? [certValidation] : undefined;
 
-    // Create path-based routing rules for /api/* and /admin/*
-    new LbListenerRule(this, 'api-path-rule', {
-      listenerArn: httpsListener.arn,
-      priority: 100,
-      action: [
-        {
-          type: 'forward',
-          targetGroupArn: targetGroup.arn,
-        },
-      ],
-      condition: [
-        {
-          pathPattern: {
-            values: ['/api/*'],
+      httpsListener = new LbListener(this, 'https-listener', {
+        loadBalancerArn: alb.arn,
+        port: 443,
+        protocol: 'HTTPS',
+        sslPolicy: 'ELBSecurityPolicy-TLS-1-2-2017-01',
+        certificateArn: certificateArn,
+        defaultAction: [
+          {
+            type: 'forward',
+            targetGroupArn: targetGroup.arn,
           },
+        ],
+        tags: {
+          Name: `https-listener-${environmentSuffix}`,
+          Environment: 'production',
+          Project: 'payment-app',
         },
-      ],
-      tags: {
-        Name: `api-path-rule-${environmentSuffix}`,
-        Environment: 'production',
-        Project: 'payment-app',
-      },
-    });
+        dependsOn: listenerDependencies,
+      });
+    }
 
-    new LbListenerRule(this, 'admin-path-rule', {
-      listenerArn: httpsListener.arn,
-      priority: 101,
-      action: [
-        {
-          type: 'forward',
-          targetGroupArn: targetGroup.arn,
-        },
-      ],
-      condition: [
-        {
-          pathPattern: {
-            values: ['/admin/*'],
+    // Create path-based routing rules for /api/* and /admin/* (only if HTTPS listener exists)
+    if (httpsListener) {
+      new LbListenerRule(this, 'api-path-rule', {
+        listenerArn: httpsListener.arn,
+        priority: 100,
+        action: [
+          {
+            type: 'forward',
+            targetGroupArn: targetGroup.arn,
           },
+        ],
+        condition: [
+          {
+            pathPattern: {
+              values: ['/api/*'],
+            },
+          },
+        ],
+        tags: {
+          Name: `api-path-rule-${environmentSuffix}`,
+          Environment: 'production',
+          Project: 'payment-app',
         },
-      ],
-      tags: {
-        Name: `admin-path-rule-${environmentSuffix}`,
-        Environment: 'production',
-        Project: 'payment-app',
-      },
-    });
+      });
 
-    // Create HTTP Listener (redirect to HTTPS)
+      new LbListenerRule(this, 'admin-path-rule', {
+        listenerArn: httpsListener.arn,
+        priority: 101,
+        action: [
+          {
+            type: 'forward',
+            targetGroupArn: targetGroup.arn,
+          },
+        ],
+        condition: [
+          {
+            pathPattern: {
+              values: ['/admin/*'],
+            },
+          },
+        ],
+        tags: {
+          Name: `admin-path-rule-${environmentSuffix}`,
+          Environment: 'production',
+          Project: 'payment-app',
+        },
+      });
+    }
+
+    // Create HTTP Listener (redirect to HTTPS if enabled, otherwise forward to target group)
     new LbListener(this, 'http-listener', {
       loadBalancerArn: alb.arn,
       port: 80,
       protocol: 'HTTP',
-      defaultAction: [
-        {
-          type: 'redirect',
-          redirect: {
-            port: '443',
-            protocol: 'HTTPS',
-            statusCode: 'HTTP_301',
-          },
-        },
-      ],
+      defaultAction: enableHttps
+        ? [
+            {
+              type: 'redirect',
+              redirect: {
+                port: '443',
+                protocol: 'HTTPS',
+                statusCode: 'HTTP_301',
+              },
+            },
+          ]
+        : [
+            {
+              type: 'forward',
+              targetGroupArn: targetGroup.arn,
+            },
+          ],
       tags: {
         Name: `http-listener-${environmentSuffix}`,
         Environment: 'production',
@@ -725,17 +780,19 @@ export class TapStack extends TerraformStack {
       },
     });
 
-    // Create Route53 A record for ALB
-    new Route53Record(this, 'alb-alias-record', {
-      zoneId: hostedZone.zoneId,
-      name: `payment-app-${environmentSuffix}.example.com`,
-      type: 'A',
-      alias: {
-        name: alb.dnsName,
-        zoneId: alb.zoneId,
-        evaluateTargetHealth: true,
-      },
-    });
+    // Create Route53 A record for ALB (only if custom domain is configured)
+    if (hostedZone && customDomain) {
+      new Route53Record(this, 'alb-alias-record', {
+        zoneId: hostedZone.zoneId,
+        name: customDomain,
+        type: 'A',
+        alias: {
+          name: alb.dnsName,
+          zoneId: alb.zoneId,
+          evaluateTargetHealth: true,
+        },
+      });
+    }
 
     // ========================================
     // ECS Task Definition and Service
@@ -838,7 +895,7 @@ export class TapStack extends TerraformStack {
         Environment: 'production',
         Project: 'payment-app',
       },
-      dependsOn: [httpsListener],
+      dependsOn: httpsListener ? [httpsListener] : undefined,
     });
 
     // ========================================
@@ -944,24 +1001,44 @@ export class TapStack extends TerraformStack {
       description: 'AWS Region',
     });
 
-    new TerraformOutput(this, 'hosted-zone-id', {
-      value: hostedZone.zoneId,
-      description: 'Route53 Hosted Zone ID',
-    });
+    // Conditional outputs based on configuration
+    if (hostedZone) {
+      new TerraformOutput(this, 'hosted-zone-id', {
+        value: hostedZone.zoneId,
+        description: 'Route53 Hosted Zone ID',
+      });
 
-    new TerraformOutput(this, 'hosted-zone-nameservers', {
-      value: hostedZone.nameServers,
-      description: 'Route53 Hosted Zone Name Servers',
-    });
+      new TerraformOutput(this, 'hosted-zone-nameservers', {
+        value: hostedZone.nameServers,
+        description:
+          'Route53 Hosted Zone Name Servers (delegate your domain to these)',
+      });
+    }
 
-    new TerraformOutput(this, 'application-url', {
-      value: `https://payment-app-${environmentSuffix}.example.com`,
-      description: 'Application URL (after DNS delegation)',
-    });
+    if (customDomain) {
+      new TerraformOutput(this, 'application-url', {
+        value: enableHttps ? `https://${customDomain}` : `http://${customDomain}`,
+        description: 'Application URL (custom domain)',
+      });
+    } else {
+      new TerraformOutput(this, 'application-url', {
+        value: enableHttps
+          ? `https://${alb.dnsName}`
+          : `http://${alb.dnsName}`,
+        description: 'Application URL (ALB DNS name)',
+      });
+    }
 
-    new TerraformOutput(this, 'certificate-arn', {
-      value: certificate.arn,
-      description: 'ACM Certificate ARN',
+    if (certificate) {
+      new TerraformOutput(this, 'certificate-arn', {
+        value: certificate.arn,
+        description: 'ACM Certificate ARN',
+      });
+    }
+
+    new TerraformOutput(this, 'https-enabled', {
+      value: enableHttps ? 'true' : 'false',
+      description: 'HTTPS is enabled',
     });
   }
 }
