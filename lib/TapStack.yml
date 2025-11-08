@@ -15,21 +15,24 @@ Parameters:
   ApiImageUri:
     Type: String
     Description: Docker image URI for API service
-    Default: 123456789012.dkr.ecr.us-east-1.amazonaws.com/api-service:latest
+    Default: public.ecr.aws/nginx/nginx:latest
 
   WorkerImageUri:
     Type: String
     Description: Docker image URI for Worker service
-    Default: 123456789012.dkr.ecr.us-east-1.amazonaws.com/worker-service:latest
+    Default: public.ecr.aws/nginx/nginx:latest
 
   SchedulerImageUri:
     Type: String
     Description: Docker image URI for Scheduler service
-    Default: 123456789012.dkr.ecr.us-east-1.amazonaws.com/scheduler-service:latest
+    Default: public.ecr.aws/nginx/nginx:latest
 
   CertificateArn:
     Type: String
-    Description: ACM Certificate ARN for HTTPS listener
+    Description: ACM Certificate ARN for HTTPS listener (must be in same region as ALB)
+    Default: arn:aws:acm:ap-south-1:679047180946:certificate/e7575731-8957-441e-9b4b-8cf3f827acd2
+    AllowedPattern: ^arn:aws:acm:[a-z0-9-]+:[0-9]{12}:certificate\/.+
+    ConstraintDescription: Must be a valid ACM certificate ARN (replace the default placeholder with your certificate ARN)
 
   SSMParameterPrefix:
     Type: String
@@ -40,6 +43,18 @@ Parameters:
     Type: String
     Description: Email address for CloudWatch alarm notifications
     Default: alerts@example.com
+
+  CreateSSMPlaceholders:
+    Type: String
+    Description: Whether to create placeholder SSM parameters for quick testing (set to false for production)
+    Default: "true"
+    AllowedValues: ["true", "false"]
+
+Conditions:
+  HasRealCertificate: !Not [!Equals [!Ref CertificateArn, "arn:aws:acm:ap-south-1:679047180946:certificate/e7575731-8957-441e-9b4b-8cf3f827acd2"]]
+  NoCertificate: !Equals [!Ref CertificateArn, "arn:aws:acm:ap-south-1:679047180946:certificate/e7575731-8957-441e-9b4b-8cf3f827acd2"]
+  CreateSSMPlaceholdersCondition: !Equals [!Ref CreateSSMPlaceholders, "true"]
+
 
 Resources:
   # ==================== VPC and Networking ====================
@@ -304,8 +319,8 @@ Resources:
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 8080
-          ToPort: 8080
+          FromPort: 80
+          ToPort: 80
           SourceSecurityGroupId: !Ref ALBSecurityGroup
       Tags:
         - Key: Name
@@ -402,6 +417,39 @@ Resources:
       LogGroupName: !Sub /ecs/${EnvironmentName}/scheduler-service
       RetentionInDays: 30
 
+  # Optional placeholder SSM parameters to allow quick test deployments.
+  SSMApiKeyParameter:
+    Condition: CreateSSMPlaceholdersCondition
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub ${SSMParameterPrefix}/api-key
+      Type: String
+      Value: "CHANGE_ME_API_KEY"
+
+  SSMDatabaseUrlParameter:
+    Condition: CreateSSMPlaceholdersCondition
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub ${SSMParameterPrefix}/database-url
+      Type: String
+      Value: "postgres://username:password@db.example.local:5432/fintech"
+
+  SSMWorkerTokenParameter:
+    Condition: CreateSSMPlaceholdersCondition
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub ${SSMParameterPrefix}/worker-token
+      Type: String
+      Value: "CHANGE_ME_WORKER_TOKEN"
+
+  SSMSchedulerTokenParameter:
+    Condition: CreateSSMPlaceholdersCondition
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub ${SSMParameterPrefix}/scheduler-token
+      Type: String
+      Value: "CHANGE_ME_SCHEDULER_TOKEN"
+
   # ==================== Service Discovery ====================
   ServiceDiscoveryNamespace:
     Type: AWS::ServiceDiscovery::PrivateDnsNamespace
@@ -454,19 +502,19 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name: !Sub ${EnvironmentName}-api-tg
-      Port: 8080
+      Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
       TargetType: ip
       HealthCheckEnabled: true
       HealthCheckIntervalSeconds: 30
-      HealthCheckPath: /health
+      HealthCheckPath: /
       HealthCheckProtocol: HTTP
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 3
       Matcher:
-        HttpCode: 200
+        HttpCode: 200-399
       TargetGroupAttributes:
         - Key: deregistration_delay.timeout_seconds
           Value: '30'
@@ -475,19 +523,19 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name: !Sub ${EnvironmentName}-worker-tg
-      Port: 8080
+      Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
       TargetType: ip
       HealthCheckEnabled: true
       HealthCheckIntervalSeconds: 30
-      HealthCheckPath: /health
+      HealthCheckPath: /
       HealthCheckProtocol: HTTP
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 3
       Matcher:
-        HttpCode: 200
+        HttpCode: 200-399
       TargetGroupAttributes:
         - Key: deregistration_delay.timeout_seconds
           Value: '30'
@@ -496,25 +544,26 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name: !Sub ${EnvironmentName}-scheduler-tg
-      Port: 8080
+      Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
       TargetType: ip
       HealthCheckEnabled: true
       HealthCheckIntervalSeconds: 30
-      HealthCheckPath: /health
+      HealthCheckPath: /
       HealthCheckProtocol: HTTP
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 3
       Matcher:
-        HttpCode: 200
+        HttpCode: 200-399
       TargetGroupAttributes:
         - Key: deregistration_delay.timeout_seconds
           Value: '30'
 
   # HTTPS Listener
   HTTPSListener:
+    Condition: HasRealCertificate
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
@@ -534,11 +583,11 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: 443
-            StatusCode: HTTP_301
+        - Type: fixed-response
+          FixedResponseConfig:
+            StatusCode: 404
+            ContentType: text/plain
+            MessageBody: Not Found
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
       Protocol: HTTP
@@ -546,6 +595,7 @@ Resources:
   # Listener Rules
   ApiListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Condition: HasRealCertificate
     Properties:
       Actions:
         - Type: forward
@@ -558,8 +608,23 @@ Resources:
       ListenerArn: !Ref HTTPSListener
       Priority: 1
 
+  ApiListenerRuleHTTP:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref ApiTargetGroup
+      Conditions:
+        - Field: path-pattern
+          PathPatternConfig:
+            Values:
+              - /api/*
+      ListenerArn: !Ref HTTPListener
+      Priority: 101
+
   WorkerListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Condition: HasRealCertificate
     Properties:
       Actions:
         - Type: forward
@@ -572,8 +637,23 @@ Resources:
       ListenerArn: !Ref HTTPSListener
       Priority: 2
 
+  WorkerListenerRuleHTTP:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref WorkerTargetGroup
+      Conditions:
+        - Field: path-pattern
+          PathPatternConfig:
+            Values:
+              - /admin/*
+      ListenerArn: !Ref HTTPListener
+      Priority: 102
+
   SchedulerListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Condition: HasRealCertificate
     Properties:
       Actions:
         - Type: forward
@@ -585,6 +665,20 @@ Resources:
               - /webhooks/*
       ListenerArn: !Ref HTTPSListener
       Priority: 3
+
+  SchedulerListenerRuleHTTP:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref SchedulerTargetGroup
+      Conditions:
+        - Field: path-pattern
+          PathPatternConfig:
+            Values:
+              - /webhooks/*
+      ListenerArn: !Ref HTTPListener
+      Priority: 103
 
   # ==================== ECS Task Definitions ====================
   ApiTaskDefinition:
@@ -602,9 +696,9 @@ Resources:
         - Name: api-container
           Image: !Ref ApiImageUri
           Essential: true
-          User: '1000'
+          
           PortMappings:
-            - ContainerPort: 8080
+            - ContainerPort: 80
               Protocol: tcp
           Environment:
             - Name: SERVICE_NAME
@@ -613,9 +707,10 @@ Resources:
               Value: !Ref EnvironmentName
           Secrets:
             - Name: DATABASE_URL
-              ValueFrom: !Sub ${SSMParameterPrefix}/database-url
+              # ECS expects the full SSM Parameter ARN for Secrets Manager/SSM
+              ValueFrom: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SSMParameterPrefix}/database-url
             - Name: API_KEY
-              ValueFrom: !Sub ${SSMParameterPrefix}/api-key
+              ValueFrom: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SSMParameterPrefix}/api-key
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -625,7 +720,7 @@ Resources:
           HealthCheck:
             Command:
               - CMD-SHELL
-              - curl -f http://localhost:8080/health || exit 1
+              - curl -f http://localhost:80/ || exit 1
             Interval: 30
             Timeout: 5
             Retries: 3
@@ -646,9 +741,9 @@ Resources:
         - Name: worker-container
           Image: !Ref WorkerImageUri
           Essential: true
-          User: '1000'
+          
           PortMappings:
-            - ContainerPort: 8080
+            - ContainerPort: 80
               Protocol: tcp
           Environment:
             - Name: SERVICE_NAME
@@ -657,9 +752,9 @@ Resources:
               Value: !Ref EnvironmentName
           Secrets:
             - Name: DATABASE_URL
-              ValueFrom: !Sub ${SSMParameterPrefix}/database-url
+              ValueFrom: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SSMParameterPrefix}/database-url
             - Name: WORKER_TOKEN
-              ValueFrom: !Sub ${SSMParameterPrefix}/worker-token
+              ValueFrom: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SSMParameterPrefix}/worker-token
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -669,7 +764,7 @@ Resources:
           HealthCheck:
             Command:
               - CMD-SHELL
-              - curl -f http://localhost:8080/health || exit 1
+              - curl -f http://localhost:80/ || exit 1
             Interval: 30
             Timeout: 5
             Retries: 3
@@ -690,9 +785,9 @@ Resources:
         - Name: scheduler-container
           Image: !Ref SchedulerImageUri
           Essential: true
-          User: '1000'
+          
           PortMappings:
-            - ContainerPort: 8080
+            - ContainerPort: 80
               Protocol: tcp
           Environment:
             - Name: SERVICE_NAME
@@ -701,9 +796,9 @@ Resources:
               Value: !Ref EnvironmentName
           Secrets:
             - Name: DATABASE_URL
-              ValueFrom: !Sub ${SSMParameterPrefix}/database-url
+              ValueFrom: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SSMParameterPrefix}/database-url
             - Name: SCHEDULER_TOKEN
-              ValueFrom: !Sub ${SSMParameterPrefix}/scheduler-token
+              ValueFrom: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SSMParameterPrefix}/scheduler-token
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -713,7 +808,7 @@ Resources:
           HealthCheck:
             Command:
               - CMD-SHELL
-              - curl -f http://localhost:8080/health || exit 1
+              - curl -f http://localhost:80/ || exit 1
             Interval: 30
             Timeout: 5
             Retries: 3
@@ -760,8 +855,11 @@ Resources:
   ApiService:
     Type: AWS::ECS::Service
     DependsOn:
-      - HTTPSListener
-      - ApiListenerRule
+      - ECSCluster
+      - ApplicationLoadBalancer
+      - HTTPListener
+      - ApiTargetGroup
+      - ApiListenerRuleHTTP
     Properties:
       ServiceName: !Sub ${EnvironmentName}-api-service
       Cluster: !Ref ECSCluster
@@ -779,17 +877,14 @@ Resources:
             - !Ref PrivateSubnet3
       LoadBalancers:
         - ContainerName: api-container
-          ContainerPort: 8080
+          ContainerPort: 80
           TargetGroupArn: !Ref ApiTargetGroup
       ServiceRegistries:
         - RegistryArn: !GetAtt ApiServiceDiscovery.Arn
-      HealthCheckGracePeriodSeconds: 60
+      HealthCheckGracePeriodSeconds: 300
       DeploymentConfiguration:
         MaximumPercent: 200
-        MinimumHealthyPercent: 100
-        DeploymentCircuitBreaker:
-          Enable: true
-          Rollback: true
+        MinimumHealthyPercent: 0
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-api-service
@@ -797,8 +892,11 @@ Resources:
   WorkerService:
     Type: AWS::ECS::Service
     DependsOn:
-      - HTTPSListener
-      - WorkerListenerRule
+      - ECSCluster
+      - ApplicationLoadBalancer
+      - HTTPListener
+      - WorkerTargetGroup
+      - WorkerListenerRuleHTTP
     Properties:
       ServiceName: !Sub ${EnvironmentName}-worker-service
       Cluster: !Ref ECSCluster
@@ -816,17 +914,14 @@ Resources:
             - !Ref PrivateSubnet3
       LoadBalancers:
         - ContainerName: worker-container
-          ContainerPort: 8080
+          ContainerPort: 80
           TargetGroupArn: !Ref WorkerTargetGroup
       ServiceRegistries:
         - RegistryArn: !GetAtt WorkerServiceDiscovery.Arn
-      HealthCheckGracePeriodSeconds: 60
+      HealthCheckGracePeriodSeconds: 300
       DeploymentConfiguration:
         MaximumPercent: 200
-        MinimumHealthyPercent: 100
-        DeploymentCircuitBreaker:
-          Enable: true
-          Rollback: true
+        MinimumHealthyPercent: 0
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-worker-service
@@ -834,8 +929,11 @@ Resources:
   SchedulerService:
     Type: AWS::ECS::Service
     DependsOn:
-      - HTTPSListener
-      - SchedulerListenerRule
+      - ECSCluster
+      - ApplicationLoadBalancer
+      - HTTPListener
+      - SchedulerTargetGroup
+      - SchedulerListenerRuleHTTP
     Properties:
       ServiceName: !Sub ${EnvironmentName}-scheduler-service
       Cluster: !Ref ECSCluster
@@ -853,17 +951,14 @@ Resources:
             - !Ref PrivateSubnet3
       LoadBalancers:
         - ContainerName: scheduler-container
-          ContainerPort: 8080
+          ContainerPort: 80
           TargetGroupArn: !Ref SchedulerTargetGroup
       ServiceRegistries:
         - RegistryArn: !GetAtt SchedulerServiceDiscovery.Arn
-      HealthCheckGracePeriodSeconds: 60
+      HealthCheckGracePeriodSeconds: 600
       DeploymentConfiguration:
         MaximumPercent: 100
         MinimumHealthyPercent: 0
-        DeploymentCircuitBreaker:
-          Enable: true
-          Rollback: true
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-scheduler-service
@@ -874,8 +969,10 @@ Resources:
     Properties:
       MaxCapacity: 10
       MinCapacity: 2
-      ResourceId: !Sub service/${ECSCluster}/${ApiService.Name}
-      RoleARN: !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService
+      ResourceId: !Sub
+        - service/${ClusterName}/${ServiceName}
+        - ClusterName: !Ref ECSCluster
+          ServiceName: !GetAtt ApiService.Name
       ScalableDimension: ecs:service:DesiredCount
       ServiceNamespace: ecs
 
@@ -897,8 +994,10 @@ Resources:
     Properties:
       MaxCapacity: 5
       MinCapacity: 1
-      ResourceId: !Sub service/${ECSCluster}/${WorkerService.Name}
-      RoleARN: !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService
+      ResourceId: !Sub
+        - service/${ClusterName}/${ServiceName}
+        - ClusterName: !Ref ECSCluster
+          ServiceName: !GetAtt WorkerService.Name
       ScalableDimension: ecs:service:DesiredCount
       ServiceNamespace: ecs
 
@@ -1057,51 +1156,36 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/ECS", "CPUUtilization", {"stat": "Average", "label": "API CPU"}],
-                  [".", ".", {"stat": "Maximum", "label": "API CPU Max"}],
-                  ["AWS/ECS", "MemoryUtilization", {"stat": "Average", "label": "API Memory"}]
+                  ["AWS/ECS", "CPUUtilization", "ClusterName", "${ECSCluster}", "ServiceName", "${ApiService}"]
                 ],
                 "period": 300,
                 "stat": "Average",
                 "region": "${AWS::Region}",
-                "title": "API Service Metrics"
+                "title": "API Service CPU"
               }
             },
             {
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/ECS", "CPUUtilization", {"stat": "Average", "label": "Worker CPU"}],
-                  [".", ".", {"stat": "Maximum", "label": "Worker CPU Max"}],
-                  ["AWS/ECS", "MemoryUtilization", {"stat": "Average", "label": "Worker Memory"}]
+                  ["AWS/ECS", "CPUUtilization", "ClusterName", "${ECSCluster}", "ServiceName", "${WorkerService}"]
                 ],
                 "period": 300,
                 "stat": "Average",
                 "region": "${AWS::Region}",
-                "title": "Worker Service Metrics"
+                "title": "Worker Service CPU"
               }
             },
             {
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/ApplicationELB", "TargetResponseTime"],
-                  [".", "RequestCount", {"stat": "Sum"}],
-                  [".", "HTTPCode_Target_2XX_Count", {"stat": "Sum"}],
-                  [".", "HTTPCode_Target_5XX_Count", {"stat": "Sum"}]
+                  ["AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", "${ApplicationLoadBalancer}"]
                 ],
                 "period": 300,
                 "stat": "Average",
                 "region": "${AWS::Region}",
-                "title": "ALB Metrics"
-              }
-            },
-            {
-              "type": "log",
-              "properties": {
-                "query": "SOURCE '/ecs/${EnvironmentName}/api-service' | fields @timestamp, @message | sort @timestamp desc | limit 100",
-                "region": "${AWS::Region}",
-                "title": "API Service Logs"
+                "title": "ALB Target Response Time"
               }
             }
           ]
