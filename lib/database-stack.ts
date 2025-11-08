@@ -6,6 +6,8 @@ import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
+import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
 
 export interface DatabaseStackProps {
   environmentSuffix: string;
@@ -209,6 +211,24 @@ export class DatabaseStack extends Construct {
       dependsOn: [primaryInstance1],
     });
 
+    // KMS Key for DR cluster encryption
+    const drKmsKey = new KmsKey(this, 'dr-kms-key', {
+      description: `KMS key for payment database DR cluster - ${environmentSuffix}`,
+      enableKeyRotation: true,
+      tags: {
+        ...commonTags,
+        'DR-Role': 'dr',
+        Name: `payment-db-kms-${environmentSuffix}-${drRegion}`,
+      },
+      provider: drProvider,
+    });
+
+    new KmsAlias(this, 'dr-kms-alias', {
+      name: `alias/payment-db-${environmentSuffix}-${drRegion}`,
+      targetKeyId: drKmsKey.id,
+      provider: drProvider,
+    });
+
     // DR Regional Cluster (read-only replica)
     const drCluster = new RdsCluster(this, 'dr-cluster', {
       clusterIdentifier: `payment-dr-${environmentSuffix}`,
@@ -217,6 +237,7 @@ export class DatabaseStack extends Construct {
       dbSubnetGroupName: drSubnetGroup.name,
       vpcSecurityGroupIds: [drDbSg.id],
       globalClusterIdentifier: globalCluster.id,
+      kmsKeyId: drKmsKey.arn,
       skipFinalSnapshot: true,
       enabledCloudwatchLogsExports: ['postgresql'],
       tags: {
