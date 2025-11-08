@@ -1819,6 +1819,31 @@
                 "ServiceNamespace": "ecs"
             }
         },
+        "SchedulerScalingTarget": {
+            "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
+            "Properties": {
+                "MaxCapacity": 1,
+                "MinCapacity": 1,
+                "ResourceId": {
+                    "Fn::Sub": [
+                        "service/${ClusterName}/${ServiceName}",
+                        {
+                            "ClusterName": {
+                                "Ref": "ECSCluster"
+                            },
+                            "ServiceName": {
+                                "Fn::GetAtt": [
+                                    "SchedulerService",
+                                    "Name"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "ScalableDimension": "ecs:service:DesiredCount",
+                "ServiceNamespace": "ecs"
+            }
+        },
         "WorkerScalingPolicy": {
             "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
             "Properties": {
