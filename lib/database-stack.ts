@@ -232,8 +232,8 @@ export class DatabaseStack extends Construct {
     });
 
     // DR Regional Cluster (read-only replica)
-    // Adding a version suffix to force recreation when joining global cluster
-    const drCluster = new RdsCluster(this, 'dr-cluster', {
+    // Changed construct ID to force Terraform to treat this as a new resource
+    const drCluster = new RdsCluster(this, 'dr-cluster-v2', {
       clusterIdentifier: `payment-dr-${environmentSuffix}`,
       engine: 'aurora-postgresql',
       engineVersion: '14.6',
@@ -246,18 +246,16 @@ export class DatabaseStack extends Construct {
       tags: {
         ...commonTags,
         'DR-Role': 'dr',
-        'ClusterVersion': 'v2', // Changed to force recreation
       },
       provider: drProvider,
       dependsOn: [primaryCluster],
       lifecycle: {
         createBeforeDestroy: false,
-        ignoreChanges: ['tags["ClusterVersion"]'],
       },
     });
 
     // DR cluster instance
-    new RdsClusterInstance(this, 'dr-instance-1', {
+    new RdsClusterInstance(this, 'dr-instance-1-v2', {
       identifier: `payment-dr-${environmentSuffix}-1`,
       clusterIdentifier: drCluster.id,
       instanceClass: 'db.r5.large',
