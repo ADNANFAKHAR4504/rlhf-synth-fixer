@@ -4,13 +4,13 @@ Hey team,
 
 We're helping a financial services startup build out their AWS environment for a new trading platform. They need rock-solid network infrastructure that meets PCI-DSS compliance requirements - we're talking full network segmentation with isolated environments for different workloads. The business is pretty specific about what they need here, and compliance is non-negotiable.
 
-I've been asked to create this infrastructure using **CloudFormation with YAML**. The platform needs to support a multi-tier application architecture with proper separation between web-facing resources, application servers, and databases. We're building this from scratch in us-east-1, and everything needs to be production-ready from day one.
+I've been asked to create this infrastructure using **CFN with YAML**. The platform needs to support a multi-tier application architecture with proper separation between web-facing resources, application servers, and databases. We're building this from scratch in us-east-1, and everything needs to be production-ready from day one.
 
 The key challenge here is setting up the networking foundation that can handle their trading platform's requirements while maintaining strict security boundaries. We need multiple availability zones for high availability, separate subnet tiers for different workload types, and all the connectivity infrastructure to make it work seamlessly.
 
 ## What we need to build
 
-Create a production-ready VPC infrastructure using **CloudFormation with YAML** for a multi-tier financial trading application.
+Create a production-ready VPC infrastructure using **CFN with YAML** for a multi-tier financial trading application.
 
 ### Core Networking Requirements
 
@@ -64,7 +64,7 @@ Create a production-ready VPC infrastructure using **CloudFormation with YAML** 
 
 ### Technical Requirements
 
-- All infrastructure defined using **CloudFormation with YAML**
+- All infrastructure defined using **CFN with YAML**
 - Use AWS VPC for network foundation
 - Use EC2 services (NAT Gateway, Internet Gateway)
 - Use CloudWatch for VPC Flow Logs
@@ -92,7 +92,7 @@ Create a production-ready VPC infrastructure using **CloudFormation with YAML** 
 
 ## Success Criteria
 
-- Functionality: CloudFormation template deploys successfully with all 9 networking requirements
+- Functionality: CFN template deploys successfully with all 9 networking requirements
 - Performance: Infrastructure supports multi-tier application with proper routing
 - Reliability: Resources deployed across 3 availability zones with NAT Gateway redundancy
 - Security: PCI-DSS compliant network segmentation with proper ACLs and encryption
@@ -104,7 +104,7 @@ Create a production-ready VPC infrastructure using **CloudFormation with YAML** 
 
 ## What to deliver
 
-- Complete CloudFormation YAML template implementation
+- Complete CFN YAML template implementation
 - VPC with DNS enabled (10.0.0.0/16)
 - 3 public subnets with Internet Gateway connectivity
 - 3 private subnets with NAT Gateway connectivity
