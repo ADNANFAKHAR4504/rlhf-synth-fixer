@@ -999,5 +999,41 @@ describe('TapStack', () => {
         expect(synthesized.output['https-enabled'].value).toBe('true');
       });
     });
+
+    describe('Edge Cases for Branch Coverage', () => {
+      it('should handle single-part domain correctly', () => {
+        const app = Testing.app();
+        const stack = new TapStack(app, 'test-stack', {
+          environmentSuffix: 'test',
+          enableHttps: true,
+          customDomain: 'localhost',
+        });
+        const synthesized = JSON.parse(Testing.synth(stack));
+
+        // Should create hosted zone with the single-part domain as-is
+        const hostedZone = Object.values(
+          synthesized.resource.aws_route53_zone
+        )[0] as any;
+        expect(hostedZone).toBeDefined();
+        expect(hostedZone.name).toBe('localhost');
+      });
+
+      it('should output HTTP URL when custom domain with HTTPS disabled', () => {
+        const app = Testing.app();
+        const stack = new TapStack(app, 'test-stack', {
+          environmentSuffix: 'test',
+          enableHttps: false,
+          customDomain: 'myapp.example.com',
+        });
+        const synthesized = JSON.parse(Testing.synth(stack));
+
+        // Should output HTTP URL (not HTTPS) because enableHttps is false
+        expect(synthesized.output['application-url']).toBeDefined();
+        expect(synthesized.output['application-url'].value).toBe(
+          'http://myapp.example.com'
+        );
+        expect(synthesized.output['https-enabled'].value).toBe('false');
+      });
+    });
   });
 });
