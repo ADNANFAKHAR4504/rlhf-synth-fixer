@@ -18,9 +18,10 @@ async function discoverResources() {
     // Try dynamic discovery first
     // Find API Gateway by name pattern
     const apis = await apigateway.getRestApis().promise();
-    const webhookApi = apis.items.find(api =>
-      api.name.includes('webhook-processor') ||
-      api.name.includes('webhook-api')
+    const webhookApi = apis.items.find(
+      (api: any) =>
+        api.name.includes('webhook-processor') ||
+        api.name.includes('webhook-api')
     );
 
     if (!webhookApi) {
@@ -29,45 +30,59 @@ async function discoverResources() {
 
     // Find S3 bucket by name pattern
     const buckets = await s3.listBuckets().promise();
-    const webhookBucket = buckets.Buckets.find(bucket =>
+    const webhookBucket = buckets.Buckets.find((bucket: any) =>
       bucket.Name.includes(`webhook-payloads-${ENVIRONMENT_SUFFIX}`)
     );
 
     if (!webhookBucket) {
-      throw new Error(`Could not find webhook payloads bucket for environment: ${ENVIRONMENT_SUFFIX}`);
+      throw new Error(
+        `Could not find webhook payloads bucket for environment: ${ENVIRONMENT_SUFFIX}`
+      );
     }
 
     // Find DynamoDB table by name pattern
     const tables = await dynamodb.listTables().promise();
-    const webhookTable = tables.TableNames.find(table =>
+    const webhookTable = tables.TableNames.find((table: any) =>
       table.includes(`webhook-transactions-${ENVIRONMENT_SUFFIX}`)
     );
 
     if (!webhookTable) {
-      throw new Error(`Could not find webhook transactions table for environment: ${ENVIRONMENT_SUFFIX}`);
+      throw new Error(
+        `Could not find webhook transactions table for environment: ${ENVIRONMENT_SUFFIX}`
+      );
     }
 
     // Find SQS queue by name pattern
     const queues = await sqs.listQueues().promise();
-    const webhookQueue = queues.QueueUrls?.find(url =>
+    const webhookQueue = queues.QueueUrls?.find((url: any) =>
       url.includes(`webhook-processing-queue-${ENVIRONMENT_SUFFIX}`)
     );
 
     if (!webhookQueue) {
-      throw new Error(`Could not find webhook processing queue for environment: ${ENVIRONMENT_SUFFIX}`);
+      throw new Error(
+        `Could not find webhook processing queue for environment: ${ENVIRONMENT_SUFFIX}`
+      );
     }
 
     // Get API Gateway stage - handle potential API structure differences
     let stage;
     try {
-      const stages = await apigateway.getStages({ restApiId: webhookApi.id }).promise();
-      stage = stages.item?.find(s => s.stageName === 'v1' || s.stageName === 'prod') || stages.item?.[0];
+      const stages = await apigateway
+        .getStages({ restApiId: webhookApi.id })
+        .promise();
+      stage =
+        stages.item?.find(
+          (s: any) => s.stageName === 'v1' || s.stageName === 'prod'
+        ) || stages.item?.[0];
 
       if (!stage) {
         throw new Error('No API Gateway stage found in stages.item');
       }
-    } catch (stageError) {
-      console.log('Stage discovery failed, using default stage:', stageError.message);
+    } catch (stageError: any) {
+      console.log(
+        'Stage discovery failed, using default stage:',
+        stageError.message
+      );
       stage = { stageName: 'v1' }; // Default fallback
     }
 
@@ -78,16 +93,23 @@ async function discoverResources() {
       STATUS_ENDPOINT: `https://${webhookApi.id}.execute-api.${AWS_REGION}.amazonaws.com/${stage.stageName}/status/{transactionId}`,
       BUCKET_NAME: webhookBucket.Name,
       TABLE_NAME: webhookTable,
-      QUEUE_URL: webhookQueue
+      QUEUE_URL: webhookQueue,
     };
-  } catch (error) {
-    console.log('Dynamic discovery failed, falling back to static outputs:', error.message);
+  } catch (error: any) {
+    console.log(
+      'Dynamic discovery failed, falling back to static outputs:',
+      error.message
+    );
 
     // Fallback to static outputs file
     const fs = require('fs');
     const path = require('path');
 
-    const outputsPath = path.resolve(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
+    const outputsPath = path.resolve(
+      process.cwd(),
+      'cfn-outputs',
+      'flat-outputs.json'
+    );
 
     if (!fs.existsSync(outputsPath)) {
       throw new Error(
@@ -96,7 +118,11 @@ async function discoverResources() {
     }
 
     const outputsContent = fs.readFileSync(outputsPath, 'utf8');
-    if (!outputsContent || outputsContent.trim() === '' || outputsContent === '{}') {
+    if (
+      !outputsContent ||
+      outputsContent.trim() === '' ||
+      outputsContent === '{}'
+    ) {
       throw new Error(
         `Both dynamic discovery and static outputs failed. Outputs file is empty at ${outputsPath}`
       );
@@ -113,7 +139,7 @@ async function discoverResources() {
       STATUS_ENDPOINT: outputs['status-endpoint'],
       BUCKET_NAME: outputs['bucket-name'],
       TABLE_NAME: outputs['table-name'],
-      QUEUE_URL: outputs['queue-url']
+      QUEUE_URL: outputs['queue-url'],
     };
 
     console.log('Returning result:', result);
@@ -148,7 +174,7 @@ describe('Webhook Processing System Integration Tests', () => {
       STATUS_ENDPOINT,
       BUCKET_NAME,
       TABLE_NAME,
-      QUEUE_URL
+      QUEUE_URL,
     });
   }, 30000); // 30 second timeout for resource discovery
 
@@ -206,7 +232,9 @@ describe('Webhook Processing System Integration Tests', () => {
 
     test('Should process webhook message from SQS queue', async () => {
       if (!correlationId) {
-        throw new Error('correlationId is required but not set from previous test');
+        throw new Error(
+          'correlationId is required but not set from previous test'
+        );
       }
 
       // Wait for processing to complete with retry logic
@@ -240,7 +268,9 @@ describe('Webhook Processing System Integration Tests', () => {
 
         attempts++;
         if (attempts < maxAttempts) {
-          console.log(`Waiting for processing... attempt ${attempts}/${maxAttempts}`);
+          console.log(
+            `Waiting for processing... attempt ${attempts}/${maxAttempts}`
+          );
           await new Promise(resolve => setTimeout(resolve, waitTime));
         }
       }
@@ -263,7 +293,9 @@ describe('Webhook Processing System Integration Tests', () => {
 
     test('Should store raw webhook payload in S3', async () => {
       if (!transactionId) {
-        throw new Error('transactionId is required but not set from previous test');
+        throw new Error(
+          'transactionId is required but not set from previous test'
+        );
       }
 
       // Verify S3 object exists
@@ -298,7 +330,9 @@ describe('Webhook Processing System Integration Tests', () => {
 
     test('GET /status/{transactionId} - Should retrieve transaction status', async () => {
       if (!transactionId) {
-        throw new Error('transactionId is required but not set from previous test');
+        throw new Error(
+          'transactionId is required but not set from previous test'
+        );
       }
 
       const controller = new AbortController();
@@ -439,7 +473,9 @@ describe('Webhook Processing System Integration Tests', () => {
       // If still no queue URL, get it by name
       if (!queueUrl || queueUrl.includes('***')) {
         const queueName = `webhook-processing-queue-${ENVIRONMENT_SUFFIX}`;
-        const queueUrls = await sqs.getQueueUrl({ QueueName: queueName }).promise();
+        const queueUrls = await sqs
+          .getQueueUrl({ QueueName: queueName })
+          .promise();
         queueUrl = queueUrls.QueueUrl;
       }
 
@@ -555,14 +591,18 @@ describe('Webhook Processing System Integration Tests', () => {
             .scan({
               TableName: TABLE_NAME,
               FilterExpression: 'correlationId = :cid',
-              ExpressionAttributeValues: { ':cid': responseData1.correlationId },
+              ExpressionAttributeValues: {
+                ':cid': responseData1.correlationId,
+              },
             })
             .promise(),
           dynamodb
             .scan({
               TableName: TABLE_NAME,
               FilterExpression: 'correlationId = :cid',
-              ExpressionAttributeValues: { ':cid': responseData2.correlationId },
+              ExpressionAttributeValues: {
+                ':cid': responseData2.correlationId,
+              },
             })
             .promise(),
         ]);
@@ -578,7 +618,9 @@ describe('Webhook Processing System Integration Tests', () => {
 
         attempts++;
         if (attempts < maxAttempts) {
-          console.log(`Waiting for webhook processing... attempt ${attempts}/${maxAttempts}`);
+          console.log(
+            `Waiting for webhook processing... attempt ${attempts}/${maxAttempts}`
+          );
           await new Promise(resolve => setTimeout(resolve, waitTime));
         }
       }

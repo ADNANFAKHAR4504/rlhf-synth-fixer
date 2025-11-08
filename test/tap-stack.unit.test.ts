@@ -235,7 +235,9 @@ describe('Stack Structure', () => {
       expect(synthesized).toBeDefined();
 
       // Verify fallback message was logged
-      expect(consoleSpy).toHaveBeenCalledWith('Creating archive using Node.js built-in modules...');
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Creating archive using Node.js built-in modules...'
+      );
     } finally {
       consoleSpy.mockRestore();
     }
@@ -278,7 +280,9 @@ describe('Stack Structure', () => {
       expect(synthesized).toBeDefined();
 
       // Verify fallback message was logged
-      expect(consoleSpy).toHaveBeenCalledWith('Creating archive using Node.js built-in modules...');
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Creating archive using Node.js built-in modules...'
+      );
     } finally {
       consoleSpy.mockRestore();
     }
@@ -311,6 +315,4 @@ describe('Stack Structure', () => {
     expect(stack).toBeDefined();
     expect(synthesized).toBeDefined();
   });
-
 });
-
