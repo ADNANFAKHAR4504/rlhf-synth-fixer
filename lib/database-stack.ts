@@ -248,6 +248,9 @@ export class DatabaseStack extends Construct {
       },
       provider: drProvider,
       dependsOn: [primaryCluster],
+      lifecycle: {
+        createBeforeDestroy: false,
+      },
     });
 
     // DR cluster instance
