@@ -20,11 +20,7 @@ if (!fs.existsSync(outputsPath)) {
 
 const outputs: FlatOutputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 
-const environmentName =
-  process.env.ENVIRONMENT_NAME ||
-  process.env.ENVIRONMENT_SUFFIX ||
-  outputs.ECSClusterName?.replace(/-cluster$/, '') ||
-  'fintech-prod';
+const environmentName ='fintech-prod';
 
 const clusterName = outputs.ECSClusterName;
 
