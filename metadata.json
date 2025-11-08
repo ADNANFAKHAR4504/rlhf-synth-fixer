@@ -1,0 +1,12 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101911971",
+  "team": "4",
+  "startedAt": "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": ["Infrastructure Analysis/Monitoring"],
+  "aws_services": ["S3 Bucket", "CloudFormation", "Lambda", "EventBridge", "CloudWatch LogGroup", "VPC"]
+}
