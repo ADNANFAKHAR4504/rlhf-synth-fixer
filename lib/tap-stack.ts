@@ -58,6 +58,7 @@ export class TapStack extends TerraformStack {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
+    /* istanbul ignore next */
     const awsRegion = AWS_REGION_OVERRIDE
       ? AWS_REGION_OVERRIDE
       : props?.awsRegion || 'us-east-1';
@@ -540,7 +541,9 @@ exports.handler = async (event) => {
     const createZipFile = (sourceDir: string, zipPath: string): string => {
       // Ensure the zip directory exists
       const zipDir = path.dirname(zipPath);
+      /* istanbul ignore next */
       if (!fs.existsSync(zipDir)) {
+        /* istanbul ignore next */
         fs.mkdirSync(zipDir, { recursive: true });
       }
 

@@ -17,6 +17,9 @@ describe('Stack Structure', () => {
     // Reset mocks before each test
     jest.clearAllMocks();
 
+    // Restore fs mocks to their original state
+    jest.restoreAllMocks();
+
     // Mock execSync to always fail to ensure fallback path is used
     const { execSync } = require('child_process');
     (execSync as jest.Mock).mockImplementation(() => {
@@ -315,4 +318,103 @@ describe('Stack Structure', () => {
     expect(stack).toBeDefined();
     expect(synthesized).toBeDefined();
   });
+
+  test('TapStack handles zip creation with directory creation', () => {
+    const { execSync } = require('child_process');
+
+    // Mock execSync to fail so we use Node.js fallback
+    (execSync as jest.Mock).mockImplementation(() => {
+      throw new Error('command failed');
+    });
+
+    app = new App();
+    stack = new TapStack(app, 'TestTapStackZipCreation');
+
+    synthesized = Testing.synth(stack);
+
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+  });
+
+  test('TapStack handles archive creation with existing lambda code', () => {
+    const { execSync } = require('child_process');
+
+    // Mock execSync to fail so we use Node.js fallback
+    (execSync as jest.Mock).mockImplementation(() => {
+      throw new Error('command failed');
+    });
+
+    // Ensure lambda directories exist with some content
+    const lambdaCodeDir = path.join(__dirname, '..', 'lib', 'lambda-code');
+    const ingestionDir = path.join(lambdaCodeDir, 'ingestion');
+
+    try {
+      fs.mkdirSync(ingestionDir, { recursive: true });
+      fs.writeFileSync(path.join(ingestionDir, 'index.js'), 'console.log("test");');
+    } catch (error) {
+      // Ignore if directory already exists
+    }
+
+    app = new App();
+    stack = new TapStack(app, 'TestTapStackWithLambdaCode');
+
+    synthesized = Testing.synth(stack);
+
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+
+  });
+
+
+  test('TapStack covers final fallback zip creation (lines 610-614)', () => {
+    const { execSync } = require('child_process');
+
+    // Mock execSync to fail
+    (execSync as jest.Mock).mockImplementation(() => {
+      throw new Error('command failed');
+    });
+
+    // Create directory with files but set up conditions that force archive creation to fail
+    const lambdaCodeDir = path.join(__dirname, '..', 'lib', 'lambda-code');
+    const ingestionDir = path.join(lambdaCodeDir, 'ingestion');
+
+    try {
+      fs.mkdirSync(ingestionDir, { recursive: true });
+      // Create some files in the directory
+      fs.writeFileSync(path.join(ingestionDir, 'index.js'), 'console.log("test");');
+      fs.writeFileSync(path.join(ingestionDir, 'package.json'), '{"name": "test"}');
+    } catch (error) {
+      // Directory might already exist
+    }
+
+    // Override zlib.gzipSync to force archive creation failure
+    const originalGzipSync = require('zlib').gzipSync;
+    require('zlib').gzipSync = jest.fn(() => {
+      throw new Error('gzip compression failed');
+    });
+
+    // Override console.log to track fallback execution
+    const originalConsoleLog = console.log;
+    let fallbackExecuted = false;
+    console.log = (...args: any[]) => {
+      if (args[0] && args[0].includes('Creating minimal zip file as final fallback')) {
+        fallbackExecuted = true;
+      }
+      originalConsoleLog(...args);
+    };
+
+    app = new App();
+    stack = new TapStack(app, 'TestStackLines610to614');
+
+    synthesized = Testing.synth(stack);
+
+    expect(stack).toBeDefined();
+    expect(synthesized).toBeDefined();
+    expect(fallbackExecuted).toBe(true); // Verify final fallback was executed
+
+    // Restore zlib.gzipSync
+    require('zlib').gzipSync = originalGzipSync;
+    console.log = originalConsoleLog; // Restore console.log
+  });
+
 });
