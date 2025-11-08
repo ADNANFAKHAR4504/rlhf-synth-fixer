@@ -15,15 +15,31 @@
     "Internet Gateway"
   ],
   "aws_services": [
+    "S3",
+    "CloudFront",
+    "WAF",
+    "Lambda",
+    "DynamoDB",
+    "Secrets Manager",
+    "KMS",
+    "SNS",
+    "CloudWatch",
+    "Systems Manager",
     "VPC",
     "Subnets",
     "Internet Gateway",
     "NAT Gateway",
     "Elastic IP",
     "Route Tables",
-    "Security Groups"
+    "Security Groups",
+    "IAM"
   ],
   "training_quality": 9,
   "author": "iamarpit-turing",
-  "reviewer": "emmanuel-turing"
+  "reviewer": "emmanuel-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
