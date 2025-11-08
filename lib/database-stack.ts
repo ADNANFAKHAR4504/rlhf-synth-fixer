@@ -232,6 +232,7 @@ export class DatabaseStack extends Construct {
     });
 
     // DR Regional Cluster (read-only replica)
+    // Adding a version suffix to force recreation when joining global cluster
     const drCluster = new RdsCluster(this, 'dr-cluster', {
       clusterIdentifier: `payment-dr-${environmentSuffix}`,
       engine: 'aurora-postgresql',
@@ -245,11 +246,13 @@ export class DatabaseStack extends Construct {
       tags: {
         ...commonTags,
         'DR-Role': 'dr',
+        'ClusterVersion': 'v2', // Changed to force recreation
       },
       provider: drProvider,
       dependsOn: [primaryCluster],
       lifecycle: {
         createBeforeDestroy: false,
+        ignoreChanges: ['tags["ClusterVersion"]'],
       },
     });
 

@@ -147,6 +147,7 @@ export class StorageStack extends Construct {
         {
           id: 'transition-to-ia',
           status: 'Enabled',
+          filter: [{}],
           transition: [
             {
               days: 30,
@@ -157,6 +158,7 @@ export class StorageStack extends Construct {
         {
           id: 'transition-to-glacier',
           status: 'Enabled',
+          filter: [{}],
           transition: [
             {
               days: 90,
@@ -167,6 +169,7 @@ export class StorageStack extends Construct {
         {
           id: 'expire-old-versions',
           status: 'Enabled',
+          filter: [{}],
           noncurrentVersionExpiration: [
             {
               noncurrentDays: 90,
@@ -183,6 +186,7 @@ export class StorageStack extends Construct {
         {
           id: 'transition-to-ia',
           status: 'Enabled',
+          filter: [{}],
           transition: [
             {
               days: 30,
@@ -193,6 +197,7 @@ export class StorageStack extends Construct {
         {
           id: 'expire-old-versions',
           status: 'Enabled',
+          filter: [{}],
           noncurrentVersionExpiration: [
             {
               noncurrentDays: 90,
