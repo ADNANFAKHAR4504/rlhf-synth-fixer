@@ -67,14 +67,6 @@
                 }
             ]
         },
-        "NoCertificate": {
-            "Fn::Equals": [
-                {
-                    "Ref": "CertificateArn"
-                },
-                "arn:aws:acm:ap-south-1:679047180946:certificate/e7575731-8957-441e-9b4b-8cf3f827acd2"
-            ]
-        },
         "CreateSSMPlaceholdersCondition": {
             "Fn::Equals": [
                 {
@@ -1524,10 +1516,8 @@
         "ApiService": {
             "Type": "AWS::ECS::Service",
             "DependsOn": [
-                "ECSCluster",
                 "ApplicationLoadBalancer",
                 "HTTPListener",
-                "ApiTargetGroup",
                 "ApiListenerRuleHTTP"
             ],
             "Properties": {
@@ -1600,10 +1590,8 @@
         "WorkerService": {
             "Type": "AWS::ECS::Service",
             "DependsOn": [
-                "ECSCluster",
                 "ApplicationLoadBalancer",
                 "HTTPListener",
-                "WorkerTargetGroup",
                 "WorkerListenerRuleHTTP"
             ],
             "Properties": {
@@ -1676,10 +1664,8 @@
         "SchedulerService": {
             "Type": "AWS::ECS::Service",
             "DependsOn": [
-                "ECSCluster",
                 "ApplicationLoadBalancer",
                 "HTTPListener",
-                "SchedulerTargetGroup",
                 "SchedulerListenerRuleHTTP"
             ],
             "Properties": {

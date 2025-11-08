@@ -53,7 +53,6 @@ Parameters:
 
 Conditions:
   HasRealCertificate: !Not [!Equals [!Ref CertificateArn, "arn:aws:acm:ap-south-1:679047180946:certificate/e7575731-8957-441e-9b4b-8cf3f827acd2"]]
-  NoCertificate: !Equals [!Ref CertificateArn, "arn:aws:acm:ap-south-1:679047180946:certificate/e7575731-8957-441e-9b4b-8cf3f827acd2"]
   CreateSSMPlaceholdersCondition: !Equals [!Ref CreateSSMPlaceholders, "true"]
 
 
@@ -856,10 +855,8 @@ Resources:
   ApiService:
     Type: AWS::ECS::Service
     DependsOn:
-      - ECSCluster
       - ApplicationLoadBalancer
       - HTTPListener
-      - ApiTargetGroup
       - ApiListenerRuleHTTP
     Properties:
       ServiceName: !Sub ${EnvironmentName}-api-service
@@ -893,10 +890,8 @@ Resources:
   WorkerService:
     Type: AWS::ECS::Service
     DependsOn:
-      - ECSCluster
       - ApplicationLoadBalancer
       - HTTPListener
-      - WorkerTargetGroup
       - WorkerListenerRuleHTTP
     Properties:
       ServiceName: !Sub ${EnvironmentName}-worker-service
@@ -930,10 +925,8 @@ Resources:
   SchedulerService:
     Type: AWS::ECS::Service
     DependsOn:
-      - ECSCluster
       - ApplicationLoadBalancer
       - HTTPListener
-      - SchedulerTargetGroup
       - SchedulerListenerRuleHTTP
     Properties:
       ServiceName: !Sub ${EnvironmentName}-scheduler-service
