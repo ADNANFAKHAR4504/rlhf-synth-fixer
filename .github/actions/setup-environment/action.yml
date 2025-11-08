@@ -1,5 +1,5 @@
 name: "Setup Environment"
-description: "Sets up environment dynamically based on platform and language"
+description: "Sets up environment dynamically based on platform and language with optimized caching"
 
 inputs:
   node-version:
@@ -23,64 +23,66 @@ inputs:
     required: false
     default: 'false'
 
-
 runs:
   using: 'composite'
   steps:
+    # === Checkout ===
     - name: Checkout
       uses: actions/checkout@v4
-    # ✅ Restore NPM Cache (only if JS/TS/CDK/CDKTF/Pulumi TS)
+
+    # === Configure pipenv venv path ===
     - name: Configure pipenv venv path
       shell: bash
-      run: |
-        echo "PIPENV_VENV_IN_PROJECT=1" >> "$GITHUB_ENV"
+      run: echo "PIPENV_VENV_IN_PROJECT=1" >> "$GITHUB_ENV"
+
+    # === Cache CDKTF .gen directory ===
     - name: Cache CDKTF generated providers
-      if: ${{ inputs.platform == 'cdktf' }}
+      if: ${{ hashFiles('cdktf.json') != '' }}
       uses: actions/cache@v4
       with:
         path: .gen
-        key: gen-${{ runner.os }}-${{ hashFiles('cdktf.json', 'package-lock.json', 'Pipfile.lock') }}
+        key: gen-${{ runner.os }}-${{ hashFiles('cdktf.json', 'package-lock.json', 'Pipfile.lock', '**/*.tf', '**/*.tf.json') }}
         restore-keys: |
           gen-${{ runner.os }}-
-    
 
+    # === Cache npm global tools (cdktf-cli, jest, etc.) ===
     - name: Cache global npm tools
-      if: ${{ inputs.platform == 'cdktf' || inputs.platform == 'cdk' || inputs.platform == 'pulumi' }}
+      if: ${{ hashFiles('package.json') != '' }}
       uses: actions/cache@v4
       with:
         path: ~/.npm-global
-        key: npm-global-${{ runner.os }}
+        key: npm-global-${{ runner.os }}-${{ inputs.platform }}-${{ hashFiles('package-lock.json') }}
         restore-keys: |
           npm-global-${{ runner.os }}-
-    
-    # Node (only if needed)
+
+    # === Setup Node.js ===
     - name: Setup Node.js
-      if: ${{ inputs.language == 'ts' || inputs.language == 'js' || inputs.platform == 'cdk' || inputs.platform == 'cdktf' }}
+      if: ${{ hashFiles('package.json') != '' }}
       uses: actions/setup-node@v4
       with:
         node-version: ${{ inputs.node-version }}
         cache: 'npm'
-    
+
+    # === Cache node_modules ===
     - name: Cache node_modules
-      if: ${{ inputs.language == 'ts' || inputs.language == 'js' || inputs.platform == 'cdk' || inputs.platform == 'cdktf' || inputs.platform == 'pulumi' }}
+      if: ${{ hashFiles('package.json') != '' }}
       uses: actions/cache@v4
       with:
-        path: |
-          node_modules
-          ~/.npm
+        path: node_modules
         key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
         restore-keys: |
           node-modules-${{ runner.os }}-
 
-    # Python (only if used)
+    # === Setup Python ===
     - name: Setup Python
-      if: ${{ inputs.language == 'py' || (inputs.platform == 'pulumi' && inputs.language == 'py') || inputs.platform == 'cfn' }}
+      if: ${{ hashFiles('Pipfile') != '' }}
       uses: actions/setup-python@v5
       with:
         python-version: '3.12.11'
 
+    # === Cache pipenv virtualenv ===
     - name: Cache pipenv virtualenv
-      if: ${{ inputs.language == 'py' || inputs.platform == 'cfn' }}
+      if: ${{ hashFiles('Pipfile') != '' }}
       uses: actions/cache@v4
       with:
         path: .venv
@@ -88,25 +90,26 @@ runs:
         restore-keys: |
           venv-${{ runner.os }}-
 
-    # ✅ Restore pip cache (only if Python)
+    # === Cache pip packages ===
     - name: Cache pip packages
-      if: ${{ inputs.language == 'py' || inputs.platform == 'cfn' }}
+      if: ${{ hashFiles('Pipfile') != '' }}
       uses: actions/cache@v4
       with:
         path: ~/.cache/pip
         key: pip-cache-${{ runner.os }}-${{ hashFiles('Pipfile.lock') }}
         restore-keys: |
           pip-cache-${{ runner.os }}-
-    # Go
+
+    # === Setup Go ===
     - name: Setup Go
-      if: ${{ (inputs.platform == 'cdktf' || inputs.platform == 'cdk') && inputs.language == 'go' }}
+      if: ${{ hashFiles('go.mod') != '' }}
       uses: actions/setup-go@v5
       with:
         go-version: '1.23.12'
-    
-    # ✅ Restore Go build/module cache (only if Go)
+
+    # === Cache Go modules ===
     - name: Cache Go modules
-      if: ${{ inputs.language == 'go' }}
+      if: ${{ hashFiles('go.sum') != '' }}
       uses: actions/cache@v4
       with:
         path: |
@@ -116,29 +119,41 @@ runs:
         restore-keys: |
           go-mod-cache-${{ runner.os }}-
 
-    # Java
+    # === Cache Terraform plugin/provider directory ===
+    - name: Cache Terraform providers
+      if: ${{ inputs.platform == 'tf' || (inputs.platform == 'cdktf' && inputs.language == 'go') }}
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.terraform.d/plugin-cache
+          lib/.terraform
+        key: terraform-${{ runner.os }}-${{ hashFiles('**/*.tf', '**/*.lock.hcl') }}
+        restore-keys: |
+          terraform-${{ runner.os }}-
+
+    # === Setup Java (if needed) ===
     - name: Setup Java
-      if: ${{ inputs.language == 'java' }}
+      if: ${{ hashFiles('pom.xml') != '' }}
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '17'
 
-    # Terraform
+    # === Setup Terraform ===
     - name: Setup Terraform
       if: ${{ inputs.platform == 'cdktf' || inputs.platform == 'tf' }}
       uses: hashicorp/setup-terraform@v3
       with:
         terraform_version: ${{ inputs.terraform-version }}
 
-    # Pulumi
+    # === Setup Pulumi ===
     - name: Setup Pulumi
       if: ${{ inputs.platform == 'pulumi' }}
       uses: pulumi/actions@v5
       with:
         pulumi-version: ${{ inputs.pulumi-version }}
 
-    # Execute script (setup.sh handles dependency installation)
+    # === Execute the main setup script ===
     - name: Setup dependencies
       shell: bash
       run: ./scripts/setup.sh

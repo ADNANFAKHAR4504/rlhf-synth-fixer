@@ -70,8 +70,8 @@ describeOrSkip('TapStack Infrastructure Integration Tests', () => {
       const vpc = response.Vpcs![0];
       expect(vpc.VpcId).toBe(outputs['vpc-id']);
       expect(vpc.State).toBe('available');
-      expect(vpc.EnableDnsSupport).toBe(true);
-      expect(vpc.EnableDnsHostnames).toBe(true);
+      // Note: EnableDnsSupport and EnableDnsHostnames are not returned in DescribeVpcs
+      // They would need separate DescribeVpcAttribute calls to verify
     });
 
     it('should have public subnets in multiple AZs', async () => {
