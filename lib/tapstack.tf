@@ -1,6 +1,57 @@
 # Data sources for shared resources
-data "aws_ecr_repository" "payment_api" {
-  name = "payment-api"
+# ECR Repository - create in each environment with workspace-specific naming
+resource "aws_ecr_repository" "payment_api" {
+  name                 = "payment-api-${terraform.workspace}"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  encryption_configuration {
+    encryption_type = "AES256"
+  }
+
+  tags = {
+    Name        = "payment-api-${terraform.workspace}"
+    Environment = terraform.workspace
+  }
+}
+
+# Lifecycle policy for ECR
+resource "aws_ecr_lifecycle_policy" "payment_api" {
+  repository = aws_ecr_repository.payment_api.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Keep last 10 images"
+        selection = {
+          tagStatus     = "tagged"
+          tagPrefixList = ["v"]
+          countType     = "imageCountMoreThan"
+          countNumber   = 10
+        }
+        action = {
+          type = "expire"
+        }
+      },
+      {
+        rulePriority = 2
+        description  = "Remove untagged images after 7 days"
+        selection = {
+          tagStatus   = "untagged"
+          countType   = "sinceImagePushed"
+          countUnit   = "days"
+          countNumber = 7
+        }
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
 }
 
 data "aws_caller_identity" "current" {}
@@ -45,7 +96,7 @@ module "ecs" {
   task_count         = var.ecs_task_count
   task_cpu           = var.ecs_task_cpu
   task_memory        = var.ecs_task_memory
-  container_image    = "${data.aws_ecr_repository.payment_api.repository_url}:latest"
+  container_image    = "${aws_ecr_repository.payment_api.repository_url}:latest"
   container_port     = 8080
   health_check_path  = "/health"
   database_url       = module.rds.db_connection_string
@@ -76,6 +127,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "transaction_logs" {
   rule {
     id     = "retention-policy"
     status = "Enabled"
+
+    filter {
+      prefix = ""
+    }
 
     transition {
       days          = var.s3_transition_days
