@@ -506,14 +506,16 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test-stack', {
         environmentSuffix: 'test',
+        enableHttps: false, // Disable HTTPS for these tests
       });
       synthesized = JSON.parse(Testing.synth(stack));
     });
 
-    it('should create ACM certificate', () => {
-      const cert = Object.values(synthesized.resource.aws_acm_certificate)[0] as any;
-      expect(cert.domain_name).toBe('payment-app-test.example.com');
-      expect(cert.validation_method).toBe('DNS');
+    it('should not create ACM certificate when HTTPS is disabled by default', () => {
+      const cert = synthesized.resource.aws_acm_certificate;
+      // With default config (no enableHttps specified), it defaults to true
+      // but without customDomain or existingCertificateArn, no cert is created
+      expect(cert).toBeUndefined();
     });
 
     it('should create Application Load Balancer', () => {
@@ -555,40 +557,23 @@ describe('TapStack', () => {
       expect(typeof tg.deregistration_delay).toBe('string');
     });
 
-    it('should create HTTPS listener', () => {
+    it('should not create HTTPS listener when HTTPS not configured', () => {
       const listeners = Object.values(synthesized.resource.aws_lb_listener) as any[];
       const httpsListener = listeners.find((l: any) => l.port === 443);
-      expect(httpsListener).toBeDefined();
-      expect(httpsListener.protocol).toBe('HTTPS');
-      expect(httpsListener.ssl_policy).toBe('ELBSecurityPolicy-TLS-1-2-2017-01');
+      expect(httpsListener).toBeUndefined();
     });
 
-    it('should create HTTP listener with redirect', () => {
+    it('should create HTTP listener with forward (not redirect) when HTTPS not configured', () => {
       const listeners = Object.values(synthesized.resource.aws_lb_listener) as any[];
       const httpListener = listeners.find((l: any) => l.port === 80);
       expect(httpListener).toBeDefined();
       expect(httpListener.protocol).toBe('HTTP');
-      expect(httpListener.default_action[0].type).toBe('redirect');
-      expect(httpListener.default_action[0].redirect.port).toBe('443');
-      expect(httpListener.default_action[0].redirect.protocol).toBe('HTTPS');
+      expect(httpListener.default_action[0].type).toBe('forward');
     });
 
-    it('should create path-based routing for /api/*', () => {
-      const rules = Object.values(
-        synthesized.resource.aws_lb_listener_rule
-      ) as any[];
-      const apiRule = rules.find((r: any) => r.priority === 100);
-      expect(apiRule).toBeDefined();
-      expect(apiRule.condition[0].path_pattern.values).toEqual(['/api/*']);
-    });
-
-    it('should create path-based routing for /admin/*', () => {
-      const rules = Object.values(
-        synthesized.resource.aws_lb_listener_rule
-      ) as any[];
-      const adminRule = rules.find((r: any) => r.priority === 101);
-      expect(adminRule).toBeDefined();
-      expect(adminRule.condition[0].path_pattern.values).toEqual(['/admin/*']);
+    it('should not create path-based routing rules when HTTPS not configured', () => {
+      const rules = synthesized.resource.aws_lb_listener_rule;
+      expect(rules).toBeUndefined();
     });
   });
 
@@ -618,8 +603,9 @@ describe('TapStack', () => {
       const service = Object.values(synthesized.resource.aws_ecs_service)[0] as any;
       expect(service.name).toBe('payment-service-test');
       expect(service.desired_count).toBe(3);
-      expect(service.launch_type).toBe('FARGATE');
       expect(service.platform_version).toBe('LATEST');
+      // Note: launch_type should NOT be set when using capacity_provider_strategy
+      expect(service.launch_type).toBeUndefined();
     });
 
     it('should use Fargate Spot capacity provider', () => {
@@ -839,6 +825,179 @@ describe('TapStack', () => {
       } else {
         delete process.env.AWS_REGION_OVERRIDE;
       }
+    });
+  });
+
+  describe('HTTPS Configuration', () => {
+    describe('HTTP Only Mode (enableHttps: false)', () => {
+      let synthesized: any;
+
+      beforeEach(() => {
+        const app = Testing.app();
+        const stack = new TapStack(app, 'test-stack', {
+          environmentSuffix: 'test',
+          enableHttps: false,
+        });
+        synthesized = JSON.parse(Testing.synth(stack));
+      });
+
+      it('should not create ACM certificate', () => {
+        expect(synthesized.resource.aws_acm_certificate).toBeUndefined();
+      });
+
+      it('should not create Route53 hosted zone', () => {
+        expect(synthesized.resource.aws_route53_zone).toBeUndefined();
+      });
+
+      it('should not create Route53 records', () => {
+        expect(synthesized.resource.aws_route53_record).toBeUndefined();
+      });
+
+      it('should not create HTTPS listener', () => {
+        const listeners = Object.values(synthesized.resource.aws_lb_listener) as any[];
+        const httpsListener = listeners.find((l: any) => l.port === 443);
+        expect(httpsListener).toBeUndefined();
+      });
+
+      it('should create HTTP listener with forward action', () => {
+        const listeners = Object.values(synthesized.resource.aws_lb_listener) as any[];
+        const httpListener = listeners.find((l: any) => l.port === 80);
+        expect(httpListener).toBeDefined();
+        expect(httpListener.default_action[0].type).toBe('forward');
+      });
+
+      it('should not create listener rules for path routing', () => {
+        expect(synthesized.resource.aws_lb_listener_rule).toBeUndefined();
+      });
+
+      it('should output HTTP URL', () => {
+        expect(synthesized.output['application-url']).toBeDefined();
+        // URL will contain the ALB DNS name reference
+        expect(synthesized.output['application-url'].value).toContain('http://');
+      });
+
+      it('should indicate HTTPS is disabled in outputs', () => {
+        expect(synthesized.output['https-enabled']).toBeDefined();
+        expect(synthesized.output['https-enabled'].value).toBe('false');
+      });
+    });
+
+    describe('HTTPS with Custom Domain', () => {
+      let synthesized: any;
+
+      beforeEach(() => {
+        const app = Testing.app();
+        const stack = new TapStack(app, 'test-stack', {
+          environmentSuffix: 'test',
+          enableHttps: true,
+          customDomain: 'api.example.com',
+        });
+        synthesized = JSON.parse(Testing.synth(stack));
+      });
+
+      it('should create Route53 hosted zone', () => {
+        const hostedZone = Object.values(synthesized.resource.aws_route53_zone)[0] as any;
+        expect(hostedZone).toBeDefined();
+        expect(hostedZone.name).toBe('example.com');
+      });
+
+      it('should create ACM certificate for custom domain', () => {
+        const cert = Object.values(synthesized.resource.aws_acm_certificate)[0] as any;
+        expect(cert).toBeDefined();
+        expect(cert.domain_name).toBe('api.example.com');
+        expect(cert.validation_method).toBe('DNS');
+      });
+
+      it('should create DNS validation record', () => {
+        const records = Object.values(synthesized.resource.aws_route53_record) as any[];
+        const validationRecord = records.find((r: any) =>
+          r.name && r.name.includes('domain_validation_options')
+        );
+        expect(validationRecord).toBeDefined();
+      });
+
+      it('should create ALB alias record', () => {
+        const records = Object.values(synthesized.resource.aws_route53_record) as any[];
+        const aliasRecord = records.find((r: any) => r.type === 'A' && r.alias);
+        expect(aliasRecord).toBeDefined();
+      });
+
+      it('should create HTTPS listener', () => {
+        const listeners = Object.values(synthesized.resource.aws_lb_listener) as any[];
+        const httpsListener = listeners.find((l: any) => l.port === 443);
+        expect(httpsListener).toBeDefined();
+        expect(httpsListener.protocol).toBe('HTTPS');
+      });
+
+      it('should create HTTP listener with redirect to HTTPS', () => {
+        const listeners = Object.values(synthesized.resource.aws_lb_listener) as any[];
+        const httpListener = listeners.find((l: any) => l.port === 80);
+        expect(httpListener).toBeDefined();
+        expect(httpListener.default_action[0].type).toBe('redirect');
+        expect(httpListener.default_action[0].redirect.protocol).toBe('HTTPS');
+      });
+
+      it('should create path-based routing rules', () => {
+        const rules = Object.values(synthesized.resource.aws_lb_listener_rule) as any[];
+        expect(rules.length).toBeGreaterThanOrEqual(2);
+        const apiRule = rules.find((r: any) => r.priority === 100);
+        const adminRule = rules.find((r: any) => r.priority === 101);
+        expect(apiRule).toBeDefined();
+        expect(adminRule).toBeDefined();
+      });
+
+      it('should output hosted zone nameservers', () => {
+        expect(synthesized.output['hosted-zone-nameservers']).toBeDefined();
+      });
+
+      it('should output HTTPS URL with custom domain', () => {
+        expect(synthesized.output['application-url']).toBeDefined();
+        expect(synthesized.output['application-url'].value).toBe('https://api.example.com');
+      });
+    });
+
+    describe('HTTPS with Existing Certificate', () => {
+      let synthesized: any;
+      const certArn = 'arn:aws:acm:us-east-1:123456789012:certificate/existing-cert';
+
+      beforeEach(() => {
+        const app = Testing.app();
+        const stack = new TapStack(app, 'test-stack', {
+          environmentSuffix: 'test',
+          enableHttps: true,
+          existingCertificateArn: certArn,
+        });
+        synthesized = JSON.parse(Testing.synth(stack));
+      });
+
+      it('should not create new ACM certificate', () => {
+        expect(synthesized.resource.aws_acm_certificate).toBeUndefined();
+      });
+
+      it('should not create Route53 hosted zone', () => {
+        expect(synthesized.resource.aws_route53_zone).toBeUndefined();
+      });
+
+      it('should not create Route53 records', () => {
+        expect(synthesized.resource.aws_route53_record).toBeUndefined();
+      });
+
+      it('should create HTTPS listener with existing certificate', () => {
+        const listeners = Object.values(synthesized.resource.aws_lb_listener) as any[];
+        const httpsListener = listeners.find((l: any) => l.port === 443);
+        expect(httpsListener).toBeDefined();
+        expect(httpsListener.certificate_arn).toBe(certArn);
+      });
+
+      it('should create HTTP listener with redirect', () => {
+        const listeners = Object.values(synthesized.resource.aws_lb_listener) as any[];
+        const httpListener = listeners.find((l: any) => l.port === 80);
+        expect(httpListener.default_action[0].type).toBe('redirect');
+      });
+
+      it('should indicate HTTPS is enabled', () => {
+        expect(synthesized.output['https-enabled'].value).toBe('true');
+      });
     });
   });
 });

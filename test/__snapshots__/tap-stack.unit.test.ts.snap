@@ -22,6 +22,10 @@ exports[`TapStack Stack Creation should create stack with default props 1`] = `
       "description": "Application Load Balancer DNS name",
       "value": "\${aws_lb.alb.dns_name}"
     },
+    "application-url": {
+      "description": "Application URL (ALB DNS name)",
+      "value": "https://\${aws_lb.alb.dns_name}"
+    },
     "aws-account-id": {
       "description": "Current AWS Account ID",
       "value": "\${data.aws_caller_identity.current.account_id}"
@@ -49,6 +53,10 @@ exports[`TapStack Stack Creation should create stack with default props 1`] = `
     "ecs-service-name": {
       "description": "ECS Service name",
       "value": "\${aws_ecs_service.ecs-service.name}"
+    },
+    "https-enabled": {
+      "description": "HTTPS is enabled",
+      "value": "true"
     },
     "private-subnet-ids": {
       "description": "Private subnet IDs",
@@ -85,20 +93,6 @@ exports[`TapStack Stack Creation should create stack with default props 1`] = `
     ]
   },
   "resource": {
-    "aws_acm_certificate": {
-      "alb-certificate": {
-        "domain_name": "payment-app-dev.example.com",
-        "lifecycle": {
-          "create_before_destroy": true
-        },
-        "tags": {
-          "Environment": "production",
-          "Name": "alb-cert-dev",
-          "Project": "payment-app"
-        },
-        "validation_method": "DNS"
-      }
-    },
     "aws_appautoscaling_policy": {
       "ecs-cpu-scaling-policy": {
         "name": "payment-cpu-scaling-dev",
@@ -226,13 +220,9 @@ exports[`TapStack Stack Creation should create stack with default props 1`] = `
           }
         ],
         "cluster": "\${aws_ecs_cluster.ecs-cluster.id}",
-        "depends_on": [
-          "aws_lb_listener.https-listener"
-        ],
         "desired_count": 3,
         "enable_execute_command": true,
         "health_check_grace_period_seconds": 60,
-        "launch_type": "FARGATE",
         "load_balancer": [
           {
             "container_name": "payment-app",
@@ -398,74 +388,6 @@ exports[`TapStack Stack Creation should create stack with default props 1`] = `
         "tags": {
           "Environment": "production",
           "Name": "http-listener-dev",
-          "Project": "payment-app"
-        }
-      },
-      "https-listener": {
-        "certificate_arn": "\${aws_acm_certificate.alb-certificate.arn}",
-        "default_action": [
-          {
-            "target_group_arn": "\${aws_lb_target_group.target-group.arn}",
-            "type": "forward"
-          }
-        ],
-        "load_balancer_arn": "\${aws_lb.alb.arn}",
-        "port": 443,
-        "protocol": "HTTPS",
-        "ssl_policy": "ELBSecurityPolicy-TLS-1-2-2017-01",
-        "tags": {
-          "Environment": "production",
-          "Name": "https-listener-dev",
-          "Project": "payment-app"
-        }
-      }
-    },
-    "aws_lb_listener_rule": {
-      "admin-path-rule": {
-        "action": [
-          {
-            "target_group_arn": "\${aws_lb_target_group.target-group.arn}",
-            "type": "forward"
-          }
-        ],
-        "condition": [
-          {
-            "path_pattern": {
-              "values": [
-                "/admin/*"
-              ]
-            }
-          }
-        ],
-        "listener_arn": "\${aws_lb_listener.https-listener.arn}",
-        "priority": 101,
-        "tags": {
-          "Environment": "production",
-          "Name": "admin-path-rule-dev",
-          "Project": "payment-app"
-        }
-      },
-      "api-path-rule": {
-        "action": [
-          {
-            "target_group_arn": "\${aws_lb_target_group.target-group.arn}",
-            "type": "forward"
-          }
-        ],
-        "condition": [
-          {
-            "path_pattern": {
-              "values": [
-                "/api/*"
-              ]
-            }
-          }
-        ],
-        "listener_arn": "\${aws_lb_listener.https-listener.arn}",
-        "priority": 100,
-        "tags": {
-          "Environment": "production",
-          "Name": "api-path-rule-dev",
           "Project": "payment-app"
         }
       }
