@@ -31,6 +31,9 @@ import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
 import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
 import { LbListenerRule } from '@cdktf/provider-aws/lib/lb-listener-rule';
 import { AcmCertificate } from '@cdktf/provider-aws/lib/acm-certificate';
+import { AcmCertificateValidation } from '@cdktf/provider-aws/lib/acm-certificate-validation';
+import { Route53Zone } from '@cdktf/provider-aws/lib/route53-zone';
+import { Route53Record } from '@cdktf/provider-aws/lib/route53-record';
 import { EcsTaskDefinition } from '@cdktf/provider-aws/lib/ecs-task-definition';
 import { EcsService } from '@cdktf/provider-aws/lib/ecs-service';
 import { AppautoscalingTarget } from '@cdktf/provider-aws/lib/appautoscaling-target';
@@ -544,10 +547,24 @@ export class TapStack extends TerraformStack {
     });
 
     // ========================================
-    // Application Load Balancer
+    // Route53 Hosted Zone for DNS Management
     // ========================================
 
-    // Create self-signed certificate for HTTPS (in production, use ACM with real domain)
+    // Create Route53 hosted zone for domain
+    const hostedZone = new Route53Zone(this, 'hosted-zone', {
+      name: `payment-app-${environmentSuffix}.example.com`,
+      tags: {
+        Name: `payment-zone-${environmentSuffix}`,
+        Environment: 'production',
+        Project: 'payment-app',
+      },
+    });
+
+    // ========================================
+    // Application Load Balancer and SSL Certificate
+    // ========================================
+
+    // Create ACM Certificate with DNS validation
     const certificate = new AcmCertificate(this, 'alb-certificate', {
       domainName: `payment-app-${environmentSuffix}.example.com`,
       validationMethod: 'DNS',
@@ -559,6 +576,22 @@ export class TapStack extends TerraformStack {
       lifecycle: {
         createBeforeDestroy: true,
       },
+    });
+
+    // Create DNS validation record in Route53
+    const certValidationRecord = new Route53Record(this, 'cert-validation-record', {
+      zoneId: hostedZone.zoneId,
+      name: `\${tolist(${certificate.fqn}.domain_validation_options)[0].resource_record_name}`,
+      type: `\${tolist(${certificate.fqn}.domain_validation_options)[0].resource_record_type}`,
+      records: [`\${tolist(${certificate.fqn}.domain_validation_options)[0].resource_record_value}`],
+      ttl: 60,
+      allowOverwrite: true,
+    });
+
+    // Wait for certificate validation to complete
+    const certValidation = new AcmCertificateValidation(this, 'cert-validation', {
+      certificateArn: certificate.arn,
+      validationRecordFqdns: [certValidationRecord.fqdn],
     });
 
     // Create Application Load Balancer
@@ -602,7 +635,7 @@ export class TapStack extends TerraformStack {
       },
     });
 
-    // Create HTTPS Listener
+    // Create HTTPS Listener (depends on certificate validation)
     const httpsListener = new LbListener(this, 'https-listener', {
       loadBalancerArn: alb.arn,
       port: 443,
@@ -620,6 +653,7 @@ export class TapStack extends TerraformStack {
         Environment: 'production',
         Project: 'payment-app',
       },
+      dependsOn: [certValidation],
     });
 
     // Create path-based routing rules for /api/* and /admin/*
@@ -688,6 +722,18 @@ export class TapStack extends TerraformStack {
         Name: `http-listener-${environmentSuffix}`,
         Environment: 'production',
         Project: 'payment-app',
+      },
+    });
+
+    // Create Route53 A record for ALB
+    new Route53Record(this, 'alb-alias-record', {
+      zoneId: hostedZone.zoneId,
+      name: `payment-app-${environmentSuffix}.example.com`,
+      type: 'A',
+      alias: {
+        name: alb.dnsName,
+        zoneId: alb.zoneId,
+        evaluateTargetHealth: true,
       },
     });
 
@@ -896,6 +942,26 @@ export class TapStack extends TerraformStack {
     new TerraformOutput(this, 'aws-region', {
       value: awsRegion,
       description: 'AWS Region',
+    });
+
+    new TerraformOutput(this, 'hosted-zone-id', {
+      value: hostedZone.zoneId,
+      description: 'Route53 Hosted Zone ID',
+    });
+
+    new TerraformOutput(this, 'hosted-zone-nameservers', {
+      value: hostedZone.nameServers,
+      description: 'Route53 Hosted Zone Name Servers',
+    });
+
+    new TerraformOutput(this, 'application-url', {
+      value: `https://payment-app-${environmentSuffix}.example.com`,
+      description: 'Application URL (after DNS delegation)',
+    });
+
+    new TerraformOutput(this, 'certificate-arn', {
+      value: certificate.arn,
+      description: 'ACM Certificate ARN',
     });
   }
 }
