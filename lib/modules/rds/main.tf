@@ -100,9 +100,9 @@ resource "aws_db_instance" "main" {
   maintenance_window      = "sun:04:00-sun:05:00"
 
   multi_az                  = var.multi_az
-  deletion_protection       = var.environment == "prod" ? true : false
-  skip_final_snapshot       = var.environment != "prod"
-  final_snapshot_identifier = var.environment == "prod" ? "payment-db-${var.environment}-final-${formatdate("YYYY-MM-DD", timestamp())}" : null
+  deletion_protection       = false
+  skip_final_snapshot       = true
+  final_snapshot_identifier = null
 
   enabled_cloudwatch_logs_exports = ["postgresql"]
 
