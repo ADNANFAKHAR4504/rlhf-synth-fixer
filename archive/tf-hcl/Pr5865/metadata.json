@@ -11,7 +11,22 @@
     "Environment Migration"
   ],
   "aws_services": [
-    "(EKS",
-    "IAM)"
-  ]
+    "EKS",
+    "VPC",
+    "EC2",
+    "IAM",
+    "KMS",
+    "CloudWatch",
+    "ELB",
+    "NAT",
+    "IGW",
+    "Route53"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
 }
