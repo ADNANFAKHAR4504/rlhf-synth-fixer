@@ -51,9 +51,31 @@ Parameters:
     Default: "true"
     AllowedValues: ["true", "false"]
 
+  UseExistingLogGroups:
+    Type: String
+    Description: Set to "true" to use existing CloudWatch Log Group names (do not create them)
+    Default: "false"
+    AllowedValues: ["true", "false"]
+
+  ExistingApiLogGroupName:
+    Type: String
+    Description: (Optional) Name of an existing Log Group to use for the API service when `UseExistingLogGroups` is true
+    Default: ""
+
+  ExistingWorkerLogGroupName:
+    Type: String
+    Description: (Optional) Name of an existing Log Group to use for the Worker service when `UseExistingLogGroups` is true
+    Default: ""
+
+  ExistingSchedulerLogGroupName:
+    Type: String
+    Description: (Optional) Name of an existing Log Group to use for the Scheduler service when `UseExistingLogGroups` is true
+    Default: ""
+
 Conditions:
   HasRealCertificate: !Not [!Equals [!Ref CertificateArn, "arn:aws:acm:ap-south-1:679047180946:certificate/e7575731-8957-441e-9b4b-8cf3f827acd2"]]
   CreateSSMPlaceholdersCondition: !Equals [!Ref CreateSSMPlaceholders, "true"]
+  CreateLogGroups: !Equals [!Ref UseExistingLogGroups, "false"]
 
 
 Resources:
@@ -400,18 +422,21 @@ Resources:
 
   # ==================== CloudWatch Log Groups ====================
   ApiLogGroup:
+    Condition: CreateLogGroups
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub /ecs/${EnvironmentName}/api-service
       RetentionInDays: 30
 
   WorkerLogGroup:
+    Condition: CreateLogGroups
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub /ecs/${EnvironmentName}/worker-service
       RetentionInDays: 30
 
   SchedulerLogGroup:
+    Condition: CreateLogGroups
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub /ecs/${EnvironmentName}/scheduler-service
@@ -714,7 +739,7 @@ Resources:
           LogConfiguration:
             LogDriver: awslogs
             Options:
-              awslogs-group: !Ref ApiLogGroup
+              awslogs-group: !If [CreateLogGroups, !Ref ApiLogGroup, !Ref ExistingApiLogGroupName]
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: api
           HealthCheck:
@@ -758,7 +783,7 @@ Resources:
           LogConfiguration:
             LogDriver: awslogs
             Options:
-              awslogs-group: !Ref WorkerLogGroup
+              awslogs-group: !If [CreateLogGroups, !Ref WorkerLogGroup, !Ref ExistingWorkerLogGroupName]
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: worker
           HealthCheck:
@@ -802,7 +827,7 @@ Resources:
           LogConfiguration:
             LogDriver: awslogs
             Options:
-              awslogs-group: !Ref SchedulerLogGroup
+              awslogs-group: !If [CreateLogGroups, !Ref SchedulerLogGroup, !Ref ExistingSchedulerLogGroupName]
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: scheduler
           HealthCheck:
