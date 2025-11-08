@@ -42,7 +42,20 @@ describe('TapStack Integration Tests', () => {
 
     if (fs.existsSync(outputsPath)) {
       const outputsContent = fs.readFileSync(outputsPath, 'utf8');
-      outputs = JSON.parse(outputsContent);
+      const parsedOutputs = JSON.parse(outputsContent);
+
+      // Extract outputs from nested structure (e.g., TapStackpr6107 -> actual outputs)
+      // If outputs are nested under a stack name, extract them
+      if (parsedOutputs && typeof parsedOutputs === 'object') {
+        const stackKeys = Object.keys(parsedOutputs);
+        if (stackKeys.length === 1 && stackKeys[0].startsWith('TapStack')) {
+          outputs = parsedOutputs[stackKeys[0]];
+        } else {
+          outputs = parsedOutputs;
+        }
+      } else {
+        outputs = parsedOutputs;
+      }
     } else {
       // If outputs don't exist, skip tests
       outputs = null;
