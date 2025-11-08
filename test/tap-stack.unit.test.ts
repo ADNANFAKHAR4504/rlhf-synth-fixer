@@ -421,7 +421,7 @@ describe('TapStack', () => {
       const secret = Object.values(
         synthesized.resource.aws_secretsmanager_secret
       )[0] as any;
-      expect(secret.name).toBe('payment-db-connection-test');
+      expect(secret.name).toBe('payment-db-connection-test-v1');
       expect(secret.description).toBe(
         'Database connection string for payment application'
       );

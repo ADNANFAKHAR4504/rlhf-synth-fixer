@@ -531,7 +531,7 @@ exports[`TapStack Stack Creation should create stack with default props 1`] = `
     "aws_secretsmanager_secret": {
       "db-secret": {
         "description": "Database connection string for payment application",
-        "name": "payment-db-connection-dev",
+        "name": "payment-db-connection-dev-v1",
         "tags": {
           "Environment": "production",
           "Name": "db-secret-dev",

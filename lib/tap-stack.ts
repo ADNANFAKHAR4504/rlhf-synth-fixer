@@ -420,7 +420,7 @@ export class TapStack extends TerraformStack {
 
     // Create Secrets Manager Secret for database connection
     const dbSecret = new SecretsmanagerSecret(this, 'db-secret', {
-      name: `payment-db-connection-${environmentSuffix}`,
+      name: `payment-db-connection-${environmentSuffix}-v1`,
       description: 'Database connection string for payment application',
       tags: {
         Name: `db-secret-${environmentSuffix}`,
