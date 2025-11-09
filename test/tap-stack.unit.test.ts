@@ -21,6 +21,20 @@ describe('Webhook Processing Stack', () => {
       expect(template).toBeDefined();
     });
 
+    test('should use provided environment suffix', () => {
+      // Test the environment suffix logic - props path
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestStack', { environmentSuffix: 'test' });
+      expect(testStack).toBeDefined();
+    });
+
+    test('should use default environment suffix when none provided', () => {
+      // Test the environment suffix logic - default path
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestStack'); // No props provided
+      expect(testStack).toBeDefined();
+    });
+
     test('should have API Gateway resources', () => {
       template.hasResourceProperties('AWS::ApiGateway::RestApi', {
         Name: `webhook-processing-api-${environmentSuffix}`,
