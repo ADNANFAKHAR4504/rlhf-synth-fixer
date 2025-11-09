@@ -1,7 +1,12 @@
+# Local variables
+locals {
+  current_env = terraform.workspace == "default" ? "dev" : terraform.workspace
+}
+
 # Data sources for shared resources
 # ECR Repository - create in each environment with workspace-specific naming
 resource "aws_ecr_repository" "payment_api" {
-  name                 = "payment-api-${terraform.workspace}"
+  name                 = "payment-api-${local.current_env}"
   image_tag_mutability = "MUTABLE"
 
   image_scanning_configuration {
@@ -13,8 +18,8 @@ resource "aws_ecr_repository" "payment_api" {
   }
 
   tags = {
-    Name        = "payment-api-${terraform.workspace}"
-    Environment = terraform.workspace
+    Name        = "payment-api-${local.current_env}"
+    Environment = local.current_env
   }
 }
 
@@ -60,7 +65,7 @@ data "aws_caller_identity" "current" {}
 module "core" {
   source = "./modules/core"
 
-  environment          = terraform.workspace
+  environment          = local.current_env
   vpc_cidr             = var.vpc_cidr
   availability_zones   = var.availability_zones
   private_subnet_cidrs = var.private_subnet_cidrs
@@ -73,7 +78,7 @@ module "core" {
 module "rds" {
   source = "./modules/rds"
 
-  environment           = terraform.workspace
+  environment           = local.current_env
   vpc_id                = module.core.vpc_id
   private_subnet_ids    = module.core.private_subnet_ids
   instance_class        = var.rds_instance_class
@@ -89,7 +94,7 @@ module "rds" {
 module "ecs" {
   source = "./modules/ecs"
 
-  environment        = terraform.workspace
+  environment        = local.current_env
   vpc_id             = module.core.vpc_id
   private_subnet_ids = module.core.private_subnet_ids
   public_subnet_ids  = module.core.public_subnet_ids
@@ -105,11 +110,11 @@ module "ecs" {
 
 # S3 Bucket for Transaction Logs
 resource "aws_s3_bucket" "transaction_logs" {
-  bucket = "payment-logs-${terraform.workspace}-${data.aws_caller_identity.current.account_id}"
+  bucket = "payment-logs-${local.current_env}-${data.aws_caller_identity.current.account_id}"
 
   tags = {
-    Name        = "payment-logs-${terraform.workspace}"
-    Environment = terraform.workspace
+    Name        = "payment-logs-${local.current_env}"
+    Environment = local.current_env
   }
 }
 

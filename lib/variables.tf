@@ -1,3 +1,9 @@
+variable "environment" {
+  description = "Environment name (dev/staging/prod) - typically set via workspace"
+  type        = string
+  default     = "dev"
+}
+
 variable "aws_region" {
   description = "AWS region"
   type        = string
