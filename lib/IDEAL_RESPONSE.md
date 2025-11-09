@@ -1,6 +1,6 @@
 # Serverless Webhook Processing System - Implementation
 
-This implementation provides a complete serverless webhook processing system using AWS CDK with Python
+This implementation provides a complete serverless webhook processing system using AWS CDK with Python.
 
 ## Infrastructure Code
 
