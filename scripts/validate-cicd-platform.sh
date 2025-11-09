@@ -1,6 +1,7 @@
 #!/bin/bash
-set -e
-set -o pipefail
+# Temporarily disable set -e to see actual errors
+# set -e
+# set -o pipefail
 
 # Multi-Platform CI/CD Validation Script
 # Supports: GitHub Actions, GitLab CI, CircleCI, ArgoCD, Google Cloud Build, Jenkins, Azure DevOps
@@ -10,6 +11,9 @@ PLATFORM=""
 VALIDATION_PASSED=true
 ERRORS=()
 WARNINGS=()
+
+echo "DEBUG: Starting validation script" >&2
+echo "DEBUG: Bash version: $BASH_VERSION" >&2
 
 echo "🔍 Multi-Platform CI/CD Validation"
 echo "======================================"
@@ -161,6 +165,7 @@ validate_script_length() {
       ;;
 
     gitlab-ci)
+      echo "DEBUG: Starting GitLab CI validation" >&2
       # Check before_script, script, and after_script sections
       # Count total lines across all three sections per job
       local in_before_script=false
@@ -170,6 +175,8 @@ validate_script_length() {
       local current_job=""
       local job_start_line=0
       local line_num=0
+
+      echo "DEBUG: About to start reading file: $CICD_FILE" >&2
 
       while IFS= read -r line; do
         ((line_num++))
