@@ -7,6 +7,19 @@
   "team": "4",
   "startedAt": "2025-11-09T07:15:42.3NZ",
   "subtask": "Application Deployment",
-  "subject_labels": ["Serverless Infrastructure (Functions as Code)"],
-  "aws_services": ["S3 Bucket", "CloudFormation", "Lambda", "EventBridge", "CloudWatch LogGroup", "VPC"]
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "CloudWatch",
+    "DynamoDB",
+    "Lambda",
+    "S3",
+    "SNS",
+    "Step Functions",
+    "Systems Manager",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 10
 }
