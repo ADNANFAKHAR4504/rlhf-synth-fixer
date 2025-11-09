@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+set -o pipefail
 
 # Multi-Platform CI/CD Validation Script
 # Supports: GitHub Actions, GitLab CI, CircleCI, ArgoCD, Google Cloud Build, Jenkins, Azure DevOps
@@ -168,6 +169,7 @@ validate_script_length() {
       local total_script_lines=0
       local current_job=""
       local job_start_line=0
+      local line_num=0
 
       while IFS= read -r line; do
         ((line_num++))
@@ -175,7 +177,9 @@ validate_script_length() {
         # Detect job start (job-name: at column 0 or with anchor/hidden jobs like .anchor:)
         if echo "$line" | grep -qE "^[a-z._-]+:"; then
           # End previous job validation (skip anchors - jobs starting with .)
-          if [ "$current_job" != "" ] && [[ ! "$current_job" =~ ^\. ]] && [ "$total_script_lines" -gt 5 ]; then
+          # Check if current_job does NOT start with a dot
+          if [ "$current_job" != "" ] && [ "${current_job#.}" = "$current_job" ] && [ "$total_script_lines" -gt 5 ]; then
+            echo "ERROR: Job '$current_job' at line ~$job_start_line has $total_script_lines script lines (>5)" >&2
             ERRORS+=("Job '$current_job' at line ~$job_start_line: Total script lines ($total_script_lines) >5. Move to scripts/ directory")
             VALIDATION_PASSED=false
           fi
@@ -224,7 +228,8 @@ validate_script_length() {
       done < "$CICD_FILE"
 
       # Check last job (skip anchors - jobs starting with .)
-      if [ "$current_job" != "" ] && [[ ! "$current_job" =~ ^\. ]] && [ "$total_script_lines" -gt 5 ]; then
+      # Check if current_job does NOT start with a dot
+      if [ "$current_job" != "" ] && [ "${current_job#.}" = "$current_job" ] && [ "$total_script_lines" -gt 5 ]; then
         echo "DEBUG: Last job validation failed - Job: '$current_job', Lines: $total_script_lines" >&2
         ERRORS+=("Job '$current_job': Total script lines ($total_script_lines) >5. Move to scripts/ directory")
         VALIDATION_PASSED=false
