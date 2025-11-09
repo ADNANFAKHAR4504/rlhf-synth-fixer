@@ -66,14 +66,6 @@ payment-infrastructure/
 ```hcl
 terraform {
   required_version = ">= 1.5.0"
-  
-  backend "s3" {
-    bucket         = "payment-infra-terraform-state"
-    key            = "payment-processing/terraform.tfstate"
-    region         = "us-east-1"
-    encrypt        = true
-    dynamodb_table = "payment-infra-terraform-locks"
-  }
 
   required_providers {
     aws = {
@@ -81,6 +73,9 @@ terraform {
       version = ">= 5.0"
     }
   }
+
+  # Partial backend config: values are injected at `terraform init` time
+  backend "s3" {}
 }
 
 provider "aws" {
