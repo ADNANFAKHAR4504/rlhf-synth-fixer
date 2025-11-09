@@ -129,9 +129,10 @@ export class TapStack extends cdk.Stack {
   }
 
   private createSqsQueues(environmentSuffix: string) {
-    // Dead letter queue
+    // Dead letter queue (must be FIFO to match source queues)
     const dlq = new cdk.aws_sqs.Queue(this, `WebhookDlq${environmentSuffix}`, {
-      queueName: `webhook-processing-dlq-${environmentSuffix}`,
+      queueName: `webhook-processing-dlq-${environmentSuffix}.fifo`,
+      fifo: true,
       retentionPeriod: cdk.Duration.days(14),
     });
 
