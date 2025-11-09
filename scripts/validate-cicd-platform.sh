@@ -225,9 +225,11 @@ validate_script_length() {
 
       # Check last job (skip anchors - jobs starting with .)
       if [ "$current_job" != "" ] && [[ ! "$current_job" =~ ^\. ]] && [ "$total_script_lines" -gt 5 ]; then
+        echo "DEBUG: Last job validation failed - Job: '$current_job', Lines: $total_script_lines" >&2
         ERRORS+=("Job '$current_job': Total script lines ($total_script_lines) >5. Move to scripts/ directory")
         VALIDATION_PASSED=false
       fi
+      echo "✅ GitLab CI script validation passed (checked ${line_num} lines)"
       ;;
 
     circleci|google-cloud-build|azure-devops)
