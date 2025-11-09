@@ -1,19 +1,14 @@
 #!/bin/bash
-# Temporarily disable set -e to see actual errors
-# set -e
-# set -o pipefail
 
 # Multi-Platform CI/CD Validation Script
-# Supports: GitHub Actions, GitLab CI, CircleCI, ArgoCD, Google Cloud Build, Jenkins, Azure DevOps
+# Supports: GitHub Actions, GitLab CI, CircleCI, ArgoCD, Google Cloud Build, Azure DevOps
+# Note: set -e is intentionally not used to allow proper error collection and reporting
 
 CICD_FILE="lib/ci-cd.yml"
 PLATFORM=""
 VALIDATION_PASSED=true
 ERRORS=()
 WARNINGS=()
-
-echo "DEBUG: Starting validation script" >&2
-echo "DEBUG: Bash version: $BASH_VERSION" >&2
 
 echo "🔍 Multi-Platform CI/CD Validation"
 echo "======================================"
@@ -67,13 +62,6 @@ detect_platform() {
   if grep -qE "^steps:" "$CICD_FILE" && grep -qE "name:.*gcr\\.io|name:.*us-docker\\.pkg\\.dev" "$CICD_FILE"; then
     PLATFORM="google-cloud-build"
     echo "✅ Detected Platform: Google Cloud Build"
-    return 0
-  fi
-
-  # Jenkins detection (Jenkinsfile)
-  if grep -qE "^(pipeline|node)\\s*\\{" "$CICD_FILE"; then
-    PLATFORM="jenkins"
-    echo "✅ Detected Platform: Jenkins"
     return 0
   fi
 
@@ -165,7 +153,6 @@ validate_script_length() {
       ;;
 
     gitlab-ci)
-      echo "DEBUG: Starting GitLab CI validation" >&2
       # Check before_script, script, and after_script sections
       # Count total lines across all three sections per job
       local in_before_script=false
@@ -175,8 +162,6 @@ validate_script_length() {
       local current_job=""
       local job_start_line=0
       local line_num=0
-
-      echo "DEBUG: About to start reading file: $CICD_FILE" >&2
 
       while IFS= read -r line; do
         ((line_num++))
