@@ -21,7 +21,7 @@ export class ResourceValidationAspect implements IAspect {
     if (this.resourceCount > this.maxResources) {
       console.warn(
         `Approaching maximum resource limit of ${this.maxResources}. ` +
-        `Current count: ${this.resourceCount}. Consider splitting into multiple stacks.`
+          `Current count: ${this.resourceCount}. Consider splitting into multiple stacks.`
       );
     }
 

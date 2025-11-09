@@ -383,10 +383,14 @@ async function updatePaymentStatus(paymentId, status, errorMessage = null) {
 
     // Connect API Gateway to validation Lambda
     // Import the API Gateway from the API stack
-    const apiGateway = apigateway.RestApi.fromRestApiAttributes(this, `ImportedApi${environmentSuffix}`, {
-      restApiId: apiGatewayId,
-      rootResourceId: 'root', // This will be resolved at deploy time
-    });
+    const apiGateway = apigateway.RestApi.fromRestApiAttributes(
+      this,
+      `ImportedApi${environmentSuffix}`,
+      {
+        restApiId: apiGatewayId,
+        rootResourceId: 'root', // This will be resolved at deploy time
+      }
+    );
 
     const paymentsResource = apiGateway.root.addResource('payments');
     const paymentResource = paymentsResource.addResource('{paymentId}');

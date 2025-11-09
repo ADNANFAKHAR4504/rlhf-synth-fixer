@@ -45,35 +45,31 @@ export class DatabaseStack extends cdk.Stack {
       'PostgreSQL access from VPC'
     );
 
-    // S3 bucket for backups
-    const backupBucket = new s3.Bucket(
-      this,
-      `DatabaseBackupBucket${environmentSuffix}`,
-      {
-        bucketName: `payment-db-backups-${environmentSuffix}`,
-        versioned: true,
-        encryption: s3.BucketEncryption.S3_MANAGED,
-        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-        removalPolicy: cdk.RemovalPolicy.RETAIN,
-        lifecycleRules: [
-          {
-            id: 'BackupRetention',
-            enabled: true,
-            transitions: [
-              {
-                storageClass: s3.StorageClass.INFREQUENT_ACCESS,
-                transitionAfter: cdk.Duration.days(30),
-              },
-              {
-                storageClass: s3.StorageClass.GLACIER,
-                transitionAfter: cdk.Duration.days(365),
-              },
-            ],
-            expiration: cdk.Duration.days(2555), // 7 years
-          },
-        ],
-      }
-    );
+    // S3 bucket for backups (created but not directly used in this simplified implementation)
+    new s3.Bucket(this, `DatabaseBackupBucket${environmentSuffix}`, {
+      bucketName: `payment-db-backups-${environmentSuffix}`,
+      versioned: true,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      lifecycleRules: [
+        {
+          id: 'BackupRetention',
+          enabled: true,
+          transitions: [
+            {
+              storageClass: s3.StorageClass.INFREQUENT_ACCESS,
+              transitionAfter: cdk.Duration.days(30),
+            },
+            {
+              storageClass: s3.StorageClass.GLACIER,
+              transitionAfter: cdk.Duration.days(365),
+            },
+          ],
+          expiration: cdk.Duration.days(2555), // 7 years
+        },
+      ],
+    });
 
     // RDS Aurora PostgreSQL cluster
     this.cluster = new rds.DatabaseCluster(
@@ -104,14 +100,14 @@ export class DatabaseStack extends cdk.Stack {
           enablePerformanceInsights: true,
           performanceInsightRetention: 7,
         },
-      port: 5432,
-      defaultDatabaseName: 'paymentdb',
+        port: 5432,
+        defaultDatabaseName: 'paymentdb',
         storageEncrypted: true,
         storageEncryptionKey: encryptionKey,
-      backup: {
-        retention: cdk.Duration.days(30),
-        preferredWindow: '03:00-04:00',
-      },
+        backup: {
+          retention: cdk.Duration.days(30),
+          preferredWindow: '03:00-04:00',
+        },
         monitoringInterval: cdk.Duration.minutes(1),
         cloudwatchLogsExports: ['postgresql'],
         deletionProtection: true,
@@ -123,24 +119,20 @@ export class DatabaseStack extends cdk.Stack {
     // Note: In CDK, readers are typically configured during cluster creation
     // For production, consider adding readers to the instances array above
 
-    // Database parameter group
-    const parameterGroup = new rds.ParameterGroup(
-      this,
-      `DatabaseParameterGroup${environmentSuffix}`,
-      {
-        engine: rds.DatabaseClusterEngine.auroraPostgres({
-          version: rds.AuroraPostgresEngineVersion.VER_14_6,
-        }),
-        description: 'Custom parameter group for payment database',
-        parameters: {
-          shared_preload_libraries: 'pg_stat_statements',
-          'pg_stat_statements.track': 'all',
-          'pg_stat_statements.max': '10000',
-          log_statement: 'ddl',
-          log_min_duration_statement: '1000',
-        },
-      }
-    );
+    // Database parameter group (created but not directly used in this simplified implementation)
+    new rds.ParameterGroup(this, `DatabaseParameterGroup${environmentSuffix}`, {
+      engine: rds.DatabaseClusterEngine.auroraPostgres({
+        version: rds.AuroraPostgresEngineVersion.VER_14_6,
+      }),
+      description: 'Custom parameter group for payment database',
+      parameters: {
+        shared_preload_libraries: 'pg_stat_statements',
+        'pg_stat_statements.track': 'all',
+        'pg_stat_statements.max': '10000',
+        log_statement: 'ddl',
+        log_min_duration_statement: '1000',
+      },
+    });
 
     // Note: Parameter group would be applied during cluster creation in production
 

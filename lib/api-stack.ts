@@ -47,8 +47,8 @@ export class ApiStack extends cdk.Stack {
       }
     );
 
-    // Request validator
-    const requestValidator = new apigateway.RequestValidator(
+    // Request validator (created but not directly used in this simplified implementation)
+    new apigateway.RequestValidator(
       this,
       `RequestValidator${environmentSuffix}`,
       {
