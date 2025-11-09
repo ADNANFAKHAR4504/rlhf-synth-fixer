@@ -340,7 +340,7 @@ def handler(event, context):
                 ],
                 "LogFormat": "JSON",
                 "Contribution": {
-                    "Keys": ["requestContext.identity.sourceIp"],
+                    "Keys": ["$.requestContext.identity.sourceIp"],
                     "ValueOf": "$.requestContext.requestId",
                     "Filters": []
                 },
