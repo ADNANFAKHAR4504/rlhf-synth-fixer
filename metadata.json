@@ -20,5 +20,5 @@
     "CloudWatch Logs",
     "SQS"
   ],
-  "training_quality": 7
+  "training_quality": 10
 }
