@@ -17,14 +17,18 @@ describe('Turn Around Prompt API Integration Tests', () => {
 
   describe('Live End-to-End Tests', () => {
     let apiUrl: string;
-    const testEnvironmentSuffix = 'pr9001';
+    const testEnvironmentSuffix = environmentSuffix;
 
     beforeAll(() => {
       // Load deployment outputs
       try {
+        // Try multiple ways to find the API URL
         apiUrl =
           outputs[`ApiUrl${testEnvironmentSuffix}`] ||
-          outputs.WebhookApipr9001Endpoint4F988D0A;
+          (Object.values(outputs).find(
+            val => typeof val === 'string' && val.includes('execute-api')
+          ) as string) ||
+          '';
         console.log(`Loaded deployment outputs. API URL: ${apiUrl}`);
       } catch (error: any) {
         console.warn(

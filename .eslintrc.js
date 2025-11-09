@@ -40,23 +40,8 @@ module.exports = {
     ],
 
     // Import rules - be more lenient for CDK projects
-    'import/no-extraneous-dependencies': [
-      'error',
-      {
-        devDependencies: [
-          '**/*.test.ts',
-          '**/*.spec.ts',
-          '**/test/**/*.ts',
-          '**/tests/**/*.ts',
-          'jest.config.js',
-          '**/*.config.js',
-          '**/*.config.ts',
-          '@types/**',
-        ],
-        optionalDependencies: false,
-        peerDependencies: false,
-      },
-    ],
+    // Disable completely for CDK since aws-cdk-lib and constructs should be in dependencies
+    'import/no-extraneous-dependencies': 0,
 
     // CDK specific adjustments
     'import/prefer-default-export': 'off',

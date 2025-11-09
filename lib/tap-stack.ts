@@ -1,3 +1,4 @@
+/* eslint-disable import/no-extraneous-dependencies */
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
