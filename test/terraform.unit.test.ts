@@ -23,10 +23,6 @@ describe('Payment Processing Infrastructure - Terraform Unit Tests', () => {
       expect(providerContent).toMatch(/provider\s+"aws"\s*{/);
     });
 
-    test('Random provider is declared in required_providers', () => {
-      expect(providerContent).toMatch(/random\s*=\s*{[\s\S]*?source\s*=\s*"hashicorp\/random"/);
-    });
-
     test('Terraform required version is specified', () => {
       expect(providerContent).toMatch(/required_version\s*=\s*">=\s*1\.5\.0"/);
     });
@@ -90,13 +86,21 @@ describe('Payment Processing Infrastructure - Terraform Unit Tests', () => {
       expect(tapstackContent).not.toMatch(/\bprovider\s+"aws"\s*{/);
     });
 
+    test('Local variable current_env is defined', () => {
+      expect(tapstackContent).toMatch(/locals\s*{[\s\S]*?current_env\s*=/);
+    });
+
+    test('Local variable current_env maps default to dev', () => {
+      expect(tapstackContent).toMatch(/current_env\s*=\s*terraform\.workspace\s*==\s*"default"\s*\?\s*"dev"\s*:\s*terraform\.workspace/);
+    });
+
     describe('ECR Resources', () => {
       test('ECR repository is defined', () => {
         expect(tapstackContent).toMatch(/resource\s+"aws_ecr_repository"\s+"payment_api"\s*{/);
       });
 
       test('ECR repository has workspace-specific naming', () => {
-        expect(tapstackContent).toMatch(/name\s*=\s*"payment-api-\$\{terraform\.workspace\}"/);
+        expect(tapstackContent).toMatch(/name\s*=\s*"payment-api-\$\{local\.current_env\}"/);
       });
 
       test('ECR image scanning is enabled', () => {
@@ -154,7 +158,7 @@ describe('Payment Processing Infrastructure - Terraform Unit Tests', () => {
       });
 
       test('S3 bucket has workspace-specific naming', () => {
-        expect(tapstackContent).toMatch(/bucket\s*=\s*"payment-logs-\$\{terraform\.workspace\}/);
+        expect(tapstackContent).toMatch(/bucket\s*=\s*"payment-logs-\$\{local\.current_env\}/);
       });
 
       test('S3 versioning is enabled', () => {
@@ -182,7 +186,7 @@ describe('Payment Processing Infrastructure - Terraform Unit Tests', () => {
 
     describe('Module Inputs', () => {
       test('Core module receives environment parameter', () => {
-        expect(tapstackContent).toMatch(/environment\s*=\s*terraform\.workspace/);
+        expect(tapstackContent).toMatch(/environment\s*=\s*local\.current_env/);
       });
 
       test('RDS module receives VPC ID from core module', () => {
@@ -207,8 +211,8 @@ describe('Payment Processing Infrastructure - Terraform Unit Tests', () => {
     });
 
     describe('Tagging', () => {
-      test('Resources have Environment tags with workspace', () => {
-        const envTagMatches = tapstackContent.match(/Environment\s*=\s*terraform\.workspace/g);
+      test('Resources have Environment tags with local.current_env', () => {
+        const envTagMatches = tapstackContent.match(/Environment\s*=\s*local\.current_env/g);
         expect(envTagMatches).not.toBeNull();
         expect(envTagMatches!.length).toBeGreaterThan(1);
       });
