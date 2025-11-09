@@ -82,7 +82,7 @@ resource "aws_secretsmanager_secret" "rds_password" {
 }
 
 resource "aws_secretsmanager_secret_version" "rds_password" {
-  secret_id     = aws_secretsmanager_secret.rds_password.id
+  secret_id = aws_secretsmanager_secret.rds_password.id
   secret_string = jsonencode({
     username = var.rds_username
     password = random_password.rds_password.result
