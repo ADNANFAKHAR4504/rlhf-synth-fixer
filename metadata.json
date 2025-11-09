@@ -7,6 +7,23 @@
   "team": "4",
   "startedAt": "2025-11-09T06:35:44.3NZ",
   "subtask": "IaC Program Optimization",
-  "subject_labels": ["Infrastructure Analysis/Monitoring"],
-  "aws_services": ["S3 Bucket", "CloudFormation", "Lambda", "EventBridge", "CloudWatch LogGroup", "VPC"]
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "CloudWatch",
+    "Config",
+    "DynamoDB",
+    "EventBridge",
+    "IAM",
+    "KMS",
+    "Lambda",
+    "S3",
+    "SNS",
+    "Step Functions",
+    "VPC",
+    "X-Ray"
+  ],
+  "training_quality": 10
 }
