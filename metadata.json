@@ -23,5 +23,5 @@
     "EC2 VPC",
     "CloudWatch Logs"
   ],
-  "training_quality": 10
+  "training_quality": 5
 }
