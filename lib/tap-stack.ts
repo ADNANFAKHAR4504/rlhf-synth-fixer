@@ -206,6 +206,11 @@ export class TapStack extends cdk.Stack {
     paypalQueue.grantSendMessages(lambdaRole);
     squareQueue.grantSendMessages(lambdaRole);
 
+    // Lambda needs consume permissions for event source mappings
+    stripeQueue.grantConsumeMessages(lambdaRole);
+    paypalQueue.grantConsumeMessages(lambdaRole);
+    squareQueue.grantConsumeMessages(lambdaRole);
+
     lambdaRole.addToPolicy(
       new cdk.aws_iam.PolicyStatement({
         actions: ['events:PutEvents'],
