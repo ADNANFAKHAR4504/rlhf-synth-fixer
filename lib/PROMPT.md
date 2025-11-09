@@ -1,4 +1,4 @@
-### **Functional scope (build everything new):**
+### **Functional scope**
 
 Develop a **secure and compliant AWS CloudFormation stack** from scratch in **YAML format** (not JSON), named `TapStack.yml`, designed to provision all foundational components under a new environment.
 The template must deploy **all resources** without referencing or pointing to any pre-existing ones. It should create a complete, standalone infrastructure environment under region **`us-east-1`**, following **organization-wide security and compliance best practices**.
