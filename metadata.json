@@ -6,9 +6,9 @@
   "po_id": "101911971",
   "team": "4",
   "startedAt": "2025-11-09T06:35:44.3NZ",
-  "subtask": "IaC Program Optimization",
+  "subtask": "Cloud Enviroment Setup",
   "subject_labels": [
-    "Infrastructure Analysis/Monitoring"
+    "Cloud Enviroment Setup"
   ],
   "aws_services": [
     "API Gateway",
