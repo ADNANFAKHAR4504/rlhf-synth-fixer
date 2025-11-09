@@ -19,8 +19,8 @@ class TestTapStack(unittest.TestCase):
     """Set up a fresh CDK app for each test"""
     self.app = cdk.App()
 
-  @mark.it("creates an S3 bucket with the correct environment suffix")
-  def test_creates_s3_bucket_with_env_suffix(self):
+  @mark.it("creates compliance system resources with environment suffix")
+  def test_creates_compliance_resources_with_env_suffix(self):
     # ARRANGE
     env_suffix = "testenv"
     stack = TapStack(self.app, "TapStackTest",
@@ -28,9 +28,13 @@ class TestTapStack(unittest.TestCase):
     template = Template.from_stack(stack)
 
     # ASSERT
-    template.resource_count_is("AWS::S3::Bucket", 1)
-    template.has_resource_properties("AWS::S3::Bucket", {
-        "BucketName": f"tap-bucket-{env_suffix}"
+    template.resource_count_is("AWS::SNS::Topic", 2)  # Critical and warning topics
+    template.resource_count_is("AWS::DynamoDB::Table", 1)  # Compliance results table
+    template.resource_count_is("AWS::S3::Bucket", 1)  # Compliance reports bucket
+    template.resource_count_is("AWS::Lambda::Function", 1)  # Compliance scanner
+    template.has_resource_properties("AWS::SNS::Topic", {
+        "TopicName": f"compliance-critical-violations-{env_suffix}",
+        "DisplayName": "Compliance Critical Violations"
     })
 
   @mark.it("defaults environment suffix to 'dev' if not provided")
@@ -40,14 +44,27 @@ class TestTapStack(unittest.TestCase):
     template = Template.from_stack(stack)
 
     # ASSERT
+    template.resource_count_is("AWS::SNS::Topic", 2)
+    template.resource_count_is("AWS::DynamoDB::Table", 1)
     template.resource_count_is("AWS::S3::Bucket", 1)
-    template.has_resource_properties("AWS::S3::Bucket", {
-        "BucketName": "tap-bucket-dev"
+    template.has_resource_properties("AWS::SNS::Topic", {
+        "TopicName": "compliance-critical-violations-dev",
+        "DisplayName": "Compliance Critical Violations"
     })
 
-  @mark.it("Write Unit Tests")
-  def test_write_unit_tests(self):
+  @mark.it("creates Lambda function with correct environment variables")
+  def test_creates_lambda_with_correct_environment(self):
     # ARRANGE
-    self.fail(
-        "Unit test for TapStack should be implemented here."
-    )
+    env_suffix = "testenv"
+    stack = TapStack(self.app, "TapStackTest",
+                     TapStackProps(environment_suffix=env_suffix))
+    template = Template.from_stack(stack)
+
+    # ASSERT
+    template.has_resource_properties("AWS::Lambda::Function", {
+        "FunctionName": f"compliance-scanner-{env_suffix}",
+        "Runtime": "python3.9",
+        "Handler": "index.lambda_handler",
+        "MemorySize": 256,
+        "Timeout": 300
+    })
