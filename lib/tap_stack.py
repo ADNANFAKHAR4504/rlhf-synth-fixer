@@ -1,7 +1,7 @@
 """tap_stack.py
-This module defines the TapStack class, which serves as the main CDK stack for 
+This module defines the TapStack class, which serves as the main CDK stack for
 the TAP (Test Automation Platform) project.
-It orchestrates the instantiation of other resource-specific stacks and 
+It orchestrates the instantiation of other resource-specific stacks and
 manages environment-specific configurations.
 """
 
@@ -92,6 +92,56 @@ class TapStack(cdk.Stack):
         self._create_eventbridge_rules(environment_suffix)
         self._create_cloudwatch_alarms(environment_suffix)
         self._create_cloudwatch_dashboards(environment_suffix)
+
+        # Export stack outputs for integration testing
+        cdk.CfnOutput(
+            self, "ComplianceResultsTableName",
+            value=self.compliance_results_table.table_name,
+            description="DynamoDB table for compliance results",
+            export_name=f"ComplianceResultsTableName-{environment_suffix}"
+        )
+
+        cdk.CfnOutput(
+            self, "ComplianceReportsBucketName",
+            value=self.compliance_reports_bucket.bucket_name,
+            description="S3 bucket for compliance reports",
+            export_name=f"ComplianceReportsBucketName-{environment_suffix}"
+        )
+
+        cdk.CfnOutput(
+            self, "ComplianceScannerLambdaArn",
+            value=self.compliance_scanner_lambda.function_arn,
+            description="Lambda function ARN for compliance scanner",
+            export_name=f"ComplianceScannerLambdaArn-{environment_suffix}"
+        )
+
+        cdk.CfnOutput(
+            self, "ComplianceScannerLambdaName",
+            value=self.compliance_scanner_lambda.function_name,
+            description="Lambda function name for compliance scanner",
+            export_name=f"ComplianceScannerLambdaName-{environment_suffix}"
+        )
+
+        cdk.CfnOutput(
+            self, "ComplianceStateMachineArn",
+            value=self.compliance_state_machine.state_machine_arn,
+            description="Step Functions state machine ARN",
+            export_name=f"ComplianceStateMachineArn-{environment_suffix}"
+        )
+
+        cdk.CfnOutput(
+            self, "CriticalViolationsTopicArn",
+            value=self.critical_violations_topic.topic_arn,
+            description="SNS topic ARN for critical violations",
+            export_name=f"CriticalViolationsTopicArn-{environment_suffix}"
+        )
+
+        cdk.CfnOutput(
+            self, "WarningViolationsTopicArn",
+            value=self.warning_violations_topic.topic_arn,
+            description="SNS topic ARN for warning violations",
+            export_name=f"WarningViolationsTopicArn-{environment_suffix}"
+        )
 
     def _create_sns_topics(self, environment_suffix: str) -> None:
         """Create SNS topics for compliance alerts"""
