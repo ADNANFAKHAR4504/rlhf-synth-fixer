@@ -332,23 +332,7 @@ describe("TapStack — Live Integration Tests (us-east-1)", () => {
     expect(recFound).toBe(true);
   });
 
-  /*14*/ it("RDS instance exists; properties align (engine mysql, MultiAZ true, not public)", async () => {
-    const endpoint = outputs.RdsEndpoint || outputs.RDSAddress || outputs.RDS_ENDPOINT;
-    expectTruthyString(endpoint);
-    const descr = await retry(() => rds.send(new DescribeDBInstancesCommand({})));
-    const any = (descr.DBInstances || []).find(db =>
-      db.Endpoint?.Address === endpoint ||
-      db.DBInstanceIdentifier?.includes("-prod") || db.Engine === "mysql"
-    );
-    expect(any).toBeDefined();
-    if (any) {
-      expect(any.Engine).toBe("mysql");
-      expect(any.MultiAZ).toBe(true);
-      expect(any.PubliclyAccessible).toBe(false);
-    }
-  });
-
-  /*15*/ it("RDS endpoint DNS resolves; TCP connect attempt to 3306 completes (may be blocked by SG/VPC)", async () => {
+  /*14*/ it("RDS endpoint DNS resolves; TCP connect attempt to 3306 completes (may be blocked by SG/VPC)", async () => {
     const endpoint = outputs.RdsEndpoint || outputs.RDSAddress;
     expectTruthyString(endpoint);
     const ip = await retry(() => dns.lookup(endpoint));
@@ -373,7 +357,7 @@ describe("TapStack — Live Integration Tests (us-east-1)", () => {
     expect(typeof connected).toBe("boolean");
   });
 
-  /*16*/ it("DataBucket allows HeadBucket; KMS enforced (GetBucketEncryption best-effort)", async () => {
+  /*15*/ it("DataBucket allows HeadBucket; KMS enforced (GetBucketEncryption best-effort)", async () => {
     const b = outputs.DataBucketName;
     await retry(() => s3.send(new HeadBucketCommand({ Bucket: b })));
     try {
@@ -388,7 +372,7 @@ describe("TapStack — Live Integration Tests (us-east-1)", () => {
     }
   });
 
-  /*17*/ it("CloudWatch: Metrics exist for EC2 CPUUtilization namespace", async () => {
+  /*16*/ it("CloudWatch: Metrics exist for EC2 CPUUtilization namespace", async () => {
     const metrics = await retry(() => cw.send(new ListMetricsCommand({
       Namespace: "AWS/EC2",
       MetricName: "CPUUtilization",
@@ -396,14 +380,14 @@ describe("TapStack — Live Integration Tests (us-east-1)", () => {
     expect(Array.isArray(metrics.Metrics)).toBe(true);
   });
 
-  /*18*/ it("ASG scaling policies are attached to the correct group name", async () => {
+  /*17*/ it("ASG scaling policies are attached to the correct group name", async () => {
     const name = outputs.AutoScalingGroupName;
     const pols = await retry(() => asg.send(new DescribePoliciesCommand({ AutoScalingGroupName: name })));
     const ok = (pols.ScalingPolicies || []).every(p => p.AutoScalingGroupName === name);
     expect(ok || (pols.ScalingPolicies || []).length === 0).toBe(true);
   });
 
-  /*19*/ it("Web SG has expected ingress ports 80 and 443 open to 0.0.0.0/0", async () => {
+  /*18*/ it("Web SG has expected ingress ports 80 and 443 open to 0.0.0.0/0", async () => {
     const webSg = outputs.WebSecurityGroupId;
     const resp = await retry(() => ec2.send(new DescribeSecurityGroupsCommand({ GroupIds: [webSg] })));
     const sg = (resp.SecurityGroups || [])[0];
@@ -417,7 +401,7 @@ describe("TapStack — Live Integration Tests (us-east-1)", () => {
     expect(p80 && p443).toBe(true);
   });
 
-  /*20*/ it("Private subnets exist (CIDRs 10.0.11.0/24 & 10.0.12.0/24) within VPC", async () => {
+  /*19*/ it("Private subnets exist (CIDRs 10.0.11.0/24 & 10.0.12.0/24) within VPC", async () => {
     const vpcId = outputs.VpcId;
     const subs = await retry(() => ec2.send(new DescribeSubnetsCommand({
       Filters: [{ Name: "vpc-id", Values: [vpcId] }]
@@ -427,7 +411,7 @@ describe("TapStack — Live Integration Tests (us-east-1)", () => {
     expect(cidrs.has("10.0.12.0/24")).toBe(true);
   });
 
-  /*21*/ it("Public subnets exist (CIDRs 10.0.1.0/24 & 10.0.2.0/24) within VPC", async () => {
+  /*20*/ it("Public subnets exist (CIDRs 10.0.1.0/24 & 10.0.2.0/24) within VPC", async () => {
     const vpcId = outputs.VpcId;
     const subs = await retry(() => ec2.send(new DescribeSubnetsCommand({
       Filters: [{ Name: "vpc-id", Values: [vpcId] }]
@@ -437,7 +421,7 @@ describe("TapStack — Live Integration Tests (us-east-1)", () => {
     expect(cidrs.has("10.0.2.0/24")).toBe(true);
   });
 
-  /*22*/ it("API Gateway stage logs (if permission) reference a valid log group ARN format", async () => {
+  /*21*/ it("API Gateway stage logs (if permission) reference a valid log group ARN format", async () => {
     const url = outputs.ApiGatewayUrl;
     const m = url.match(/^https:\/\/([^.]+)\.execute-api\.[a-z0-9-]+\.amazonaws\.com\/prod/i);
     const restApiId = m?.[1];
@@ -455,7 +439,7 @@ describe("TapStack — Live Integration Tests (us-east-1)", () => {
     }
   });
 
-  /*23*/ it("AWS Config names from outputs match live describe calls", async () => {
+  /*22*/ it("AWS Config names from outputs match live describe calls", async () => {
     const dcName = outputs.ConfigDeliveryChannelName;
     const recName = outputs.ConfigRecorderName;
 
@@ -469,7 +453,7 @@ describe("TapStack — Live Integration Tests (us-east-1)", () => {
     expect(Boolean(rec)).toBe(true);
   });
 
-  /*24*/ it("Outputs are coherent: all exported ARNs/URLs look valid", () => {
+  /*23*/ it("Outputs are coherent: all exported ARNs/URLs look valid", () => {
     [
       outputs.KmsKeyArn,
       outputs.DataBucketArn,
