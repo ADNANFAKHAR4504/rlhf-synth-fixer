@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
@@ -442,7 +443,7 @@ exports.handler = async (event) => {
     // S3 Event trigger for validator function
     transactionBucket.addEventNotification(
       s3.EventType.OBJECT_CREATED,
-      new targets.LambdaDestination(validatorFunction),
+      new s3n.LambdaDestination(validatorFunction),
       { prefix: 'transactions/', suffix: '.json' }
     );
 
@@ -461,7 +462,6 @@ exports.handler = async (event) => {
     const usagePlan = new apigateway.UsagePlan(this, `TransactionUsagePlan${environmentSuffix}`, {
       name: `transaction-usage-plan-${environmentSuffix}`,
       description: 'Usage plan for transaction API',
-      apiKey,
       throttle: {
         rateLimit: 100,
         burstLimit: 200,
@@ -475,6 +475,8 @@ exports.handler = async (event) => {
     usagePlan.addApiStage({
       stage: api.deploymentStage,
     });
+
+    usagePlan.addApiKey(apiKey);
 
     // API Gateway Lambda for status queries
     const statusFunction = new lambda.Function(this, `TransactionStatus${environmentSuffix}`, {
@@ -606,7 +608,7 @@ exports.handler = async (event) => {
       description: 'Environment suffix used for resource naming',
     });
 
-    new cdk.CfnOutput(this, `TransactionBucket${environmentSuffix}`, {
+    new cdk.CfnOutput(this, `TransactionBucketName${environmentSuffix}`, {
       value: transactionBucket.bucketName,
       description: 'S3 bucket for transaction file uploads',
     });
@@ -616,7 +618,7 @@ exports.handler = async (event) => {
       description: 'API Gateway URL for transaction status queries',
     });
 
-    new cdk.CfnOutput(this, `TransactionApiKey${environmentSuffix}`, {
+    new cdk.CfnOutput(this, `TransactionApiKeyId${environmentSuffix}`, {
       value: apiKey.keyId,
       description: 'API key ID for transaction API access',
     });
@@ -674,11 +676,7 @@ exports.handler = async (event) => {
     // Define the workflow
     const definition = parallelProcessing
       .next(notificationTask)
-      .next(successState)
-      .addCatch(errorHandler, {
-        errors: ['States.TaskFailed'],
-        resultPath: '$.errorInfo',
-      });
+      .next(successState);
 
     // Create state machine
     const stateMachine = new stepfunctions.StateMachine(this, `RiskAnalysisWorkflow${environmentSuffix}`, {
