@@ -22,10 +22,15 @@ describe('Turn Around Prompt API Integration Tests', () => {
     beforeAll(() => {
       // Load deployment outputs
       try {
-        apiUrl = outputs[`ApiUrl${testEnvironmentSuffix}`] || outputs.WebhookApipr9001Endpoint4F988D0A;
+        apiUrl =
+          outputs[`ApiUrl${testEnvironmentSuffix}`] ||
+          outputs.WebhookApipr9001Endpoint4F988D0A;
         console.log(`Loaded deployment outputs. API URL: ${apiUrl}`);
       } catch (error: any) {
-        console.warn('Could not load deployment outputs, skipping live tests:', error.message);
+        console.warn(
+          'Could not load deployment outputs, skipping live tests:',
+          error.message
+        );
         apiUrl = '';
       }
     });
@@ -49,16 +54,16 @@ describe('Turn Around Prompt API Integration Tests', () => {
             amount: 2000,
             currency: 'usd',
             status: 'succeeded',
-            customer: 'cus_test_customer'
-          }
+            customer: 'cus_test_customer',
+          },
         },
         livemode: false,
         pending_webhooks: 1,
         request: {
           id: 'req_test_request',
-          idempotency_key: null
+          idempotency_key: null,
         },
-        type: 'payment_intent.succeeded'
+        type: 'payment_intent.succeeded',
       };
 
       try {
@@ -68,9 +73,9 @@ describe('Turn Around Prompt API Integration Tests', () => {
           {
             headers: {
               'Content-Type': 'application/json',
-              'Stripe-Signature': 't=1234567890,v1=test_signature'
+              'Stripe-Signature': 't=1234567890,v1=test_signature',
             },
-            timeout: 10000
+            timeout: 10000,
           }
         );
 
@@ -82,8 +87,14 @@ describe('Turn Around Prompt API Integration Tests', () => {
         console.log('Stripe webhook processed successfully:', response.data);
       } catch (error: any) {
         // Webhook validation might fail due to signature, but API should respond
-        if (error.response?.status === 400 || error.response?.status === 401 || error.response?.status === 403) {
-          console.log('Webhook security validation working (expected for unsigned test payload)');
+        if (
+          error.response?.status === 400 ||
+          error.response?.status === 401 ||
+          error.response?.status === 403
+        ) {
+          console.log(
+            'Webhook security validation working (expected for unsigned test payload)'
+          );
           expect(error.response.status).toBeGreaterThanOrEqual(400);
         } else {
           throw error;
@@ -110,19 +121,20 @@ describe('Turn Around Prompt API Integration Tests', () => {
           state: 'completed',
           amount: {
             total: '20.00',
-            currency: 'USD'
+            currency: 'USD',
           },
           payment_mode: 'INSTANT_TRANSFER',
           protection_eligibility: 'ELIGIBLE',
-          protection_eligibility_type: 'ITEM_NOT_RECEIVED_ELIGIBLE,UNAUTHORIZED_PAYMENT_ELIGIBLE'
+          protection_eligibility_type:
+            'ITEM_NOT_RECEIVED_ELIGIBLE,UNAUTHORIZED_PAYMENT_ELIGIBLE',
         },
         links: [
           {
             href: 'https://api.paypal.com/v1/payments/sale/PAY-1234567890ABCDEF',
             rel: 'self',
-            method: 'GET'
-          }
-        ]
+            method: 'GET',
+          },
+        ],
       };
 
       try {
@@ -131,9 +143,9 @@ describe('Turn Around Prompt API Integration Tests', () => {
           paypalWebhookPayload,
           {
             headers: {
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
             },
-            timeout: 10000
+            timeout: 10000,
           }
         );
 
@@ -170,21 +182,21 @@ describe('Turn Around Prompt API Integration Tests', () => {
               status: 'COMPLETED',
               amount_money: {
                 amount: 2000,
-                currency: 'USD'
+                currency: 'USD',
               },
               total_money: {
                 amount: 2000,
-                currency: 'USD'
+                currency: 'USD',
               },
               approved_money: {
                 amount: 2000,
-                currency: 'USD'
+                currency: 'USD',
               },
               customer_id: 'TEST_CUSTOMER_ID',
-              created_at: '2023-01-01T00:00:00.000Z'
-            }
-          }
-        }
+              created_at: '2023-01-01T00:00:00.000Z',
+            },
+          },
+        },
       };
 
       try {
@@ -193,9 +205,9 @@ describe('Turn Around Prompt API Integration Tests', () => {
           squareWebhookPayload,
           {
             headers: {
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
             },
-            timeout: 10000
+            timeout: 10000,
           }
         );
 
@@ -224,15 +236,17 @@ describe('Turn Around Prompt API Integration Tests', () => {
           { test: 'data' },
           {
             headers: {
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
             },
-            timeout: 5000
+            timeout: 5000,
           }
         );
         fail('Should have returned 404 for invalid provider');
       } catch (error: any) {
         expect(error.response?.status).toBe(403);
-        console.log('Invalid provider test passed - 403 returned as expected (security layer active)');
+        console.log(
+          'Invalid provider test passed - 403 returned as expected (security layer active)'
+        );
       }
     }, 10000);
 
@@ -244,16 +258,12 @@ describe('Turn Around Prompt API Integration Tests', () => {
 
       const axios = require('axios');
       try {
-        await axios.post(
-          `${apiUrl}webhooks/stripe`,
-          'invalid json',
-          {
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            timeout: 5000
-          }
-        );
+        await axios.post(`${apiUrl}webhooks/stripe`, 'invalid json', {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          timeout: 5000,
+        });
         fail('Should have failed with malformed JSON');
       } catch (error: any) {
         expect(error.response?.status).toBeGreaterThanOrEqual(400);

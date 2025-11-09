@@ -23,7 +23,9 @@ export class TapStack extends cdk.Stack {
     this.createWebhookProcessingInfrastructure(environmentSuffix);
   }
 
-  private createWebhookProcessingInfrastructure(environmentSuffix: string): void {
+  private createWebhookProcessingInfrastructure(
+    environmentSuffix: string
+  ): void {
     // API Gateway for webhook ingestion
     const { apiGateway } = this.createApiGateway(environmentSuffix);
 
@@ -31,7 +33,8 @@ export class TapStack extends cdk.Stack {
     const { table } = this.createDynamoDbTable(environmentSuffix);
 
     // SQS FIFO queues for each provider
-    const { stripeQueue, paypalQueue, squareQueue, dlq } = this.createSqsQueues(environmentSuffix);
+    const { stripeQueue, paypalQueue, squareQueue } =
+      this.createSqsQueues(environmentSuffix);
 
     // EventBridge custom event bus
     const { eventBus } = this.createEventBridgeBus(environmentSuffix);
@@ -50,10 +53,23 @@ export class TapStack extends cdk.Stack {
     this.connectApiGatewayToLambda(apiGateway, validatorFunction);
 
     // Connect SQS to processor function
-    this.connectSqsToLambda(processorFunction, stripeQueue, paypalQueue, squareQueue);
+    this.connectSqsToLambda(
+      processorFunction,
+      stripeQueue,
+      paypalQueue,
+      squareQueue
+    );
 
     // Monitoring and alerts
-    this.createMonitoring(environmentSuffix, apiGateway, validatorFunction, processorFunction, stripeQueue, paypalQueue, squareQueue);
+    this.createMonitoring(
+      environmentSuffix,
+      apiGateway,
+      validatorFunction,
+      processorFunction,
+      stripeQueue,
+      paypalQueue,
+      squareQueue
+    );
 
     // Outputs
     new cdk.CfnOutput(this, `EnvironmentSuffix${environmentSuffix}`, {
@@ -69,18 +85,22 @@ export class TapStack extends cdk.Stack {
 
   private createApiGateway(environmentSuffix: string) {
     // API Gateway with IAM authorization
-    const apiGateway = new cdk.aws_apigateway.RestApi(this, `WebhookApi${environmentSuffix}`, {
-      restApiName: `webhook-processing-api-${environmentSuffix}`,
-      description: 'Webhook Processing API Gateway',
-      deployOptions: {
-        stageName: 'prod',
-        throttlingRateLimit: 1000,
-        throttlingBurstLimit: 2000,
-        loggingLevel: cdk.aws_apigateway.MethodLoggingLevel.INFO,
-        dataTraceEnabled: true,
-        metricsEnabled: true,
-      },
-    });
+    const apiGateway = new cdk.aws_apigateway.RestApi(
+      this,
+      `WebhookApi${environmentSuffix}`,
+      {
+        restApiName: `webhook-processing-api-${environmentSuffix}`,
+        description: 'Webhook Processing API Gateway',
+        deployOptions: {
+          stageName: 'prod',
+          throttlingRateLimit: 1000,
+          throttlingBurstLimit: 2000,
+          loggingLevel: cdk.aws_apigateway.MethodLoggingLevel.INFO,
+          dataTraceEnabled: true,
+          metricsEnabled: true,
+        },
+      }
+    );
 
     // Request validator
     const requestValidator = new cdk.aws_apigateway.RequestValidator(
@@ -97,20 +117,24 @@ export class TapStack extends cdk.Stack {
   }
 
   private createDynamoDbTable(environmentSuffix: string) {
-    const table = new cdk.aws_dynamodb.Table(this, `WebhookTransactions${environmentSuffix}`, {
-      tableName: `webhook-transactions-${environmentSuffix}`,
-      partitionKey: {
-        name: 'webhook_id',
-        type: cdk.aws_dynamodb.AttributeType.STRING,
-      },
-      sortKey: {
-        name: 'timestamp',
-        type: cdk.aws_dynamodb.AttributeType.STRING,
-      },
-      billingMode: cdk.aws_dynamodb.BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecovery: true,
-      encryption: cdk.aws_dynamodb.TableEncryption.AWS_MANAGED,
-    });
+    const table = new cdk.aws_dynamodb.Table(
+      this,
+      `WebhookTransactions${environmentSuffix}`,
+      {
+        tableName: `webhook-transactions-${environmentSuffix}`,
+        partitionKey: {
+          name: 'webhook_id',
+          type: cdk.aws_dynamodb.AttributeType.STRING,
+        },
+        sortKey: {
+          name: 'timestamp',
+          type: cdk.aws_dynamodb.AttributeType.STRING,
+        },
+        billingMode: cdk.aws_dynamodb.BillingMode.PAY_PER_REQUEST,
+        pointInTimeRecovery: true,
+        encryption: cdk.aws_dynamodb.TableEncryption.AWS_MANAGED,
+      }
+    );
 
     // GSI for provider and event_type queries
     table.addGlobalSecondaryIndex({
@@ -137,49 +161,65 @@ export class TapStack extends cdk.Stack {
     });
 
     // FIFO queues for each provider
-    const stripeQueue = new cdk.aws_sqs.Queue(this, `StripeWebhookQueue${environmentSuffix}`, {
-      queueName: `stripe-webhook-queue-${environmentSuffix}.fifo`,
-      fifo: true,
-      contentBasedDeduplication: true,
-      visibilityTimeout: cdk.Duration.minutes(5),
-      retentionPeriod: cdk.Duration.days(4),
-      deadLetterQueue: {
-        queue: dlq,
-        maxReceiveCount: 3,
-      },
-    });
+    const stripeQueue = new cdk.aws_sqs.Queue(
+      this,
+      `StripeWebhookQueue${environmentSuffix}`,
+      {
+        queueName: `stripe-webhook-queue-${environmentSuffix}.fifo`,
+        fifo: true,
+        contentBasedDeduplication: true,
+        visibilityTimeout: cdk.Duration.minutes(5),
+        retentionPeriod: cdk.Duration.days(4),
+        deadLetterQueue: {
+          queue: dlq,
+          maxReceiveCount: 3,
+        },
+      }
+    );
 
-    const paypalQueue = new cdk.aws_sqs.Queue(this, `PaypalWebhookQueue${environmentSuffix}`, {
-      queueName: `paypal-webhook-queue-${environmentSuffix}.fifo`,
-      fifo: true,
-      contentBasedDeduplication: true,
-      visibilityTimeout: cdk.Duration.minutes(5),
-      retentionPeriod: cdk.Duration.days(4),
-      deadLetterQueue: {
-        queue: dlq,
-        maxReceiveCount: 3,
-      },
-    });
+    const paypalQueue = new cdk.aws_sqs.Queue(
+      this,
+      `PaypalWebhookQueue${environmentSuffix}`,
+      {
+        queueName: `paypal-webhook-queue-${environmentSuffix}.fifo`,
+        fifo: true,
+        contentBasedDeduplication: true,
+        visibilityTimeout: cdk.Duration.minutes(5),
+        retentionPeriod: cdk.Duration.days(4),
+        deadLetterQueue: {
+          queue: dlq,
+          maxReceiveCount: 3,
+        },
+      }
+    );
 
-    const squareQueue = new cdk.aws_sqs.Queue(this, `SquareWebhookQueue${environmentSuffix}`, {
-      queueName: `square-webhook-queue-${environmentSuffix}.fifo`,
-      fifo: true,
-      contentBasedDeduplication: true,
-      visibilityTimeout: cdk.Duration.minutes(5),
-      retentionPeriod: cdk.Duration.days(4),
-      deadLetterQueue: {
-        queue: dlq,
-        maxReceiveCount: 3,
-      },
-    });
+    const squareQueue = new cdk.aws_sqs.Queue(
+      this,
+      `SquareWebhookQueue${environmentSuffix}`,
+      {
+        queueName: `square-webhook-queue-${environmentSuffix}.fifo`,
+        fifo: true,
+        contentBasedDeduplication: true,
+        visibilityTimeout: cdk.Duration.minutes(5),
+        retentionPeriod: cdk.Duration.days(4),
+        deadLetterQueue: {
+          queue: dlq,
+          maxReceiveCount: 3,
+        },
+      }
+    );
 
     return { stripeQueue, paypalQueue, squareQueue, dlq };
   }
 
   private createEventBridgeBus(environmentSuffix: string) {
-    const eventBus = new cdk.aws_events.EventBus(this, `PaymentEventsBus${environmentSuffix}`, {
-      eventBusName: `payment-events-${environmentSuffix}`,
-    });
+    const eventBus = new cdk.aws_events.EventBus(
+      this,
+      `PaymentEventsBus${environmentSuffix}`,
+      {
+        eventBusName: `payment-events-${environmentSuffix}`,
+      }
+    );
 
     return { eventBus };
   }
@@ -193,12 +233,18 @@ export class TapStack extends cdk.Stack {
     eventBus: cdk.aws_events.EventBus
   ) {
     // IAM role for Lambda functions
-    const lambdaRole = new cdk.aws_iam.Role(this, `WebhookLambdaRole${environmentSuffix}`, {
-      assumedBy: new cdk.aws_iam.ServicePrincipal('lambda.amazonaws.com'),
-      managedPolicies: [
-        cdk.aws_iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
-      ],
-    });
+    const lambdaRole = new cdk.aws_iam.Role(
+      this,
+      `WebhookLambdaRole${environmentSuffix}`,
+      {
+        assumedBy: new cdk.aws_iam.ServicePrincipal('lambda.amazonaws.com'),
+        managedPolicies: [
+          cdk.aws_iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'service-role/AWSLambdaBasicExecutionRole'
+          ),
+        ],
+      }
+    );
 
     // Add permissions
     table.grantWriteData(lambdaRole);
@@ -219,11 +265,14 @@ export class TapStack extends cdk.Stack {
     );
 
     // Webhook validator function
-    const validatorFunction = new cdk.aws_lambda.Function(this, `WebhookValidator${environmentSuffix}`, {
-      functionName: `webhook-validator-${environmentSuffix}`,
-      runtime: cdk.aws_lambda.Runtime.NODEJS_18_X,
-      architecture: cdk.aws_lambda.Architecture.ARM_64,
-      code: cdk.aws_lambda.Code.fromInline(`
+    const validatorFunction = new cdk.aws_lambda.Function(
+      this,
+      `WebhookValidator${environmentSuffix}`,
+      {
+        functionName: `webhook-validator-${environmentSuffix}`,
+        runtime: cdk.aws_lambda.Runtime.NODEJS_18_X,
+        architecture: cdk.aws_lambda.Architecture.ARM_64,
+        code: cdk.aws_lambda.Code.fromInline(`
 const crypto = require('crypto');
 const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
 
@@ -342,26 +391,30 @@ function getQueueUrlForProvider(provider) {
   }
 }
       `),
-      handler: 'index.handler',
-      timeout: cdk.Duration.seconds(30),
-      memorySize: 512,
-      role: lambdaRole,
-      environment: {
-        STRIPE_WEBHOOK_SECRET: 'whsec_test_secret',
-        PAYPAL_WEBHOOK_SECRET: 'paypal_test_secret',
-        SQUARE_WEBHOOK_SECRET: 'square_test_secret',
-        STRIPE_QUEUE_URL: stripeQueue.queueUrl,
-        PAYPAL_QUEUE_URL: paypalQueue.queueUrl,
-        SQUARE_QUEUE_URL: squareQueue.queueUrl,
-      },
-    });
+        handler: 'index.handler',
+        timeout: cdk.Duration.seconds(30),
+        memorySize: 512,
+        role: lambdaRole,
+        environment: {
+          STRIPE_WEBHOOK_SECRET: 'whsec_test_secret',
+          PAYPAL_WEBHOOK_SECRET: 'paypal_test_secret',
+          SQUARE_WEBHOOK_SECRET: 'square_test_secret',
+          STRIPE_QUEUE_URL: stripeQueue.queueUrl,
+          PAYPAL_QUEUE_URL: paypalQueue.queueUrl,
+          SQUARE_QUEUE_URL: squareQueue.queueUrl,
+        },
+      }
+    );
 
     // Webhook processor function
-    const processorFunction = new cdk.aws_lambda.Function(this, `WebhookProcessor${environmentSuffix}`, {
-      functionName: `webhook-processor-${environmentSuffix}`,
-      runtime: cdk.aws_lambda.Runtime.NODEJS_18_X,
-      architecture: cdk.aws_lambda.Architecture.ARM_64,
-      code: cdk.aws_lambda.Code.fromInline(`
+    const processorFunction = new cdk.aws_lambda.Function(
+      this,
+      `WebhookProcessor${environmentSuffix}`,
+      {
+        functionName: `webhook-processor-${environmentSuffix}`,
+        runtime: cdk.aws_lambda.Runtime.NODEJS_18_X,
+        architecture: cdk.aws_lambda.Architecture.ARM_64,
+        code: cdk.aws_lambda.Code.fromInline(`
 const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
 const { EventBridgeClient, PutEventsCommand } = require('@aws-sdk/client-eventbridge');
 
@@ -407,15 +460,16 @@ exports.handler = async (event) => {
   }
 };
       `),
-      handler: 'index.handler',
-      timeout: cdk.Duration.minutes(5),
-      memorySize: 1024,
-      role: lambdaRole,
-      environment: {
-        TABLE_NAME: table.tableName,
-        EVENT_BUS_NAME: eventBus.eventBusName,
-      },
-    });
+        handler: 'index.handler',
+        timeout: cdk.Duration.minutes(5),
+        memorySize: 1024,
+        role: lambdaRole,
+        environment: {
+          TABLE_NAME: table.tableName,
+          EVENT_BUS_NAME: eventBus.eventBusName,
+        },
+      }
+    );
 
     return { validatorFunction, processorFunction };
   }
@@ -429,9 +483,13 @@ exports.handler = async (event) => {
     const providerResource = webhooksResource.addResource('{provider}');
 
     // Add method with IAM authorization
-    providerResource.addMethod('POST', new cdk.aws_apigateway.LambdaIntegration(validatorFunction), {
-      authorizationType: cdk.aws_apigateway.AuthorizationType.IAM,
-    });
+    providerResource.addMethod(
+      'POST',
+      new cdk.aws_apigateway.LambdaIntegration(validatorFunction),
+      {
+        authorizationType: cdk.aws_apigateway.AuthorizationType.IAM,
+      }
+    );
   }
 
   private connectSqsToLambda(
@@ -467,79 +525,104 @@ exports.handler = async (event) => {
     squareQueue: cdk.aws_sqs.Queue
   ): void {
     // CloudWatch alarms
-    new cdk.aws_cloudwatch.Alarm(this, `ApiGateway4xxErrors${environmentSuffix}`, {
-      alarmName: `webhook-api-4xx-errors-${environmentSuffix}`,
-      alarmDescription: 'API Gateway 4XX errors above 1%',
-      metric: new cdk.aws_cloudwatch.Metric({
-        namespace: 'AWS/ApiGateway',
-        metricName: '4XXError',
-        dimensionsMap: { ApiName: apiGateway.restApiName },
-        statistic: 'Sum',
-      }),
-      threshold: 1,
-      evaluationPeriods: 5,
-      comparisonOperator: cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-    });
+    new cdk.aws_cloudwatch.Alarm(
+      this,
+      `ApiGateway4xxErrors${environmentSuffix}`,
+      {
+        alarmName: `webhook-api-4xx-errors-${environmentSuffix}`,
+        alarmDescription: 'API Gateway 4XX errors above 1%',
+        metric: new cdk.aws_cloudwatch.Metric({
+          namespace: 'AWS/ApiGateway',
+          metricName: '4XXError',
+          dimensionsMap: { ApiName: apiGateway.restApiName },
+          statistic: 'Sum',
+        }),
+        threshold: 1,
+        evaluationPeriods: 5,
+        comparisonOperator:
+          cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      }
+    );
 
-    new cdk.aws_cloudwatch.Alarm(this, `ApiGateway5xxErrors${environmentSuffix}`, {
-      alarmName: `webhook-api-5xx-errors-${environmentSuffix}`,
-      alarmDescription: 'API Gateway 5XX errors above 1%',
-      metric: new cdk.aws_cloudwatch.Metric({
-        namespace: 'AWS/ApiGateway',
-        metricName: '5XXError',
-        dimensionsMap: { ApiName: apiGateway.restApiName },
-        statistic: 'Sum',
-      }),
-      threshold: 1,
-      evaluationPeriods: 5,
-      comparisonOperator: cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-    });
+    new cdk.aws_cloudwatch.Alarm(
+      this,
+      `ApiGateway5xxErrors${environmentSuffix}`,
+      {
+        alarmName: `webhook-api-5xx-errors-${environmentSuffix}`,
+        alarmDescription: 'API Gateway 5XX errors above 1%',
+        metric: new cdk.aws_cloudwatch.Metric({
+          namespace: 'AWS/ApiGateway',
+          metricName: '5XXError',
+          dimensionsMap: { ApiName: apiGateway.restApiName },
+          statistic: 'Sum',
+        }),
+        threshold: 1,
+        evaluationPeriods: 5,
+        comparisonOperator:
+          cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      }
+    );
 
     // Queue depth alarms
     [stripeQueue, paypalQueue, squareQueue].forEach((queue, index) => {
       const providers = ['stripe', 'paypal', 'square'];
-      new cdk.aws_cloudwatch.Alarm(this, `${providers[index]}QueueDepthAlarm${environmentSuffix}`, {
-        alarmName: `${providers[index]}-webhook-queue-depth-${environmentSuffix}`,
-        alarmDescription: `${providers[index]} webhook queue depth above threshold`,
-        metric: new cdk.aws_cloudwatch.Metric({
-          namespace: 'AWS/SQS',
-          metricName: 'ApproximateNumberOfMessagesVisible',
-          dimensionsMap: { QueueName: queue.queueName },
-          statistic: 'Maximum',
-        }),
-        threshold: 1000,
-        evaluationPeriods: 3,
-        comparisonOperator: cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-      });
+      new cdk.aws_cloudwatch.Alarm(
+        this,
+        `${providers[index]}QueueDepthAlarm${environmentSuffix}`,
+        {
+          alarmName: `${providers[index]}-webhook-queue-depth-${environmentSuffix}`,
+          alarmDescription: `${providers[index]} webhook queue depth above threshold`,
+          metric: new cdk.aws_cloudwatch.Metric({
+            namespace: 'AWS/SQS',
+            metricName: 'ApproximateNumberOfMessagesVisible',
+            dimensionsMap: { QueueName: queue.queueName },
+            statistic: 'Maximum',
+          }),
+          threshold: 1000,
+          evaluationPeriods: 3,
+          comparisonOperator:
+            cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+        }
+      );
     });
 
     // Lambda error alarms
-    new cdk.aws_cloudwatch.Alarm(this, `ValidatorFunctionErrors${environmentSuffix}`, {
-      alarmName: `webhook-validator-errors-${environmentSuffix}`,
-      alarmDescription: 'Webhook validator function errors',
-      metric: new cdk.aws_cloudwatch.Metric({
-        namespace: 'AWS/Lambda',
-        metricName: 'Errors',
-        dimensionsMap: { FunctionName: validatorFunction.functionName },
-        statistic: 'Sum',
-      }),
-      threshold: 5,
-      evaluationPeriods: 5,
-      comparisonOperator: cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-    });
+    new cdk.aws_cloudwatch.Alarm(
+      this,
+      `ValidatorFunctionErrors${environmentSuffix}`,
+      {
+        alarmName: `webhook-validator-errors-${environmentSuffix}`,
+        alarmDescription: 'Webhook validator function errors',
+        metric: new cdk.aws_cloudwatch.Metric({
+          namespace: 'AWS/Lambda',
+          metricName: 'Errors',
+          dimensionsMap: { FunctionName: validatorFunction.functionName },
+          statistic: 'Sum',
+        }),
+        threshold: 5,
+        evaluationPeriods: 5,
+        comparisonOperator:
+          cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      }
+    );
 
-    new cdk.aws_cloudwatch.Alarm(this, `ProcessorFunctionErrors${environmentSuffix}`, {
-      alarmName: `webhook-processor-errors-${environmentSuffix}`,
-      alarmDescription: 'Webhook processor function errors',
-      metric: new cdk.aws_cloudwatch.Metric({
-        namespace: 'AWS/Lambda',
-        metricName: 'Errors',
-        dimensionsMap: { FunctionName: processorFunction.functionName },
-        statistic: 'Sum',
-      }),
-      threshold: 5,
-      evaluationPeriods: 5,
-      comparisonOperator: cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-    });
+    new cdk.aws_cloudwatch.Alarm(
+      this,
+      `ProcessorFunctionErrors${environmentSuffix}`,
+      {
+        alarmName: `webhook-processor-errors-${environmentSuffix}`,
+        alarmDescription: 'Webhook processor function errors',
+        metric: new cdk.aws_cloudwatch.Metric({
+          namespace: 'AWS/Lambda',
+          metricName: 'Errors',
+          dimensionsMap: { FunctionName: processorFunction.functionName },
+          statistic: 'Sum',
+        }),
+        threshold: 5,
+        evaluationPeriods: 5,
+        comparisonOperator:
+          cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      }
+    );
   }
 }
