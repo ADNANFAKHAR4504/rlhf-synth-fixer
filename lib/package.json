@@ -1,0 +1,8 @@
+{
+  "name": "webhook-validator",
+  "version": "1.0.0",
+  "main": "app.js",
+  "dependencies": {
+    "@aws-sdk/client-sqs": "^3.400.0"
+  }
+}

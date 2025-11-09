@@ -5,7 +5,7 @@
   "turn_type": "single",
   "po_id": "101912206",
   "team": "4",
-  "startedAt": "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)",
+  "startedAt": "2025-11-09T07:09:30.3NZ",
   "subtask": "Application Deployment",
   "subject_labels": ["Serverless Infrastructure (Functions as Code)"],
   "aws_services": ["S3 Bucket", "CloudFormation", "Lambda", "EventBridge", "CloudWatch LogGroup", "VPC"]
