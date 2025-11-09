@@ -74,18 +74,18 @@ terraform {
     encrypt        = true
     dynamodb_table = "payment-infra-terraform-locks"
   }
-  
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = ">= 5.0"
     }
   }
 }
 
 provider "aws" {
   region = var.aws_region
-  
+
   default_tags {
     tags = {
       Environment = terraform.workspace
@@ -99,9 +99,65 @@ provider "aws" {
 ### `main.tf`
 
 ```hcl
+# Local variables
+locals {
+  current_env = terraform.workspace == "default" ? "dev" : terraform.workspace
+}
+
 # Data sources for shared resources
-data "aws_ecr_repository" "payment_api" {
-  name = "payment-api"
+# ECR Repository - create in each environment with workspace-specific naming
+resource "aws_ecr_repository" "payment_api" {
+  name                 = "payment-api-${local.current_env}"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  encryption_configuration {
+    encryption_type = "AES256"
+  }
+
+  tags = {
+    Name        = "payment-api-${local.current_env}"
+    Environment = local.current_env
+  }
+}
+
+# Lifecycle policy for ECR
+resource "aws_ecr_lifecycle_policy" "payment_api" {
+  repository = aws_ecr_repository.payment_api.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Keep last 10 images"
+        selection = {
+          tagStatus     = "tagged"
+          tagPrefixList = ["v"]
+          countType     = "imageCountMoreThan"
+          countNumber   = 10
+        }
+        action = {
+          type = "expire"
+        }
+      },
+      {
+        rulePriority = 2
+        description  = "Remove untagged images after 7 days"
+        selection = {
+          tagStatus   = "untagged"
+          countType   = "sinceImagePushed"
+          countUnit   = "days"
+          countNumber = 7
+        }
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
 }
 
 data "aws_caller_identity" "current" {}
@@ -109,10 +165,10 @@ data "aws_caller_identity" "current" {}
 # Core Infrastructure Module
 module "core" {
   source = "./modules/core"
-  
-  environment         = terraform.workspace
-  vpc_cidr           = var.vpc_cidr
-  availability_zones = var.availability_zones
+
+  environment          = local.current_env
+  vpc_cidr             = var.vpc_cidr
+  availability_zones   = var.availability_zones
   private_subnet_cidrs = var.private_subnet_cidrs
   public_subnet_cidrs  = var.public_subnet_cidrs
   enable_nat_gateway   = var.enable_nat_gateway
@@ -122,50 +178,50 @@ module "core" {
 # RDS Module
 module "rds" {
   source = "./modules/rds"
-  
-  environment         = terraform.workspace
-  vpc_id             = module.core.vpc_id
-  private_subnet_ids = module.core.private_subnet_ids
-  instance_class     = var.rds_instance_class
-  db_name            = var.db_name
-  db_username        = var.db_username
-  allocated_storage  = var.rds_allocated_storage
-  backup_retention   = var.rds_backup_retention
-  multi_az          = var.rds_multi_az
+
+  environment           = local.current_env
+  vpc_id                = module.core.vpc_id
+  private_subnet_ids    = module.core.private_subnet_ids
+  instance_class        = var.rds_instance_class
+  db_name               = var.db_name
+  db_username           = var.db_username
+  allocated_storage     = var.rds_allocated_storage
+  backup_retention      = var.rds_backup_retention
+  multi_az              = var.rds_multi_az
   ecs_security_group_id = module.ecs.ecs_security_group_id
 }
 
 # ECS Module
 module "ecs" {
   source = "./modules/ecs"
-  
-  environment           = terraform.workspace
-  vpc_id               = module.core.vpc_id
-  private_subnet_ids   = module.core.private_subnet_ids
-  public_subnet_ids    = module.core.public_subnet_ids
-  task_count           = var.ecs_task_count
-  task_cpu             = var.ecs_task_cpu
-  task_memory          = var.ecs_task_memory
-  container_image      = "${data.aws_ecr_repository.payment_api.repository_url}:latest"
-  container_port       = 8080
-  health_check_path    = "/health"
-  database_url         = module.rds.db_connection_string
-  certificate_arn      = var.certificate_arn
+
+  environment        = local.current_env
+  vpc_id             = module.core.vpc_id
+  private_subnet_ids = module.core.private_subnet_ids
+  public_subnet_ids  = module.core.public_subnet_ids
+  task_count         = var.ecs_task_count
+  task_cpu           = var.ecs_task_cpu
+  task_memory        = var.ecs_task_memory
+  container_image    = "${aws_ecr_repository.payment_api.repository_url}:latest"
+  container_port     = 8080
+  health_check_path  = "/health"
+  database_url       = module.rds.db_connection_string
+  certificate_arn    = var.certificate_arn
 }
 
 # S3 Bucket for Transaction Logs
 resource "aws_s3_bucket" "transaction_logs" {
-  bucket = "payment-logs-${terraform.workspace}-${data.aws_caller_identity.current.account_id}"
-  
+  bucket = "payment-logs-${local.current_env}-${data.aws_caller_identity.current.account_id}"
+
   tags = {
-    Name        = "payment-logs-${terraform.workspace}"
-    Environment = terraform.workspace
+    Name        = "payment-logs-${local.current_env}"
+    Environment = local.current_env
   }
 }
 
 resource "aws_s3_bucket_versioning" "transaction_logs" {
   bucket = aws_s3_bucket.transaction_logs.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -173,21 +229,25 @@ resource "aws_s3_bucket_versioning" "transaction_logs" {
 
 resource "aws_s3_bucket_lifecycle_configuration" "transaction_logs" {
   bucket = aws_s3_bucket.transaction_logs.id
-  
+
   rule {
     id     = "retention-policy"
     status = "Enabled"
-    
+
+    filter {
+      prefix = ""
+    }
+
     transition {
       days          = var.s3_transition_days
       storage_class = "STANDARD_IA"
     }
-    
+
     transition {
       days          = var.s3_glacier_days
       storage_class = "GLACIER"
     }
-    
+
     expiration {
       days = var.s3_expiration_days
     }
@@ -196,7 +256,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "transaction_logs" {
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "transaction_logs" {
   bucket = aws_s3_bucket.transaction_logs.id
-  
+
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -208,6 +268,12 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "transaction_logs"
 ### `variables.tf`
 
 ```hcl
+variable "environment" {
+  description = "Environment name (dev/staging/prod) - typically set via workspace"
+  type        = string
+  default     = "dev"
+}
+
 variable "aws_region" {
   description = "AWS region"
   type        = string
@@ -217,21 +283,25 @@ variable "aws_region" {
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string
+  default     = "10.0.0.0/16"
 }
 
 variable "availability_zones" {
   description = "Availability zones"
   type        = list(string)
+  default     = ["us-east-1a", "us-east-1b"]
 }
 
 variable "private_subnet_cidrs" {
   description = "CIDR blocks for private subnets"
   type        = list(string)
+  default     = ["10.0.1.0/24", "10.0.2.0/24"]
 }
 
 variable "public_subnet_cidrs" {
   description = "CIDR blocks for public subnets"
   type        = list(string)
+  default     = ["10.0.101.0/24", "10.0.102.0/24"]
 }
 
 variable "enable_nat_gateway" {
@@ -249,6 +319,7 @@ variable "single_nat_gateway" {
 variable "rds_instance_class" {
   description = "RDS instance class"
   type        = string
+  default     = "db.t3.micro"
 }
 
 variable "db_name" {
@@ -272,26 +343,31 @@ variable "rds_allocated_storage" {
 variable "rds_backup_retention" {
   description = "RDS backup retention period in days"
   type        = number
+  default     = 7
 }
 
 variable "rds_multi_az" {
   description = "Enable Multi-AZ for RDS"
   type        = bool
+  default     = false
 }
 
 variable "ecs_task_count" {
   description = "Number of ECS tasks"
   type        = number
+  default     = 1
 }
 
 variable "ecs_task_cpu" {
   description = "ECS task CPU units"
   type        = string
+  default     = "256"
 }
 
 variable "ecs_task_memory" {
   description = "ECS task memory in MB"
   type        = string
+  default     = "512"
 }
 
 variable "certificate_arn" {
@@ -303,16 +379,19 @@ variable "certificate_arn" {
 variable "s3_transition_days" {
   description = "Days before transitioning to STANDARD_IA"
   type        = number
+  default     = 30
 }
 
 variable "s3_glacier_days" {
   description = "Days before transitioning to GLACIER"
   type        = number
+  default     = 90
 }
 
 variable "s3_expiration_days" {
   description = "Days before expiring objects"
   type        = number
+  default     = 365
 }
 ```
 
@@ -356,7 +435,7 @@ resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-  
+
   tags = {
     Name = "payment-vpc-${var.environment}"
   }
@@ -365,7 +444,7 @@ resource "aws_vpc" "main" {
 # Internet Gateway
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
-  
+
   tags = {
     Name = "payment-igw-${var.environment}"
   }
@@ -374,12 +453,12 @@ resource "aws_internet_gateway" "main" {
 # Public Subnets
 resource "aws_subnet" "public" {
   count = length(var.public_subnet_cidrs)
-  
+
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.public_subnet_cidrs[count.index]
   availability_zone       = var.availability_zones[count.index]
   map_public_ip_on_launch = true
-  
+
   tags = {
     Name = "payment-public-subnet-${var.environment}-${count.index + 1}"
     Type = "Public"
@@ -389,11 +468,11 @@ resource "aws_subnet" "public" {
 # Private Subnets
 resource "aws_subnet" "private" {
   count = length(var.private_subnet_cidrs)
-  
+
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.private_subnet_cidrs[count.index]
   availability_zone = var.availability_zones[count.index]
-  
+
   tags = {
     Name = "payment-private-subnet-${var.environment}-${count.index + 1}"
     Type = "Private"
@@ -403,9 +482,9 @@ resource "aws_subnet" "private" {
 # Elastic IPs for NAT Gateways
 resource "aws_eip" "nat" {
   count = var.enable_nat_gateway ? (var.single_nat_gateway ? 1 : length(var.public_subnet_cidrs)) : 0
-  
+
   domain = "vpc"
-  
+
   tags = {
     Name = "payment-nat-eip-${var.environment}-${count.index + 1}"
   }
@@ -414,26 +493,26 @@ resource "aws_eip" "nat" {
 # NAT Gateways
 resource "aws_nat_gateway" "main" {
   count = var.enable_nat_gateway ? (var.single_nat_gateway ? 1 : length(var.public_subnet_cidrs)) : 0
-  
+
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
-  
+
   tags = {
     Name = "payment-nat-${var.environment}-${count.index + 1}"
   }
-  
+
   depends_on = [aws_internet_gateway.main]
 }
 
 # Public Route Table
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
-  
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main.id
   }
-  
+
   tags = {
     Name = "payment-public-rt-${var.environment}"
   }
@@ -442,14 +521,14 @@ resource "aws_route_table" "public" {
 # Private Route Tables
 resource "aws_route_table" "private" {
   count = var.enable_nat_gateway ? (var.single_nat_gateway ? 1 : length(var.private_subnet_cidrs)) : 0
-  
+
   vpc_id = aws_vpc.main.id
-  
+
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.main[var.single_nat_gateway ? 0 : count.index].id
   }
-  
+
   tags = {
     Name = "payment-private-rt-${var.environment}-${count.index + 1}"
   }
@@ -458,14 +537,14 @@ resource "aws_route_table" "private" {
 # Route Table Associations
 resource "aws_route_table_association" "public" {
   count = length(aws_subnet.public)
-  
+
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
 
 resource "aws_route_table_association" "private" {
   count = length(aws_subnet.private)
-  
+
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = var.enable_nat_gateway ? aws_route_table.private[var.single_nat_gateway ? 0 : count.index].id : aws_route_table.public.id
 }
@@ -478,7 +557,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
 
 resource "aws_iam_role" "vpc_flow_logs" {
   name = "payment-vpc-flow-logs-${var.environment}"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -496,7 +575,7 @@ resource "aws_iam_role" "vpc_flow_logs" {
 resource "aws_iam_role_policy" "vpc_flow_logs" {
   name = "payment-vpc-flow-logs-${var.environment}"
   role = aws_iam_role.vpc_flow_logs.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -516,10 +595,11 @@ resource "aws_iam_role_policy" "vpc_flow_logs" {
 }
 
 resource "aws_flow_log" "main" {
-  iam_role_arn    = aws_iam_role.vpc_flow_logs.arn
-  log_destination_arn = aws_cloudwatch_log_group.vpc_flow_logs.arn
-  traffic_type    = "ALL"
-  vpc_id          = aws_vpc.main.id
+  iam_role_arn         = aws_iam_role.vpc_flow_logs.arn
+  log_destination      = aws_cloudwatch_log_group.vpc_flow_logs.arn
+  log_destination_type = "cloud-watch-logs"
+  traffic_type         = "ALL"
+  vpc_id               = aws_vpc.main.id
 }
 ```
 
@@ -598,7 +678,7 @@ resource "aws_security_group" "rds" {
   name        = "payment-rds-sg-${var.environment}"
   description = "Security group for RDS database"
   vpc_id      = var.vpc_id
-  
+
   tags = {
     Name = "payment-rds-sg-${var.environment}"
   }
@@ -628,7 +708,7 @@ resource "aws_security_group_rule" "rds_egress" {
 resource "aws_db_subnet_group" "main" {
   name       = "payment-db-subnet-${var.environment}"
   subnet_ids = var.private_subnet_ids
-  
+
   tags = {
     Name = "payment-db-subnet-${var.environment}"
   }
@@ -636,8 +716,9 @@ resource "aws_db_subnet_group" "main" {
 
 # Generate random password
 resource "random_password" "db_password" {
-  length  = 32
-  special = true
+  length           = 32
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
 # Store password in SSM Parameter Store
@@ -645,7 +726,7 @@ resource "aws_ssm_parameter" "db_password" {
   name  = "/payment/${var.environment}/database/password"
   type  = "SecureString"
   value = random_password.db_password.result
-  
+
   tags = {
     Name = "payment-db-password-${var.environment}"
   }
@@ -655,17 +736,17 @@ resource "aws_ssm_parameter" "db_password" {
 resource "aws_db_parameter_group" "main" {
   family = "postgres15"
   name   = "payment-db-params-${var.environment}"
-  
+
   parameter {
     name  = "log_statement"
-    value = "all"
+    value = "ddl"
   }
-  
+
   parameter {
     name  = "log_min_duration_statement"
     value = "100"
   }
-  
+
   tags = {
     Name = "payment-db-params-${var.environment}"
   }
@@ -675,32 +756,32 @@ resource "aws_db_parameter_group" "main" {
 resource "aws_db_instance" "main" {
   identifier     = "payment-db-${var.environment}"
   engine         = "postgres"
-  engine_version = "15.4"
-  
+  engine_version = "15.14"
+
   instance_class    = var.instance_class
   allocated_storage = var.allocated_storage
   storage_type      = "gp3"
   storage_encrypted = true
-  
+
   db_name  = var.db_name
   username = var.db_username
   password = random_password.db_password.result
-  
+
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
   parameter_group_name   = aws_db_parameter_group.main.name
-  
+
   backup_retention_period = var.backup_retention
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
-  
-  multi_az               = var.multi_az
-  deletion_protection    = var.environment == "prod" ? true : false
-  skip_final_snapshot    = var.environment != "prod"
-  final_snapshot_identifier = var.environment == "prod" ? "payment-db-${var.environment}-final-${formatdate("YYYY-MM-DD", timestamp())}" : null
-  
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
+
+  multi_az                  = var.multi_az
+  deletion_protection       = false
+  skip_final_snapshot       = true
+  final_snapshot_identifier = null
+
   enabled_cloudwatch_logs_exports = ["postgresql"]
-  
+
   tags = {
     Name = "payment-db-${var.environment}"
   }
@@ -717,7 +798,7 @@ resource "aws_cloudwatch_metric_alarm" "database_cpu" {
   statistic           = "Average"
   threshold           = var.environment == "prod" ? "75" : "85"
   alarm_description   = "This metric monitors RDS CPU utilization"
-  
+
   dimensions = {
     DBInstanceIdentifier = aws_db_instance.main.id
   }
@@ -731,9 +812,9 @@ resource "aws_cloudwatch_metric_alarm" "database_storage" {
   namespace           = "AWS/RDS"
   period              = "300"
   statistic           = "Average"
-  threshold           = "2147483648"  # 2GB in bytes
+  threshold           = "2147483648" # 2GB in bytes
   alarm_description   = "This metric monitors RDS free storage"
-  
+
   dimensions = {
     DBInstanceIdentifier = aws_db_instance.main.id
   }
@@ -822,12 +903,12 @@ output "db_security_group_id" {
 # ECS Cluster
 resource "aws_ecs_cluster" "main" {
   name = "payment-cluster-${var.environment}"
-  
+
   setting {
     name  = "containerInsights"
     value = "enabled"
   }
-  
+
   tags = {
     Name = "payment-cluster-${var.environment}"
   }
@@ -838,7 +919,7 @@ resource "aws_security_group" "ecs_tasks" {
   name        = "payment-ecs-tasks-sg-${var.environment}"
   description = "Security group for ECS tasks"
   vpc_id      = var.vpc_id
-  
+
   tags = {
     Name = "payment-ecs-tasks-sg-${var.environment}"
   }
@@ -869,7 +950,7 @@ resource "aws_security_group" "alb" {
   name        = "payment-alb-sg-${var.environment}"
   description = "Security group for Application Load Balancer"
   vpc_id      = var.vpc_id
-  
+
   tags = {
     Name = "payment-alb-sg-${var.environment}"
   }
@@ -912,10 +993,10 @@ resource "aws_lb" "main" {
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
   subnets            = var.public_subnet_ids
-  
-  enable_deletion_protection = var.environment == "prod" ? true : false
-  enable_http2              = true
-  
+
+  enable_deletion_protection = false
+  enable_http2               = true
+
   tags = {
     Name = "payment-alb-${var.environment}"
   }
@@ -923,12 +1004,12 @@ resource "aws_lb" "main" {
 
 # ALB Target Group
 resource "aws_lb_target_group" "main" {
-  name     = "payment-tg-${var.environment}"
-  port     = var.container_port
-  protocol = "HTTP"
-  vpc_id   = var.vpc_id
+  name        = "payment-tg-${var.environment}"
+  port        = var.container_port
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
   target_type = "ip"
-  
+
   health_check {
     enabled             = true
     healthy_threshold   = 2
@@ -938,9 +1019,9 @@ resource "aws_lb_target_group" "main" {
     path                = var.health_check_path
     matcher             = "200"
   }
-  
+
   deregistration_delay = 30
-  
+
   tags = {
     Name = "payment-tg-${var.environment}"
   }
@@ -951,7 +1032,7 @@ resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
-  
+
   default_action {
     type = "redirect"
     redirect {
@@ -965,13 +1046,13 @@ resource "aws_lb_listener" "http" {
 # ALB Listener - HTTPS (if certificate provided)
 resource "aws_lb_listener" "https" {
   count = var.certificate_arn != "" ? 1 : 0
-  
+
   load_balancer_arn = aws_lb.main.arn
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
   certificate_arn   = var.certificate_arn
-  
+
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.main.arn
@@ -982,12 +1063,12 @@ resource "aws_lb_listener" "https" {
 resource "aws_lb_listener_rule" "api" {
   listener_arn = var.certificate_arn != "" ? aws_lb_listener.https[0].arn : aws_lb_listener.http.arn
   priority     = 100
-  
+
   action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.main.arn
   }
-  
+
   condition {
     path_pattern {
       values = ["/api/*", "/payments/*"]
@@ -998,7 +1079,7 @@ resource "aws_lb_listener_rule" "api" {
 # ECS Task Execution Role
 resource "aws_iam_role" "ecs_task_execution" {
   name = "payment-ecs-task-execution-${var.environment}"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1021,7 +1102,7 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
 # ECS Task Role
 resource "aws_iam_role" "ecs_task" {
   name = "payment-ecs-task-${var.environment}"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1039,7 +1120,7 @@ resource "aws_iam_role" "ecs_task" {
 resource "aws_iam_role_policy" "ecs_task" {
   name = "payment-ecs-task-${var.environment}"
   role = aws_iam_role.ecs_task.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1081,20 +1162,20 @@ resource "aws_ecs_task_definition" "main" {
   cpu                      = var.task_cpu
   memory                   = var.task_memory
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
-  task_role_arn           = aws_iam_role.ecs_task.arn
-  
+  task_role_arn            = aws_iam_role.ecs_task.arn
+
   container_definitions = jsonencode([
     {
       name  = "payment-api"
       image = var.container_image
-      
+
       portMappings = [
         {
           containerPort = var.container_port
           protocol      = "tcp"
         }
       ]
-      
+
       environment = [
         {
           name  = "ENVIRONMENT"
@@ -1105,14 +1186,14 @@ resource "aws_ecs_task_definition" "main" {
           value = tostring(var.container_port)
         }
       ]
-      
+
       secrets = [
         {
           name      = "DATABASE_URL"
           valueFrom = aws_ssm_parameter.database_url.arn
         }
       ]
-      
+
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -1121,7 +1202,7 @@ resource "aws_ecs_task_definition" "main" {
           "awslogs-stream-prefix" = "payment-api"
         }
       }
-      
+
       healthCheck = {
         command     = ["CMD-SHELL", "curl -f http://localhost:${var.container_port}${var.health_check_path} || exit 1"]
         interval    = 30
@@ -1147,19 +1228,19 @@ resource "aws_ecs_service" "main" {
   task_definition = aws_ecs_task_definition.main.arn
   desired_count   = var.task_count
   launch_type     = "FARGATE"
-  
+
   network_configuration {
     security_groups  = [aws_security_group.ecs_tasks.id]
     subnets          = var.private_subnet_ids
     assign_public_ip = false
   }
-  
+
   load_balancer {
     target_group_arn = aws_lb_target_group.main.arn
     container_name   = "payment-api"
     container_port   = var.container_port
   }
-  
+
   depends_on = [aws_lb_listener.http]
 }
 
@@ -1178,7 +1259,7 @@ resource "aws_appautoscaling_policy" "ecs_cpu" {
   resource_id        = aws_appautoscaling_target.ecs.resource_id
   scalable_dimension = aws_appautoscaling_target.ecs.scalable_dimension
   service_namespace  = aws_appautoscaling_target.ecs.service_namespace
-  
+
   target_tracking_scaling_policy_configuration {
     predefined_metric_specification {
       predefined_metric_type = "ECSServiceAverageCPUUtilization"
@@ -1287,27 +1368,27 @@ output "service_name" {
 
 ```hcl
 # Network Configuration
-vpc_cidr = "10.0.0.0/16"
-availability_zones = ["us-east-1a", "us-east-1b"]
+vpc_cidr             = "10.0.0.0/16"
+availability_zones   = ["us-east-1a", "us-east-1b"]
 private_subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24"]
-public_subnet_cidrs = ["10.0.101.0/24", "10.0.102.0/24"]
-enable_nat_gateway = true
-single_nat_gateway = true
+public_subnet_cidrs  = ["10.0.101.0/24", "10.0.102.0/24"]
+enable_nat_gateway   = true
+single_nat_gateway   = true
 
 # RDS Configuration
-rds_instance_class = "db.t3.micro"
+rds_instance_class    = "db.t3.micro"
 rds_allocated_storage = 20
-rds_backup_retention = 7
-rds_multi_az = false
+rds_backup_retention  = 7
+rds_multi_az          = false
 
 # ECS Configuration
-ecs_task_count = 1
-ecs_task_cpu = "256"
+ecs_task_count  = 1
+ecs_task_cpu    = "256"
 ecs_task_memory = "512"
 
 # S3 Configuration
 s3_transition_days = 30
-s3_glacier_days = 90
+s3_glacier_days    = 90
 s3_expiration_days = 365
 ```
 
@@ -1315,27 +1396,27 @@ s3_expiration_days = 365
 
 ```hcl
 # Network Configuration
-vpc_cidr = "10.1.0.0/16"
-availability_zones = ["us-east-1a", "us-east-1b"]
+vpc_cidr             = "10.1.0.0/16"
+availability_zones   = ["us-east-1a", "us-east-1b"]
 private_subnet_cidrs = ["10.1.1.0/24", "10.1.2.0/24"]
-public_subnet_cidrs = ["10.1.101.0/24", "10.1.102.0/24"]
-enable_nat_gateway = true
-single_nat_gateway = false
+public_subnet_cidrs  = ["10.1.101.0/24", "10.1.102.0/24"]
+enable_nat_gateway   = true
+single_nat_gateway   = false
 
 # RDS Configuration
-rds_instance_class = "db.t3.small"
+rds_instance_class    = "db.t3.small"
 rds_allocated_storage = 50
-rds_backup_retention = 14
-rds_multi_az = false
+rds_backup_retention  = 14
+rds_multi_az          = false
 
 # ECS Configuration
-ecs_task_count = 2
-ecs_task_cpu = "512"
+ecs_task_count  = 2
+ecs_task_cpu    = "512"
 ecs_task_memory = "1024"
 
 # S3 Configuration
 s3_transition_days = 60
-s3_glacier_days = 180
+s3_glacier_days    = 180
 s3_expiration_days = 730
 ```
 
@@ -1343,28 +1424,28 @@ s3_expiration_days = 730
 
 ```hcl
 # Network Configuration
-vpc_cidr = "10.2.0.0/16"
-availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
+vpc_cidr             = "10.2.0.0/16"
+availability_zones   = ["us-east-1a", "us-east-1b", "us-east-1c"]
 private_subnet_cidrs = ["10.2.1.0/24", "10.2.2.0/24", "10.2.3.0/24"]
-public_subnet_cidrs = ["10.2.101.0/24", "10.2.102.0/24", "10.2.103.0/24"]
-enable_nat_gateway = true
-single_nat_gateway = false
+public_subnet_cidrs  = ["10.2.101.0/24", "10.2.102.0/24", "10.2.103.0/24"]
+enable_nat_gateway   = true
+single_nat_gateway   = false
 
 # RDS Configuration
-rds_instance_class = "db.t3.medium"
+rds_instance_class    = "db.t3.medium"
 rds_allocated_storage = 100
-rds_backup_retention = 30
-rds_multi_az = true
+rds_backup_retention  = 30
+rds_multi_az          = true
 
 # ECS Configuration
-ecs_task_count = 4
-ecs_task_cpu = "1024"
+ecs_task_count  = 4
+ecs_task_cpu    = "1024"
 ecs_task_memory = "2048"
 
 # S3 Configuration
 s3_transition_days = 90
-s3_glacier_days = 365
-s3_expiration_days = 2555  # 7 years for compliance
+s3_glacier_days    = 365
+s3_expiration_days = 2555 # 7 years for compliance
 ```
 
 ## Deployment Instructions

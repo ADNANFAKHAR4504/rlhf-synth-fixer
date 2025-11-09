@@ -2,6 +2,9 @@ import AWS from 'aws-sdk';
 import fs from 'fs';
 import path from 'path';
 
+// AWS Region configuration - matches AWS_REGION, AWS_DEFAULT_REGION, CDK_DEFAULT_REGION
+const AWS_REGION = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || process.env.CDK_DEFAULT_REGION || 'us-east-1';
+
 // Load outputs from flat-outputs.json
 const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
 let outputs: Record<string, any> = {};
@@ -15,12 +18,12 @@ try {
 }
 
 // Initialize AWS SDK clients
-const ec2 = new AWS.EC2({ region: 'us-east-1' });
-const ecs = new AWS.ECS({ region: 'us-east-1' });
-const elbv2 = new AWS.ELBv2({ region: 'us-east-1' });
-const rds = new AWS.RDS({ region: 'us-east-1' });
-const s3 = new AWS.S3({ region: 'us-east-1' });
-const ecr = new AWS.ECR({ region: 'us-east-1' });
+const ec2 = new AWS.EC2({ region: AWS_REGION });
+const ecs = new AWS.ECS({ region: AWS_REGION });
+const elbv2 = new AWS.ELBv2({ region: AWS_REGION });
+const rds = new AWS.RDS({ region: AWS_REGION });
+const s3 = new AWS.S3({ region: AWS_REGION });
+const ecr = new AWS.ECR({ region: AWS_REGION });
 
 // Helper for diagnostic AWS SDK calls with error handling
 async function diagAwsCall(label: string, fn: any, ...args: any[]) {

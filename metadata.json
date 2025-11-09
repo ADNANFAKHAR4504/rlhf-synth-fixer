@@ -11,11 +11,23 @@
     "Security Configuration as Code"
   ],
   "aws_services": [
-    "S3 Bucket",
-    "CloudFormation",
-    "Lambda",
-    "EventBridge",
-    "CloudWatch LogGroup",
+    "Application Auto Scaling",
+    "CloudWatch",
+    "EC2",
+    "ECR",
+    "ECS",
+    "ELB",
+    "IAM",
+    "RDS",
+    "S3",
+    "SSM",
     "VPC"
-  ]
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "kanishkah-turing",
+  "dockerS3Location": ""
 }
