@@ -50,6 +50,8 @@ export class TapStack extends cdk.Stack {
       paymentProcessingFunction,
       paymentQueue,
       paymentDlq,
+      eventBus,
+      stateMachine,
     } = this.createProcessingComponents(
       environmentSuffix,
       vpc,
@@ -78,6 +80,21 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, `ApiUrl${environmentSuffix}`, {
       value: apiGateway.url,
       description: 'Payment API Gateway URL',
+    });
+
+    new cdk.CfnOutput(this, `VpcId${environmentSuffix}`, {
+      value: vpc.vpcId,
+      description: 'VPC ID for payment processing',
+    });
+
+    new cdk.CfnOutput(this, `DatabaseEndpoint${environmentSuffix}`, {
+      value: cluster.clusterEndpoint.hostname,
+      description: 'RDS Aurora cluster endpoint',
+    });
+
+    new cdk.CfnOutput(this, `PaymentQueueUrl${environmentSuffix}`, {
+      value: paymentQueue.queueUrl,
+      description: 'Payment processing SQS queue URL',
     });
   }
 
@@ -220,12 +237,14 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // SQS queues
+    // SQS FIFO queues
     const paymentDlq = new cdk.aws_sqs.Queue(
       this,
       `PaymentDlq${environmentSuffix}`,
       {
-        queueName: `payment-processing-dlq-${environmentSuffix}`,
+        queueName: `payment-processing-dlq-${environmentSuffix}.fifo`,
+        fifo: true,
+        contentBasedDeduplication: true,
         retentionPeriod: cdk.Duration.days(14),
       }
     );
@@ -234,12 +253,51 @@ export class TapStack extends cdk.Stack {
       this,
       `PaymentQueue${environmentSuffix}`,
       {
-        queueName: `payment-processing-queue-${environmentSuffix}`,
+        queueName: `payment-processing-queue-${environmentSuffix}.fifo`,
+        fifo: true,
+        contentBasedDeduplication: true,
         retentionPeriod: cdk.Duration.days(4),
         deadLetterQueue: {
           queue: paymentDlq,
           maxReceiveCount: 3,
         },
+      }
+    );
+
+    // EventBridge event bus
+    const eventBus = new cdk.aws_events.EventBus(
+      this,
+      `PaymentEventBus${environmentSuffix}`,
+      {
+        eventBusName: `payment-events-${environmentSuffix}`,
+      }
+    );
+
+    // EventBridge rule for payment events
+    new cdk.aws_events.Rule(this, `PaymentEventRule${environmentSuffix}`, {
+      eventBus: eventBus,
+      eventPattern: {
+        source: ['payment.processing'],
+        detailType: ['Payment Transaction'],
+      },
+      targets: [
+        new cdk.aws_events_targets.SqsQueue(paymentQueue, {
+          messageGroupId: 'payment-events',
+        }),
+      ],
+    });
+
+    // Step Functions state machine for payment workflow
+    const stateMachine = new cdk.aws_stepfunctions.StateMachine(
+      this,
+      `PaymentWorkflow${environmentSuffix}`,
+      {
+        stateMachineName: `payment-processing-workflow-${environmentSuffix}`,
+        stateMachineType: cdk.aws_stepfunctions.StateMachineType.EXPRESS,
+        definition: new cdk.aws_stepfunctions.Pass(
+          this,
+          `PassState${environmentSuffix}`
+        ),
       }
     );
 
@@ -316,39 +374,92 @@ exports.handler = async (event) => {
       paymentProcessingFunction,
       paymentQueue,
       paymentDlq,
+      eventBus,
+      stateMachine,
     };
   }
 
   private createMonitoringComponents(
     environmentSuffix: string,
     apiGateway: cdk.aws_apigateway.RestApi,
-    _paymentValidationFunction: cdk.aws_lambda.Function,
-    _paymentProcessingFunction: cdk.aws_lambda.Function,
-    _databaseCluster: cdk.aws_rds.DatabaseCluster,
-    _paymentQueue: cdk.aws_sqs.Queue,
-    _paymentDlq: cdk.aws_sqs.Queue
+    paymentValidationFunction: cdk.aws_lambda.Function,
+    paymentProcessingFunction: cdk.aws_lambda.Function,
+    databaseCluster: cdk.aws_rds.DatabaseCluster,
+    paymentQueue: cdk.aws_sqs.Queue,
+    paymentDlq: cdk.aws_sqs.Queue
   ): void {
-    // SNS topic for alerts (created but not directly used in this simplified implementation)
-    new cdk.aws_sns.Topic(this, `PaymentAlertsTopic${environmentSuffix}`, {
-      topicName: `payment-processing-alerts-${environmentSuffix}`,
-      displayName: 'Payment Processing Alerts',
-    });
+    // SNS topics for alerts
+    new cdk.aws_sns.Topic(
+      this,
+      `PaymentCriticalAlertsTopic${environmentSuffix}`,
+      {
+        topicName: `payment-critical-alerts-${environmentSuffix}`,
+        displayName: 'Payment Critical Alerts',
+      }
+    );
 
-    // CloudWatch alarms
-    new cdk.aws_cloudwatch.Alarm(this, `ApiGatewayErrors${environmentSuffix}`, {
-      alarmName: `api-gateway-errors-${environmentSuffix}`,
-      alarmDescription: 'API Gateway 5xx errors above threshold',
-      metric: new cdk.aws_cloudwatch.Metric({
-        namespace: 'AWS/ApiGateway',
-        metricName: '5XXError',
-        dimensionsMap: { ApiName: apiGateway.restApiName },
-        statistic: 'Sum',
-      }),
-      threshold: 5,
-      evaluationPeriods: 3,
-      comparisonOperator:
-        cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-    });
+    new cdk.aws_sns.Topic(
+      this,
+      `PaymentSystemAlertsTopic${environmentSuffix}`,
+      {
+        topicName: `payment-system-alerts-${environmentSuffix}`,
+        displayName: 'Payment System Alerts',
+      }
+    );
+
+    // CloudWatch alarms - API Gateway 4XX errors
+    new cdk.aws_cloudwatch.Alarm(
+      this,
+      `ApiGateway4xxErrors${environmentSuffix}`,
+      {
+        alarmName: `payment-api-4xx-errors-${environmentSuffix}`,
+        alarmDescription: 'API Gateway 4xx errors above threshold',
+        metric: new cdk.aws_cloudwatch.Metric({
+          namespace: 'AWS/ApiGateway',
+          metricName: '4XXError',
+          dimensionsMap: { ApiName: apiGateway.restApiName },
+          statistic: 'Sum',
+        }),
+        threshold: 10,
+        evaluationPeriods: 3,
+        comparisonOperator:
+          cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      }
+    );
+
+    // CloudWatch alarms - Lambda validation errors
+    new cdk.aws_cloudwatch.Alarm(
+      this,
+      `PaymentValidationErrors${environmentSuffix}`,
+      {
+        alarmName: `payment-validation-errors-${environmentSuffix}`,
+        alarmDescription: 'Payment validation Lambda errors above threshold',
+        metric: paymentValidationFunction.metricErrors({
+          statistic: 'Sum',
+        }),
+        threshold: 5,
+        evaluationPeriods: 2,
+        comparisonOperator:
+          cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      }
+    );
+
+    // CloudWatch alarms - SQS queue depth
+    new cdk.aws_cloudwatch.Alarm(
+      this,
+      `PaymentQueueDepth${environmentSuffix}`,
+      {
+        alarmName: `payment-queue-depth-${environmentSuffix}`,
+        alarmDescription: 'Payment queue depth above threshold',
+        metric: paymentQueue.metricApproximateNumberOfMessagesVisible({
+          statistic: 'Average',
+        }),
+        threshold: 100,
+        evaluationPeriods: 2,
+        comparisonOperator:
+          cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      }
+    );
 
     // CloudWatch Dashboard
     const dashboard = new cdk.aws_cloudwatch.Dashboard(
