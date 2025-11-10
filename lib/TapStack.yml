@@ -123,7 +123,7 @@ Resources:
                   - s3:GetBucketPolicy
                   - s3:GetBucketPolicyStatus
                   - s3:GetBucketPublicAccessBlock
-                  - s3:GetBucketEncryption
+                  - s3:GetEncryptionConfiguration
                   - s3:GetBucketVersioning
                   - s3:GetBucketLogging
                   - s3:ListBucket
@@ -981,3 +981,51 @@ Outputs:
   DashboardURL:
     Description: CloudWatch Dashboard URL
     Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=SecurityComplianceDashboard'
+
+  SecurityAnalysisLambdaRoleArn:
+    Description: ARN of the Lambda execution role
+    Value: !GetAtt SecurityAnalysisLambdaRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaRoleArn'
+
+  ScheduledAnalysisRuleArn:
+    Description: ARN of the EventBridge rule
+    Value: !GetAtt ScheduledAnalysisRule.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ScheduledRuleArn'
+
+  CriticalViolationsAlarmArn:
+    Description: ARN of the critical violations CloudWatch alarm
+    Value: !GetAtt CriticalViolationsAlarm.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CriticalAlarmArn'
+
+  LowComplianceScoreAlarmArn:
+    Description: ARN of the low compliance score CloudWatch alarm
+    Value: !GetAtt LowComplianceScoreAlarm.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ComplianceAlarmArn'
+
+  ComplianceDashboardName:
+    Description: Name of the CloudWatch Dashboard
+    Value: SecurityComplianceDashboard
+    Export:
+      Name: !Sub '${AWS::StackName}-DashboardName'
+
+  ComplianceReportsBucketArn:
+    Description: ARN of the S3 bucket for compliance reports
+    Value: !GetAtt ComplianceReportsBucket.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ReportsBucketArn'
+
+  StackRegion:
+    Description: AWS Region where the stack is deployed
+    Value: !Ref AWS::Region
+    Export:
+      Name: !Sub '${AWS::StackName}-Region'
+
+  StackAccountId:
+    Description: AWS Account ID where the stack is deployed
+    Value: !Ref AWS::AccountId
+    Export:
+      Name: !Sub '${AWS::StackName}-AccountId'
