@@ -1,0 +1,15 @@
+[run]
+source = lib
+omit =
+    */tests/*
+    */test_*.py
+    */__pycache__/*
+    lib/__init__.py
+    lib/tap_stack.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise NotImplementedError
+    if __name__ == .__main__.:
