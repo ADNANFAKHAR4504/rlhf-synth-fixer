@@ -35,21 +35,23 @@ class MinimalMocks(Mocks):
         outputs.setdefault("arn", f"arn:aws:mock::{args.name}")
         outputs.setdefault("name", args.name)
 
-        if args.type_.endswith(":Queue"):
+        type_token = getattr(args, "type", "")
+
+        if type_token.endswith(":Queue"):
             queue_url = f"https://mock.sqs/{args.name}"
             outputs.setdefault("url", queue_url)
             outputs.setdefault("queue_url", queue_url)
 
-        if args.type_.endswith(":Function"):
+        if type_token.endswith(":Function"):
             outputs.setdefault("invoke_arn", f"arn:aws:lambda:mock:::function:{args.name}:invoke")
 
-        if args.type_.endswith(":Table"):
+        if type_token.endswith(":Table"):
             outputs.setdefault("stream_arn", f"arn:aws:dynamodb:mock:::table/{args.name}/stream/mock")
 
-        if args.type_.endswith(":Topic"):
+        if type_token.endswith(":Topic"):
             outputs.setdefault("arn", f"arn:aws:sns:mock::{args.name}")
 
-        if args.type_.endswith(":RestApi"):
+        if type_token.endswith(":RestApi"):
             outputs.setdefault("id", f"{args.name}-id")
 
         return f"{args.name}_id", outputs
