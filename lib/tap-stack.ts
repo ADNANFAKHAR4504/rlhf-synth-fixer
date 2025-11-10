@@ -45,6 +45,7 @@ export class TapStack extends cdk.Stack {
     );
 
     // Processing components (Lambda, SQS, Step Functions)
+    /* eslint-disable @typescript-eslint/no-unused-vars */
     const {
       paymentValidationFunction,
       paymentProcessingFunction,
@@ -59,6 +60,7 @@ export class TapStack extends cdk.Stack {
       securityGroup,
       cluster
     );
+    /* eslint-enable @typescript-eslint/no-unused-vars */
 
     // Monitoring and Observability
     this.createMonitoringComponents(
@@ -386,6 +388,7 @@ exports.handler = async (event) => {
     paymentProcessingFunction: cdk.aws_lambda.Function,
     databaseCluster: cdk.aws_rds.DatabaseCluster,
     paymentQueue: cdk.aws_sqs.Queue,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     paymentDlq: cdk.aws_sqs.Queue
   ): void {
     // SNS topics for alerts
