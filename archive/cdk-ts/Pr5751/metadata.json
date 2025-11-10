@@ -13,17 +13,23 @@
   "aws_services": [
     "Amazon Aurora",
     "Amazon RDS",
-    "Amazon S3",
+    "Amazon EC2",
+    "AWS IAM",
+    "AWS KMS",
     "AWS Lambda",
     "Amazon EventBridge",
-    "Amazon CloudWatch",
-    "Amazon CloudWatch Logs",
     "Amazon SNS",
     "Amazon Route 53",
-    "Amazon VPC",
-    "AWS KMS",
-    "AWS IAM",
-    "Amazon EC2"
+    "Amazon S3",
+    "Amazon CloudWatch",
+    "Amazon CloudWatch Logs",
+    "Amazon VPC"
   ],
-  "training_quality": 9
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
 }
