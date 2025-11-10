@@ -1,10 +1,7 @@
 /**
  * tap-stack.ts
  *
- * This module defines the TapStack class for deploying a microservices architecture
- * on Kubernetes with Istio service mesh integration.
- *
- * Creates EKS cluster using native AWS resources (no @pulumi/eks package required).
+ * Creates EKS cluster using native AWS resources in eu-west-2 (London)
  */
 
 import * as pulumi from '@pulumi/pulumi';
@@ -35,6 +32,15 @@ export class TapStack extends pulumi.ComponentResource {
 
     const environmentSuffix = args.environmentSuffix || 'dev';
 
+    // Create explicit AWS provider for eu-west-2 (London)
+    const awsProvider = new aws.Provider(
+      `aws-provider-${environmentSuffix}`,
+      {
+        region: 'eu-west-2',
+      },
+      { parent: this }
+    );
+
     // Updated to eu-west-2 (London) region
     const paymentApiImage =
       args.paymentApiImage ||
@@ -58,7 +64,7 @@ export class TapStack extends pulumi.ComponentResource {
           Environment: environmentSuffix,
         },
       },
-      { parent: this }
+      { parent: this, provider: awsProvider }
     );
 
     // Create Internet Gateway
@@ -70,7 +76,7 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `eks-igw-${environmentSuffix}`,
         },
       },
-      { parent: this }
+      { parent: this, provider: awsProvider }
     );
 
     // Create public subnets in two availability zones
@@ -87,7 +93,7 @@ export class TapStack extends pulumi.ComponentResource {
           [`kubernetes.io/cluster/eks-cluster-${environmentSuffix}`]: 'shared',
         },
       },
-      { parent: this }
+      { parent: this, provider: awsProvider }
     );
 
     const publicSubnet2 = new aws.ec2.Subnet(
@@ -103,7 +109,7 @@ export class TapStack extends pulumi.ComponentResource {
           [`kubernetes.io/cluster/eks-cluster-${environmentSuffix}`]: 'shared',
         },
       },
-      { parent: this }
+      { parent: this, provider: awsProvider }
     );
 
     // Create route table for public subnets
@@ -115,7 +121,7 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `eks-public-rt-${environmentSuffix}`,
         },
       },
-      { parent: this }
+      { parent: this, provider: awsProvider }
     );
 
     // Create route to internet gateway
@@ -126,7 +132,7 @@ export class TapStack extends pulumi.ComponentResource {
         destinationCidrBlock: '0.0.0.0/0',
         gatewayId: igw.id,
       },
-      { parent: this }
+      { parent: this, provider: awsProvider }
     );
 
     // Associate route table with public subnets
@@ -136,7 +142,7 @@ export class TapStack extends pulumi.ComponentResource {
         subnetId: publicSubnet1.id,
         routeTableId: publicRouteTable.id,
       },
-      { parent: this }
+      { parent: this, provider: awsProvider }
     );
 
     new aws.ec2.RouteTableAssociation(
@@ -145,7 +151,7 @@ export class TapStack extends pulumi.ComponentResource {
         subnetId: publicSubnet2.id,
         routeTableId: publicRouteTable.id,
       },
-      { parent: this }
+      { parent: this, provider: awsProvider }
     );
 
     // Create IAM role for EKS cluster
@@ -165,7 +171,7 @@ export class TapStack extends pulumi.ComponentResource {
           ],
         }),
       },
-      { parent: this }
+      { parent: this, provider: awsProvider }
     );
 
     // Attach required policies to EKS cluster role
@@ -175,7 +181,7 @@ export class TapStack extends pulumi.ComponentResource {
         role: eksRole.name,
         policyArn: 'arn:aws:iam::aws:policy/AmazonEKSClusterPolicy',
       },
-      { parent: this }
+      { parent: this, provider: awsProvider }
     );
 
     // Create security group for EKS cluster
@@ -196,7 +202,7 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `eks-cluster-sg-${environmentSuffix}`,
         },
       },
-      { parent: this }
+      { parent: this, provider: awsProvider }
     );
 
     // Create EKS cluster
@@ -217,7 +223,7 @@ export class TapStack extends pulumi.ComponentResource {
           Environment: environmentSuffix,
         },
       },
-      { parent: this, dependsOn: [eksRole] }
+      { parent: this, provider: awsProvider, dependsOn: [eksRole] }
     );
 
     // Create IAM role for node group
@@ -237,7 +243,7 @@ export class TapStack extends pulumi.ComponentResource {
           ],
         }),
       },
-      { parent: this }
+      { parent: this, provider: awsProvider }
     );
 
     // Attach required policies to node role
@@ -247,7 +253,7 @@ export class TapStack extends pulumi.ComponentResource {
         role: nodeRole.name,
         policyArn: 'arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy',
       },
-      { parent: this }
+      { parent: this, provider: awsProvider }
     );
 
     new aws.iam.RolePolicyAttachment(
@@ -256,7 +262,7 @@ export class TapStack extends pulumi.ComponentResource {
         role: nodeRole.name,
         policyArn: 'arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy',
       },
-      { parent: this }
+      { parent: this, provider: awsProvider }
     );
 
     new aws.iam.RolePolicyAttachment(
@@ -266,7 +272,7 @@ export class TapStack extends pulumi.ComponentResource {
         policyArn:
           'arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly',
       },
-      { parent: this }
+      { parent: this, provider: awsProvider }
     );
 
     // Create EKS node group
@@ -287,7 +293,7 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `eks-node-group-${environmentSuffix}`,
         },
       },
-      { parent: this, dependsOn: [cluster, nodeRole] }
+      { parent: this, provider: awsProvider, dependsOn: [cluster, nodeRole] }
     );
 
     // Generate kubeconfig
@@ -1518,7 +1524,6 @@ export class TapStack extends pulumi.ComponentResource {
         notificationServiceHpa: notification,
       }));
 
-    // Register the outputs of this component.
     this.registerOutputs({
       clusterName: this.clusterName,
       kubeconfig: this.kubeconfig,

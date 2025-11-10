@@ -53,6 +53,8 @@ const stack = new TapStack('TapStack', {
 });
 
 // Export stack outputs
+export const clusterName = stack.clusterName;
+export const kubeconfig = stack.kubeconfig;
 export const namespaceName = stack.namespaceName;
 export const gatewayUrl = stack.gatewayUrl;
 export const paymentApiEndpoint = stack.paymentApiEndpoint;
