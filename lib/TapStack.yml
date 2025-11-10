@@ -218,8 +218,7 @@ Parameters:
   # Security Parameters
   SSLCertificateArn:
     Type: String
-    Default: arn:aws:acm:sa-east-1:123456789012:certificate/00000000-0000-0000-0000-000000000000
-    Description: ARN of the SSL certificate in ACM for HTTPS listener (must be in sa-east-1)
+    Description: ARN of the SSL certificate in ACM for HTTPS listener (REQUIRED - must be a valid certificate ARN in the deployment region)
     AllowedPattern: ^arn:aws:acm:[a-z0-9-]+:[0-9]+:certificate/[a-f0-9-]+$
 
   LogRetentionDays:
