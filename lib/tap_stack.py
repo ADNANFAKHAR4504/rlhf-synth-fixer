@@ -200,19 +200,23 @@ class TapStack(pulumi.ComponentResource):
             parameters=[
                 aws.rds.ClusterParameterGroupParameterArgs(
                     name='log_statement',
-                    value='all'
+                    value='all',
+                    apply_method='pending-reboot'
                 ),
                 aws.rds.ClusterParameterGroupParameterArgs(
                     name='log_min_duration_statement',
-                    value='1000'
+                    value='1000',
+                    apply_method='immediate'
                 ),
                 aws.rds.ClusterParameterGroupParameterArgs(
                     name='rds.logical_replication',
-                    value='1'
+                    value='1',
+                    apply_method='pending-reboot'
                 ),
                 aws.rds.ClusterParameterGroupParameterArgs(
                     name='shared_preload_libraries',
-                    value='pg_stat_statements'
+                    value='pg_stat_statements',
+                    apply_method='pending-reboot'
                 )
             ],
             tags=self.tags,
@@ -243,7 +247,7 @@ class TapStack(pulumi.ComponentResource):
             f'aurora-cluster-{self.environment_suffix}',
             cluster_identifier=f'aurora-postgres-{self.environment_suffix}',
             engine='aurora-postgresql',
-            engine_version='15.4',
+            engine_version='15.8',
             database_name='migrationdb',
             master_username=args.aurora_username,
             master_password=args.aurora_password,
@@ -269,7 +273,7 @@ class TapStack(pulumi.ComponentResource):
             cluster_identifier=self.aurora_cluster.id,
             instance_class='db.r6g.large',
             engine='aurora-postgresql',
-            engine_version='15.4',
+            engine_version='15.8',
             publicly_accessible=False,
             db_subnet_group_name=self.db_subnet_group.name,
             db_parameter_group_name=self.db_parameter_group.name,
@@ -286,7 +290,7 @@ class TapStack(pulumi.ComponentResource):
             cluster_identifier=self.aurora_cluster.id,
             instance_class='db.r6g.large',
             engine='aurora-postgresql',
-            engine_version='15.4',
+            engine_version='15.8',
             publicly_accessible=False,
             db_subnet_group_name=self.db_subnet_group.name,
             db_parameter_group_name=self.db_parameter_group.name,
@@ -303,7 +307,7 @@ class TapStack(pulumi.ComponentResource):
             cluster_identifier=self.aurora_cluster.id,
             instance_class='db.r6g.large',
             engine='aurora-postgresql',
-            engine_version='15.4',
+            engine_version='15.8',
             publicly_accessible=False,
             db_subnet_group_name=self.db_subnet_group.name,
             db_parameter_group_name=self.db_parameter_group.name,
@@ -313,18 +317,9 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self, depends_on=[self.aurora_cluster])
         )
 
-        # ==================== DMS Subnet Group ====================
-        self.dms_subnet_group = aws.dms.ReplicationSubnetGroup(
-            f'dms-subnet-group-{self.environment_suffix}',
-            replication_subnet_group_id=f'dms-subnet-group-{self.environment_suffix}',
-            replication_subnet_group_description=f'DMS subnet group for {self.environment_suffix}',
-            subnet_ids=args.dms_subnet_ids,
-            tags=self.tags,
-            opts=child_opts
-        )
-
-        # ==================== DMS IAM Role ====================
-        # IAM role for DMS to access resources
+        # ==================== DMS IAM Roles ====================
+        # IAM role for DMS to access VPC resources
+        # AWS DMS requires a role named 'dms-vpc-role' for VPC management
         dms_assume_role_policy = aws.iam.get_policy_document(
             statements=[
                 aws.iam.GetPolicyDocumentStatementArgs(
@@ -339,15 +334,17 @@ class TapStack(pulumi.ComponentResource):
             ]
         )
 
+        # Create the dms-vpc-role that AWS DMS expects
+        # Note: This role must be named exactly 'dms-vpc-role'
         self.dms_vpc_role = aws.iam.Role(
-            f'dms-vpc-role-{self.environment_suffix}',
-            name=f'dms-vpc-management-role-{self.environment_suffix}',
+            'dms-vpc-role',
+            name='dms-vpc-role',
             assume_role_policy=dms_assume_role_policy.json,
             managed_policy_arns=[
                 'arn:aws:iam::aws:policy/service-role/AmazonDMSVPCManagementRole'
             ],
             tags=self.tags,
-            opts=child_opts
+            opts=ResourceOptions(parent=self, ignore_changes=['name'])
         )
 
         self.dms_cloudwatch_role = aws.iam.Role(
@@ -361,13 +358,23 @@ class TapStack(pulumi.ComponentResource):
             opts=child_opts
         )
 
+        # ==================== DMS Subnet Group ====================
+        self.dms_subnet_group = aws.dms.ReplicationSubnetGroup(
+            f'dms-subnet-group-{self.environment_suffix}',
+            replication_subnet_group_id=f'dms-subnet-group-{self.environment_suffix}',
+            replication_subnet_group_description=f'DMS subnet group for {self.environment_suffix}',
+            subnet_ids=args.dms_subnet_ids,
+            tags=self.tags,
+            opts=ResourceOptions(parent=self, depends_on=[self.dms_vpc_role])
+        )
+
         # ==================== DMS Replication Instance ====================
         self.dms_replication_instance = aws.dms.ReplicationInstance(
             f'dms-replication-{self.environment_suffix}',
             replication_instance_id=f'dms-replication-{self.environment_suffix}',
             replication_instance_class='dms.c5.2xlarge',  # 8 vCPU, 16 GB memory
             allocated_storage=100,
-            engine_version='3.5.2',
+            engine_version='3.5.4',
             multi_az=True,
             publicly_accessible=False,
             replication_subnet_group_id=self.dms_subnet_group.id,

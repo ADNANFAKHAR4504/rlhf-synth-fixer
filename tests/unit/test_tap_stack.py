@@ -25,7 +25,7 @@ class MyMocks(pulumi.runtime.Mocks):
                 'reader_endpoint': 'aurora-cluster-test.cluster-ro-abc123.us-east-1.rds.amazonaws.com',
                 'cluster_identifier': 'aurora-postgres-test',
                 'engine': 'aurora-postgresql',
-                'engine_version': '15.4',
+                'engine_version': '15.8',
                 'backup_retention_period': 7,
                 'preferred_backup_window': '03:00-04:00',
                 **args.inputs,
@@ -191,7 +191,7 @@ def test_aurora_cluster_creation():
     def check_cluster(args):
         engine, engine_version, backup_retention, backup_window = args
         assert engine == 'aurora-postgresql', f"Expected aurora-postgresql, got {engine}"
-        assert engine_version == '15.4', f"Expected 15.4, got {engine_version}"
+        assert engine_version == '15.8', f"Expected 15.8, got {engine_version}"
         assert backup_retention == 7, f"Expected 7 day retention, got {backup_retention}"
         assert backup_window == '03:00-04:00', f"Expected 03:00-04:00, got {backup_window}"
 
