@@ -41,7 +41,12 @@ ext {
     googleCodeGsonVersion = '2.10.1'
 
     //Build settings
-    def platform = project.findProperty("platform") ?: "default"
+    def metadataFile = file("metadata.json")
+    def platform = "default"
+    if (metadataFile.exists()) {
+        def metadata = new groovy.json.JsonSlurper().parseText(metadataFile.text)
+        platform = metadata.platform ?: "default"
+    }
 
     switch (platform) {
         case "pulumi":
@@ -452,7 +457,6 @@ afterEvaluate {
     jacocoTestReport.configure {
         classDirectories.setFrom(files(classDirectories.files.collect {
             fileTree(dir: it, exclude: [
-                '**/Main.class',
                 '**/imports/**'
             ])
         }))

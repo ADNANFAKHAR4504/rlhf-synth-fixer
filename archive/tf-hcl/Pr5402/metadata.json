@@ -1,0 +1,23 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000190",
+  "team": "1",
+  "startedAt": "2025-10-30T08:50:58.518Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": "\"VPC\",    \"Lambda\",    \"DynamoDB\",    \"Kinesis\",    \"ElastiCache\",    \"Aurora\",    \"API Gateway\",    \"Step Functions\",    \"EventBridge\",    \"CloudWatch\",    \"Secrets Manager\",    \"IAM\"",
+  "task_config": {
+    "deploy_env": "prod.tfvars"
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
+}
