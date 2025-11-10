@@ -12,15 +12,22 @@
   ],
   "aws_services": [
     "VPC",
+    "EC2",
     "Transit Gateway",
     "NAT Gateway",
     "Route53",
-    "S3 Bucket",
+    "S3",
     "Systems Manager",
-    "CloudWatch Logs",
+    "CloudWatch",
     "Internet Gateway",
-    "Subnets",
-    "Route Tables",
-    "VPC Flow Logs"
-  ]
+    "IAM",
+    "EIP"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raghav-turing",
+  "dockerS3Location": ""
 }
