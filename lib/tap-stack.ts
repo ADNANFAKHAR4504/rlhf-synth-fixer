@@ -12,7 +12,7 @@
 * Architecture:
 * - Primary region: eu-south-1 (Milan) with 2 instances
 * - Standby region: eu-central-1 (Frankfurt) with 1 instance
-* - Direct ALB DNS routing (no custom domain)
+* - Route 53 hosted zone with weighted DNS failover
 * - DynamoDB global table for session replication
 * - CloudWatch alarms and SNS notifications
 *
@@ -60,6 +60,8 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly primarySnsTopicArn: pulumi.Output<string>;
   public readonly standbySnsTopicArn: pulumi.Output<string>;
   public readonly primaryHealthCheckId: pulumi.Output<string>;
+  public readonly hostedZoneId: pulumi.Output<string>;
+  public readonly domainName: pulumi.Output<string>;
   public readonly applicationUrl: pulumi.Output<string>;
 
   /**
@@ -1084,6 +1086,73 @@ echo "Standby Region (Frankfurt) - Trading Application" > /var/www/html/index.ht
       { provider: primaryProvider, parent: this }
     );
 
+    // ============================================
+    // ROUTE 53 DNS FAILOVER
+    // ============================================
+
+    // Create Route 53 hosted zone for DNS failover
+    const hostedZone = new aws.route53.Zone(
+      `hosted-zone-${environmentSuffix}`,
+      {
+        name: `trading-app-${environmentSuffix}.example.com`,
+        tags: {
+          Name: `hosted-zone-${environmentSuffix}`,
+          Environment: 'Production',
+          ...tags,
+        },
+      },
+      { parent: this }
+    );
+
+    // Create Route 53 record for primary region with weighted routing
+    const _primaryDnsRecord = new aws.route53.Record(
+      `primary-record-${environmentSuffix}`,
+      {
+        zoneId: hostedZone.zoneId,
+        name: `trading-app-${environmentSuffix}.example.com`,
+        type: 'A',
+        aliases: [
+          {
+            name: primaryAlb.dnsName,
+            zoneId: primaryAlb.zoneId,
+            evaluateTargetHealth: true,
+          },
+        ],
+        healthCheckId: primaryHealthCheck.id,
+        setIdentifier: 'primary',
+        weightedRoutingPolicies: [
+          {
+            weight: 100,
+          },
+        ],
+      },
+      { parent: this }
+    );
+
+    // Create Route 53 record for standby region with weighted routing
+    const _standbyDnsRecord = new aws.route53.Record(
+      `standby-record-${environmentSuffix}`,
+      {
+        zoneId: hostedZone.zoneId,
+        name: `trading-app-${environmentSuffix}.example.com`,
+        type: 'A',
+        aliases: [
+          {
+            name: standbyAlb.dnsName,
+            zoneId: standbyAlb.zoneId,
+            evaluateTargetHealth: true,
+          },
+        ],
+        setIdentifier: 'standby',
+        weightedRoutingPolicies: [
+          {
+            weight: 0,
+          },
+        ],
+      },
+      { parent: this }
+    );
+
     // Set public outputs
     this.primaryVpcId = primaryVpc.id;
     this.standbyVpcId = standbyVpc.id;
@@ -1095,7 +1164,9 @@ echo "Standby Region (Frankfurt) - Trading Application" > /var/www/html/index.ht
     this.primarySnsTopicArn = primarySnsTopic.arn;
     this.standbySnsTopicArn = standbySnsTopic.arn;
     this.primaryHealthCheckId = primaryHealthCheck.id;
-    this.applicationUrl = pulumi.interpolate`http://${primaryAlb.dnsName}`;
+    this.hostedZoneId = hostedZone.zoneId;
+    this.domainName = hostedZone.name;
+    this.applicationUrl = pulumi.interpolate`http://${hostedZone.name}`;
 
     // Register outputs
     this.registerOutputs({
@@ -1109,6 +1180,8 @@ echo "Standby Region (Frankfurt) - Trading Application" > /var/www/html/index.ht
       primarySnsTopicArn: this.primarySnsTopicArn,
       standbySnsTopicArn: this.standbySnsTopicArn,
       primaryHealthCheckId: this.primaryHealthCheckId,
+      hostedZoneId: this.hostedZoneId,
+      domainName: this.domainName,
       applicationUrl: this.applicationUrl,
     });
   }

@@ -177,6 +177,24 @@ describe('TapStack', () => {
       });
     });
 
+    it('should expose hostedZoneId output', (done) => {
+      pulumi.output(stack.hostedZoneId).apply(hostedZoneId => {
+        expect(hostedZoneId).toBeDefined();
+        expect(typeof hostedZoneId).toBe('string');
+        done();
+      });
+    });
+
+    it('should expose domainName output', (done) => {
+      pulumi.output(stack.domainName).apply(domainName => {
+        expect(domainName).toBeDefined();
+        expect(typeof domainName).toBe('string');
+        expect(domainName).toContain('trading-app');
+        expect(domainName).toContain('.example.com');
+        done();
+      });
+    });
+
     it('should expose applicationUrl output with http protocol', (done) => {
       pulumi.output(stack.applicationUrl).apply(appUrl => {
         expect(appUrl).toBeDefined();
@@ -383,9 +401,9 @@ describe('TapStack', () => {
       });
     });
 
-    it('should create application URL based on primary ALB', (done) => {
-      pulumi.all([stack.applicationUrl, stack.primaryAlbDns]).apply(([appUrl, primaryAlbDns]) => {
-        expect(appUrl).toContain(primaryAlbDns);
+    it('should create application URL based on hosted zone domain', (done) => {
+      pulumi.all([stack.applicationUrl, stack.domainName]).apply(([appUrl, domainName]) => {
+        expect(appUrl).toContain(domainName);
         expect(appUrl).toMatch(/^http:\/\//);
         done();
       });
@@ -523,6 +541,8 @@ describe('TapStack', () => {
         stack.primarySnsTopicArn,
         stack.standbySnsTopicArn,
         stack.primaryHealthCheckId,
+        stack.hostedZoneId,
+        stack.domainName,
         stack.applicationUrl,
       ]).apply(() => {
         done();
@@ -628,9 +648,9 @@ describe('TapStack', () => {
       });
     });
 
-    it('should include ALB DNS name in application URL', (done) => {
-      pulumi.all([stack.applicationUrl, stack.primaryAlbDns]).apply(([url, albDns]) => {
-        expect(url).toContain(albDns);
+    it('should include domain name in application URL', (done) => {
+      pulumi.all([stack.applicationUrl, stack.domainName]).apply(([url, domainName]) => {
+        expect(url).toContain(domainName);
         done();
       });
     });
@@ -657,6 +677,8 @@ describe('TapStack', () => {
         stack.primarySnsTopicArn,
         stack.standbySnsTopicArn,
         stack.primaryHealthCheckId,
+        stack.hostedZoneId,
+        stack.domainName,
         stack.applicationUrl,
       ]).apply(([
         primaryVpcId,
@@ -669,6 +691,8 @@ describe('TapStack', () => {
         primarySnsTopicArn,
         standbySnsTopicArn,
         primaryHealthCheckId,
+        hostedZoneId,
+        domainName,
         applicationUrl,
       ]) => {
         expect(primaryVpcId).toBeDefined();
@@ -681,6 +705,8 @@ describe('TapStack', () => {
         expect(primarySnsTopicArn).toBeDefined();
         expect(standbySnsTopicArn).toBeDefined();
         expect(primaryHealthCheckId).toBeDefined();
+        expect(hostedZoneId).toBeDefined();
+        expect(domainName).toBeDefined();
         expect(applicationUrl).toBeDefined();
         done();
       });
