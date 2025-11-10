@@ -5,6 +5,7 @@ Main Pulumi stack for loan processing application infrastructure.
 import json
 import pulumi
 import pulumi_aws as aws
+import pulumi_random as random
 from typing import Optional
 from dataclasses import dataclass
 
@@ -93,7 +94,7 @@ class TapStack:
             tags={**self.common_tags, "Name": f"igw-{self.env_suffix}"},
         )
         
-        # Get availability zones - FIXED: Changed from us-east-2 to us-east-1
+        # Get availability zones - FIXED: Changed to us-east-1
         self.availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
         
         # Create public and private subnets
@@ -462,6 +463,14 @@ class TapStack:
     
     def _create_rds_database(self):
         """Create RDS PostgreSQL database with KMS encryption."""
+        # Generate a random password using Pulumi Random provider
+        self.db_password = random.RandomPassword(
+            f"db-password-{self.env_suffix}",
+            length=32,
+            special=True,
+            override_special="!#$%&*()-_=+[]{}<>:?",
+        )
+        
         # DB Subnet Group
         self.db_subnet_group = aws.rds.SubnetGroup(
             f"db-subnet-group-{self.env_suffix}",
@@ -470,7 +479,7 @@ class TapStack:
             tags={**self.common_tags, "Name": f"db-subnet-group-{self.env_suffix}"},
         )
         
-        # RDS Instance
+        # RDS Instance - FIXED: Using generated password instead of Config
         self.rds_instance = aws.rds.Instance(
             f"loan-db-{self.env_suffix}",
             identifier=f"loan-processing-db-{self.env_suffix}",
@@ -483,7 +492,7 @@ class TapStack:
             kms_key_id=self.kms_key.arn,
             db_name="loandb",
             username="dbadmin",
-            password=pulumi.Config().require_secret("db_password"),
+            password=self.db_password.result,  # Using generated password
             db_subnet_group_name=self.db_subnet_group.name,
             vpc_security_group_ids=[self.rds_security_group.id],
             publicly_accessible=False,
@@ -500,7 +509,7 @@ class TapStack:
         db_credentials = pulumi.Output.all(
             self.rds_instance.endpoint,
             self.rds_instance.username,
-            pulumi.Config().require_secret("db_password")
+            self.db_password.result  # Using generated password
         ).apply(lambda args: json.dumps({
             "host": args[0].split(":")[0],
             "port": 5432,
