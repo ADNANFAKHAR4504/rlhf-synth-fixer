@@ -281,7 +281,7 @@ describe('TapStack CloudFormation Template - Security Analysis System', () => {
           s.Action.some((a: string) => a === 's3:ListBucket')
       );
       expect(s3ReadStatement).toBeDefined();
-      expect(s3ReadStatement.Action).toContain('s3:GetBucketEncryption');
+      expect(s3ReadStatement.Action).toContain('s3:GetEncryptionConfiguration');
       expect(s3ReadStatement.Action).toContain('s3:GetBucketVersioning');
     });
 
