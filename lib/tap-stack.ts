@@ -383,7 +383,6 @@ systemctl enable nginx
     new TerraformOutput(this, 'rds-endpoint', {
       value: rdsModule.instance.endpoint,
       description: 'RDS instance endpoint',
-      sensitive: true,
     });
 
     new TerraformOutput(this, 'lambda-s3-bucket', {

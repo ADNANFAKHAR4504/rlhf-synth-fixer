@@ -2,7 +2,6 @@ import { App } from "cdktf";
 import "cdktf/lib/testing/adapters/jest";
 import { TapStack } from "../lib/tap-stack";
 import { expect } from "@jest/globals";
-import { describe, test, beforeEach } from "@jest/globals";
 
 // Mock all the modules used in TapStack
 jest.mock("../lib/modules", () => ({

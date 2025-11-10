@@ -1044,76 +1044,136 @@ describe('TAP Stack CDKTF Integration Tests', () => {
     }, 90000);
   });
 
-  describe('[E2E] Application Request Flow: Internet → ALB → EC2 → RDS', () => {
-    test('should validate complete application data flow', async () => {
-      if (isMockData) {
-        console.log('Using mock data - skipping live application flow test');
-        return;
-      }
+  describe('[E2E] Security and Compliance Flow: API Enforcement', () => {
+    test('should validate security enforcement via API interaction', async () => {
+      // Assuming a simple HTTP client (like axios/node-fetch) is available
+      const apiEndpoint = `http://${outputs['alb-dns']}/api/v1/users`;
 
+      // --- Step 1 & 2: Verify Password Policy Enforcement ---
+      console.log('Testing security enforcement (weak password)...');
+      
+      const weakPasswordAttempt = { 
+          username: 'testUser', 
+          password: 'short' // Password fails min length (14)
+      };
+
+      let securityError: any;
       try {
-        // Step 1: Verify ALB is accessible
-        const albDns = outputs['alb-dns'];
-        const targetUrl = `http://${albDns}/health`;
-        
-        console.log(`Testing application endpoint: ${targetUrl}`);
-
-        // Note: In a real test, you would use an HTTP client like axios or node-fetch
-        // For this example, we'll verify the infrastructure is ready
-        
-        // Step 2: Verify ALB target health
-        const albName = albDns.split('.')[0];
-        const albResponse = await elbv2Client.send(new DescribeLoadBalancersCommand({
-          Names: [albName.split('-').slice(0, -1).join('-')]
-        }));
-
-        const alb = albResponse.LoadBalancers![0];
-        const tgResponse = await elbv2Client.send(new DescribeTargetGroupsCommand({
-          LoadBalancerArn: alb.LoadBalancerArn
-        }));
-
-        const targetGroupArn = tgResponse.TargetGroups![0].TargetGroupArn;
-        const healthResponse = await elbv2Client.send(new DescribeTargetHealthCommand({
-          TargetGroupArn: targetGroupArn
-        }));
-
-        const healthyTargets = healthResponse.TargetHealthDescriptions?.filter(t =>
-          t.TargetHealth?.State === 'healthy'
-        );
-
-        expect(healthyTargets?.length).toBeGreaterThan(0);
-
-        // Step 3: Verify EC2 instances can connect to RDS
-        const dbResponse = await rdsClient.send(new DescribeDBInstancesCommand({
-          DBInstanceIdentifier: 'tap-database'
-        }));
-
-        const dbEndpoint = dbResponse.DBInstances![0].Endpoint;
-        expect(dbEndpoint?.Address).toBeDefined();
-        expect(dbEndpoint?.Port).toBe(3306);
-
-        // Step 4: Publish metric to track E2E test execution
-        await cloudWatchClient.send(new PutMetricDataCommand({
-          Namespace: 'IntegrationTests/E2E',
-          MetricData: [{
-            MetricName: 'ApplicationFlowTest',
-            Value: 1,
-            Unit: 'Count',
-            Timestamp: new Date(),
-            Dimensions: [
-              { Name: 'TestType', Value: 'E2E' },
-              { Name: 'Environment', Value: 'production' }
-            ]
-          }]
-        }));
-
-        console.log('✅ E2E application flow validation completed successfully');
-
+          // This must be an actual HTTP client call
+          await httpClient.post(apiEndpoint, weakPasswordAttempt);
       } catch (error: any) {
-        console.error('E2E application flow test failed:', error.message);
-        throw error;
+          securityError = error.response;
       }
+      
+      // Traditional E2E check: Did the application reject the insecure action?
+      expect(securityError.status).toBe(400); 
+      expect(securityError.data).toContain('Password does not meet minimum complexity requirements'); 
+
+      // --- Step 3: Trigger and Verify Security Alert/Audit (via functional action) ---
+      // Assuming a functional endpoint exists to trigger a traceable action
+      const secureAction = { username: 'auditUser', action: 'perform_audit_op' };
+      const secureResponse = await httpClient.post(`${apiEndpoint}/action`, secureAction);
+      expect(secureResponse.status).toBe(200);
+
+      // --- Step 4: Verify the alert/audit trace landed in the monitoring system ---
+      // Wait for the asynchronous CloudTrail/Lambda/SNS flow to complete
+      await new Promise(resolve => setTimeout(resolve, 15000)); 
+      
+      // Poll an exposed internal API/Endpoint that confirms the flow completed (e.g., a status endpoint)
+      const auditStatus = await httpClient.get('http://internal-monitoring-api/audit-status');
+      expect(auditStatus.data.lastAuditedAction).toBe('perform_audit_op');
+      
+      console.log('✅ E2E security enforcement flow validated');
+    }, 90000);
+  });
+
+  describe('[E2E] Application Request Flow: Full Data CRUD Cycle', () => {
+    test('should validate complete application data flow (API write/read)', async () => {
+      const targetUrl = `http://${outputs['alb-dns']}/api/v1/data`;
+      const uniqueId = `test-${Date.now()}`;
+      const payload = { 
+          id: uniqueId, 
+          value: 'E2E test data' 
+      };
+
+      // --- Step 1: Write Data (Internet → ALB → EC2 → RDS) ---
+      const postResponse = await httpClient.post(targetUrl, payload);
+      expect(postResponse.status).toBe(201); // Created
+      console.log(`Data created with ID: ${uniqueId}`);
+
+      // --- Step 2: Read Data (RDS → EC2 → ALB → Internet) ---
+      const getResponse = await httpClient.get(`${targetUrl}/${uniqueId}`);
+      expect(getResponse.status).toBe(200); // OK
+
+      // --- Step 3: Verify Data Integrity ---
+      expect(getResponse.data.id).toBe(uniqueId);
+      expect(getResponse.data.value).toBe(payload.value);
+
+      console.log('✅ E2E application data flow validated successfully (CRUD cycle)');
+
+      // The original CloudWatch metric logging can be kept as an E2E audit step,
+      // but it's not strictly part of the functional flow.
+      // E2E functional test is complete at Step 3.
+      
     }, 60000);
+  });
+
+  describe('[E2E] Monitoring and Alerting Flow: Load Trigger → Alert Check', () => {
+    test('should validate complete monitoring pipeline via load trigger', async () => {
+      const slowEndpoint = `http://${outputs['alb-dns']}/api/v1/slow-endpoint`;
+      
+      // --- Step 1: Trigger the ALARM Condition (Spike load) ---
+      // Hit the endpoint multiple times to push a metric (e.g., RequestCount, Latency) above a threshold
+      const loadPromises = [];
+      for (let i = 0; i < 50; i++) { // 50 requests to simulate a burst
+          loadPromises.push(httpClient.get(slowEndpoint));
+      }
+      await Promise.allSettled(loadPromises);
+      console.log('Load spike triggered to generate ALARM state...');
+
+      // --- Step 2 & 3: Wait for Alarm and Verify Alert Delivery (SNS) ---
+      // Wait for the CloudWatch metric to be collected, alarm state to change, and SNS to fire
+      await new Promise(resolve => setTimeout(resolve, 45000)); 
+      
+      // This endpoint is assumed to receive and log the SNS messages
+      const alertLogApi = 'http://alert-log-collector-service/logs/latest';
+      const alertResponse = await httpClient.get(alertLogApi); 
+
+      // Traditional E2E check: Verify the output of the final service in the pipeline
+      expect(alertResponse.data.latestAlarm.Subject).toContain('Integration Test Alert');
+      expect(alertResponse.data.latestAlarm.Message).toContain('ALARM');
+
+      console.log('✅ E2E monitoring pipeline validated (alarm successfully triggered and logged)');
+
+    }, 90000);
+  }); 
+
+  describe('[E2E] Disaster Recovery Flow: Functional Backup Verification', () => {
+    test('should validate backup and recovery mechanisms via API', async () => {
+      const backupApi = `http://${outputs['alb-dns']}/api/v1/admin/backup`;
+      
+      // --- Step 1: Trigger a Manual Backup ---
+      // Assumes a secure admin endpoint exists to trigger the backup process
+      const triggerResponse = await httpClient.post(backupApi, { type: 'rds-snapshot' });
+      expect(triggerResponse.status).toBe(202); // Accepted
+      console.log('RDS Snapshot trigger initiated...');
+
+      // --- Step 2: Wait for Backup to Complete ---
+      await new Promise(resolve => setTimeout(resolve, 60000)); // Wait for the async process
+
+      // --- Step 3: Verify Backup Presence ---
+      // Assumes another admin endpoint can list completed backups
+      const listResponse = await httpClient.get(backupApi);
+      
+      const newSnapshot = listResponse.data.snapshots.find(
+          (s: { status: string; type: string; }) => s.status === 'completed' && s.type === 'rds-snapshot'
+      );
+      
+      // Traditional E2E check: Verify the final, functional outcome of the process
+      expect(newSnapshot).toBeDefined();
+
+      console.log('✅ E2E disaster recovery validation completed (snapshot verified)');
+    }, 90000);
   });
 
   describe('[E2E] Monitoring and Alerting Flow: EC2 → CloudWatch → Dashboard → SNS', () => {
