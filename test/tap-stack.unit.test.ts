@@ -63,13 +63,13 @@ describe('TapStack CloudFormation Template', () => {
 
     test('enforces multi-az configuration defaults and documentation', () => {
       const numberOfAzs = template.Parameters.NumberOfAvailabilityZones;
-      const availabilityZones = template.Parameters.AvailabilityZones;
 
       expect(numberOfAzs.Default).toBe(2);
       expect(numberOfAzs.AllowedValues).toEqual([2, 3]);
-      expect(numberOfAzs.Description).toContain('You MUST provide AvailabilityZones parameter when using 2 or 3 AZs');
-      expect(availabilityZones.Type).toBe('CommaDelimitedList');
-      expect(availabilityZones.Description).toContain('REQUIRED when NumberOfAvailabilityZones is 2 or 3');
+      if (template.Parameters.AvailabilityZones) {
+        expect(template.Parameters.AvailabilityZones.Type).toBe('CommaDelimitedList');
+        expect(template.Parameters.AvailabilityZones.Description).toContain('REQUIRED when NumberOfAvailabilityZones is 2 or 3');
+      }
     });
 
     test('secures certificate and credential parameters', () => {
@@ -95,22 +95,12 @@ describe('TapStack CloudFormation Template', () => {
 
   describe('Conditions', () => {
     test('requires multi-az configuration for resource creation', () => {
-      // HasAtLeastTwoAZsWithCustomAZs requires both HasAtLeastTwoAZs AND HasCustomAZs
-      const condition = template.Conditions.HasAtLeastTwoAZsWithCustomAZs['Fn::And'];
-      expect(condition).toEqual(
-        expect.arrayContaining([
-          { Condition: 'HasAtLeastTwoAZs' },
-          { Condition: 'HasCustomAZs' },
-        ])
-      );
-      
-      const threeAzCondition = template.Conditions.HasThreeAZsWithCustomAZs['Fn::And'];
-      expect(threeAzCondition).toEqual(
-        expect.arrayContaining([
-          { Condition: 'HasThreeAZs' },
-          { Condition: 'HasCustomAZs' },
-        ])
-      );
+      // Verify HasThreeAZs condition exists
+      expect(template.Conditions.HasThreeAZs).toBeDefined();
+      expect(template.Conditions.HasThreeAZs['Fn::Equals']).toEqual([
+        { Ref: 'NumberOfAvailabilityZones' },
+        3
+      ]);
     });
 
     test('enables third AZ NAT only when HA and AZ3 are available', () => {
@@ -119,7 +109,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(condition).toEqual(
         expect.arrayContaining([
           { Condition: 'EnableHighAvailabilityNAT' },
-          { Condition: 'HasThreeAZsWithCustomAZs' },
+          { Condition: 'HasThreeAZs' },
         ])
       );
     });
@@ -141,8 +131,8 @@ describe('TapStack CloudFormation Template', () => {
       const publicSubnet2 = resources.PublicSubnet2;
       const publicSubnet3 = resources.PublicSubnet3;
 
-      expect(publicSubnet2.Condition).toBe('HasAtLeastTwoAZsWithCustomAZs');
-      expect(publicSubnet3.Condition).toBe('HasThreeAZsWithCustomAZs');
+      expect(publicSubnet2.Condition).toBeUndefined();
+      expect(publicSubnet3.Condition).toBe('HasThreeAZs');
       expect(publicSubnet2.Properties.AvailabilityZone['Fn::Select'][0]).toBe(1);
       expect(publicSubnet3.Properties.AvailabilityZone['Fn::Select'][0]).toBe(2);
     });
@@ -186,7 +176,7 @@ describe('TapStack CloudFormation Template', () => {
     test('auto scaling group integrates with ALB target group', () => {
       const asg = resources.AutoScalingGroup;
 
-      expect(asg.Condition).toBe('HasAtLeastTwoAZsWithCustomAZs');
+      expect(asg.Condition).toBeUndefined();
       expect(asg.Properties.TargetGroupARNs).toEqual([{ Ref: 'ALBTargetGroup' }]);
       expect(asg.Properties.HealthCheckType).toBe('ELB');
       expect(asg.Properties.LaunchTemplate.LaunchTemplateId).toEqual({ Ref: 'LaunchTemplate' });
@@ -219,7 +209,7 @@ describe('TapStack CloudFormation Template', () => {
       const subnetGroup = resources.DBSubnetGroup;
       const [, threeAzSubnets, twoAzSubnets] = subnetGroup.Properties.SubnetIds['Fn::If'];
 
-      expect(subnetGroup.Condition).toBe('HasAtLeastTwoAZsWithCustomAZs');
+      expect(subnetGroup.Condition).toBeUndefined();
       expect(threeAzSubnets).toEqual([
         { Ref: 'PrivateDBSubnet1' },
         { Ref: 'PrivateDBSubnet2' },
@@ -258,7 +248,7 @@ describe('TapStack CloudFormation Template', () => {
     test('cloudwatch alarms fan out to SNS topic', () => {
       const cpuAlarm = resources.HighCPUAlarm;
 
-      expect(cpuAlarm.Condition).toBe('HasAtLeastTwoAZsWithCustomAZs');
+      expect(cpuAlarm.Condition).toBeUndefined();
       expect(cpuAlarm.Properties.AlarmActions).toEqual([{ Ref: 'SNSTopic' }]);
       expect(cpuAlarm.Properties.Threshold).toEqual({ Ref: 'CPUAlarmThreshold' });
     });
@@ -299,9 +289,8 @@ describe('TapStack CloudFormation Template', () => {
 
       expect(albDnsOutput.Condition).toBeUndefined();
       expect(albArnOutput.Condition).toBeUndefined();
-      expect(albDnsOutput.Value['Fn::If'][0]).toBe('HasAtLeastTwoAZsWithCustomAZs');
-      expect(albDnsOutput.Value['Fn::If'][1]['Fn::GetAtt']).toEqual(['ApplicationLoadBalancer', 'DNSName']);
-      expect(albDnsOutput.Value['Fn::If'][2]).toBe('NotAvailable');
+      expect(albDnsOutput.Value['Fn::GetAtt']).toEqual(['ApplicationLoadBalancer', 'DNSName']);
+      expect(albArnOutput.Value.Ref).toBe('ApplicationLoadBalancer');
     });
 
     test('exports bucket identifiers for downstream stacks', () => {
