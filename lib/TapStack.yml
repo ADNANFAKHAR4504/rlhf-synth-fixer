@@ -279,12 +279,9 @@ Conditions:
   HasAtLeastTwoAZsWithCustomAZs: !And
     - !Condition HasAtLeastTwoAZs
     - !Condition HasCustomAZs
-  HasThreeAZsWithCustomAZs: !And
-    - !Condition HasThreeAZs
-    - !Condition HasCustomAZs
   EnableHighAvailabilityNATInAZ3: !And
     - !Condition EnableHighAvailabilityNAT
-    - !Condition HasThreeAZsWithCustomAZs
+    - !Condition HasThreeAZs
 
 # ============================================================================
 # RESOURCES
@@ -374,7 +371,7 @@ Resources:
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: HasAtLeastTwoAZs
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select
@@ -385,7 +382,10 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 1
-        - !Split [',', !Ref AvailabilityZones]
+        - !If
+            - HasCustomAZs
+            - !Split [',', !Ref AvailabilityZones]
+            - !GetAZs ''
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -405,7 +405,7 @@ Resources:
 
   PublicSubnet3:
     Type: AWS::EC2::Subnet
-    Condition: HasThreeAZsWithCustomAZs
+    Condition: HasThreeAZs
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select
@@ -416,7 +416,10 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 2
-        - !Split [',', !Ref AvailabilityZones]
+        - !If
+            - HasCustomAZs
+            - !Split [',', !Ref AvailabilityZones]
+            - !GetAZs ''
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -469,7 +472,7 @@ Resources:
 
   PrivateAppSubnet2:
     Type: AWS::EC2::Subnet
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: HasAtLeastTwoAZs
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select
@@ -480,7 +483,10 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 1
-        - !Split [',', !Ref AvailabilityZones]
+        - !If
+            - HasCustomAZs
+            - !Split [',', !Ref AvailabilityZones]
+            - !GetAZs ''
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-2
@@ -499,7 +505,7 @@ Resources:
 
   PrivateAppSubnet3:
     Type: AWS::EC2::Subnet
-    Condition: HasThreeAZsWithCustomAZs
+    Condition: HasThreeAZs
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select
@@ -510,7 +516,10 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 2
-        - !Split [',', !Ref AvailabilityZones]
+        - !If
+            - HasCustomAZs
+            - !Split [',', !Ref AvailabilityZones]
+            - !GetAZs ''
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-3
@@ -562,7 +571,7 @@ Resources:
 
   PrivateDBSubnet2:
     Type: AWS::EC2::Subnet
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: HasAtLeastTwoAZs
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select
@@ -573,7 +582,10 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 1
-        - !Split [',', !Ref AvailabilityZones]
+        - !If
+            - HasCustomAZs
+            - !Split [',', !Ref AvailabilityZones]
+            - !GetAZs ''
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-2
@@ -592,7 +604,7 @@ Resources:
 
   PrivateDBSubnet3:
     Type: AWS::EC2::Subnet
-    Condition: HasThreeAZsWithCustomAZs
+    Condition: HasThreeAZs
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select
@@ -603,7 +615,10 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 2
-        - !Split [',', !Ref AvailabilityZones]
+        - !If
+            - HasCustomAZs
+            - !Split [',', !Ref AvailabilityZones]
+            - !GetAZs ''
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-3
@@ -774,14 +789,14 @@ Resources:
 
   PublicSubnetRouteTableAssociation2:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: HasAtLeastTwoAZs
     Properties:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
 
   PublicSubnetRouteTableAssociation3:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: HasThreeAZsWithCustomAZs
+    Condition: HasThreeAZs
     Properties:
       SubnetId: !Ref PublicSubnet3
       RouteTableId: !Ref PublicRouteTable
@@ -875,7 +890,7 @@ Resources:
 
   PrivateAppSubnetRouteTableAssociation2:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: HasAtLeastTwoAZs
     Properties:
       SubnetId: !Ref PrivateAppSubnet2
       RouteTableId: !If
@@ -885,7 +900,7 @@ Resources:
 
   PrivateAppSubnetRouteTableAssociation3:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: HasThreeAZsWithCustomAZs
+    Condition: HasThreeAZs
     Properties:
       SubnetId: !Ref PrivateAppSubnet3
       RouteTableId: !If
@@ -901,7 +916,7 @@ Resources:
 
   PrivateDBSubnetRouteTableAssociation2:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: HasAtLeastTwoAZs
     Properties:
       SubnetId: !Ref PrivateDBSubnet2
       RouteTableId: !If
@@ -911,7 +926,7 @@ Resources:
 
   PrivateDBSubnetRouteTableAssociation3:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: HasThreeAZsWithCustomAZs
+    Condition: HasThreeAZs
     Properties:
       SubnetId: !Ref PrivateDBSubnet3
       RouteTableId: !If
@@ -1032,7 +1047,7 @@ Resources:
 
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: HasAtLeastTwoAZs
     Properties:
       Name: !Sub ${ProjectName}-${Environment}-ALB
       Type: application
@@ -1040,7 +1055,7 @@ Resources:
       SecurityGroups:
         - !Ref ALBSecurityGroup
       Subnets: !If
-        - HasThreeAZsWithCustomAZs
+        - HasThreeAZs
         - - !Ref PublicSubnet1
           - !Ref PublicSubnet2
           - !Ref PublicSubnet3
@@ -1062,7 +1077,7 @@ Resources:
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: HasAtLeastTwoAZs
     Properties:
       Name: !Sub ${ProjectName}-${Environment}-TG
       Port: 80
@@ -1104,7 +1119,7 @@ Resources:
 
   HTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: HasAtLeastTwoAZs
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 443
@@ -1118,7 +1133,7 @@ Resources:
 
   HTTPListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: HasAtLeastTwoAZs
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
@@ -1361,7 +1376,7 @@ Resources:
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: HasAtLeastTwoAZs
     UpdatePolicy:
       AutoScalingRollingUpdate:
         MaxBatchSize: 2
@@ -1377,7 +1392,7 @@ Resources:
       MaxSize: !Ref MaxInstances
       DesiredCapacity: !Ref DesiredInstances
       VPCZoneIdentifier: !If
-        - HasThreeAZsWithCustomAZs
+        - HasThreeAZs
         - - !Ref PrivateAppSubnet1
           - !Ref PrivateAppSubnet2
           - !Ref PrivateAppSubnet3
@@ -1410,7 +1425,7 @@ Resources:
   # Target tracking scaling policy for better performance
   TargetTrackingScalingPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: HasAtLeastTwoAZs
     Properties:
       AutoScalingGroupName: !Ref AutoScalingGroup
       PolicyType: TargetTrackingScaling
@@ -1425,12 +1440,12 @@ Resources:
 
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: HasAtLeastTwoAZs
     Properties:
       DBSubnetGroupName: !Sub ${ProjectName}-${Environment}-db-subnet-group
       DBSubnetGroupDescription: Subnet group for Aurora cluster across multiple AZs
       SubnetIds: !If
-        - HasThreeAZsWithCustomAZs
+        - HasThreeAZs
         - - !Ref PrivateDBSubnet1
           - !Ref PrivateDBSubnet2
           - !Ref PrivateDBSubnet3
@@ -1572,7 +1587,7 @@ Resources:
 
   AuroraCluster:
     Type: AWS::RDS::DBCluster
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: HasAtLeastTwoAZs
     Properties:
       DBClusterIdentifier: !Sub ${ProjectName}-${Environment}-aurora-cluster
       Engine: aurora-mysql
@@ -1613,7 +1628,7 @@ Resources:
 
   AuroraInstanceWriter:
     Type: AWS::RDS::DBInstance
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: HasAtLeastTwoAZs
     Properties:
       DBInstanceIdentifier: !Sub ${ProjectName}-${Environment}-aurora-writer
       DBClusterIdentifier: !Ref AuroraCluster
@@ -1653,7 +1668,7 @@ Resources:
 
   AuroraInstanceReader1:
     Type: AWS::RDS::DBInstance
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: HasAtLeastTwoAZs
     DependsOn: AuroraInstanceWriter
     Properties:
       DBInstanceIdentifier: !Sub ${ProjectName}-${Environment}-aurora-reader-1
@@ -1692,7 +1707,7 @@ Resources:
 
   AuroraInstanceReader2:
     Type: AWS::RDS::DBInstance
-    Condition: HasThreeAZsWithCustomAZs
+    Condition: HasThreeAZs
     DependsOn: AuroraInstanceReader1
     Properties:
       DBInstanceIdentifier: !Sub ${ProjectName}-${Environment}-aurora-reader-2
@@ -1910,7 +1925,7 @@ Resources:
 
   HighCPUAlarm:
     Type: AWS::CloudWatch::Alarm
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: HasAtLeastTwoAZs
     Properties:
       AlarmName: !Sub ${ProjectName}-${Environment}-HighCPU
       AlarmDescription: Triggers when CPU exceeds threshold for 2 consecutive periods
@@ -1930,7 +1945,7 @@ Resources:
   # Database connections alarm with percentage calculation
   DatabaseConnectionAlarm:
     Type: AWS::CloudWatch::Alarm
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: HasAtLeastTwoAZs
     Properties:
       AlarmName: !Sub ${ProjectName}-${Environment}-DB-HighConnections
       AlarmDescription: Alarm when database connections exceed threshold percentage
@@ -1961,7 +1976,7 @@ Resources:
 
   UnhealthyTargetsAlarm:
     Type: AWS::CloudWatch::Alarm
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: HasAtLeastTwoAZs
     Properties:
       AlarmName: !Sub ${ProjectName}-${Environment}-UnhealthyTargets
       AlarmDescription: Alarm when any target becomes unhealthy
@@ -1982,7 +1997,7 @@ Resources:
 
   TargetResponseTimeAlarm:
     Type: AWS::CloudWatch::Alarm
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: HasAtLeastTwoAZs
     Properties:
       AlarmName: !Sub ${ProjectName}-${Environment}-HighResponseTime
       AlarmDescription: Alarm when target response time exceeds 2 seconds
@@ -2357,14 +2372,14 @@ Outputs:
       Name: !Sub ${ProjectName}-${Environment}-PublicSubnet1
 
   PublicSubnet2Id:
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: HasAtLeastTwoAZs
     Description: Public Subnet 2 ID
     Value: !Ref PublicSubnet2
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PublicSubnet2
 
   PublicSubnet3Id:
-    Condition: HasThreeAZsWithCustomAZs
+    Condition: HasThreeAZs
     Description: Public Subnet 3 ID
     Value: !Ref PublicSubnet3
     Export:
@@ -2377,14 +2392,14 @@ Outputs:
       Name: !Sub ${ProjectName}-${Environment}-PrivateAppSubnet1
 
   PrivateAppSubnet2Id:
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: HasAtLeastTwoAZs
     Description: Private App Subnet 2 ID
     Value: !Ref PrivateAppSubnet2
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PrivateAppSubnet2
 
   PrivateAppSubnet3Id:
-    Condition: HasThreeAZsWithCustomAZs
+    Condition: HasThreeAZs
     Description: Private App Subnet 3 ID
     Value: !Ref PrivateAppSubnet3
     Export:
@@ -2397,14 +2412,14 @@ Outputs:
       Name: !Sub ${ProjectName}-${Environment}-PrivateDBSubnet1
 
   PrivateDBSubnet2Id:
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: HasAtLeastTwoAZs
     Description: Private DB Subnet 2 ID
     Value: !Ref PrivateDBSubnet2
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PrivateDBSubnet2
 
   PrivateDBSubnet3Id:
-    Condition: HasThreeAZsWithCustomAZs
+    Condition: HasThreeAZs
     Description: Private DB Subnet 3 ID
     Value: !Ref PrivateDBSubnet3
     Export:
@@ -2413,36 +2428,36 @@ Outputs:
   ALBDNSName:
     Description: Application Load Balancer DNS Name
     Value: !If
-      - HasAtLeastTwoAZsWithCustomAZs
+      - HasAtLeastTwoAZs
       - !GetAtt ApplicationLoadBalancer.DNSName
-      - ''
+      - 'NotAvailable'
     Export:
       Name: !Sub ${ProjectName}-${Environment}-ALB-DNS
 
   ALBArn:
     Description: Application Load Balancer ARN
     Value: !If
-      - HasAtLeastTwoAZsWithCustomAZs
+      - HasAtLeastTwoAZs
       - !Ref ApplicationLoadBalancer
-      - ''
+      - 'NotAvailable'
     Export:
       Name: !Sub ${ProjectName}-${Environment}-ALB-ARN
 
   ALBHostedZone:
     Description: ALB Hosted Zone ID for Route53 alias records
     Value: !If
-      - HasAtLeastTwoAZsWithCustomAZs
+      - HasAtLeastTwoAZs
       - !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
-      - ''
+      - 'NotAvailable'
     Export:
       Name: !Sub ${ProjectName}-${Environment}-ALB-HostedZone
 
   AutoScalingGroupName:
     Description: Auto Scaling Group Name
     Value: !If
-      - HasAtLeastTwoAZsWithCustomAZs
+      - HasAtLeastTwoAZs
       - !Ref AutoScalingGroup
-      - ''
+      - 'NotAvailable'
     Export:
       Name: !Sub ${ProjectName}-${Environment}-ASG-Name
 
@@ -2455,27 +2470,27 @@ Outputs:
   AuroraClusterEndpoint:
     Description: Aurora Cluster Writer Endpoint
     Value: !If
-      - HasAtLeastTwoAZsWithCustomAZs
+      - HasAtLeastTwoAZs
       - !GetAtt AuroraCluster.Endpoint.Address
-      - ''
+      - 'NotAvailable'
     Export:
       Name: !Sub ${ProjectName}-${Environment}-DB-Writer-Endpoint
 
   AuroraReaderEndpoint:
     Description: Aurora Cluster Reader Endpoint
     Value: !If
-      - HasAtLeastTwoAZsWithCustomAZs
+      - HasAtLeastTwoAZs
       - !GetAtt AuroraCluster.ReadEndpoint.Address
-      - ''
+      - 'NotAvailable'
     Export:
       Name: !Sub ${ProjectName}-${Environment}-DB-Reader-Endpoint
 
   AuroraClusterPort:
     Description: Aurora Cluster Port
     Value: !If
-      - HasAtLeastTwoAZsWithCustomAZs
+      - HasAtLeastTwoAZs
       - !GetAtt AuroraCluster.Endpoint.Port
-      - ''
+      - 'NotAvailable'
     Export:
       Name: !Sub ${ProjectName}-${Environment}-DB-Port
 

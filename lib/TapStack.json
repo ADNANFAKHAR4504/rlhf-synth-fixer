@@ -355,23 +355,13 @@
                 }
             ]
         },
-        "HasThreeAZsWithCustomAZs": {
-            "Fn::And": [
-                {
-                    "Condition": "HasThreeAZs"
-                },
-                {
-                    "Condition": "HasCustomAZs"
-                }
-            ]
-        },
         "EnableHighAvailabilityNATInAZ3": {
             "Fn::And": [
                 {
                     "Condition": "EnableHighAvailabilityNAT"
                 },
                 {
-                    "Condition": "HasThreeAZsWithCustomAZs"
+                    "Condition": "HasThreeAZs"
                 }
             ]
         }
@@ -561,7 +551,7 @@
         },
         "PublicSubnet2": {
             "Type": "AWS::EC2::Subnet",
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
+            "Condition": "HasAtLeastTwoAZs",
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
@@ -584,10 +574,18 @@
                     "Fn::Select": [
                         1,
                         {
-                            "Fn::Split": [
-                                ",",
+                            "Fn::If": [
+                                "HasCustomAZs",
                                 {
-                                    "Ref": "AvailabilityZones"
+                                    "Fn::Split": [
+                                        ",",
+                                        {
+                                            "Ref": "AvailabilityZones"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Fn::GetAZs": ""
                                 }
                             ]
                         }
@@ -638,7 +636,7 @@
         },
         "PublicSubnet3": {
             "Type": "AWS::EC2::Subnet",
-            "Condition": "HasThreeAZsWithCustomAZs",
+            "Condition": "HasThreeAZs",
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
@@ -661,10 +659,18 @@
                     "Fn::Select": [
                         2,
                         {
-                            "Fn::Split": [
-                                ",",
+                            "Fn::If": [
+                                "HasCustomAZs",
                                 {
-                                    "Ref": "AvailabilityZones"
+                                    "Fn::Split": [
+                                        ",",
+                                        {
+                                            "Ref": "AvailabilityZones"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Fn::GetAZs": ""
                                 }
                             ]
                         }
@@ -798,7 +804,7 @@
         },
         "PrivateAppSubnet2": {
             "Type": "AWS::EC2::Subnet",
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
+            "Condition": "HasAtLeastTwoAZs",
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
@@ -821,10 +827,18 @@
                     "Fn::Select": [
                         1,
                         {
-                            "Fn::Split": [
-                                ",",
+                            "Fn::If": [
+                                "HasCustomAZs",
                                 {
-                                    "Ref": "AvailabilityZones"
+                                    "Fn::Split": [
+                                        ",",
+                                        {
+                                            "Ref": "AvailabilityZones"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Fn::GetAZs": ""
                                 }
                             ]
                         }
@@ -874,7 +888,7 @@
         },
         "PrivateAppSubnet3": {
             "Type": "AWS::EC2::Subnet",
-            "Condition": "HasThreeAZsWithCustomAZs",
+            "Condition": "HasThreeAZs",
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
@@ -897,10 +911,18 @@
                     "Fn::Select": [
                         2,
                         {
-                            "Fn::Split": [
-                                ",",
+                            "Fn::If": [
+                                "HasCustomAZs",
                                 {
-                                    "Ref": "AvailabilityZones"
+                                    "Fn::Split": [
+                                        ",",
+                                        {
+                                            "Ref": "AvailabilityZones"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Fn::GetAZs": ""
                                 }
                             ]
                         }
@@ -1033,7 +1055,7 @@
         },
         "PrivateDBSubnet2": {
             "Type": "AWS::EC2::Subnet",
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
+            "Condition": "HasAtLeastTwoAZs",
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
@@ -1056,10 +1078,18 @@
                     "Fn::Select": [
                         1,
                         {
-                            "Fn::Split": [
-                                ",",
+                            "Fn::If": [
+                                "HasCustomAZs",
                                 {
-                                    "Ref": "AvailabilityZones"
+                                    "Fn::Split": [
+                                        ",",
+                                        {
+                                            "Ref": "AvailabilityZones"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Fn::GetAZs": ""
                                 }
                             ]
                         }
@@ -1109,7 +1139,7 @@
         },
         "PrivateDBSubnet3": {
             "Type": "AWS::EC2::Subnet",
-            "Condition": "HasThreeAZsWithCustomAZs",
+            "Condition": "HasThreeAZs",
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
@@ -1132,10 +1162,18 @@
                     "Fn::Select": [
                         2,
                         {
-                            "Fn::Split": [
-                                ",",
+                            "Fn::If": [
+                                "HasCustomAZs",
                                 {
-                                    "Ref": "AvailabilityZones"
+                                    "Fn::Split": [
+                                        ",",
+                                        {
+                                            "Ref": "AvailabilityZones"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Fn::GetAZs": ""
                                 }
                             ]
                         }
@@ -1536,7 +1574,7 @@
         },
         "PublicSubnetRouteTableAssociation2": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
+            "Condition": "HasAtLeastTwoAZs",
             "Properties": {
                 "SubnetId": {
                     "Ref": "PublicSubnet2"
@@ -1548,7 +1586,7 @@
         },
         "PublicSubnetRouteTableAssociation3": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Condition": "HasThreeAZsWithCustomAZs",
+            "Condition": "HasThreeAZs",
             "Properties": {
                 "SubnetId": {
                     "Ref": "PublicSubnet3"
@@ -1743,7 +1781,7 @@
         },
         "PrivateAppSubnetRouteTableAssociation2": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
+            "Condition": "HasAtLeastTwoAZs",
             "Properties": {
                 "SubnetId": {
                     "Ref": "PrivateAppSubnet2"
@@ -1763,7 +1801,7 @@
         },
         "PrivateAppSubnetRouteTableAssociation3": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Condition": "HasThreeAZsWithCustomAZs",
+            "Condition": "HasThreeAZs",
             "Properties": {
                 "SubnetId": {
                     "Ref": "PrivateAppSubnet3"
@@ -1794,7 +1832,7 @@
         },
         "PrivateDBSubnetRouteTableAssociation2": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
+            "Condition": "HasAtLeastTwoAZs",
             "Properties": {
                 "SubnetId": {
                     "Ref": "PrivateDBSubnet2"
@@ -1814,7 +1852,7 @@
         },
         "PrivateDBSubnetRouteTableAssociation3": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Condition": "HasThreeAZsWithCustomAZs",
+            "Condition": "HasThreeAZs",
             "Properties": {
                 "SubnetId": {
                     "Ref": "PrivateDBSubnet3"
@@ -2048,7 +2086,7 @@
         },
         "ApplicationLoadBalancer": {
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
+            "Condition": "HasAtLeastTwoAZs",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "${ProjectName}-${Environment}-ALB"
@@ -2062,7 +2100,7 @@
                 ],
                 "Subnets": {
                     "Fn::If": [
-                        "HasThreeAZsWithCustomAZs",
+                        "HasThreeAZs",
                         [
                             {
                                 "Ref": "PublicSubnet1"
@@ -2124,7 +2162,7 @@
         },
         "ALBTargetGroup": {
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
+            "Condition": "HasAtLeastTwoAZs",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "${ProjectName}-${Environment}-TG"
@@ -2203,7 +2241,7 @@
         },
         "HTTPSListener": {
             "Type": "AWS::ElasticLoadBalancingV2::Listener",
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
+            "Condition": "HasAtLeastTwoAZs",
             "Properties": {
                 "LoadBalancerArn": {
                     "Ref": "ApplicationLoadBalancer"
@@ -2230,7 +2268,7 @@
         },
         "HTTPListener": {
             "Type": "AWS::ElasticLoadBalancingV2::Listener",
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
+            "Condition": "HasAtLeastTwoAZs",
             "Properties": {
                 "LoadBalancerArn": {
                     "Ref": "ApplicationLoadBalancer"
@@ -2514,7 +2552,7 @@
         },
         "AutoScalingGroup": {
             "Type": "AWS::AutoScaling::AutoScalingGroup",
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
+            "Condition": "HasAtLeastTwoAZs",
             "UpdatePolicy": {
                 "AutoScalingRollingUpdate": {
                     "MaxBatchSize": 2,
@@ -2551,7 +2589,7 @@
                 },
                 "VPCZoneIdentifier": {
                     "Fn::If": [
-                        "HasThreeAZsWithCustomAZs",
+                        "HasThreeAZs",
                         [
                             {
                                 "Ref": "PrivateAppSubnet1"
@@ -2626,7 +2664,7 @@
         },
         "TargetTrackingScalingPolicy": {
             "Type": "AWS::AutoScaling::ScalingPolicy",
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
+            "Condition": "HasAtLeastTwoAZs",
             "Properties": {
                 "AutoScalingGroupName": {
                     "Ref": "AutoScalingGroup"
@@ -2644,7 +2682,7 @@
         },
         "DBSubnetGroup": {
             "Type": "AWS::RDS::DBSubnetGroup",
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
+            "Condition": "HasAtLeastTwoAZs",
             "Properties": {
                 "DBSubnetGroupName": {
                     "Fn::Sub": "${ProjectName}-${Environment}-db-subnet-group"
@@ -2652,7 +2690,7 @@
                 "DBSubnetGroupDescription": "Subnet group for Aurora cluster across multiple AZs",
                 "SubnetIds": {
                     "Fn::If": [
-                        "HasThreeAZsWithCustomAZs",
+                        "HasThreeAZs",
                         [
                             {
                                 "Ref": "PrivateDBSubnet1"
@@ -2952,7 +2990,7 @@
         },
         "AuroraCluster": {
             "Type": "AWS::RDS::DBCluster",
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
+            "Condition": "HasAtLeastTwoAZs",
             "Properties": {
                 "DBClusterIdentifier": {
                     "Fn::Sub": "${ProjectName}-${Environment}-aurora-cluster"
@@ -3035,7 +3073,7 @@
         },
         "AuroraInstanceWriter": {
             "Type": "AWS::RDS::DBInstance",
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
+            "Condition": "HasAtLeastTwoAZs",
             "Properties": {
                 "DBInstanceIdentifier": {
                     "Fn::Sub": "${ProjectName}-${Environment}-aurora-writer"
@@ -3123,7 +3161,7 @@
         },
         "AuroraInstanceReader1": {
             "Type": "AWS::RDS::DBInstance",
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
+            "Condition": "HasAtLeastTwoAZs",
             "DependsOn": "AuroraInstanceWriter",
             "Properties": {
                 "DBInstanceIdentifier": {
@@ -3212,7 +3250,7 @@
         },
         "AuroraInstanceReader2": {
             "Type": "AWS::RDS::DBInstance",
-            "Condition": "HasThreeAZsWithCustomAZs",
+            "Condition": "HasThreeAZs",
             "DependsOn": "AuroraInstanceReader1",
             "Properties": {
                 "DBInstanceIdentifier": {
@@ -3658,7 +3696,7 @@
         },
         "HighCPUAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
+            "Condition": "HasAtLeastTwoAZs",
             "Properties": {
                 "AlarmName": {
                     "Fn::Sub": "${ProjectName}-${Environment}-HighCPU"
@@ -3690,7 +3728,7 @@
         },
         "DatabaseConnectionAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
+            "Condition": "HasAtLeastTwoAZs",
             "Properties": {
                 "AlarmName": {
                     "Fn::Sub": "${ProjectName}-${Environment}-DB-HighConnections"
@@ -3743,7 +3781,7 @@
         },
         "UnhealthyTargetsAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
+            "Condition": "HasAtLeastTwoAZs",
             "Properties": {
                 "AlarmName": {
                     "Fn::Sub": "${ProjectName}-${Environment}-UnhealthyTargets"
@@ -3785,7 +3823,7 @@
         },
         "TargetResponseTimeAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
+            "Condition": "HasAtLeastTwoAZs",
             "Properties": {
                 "AlarmName": {
                     "Fn::Sub": "${ProjectName}-${Environment}-HighResponseTime"
@@ -4250,7 +4288,7 @@
             }
         },
         "PublicSubnet2Id": {
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
+            "Condition": "HasAtLeastTwoAZs",
             "Description": "Public Subnet 2 ID",
             "Value": {
                 "Ref": "PublicSubnet2"
@@ -4262,7 +4300,7 @@
             }
         },
         "PublicSubnet3Id": {
-            "Condition": "HasThreeAZsWithCustomAZs",
+            "Condition": "HasThreeAZs",
             "Description": "Public Subnet 3 ID",
             "Value": {
                 "Ref": "PublicSubnet3"
@@ -4285,7 +4323,7 @@
             }
         },
         "PrivateAppSubnet2Id": {
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
+            "Condition": "HasAtLeastTwoAZs",
             "Description": "Private App Subnet 2 ID",
             "Value": {
                 "Ref": "PrivateAppSubnet2"
@@ -4297,7 +4335,7 @@
             }
         },
         "PrivateAppSubnet3Id": {
-            "Condition": "HasThreeAZsWithCustomAZs",
+            "Condition": "HasThreeAZs",
             "Description": "Private App Subnet 3 ID",
             "Value": {
                 "Ref": "PrivateAppSubnet3"
@@ -4320,7 +4358,7 @@
             }
         },
         "PrivateDBSubnet2Id": {
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
+            "Condition": "HasAtLeastTwoAZs",
             "Description": "Private DB Subnet 2 ID",
             "Value": {
                 "Ref": "PrivateDBSubnet2"
@@ -4332,7 +4370,7 @@
             }
         },
         "PrivateDBSubnet3Id": {
-            "Condition": "HasThreeAZsWithCustomAZs",
+            "Condition": "HasThreeAZs",
             "Description": "Private DB Subnet 3 ID",
             "Value": {
                 "Ref": "PrivateDBSubnet3"
@@ -4344,12 +4382,17 @@
             }
         },
         "ALBDNSName": {
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
             "Description": "Application Load Balancer DNS Name",
             "Value": {
-                "Fn::GetAtt": [
-                    "ApplicationLoadBalancer",
-                    "DNSName"
+                "Fn::If": [
+                    "HasAtLeastTwoAZs",
+                    {
+                        "Fn::GetAtt": [
+                            "ApplicationLoadBalancer",
+                            "DNSName"
+                        ]
+                    },
+                    "NotAvailable"
                 ]
             },
             "Export": {
@@ -4359,10 +4402,15 @@
             }
         },
         "ALBArn": {
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
             "Description": "Application Load Balancer ARN",
             "Value": {
-                "Ref": "ApplicationLoadBalancer"
+                "Fn::If": [
+                    "HasAtLeastTwoAZs",
+                    {
+                        "Ref": "ApplicationLoadBalancer"
+                    },
+                    "NotAvailable"
+                ]
             },
             "Export": {
                 "Name": {
@@ -4371,12 +4419,17 @@
             }
         },
         "ALBHostedZone": {
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
             "Description": "ALB Hosted Zone ID for Route53 alias records",
             "Value": {
-                "Fn::GetAtt": [
-                    "ApplicationLoadBalancer",
-                    "CanonicalHostedZoneID"
+                "Fn::If": [
+                    "HasAtLeastTwoAZs",
+                    {
+                        "Fn::GetAtt": [
+                            "ApplicationLoadBalancer",
+                            "CanonicalHostedZoneID"
+                        ]
+                    },
+                    "NotAvailable"
                 ]
             },
             "Export": {
@@ -4386,10 +4439,15 @@
             }
         },
         "AutoScalingGroupName": {
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
             "Description": "Auto Scaling Group Name",
             "Value": {
-                "Ref": "AutoScalingGroup"
+                "Fn::If": [
+                    "HasAtLeastTwoAZs",
+                    {
+                        "Ref": "AutoScalingGroup"
+                    },
+                    "NotAvailable"
+                ]
             },
             "Export": {
                 "Name": {
@@ -4409,12 +4467,17 @@
             }
         },
         "AuroraClusterEndpoint": {
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
             "Description": "Aurora Cluster Writer Endpoint",
             "Value": {
-                "Fn::GetAtt": [
-                    "AuroraCluster",
-                    "Endpoint.Address"
+                "Fn::If": [
+                    "HasAtLeastTwoAZs",
+                    {
+                        "Fn::GetAtt": [
+                            "AuroraCluster",
+                            "Endpoint.Address"
+                        ]
+                    },
+                    "NotAvailable"
                 ]
             },
             "Export": {
@@ -4424,12 +4487,17 @@
             }
         },
         "AuroraReaderEndpoint": {
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
             "Description": "Aurora Cluster Reader Endpoint",
             "Value": {
-                "Fn::GetAtt": [
-                    "AuroraCluster",
-                    "ReadEndpoint.Address"
+                "Fn::If": [
+                    "HasAtLeastTwoAZs",
+                    {
+                        "Fn::GetAtt": [
+                            "AuroraCluster",
+                            "ReadEndpoint.Address"
+                        ]
+                    },
+                    "NotAvailable"
                 ]
             },
             "Export": {
@@ -4439,12 +4507,17 @@
             }
         },
         "AuroraClusterPort": {
-            "Condition": "HasAtLeastTwoAZsWithCustomAZs",
             "Description": "Aurora Cluster Port",
             "Value": {
-                "Fn::GetAtt": [
-                    "AuroraCluster",
-                    "Endpoint.Port"
+                "Fn::If": [
+                    "HasAtLeastTwoAZs",
+                    {
+                        "Fn::GetAtt": [
+                            "AuroraCluster",
+                            "Endpoint.Port"
+                        ]
+                    },
+                    "NotAvailable"
                 ]
             },
             "Export": {
