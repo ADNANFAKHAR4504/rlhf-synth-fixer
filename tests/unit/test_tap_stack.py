@@ -345,9 +345,15 @@ class TestTapStackComponent(unittest.TestCase):
     def _instantiate_stack(self, environment_suffix: str | None = "dev", tags: dict | None = None):
         exports = {}
 
+        original_export = pulumi.export
+
+        def capture_export(key, value):
+            exports[key] = value
+            return original_export(key, value)
+
         with patch("pulumi.Config") as mock_config, patch(
             "lib.tap_stack.pulumi.export",
-            side_effect=lambda key, value: exports.__setitem__(key, value),
+            new=capture_export,
         ):
             mock_config.return_value.get.return_value = None
             stack = TapStack(
