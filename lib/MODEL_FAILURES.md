@@ -22,7 +22,7 @@ Corrected to use valid PostgreSQL version "14.15" (line 594 in tap_stack.py):
 engine_version="14.15",
 ```
 
-**Root Cause**: The model generated an invalid PostgreSQL engine version that is not available in AWS RDS. PostgreSQL version 14.7 is not a valid AWS RDS engine version. AWS RDS provides specific minor versions for PostgreSQL 14.x, and 14.7 is not among the supported versions in the us-east-2 region (or any AWS region).
+**Root Cause**: The model generated an invalid PostgreSQL engine version that is not available in AWS RDS. PostgreSQL version 14.7 is not a valid AWS RDS engine version. AWS RDS provides specific minor versions for PostgreSQL 14.x, and 14.7 is not among the supported versions in the us-east-1 region (or any AWS region).
 
 **AWS Documentation Reference**: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_PostgreSQL.html#PostgreSQL.Concepts.General.DBVersions
 
@@ -127,7 +127,7 @@ alb_logs_policy = self.alb_logs_bucket.arn.apply(
 ```
 
 **IDEAL_RESPONSE Fix**:
-Updated the first statement to use the AWS account principal for the us-east-2 region's ELB service account (lines 336-360 in tap_stack.py):
+Updated the first statement to use the AWS account principal for the us-east-1 region's ELB service account (lines 336-360 in tap_stack.py):
 
 ```python
 alb_logs_policy = self.alb_logs_bucket.arn.apply(
@@ -157,7 +157,7 @@ alb_logs_policy = self.alb_logs_bucket.arn.apply(
 )
 ```
 
-**Root Cause**: The model used an incorrect principal type for granting ALB access to write logs to S3. While the service principal `elasticloadbalancing.amazonaws.com` works for the ACL check action, the PutObject action requires specifying the AWS account principal specific to the region's ELB service. Each AWS region has a specific AWS account ID that owns the Elastic Load Balancing service, and this account must be granted PutObject permissions for ALB access logging to work. For us-east-2, this account ID is 033677994240.
+**Root Cause**: The model used an incorrect principal type for granting ALB access to write logs to S3. While the service principal `elasticloadbalancing.amazonaws.com` works for the ACL check action, the PutObject action requires specifying the AWS account principal specific to the region's ELB service. Each AWS region has a specific AWS account ID that owns the Elastic Load Balancing service, and this account must be granted PutObject permissions for ALB access logging to work. For us-east-1, this account ID is 033677994240.
 
 **AWS Documentation Reference**: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/enable-access-logging.html#attach-bucket-policy
 

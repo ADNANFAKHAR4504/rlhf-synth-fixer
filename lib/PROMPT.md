@@ -8,7 +8,7 @@ The team has decided to use **Pulumi with Python** for this infrastructure. We n
 
 ## What we need to build
 
-Create a production-ready containerized application infrastructure using **Pulumi with Python** for a loan processing application migration in the us-east-2 region.
+Create a production-ready containerized application infrastructure using **Pulumi with Python** for a loan processing application migration in the us-east-1 region.
 
 ### Core Infrastructure Requirements
 
@@ -72,7 +72,7 @@ Create a production-ready containerized application infrastructure using **Pulum
 - Use **Parameter Store** for non-sensitive configuration
 - Use **S3** with 90-day lifecycle for ALB access logs
 - Use **KMS** customer-managed keys for RDS encryption
-- Deploy to **us-east-2** region
+- Deploy to **us-east-1** region
 - Each environment must have its own VPC with no peering between them
 - All resources must include **environmentSuffix** for uniqueness
 - Follow naming convention: resource-type-{environmentSuffix}

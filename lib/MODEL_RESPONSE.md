@@ -109,7 +109,7 @@ class TapStack:
             tags={**self.common_tags, "Name": f"igw-{self.env_suffix}"},
         )
 
-        # Get availability zones (us-east-2 has 3 AZs: us-east-2a, us-east-2b, us-east-2c)
+        # Get availability zones (us-east-1 has 3 AZs: us-east-2a, us-east-2b, us-east-2c)
         self.availability_zones = ["us-east-2a", "us-east-2b", "us-east-2c"]
 
         # Create public and private subnets
@@ -347,7 +347,7 @@ class TapStack:
             restrict_public_buckets=True,
         )
 
-        # Bucket policy for ALB access logs (us-east-2 ELB account: 033677994240)
+        # Bucket policy for ALB access logs (us-east-1 ELB account: 033677994240)
         alb_logs_policy = self.alb_logs_bucket.arn.apply(
             lambda arn: json.dumps({
                 "Version": "2012-10-17",
@@ -900,7 +900,7 @@ def finish_secret(service_client, arn, token):
                     },
                     {
                         "name": "AWS_REGION",
-                        "value": "us-east-2"
+                        "value": "us-east-1"
                     }
                 ],
                 "secrets": [
@@ -917,7 +917,7 @@ def finish_secret(service_client, arn, token):
                     "logDriver": "awslogs",
                     "options": {
                         "awslogs-group": args[0],
-                        "awslogs-region": "us-east-2",
+                        "awslogs-region": "us-east-1",
                         "awslogs-stream-prefix": "ecs"
                     }
                 }
@@ -1011,7 +1011,7 @@ Component modules for the Pulumi infrastructure.
    ```bash
    export ENVIRONMENT_SUFFIX="dev"
    pulumi stack init TapStackdev
-   pulumi config set aws:region us-east-2
+   pulumi config set aws:region us-east-1
    ```
 
 2. Deploy infrastructure:
