@@ -15,12 +15,16 @@ interface TapStackProps {
 }
 
 export class TapStack extends TerraformStack {
+  // Make AWS_REGION_OVERRIDE a static property that can be tested
+  private static readonly AWS_REGION_OVERRIDE = 'ap-southeast-1';
+
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
 
-    const AWS_REGION_OVERRIDE = 'ap-southeast-1';
     const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE || props?.awsRegion || 'us-east-1';
+    // Use the static property - this allows for better testability
+    const awsRegion =
+      TapStack.AWS_REGION_OVERRIDE || props?.awsRegion || 'us-east-1';
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags || [];

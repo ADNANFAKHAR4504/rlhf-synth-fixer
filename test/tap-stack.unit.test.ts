@@ -116,6 +116,113 @@ describe('TapStack Unit Tests', () => {
 
       expect(synthesized).toContain('ap-southeast-1');
     });
+
+    // Add these two tests to cover the optional chaining branches
+    test('TapStack uses AWS_REGION_OVERRIDE when props is undefined', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestTapStackUndefinedProps', undefined);
+      synthesized = Testing.synth(stack);
+
+      expect(synthesized).toContain('ap-southeast-1');
+    });
+
+    test('TapStack uses AWS_REGION_OVERRIDE when props.awsRegion is not provided', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestTapStackNoRegionProp', {
+        environmentSuffix: 'test',
+        // awsRegion is intentionally omitted to test the optional chaining
+      });
+      synthesized = Testing.synth(stack);
+
+      expect(synthesized).toContain('ap-southeast-1');
+    });
+
+    // Add test to cover the fallback branch when AWS_REGION_OVERRIDE is falsy
+    test('TapStack uses props.awsRegion when AWS_REGION_OVERRIDE is falsy', () => {
+      app = new App();
+
+      // Mock the static property to be falsy to test the fallback branch
+      const originalOverride = (TapStack as any).AWS_REGION_OVERRIDE;
+      Object.defineProperty(TapStack, 'AWS_REGION_OVERRIDE', {
+        get: () => undefined,
+        configurable: true,
+      });
+
+      try {
+        stack = new TapStack(app, 'TestTapStackFallbackRegion', {
+          environmentSuffix: 'test',
+          awsRegion: 'us-west-2',
+        });
+        synthesized = Testing.synth(stack);
+
+        expect(synthesized).toContain('us-west-2');
+        expect(synthesized).not.toContain('ap-southeast-1');
+      } finally {
+        // Restore original value
+        Object.defineProperty(TapStack, 'AWS_REGION_OVERRIDE', {
+          get: () => originalOverride,
+          configurable: true,
+        });
+      }
+    });
+
+    // Add test to cover the final fallback to 'us-east-1' when both are falsy
+    test('TapStack uses default us-east-1 when AWS_REGION_OVERRIDE and props.awsRegion are both falsy', () => {
+      app = new App();
+
+      // Mock the static property to be falsy
+      const originalOverride = (TapStack as any).AWS_REGION_OVERRIDE;
+      Object.defineProperty(TapStack, 'AWS_REGION_OVERRIDE', {
+        get: () => undefined,
+        configurable: true,
+      });
+
+      try {
+        stack = new TapStack(app, 'TestTapStackDefaultFallback', {
+          environmentSuffix: 'test',
+          // awsRegion is intentionally omitted
+        });
+        synthesized = Testing.synth(stack);
+
+        expect(synthesized).toContain('us-east-1');
+        expect(synthesized).not.toContain('ap-southeast-1');
+      } finally {
+        // Restore original value
+        Object.defineProperty(TapStack, 'AWS_REGION_OVERRIDE', {
+          get: () => originalOverride,
+          configurable: true,
+        });
+      }
+    });
+
+    // Add test to cover when AWS_REGION_OVERRIDE is falsy and props.awsRegion is undefined
+    test('TapStack uses default us-east-1 when AWS_REGION_OVERRIDE is falsy and props.awsRegion is undefined', () => {
+      app = new App();
+
+      // Mock the static property to be falsy
+      const originalOverride = (TapStack as any).AWS_REGION_OVERRIDE;
+      Object.defineProperty(TapStack, 'AWS_REGION_OVERRIDE', {
+        get: () => undefined,
+        configurable: true,
+      });
+
+      try {
+        stack = new TapStack(app, 'TestTapStackUndefinedFallback', {
+          environmentSuffix: 'test',
+          awsRegion: undefined,
+        });
+        synthesized = Testing.synth(stack);
+
+        expect(synthesized).toContain('us-east-1');
+        expect(synthesized).not.toContain('ap-southeast-1');
+      } finally {
+        // Restore original value
+        Object.defineProperty(TapStack, 'AWS_REGION_OVERRIDE', {
+          get: () => originalOverride,
+          configurable: true,
+        });
+      }
+    });
   });
 
   describe('State Bucket Configuration', () => {
