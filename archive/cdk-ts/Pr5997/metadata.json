@@ -19,8 +19,8 @@
     "Parameter Store",
     "CloudWatch",
     "IAM",
-    "NAT Gateway",
-    "Lambda"
+    "Lambda",
+    "NAT Gateway"
   ],
   "subject_labels": [
     "three-tier-architecture",
@@ -28,5 +28,12 @@
     "blue-green-deployment",
     "container-orchestration",
     "cdn-distribution"
-  ]
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
