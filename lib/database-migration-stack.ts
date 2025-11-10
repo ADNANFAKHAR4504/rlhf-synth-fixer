@@ -414,14 +414,48 @@ export class DatabaseMigrationStack extends Construct {
 
     const dmsVpcRole = new iam.Role(this, `DmsVpcRole-${environmentSuffix}`, {
       assumedBy: new iam.ServicePrincipal('dms.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/AmazonDMSVPCManagementRole'
-        ),
-      ],
-      // Remove explicit roleName to avoid naming collisions and propagation delays
-      // roleName: `dms-vpc-role-${environmentSuffix}`,
     });
+
+    dmsVpcRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName(
+        'service-role/AmazonDMSVPCManagementRole'
+      )
+    );
+
+    dmsVpcRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'ec2:DescribeAccountAttributes',
+          'ec2:DescribeAddresses',
+          'ec2:DescribeAvailabilityZones',
+          'ec2:DescribeInternetGateways',
+          'ec2:DescribeNetworkAcls',
+          'ec2:DescribeRouteTables',
+          'ec2:DescribeSecurityGroups',
+          'ec2:DescribeSubnets',
+          'ec2:DescribeVpcs',
+          'ec2:CreateNetworkInterface',
+          'ec2:DeleteNetworkInterface',
+          'ec2:ModifyNetworkInterfaceAttribute',
+          'ec2:DescribeNetworkInterfaces',
+        ],
+        resources: ['*'],
+      })
+    );
+
+    const dmsSubnetGroup = new dms.CfnReplicationSubnetGroup(
+      this,
+      `DmsSubnetGroup-${environmentSuffix}`,
+      {
+        replicationSubnetGroupIdentifier: `dms-subnet-group-${environmentSuffix}`,
+        replicationSubnetGroupDescription:
+          'Subnet group for DMS replication instance',
+        subnetIds: prodPrivateSubnets.map(subnet => subnet.subnetId),
+      }
+    );
+
+    dmsSubnetGroup.node.addDependency(dmsVpcRole);
 
     // DMS CloudWatch Logs Role (required for DMS logging)
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -453,17 +487,6 @@ export class DatabaseMigrationStack extends Construct {
     //    subnetIds: prodPrivateSubnets.map(subnet => subnet.subnetId),
     //  }
     //);
-    const dmsSubnetGroup = new dms.CfnReplicationSubnetGroup(
-      this,
-      `DmsSubnetGroup-${environmentSuffix}`,
-      {
-        replicationSubnetGroupIdentifier: `dms-subnet-group-${environmentSuffix}`,
-        replicationSubnetGroupDescription:
-          'Subnet group for DMS replication instance',
-        subnetIds: prodPrivateSubnets.map(subnet => subnet.subnetId),
-      }
-    );
-    dmsSubnetGroup.node.addDependency(dmsVpcRole);
     // ==============================
     // 9. DMS Replication Instance
     // ==============================
