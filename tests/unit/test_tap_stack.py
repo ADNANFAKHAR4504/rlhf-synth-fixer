@@ -346,7 +346,7 @@ class TestTapStackComponent(unittest.TestCase):
         exports = {}
 
         with patch("pulumi.Config") as mock_config, patch(
-            "pulumi.export",
+            "lib.tap_stack.pulumi.export",
             side_effect=lambda key, value: exports.__setitem__(key, value),
         ):
             mock_config.return_value.get.return_value = None
