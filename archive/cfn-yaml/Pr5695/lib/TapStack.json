@@ -1,0 +1,1996 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Payment Processing System Infrastructure Template",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "AllowedPattern": "^[a-z0-9-]+$",
+      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod, blue, green)"
+    },
+    "DeploymentColor": {
+      "Type": "String",
+      "Default": "blue",
+      "AllowedValues": [
+        "blue",
+        "green"
+      ],
+      "Description": "Deployment color for blue-green deployment strategy"
+    },
+    "TrafficWeight": {
+      "Type": "Number",
+      "Default": 100,
+      "MinValue": 0,
+      "MaxValue": 100,
+      "Description": "Traffic weight percentage for this environment (0-100) for gradual traffic shifting"
+    },
+    "EnableBlueGreenDeployment": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "true",
+        "false"
+      ],
+      "Description": "Enable blue-green deployment features (Route53, CloudFront origin failover)"
+    },
+    "DomainName": {
+      "Type": "String",
+      "Default": "",
+      "Description": "Optional - Domain name for Route53 (e.g., api.payments.example.com). Leave empty to skip Route53 setup."
+    },
+    "HostedZoneId": {
+      "Type": "String",
+      "Default": "",
+      "Description": "Optional - Route53 Hosted Zone ID. Leave empty to skip Route53 setup."
+    },
+    "DBMasterUsername": {
+      "Type": "String",
+      "Default": "admin",
+      "MinLength": 1,
+      "MaxLength": 16,
+      "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+      "Description": "Database master username"
+    },
+    "AlertEmail": {
+      "Type": "String",
+      "Default": "alerts@example.com",
+      "AllowedPattern": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}",
+      "Description": "Email address for CloudWatch alerts"
+    }
+  },
+  "Conditions": {
+    "EnableBlueGreen": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnableBlueGreenDeployment"
+        },
+        "true"
+      ]
+    },
+    "CreateRoute53": {
+      "Fn::And": [
+        {
+          "Condition": "EnableBlueGreen"
+        },
+        {
+          "Fn::Not": [
+            {
+              "Fn::Equals": [
+                {
+                  "Ref": "DomainName"
+                },
+                ""
+              ]
+            }
+          ]
+        },
+        {
+          "Fn::Not": [
+            {
+              "Fn::Equals": [
+                {
+                  "Ref": "HostedZoneId"
+                },
+                ""
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "MasterKMSKey": {
+      "Type": "AWS::KMS::Key",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "Master KMS key for ${EnvironmentSuffix} environment encryption"
+        },
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow services to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "rds.amazonaws.com",
+                  "s3.amazonaws.com",
+                  "lambda.amazonaws.com",
+                  "dynamodb.amazonaws.com",
+                  "secretsmanager.amazonaws.com",
+                  "sns.amazonaws.com",
+                  {
+                    "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+                  }
+                ]
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:CreateGrant",
+                "kms:GenerateDataKey",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": [
+                    {
+                      "Fn::Sub": "rds.${AWS::Region}.amazonaws.com"
+                    },
+                    {
+                      "Fn::Sub": "s3.${AWS::Region}.amazonaws.com"
+                    },
+                    {
+                      "Fn::Sub": "dynamodb.${AWS::Region}.amazonaws.com"
+                    },
+                    {
+                      "Fn::Sub": "secretsmanager.${AWS::Region}.amazonaws.com"
+                    },
+                    {
+                      "Fn::Sub": "sns.${AWS::Region}.amazonaws.com"
+                    },
+                    {
+                      "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-master-key"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "iac-rlhf-amazon"
+          },
+          {
+            "Key": "team-number",
+            "Value": 2
+          }
+        ]
+      }
+    },
+    "MasterKMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/${AWS::StackName}-${EnvironmentSuffix}-master"
+        },
+        "TargetKeyId": {
+          "Ref": "MasterKMSKey"
+        }
+      }
+    },
+    "DBMasterSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-db-master-secret"
+        },
+        "Description": "Master password for Aurora cluster",
+        "KmsKeyId": {
+          "Ref": "MasterKMSKey"
+        },
+        "GenerateSecretString": {
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\": \"${DBMasterUsername}\"}"
+          },
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\",
+          "RequireEachIncludedType": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-db-secret"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "iac-rlhf-amazon"
+          },
+          {
+            "Key": "team-number",
+            "Value": 2
+          }
+        ]
+      }
+    },
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-vpc"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "iac-rlhf-amazon"
+          },
+          {
+            "Key": "team-number",
+            "Value": 2
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-igw"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "iac-rlhf-amazon"
+          },
+          {
+            "Key": "team-number",
+            "Value": 2
+          }
+        ]
+      }
+    },
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-public-subnet-1"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "iac-rlhf-amazon"
+          },
+          {
+            "Key": "team-number",
+            "Value": 2
+          }
+        ]
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-public-subnet-2"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "iac-rlhf-amazon"
+          },
+          {
+            "Key": "team-number",
+            "Value": 2
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.10.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-private-subnet-1"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "iac-rlhf-amazon"
+          },
+          {
+            "Key": "team-number",
+            "Value": 2
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.11.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-private-subnet-2"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "iac-rlhf-amazon"
+          },
+          {
+            "Key": "team-number",
+            "Value": 2
+          }
+        ]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-public-rt"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "iac-rlhf-amazon"
+          },
+          {
+            "Key": "team-number",
+            "Value": 2
+          }
+        ]
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-private-rt"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "iac-rlhf-amazon"
+          },
+          {
+            "Key": "team-number",
+            "Value": 2
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "PrivateSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "LambdaSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-lambda-sg"
+        },
+        "GroupDescription": "Security group for Lambda functions",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": -1,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-lambda-sg"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "iac-rlhf-amazon"
+          },
+          {
+            "Key": "team-number",
+            "Value": 2
+          }
+        ]
+      }
+    },
+    "DBSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-db-sg"
+        },
+        "GroupDescription": "Security group for Aurora cluster",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "SourceSecurityGroupId": {
+              "Ref": "LambdaSecurityGroup"
+            },
+            "Description": "MySQL from Lambda"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-db-sg"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "iac-rlhf-amazon"
+          },
+          {
+            "Key": "team-number",
+            "Value": 2
+          }
+        ]
+      }
+    },
+    "DynamoDBEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.dynamodb"
+        },
+        "VpcEndpointType": "Gateway",
+        "RouteTableIds": [
+          {
+            "Ref": "PrivateRouteTable"
+          }
+        ]
+      }
+    },
+    "S3Endpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+        },
+        "VpcEndpointType": "Gateway",
+        "RouteTableIds": [
+          {
+            "Ref": "PrivateRouteTable"
+          }
+        ]
+      }
+    },
+    "SecretsManagerEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.secretsmanager"
+        },
+        "VpcEndpointType": "Interface",
+        "PrivateDnsEnabled": true,
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
+        ],
+        "SecurityGroupIds": [
+          {
+            "Ref": "VPCEndpointSecurityGroup"
+          }
+        ]
+      }
+    },
+    "VPCEndpointSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-vpce-sg"
+        },
+        "GroupDescription": "Security group for VPC endpoints",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "SourceSecurityGroupId": {
+              "Ref": "LambdaSecurityGroup"
+            },
+            "Description": "HTTPS from Lambda"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "DestinationSecurityGroupId": {
+              "Ref": "LambdaSecurityGroup"
+            },
+            "Description": "HTTPS to Lambda"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-vpce-sg"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "iac-rlhf-amazon"
+          },
+          {
+            "Key": "team-number",
+            "Value": 2
+          }
+        ]
+      }
+    },
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "DBSubnetGroupName": {
+          "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-db-subnet-group"
+        },
+        "DBSubnetGroupDescription": "Subnet group for Aurora cluster",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-db-subnet-group"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "iac-rlhf-amazon"
+          },
+          {
+            "Key": "team-number",
+            "Value": 2
+          }
+        ]
+      }
+    },
+    "DBClusterParameterGroup": {
+      "Type": "AWS::RDS::DBClusterParameterGroup",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "Aurora cluster parameter group for ${EnvironmentSuffix}"
+        },
+        "Family": "aurora-mysql5.7",
+        "Parameters": {
+          "character_set_server": "utf8mb4",
+          "collation_server": "utf8mb4_unicode_ci"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-db-param-group"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "iac-rlhf-amazon"
+          },
+          {
+            "Key": "team-number",
+            "Value": 2
+          }
+        ]
+      }
+    },
+    "AuroraCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "Engine": "aurora-mysql",
+        "EngineVersion": "5.7.mysql_aurora.2.12.5",
+        "DBClusterIdentifier": {
+          "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-aurora-cluster"
+        },
+        "MasterUsername": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DBMasterSecret}:SecretString:username}}"
+        },
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DBMasterSecret}:SecretString:password}}"
+        },
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "DBSecurityGroup"
+          }
+        ],
+        "DBClusterParameterGroupName": {
+          "Ref": "DBClusterParameterGroup"
+        },
+        "BackupRetentionPeriod": 7,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+        "StorageEncrypted": true,
+        "KmsKeyId": {
+          "Ref": "MasterKMSKey"
+        },
+        "EnableCloudwatchLogsExports": [
+          "error",
+          "general",
+          "slowquery"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-aurora-cluster"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "iac-rlhf-amazon"
+          },
+          {
+            "Key": "team-number",
+            "Value": 2
+          }
+        ]
+      }
+    },
+    "AuroraInstance1": {
+      "Type": "AWS::RDS::DBInstance",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "Engine": "aurora-mysql",
+        "DBInstanceClass": "db.r5.large",
+        "DBClusterIdentifier": {
+          "Ref": "AuroraCluster"
+        },
+        "PubliclyAccessible": false,
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-aurora-instance-1"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "iac-rlhf-amazon"
+          },
+          {
+            "Key": "team-number",
+            "Value": 2
+          }
+        ]
+      }
+    },
+    "SecretRDSAttachment": {
+      "Type": "AWS::SecretsManager::SecretTargetAttachment",
+      "Properties": {
+        "SecretId": {
+          "Ref": "DBMasterSecret"
+        },
+        "TargetId": {
+          "Ref": "AuroraCluster"
+        },
+        "TargetType": "AWS::RDS::DBCluster"
+      }
+    },
+    "SessionTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-sessions"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "sessionId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "userId",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "sessionId",
+            "KeyType": "HASH"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "UserIdIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "userId",
+                "KeyType": "HASH"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "SSESpecification": {
+          "SSEEnabled": true,
+          "SSEType": "KMS",
+          "KMSMasterKeyId": {
+            "Ref": "MasterKMSKey"
+          }
+        },
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-sessions-table"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "iac-rlhf-amazon"
+          },
+          {
+            "Key": "team-number",
+            "Value": 2
+          }
+        ]
+      }
+    },
+    "TransactionLogsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "aws:kms",
+                "KMSMasterKeyID": {
+                  "Ref": "MasterKMSKey"
+                }
+              }
+            }
+          ]
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "RetentionPolicy",
+              "Status": "Enabled",
+              "ExpirationInDays": 90,
+              "NoncurrentVersionExpirationInDays": 30
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-transaction-logs"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "iac-rlhf-amazon"
+          },
+          {
+            "Key": "team-number",
+            "Value": 2
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-lambda-role"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "LambdaPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "CloudWatchLogs",
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-${EnvironmentSuffix}-*"
+                  }
+                },
+                {
+                  "Sid": "DynamoDBAccess",
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:DeleteItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "SessionTable",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${SessionTable.Arn}/index/*"
+                    }
+                  ]
+                },
+                {
+                  "Sid": "S3Access",
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${TransactionLogsBucket.Arn}/*"
+                  }
+                },
+                {
+                  "Sid": "KMSAccess",
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:Decrypt",
+                    "kms:GenerateDataKey",
+                    "kms:DescribeKey"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "MasterKMSKey",
+                      "Arn"
+                    ]
+                  },
+                  "Condition": {
+                    "StringEquals": {
+                      "kms:ViaService": [
+                        {
+                          "Fn::Sub": "s3.${AWS::Region}.amazonaws.com"
+                        },
+                        {
+                          "Fn::Sub": "dynamodb.${AWS::Region}.amazonaws.com"
+                        },
+                        {
+                          "Fn::Sub": "secretsmanager.${AWS::Region}.amazonaws.com"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "Sid": "SecretsManagerAccess",
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue"
+                  ],
+                  "Resource": {
+                    "Ref": "DBMasterSecret"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-lambda-role"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "iac-rlhf-amazon"
+          },
+          {
+            "Key": "team-number",
+            "Value": 2
+          }
+        ]
+      }
+    },
+    "PaymentValidationFunction": {
+      "Type": "AWS::Lambda::Function",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-payment-validation"
+        },
+        "Runtime": "python3.9",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Environment": {
+          "Variables": {
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffix"
+            },
+            "DB_ENDPOINT": {
+              "Fn::GetAtt": [
+                "AuroraCluster",
+                "Endpoint.Address"
+              ]
+            },
+            "SESSION_TABLE": {
+              "Ref": "SessionTable"
+            },
+            "TRANSACTION_BUCKET": {
+              "Ref": "TransactionLogsBucket"
+            }
+          }
+        },
+        "VpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Ref": "LambdaSecurityGroup"
+            }
+          ],
+          "SubnetIds": [
+            {
+              "Ref": "PrivateSubnet1"
+            },
+            {
+              "Ref": "PrivateSubnet2"
+            }
+          ]
+        },
+        "Timeout": 60,
+        "MemorySize": 512,
+        "Code": {
+          "ZipFile": "import json\nimport os\nimport boto3\nimport logging\nfrom datetime import datetime\nfrom decimal import Decimal\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef handler(event, context):\n    # Initialize AWS clients inside handler to avoid cold start timeout\n    dynamodb = boto3.client('dynamodb')\n    s3 = boto3.client('s3')\n    secrets = boto3.client('secretsmanager')\n    \n    environment = os.environ['ENVIRONMENT']\n    db_endpoint = os.environ.get('DB_ENDPOINT')\n    session_table = os.environ.get('SESSION_TABLE')\n    transaction_bucket = os.environ.get('TRANSACTION_BUCKET')\n\n    logger.info(f\"Processing request in {environment} environment\")\n    logger.info(f\"Event: {json.dumps(event)}\")\n\n    action = event.get('action', 'payment')\n\n    try:\n        if action == 'test-dynamodb-access':\n            # Test DynamoDB connectivity\n            session_id = event.get('sessionId', f\"test-{datetime.now().timestamp()}\")\n\n            # Write to DynamoDB\n            dynamodb.put_item(\n                TableName=session_table,\n                Item={\n                    'sessionId': {'S': session_id},\n                    'userId': {'S': 'lambda-test-user'},\n                    'createdAt': {'N': str(int(datetime.now().timestamp()))},\n                    'status': {'S': 'lambda-processed'},\n                    'source': {'S': 'lambda-function'}\n                }\n            )\n\n            # Read from DynamoDB\n            response = dynamodb.get_item(\n                TableName=session_table,\n                Key={'sessionId': {'S': session_id}}\n            )\n\n            return {\n                'statusCode': 200,\n                'body': json.dumps({\n                    'message': 'DynamoDB access successful',\n                    'sessionId': session_id,\n                    'itemFound': 'Item' in response,\n                    'environment': environment\n                })\n            }\n\n        elif action == 'test-s3-access':\n            # Test S3 connectivity\n            key = event.get('key', f\"lambda-test-{datetime.now().timestamp()}.json\")\n\n            # Write to S3\n            s3.put_object(\n                Bucket=transaction_bucket,\n                Key=key,\n                Body=json.dumps({\n                    'timestamp': datetime.now().isoformat(),\n                    'source': 'lambda-function',\n                    'environment': environment\n                }),\n                ContentType='application/json'\n            )\n\n            # Read from S3\n            response = s3.get_object(\n                Bucket=transaction_bucket,\n                Key=key\n            )\n\n            body = response['Body'].read().decode('utf-8')\n\n            return {\n                'statusCode': 200,\n                'body': json.dumps({\n                    'message': 'S3 access successful',\n                    'key': key,\n                    'contentRetrieved': len(body) > 0,\n                    'environment': environment\n                })\n            }\n\n        elif action == 'test-secrets-access':\n            # Test Secrets Manager connectivity\n            # Note: We don't have the secret ARN in env vars, but we can test access\n            return {\n                'statusCode': 200,\n                'body': json.dumps({\n                    'message': 'Secrets Manager client initialized',\n                    'dbEndpoint': db_endpoint,\n                    'environment': environment\n                })\n            }\n\n        elif action == 'payment':\n            # Full payment workflow\n            transaction_id = event.get('transactionId', f\"txn-{datetime.now().timestamp()}\")\n            amount = event.get('amount', 0)\n            currency = event.get('currency', 'USD')\n\n            # Step 1: Write session to DynamoDB\n            dynamodb.put_item(\n                TableName=session_table,\n                Item={\n                    'sessionId': {'S': transaction_id},\n                    'userId': {'S': event.get('userId', 'anonymous')},\n                    'createdAt': {'N': str(int(datetime.now().timestamp()))},\n                    'status': {'S': 'processing'},\n                    'amount': {'N': str(amount)},\n                    'currency': {'S': currency}\n                }\n            )\n\n            # Step 2: Write transaction log to S3\n            log_key = f\"transactions/{transaction_id}.json\"\n            s3.put_object(\n                Bucket=transaction_bucket,\n                Key=log_key,\n                Body=json.dumps({\n                    'transactionId': transaction_id,\n                    'timestamp': datetime.now().isoformat(),\n                    'amount': amount,\n                    'currency': currency,\n                    'status': 'completed',\n                    'environment': environment\n                }),\n                ContentType='application/json'\n            )\n\n            # Step 3: Update session status\n            dynamodb.update_item(\n                TableName=session_table,\n                Key={'sessionId': {'S': transaction_id}},\n                UpdateExpression='SET #status = :status',\n                ExpressionAttributeNames={'#status': 'status'},\n                ExpressionAttributeValues={':status': {'S': 'completed'}}\n            )\n\n            return {\n                'statusCode': 200,\n                'body': json.dumps({\n                    'message': f'Payment processed in {environment} environment',\n                    'transactionId': transaction_id,\n                    'amount': amount,\n                    'currency': currency,\n                    'status': 'completed'\n                })\n            }\n\n        else:\n            # Default payment validation\n            return {\n                'statusCode': 200,\n                'body': json.dumps({\n                    'message': f'Payment processed in {environment} environment',\n                    'valid': True\n                })\n            }\n\n    except Exception as e:\n        logger.error(f\"Error processing request: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'body': json.dumps({\n                'error': str(e),\n                'environment': environment\n            })\n        }\n"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-payment-validation"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "iac-rlhf-amazon"
+          },
+          {
+            "Key": "team-number",
+            "Value": 2
+          }
+        ]
+      }
+    },
+    "PaymentValidationVersion": {
+      "Type": "AWS::Lambda::Version",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "PaymentValidationFunction"
+        },
+        "Description": {
+          "Fn::Sub": "Version for ${DeploymentColor} environment"
+        }
+      }
+    },
+    "PaymentValidationAlias": {
+      "Type": "AWS::Lambda::Alias",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "PaymentValidationFunction"
+        },
+        "FunctionVersion": {
+          "Fn::GetAtt": [
+            "PaymentValidationVersion",
+            "Version"
+          ]
+        },
+        "Name": {
+          "Fn::If": [
+            "EnableBlueGreen",
+            {
+              "Ref": "DeploymentColor"
+            },
+            "live"
+          ]
+        },
+        "Description": {
+          "Fn::Sub": "Alias for ${DeploymentColor} deployment with ${TrafficWeight}% traffic weight"
+        }
+      }
+    },
+    "ApiGateway": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-api"
+        },
+        "EndpointConfiguration": {
+          "Types": [
+            "REGIONAL"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-api"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "iac-rlhf-amazon"
+          },
+          {
+            "Key": "team-number",
+            "Value": 2
+          }
+        ]
+      }
+    },
+    "ApiResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "ParentId": {
+          "Fn::GetAtt": [
+            "ApiGateway",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "payment"
+      }
+    },
+    "ApiMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "ResourceId": {
+          "Ref": "ApiResource"
+        },
+        "HttpMethod": "POST",
+        "AuthorizationType": "NONE",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PaymentValidationAlias}/invocations"
+          }
+        }
+      }
+    },
+    "ApiDeployment": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "DependsOn": "ApiMethod",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "ApiGateway"
+        },
+        "StageName": {
+          "Ref": "EnvironmentSuffix"
+        }
+      }
+    },
+    "LambdaApiGatewayPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "PaymentValidationAlias"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+        }
+      }
+    },
+    "SNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-alerts"
+        },
+        "KmsMasterKeyId": {
+          "Ref": "MasterKMSKey"
+        },
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Ref": "AlertEmail"
+            },
+            "Protocol": "email"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-alerts"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "iac-rlhf-amazon"
+          },
+          {
+            "Key": "team-number",
+            "Value": 2
+          }
+        ]
+      }
+    },
+    "RDSHighCPUAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-rds-high-cpu"
+        },
+        "AlarmDescription": "RDS cluster CPU utilization",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBClusterIdentifier",
+            "Value": {
+              "Ref": "AuroraCluster"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "SNSTopic"
+          }
+        ]
+      }
+    },
+    "LambdaErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-lambda-errors"
+        },
+        "AlarmDescription": "Lambda function errors",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 10,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "PaymentValidationFunction"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "SNSTopic"
+          }
+        ]
+      }
+    },
+    "CloudFrontDistribution": {
+      "Type": "AWS::CloudFront::Distribution",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "DistributionConfig": {
+          "Enabled": true,
+          "Comment": {
+            "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-${DeploymentColor}"
+          },
+          "Origins": [
+            {
+              "Id": "ApiGatewayOrigin",
+              "DomainName": {
+                "Fn::Sub": "${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com"
+              },
+              "CustomOriginConfig": {
+                "HTTPSPort": 443,
+                "OriginProtocolPolicy": "https-only",
+                "OriginSSLProtocols": [
+                  "TLSv1.2"
+                ]
+              },
+              "OriginPath": {
+                "Fn::Sub": "/${EnvironmentSuffix}"
+              }
+            }
+          ],
+          "DefaultCacheBehavior": {
+            "TargetOriginId": "ApiGatewayOrigin",
+            "ViewerProtocolPolicy": "redirect-to-https",
+            "AllowedMethods": [
+              "DELETE",
+              "GET",
+              "HEAD",
+              "OPTIONS",
+              "PATCH",
+              "POST",
+              "PUT"
+            ],
+            "CachedMethods": [
+              "GET",
+              "HEAD"
+            ],
+            "Compress": true,
+            "ForwardedValues": {
+              "QueryString": true,
+              "Headers": [
+                "Authorization",
+                "Content-Type",
+                "Accept"
+              ],
+              "Cookies": {
+                "Forward": "none"
+              }
+            },
+            "DefaultTTL": 0,
+            "MinTTL": 0,
+            "MaxTTL": 0
+          },
+          "PriceClass": "PriceClass_100",
+          "ViewerCertificate": {
+            "CloudFrontDefaultCertificate": true
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-cf-distribution"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "DeploymentColor",
+            "Value": {
+              "Ref": "DeploymentColor"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "iac-rlhf-amazon"
+          },
+          {
+            "Key": "team-number",
+            "Value": 2
+          }
+        ]
+      }
+    },
+    "HealthCheck": {
+      "Type": "AWS::Route53::HealthCheck",
+      "Condition": "CreateRoute53",
+      "Properties": {
+        "HealthCheckConfig": {
+          "Type": "HTTPS",
+          "ResourcePath": {
+            "Fn::Sub": "/${EnvironmentSuffix}/payment"
+          },
+          "FullyQualifiedDomainName": {
+            "Fn::Sub": "${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com"
+          },
+          "Port": 443,
+          "RequestInterval": 30,
+          "FailureThreshold": 3
+        },
+        "HealthCheckTags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-health-check"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "DeploymentColor",
+            "Value": {
+              "Ref": "DeploymentColor"
+            }
+          },
+          {
+            "Key": "project",
+            "Value": "iac-rlhf-amazon"
+          },
+          {
+            "Key": "team-number",
+            "Value": 2
+          }
+        ]
+      }
+    },
+    "RecordSet": {
+      "Type": "AWS::Route53::RecordSet",
+      "Condition": "CreateRoute53",
+      "Properties": {
+        "HostedZoneId": {
+          "Ref": "HostedZoneId"
+        },
+        "Name": {
+          "Fn::Sub": "${DeploymentColor}.${DomainName}"
+        },
+        "Type": "A",
+        "SetIdentifier": {
+          "Fn::Sub": "${AWS::StackName}-${DeploymentColor}"
+        },
+        "Weight": {
+          "Ref": "TrafficWeight"
+        },
+        "AliasTarget": {
+          "DNSName": {
+            "Fn::GetAtt": [
+              "CloudFrontDistribution",
+              "DomainName"
+            ]
+          },
+          "HostedZoneId": "Z2FDTNDATAQYW2",
+          "EvaluateTargetHealth": true
+        },
+        "HealthCheckId": {
+          "Ref": "HealthCheck"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    },
+    "VPCId": {
+      "Description": "VPC ID",
+      "Value": {
+        "Ref": "VPC"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPCId"
+        }
+      }
+    },
+    "ApiEndpoint": {
+      "Description": "API Gateway endpoint",
+      "Value": {
+        "Fn::Sub": "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ApiEndpoint"
+        }
+      }
+    },
+    "RDSEndpoint": {
+      "Description": "RDS cluster endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "AuroraCluster",
+          "Endpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RDSEndpoint"
+        }
+      }
+    },
+    "SessionTableName": {
+      "Description": "DynamoDB session table name",
+      "Value": {
+        "Ref": "SessionTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SessionTableName"
+        }
+      }
+    },
+    "TransactionLogsBucketName": {
+      "Description": "S3 bucket for transaction logs",
+      "Value": {
+        "Ref": "TransactionLogsBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TransactionLogsBucketName"
+        }
+      }
+    },
+    "LambdaFunctionArn": {
+      "Description": "Payment validation Lambda function ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "PaymentValidationFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LambdaFunctionArn"
+        }
+      }
+    },
+    "SNSTopicArn": {
+      "Description": "SNS topic for alerts",
+      "Value": {
+        "Ref": "SNSTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SNSTopicArn"
+        }
+      }
+    },
+    "MasterKMSKeyId": {
+      "Description": "Master KMS key ID",
+      "Value": {
+        "Ref": "MasterKMSKey"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-MasterKMSKeyId"
+        }
+      }
+    },
+    "DBMasterSecretArn": {
+      "Description": "Database master secret ARN",
+      "Value": {
+        "Ref": "DBMasterSecret"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBMasterSecretArn"
+        }
+      }
+    },
+    "DeploymentColor": {
+      "Description": "Deployment color for blue-green strategy",
+      "Value": {
+        "Ref": "DeploymentColor"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DeploymentColor"
+        }
+      }
+    },
+    "TrafficWeight": {
+      "Description": "Traffic weight percentage for this environment",
+      "Value": {
+        "Ref": "TrafficWeight"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TrafficWeight"
+        }
+      }
+    },
+    "LambdaAliasArn": {
+      "Description": "Lambda function alias ARN for blue-green deployment",
+      "Value": {
+        "Ref": "PaymentValidationAlias"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LambdaAliasArn"
+        }
+      }
+    },
+    "LambdaVersionNumber": {
+      "Description": "Lambda function version number",
+      "Value": {
+        "Fn::GetAtt": [
+          "PaymentValidationVersion",
+          "Version"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LambdaVersionNumber"
+        }
+      }
+    },
+    "CloudFrontDistributionId": {
+      "Description": "CloudFront distribution ID",
+      "Value": {
+        "Ref": "CloudFrontDistribution"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CloudFrontDistributionId"
+        }
+      }
+    },
+    "CloudFrontDomainName": {
+      "Description": "CloudFront distribution domain name",
+      "Value": {
+        "Fn::GetAtt": [
+          "CloudFrontDistribution",
+          "DomainName"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CloudFrontDomainName"
+        }
+      }
+    },
+    "HealthCheckId": {
+      "Condition": "CreateRoute53",
+      "Description": "Route53 health check ID",
+      "Value": {
+        "Ref": "HealthCheck"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-HealthCheckId"
+        }
+      }
+    },
+    "Route53RecordName": {
+      "Condition": "CreateRoute53",
+      "Description": "Route53 record set name",
+      "Value": {
+        "Ref": "RecordSet"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-Route53RecordName"
+        }
+      }
+    }
+  }
+}

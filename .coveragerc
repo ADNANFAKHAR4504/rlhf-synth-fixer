@@ -1,11 +1,12 @@
 [run]
 source = lib
 omit =
-    */tests/*
-    */test_*.py
-    */__pycache__/*
-    lib/__init__.py
-    lib/tap_stack.py
+    tests/*
+    setup.py
+    */__init__.py
+    lib/tap.py
+    lib/lib/*
+    lib/tests/*
 
 [report]
 exclude_lines =
@@ -13,3 +14,4 @@ exclude_lines =
     def __repr__
     raise NotImplementedError
     if __name__ == .__main__.:
+fail_under = 90

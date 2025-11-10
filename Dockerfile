@@ -88,14 +88,14 @@ RUN curl https://pyenv.run | bash
 ENV PATH="/root/.pyenv/bin:$PATH"
 ENV PYENV_ROOT="/root/.pyenv"
 
-# Install Python 3.12.11 using pyenv
+# Install Python 3.13 using pyenv
 RUN eval "$(pyenv init --path)" && \
     eval "$(pyenv init -)" && \
-    pyenv install 3.12.11 && \
-    pyenv global 3.12.11
+    pyenv install 3.13 && \
+    pyenv global 3.13
 
-# Set Python 3.12.11 as default
-ENV PATH="/root/.pyenv/versions/3.12.11/bin:$PATH"
+# Set Python 3.13 as default
+ENV PATH="/root/.pyenv/versions/3.13/bin:$PATH"
 
 # Install nvm
 RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
@@ -120,7 +120,7 @@ RUN python -m pip install --upgrade pip && \
 # Initialize pyenv and nvm in shell profile for faster container startup
 RUN echo 'export PATH="/root/.pyenv/bin:$PATH"' >> /root/.bashrc && \
     echo 'export PYENV_ROOT="/root/.pyenv"' >> /root/.bashrc && \
-    echo 'export PATH="/root/.pyenv/versions/3.12.11/bin:$PATH"' >> /root/.bashrc && \
+    echo 'export PATH="/root/.pyenv/versions/3.13/bin:$PATH"' >> /root/.bashrc && \
     echo 'export NVM_DIR="/root/.nvm"' >> /root/.bashrc && \
     echo 'export PATH="$NVM_DIR:$PATH"' >> /root/.bashrc && \
     echo 'export PATH="/root/.nvm/versions/node/v22.17.0/bin:$PATH"' >> /root/.bashrc && \
