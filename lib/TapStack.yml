@@ -1927,7 +1927,7 @@ Resources:
         - Name: AutoScalingGroupName
           Value: !Ref AutoScalingGroup
 
-  # Fixed database connections alarm with percentage calculation
+  # Database connections alarm with percentage calculation
   DatabaseConnectionAlarm:
     Type: AWS::CloudWatch::Alarm
     Condition: HasAtLeastTwoAZsWithCustomAZs
@@ -2000,7 +2000,7 @@ Resources:
           Value: !GetAtt ApplicationLoadBalancer.LoadBalancerFullName
 
   # ==========================================================================
-  # AWS CONFIG - FIXED: Proper dependency order for Config resources
+  # AWS CONFIG - Proper dependency order for Config resources
   # ==========================================================================
 
   ConfigBucket:
@@ -2112,29 +2112,29 @@ Resources:
         - Key: iac-rlhf-amazon
           Value: 'true'
 
-  # Create ConfigRecorder FIRST (without starting it)
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    DependsOn:
-      - ConfigBucketPolicy
-    Properties:
-      Name: !Sub ${ProjectName}-${Environment}-Recorder
-      RoleARN: !GetAtt ConfigRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-
-  # Create DeliveryChannel AFTER ConfigRecorder
+  # Create DeliveryChannel FIRST (ConfigRecorder needs it to exist before it can start)
   DeliveryChannel:
     Type: AWS::Config::DeliveryChannel
     DependsOn:
-      - ConfigRecorder
+      - ConfigBucketPolicy
     Properties:
       Name: !Sub ${ProjectName}-${Environment}-DeliveryChannel
       S3BucketName: !Ref ConfigBucket
       SnsTopicARN: !Ref SNSTopic
       ConfigSnapshotDeliveryProperties:
         DeliveryFrequency: TwentyFour_Hours
+
+  # Create ConfigRecorder AFTER DeliveryChannel (can be created but won't auto-start)
+  ConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    DependsOn:
+      - DeliveryChannel
+    Properties:
+      Name: !Sub ${ProjectName}-${Environment}-Recorder
+      RoleARN: !GetAtt ConfigRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
 
   # Lambda function to START the Config Recorder after both resources exist
   ConfigRecorderStarterRole:
