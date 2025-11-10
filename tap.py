@@ -31,7 +31,32 @@ default_tags = {
     'Author': commit_author,
 }
 
+# Get configuration values from Pulumi config
+vpc_id = config.require('vpcId')
+private_subnet_ids = config.require_object('privateSubnetIds')
+dms_subnet_ids = config.require_object('dmsSubnetIds')
+source_db_host = config.require('sourceDbHost')
+source_db_port = config.get_int('sourceDbPort') or 5432
+source_db_name = config.get('sourceDbName') or 'postgres'
+source_db_username = config.get('sourceDbUsername') or 'postgres'
+source_db_password = config.require_secret('sourceDbPassword')
+aurora_username = config.get('auroraUsername') or 'auroraMaster'
+aurora_password = config.require_secret('auroraPassword')
+
 stack = TapStack(
     name="pulumi-infra",
-    args=TapStackArgs(environment_suffix=environment_suffix),
+    args=TapStackArgs(
+        environment_suffix=environment_suffix,
+        vpc_id=vpc_id,
+        private_subnet_ids=private_subnet_ids,
+        dms_subnet_ids=dms_subnet_ids,
+        source_db_host=source_db_host,
+        source_db_port=source_db_port,
+        source_db_name=source_db_name,
+        source_db_username=source_db_username,
+        source_db_password=source_db_password,
+        aurora_username=aurora_username,
+        aurora_password=aurora_password,
+        tags=default_tags,
+    ),
 )
