@@ -1,4 +1,5 @@
 {
+  "author": "raaj1021",
   "platform": "cdk",
   "language": "py",
   "complexity": "hard",
@@ -24,5 +25,5 @@
     "CloudWatch",
     "CloudWatch Logs"
   ],
-  "training_quality": 9
+  "training_quality": 10
 }

@@ -133,6 +133,11 @@ class S3ReplicationStack(Stack):
                             )
                         ),
                     ),
+                    source_selection_criteria=s3.CfnBucket.SourceSelectionCriteriaProperty(
+                        sse_kms_encrypted_objects=s3.CfnBucket.SseKmsEncryptedObjectsProperty(
+                            status="Enabled"
+                        )
+                    ),
                     delete_marker_replication=s3.CfnBucket.DeleteMarkerReplicationProperty(
                         status="Enabled"
                     ),

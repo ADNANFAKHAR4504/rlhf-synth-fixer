@@ -241,6 +241,26 @@ class TestS3Replication:
             }
         )
 
+    def test_source_selection_criteria_configured(self, template):
+        """Test that source selection criteria with SSE-KMS is configured."""
+        template.has_resource_properties(
+            "AWS::S3::Bucket",
+            {
+                "BucketName": "primary-bucket-test",
+                "ReplicationConfiguration": {
+                    "Rules": [
+                        {
+                            "SourceSelectionCriteria": {
+                                "SseKmsEncryptedObjects": {
+                                    "Status": "Enabled"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        )
+
 
 class TestBucketPolicies:
     """Test S3 bucket policies."""
