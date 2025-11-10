@@ -11,14 +11,20 @@
     "Cloud Environment Setup"
   ],
   "aws_services": [
-    "\"KMS\"",
-    "\"S3\"",
-    "\"CloudTrail\"",
-    "\"IAM\"",
-    "\"VPC\"",
-    "\"EC2\"",
-    "\"RDS\"",
-    "\"SecurityGroup\"",
-    "\"SecretsManager\""
-  ]
+    "KMS",
+    "S3",
+    "CloudTrail",
+    "IAM",
+    "VPC",
+    "EC2",
+    "RDS",
+    "SecurityGroup"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
 }
