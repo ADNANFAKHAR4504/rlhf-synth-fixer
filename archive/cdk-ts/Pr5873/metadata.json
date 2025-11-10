@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000294",
+  "team": "1",
+  "startedAt": "2025-11-05T18:13:10.865Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "KMS",
+    "IAM",
+    "S3",
+    "Secrets Manager",
+    "CloudTrail",
+    "CloudWatch",
+    "EC2",
+    "VPC",
+    "Lambda"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
+}

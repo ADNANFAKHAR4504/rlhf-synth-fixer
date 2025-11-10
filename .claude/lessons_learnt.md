@@ -202,7 +202,55 @@ cat metadata.json | jq -r '"\(.platform) - \(.language)"'
 
 ## Common Deployment Failures & Quick Fixes
 
-### 1. Lambda Reserved Concurrency Issues
+### 1. AWS GuardDuty - Account-Level Resource Constraint
+
+**Symptom**: `The request is rejected because a detector already exists for the current account`
+
+**Root Cause**: GuardDuty allows only ONE detector per AWS account/region. It's an account-level service, not a stack-level resource.
+
+**Quick Fix**:
+- Remove GuardDuty from infrastructure code entirely
+- Document that GuardDuty should be enabled manually at account level
+- Alternative: Use CloudFormation custom resource to check if detector exists before creating
+
+**Applies to**: All platforms when deploying GuardDuty
+
+**Note**: If task explicitly requires GuardDuty in requirements, add comment in code explaining account-level limitation and manual setup requirement.
+
+---
+
+### 2. AWS Config IAM Role - Managed Policy Name
+
+**Symptom**: `Policy arn:aws:iam::aws:policy/service-role/ConfigRole does not exist` or `Policy arn:aws:iam::aws:policy/AWS_ConfigRole does not exist`
+
+**Root Cause**: Model hallucinates incorrect AWS Config managed policy names
+
+**Quick Fix**:
+- **Correct managed policy**: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole` (note `service-role/AWS_` prefix)
+- **Alternative**: Use AWS Config service-linked role `AWSServiceRoleForConfig` (recommended, auto-created)
+- **Last resort**: Create custom inline policy with Config permissions
+
+**Example (CDK Python)**:
+```python
+# CORRECT - Use actual managed policy
+config_role = iam.Role(
+    self, "ConfigRole",
+    assumed_by=iam.ServicePrincipal("config.amazonaws.com"),
+    managed_policies=[
+        iam.ManagedPolicy.from_aws_managed_policy_name(
+            "service-role/AWS_ConfigRole"  # Note: service-role/ prefix
+        )
+    ]
+)
+```
+
+**Applies to**: CDK, CloudFormation, Terraform, Pulumi when using AWS Config
+
+**Reference**: AWS Docs - [AWS_ConfigRole Managed Policy](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AWS_ConfigRole.html)
+
+---
+
+### 3. Lambda Reserved Concurrency Issues
 
 **Symptom**: `Specified ReservedConcurrentExecutions for function decreases account's UnreservedConcurrentExecution below its minimum value of [10]`
 
@@ -216,7 +264,7 @@ cat metadata.json | jq -r '"\(.platform) - \(.language)"'
 
 ---
 
-### 2. Lambda Runtime - AWS SDK Missing
+### 4. Lambda Runtime - AWS SDK Missing
 
 **Symptom**: `Runtime.ImportModuleError: Error: Cannot find module 'aws-sdk'`
 
@@ -240,7 +288,7 @@ const key = event.Records[0].s3.object.key;
 
 ---
 
-### 3. Hardcoded Environment Suffixes
+### 5. Hardcoded Environment Suffixes
 
 **Symptom**: Resource conflicts, deployment failures in CI/CD with "already exists" errors
 
@@ -254,13 +302,13 @@ const key = event.Records[0].s3.object.key;
 
 ---
 
-### 4. S3 Bucket Considerations
+### 6. S3 Bucket Considerations
 
 **Note**: Resource cleanup (including S3 bucket deletion) is handled after manual PR review. The infrastructure code does not need special deletion configurations for synthetic tasks.
 
 ---
 
-### 5. RDS Multi-AZ Deployment Time
+### 7. RDS Multi-AZ Deployment Time
 
 **Symptom**: Deployments take 20-30+ minutes, often timeout
 
@@ -274,7 +322,7 @@ const key = event.Records[0].s3.object.key;
 
 ---
 
-### 6. NAT Gateway Costs
+### 8. NAT Gateway Costs
 
 **Symptom**: High AWS costs from synthetic tasks
 
@@ -586,6 +634,6 @@ grep -rni "RETAIN\|DeletionPolicy.*Retain\|deletion_protection.*true" lib/
 
 ---
 
-*Last Updated: 2025-10-13*
+*Last Updated: 2025-11-06*
 *This document is maintained by the task-coordinator and updated after each task completion.*
 

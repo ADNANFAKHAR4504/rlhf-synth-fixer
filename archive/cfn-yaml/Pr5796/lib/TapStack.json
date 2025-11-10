@@ -1,0 +1,1368 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Serverless Transaction Processing Pipeline with API Gateway, Lambda, Step Functions, DynamoDB, and EventBridge",
+    "Parameters": {
+        "AllowedCORSDomain": {
+            "Type": "String",
+            "Default": "https://example.com",
+            "Description": "Allowed domain for CORS configuration"
+        },
+        "Environment": {
+            "Type": "String",
+            "Default": "production",
+            "Description": "Environment name",
+            "AllowedValues": [
+                "development",
+                "staging",
+                "production"
+            ]
+        }
+    },
+    "Resources": {
+        "TransactionKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "KMS key for encrypting Lambda environment variables",
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow Lambda Functions to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+        "TransactionKMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": "alias/transaction-processing-key",
+                "TargetKeyId": {
+                    "Ref": "TransactionKMSKey"
+                }
+            }
+        },
+        "TransactionsTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${AWS::StackName}-Transactions"
+                },
+                "BillingMode": "PAY_PER_REQUEST",
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "transactionId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "AttributeType": "N"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "transactionId",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "SSESpecification": {
+                    "SSEEnabled": true
+                },
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "StreamSpecification": {
+                    "StreamViewType": "NEW_AND_OLD_IMAGES"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "FraudPatternsTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${AWS::StackName}-FraudPatterns"
+                },
+                "BillingMode": "PROVISIONED",
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": 100,
+                    "WriteCapacityUnits": 100
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "patternId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "riskScore",
+                        "AttributeType": "N"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "patternId",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "riskScore",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "SSESpecification": {
+                    "SSEEnabled": true
+                },
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "TransactionValidatorDLQ": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "${AWS::StackName}-TransactionValidator-DLQ"
+                },
+                "MessageRetentionPeriod": 1209600,
+                "KmsMasterKeyId": "alias/aws/sqs"
+            }
+        },
+        "FraudDetectorDLQ": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "${AWS::StackName}-FraudDetector-DLQ"
+                },
+                "MessageRetentionPeriod": 1209600,
+                "KmsMasterKeyId": "alias/aws/sqs"
+            }
+        },
+        "AuditLoggerDLQ": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "${AWS::StackName}-AuditLogger-DLQ"
+                },
+                "MessageRetentionPeriod": 1209600,
+                "KmsMasterKeyId": "alias/aws/sqs"
+            }
+        },
+        "TransactionValidatorRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-TransactionValidatorRole"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+                    "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "TransactionValidatorPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:Query"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "TransactionsTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${TransactionsTable.Arn}/index/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sqs:SendMessage",
+                                        "sqs:GetQueueAttributes"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "TransactionValidatorDLQ",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "TransactionKMSKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "FraudDetectorRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-FraudDetectorRole"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+                    "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "FraudDetectorPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "FraudPatternsTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${FraudPatternsTable.Arn}/index/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:UpdateItem"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "TransactionsTable",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sqs:SendMessage",
+                                        "sqs:GetQueueAttributes"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "FraudDetectorDLQ",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "TransactionKMSKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "AuditLoggerRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-AuditLoggerRole"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+                    "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "AuditLoggerPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "TransactionsTable",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sqs:SendMessage",
+                                        "sqs:GetQueueAttributes"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "AuditLoggerDLQ",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "TransactionKMSKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "TransactionValidatorLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${AWS::StackName}-TransactionValidator"
+                },
+                "Runtime": "python3.11",
+                "Architectures": [
+                    "arm64"
+                ],
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "TransactionValidatorRole",
+                        "Arn"
+                    ]
+                },
+                "MemorySize": 256,
+                "Timeout": 30,
+                "ReservedConcurrentExecutions": 100,
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "Environment": {
+                    "Variables": {
+                        "TRANSACTIONS_TABLE": {
+                            "Ref": "TransactionsTable"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        }
+                    }
+                },
+                "KmsKeyArn": {
+                    "Fn::GetAtt": [
+                        "TransactionKMSKey",
+                        "Arn"
+                    ]
+                },
+                "DeadLetterConfig": {
+                    "TargetArn": {
+                        "Fn::GetAtt": [
+                            "TransactionValidatorDLQ",
+                            "Arn"
+                        ]
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom aws_xray_sdk.core import xray_recorder\nfrom aws_xray_sdk.core import patch_all\n\npatch_all()\n\ndynamodb = boto3.resource('dynamodb')\ntable = dynamodb.Table(os.environ['TRANSACTIONS_TABLE'])\n\n@xray_recorder.capture('validate_transaction')\ndef handler(event, context):\n    try:\n        # Transaction validation logic\n        transaction = json.loads(event.get('body', '{}')) if isinstance(event, dict) and 'body' in event else event\n        \n        # Validate required fields\n        required_fields = ['transactionId', 'amount', 'currency', 'timestamp']\n        for field in required_fields:\n            if field not in transaction:\n                raise ValueError(f\"Missing required field: {field}\")\n        \n        # Validate amount\n        if transaction['amount'] <= 0:\n            raise ValueError(\"Amount must be positive\")\n        \n        # Store in DynamoDB\n        table.put_item(Item=transaction)\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'status': 'validated',\n                'transactionId': transaction['transactionId']\n            })\n        }\n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        return {\n            'statusCode': 400,\n            'body': json.dumps({'error': str(e)})\n        }\n"
+                }
+            }
+        },
+        "FraudDetectorLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${AWS::StackName}-FraudDetector"
+                },
+                "Runtime": "python3.11",
+                "Architectures": [
+                    "arm64"
+                ],
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "FraudDetectorRole",
+                        "Arn"
+                    ]
+                },
+                "MemorySize": 512,
+                "Timeout": 30,
+                "ReservedConcurrentExecutions": 50,
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "Environment": {
+                    "Variables": {
+                        "FRAUD_PATTERNS_TABLE": {
+                            "Ref": "FraudPatternsTable"
+                        },
+                        "TRANSACTIONS_TABLE": {
+                            "Ref": "TransactionsTable"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        }
+                    }
+                },
+                "KmsKeyArn": {
+                    "Fn::GetAtt": [
+                        "TransactionKMSKey",
+                        "Arn"
+                    ]
+                },
+                "DeadLetterConfig": {
+                    "TargetArn": {
+                        "Fn::GetAtt": [
+                            "FraudDetectorDLQ",
+                            "Arn"
+                        ]
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom aws_xray_sdk.core import xray_recorder\nfrom aws_xray_sdk.core import patch_all\n\npatch_all()\n\ndynamodb = boto3.resource('dynamodb')\nfraud_table = dynamodb.Table(os.environ['FRAUD_PATTERNS_TABLE'])\ntransactions_table = dynamodb.Table(os.environ['TRANSACTIONS_TABLE'])\n\n@xray_recorder.capture('detect_fraud')\ndef handler(event, context):\n    try:\n        transaction = event\n        \n        # Fraud detection logic\n        risk_score = 0\n        \n        # Check amount threshold\n        if transaction.get('amount', 0) > 10000:\n            risk_score += 30\n        \n        # Check velocity (simplified)\n        if transaction.get('amount', 0) > 5000:\n            risk_score += 20\n        \n        # Update transaction with fraud score\n        transactions_table.update_item(\n            Key={\n                'transactionId': transaction['transactionId'],\n                'timestamp': transaction['timestamp']\n            },\n            UpdateExpression='SET fraudRiskScore = :score, fraudChecked = :checked',\n            ExpressionAttributeValues={\n                ':score': risk_score,\n                ':checked': True\n            }\n        )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'status': 'fraud_check_complete',\n                'transactionId': transaction['transactionId'],\n                'riskScore': risk_score,\n                'suspicious': risk_score > 50\n            })\n        }\n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'body': json.dumps({'error': str(e)})\n        }\n"
+                }
+            }
+        },
+        "AuditLoggerLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${AWS::StackName}-AuditLogger"
+                },
+                "Runtime": "python3.11",
+                "Architectures": [
+                    "arm64"
+                ],
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "AuditLoggerRole",
+                        "Arn"
+                    ]
+                },
+                "MemorySize": 128,
+                "Timeout": 30,
+                "ReservedConcurrentExecutions": 25,
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "Environment": {
+                    "Variables": {
+                        "TRANSACTIONS_TABLE": {
+                            "Ref": "TransactionsTable"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        }
+                    }
+                },
+                "KmsKeyArn": {
+                    "Fn::GetAtt": [
+                        "TransactionKMSKey",
+                        "Arn"
+                    ]
+                },
+                "DeadLetterConfig": {
+                    "TargetArn": {
+                        "Fn::GetAtt": [
+                            "AuditLoggerDLQ",
+                            "Arn"
+                        ]
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\nfrom aws_xray_sdk.core import xray_recorder\nfrom aws_xray_sdk.core import patch_all\n\npatch_all()\n\ndynamodb = boto3.resource('dynamodb')\ntable = dynamodb.Table(os.environ['TRANSACTIONS_TABLE'])\n\n@xray_recorder.capture('audit_log')\ndef handler(event, context):\n    try:\n        # Parse event from EventBridge or direct invocation\n        if 'detail' in event:\n            transaction = event['detail']\n        else:\n            transaction = event\n        \n        # Create audit log entry\n        audit_entry = {\n            'transactionId': transaction.get('transactionId', 'unknown'),\n            'auditTimestamp': datetime.utcnow().isoformat(),\n            'eventType': 'transaction_processed',\n            'details': json.dumps(transaction)\n        }\n        \n        # Update transaction with audit info\n        table.update_item(\n            Key={\n                'transactionId': transaction['transactionId'],\n                'timestamp': transaction['timestamp']\n            },\n            UpdateExpression='SET auditLog = :audit, lastUpdated = :time',\n            ExpressionAttributeValues={\n                ':audit': audit_entry,\n                ':time': datetime.utcnow().isoformat()\n            }\n        )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'status': 'audit_logged',\n                'transactionId': transaction.get('transactionId')\n            })\n        }\n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'body': json.dumps({'error': str(e)})\n        }\n"
+                }
+            }
+        },
+        "HealthCheckLambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-HealthCheckRole"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "HealthCheckPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:DescribeTable"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "TransactionsTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "FraudPatternsTable",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "states:DescribeStateMachine"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "TransactionProcessingStateMachine"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "HealthCheckLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${AWS::StackName}-HealthCheck"
+                },
+                "Runtime": "python3.11",
+                "Architectures": [
+                    "arm64"
+                ],
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "HealthCheckLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "MemorySize": 128,
+                "Timeout": 10,
+                "Environment": {
+                    "Variables": {
+                        "TRANSACTIONS_TABLE": {
+                            "Ref": "TransactionsTable"
+                        },
+                        "FRAUD_PATTERNS_TABLE": {
+                            "Ref": "FraudPatternsTable"
+                        },
+                        "STATE_MACHINE_ARN": {
+                            "Ref": "TransactionProcessingStateMachine"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\n\ndynamodb = boto3.client('dynamodb')\nsfn = boto3.client('stepfunctions')\n\ndef test_dynamodb_tables():\n    \"\"\"Test DynamoDB tables connectivity and status\"\"\"\n    try:\n        transactions_table = os.environ['TRANSACTIONS_TABLE']\n        fraud_table = os.environ['FRAUD_PATTERNS_TABLE']\n        \n        # Check Transactions Table\n        trans_response = dynamodb.describe_table(TableName=transactions_table)\n        trans_status = trans_response['Table']['TableStatus']\n        \n        # Check Fraud Patterns Table\n        fraud_response = dynamodb.describe_table(TableName=fraud_table)\n        fraud_status = fraud_response['Table']['TableStatus']\n        \n        if trans_status == 'ACTIVE' and fraud_status == 'ACTIVE':\n            return {\n                'status': 'success',\n                'transactions_table': trans_status,\n                'fraud_patterns_table': fraud_status\n            }\n        else:\n            return {\n                'status': 'degraded',\n                'transactions_table': trans_status,\n                'fraud_patterns_table': fraud_status\n            }\n    except Exception as e:\n        return {\n            'status': 'failed',\n            'error': str(e)\n        }\n\ndef test_step_functions():\n    \"\"\"Test Step Functions State Machine status\"\"\"\n    try:\n        state_machine_arn = os.environ['STATE_MACHINE_ARN']\n        response = sfn.describe_state_machine(stateMachineArn=state_machine_arn)\n        \n        status = response['status']\n        return {\n            'status': 'success' if status == 'ACTIVE' else 'failed',\n            'state_machine_status': status\n        }\n    except Exception as e:\n        return {\n            'status': 'failed',\n            'error': str(e)\n        }\n\ndef handler(event, context):\n    \"\"\"Health check handler\"\"\"\n    try:\n        # Test DynamoDB\n        dynamodb_health = test_dynamodb_tables()\n        \n        # Test Step Functions\n        sfn_health = test_step_functions()\n        \n        # Determine overall health\n        all_healthy = (\n            dynamodb_health['status'] == 'success' and \n            sfn_health['status'] == 'success'\n        )\n        \n        response_code = 200 if all_healthy else 503\n        \n        response_body = {\n            'status': 'healthy' if all_healthy else 'unhealthy',\n            'timestamp': context.request_time_epoch if hasattr(context, 'request_time_epoch') else None,\n            'services': {\n                'dynamodb': dynamodb_health,\n                'step_functions': sfn_health\n            },\n            'environment': os.environ.get('AWS_REGION', 'unknown')\n        }\n        \n        return {\n            'statusCode': response_code,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps(response_body)\n        }\n    except Exception as e:\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'status': 'error',\n                'message': str(e)\n            })\n        }\n"
+                }
+            }
+        },
+        "HealthCheckLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${HealthCheckLambda}"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "TransactionValidatorLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${TransactionValidatorLambda}"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "FraudDetectorLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${FraudDetectorLambda}"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "AuditLoggerLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${AuditLoggerLambda}"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "StateMachineRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-StateMachineRole"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "states.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "StateMachinePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "lambda:InvokeFunction"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "TransactionValidatorLambda",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "FraudDetectorLambda",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "AuditLoggerLambda",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "xray:PutTraceSegments",
+                                        "xray:PutTelemetryRecords"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogDelivery",
+                                        "logs:GetLogDelivery",
+                                        "logs:UpdateLogDelivery",
+                                        "logs:DeleteLogDelivery",
+                                        "logs:ListLogDeliveries",
+                                        "logs:PutResourcePolicy",
+                                        "logs:DescribeResourcePolicies",
+                                        "logs:DescribeLogGroups"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "TransactionProcessingStateMachine": {
+            "Type": "AWS::StepFunctions::StateMachine",
+            "Properties": {
+                "StateMachineName": {
+                    "Fn::Sub": "${AWS::StackName}-TransactionProcessing"
+                },
+                "RoleArn": {
+                    "Fn::GetAtt": [
+                        "StateMachineRole",
+                        "Arn"
+                    ]
+                },
+                "TracingConfiguration": {
+                    "Enabled": true
+                },
+                "LoggingConfiguration": {
+                    "Level": "ALL",
+                    "IncludeExecutionData": true,
+                    "Destinations": [
+                        {
+                            "CloudWatchLogsLogGroup": {
+                                "LogGroupArn": {
+                                    "Fn::GetAtt": [
+                                        "StateMachineLogGroup",
+                                        "Arn"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                "DefinitionString": {
+                    "Fn::Sub": "{\n  \"Comment\": \"Transaction Processing Pipeline\",\n  \"StartAt\": \"ValidateTransaction\",\n  \"States\": {\n    \"ValidateTransaction\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::lambda:invoke\",\n      \"Parameters\": {\n        \"FunctionName\": \"${TransactionValidatorLambda.Arn}\",\n        \"Payload.$\": \"$\"\n      },\n      \"ResultPath\": \"$.validationResult\",\n      \"ResultSelector\": {\n        \"statusCode.$\": \"$.Payload.statusCode\",\n        \"body.$\": \"$.Payload.body\"\n      },\n      \"Retry\": [\n        {\n          \"ErrorEquals\": [\"Lambda.ServiceException\", \"Lambda.AWSLambdaException\"],\n          \"IntervalSeconds\": 2,\n          \"MaxAttempts\": 3,\n          \"BackoffRate\": 2\n        }\n      ],\n      \"Catch\": [\n        {\n          \"ErrorEquals\": [\"States.ALL\"],\n          \"Next\": \"HandleError\"\n        }\n      ],\n      \"Next\": \"CheckValidation\"\n    },\n    \"CheckValidation\": {\n      \"Type\": \"Choice\",\n      \"Choices\": [\n        {\n          \"Variable\": \"$.validationResult.statusCode\",\n          \"NumericEquals\": 200,\n          \"Next\": \"ParallelProcessing\"\n        }\n      ],\n      \"Default\": \"ValidationFailed\"\n    },\n    \"ParallelProcessing\": {\n      \"Type\": \"Parallel\",\n      \"Branches\": [\n        {\n          \"StartAt\": \"FraudDetection\",\n          \"States\": {\n            \"FraudDetection\": {\n              \"Type\": \"Task\",\n              \"Resource\": \"arn:aws:states:::lambda:invoke\",\n              \"Parameters\": {\n                \"FunctionName\": \"${FraudDetectorLambda.Arn}\",\n                \"Payload.$\": \"$\"\n              },\n              \"ResultPath\": \"$.fraudResult\",\n              \"Retry\": [\n                {\n                  \"ErrorEquals\": [\"Lambda.ServiceException\", \"Lambda.AWSLambdaException\"],\n                  \"IntervalSeconds\": 2,\n                  \"MaxAttempts\": 3,\n                  \"BackoffRate\": 2\n                }\n              ],\n              \"End\": true\n            }\n          }\n        },\n        {\n          \"StartAt\": \"AuditLogging\",\n          \"States\": {\n            \"AuditLogging\": {\n              \"Type\": \"Task\",\n              \"Resource\": \"arn:aws:states:::lambda:invoke\",\n              \"Parameters\": {\n                \"FunctionName\": \"${AuditLoggerLambda.Arn}\",\n                \"Payload.$\": \"$\"\n              },\n              \"ResultPath\": \"$.auditResult\",\n              \"Retry\": [\n                {\n                  \"ErrorEquals\": [\"Lambda.ServiceException\", \"Lambda.AWSLambdaException\"],\n                  \"IntervalSeconds\": 2,\n                  \"MaxAttempts\": 3,\n                  \"BackoffRate\": 2\n                }\n              ],\n              \"End\": true\n            }\n          }\n        }\n      ],\n      \"Next\": \"ProcessingComplete\"\n    },\n    \"ProcessingComplete\": {\n      \"Type\": \"Succeed\"\n    },\n    \"ValidationFailed\": {\n      \"Type\": \"Fail\",\n      \"Cause\": \"Transaction validation failed\"\n    },\n    \"HandleError\": {\n      \"Type\": \"Fail\",\n      \"Cause\": \"Error in transaction processing\"\n    }\n  }\n}\n"
+                }
+            }
+        },
+        "StateMachineLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/stepfunctions/${AWS::StackName}-TransactionProcessing"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "TransactionAPI": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TransactionAPI"
+                },
+                "Description": "Transaction Processing REST API",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                },
+                "Policy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": "*",
+                            "Action": "execute-api:Invoke",
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+        "APIGatewayAccount": {
+            "Type": "AWS::ApiGateway::Account",
+            "Properties": {
+                "CloudWatchRoleArn": {
+                    "Fn::GetAtt": [
+                        "APIGatewayCloudWatchRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "APIGatewayCloudWatchRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "apigateway.amazonaws.com"
+                                ]
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+                ]
+            }
+        },
+        "APILogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/api-gateway/${TransactionAPI}"
+                },
+                "RetentionInDays": 30
+            }
+        },
+        "TransactionRequestValidator": {
+            "Type": "AWS::ApiGateway::RequestValidator",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "TransactionAPI"
+                },
+                "ValidateRequestBody": true,
+                "ValidateRequestParameters": true
+            }
+        },
+        "TransactionModel": {
+            "Type": "AWS::ApiGateway::Model",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "TransactionAPI"
+                },
+                "ContentType": "application/json",
+                "Name": "TransactionModel",
+                "Schema": {
+                    "$schema": "http://json-schema.org/draft-04/schema#",
+                    "type": "object",
+                    "required": [
+                        "transactionId",
+                        "amount",
+                        "currency",
+                        "timestamp"
+                    ],
+                    "properties": {
+                        "transactionId": {
+                            "type": "string"
+                        },
+                        "amount": {
+                            "type": "number",
+                            "minimum": 0
+                        },
+                        "currency": {
+                            "type": "string"
+                        },
+                        "timestamp": {
+                            "type": "number"
+                        }
+                    }
+                }
+            }
+        },
+        "TransactionResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "TransactionAPI"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "TransactionAPI",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "transactions"
+            }
+        },
+        "TransactionMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "TransactionAPI"
+                },
+                "ResourceId": {
+                    "Ref": "TransactionResource"
+                },
+                "HttpMethod": "POST",
+                "AuthorizationType": "AWS_IAM",
+                "RequestValidatorId": {
+                    "Ref": "TransactionRequestValidator"
+                },
+                "RequestModels": {
+                    "application/json": {
+                        "Ref": "TransactionModel"
+                    }
+                },
+                "Integration": {
+                    "Type": "AWS",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:states:action/StartExecution"
+                    },
+                    "Credentials": {
+                        "Fn::GetAtt": [
+                            "APIGatewayStepFunctionsRole",
+                            "Arn"
+                        ]
+                    },
+                    "RequestTemplates": {
+                        "application/json": {
+                            "Fn::Sub": "{\n  \"input\": \"$util.escapeJavaScript($input.body)\",\n  \"stateMachineArn\": \"${TransactionProcessingStateMachine}\"\n}\n"
+                        }
+                    },
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200,
+                            "ResponseTemplates": {
+                                "application/json": "{\n  \"executionId\": \"$input.json('$.executionArn').split(':').get(7)\",\n  \"status\": \"processing\"\n}\n"
+                            },
+                            "ResponseParameters": {
+                                "method.response.header.Access-Control-Allow-Origin": {
+                                    "Fn::Sub": "'${AllowedCORSDomain}'"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        },
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Origin": true
+                        }
+                    }
+                ]
+            }
+        },
+        "TransactionOptionsMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "TransactionAPI"
+                },
+                "ResourceId": {
+                    "Ref": "TransactionResource"
+                },
+                "HttpMethod": "OPTIONS",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "MOCK",
+                    "RequestTemplates": {
+                        "application/json": "{\"statusCode\": 200}"
+                    },
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200,
+                            "ResponseParameters": {
+                                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                                "method.response.header.Access-Control-Allow-Methods": "'POST,OPTIONS'",
+                                "method.response.header.Access-Control-Allow-Origin": {
+                                    "Fn::Sub": "'${AllowedCORSDomain}'"
+                                }
+                            },
+                            "ResponseTemplates": {
+                                "application/json": ""
+                            }
+                        }
+                    ]
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        },
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Headers": true,
+                            "method.response.header.Access-Control-Allow-Methods": true,
+                            "method.response.header.Access-Control-Allow-Origin": true
+                        }
+                    }
+                ]
+            }
+        },
+        "HealthResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "TransactionAPI"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "TransactionAPI",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "health"
+            }
+        },
+        "HealthMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "TransactionAPI"
+                },
+                "ResourceId": {
+                    "Ref": "HealthResource"
+                },
+                "HttpMethod": "GET",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${HealthCheckLambda.Arn}/invocations"
+                    },
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200
+                        }
+                    ]
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        }
+                    }
+                ]
+            }
+        },
+        "HealthMethodPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "HealthCheckLambda"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${TransactionAPI}/*/*/health"
+                }
+            }
+        },
+        "APIGatewayStepFunctionsRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "apigateway.amazonaws.com"
+                                ]
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "StepFunctionsExecutionPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "states:StartExecution"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "TransactionProcessingStateMachine"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "APIDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": [
+                "TransactionMethod",
+                "TransactionOptionsMethod",
+                "HealthMethod"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "TransactionAPI"
+                },
+                "StageName": {
+                    "Ref": "Environment"
+                },
+                "StageDescription": {
+                    "TracingEnabled": true,
+                    "LoggingLevel": "INFO",
+                    "DataTraceEnabled": true,
+                    "MetricsEnabled": true,
+                    "AccessLogSetting": {
+                        "DestinationArn": {
+                            "Fn::GetAtt": [
+                                "APILogGroup",
+                                "Arn"
+                            ]
+                        },
+                        "Format": "$context.requestId - $context.error.message $context.error.messageString"
+                    },
+                    "ThrottlingBurstLimit": 10000,
+                    "ThrottlingRateLimit": 10000
+                }
+            }
+        },
+        "TransactionCompleteEventRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TransactionCompleteRule"
+                },
+                "Description": "Trigger audit logging when transaction completes",
+                "EventPattern": {
+                    "source": [
+                        "aws.states"
+                    ],
+                    "detail-type": [
+                        "Step Functions Execution Status Change"
+                    ],
+                    "detail": {
+                        "status": [
+                            "SUCCEEDED"
+                        ],
+                        "stateMachineArn": [
+                            {
+                                "Ref": "TransactionProcessingStateMachine"
+                            }
+                        ]
+                    }
+                },
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "AuditLoggerLambda",
+                                "Arn"
+                            ]
+                        },
+                        "Id": "AuditLoggerTarget",
+                        "RetryPolicy": {
+                            "MaximumRetryAttempts": 2
+                        }
+                    }
+                ]
+            }
+        },
+        "PermissionForEventsToInvokeLambda": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "AuditLoggerLambda"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "TransactionCompleteEventRule",
+                        "Arn"
+                    ]
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "APIEndpoint": {
+            "Description": "API Gateway endpoint URL",
+            "Value": {
+                "Fn::Sub": "https://${TransactionAPI}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-APIEndpoint"
+                }
+            }
+        },
+        "StateMachineArn": {
+            "Description": "Step Functions State Machine ARN",
+            "Value": {
+                "Ref": "TransactionProcessingStateMachine"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StateMachineArn"
+                }
+            }
+        },
+        "TransactionsTableName": {
+            "Description": "DynamoDB Transactions table name",
+            "Value": {
+                "Ref": "TransactionsTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TransactionsTable"
+                }
+            }
+        },
+        "FraudPatternsTableName": {
+            "Description": "DynamoDB Fraud Patterns table name",
+            "Value": {
+                "Ref": "FraudPatternsTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-FraudPatternsTable"
+                }
+            }
+        }
+    }
+}
