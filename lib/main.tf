@@ -1,11 +1,5 @@
 # main.tf 
 # Data sources
-variable "aws_region" {
-  description = "AWS region for resources"
-  type        = string
-  default     = "us-east-1"
-}
-
 data "aws_availability_zones" "available" {
   state = "available"
 }
@@ -611,6 +605,12 @@ resource "aws_db_instance" "main" {
 }
 
 # Variables
+variable "aws_region" {
+  description = "AWS region for resources"
+  type        = string
+  default     = "us-east-1"
+}
+
 variable "environment" {
   description = "Environment name"
   type        = string
