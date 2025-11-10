@@ -22,9 +22,8 @@ export class TapStack extends TerraformStack {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE
-      ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
+    // AWS_REGION_OVERRIDE is a constant, so it always takes precedence
+    const awsRegion = AWS_REGION_OVERRIDE;
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags || [];
