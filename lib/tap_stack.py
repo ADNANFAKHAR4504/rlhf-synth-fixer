@@ -479,12 +479,12 @@ class TapStack:
             tags={**self.common_tags, "Name": f"db-subnet-group-{self.env_suffix}"},
         )
         
-        # RDS Instance - FIXED: Using generated password instead of Config
+        # RDS Instance - FIXED: Changed engine_version to "15" (not "15.4")
         self.rds_instance = aws.rds.Instance(
             f"loan-db-{self.env_suffix}",
             identifier=f"loan-processing-db-{self.env_suffix}",
             engine="postgres",
-            engine_version="15.4",
+            engine_version="15",  # FIXED: Changed from "15.4" to "15"
             instance_class="db.t3.micro",
             allocated_storage=20,
             storage_type="gp3",
@@ -492,7 +492,7 @@ class TapStack:
             kms_key_id=self.kms_key.arn,
             db_name="loandb",
             username="dbadmin",
-            password=self.db_password.result,  # Using generated password
+            password=self.db_password.result,
             db_subnet_group_name=self.db_subnet_group.name,
             vpc_security_group_ids=[self.rds_security_group.id],
             publicly_accessible=False,
@@ -509,7 +509,7 @@ class TapStack:
         db_credentials = pulumi.Output.all(
             self.rds_instance.endpoint,
             self.rds_instance.username,
-            self.db_password.result  # Using generated password
+            self.db_password.result
         ).apply(lambda args: json.dumps({
             "host": args[0].split(":")[0],
             "port": 5432,
