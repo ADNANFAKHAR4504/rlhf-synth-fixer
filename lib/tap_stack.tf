@@ -10,7 +10,7 @@ locals {
   project_name = "fraud-detection"
   environment  = var.environment_suffix
   name_prefix  = "${local.project_name}-${local.environment}"
-  
+
   # Common tags for all resources
   common_tags = {
     Project     = local.project_name
@@ -22,11 +22,11 @@ locals {
 
 # DynamoDB table for transaction storage
 resource "aws_dynamodb_table" "transactions" {
-  name           = "${local.name_prefix}-transactions"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "transaction_id"
-  range_key      = "timestamp"
-  stream_enabled = true
+  name             = "${local.name_prefix}-transactions"
+  billing_mode     = "PAY_PER_REQUEST"
+  hash_key         = "transaction_id"
+  range_key        = "timestamp"
+  stream_enabled   = true
   stream_view_type = "NEW_AND_OLD_IMAGES"
 
   attribute {
@@ -54,11 +54,11 @@ resource "aws_dynamodb_table" "transactions" {
 
 # SQS queue for suspicious transactions requiring manual review
 resource "aws_sqs_queue" "suspicious_transactions" {
-  name                      = "${local.name_prefix}-suspicious-transactions"
-  delay_seconds             = 0
-  max_message_size          = 262144
-  message_retention_seconds = 1209600  # 14 days
-  receive_wait_time_seconds = 0
+  name                       = "${local.name_prefix}-suspicious-transactions"
+  delay_seconds              = 0
+  max_message_size           = 262144
+  message_retention_seconds  = 1209600 # 14 days
+  receive_wait_time_seconds  = 0
   visibility_timeout_seconds = 300
 
   # Redrive policy for dead letter queue
@@ -73,7 +73,7 @@ resource "aws_sqs_queue" "suspicious_transactions" {
 # Dead letter queue for suspicious transactions
 resource "aws_sqs_queue" "suspicious_transactions_dlq" {
   name                      = "${local.name_prefix}-suspicious-transactions-dlq"
-  message_retention_seconds = 1209600  # 14 days
+  message_retention_seconds = 1209600 # 14 days
 
   tags = local.common_tags
 }
@@ -81,7 +81,7 @@ resource "aws_sqs_queue" "suspicious_transactions_dlq" {
 # Dead letter queue for transaction processor Lambda
 resource "aws_sqs_queue" "transaction_processor_dlq" {
   name                      = "${local.name_prefix}-transaction-processor-dlq"
-  message_retention_seconds = 1209600  # 14 days
+  message_retention_seconds = 1209600 # 14 days
 
   tags = local.common_tags
 }
@@ -89,7 +89,7 @@ resource "aws_sqs_queue" "transaction_processor_dlq" {
 # Dead letter queue for fraud detector Lambda
 resource "aws_sqs_queue" "fraud_detector_dlq" {
   name                      = "${local.name_prefix}-fraud-detector-dlq"
-  message_retention_seconds = 1209600  # 14 days
+  message_retention_seconds = 1209600 # 14 days
 
   tags = local.common_tags
 }
@@ -268,14 +268,14 @@ resource "aws_cloudwatch_log_group" "fraud_detector_logs" {
 
 # Transaction processor Lambda function
 resource "aws_lambda_function" "transaction_processor" {
-  filename         = "transaction_processor.zip"
-  function_name    = "${local.name_prefix}-transaction-processor"
-  role            = aws_iam_role.transaction_processor_role.arn
-  handler         = "lambda_function.lambda_handler"
-  runtime         = "python3.11"
-  architectures   = ["arm64"]  # Graviton2 ARM processor
-  timeout         = 30
-  memory_size     = 256
+  filename      = "transaction_processor.zip"
+  function_name = "${local.name_prefix}-transaction-processor"
+  role          = aws_iam_role.transaction_processor_role.arn
+  handler       = "lambda_function.lambda_handler"
+  runtime       = "python3.11"
+  architectures = ["arm64"] # Graviton2 ARM processor
+  timeout       = 30
+  memory_size   = 256
 
   # Dead letter queue configuration
   dead_letter_config {
@@ -286,7 +286,7 @@ resource "aws_lambda_function" "transaction_processor" {
   environment {
     variables = {
       DYNAMODB_TABLE_NAME = aws_dynamodb_table.transactions.name
-      REGION             = data.aws_region.current.name
+      REGION              = data.aws_region.current.name
     }
   }
 
@@ -300,14 +300,14 @@ resource "aws_lambda_function" "transaction_processor" {
 
 # Fraud detector Lambda function
 resource "aws_lambda_function" "fraud_detector" {
-  filename         = "fraud_detector.zip"
-  function_name    = "${local.name_prefix}-fraud-detector"
-  role            = aws_iam_role.fraud_detector_role.arn
-  handler         = "lambda_function.lambda_handler"
-  runtime         = "python3.11"
-  architectures   = ["arm64"]  # Graviton2 ARM processor
-  timeout         = 60
-  memory_size     = 512
+  filename      = "fraud_detector.zip"
+  function_name = "${local.name_prefix}-fraud-detector"
+  role          = aws_iam_role.fraud_detector_role.arn
+  handler       = "lambda_function.lambda_handler"
+  runtime       = "python3.11"
+  architectures = ["arm64"] # Graviton2 ARM processor
+  timeout       = 60
+  memory_size   = 512
 
   # Dead letter queue configuration
   dead_letter_config {
@@ -332,10 +332,10 @@ resource "aws_lambda_function" "fraud_detector" {
 
 # Event source mapping for DynamoDB stream to fraud detector Lambda
 resource "aws_lambda_event_source_mapping" "dynamodb_stream" {
-  event_source_arn  = aws_dynamodb_table.transactions.stream_arn
-  function_name     = aws_lambda_function.fraud_detector.arn
-  starting_position = "LATEST"
-  batch_size        = 10
+  event_source_arn                   = aws_dynamodb_table.transactions.stream_arn
+  function_name                      = aws_lambda_function.fraud_detector.arn
+  starting_position                  = "LATEST"
+  batch_size                         = 10
   maximum_batching_window_in_seconds = 5
 
   # Error handling
@@ -364,8 +364,8 @@ resource "aws_api_gateway_resource" "transactions" {
 # API Gateway request validator
 resource "aws_api_gateway_request_validator" "transaction_validator" {
   name                        = "${local.name_prefix}-transaction-validator"
-  rest_api_id                = aws_api_gateway_rest_api.fraud_detection_api.id
-  validate_request_body      = true
+  rest_api_id                 = aws_api_gateway_rest_api.fraud_detection_api.id
+  validate_request_body       = true
   validate_request_parameters = true
 }
 
@@ -376,35 +376,35 @@ resource "aws_api_gateway_model" "transaction_model" {
   content_type = "application/json"
 
   schema = jsonencode({
-    "$schema": "http://json-schema.org/draft-04/schema#",
-    "title": "Transaction Schema",
-    "type": "object",
-    "properties": {
-      "transaction_id": {
-        "type": "string",
-        "minLength": 1,
-        "maxLength": 100
+    "$schema" : "http://json-schema.org/draft-04/schema#",
+    "title" : "Transaction Schema",
+    "type" : "object",
+    "properties" : {
+      "transaction_id" : {
+        "type" : "string",
+        "minLength" : 1,
+        "maxLength" : 100
       },
-      "amount": {
-        "type": "number",
-        "minimum": 0.01
+      "amount" : {
+        "type" : "number",
+        "minimum" : 0.01
       },
-      "currency": {
-        "type": "string",
-        "pattern": "^[A-Z]{3}$"
+      "currency" : {
+        "type" : "string",
+        "pattern" : "^[A-Z]{3}$"
       },
-      "merchant_id": {
-        "type": "string",
-        "minLength": 1,
-        "maxLength": 50
+      "merchant_id" : {
+        "type" : "string",
+        "minLength" : 1,
+        "maxLength" : 50
       },
-      "timestamp": {
-        "type": "string",
-        "format": "date-time"
+      "timestamp" : {
+        "type" : "string",
+        "format" : "date-time"
       }
     },
-    "required": ["transaction_id", "amount", "currency", "merchant_id", "timestamp"],
-    "additionalProperties": false
+    "required" : ["transaction_id", "amount", "currency", "merchant_id", "timestamp"],
+    "additionalProperties" : false
   })
 }
 
@@ -429,8 +429,8 @@ resource "aws_api_gateway_integration" "lambda_integration" {
   http_method = aws_api_gateway_method.post_transactions.http_method
 
   integration_http_method = "POST"
-  type                   = "AWS_PROXY"
-  uri                    = aws_lambda_function.transaction_processor.invoke_arn
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.transaction_processor.invoke_arn
 }
 
 # API Gateway method response
@@ -485,11 +485,11 @@ resource "aws_cloudwatch_metric_alarm" "transaction_processor_errors" {
   evaluation_periods  = "1"
   metric_name         = "ErrorRate"
   namespace           = "AWS/Lambda"
-  period              = "300"  # 5 minutes
+  period              = "300" # 5 minutes
   statistic           = "Average"
-  threshold           = "0.01"  # 1% error rate
+  threshold           = "0.01" # 1% error rate
   alarm_description   = "This metric monitors transaction processor lambda error rate"
-  alarm_actions       = []  # Add SNS topic ARN here for notifications
+  alarm_actions       = [] # Add SNS topic ARN here for notifications
 
   dimensions = {
     FunctionName = aws_lambda_function.transaction_processor.function_name
@@ -504,11 +504,11 @@ resource "aws_cloudwatch_metric_alarm" "fraud_detector_errors" {
   evaluation_periods  = "1"
   metric_name         = "ErrorRate"
   namespace           = "AWS/Lambda"
-  period              = "300"  # 5 minutes
+  period              = "300" # 5 minutes
   statistic           = "Average"
-  threshold           = "0.01"  # 1% error rate
+  threshold           = "0.01" # 1% error rate
   alarm_description   = "This metric monitors fraud detector lambda error rate"
-  alarm_actions       = []  # Add SNS topic ARN here for notifications
+  alarm_actions       = [] # Add SNS topic ARN here for notifications
 
   dimensions = {
     FunctionName = aws_lambda_function.fraud_detector.function_name
@@ -537,6 +537,6 @@ output "lambda_function_names" {
   description = "Names of the Lambda functions"
   value = {
     transaction_processor = aws_lambda_function.transaction_processor.function_name
-    fraud_detector       = aws_lambda_function.fraud_detector.function_name
+    fraud_detector        = aws_lambda_function.fraud_detector.function_name
   }
 }
