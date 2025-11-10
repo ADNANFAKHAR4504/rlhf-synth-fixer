@@ -1,6 +1,3 @@
-/**
- * RDS Stack - Creates RDS PostgreSQL instances with AWS Secrets Manager integration
- */
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { EnvironmentConfig, RdsOutputs, VpcOutputs } from './types';
@@ -25,11 +22,17 @@ export class RdsStack extends pulumi.ComponentResource {
     // Create secret in AWS Secrets Manager (for CI/CD testing)
     // In production, this would be pre-created and fetched using getSecret
     const secretName = `${config.environment}/payment-db-password-${config.environmentSuffix}`;
+
+    // Set recovery window to 0 for dev/test environments to allow immediate deletion
+    // This enables rapid destroy/deploy cycles in CI/CD
+    const recoveryWindowInDays = config.environment === 'prod' ? 7 : 0;
+
     const dbSecret = new aws.secretsmanager.Secret(
       `${config.environment}-db-secret-${config.environmentSuffix}`,
       {
         name: secretName,
         description: `Database password for ${config.environment} environment`,
+        recoveryWindowInDays: recoveryWindowInDays, // ✅ Allow immediate deletion for non-prod
         tags: {
           ...config.tags,
           Name: `${config.environment}-db-secret-${config.environmentSuffix}`,

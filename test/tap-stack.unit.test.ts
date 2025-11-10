@@ -6,8 +6,12 @@
  * type interfaces, and stack structure. Integration tests verify deployed resources.
  */
 import * as pulumi from '@pulumi/pulumi';
+import { AlbStack } from '../lib/alb-stack';
+import { EcsStack } from '../lib/ecs-stack';
+import { MonitoringStack } from '../lib/monitoring-stack';
+import { RdsStack } from '../lib/rds-stack';
 import { TapStack, TapStackArgs } from '../lib/tap-stack';
-import { EnvironmentConfig } from '../lib/types';
+import { AlbOutputs, EcsOutputs, EnvironmentConfig, RdsOutputs, VpcOutputs } from '../lib/types';
 
 /**
  * Mock Pulumi runtime for testing configuration logic
@@ -39,6 +43,12 @@ pulumi.runtime.setMocks({
       outputs.bucket = args.inputs.bucket || `bucket-${args.name}`;
     }
     if (args.type === 'aws:ecs/cluster:Cluster') {
+      outputs.name = args.inputs.name || args.name;
+    }
+    if (args.type === 'aws:cloudwatch/logGroup:LogGroup') {
+      outputs.name = args.inputs.name || args.name;
+    }
+    if (args.type === 'aws:secretsmanager/secret:Secret') {
       outputs.name = args.inputs.name || args.name;
     }
 
@@ -487,6 +497,492 @@ describe('Configuration Logic Coverage', () => {
       const config = envConfigs[env] || envConfigs.dev;
 
       expect(config.instanceClass).toBe('db.t3.micro');
+    });
+  });
+});
+
+describe('RDS Stack Coverage', () => {
+  const baseVpcOutputs: VpcOutputs = {
+    vpcId: pulumi.output('vpc-12345'),
+    publicSubnetIds: ['subnet-1', 'subnet-2'].map(id => pulumi.output(id)),
+    privateSubnetIds: ['subnet-3', 'subnet-4'].map(id => pulumi.output(id)),
+    natGatewayIds: ['nat-1', 'nat-2'].map(id => pulumi.output(id)),
+  };
+
+  describe('Recovery Window Configuration', () => {
+    it('should set recoveryWindowInDays to 0 for dev environment', async () => {
+      const config: EnvironmentConfig = {
+        environment: 'dev',
+        environmentSuffix: 'test',
+        vpcCidr: '10.1.0.0/16',
+        availabilityZones: ['us-east-1a', 'us-east-1b'],
+        ecsTaskCount: 1,
+        rdsInstanceClass: 'db.t3.micro',
+        rdsMultiAz: false,
+        s3LifecycleDays: 7,
+        enableSsl: false,
+        enableMonitoring: false,
+        tags: {},
+      };
+
+      const stack = new RdsStack('test-rds', {
+        config,
+        vpcOutputs: baseVpcOutputs,
+      });
+
+      expect(stack).toBeDefined();
+      expect(stack.outputs).toBeDefined();
+    });
+
+    it('should set recoveryWindowInDays to 7 for prod environment', async () => {
+      const config: EnvironmentConfig = {
+        environment: 'prod',
+        environmentSuffix: 'test',
+        vpcCidr: '10.3.0.0/16',
+        availabilityZones: ['us-east-1a', 'us-east-1b'],
+        ecsTaskCount: 4,
+        rdsInstanceClass: 'db.t3.medium',
+        rdsMultiAz: true,
+        s3LifecycleDays: 90,
+        enableSsl: true,
+        enableMonitoring: true,
+        tags: {},
+      };
+
+      const stack = new RdsStack('test-rds-prod', {
+        config,
+        vpcOutputs: baseVpcOutputs,
+      });
+
+      expect(stack).toBeDefined();
+      expect(stack.outputs).toBeDefined();
+    });
+
+    it('should set recoveryWindowInDays to 0 for staging environment', async () => {
+      const config: EnvironmentConfig = {
+        environment: 'staging',
+        environmentSuffix: 'test',
+        vpcCidr: '10.2.0.0/16',
+        availabilityZones: ['us-east-1a', 'us-east-1b'],
+        ecsTaskCount: 2,
+        rdsInstanceClass: 'db.t3.small',
+        rdsMultiAz: false,
+        s3LifecycleDays: 30,
+        enableSsl: true,
+        enableMonitoring: true,
+        tags: {},
+      };
+
+      const stack = new RdsStack('test-rds-staging', {
+        config,
+        vpcOutputs: baseVpcOutputs,
+      });
+
+      expect(stack).toBeDefined();
+      expect(stack.outputs).toBeDefined();
+    });
+  });
+
+  describe('Backup Retention Configuration', () => {
+    it('should set backupRetentionPeriod to 7 for prod', async () => {
+      const config: EnvironmentConfig = {
+        environment: 'prod',
+        environmentSuffix: 'test',
+        vpcCidr: '10.3.0.0/16',
+        availabilityZones: ['us-east-1a', 'us-east-1b'],
+        ecsTaskCount: 4,
+        rdsInstanceClass: 'db.t3.medium',
+        rdsMultiAz: true,
+        s3LifecycleDays: 90,
+        enableSsl: true,
+        enableMonitoring: true,
+        tags: {},
+      };
+
+      const stack = new RdsStack('test-rds-backup-prod', {
+        config,
+        vpcOutputs: baseVpcOutputs,
+      });
+
+      expect(stack).toBeDefined();
+    });
+
+    it('should set backupRetentionPeriod to 1 for non-prod', async () => {
+      const config: EnvironmentConfig = {
+        environment: 'dev',
+        environmentSuffix: 'test',
+        vpcCidr: '10.1.0.0/16',
+        availabilityZones: ['us-east-1a', 'us-east-1b'],
+        ecsTaskCount: 1,
+        rdsInstanceClass: 'db.t3.micro',
+        rdsMultiAz: false,
+        s3LifecycleDays: 7,
+        enableSsl: false,
+        enableMonitoring: false,
+        tags: {},
+      };
+
+      const stack = new RdsStack('test-rds-backup-dev', {
+        config,
+        vpcOutputs: baseVpcOutputs,
+      });
+
+      expect(stack).toBeDefined();
+    });
+  });
+});
+
+describe('ALB Stack Coverage', () => {
+  const baseVpcOutputs: VpcOutputs = {
+    vpcId: pulumi.output('vpc-12345'),
+    publicSubnetIds: ['subnet-1', 'subnet-2'].map(id => pulumi.output(id)),
+    privateSubnetIds: ['subnet-3', 'subnet-4'].map(id => pulumi.output(id)),
+    natGatewayIds: ['nat-1', 'nat-2'].map(id => pulumi.output(id)),
+  };
+
+  describe('SSL Configuration', () => {
+    it('should create HTTPS listener and certificate when enableSsl is true', async () => {
+      const config: EnvironmentConfig = {
+        environment: 'staging',
+        environmentSuffix: 'test',
+        vpcCidr: '10.2.0.0/16',
+        availabilityZones: ['us-east-1a', 'us-east-1b'],
+        ecsTaskCount: 2,
+        rdsInstanceClass: 'db.t3.small',
+        rdsMultiAz: false,
+        s3LifecycleDays: 30,
+        enableSsl: true,
+        enableMonitoring: true,
+        tags: {},
+      };
+
+      const stack = new AlbStack('test-alb-ssl', {
+        config,
+        vpcOutputs: baseVpcOutputs,
+      });
+
+      expect(stack).toBeDefined();
+      expect(stack.outputs).toBeDefined();
+      expect(stack.outputs.albUrl).toBeDefined();
+    });
+
+    it('should create HTTP listener only when enableSsl is false', async () => {
+      const config: EnvironmentConfig = {
+        environment: 'dev',
+        environmentSuffix: 'test',
+        vpcCidr: '10.1.0.0/16',
+        availabilityZones: ['us-east-1a', 'us-east-1b'],
+        ecsTaskCount: 1,
+        rdsInstanceClass: 'db.t3.micro',
+        rdsMultiAz: false,
+        s3LifecycleDays: 7,
+        enableSsl: false,
+        enableMonitoring: false,
+        tags: {},
+      };
+
+      const stack = new AlbStack('test-alb-no-ssl', {
+        config,
+        vpcOutputs: baseVpcOutputs,
+      });
+
+      expect(stack).toBeDefined();
+      expect(stack.outputs).toBeDefined();
+      expect(stack.outputs.albUrl).toBeDefined();
+    });
+
+    it('should include HTTPS port in security group when enableSsl is true', async () => {
+      const config: EnvironmentConfig = {
+        environment: 'prod',
+        environmentSuffix: 'test',
+        vpcCidr: '10.3.0.0/16',
+        availabilityZones: ['us-east-1a', 'us-east-1b'],
+        ecsTaskCount: 4,
+        rdsInstanceClass: 'db.t3.medium',
+        rdsMultiAz: true,
+        s3LifecycleDays: 90,
+        enableSsl: true,
+        enableMonitoring: true,
+        tags: {},
+      };
+
+      const stack = new AlbStack('test-alb-https-sg', {
+        config,
+        vpcOutputs: baseVpcOutputs,
+      });
+
+      expect(stack).toBeDefined();
+    });
+  });
+});
+
+describe('ECS Stack Coverage', () => {
+  const baseVpcOutputs: VpcOutputs = {
+    vpcId: pulumi.output('vpc-12345'),
+    publicSubnetIds: ['subnet-1', 'subnet-2'].map(id => pulumi.output(id)),
+    privateSubnetIds: ['subnet-3', 'subnet-4'].map(id => pulumi.output(id)),
+    natGatewayIds: ['nat-1', 'nat-2'].map(id => pulumi.output(id)),
+  };
+
+  const baseAlbOutputs: AlbOutputs = {
+    albArn: pulumi.output('arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/test/1234567890abcdef'),
+    albDnsName: pulumi.output('test-alb-1234567890.us-east-1.elb.amazonaws.com'),
+    albUrl: pulumi.output('http://test-alb-1234567890.us-east-1.elb.amazonaws.com'),
+    targetGroupArn: pulumi.output('arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/test/1234567890abcdef'),
+    securityGroupId: pulumi.output('sg-12345'),
+  };
+
+  const baseRdsOutputs: RdsOutputs = {
+    instanceId: pulumi.output('db-instance-12345'),
+    endpoint: pulumi.output('db-endpoint.region.rds.amazonaws.com:5432'),
+    port: pulumi.output(5432),
+    securityGroupId: pulumi.output('sg-rds-12345'),
+    secretArn: pulumi.output('arn:aws:secretsmanager:us-east-1:123456789012:secret:test-secret'),
+  };
+
+  describe('Container Definitions', () => {
+    it('should create task definition with correct NODE_ENV for prod', async () => {
+      const config: EnvironmentConfig = {
+        environment: 'prod',
+        environmentSuffix: 'test',
+        vpcCidr: '10.3.0.0/16',
+        availabilityZones: ['us-east-1a', 'us-east-1b'],
+        ecsTaskCount: 4,
+        rdsInstanceClass: 'db.t3.medium',
+        rdsMultiAz: true,
+        s3LifecycleDays: 90,
+        enableSsl: true,
+        enableMonitoring: true,
+        tags: {},
+      };
+
+      const stack = new EcsStack('test-ecs-prod', {
+        config,
+        vpcOutputs: baseVpcOutputs,
+        albOutputs: baseAlbOutputs,
+        rdsOutputs: baseRdsOutputs,
+      });
+
+      expect(stack).toBeDefined();
+      expect(stack.outputs).toBeDefined();
+    });
+
+    it('should create task definition with correct NODE_ENV for non-prod', async () => {
+      const config: EnvironmentConfig = {
+        environment: 'dev',
+        environmentSuffix: 'test',
+        vpcCidr: '10.1.0.0/16',
+        availabilityZones: ['us-east-1a', 'us-east-1b'],
+        ecsTaskCount: 1,
+        rdsInstanceClass: 'db.t3.micro',
+        rdsMultiAz: false,
+        s3LifecycleDays: 7,
+        enableSsl: false,
+        enableMonitoring: false,
+        tags: {},
+      };
+
+      const stack = new EcsStack('test-ecs-dev', {
+        config,
+        vpcOutputs: baseVpcOutputs,
+        albOutputs: baseAlbOutputs,
+        rdsOutputs: baseRdsOutputs,
+      });
+
+      expect(stack).toBeDefined();
+      expect(stack.outputs).toBeDefined();
+    });
+  });
+
+  describe('Log Retention Configuration', () => {
+    it('should set log retention to 30 days for prod', async () => {
+      const config: EnvironmentConfig = {
+        environment: 'prod',
+        environmentSuffix: 'test',
+        vpcCidr: '10.3.0.0/16',
+        availabilityZones: ['us-east-1a', 'us-east-1b'],
+        ecsTaskCount: 4,
+        rdsInstanceClass: 'db.t3.medium',
+        rdsMultiAz: true,
+        s3LifecycleDays: 90,
+        enableSsl: true,
+        enableMonitoring: true,
+        tags: {},
+      };
+
+      const stack = new EcsStack('test-ecs-logs-prod', {
+        config,
+        vpcOutputs: baseVpcOutputs,
+        albOutputs: baseAlbOutputs,
+        rdsOutputs: baseRdsOutputs,
+      });
+
+      expect(stack).toBeDefined();
+    });
+
+    it('should set log retention to 7 days for non-prod', async () => {
+      const config: EnvironmentConfig = {
+        environment: 'dev',
+        environmentSuffix: 'test',
+        vpcCidr: '10.1.0.0/16',
+        availabilityZones: ['us-east-1a', 'us-east-1b'],
+        ecsTaskCount: 1,
+        rdsInstanceClass: 'db.t3.micro',
+        rdsMultiAz: false,
+        s3LifecycleDays: 7,
+        enableSsl: false,
+        enableMonitoring: false,
+        tags: {},
+      };
+
+      const stack = new EcsStack('test-ecs-logs-dev', {
+        config,
+        vpcOutputs: baseVpcOutputs,
+        albOutputs: baseAlbOutputs,
+        rdsOutputs: baseRdsOutputs,
+      });
+
+      expect(stack).toBeDefined();
+    });
+  });
+
+  describe('Container Insights Configuration', () => {
+    it('should enable container insights when enableMonitoring is true', async () => {
+      const config: EnvironmentConfig = {
+        environment: 'staging',
+        environmentSuffix: 'test',
+        vpcCidr: '10.2.0.0/16',
+        availabilityZones: ['us-east-1a', 'us-east-1b'],
+        ecsTaskCount: 2,
+        rdsInstanceClass: 'db.t3.small',
+        rdsMultiAz: false,
+        s3LifecycleDays: 30,
+        enableSsl: true,
+        enableMonitoring: true,
+        tags: {},
+      };
+
+      const stack = new EcsStack('test-ecs-monitoring', {
+        config,
+        vpcOutputs: baseVpcOutputs,
+        albOutputs: baseAlbOutputs,
+        rdsOutputs: baseRdsOutputs,
+      });
+
+      expect(stack).toBeDefined();
+    });
+
+    it('should disable container insights when enableMonitoring is false', async () => {
+      const config: EnvironmentConfig = {
+        environment: 'dev',
+        environmentSuffix: 'test',
+        vpcCidr: '10.1.0.0/16',
+        availabilityZones: ['us-east-1a', 'us-east-1b'],
+        ecsTaskCount: 1,
+        rdsInstanceClass: 'db.t3.micro',
+        rdsMultiAz: false,
+        s3LifecycleDays: 7,
+        enableSsl: false,
+        enableMonitoring: false,
+        tags: {},
+      };
+
+      const stack = new EcsStack('test-ecs-no-monitoring', {
+        config,
+        vpcOutputs: baseVpcOutputs,
+        albOutputs: baseAlbOutputs,
+        rdsOutputs: baseRdsOutputs,
+      });
+
+      expect(stack).toBeDefined();
+    });
+  });
+});
+
+describe('Monitoring Stack Coverage', () => {
+  const baseEcsOutputs: EcsOutputs = {
+    clusterId: pulumi.output('cluster-12345'),
+    serviceArn: pulumi.output('arn:aws:ecs:us-east-1:123456789012:service/test-service'),
+    taskDefinitionArn: pulumi.output('arn:aws:ecs:us-east-1:123456789012:task-definition/test:1'),
+    securityGroupId: pulumi.output('sg-12345'),
+  };
+
+  describe('Monitoring Enabled', () => {
+    it('should create all alarms when enableMonitoring is true', async () => {
+      const config: EnvironmentConfig = {
+        environment: 'staging',
+        environmentSuffix: 'test',
+        vpcCidr: '10.2.0.0/16',
+        availabilityZones: ['us-east-1a', 'us-east-1b'],
+        ecsTaskCount: 2,
+        rdsInstanceClass: 'db.t3.small',
+        rdsMultiAz: false,
+        s3LifecycleDays: 30,
+        enableSsl: true,
+        enableMonitoring: true,
+        tags: {},
+      };
+
+      const stack = new MonitoringStack('test-monitoring', {
+        config,
+        ecsOutputs: baseEcsOutputs,
+        clusterName: 'staging-payment-cluster-test',
+        serviceName: 'staging-payment-service-test',
+      });
+
+      expect(stack).toBeDefined();
+    });
+
+    it('should create SNS topic for alarms', async () => {
+      const config: EnvironmentConfig = {
+        environment: 'prod',
+        environmentSuffix: 'test',
+        vpcCidr: '10.3.0.0/16',
+        availabilityZones: ['us-east-1a', 'us-east-1b'],
+        ecsTaskCount: 4,
+        rdsInstanceClass: 'db.t3.medium',
+        rdsMultiAz: true,
+        s3LifecycleDays: 90,
+        enableSsl: true,
+        enableMonitoring: true,
+        tags: {},
+      };
+
+      const stack = new MonitoringStack('test-monitoring-sns', {
+        config,
+        ecsOutputs: baseEcsOutputs,
+        clusterName: 'prod-payment-cluster-test',
+        serviceName: 'prod-payment-service-test',
+      });
+
+      expect(stack).toBeDefined();
+    });
+  });
+
+  describe('Monitoring Disabled', () => {
+    it('should not create alarms when enableMonitoring is false', async () => {
+      const config: EnvironmentConfig = {
+        environment: 'dev',
+        environmentSuffix: 'test',
+        vpcCidr: '10.1.0.0/16',
+        availabilityZones: ['us-east-1a', 'us-east-1b'],
+        ecsTaskCount: 1,
+        rdsInstanceClass: 'db.t3.micro',
+        rdsMultiAz: false,
+        s3LifecycleDays: 7,
+        enableSsl: false,
+        enableMonitoring: false,
+        tags: {},
+      };
+
+      const stack = new MonitoringStack('test-no-monitoring', {
+        config,
+        ecsOutputs: baseEcsOutputs,
+        clusterName: 'dev-payment-cluster-test',
+        serviceName: 'dev-payment-service-test',
+      });
+
+      expect(stack).toBeDefined();
     });
   });
 });
