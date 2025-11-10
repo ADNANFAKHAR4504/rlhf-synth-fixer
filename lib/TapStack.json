@@ -33,7 +33,6 @@
                         "DBInstanceClass",
                         "DBName",
                         "DBUsername",
-                        "DBPassword",
                         "DBBackupRetentionPeriod"
                     ]
                 },
@@ -121,13 +120,33 @@
             "MaxLength": 16,
             "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$"
         },
-        "DBPassword": {
-            "Type": "String",
-            "NoEcho": true,
-            "Description": "Database master password (minimum 8 characters)",
-            "MinLength": 8,
-            "MaxLength": 41,
-            "AllowedPattern": "^[a-zA-Z0-9]*$"
+        "RDSMasterPasswordSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-rds-master-password"
+                },
+                "Description": "Auto-generated master password for RDS MySQL database",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": {
+                        "Fn::Sub": "{\"username\": \"${DBUsername}\"}"
+                    },
+                    "GenerateStringKey": "password",
+                    "PasswordLength": {
+                        "Ref": "DBPasswordLength"
+                    },
+                    "ExcludeCharacters": "\"@/\\\\",
+                    "RequireEachIncludedType": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-RDS-Secret"
+                        }
+                    }
+                ]
+            }
         },
         "DBBackupRetentionPeriod": {
             "Type": "Number",
@@ -1083,7 +1102,7 @@
                     "Ref": "DBUsername"
                 },
                 "MasterUserPassword": {
-                    "Ref": "DBPassword"
+                    "Fn::Sub": "{{resolve:secretsmanager:${RDSMasterPasswordSecret}:SecretString:password}}"
                 },
                 "DBSubnetGroupName": {
                     "Ref": "DBSubnetGroup"

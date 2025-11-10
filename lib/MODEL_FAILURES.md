@@ -12,34 +12,33 @@ The MODEL_RESPONSE provided a comprehensive CloudFormation template that was 99%
 
 ---
 
-## Critical Failures
-
 ### 1. Outdated PostgreSQL Engine Version
 
-**Impact Level**: Critical
-
 **MODEL_RESPONSE Issue**:
+
 ```yaml
 RDSInstance:
   Type: AWS::RDS::DBInstance
   Properties:
     Engine: postgres
-    EngineVersion: '15.5'  # This version is no longer available in AWS
+    EngineVersion: '15.5' # This version is no longer available in AWS
 ```
 
 **IDEAL_RESPONSE Fix**:
+
 ```yaml
 RDSInstance:
   Type: AWS::RDS::DBInstance
   Properties:
     Engine: postgres
-    EngineVersion: '15.14'  # Updated to latest available PostgreSQL 15.x version
+    EngineVersion: '15.14' # Updated to latest available PostgreSQL 15.x version
 ```
 
 **Root Cause**:
 The model referenced PostgreSQL version 15.5, which was deprecated and removed from AWS RDS supported versions. AWS maintains a rolling window of supported minor versions, and older versions are retired as new patches are released. The model's training data likely included 15.5 when it was available, but AWS has since removed it from the available engine versions.
 
 **Deployment Error**:
+
 ```
 Resource handler returned message: "Cannot find version 15.5 for postgres
 (Service: Rds, Status Code: 400, Request ID: c0ee4e05-ccf8-4eaf-bdb0-81aa97fadc80)"
@@ -49,18 +48,21 @@ Resource handler returned message: "Cannot find version 15.5 for postgres
 https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_PostgreSQL.html#PostgreSQL.Concepts.General.DBVersions
 
 Available PostgreSQL 15.x versions as of deployment (November 2025):
+
 - 15.10
 - 15.12
 - 15.13
 - 15.14 (latest)
 
 **Impact**:
+
 - **Deployment**: Complete stack creation failure
 - **Rollback**: All 13 resources that were successfully created had to be rolled back
 - **Time**: Added 5-7 minutes to deployment time due to rollback and retry
 - **Cost**: Minimal cost impact (~$0.50) due to transient NAT Gateway charges during rollback
 
 **Resolution Process**:
+
 1. Deployment attempt #1 failed after creating VPC, subnets, NAT Gateways, security groups, ALB
 2. CloudFormation automatically rolled back all resources
 3. Queried AWS RDS API to identify available PostgreSQL 15.x versions
@@ -74,10 +76,11 @@ For production templates, use major version only (e.g., `EngineVersion: '15'`) a
 RDSInstance:
   Properties:
     Engine: postgres
-    EngineVersion: '15'  # AWS selects latest 15.x automatically
+    EngineVersion: '15' # AWS selects latest 15.x automatically
 ```
 
 Alternatively, implement version checking in CI/CD:
+
 ```bash
 # Query available versions before deployment
 aws rds describe-db-engine-versions \
@@ -93,7 +96,9 @@ aws rds describe-db-engine-versions \
 The MODEL_RESPONSE demonstrated strong CloudFormation expertise:
 
 ### 1. Proper EnvironmentSuffix Implementation
+
 All 36 resources correctly use `!Sub` with `${EnvironmentSuffix}` in names:
+
 - VPC: `vpc-${EnvironmentSuffix}`
 - Subnets: `public-subnet-1-${EnvironmentSuffix}`, etc.
 - Security Groups: `alb-sg-${EnvironmentSuffix}`, `ec2-sg-${EnvironmentSuffix}`, `rds-sg-${EnvironmentSuffix}`
@@ -102,26 +107,32 @@ All 36 resources correctly use `!Sub` with `${EnvironmentSuffix}` in names:
 - ASG: `asg-${EnvironmentSuffix}`
 
 ### 2. Security Best Practices
+
 Least-privilege security group rules:
+
 - ALB SG: Only 80/443 from `0.0.0.0/0`
 - EC2 SG: Only port 80 from ALB SG (source security group reference)
 - RDS SG: Only port 5432 from EC2 SG (source security group reference)
 
 RDS security:
+
 - `StorageEncrypted: true`
 - `PubliclyAccessible: false`
 - `DeletionProtection: false` (correct for test environments)
 - `DeletionPolicy: Delete` and `UpdateReplacePolicy: Delete` (correct for cleanup)
 
 EC2 IMDSv2 enforcement:
+
 ```yaml
 MetadataOptions:
-  HttpTokens: required  # Enforces IMDSv2
+  HttpTokens: required # Enforces IMDSv2
   HttpPutResponseHopLimit: 1
 ```
 
 ### 3. Multi-AZ Architecture
+
 Resources correctly distributed across 2 availability zones:
+
 - Public subnets: us-east-1a, us-east-1b
 - Private subnets: us-east-1a, us-east-1b
 - NAT Gateways: One per AZ for HA
@@ -130,44 +141,57 @@ Resources correctly distributed across 2 availability zones:
 - ASG: Spans both private subnets
 
 ### 4. Proper Dependencies
+
 Correct use of `DependsOn`:
+
 - EIPs depend on `AttachGateway` (NAT Gateways need IGW attached first)
 - ASG depends on both NAT Gateways (instances need internet access)
 - Routes depend on gateways being created
 
 ### 5. Comprehensive Outputs
+
 13 well-structured outputs with Export names:
+
 - All major resource IDs exported for cross-stack references
 - DNS names and connection strings provided
 - Export names follow pattern: `${AWS::StackName}-OutputName`
 
 ### 6. CloudWatch Integration
+
 VPC Flow Logs configured:
+
 - Log group with 7-day retention
 - IAM role with proper trust policy
 - Captures ALL traffic types
 
 ### 7. Parameterization
+
 16 parameters for flexibility:
+
 - Environment configuration (suffix, name)
 - Network CIDRs (VPC, subnets)
 - Database config (instance class, name, credentials, retention)
 - Compute config (instance type, min/max/desired capacity)
 
 Parameter validation:
+
 - CIDR pattern validation for VPC
 - AllowedValues for enum-like parameters
 - NoEcho for sensitive data (DBPassword)
 - Min/Max constraints for numeric values
 
 ### 8. Tagging Strategy
+
 Consistent tags across all resources:
+
 - `Name`: Includes EnvironmentSuffix
 - `Environment`: From EnvironmentName parameter
 - `ManagedBy`: cloudformation
 
 ### 9. User Data Script
+
 Functional bootstrap script for EC2:
+
 ```bash
 #!/bin/bash
 yum update -y
@@ -180,7 +204,9 @@ echo "<p>Instance ID: $(ec2-metadata --instance-id | cut -d ' ' -f 2)</p>" >> /v
 ```
 
 ### 10. AMI Mapping
+
 Regional AMI mapping for Amazon Linux 2023:
+
 ```yaml
 Mappings:
   RegionMap:
@@ -198,7 +224,6 @@ Mappings:
 
 ## Summary
 
-- **Total Failures**: 1 Critical
 - **Primary Knowledge Gap**: AWS service version lifecycle management
 - **Training Value**: HIGH
 
@@ -222,6 +247,7 @@ Future model iterations should:
 ### Training Quality Score: 9.5/10
 
 **Justification**:
+
 - Template architecture: Perfect (10/10)
 - Security implementation: Perfect (10/10)
 - Multi-AZ design: Perfect (10/10)

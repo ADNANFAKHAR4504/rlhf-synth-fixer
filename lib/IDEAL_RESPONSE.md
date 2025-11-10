@@ -44,7 +44,6 @@ Metadata:
           - DBInstanceClass
           - DBName
           - DBUsername
-          - DBPassword
           - DBBackupRetentionPeriod
       - Label:
           default: 'Compute Configuration'
@@ -122,13 +121,12 @@ Parameters:
     MaxLength: 16
     AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
 
-  DBPassword:
-    Type: String
-    NoEcho: true
-    Description: 'Database master password (minimum 8 characters)'
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '^[a-zA-Z0-9]*$'
+  DBPasswordLength:
+    Type: Number
+    Default: 16
+    Description: 'Length of the auto-generated database password'
+    MinValue: 8
+    MaxValue: 41
 
   DBBackupRetentionPeriod:
     Type: Number
@@ -609,6 +607,25 @@ Resources:
   # RDS PostgreSQL Database
   # ===========================
 
+  RDSMasterPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AWS::StackName}-rds-master-password'
+      Description: 'Auto-generated master password for RDS PostgreSQL database'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: !Ref DBPasswordLength
+        ExcludeCharacters: '"@/\\'
+        RequireEachIncludedType: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-RDS-Secret'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: ManagedBy
+          Value: cloudformation
+
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -632,14 +649,14 @@ Resources:
     Properties:
       DBInstanceIdentifier: !Sub 'rds-postgres-${EnvironmentSuffix}'
       Engine: postgres
-      EngineVersion: '15.5'
+      EngineVersion: '15.14'
       DBInstanceClass: !Ref DBInstanceClass
       AllocatedStorage: 20
       StorageType: gp3
       StorageEncrypted: true
       DBName: !Ref DBName
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${RDSMasterPasswordSecret}:SecretString:password}}'
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
@@ -880,15 +897,18 @@ Outputs:
 ### 2. Security Controls
 
 **Least-Privilege Security Groups**:
+
 - ALB Security Group: Only allows inbound HTTPS (443) and HTTP (80) from the internet
 - EC2 Security Group: Only allows HTTP (80) from the ALB security group
 - RDS Security Group: Only allows PostgreSQL (5432) from the EC2 security group
 
 **Encryption**:
+
 - RDS storage encryption enabled using AWS managed keys
 - IMDSv2 enforced on EC2 instances (HttpTokens: required)
 
 **IAM Roles**:
+
 - EC2 instances use IAM roles instead of long-lived credentials
 - CloudWatch Agent and SSM policies for monitoring and management
 - VPC Flow Logs role with minimal permissions
@@ -914,6 +934,7 @@ Outputs:
 **EnvironmentSuffix Parameter**: All resources include an environment suffix for resource uniqueness across deployments.
 
 **Consistent Tags**: All resources tagged with:
+
 - `Environment`: production/staging/development
 - `ManagedBy`: cloudformation
 - `Name`: Descriptive name with environment suffix
@@ -921,6 +942,7 @@ Outputs:
 ### 6. Parameterization
 
 The template uses CloudFormation parameters for flexibility:
+
 - Network CIDR blocks (VPC and subnets)
 - Database configuration (instance class, credentials, backup retention)
 - Compute configuration (instance types, auto scaling limits)
@@ -935,6 +957,7 @@ The template uses CloudFormation parameters for flexibility:
 ## Deployment Instructions
 
 ### Prerequisites
+
 - AWS CLI configured with appropriate credentials
 - AWS account with permissions to create VPC, EC2, RDS, IAM, and CloudWatch resources
 - Database password ready (minimum 8 alphanumeric characters)
@@ -942,11 +965,13 @@ The template uses CloudFormation parameters for flexibility:
 ### Deployment Steps
 
 1. **Validate Template Syntax**:
+
    ```bash
    aws cloudformation validate-template --template-body file://lib/TapStack.yml
    ```
 
 2. **Deploy Stack**:
+
    ```bash
    aws cloudformation create-stack \
      --stack-name production-cloud-env \
@@ -960,6 +985,7 @@ The template uses CloudFormation parameters for flexibility:
    ```
 
 3. **Monitor Stack Creation**:
+
    ```bash
    aws cloudformation describe-stacks \
      --stack-name production-cloud-env \
@@ -978,6 +1004,7 @@ The template uses CloudFormation parameters for flexibility:
 ### Testing the Deployment
 
 1. **Access Application Load Balancer**:
+
    ```bash
    ALB_URL=$(aws cloudformation describe-stacks \
      --stack-name production-cloud-env \
@@ -989,6 +1016,7 @@ The template uses CloudFormation parameters for flexibility:
    ```
 
 2. **Verify RDS Connectivity** (from EC2 instance):
+
    ```bash
    RDS_ENDPOINT=$(aws cloudformation describe-stacks \
      --stack-name production-cloud-env \
@@ -1007,6 +1035,7 @@ The template uses CloudFormation parameters for flexibility:
 ### Cleanup
 
 To delete all resources:
+
 ```bash
 aws cloudformation delete-stack \
   --stack-name production-cloud-env \
@@ -1018,11 +1047,13 @@ aws cloudformation delete-stack \
 ## Cost Considerations
 
 **Expensive Resources**:
+
 - NAT Gateways: ~$0.045/hour each ($32/month x 2 = $64/month)
 - RDS Multi-AZ: db.t3.micro ~$0.034/hour ($50/month with Multi-AZ)
 - EC2 Instances: t3.micro ~$0.0104/hour ($15/month per instance)
 
 **Cost Optimization**:
+
 - For development, use single NAT Gateway or VPC endpoints
 - Use RDS single-AZ for non-production environments
 - Implement Auto Scaling policies to scale down during off-hours

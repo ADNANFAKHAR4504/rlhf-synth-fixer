@@ -23,7 +23,6 @@ Metadata:
           - DBInstanceClass
           - DBName
           - DBUsername
-          - DBPasswordSecretArn
           - DBBackupRetentionPeriod
       - Label:
           default: 'Compute Configuration'
@@ -101,9 +100,12 @@ Parameters:
     MaxLength: 16
     AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
 
-  DBPasswordSecretArn:
-    Type: String
-    Description: "ARN or name of a Secrets Manager secret that contains the DB password. The secret must contain the password at JSON key 'password' (accessed via SecretString:password)."
+  DBPasswordLength:
+    Type: Number
+    Default: 16
+    Description: 'Length of the auto-generated database password'
+    MinValue: 8
+    MaxValue: 41
 
   DBBackupRetentionPeriod:
     Type: Number
@@ -150,8 +152,6 @@ Mappings:
       AMI: 'ami-0a2d0e8c8c8a8c8c8'
     us-west-2:
       AMI: 'ami-04e914639d0cca79a'
-
-# No Conditions needed: the template requires `DBPasswordSecretArn` and uses a dynamic reference.
 
 Resources:
   # ===========================
@@ -586,6 +586,25 @@ Resources:
   # RDS PostgreSQL Database
   # ===========================
 
+  RDSMasterPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AWS::StackName}-rds-master-password'
+      Description: 'Auto-generated master password for RDS PostgreSQL database'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: !Ref DBPasswordLength
+        ExcludeCharacters: '"@/\\'
+        RequireEachIncludedType: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-RDS-Secret'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: ManagedBy
+          Value: cloudformation
+
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -616,7 +635,7 @@ Resources:
       StorageEncrypted: true
       DBName: !Ref DBName
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecretArn}:SecretString:password}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${RDSMasterPasswordSecret}:SecretString:password}}'
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup

@@ -50,18 +50,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
     });
 
-    test('should have database configuration parameters', () => {
-      expect(template.Parameters.DBInstanceClass).toBeDefined();
-      expect(template.Parameters.DBName).toBeDefined();
-      expect(template.Parameters.DBUsername).toBeDefined();
-      expect(template.Parameters.DBPassword).toBeDefined();
-      expect(template.Parameters.DBBackupRetentionPeriod).toBeDefined();
-    });
-
-    test('DBPassword parameter should have NoEcho enabled', () => {
-      expect(template.Parameters.DBPassword.NoEcho).toBe(true);
-    });
-
     test('should have compute configuration parameters', () => {
       expect(template.Parameters.InstanceType).toBeDefined();
       expect(template.Parameters.MinInstances).toBeDefined();
@@ -456,7 +444,7 @@ describe('TapStack CloudFormation Template', () => {
           const props = JSON.stringify(resource.Properties);
           // Check if the properties contain a reference to EnvironmentSuffix
           const hasEnvSuffix = props.includes('EnvironmentSuffix') ||
-                               props.includes('${EnvironmentSuffix}');
+            props.includes('${EnvironmentSuffix}');
           expect(hasEnvSuffix).toBe(true);
         }
       });
