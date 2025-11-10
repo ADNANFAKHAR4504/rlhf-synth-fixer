@@ -35,5 +35,7 @@
     "S3",
     "Auto Scaling"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342"
 }
