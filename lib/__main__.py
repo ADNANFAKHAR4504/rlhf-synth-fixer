@@ -8,11 +8,11 @@ with the appropriate environment suffix and configuration.
 
 import pulumi
 import pulumi_aws as aws
-from lib.vpc_component import VpcComponent
-from lib.alb_component import AlbComponent
-from lib.asg_component import AsgComponent
-from lib.rds_component import RdsComponent
-from lib.s3_component import S3Component
+from vpc_component import VpcComponent
+from alb_component import AlbComponent
+from asg_component import AsgComponent
+from rds_component import RdsComponent
+from s3_component import S3Component
 
 # Get configuration
 config = pulumi.Config("TapStack")
