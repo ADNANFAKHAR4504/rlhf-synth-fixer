@@ -1,0 +1,4 @@
+name: secure-api-kms-logs
+runtime: nodejs
+description: Secure serverless API with KMS-encrypted CloudWatch Logs
+main: dist/bin/tap.js
