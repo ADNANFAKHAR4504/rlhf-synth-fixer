@@ -14,7 +14,7 @@ All intentional bugs have been corrected:
 
 ## File: /lib/tap_stack.py
 
-```python
+```py
 """
 tap_stack.py
 
@@ -98,7 +98,7 @@ class TapStack(pulumi.ComponentResource):
 
 ## File: /lib/compute.py
 
-```python
+```py
 """Compute infrastructure components including Lambda and API Gateway."""
 from typing import Dict, List, Optional
 import json
@@ -301,7 +301,7 @@ class ComputeStack(ComponentResource):
 
 ## File: /lib/network.py
 
-```python
+```py
 """Network infrastructure components for payment processing system."""
 from typing import Dict, List, Optional
 import pulumi
@@ -498,7 +498,7 @@ class NetworkStack(ComponentResource):
 
 ## File: /lib/payment_stack.py
 
-```python
+```py
 """Main ComponentResource for payment processing infrastructure."""
 import datetime
 from typing import Optional
@@ -606,7 +606,7 @@ class PaymentProcessingStack(ComponentResource):
 
 ## File: /lib/storage.py
 
-```python
+```py
 """Storage infrastructure components including DynamoDB, RDS, and S3."""
 from typing import Dict, List, Optional
 
