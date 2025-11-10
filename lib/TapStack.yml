@@ -2112,31 +2112,7 @@ Resources:
         - Key: iac-rlhf-amazon
           Value: 'true'
 
-  # Create ConfigRecorder first (it will remain stopped until the custom resource starts it)
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    DependsOn:
-      - ConfigBucketPolicy
-    Properties:
-      Name: !Sub ${ProjectName}-${Environment}-Recorder
-      RoleARN: !GetAtt ConfigRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-
-  # Create DeliveryChannel after ConfigRecorder so the recorder can start successfully
-  DeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    DependsOn:
-      - ConfigRecorder
-    Properties:
-      Name: !Sub ${ProjectName}-${Environment}-DeliveryChannel
-      S3BucketName: !Ref ConfigBucket
-      SnsTopicARN: !Ref SNSTopic
-      ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: TwentyFour_Hours
-
-  # Lambda function to START the Config Recorder after both resources exist
+  # Lambda function to configure and start AWS Config once prerequisites are ready
   ConfigRecorderStarterRole:
     Type: AWS::IAM::Role
     Properties:
@@ -2156,6 +2132,10 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
+                  - config:PutConfigurationRecorder
+                  - config:DeleteConfigurationRecorder
+                  - config:PutDeliveryChannel
+                  - config:DeleteDeliveryChannel
                   - config:StartConfigurationRecorder
                   - config:StopConfigurationRecorder
                   - config:DescribeConfigurationRecorderStatus
@@ -2199,16 +2179,46 @@ Resources:
               try:
                   request_type = event['RequestType']
                   recorder_name = event['ResourceProperties']['ConfigRecorderName']
+                  delivery_channel_name = event['ResourceProperties']['DeliveryChannelName']
+                  role_arn = event['ResourceProperties']['ConfigRoleArn']
+                  bucket_name = event['ResourceProperties']['ConfigBucketName']
+                  sns_topic = event['ResourceProperties']['ConfigTopicArn']
                   
                   if request_type == 'Create' or request_type == 'Update':
-                      # Wait a moment to ensure resources are fully created
-                      time.sleep(5)
-                      
-                      # Verify delivery channel exists
-                      delivery_channels = config_client.describe_delivery_channels()
-                      if not delivery_channels.get('DeliveryChannels'):
-                          raise Exception("No delivery channel found")
-                      
+                      # Create / update configuration recorder
+                      config_client.put_configuration_recorder(
+                          ConfigurationRecorder={
+                              'name': recorder_name,
+                              'roleARN': role_arn,
+                              'recordingGroup': {
+                                  'allSupported': True,
+                                  'includeGlobalResourceTypes': True
+                              }
+                          }
+                      )
+
+                      # Create / update delivery channel
+                      delivery_channel = {
+                          'name': delivery_channel_name,
+                          's3BucketName': bucket_name,
+                          'configSnapshotDeliveryProperties': {
+                              'deliveryFrequency': 'TwentyFour_Hours'
+                          }
+                      }
+                      if sns_topic:
+                          delivery_channel['snsTopicARN'] = sns_topic
+
+                      config_client.put_delivery_channel(DeliveryChannel=delivery_channel)
+
+                      # Wait for delivery channel to become available
+                      for _ in range(12):
+                          response = config_client.describe_delivery_channels()
+                          if response.get('DeliveryChannels'):
+                              break
+                          time.sleep(5)
+                      else:
+                          raise Exception("Delivery channel not available after waiting")
+
                       # Start the configuration recorder
                       config_client.start_configuration_recorder(
                           ConfigurationRecorderName=recorder_name
@@ -2225,6 +2235,23 @@ Resources:
                           print(f"Stopped Config Recorder: {recorder_name}")
                       except:
                           pass  # Ignore errors on deletion
+
+                      # Delete delivery channel
+                      try:
+                          config_client.delete_delivery_channel(
+                              DeliveryChannelName=delivery_channel_name
+                          )
+                      except:
+                          pass
+
+                      # Delete configuration recorder
+                      try:
+                          config_client.delete_configuration_recorder(
+                              ConfigurationRecorderName=recorder_name
+                          )
+                      except:
+                          pass
+
                       send_response(event, context, 'SUCCESS', {})
                   
               except Exception as e:
@@ -2233,14 +2260,18 @@ Resources:
                       'Error': str(e)
                   })
 
-  # Custom Resource to START the Config Recorder after both resources exist
+  # Custom Resource to configure and start AWS Config after prerequisites are ready
   ConfigRecorderStarter:
     Type: AWS::CloudFormation::CustomResource
     DependsOn:
-      - DeliveryChannel
+      - ConfigBucketPolicy
     Properties:
       ServiceToken: !GetAtt ConfigRecorderStarterFunction.Arn
-      ConfigRecorderName: !Ref ConfigRecorder
+      ConfigRecorderName: !Sub ${ProjectName}-${Environment}-Recorder
+      DeliveryChannelName: !Sub ${ProjectName}-${Environment}-DeliveryChannel
+      ConfigRoleArn: !GetAtt ConfigRole.Arn
+      ConfigBucketName: !Ref ConfigBucket
+      ConfigTopicArn: !Ref SNSTopic
 
   # Config Rules for compliance (only create after recorder is started)
   S3BucketEncryptionRule:
