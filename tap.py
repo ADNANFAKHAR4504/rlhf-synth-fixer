@@ -12,7 +12,7 @@ different deployment environments (development, staging, production, etc.).
 import os
 import pulumi
 import pulumi_aws as aws
-from pulumi import Config, ResourceOptions
+from pulumi import Config, ResourceOptions, Output
 from lib.tap_stack import TapStack, TapStackArgs
 
 # Initialize Pulumi configuration
@@ -33,30 +33,50 @@ default_tags = {
 }
 
 # Get configuration values from Pulumi config with defaults
-# If not provided, use default VPC and its subnets
 vpc_id = config.get('vpc_id')
 private_subnet_ids = config.get_object('private_subnet_ids')
 dms_subnet_ids = config.get_object('dms_subnet_ids')
 
-# Get default VPC if not configured
+# Create VPC and subnets if not provided
 if not vpc_id:
-    default_vpc = aws.ec2.get_vpc(default=True)
-    vpc_id = default_vpc.id
+    # Create VPC
+    vpc = aws.ec2.Vpc(
+        f'tap-vpc-{environment_suffix}',
+        cidr_block='10.0.0.0/16',
+        enable_dns_hostnames=True,
+        enable_dns_support=True,
+        tags={**default_tags, 'Name': f'tap-vpc-{environment_suffix}'}
+    )
+    vpc_id = vpc.id
     
-    # Get subnets from default VPC if not configured
-    if not private_subnet_ids or not dms_subnet_ids:
-        default_subnets = aws.ec2.get_subnets(
-            filters=[aws.ec2.GetSubnetsFilterArgs(
-                name="vpc-id",
-                values=[vpc_id]
-            )]
+    # Create Internet Gateway
+    igw = aws.ec2.InternetGateway(
+        f'tap-igw-{environment_suffix}',
+        vpc_id=vpc.id,
+        tags={**default_tags, 'Name': f'tap-igw-{environment_suffix}'}
+    )
+    
+    # Get availability zones
+    azs = aws.get_availability_zones(state="available")
+    
+    # Create subnets in multiple AZs (need at least 2 for Aurora)
+    private_subnets = []
+    for i in range(3):
+        subnet = aws.ec2.Subnet(
+            f'tap-private-subnet-{i}-{environment_suffix}',
+            vpc_id=vpc.id,
+            cidr_block=f'10.0.{i}.0/24',
+            availability_zone=azs.names[i],
+            map_public_ip_on_launch=False,
+            tags={**default_tags, 'Name': f'tap-private-subnet-{i}-{environment_suffix}'}
         )
-        subnet_ids = default_subnets.ids
-        # Use all available subnets if not configured
-        if not private_subnet_ids:
-            private_subnet_ids = subnet_ids
-        if not dms_subnet_ids:
-            dms_subnet_ids = subnet_ids
+        private_subnets.append(subnet.id)
+    
+    # Use same subnets for both Aurora and DMS if not specified
+    if not private_subnet_ids:
+        private_subnet_ids = private_subnets
+    if not dms_subnet_ids:
+        dms_subnet_ids = private_subnets
 
 source_db_host = config.get('source_db_host') or '10.0.1.100'
 source_db_port = config.get_int('source_db_port') or 5432
@@ -90,3 +110,4 @@ pulumi.export('reader_endpoint', stack.reader_endpoint)
 pulumi.export('cluster_arn', stack.cluster_arn)
 pulumi.export('dms_task_arn', stack.dms_task_arn)
 pulumi.export('secret_arn', stack.secret_arn)
+pulumi.export('vpc_id', vpc_id)
