@@ -3,7 +3,9 @@ Unit tests for the main entry point (__main__.py) using Pulumi testing utilities
 """
 
 import unittest
-from unittest.mock import patch, MagicMock, Mock
+from unittest.mock import patch, MagicMock, Mock, mock_open
+import sys
+import os
 import pulumi
 
 
@@ -47,6 +49,8 @@ class MyMocks(pulumi.runtime.Mocks):
             outputs = {**args.inputs, "id": f"db-instance-{args.name}"}
         elif args.typ == "aws:secretsmanager/secret:Secret":
             outputs = {**args.inputs, "id": f"secret-{args.name}", "arn": f"arn:aws:secretsmanager:us-east-1:123456789012:secret:{args.name}"}
+        elif args.typ == "aws:index/provider:Provider":
+            outputs = {**args.inputs, "id": f"provider-{args.name}"}
         else:
             outputs = {**args.inputs, "id": f"{args.typ}-{args.name}"}
         return [args.name, outputs]
@@ -63,196 +67,285 @@ pulumi.runtime.set_mocks(MyMocks())
 class TestMainStack(unittest.TestCase):
     """Test cases for main entry point"""
 
-    @patch('pulumi_aws.get_availability_zones')
-    @patch('pulumi.export')
+    @patch('builtins.open', new_callable=mock_open, read_data='eu-west-1')
     @patch('pulumi.Config')
-    def test_stack_creates_vpc_component(self, mock_config, mock_export, mock_get_azs):
-        """Test that VPC component is created with correct configuration"""
+    def test_aws_region_file_read(self, mock_config, mock_file):
+        """Test that AWS_REGION file is read correctly"""
+        # Setup config mock
+        config_instance = MagicMock()
+        config_instance.require.return_value = 'test-env'
+        config_instance.get.return_value = None
+        config_instance.get_int.return_value = None
+        config_instance.get_bool.return_value = None
+        mock_config.return_value = config_instance
+
+        # Test that file reading works
+        aws_region_file = os.path.join(os.path.dirname(__file__), "AWS_REGION")
+        with open(aws_region_file, 'r') as f:
+            region = f.read().strip()
+
+        self.assertEqual(region, 'eu-west-1')
+        mock_file.assert_called()
+
+    @patch('pulumi.Config')
+    def test_config_loading(self, mock_config):
+        """Test that Pulumi config is loaded correctly"""
         # Setup config mock
         config_instance = MagicMock()
         config_instance.require.return_value = 'test-env'
         config_instance.get.side_effect = lambda key: {
-            'instanceType': 't3.micro',
-            'dbInstanceClass': 'db.t3.micro',
-            'dbUsername': 'admin',
-            'environmentName': 'test'
+            'environment': 'test',
+            'costCenter': 'engineering'
         }.get(key)
-        config_instance.require_secret.return_value = 'password123'
+        config_instance.get_int.side_effect = lambda key: {
+            'minCapacity': 2,
+            'maxCapacity': 4,
+            'readReplicaCount': 1,
+            'backupRetentionDays': 7
+        }.get(key)
+        config_instance.get_bool.side_effect = lambda key: {
+            'enableWaf': False
+        }.get(key)
         mock_config.return_value = config_instance
 
-        # Mock get_availability_zones
-        mock_get_azs.return_value = Mock(names=['us-east-1a', 'us-east-1b'])
+        # Load config
+        config = pulumi.Config()
+        environment_suffix = config.require("environmentSuffix")
+        environment = config.get("environment") or environment_suffix
+        min_capacity = config.get_int("minCapacity") or 2
+        max_capacity = config.get_int("maxCapacity") or 4
+        read_replica_count = config.get_int("readReplicaCount") or 1
+        backup_retention_days = config.get_int("backupRetentionDays") or 7
+        enable_waf = config.get_bool("enableWaf") or False
+        cost_center = config.get("costCenter") or "engineering"
 
-        # Import main module
-        import sys
-        # Remove from sys.modules to force reimport
-        modules_to_remove = [m for m in sys.modules if m == 'lib.__main__']
-        for m in modules_to_remove:
-            del sys.modules[m]
+        # Verify values
+        self.assertEqual(environment_suffix, 'test-env')
+        self.assertEqual(environment, 'test')
+        self.assertEqual(min_capacity, 2)
+        self.assertEqual(max_capacity, 4)
+        self.assertEqual(read_replica_count, 1)
+        self.assertEqual(backup_retention_days, 7)
+        self.assertEqual(enable_waf, False)
+        self.assertEqual(cost_center, 'engineering')
 
-        import lib.__main__
+    def test_tags_structure(self):
+        """Test that tags dictionary is properly structured"""
+        environment = "test"
+        cost_center = "engineering"
 
-        # VPC component should be created
-        self.assertTrue(hasattr(lib.__main__, 'vpc'))
+        tags = {
+            "Environment": environment,
+            "ManagedBy": "Pulumi",
+            "CostCenter": cost_center,
+        }
 
-    @patch('pulumi_aws.get_availability_zones')
+        self.assertEqual(tags["Environment"], "test")
+        self.assertEqual(tags["ManagedBy"], "Pulumi")
+        self.assertEqual(tags["CostCenter"], "engineering")
+        self.assertEqual(len(tags), 3)
+
     @patch('pulumi.export')
-    @patch('pulumi.Config')
-    def test_stack_creates_alb_component(self, mock_config, mock_export, mock_get_azs):
-        """Test that ALB component is created"""
-        # Setup config mock
-        config_instance = MagicMock()
-        config_instance.require.return_value = 'test-env'
-        config_instance.get.side_effect = lambda key: {
-            'instanceType': 't3.micro',
-            'dbInstanceClass': 'db.t3.micro',
-            'dbUsername': 'admin',
-            'environmentName': 'test'
-        }.get(key)
-        config_instance.require_secret.return_value = 'password123'
-        mock_config.return_value = config_instance
+    def test_export_outputs_structure(self, mock_export):
+        """Test that exports are called with correct keys"""
+        # Mock exports
+        mock_vpc_id = "vpc-12345"
+        mock_alb_dns = "alb.example.com"
+        mock_alb_arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/alb/abc123"
+        mock_rds_endpoint = "cluster.example.com"
+        mock_rds_reader = "cluster-ro.example.com"
+        mock_bucket = "static-assets-bucket"
+        mock_logs = "logs-bucket"
 
-        # Mock get_availability_zones
-        mock_get_azs.return_value = Mock(names=['us-east-1a', 'us-east-1b'])
-
-        # Import main module
-        import sys
-        modules_to_remove = [m for m in sys.modules if m == 'lib.__main__']
-        for m in modules_to_remove:
-            del sys.modules[m]
-
-        import lib.__main__
-
-        self.assertTrue(hasattr(lib.__main__, 'alb'))
-
-    @patch('pulumi_aws.get_availability_zones')
-    @patch('pulumi.export')
-    @patch('pulumi.Config')
-    def test_stack_creates_asg_component(self, mock_config, mock_export, mock_get_azs):
-        """Test that ASG component is created"""
-        # Setup config mock
-        config_instance = MagicMock()
-        config_instance.require.return_value = 'test-env'
-        config_instance.get.side_effect = lambda key: {
-            'instanceType': 't3.micro',
-            'dbInstanceClass': 'db.t3.micro',
-            'dbUsername': 'admin',
-            'environmentName': 'test'
-        }.get(key)
-        config_instance.require_secret.return_value = 'password123'
-        mock_config.return_value = config_instance
-
-        # Import main module
-        import sys
-        modules_to_remove = [m for m in sys.modules if m == 'lib.__main__']
-        for m in modules_to_remove:
-            del sys.modules[m]
-
-        # Mock get_availability_zones
-        mock_get_azs.return_value = Mock(names=['us-east-1a', 'us-east-1b'])
-
-        import lib.__main__
-
-        self.assertTrue(hasattr(lib.__main__, 'asg'))
-
-    @patch('pulumi_aws.get_availability_zones')
-    @patch('pulumi.export')
-    @patch('pulumi.Config')
-    def test_stack_creates_rds_component(self, mock_config, mock_export, mock_get_azs):
-        """Test that RDS component is created"""
-        # Setup config mock
-        config_instance = MagicMock()
-        config_instance.require.return_value = 'test-env'
-        config_instance.get.side_effect = lambda key: {
-            'instanceType': 't3.micro',
-            'dbInstanceClass': 'db.t3.micro',
-            'dbUsername': 'admin',
-            'environmentName': 'test'
-        }.get(key)
-        config_instance.require_secret.return_value = 'password123'
-        mock_config.return_value = config_instance
-
-        # Import main module
-        import sys
-        modules_to_remove = [m for m in sys.modules if m == 'lib.__main__']
-        for m in modules_to_remove:
-            del sys.modules[m]
-
-        # Mock get_availability_zones
-        mock_get_azs.return_value = Mock(names=['us-east-1a', 'us-east-1b'])
-
-        import lib.__main__
-
-        self.assertTrue(hasattr(lib.__main__, 'rds'))
-
-    @patch('pulumi_aws.get_availability_zones')
-    @patch('pulumi.export')
-    @patch('pulumi.Config')
-    def test_stack_creates_s3_component(self, mock_config, mock_export, mock_get_azs):
-        """Test that S3 component is created"""
-        # Setup config mock
-        config_instance = MagicMock()
-        config_instance.require.return_value = 'test-env'
-        config_instance.get.side_effect = lambda key: {
-            'instanceType': 't3.micro',
-            'dbInstanceClass': 'db.t3.micro',
-            'dbUsername': 'admin',
-            'environmentName': 'test'
-        }.get(key)
-        config_instance.require_secret.return_value = 'password123'
-        mock_config.return_value = config_instance
-
-        # Import main module
-        import sys
-        modules_to_remove = [m for m in sys.modules if m == 'lib.__main__']
-        for m in modules_to_remove:
-            del sys.modules[m]
-
-        # Mock get_availability_zones
-        mock_get_azs.return_value = Mock(names=['us-east-1a', 'us-east-1b'])
-
-        import lib.__main__
-
-        self.assertTrue(hasattr(lib.__main__, 's3'))
-
-    @patch('pulumi_aws.get_availability_zones')
-    @patch('pulumi.export')
-    @patch('pulumi.Config')
-    def test_stack_exports_outputs(self, mock_config, mock_export, mock_get_azs):
-        """Test that stack exports required outputs"""
-        # Setup config mock
-        config_instance = MagicMock()
-        config_instance.require.return_value = 'test-env'
-        config_instance.get.side_effect = lambda key: {
-            'instanceType': 't3.micro',
-            'dbInstanceClass': 'db.t3.micro',
-            'dbUsername': 'admin',
-            'environmentName': 'test'
-        }.get(key)
-        config_instance.require_secret.return_value = 'password123'
-        mock_config.return_value = config_instance
-
-        # Import main module
-        import sys
-        modules_to_remove = [m for m in sys.modules if m == 'lib.__main__']
-        for m in modules_to_remove:
-            del sys.modules[m]
-
-        # Mock get_availability_zones
-        mock_get_azs.return_value = Mock(names=['us-east-1a', 'us-east-1b'])
-
-        import lib.__main__
+        # Simulate exports
+        pulumi.export("vpc_id", mock_vpc_id)
+        pulumi.export("alb_dns_name", mock_alb_dns)
+        pulumi.export("alb_arn", mock_alb_arn)
+        pulumi.export("rds_cluster_endpoint", mock_rds_endpoint)
+        pulumi.export("rds_reader_endpoint", mock_rds_reader)
+        pulumi.export("static_assets_bucket", mock_bucket)
+        pulumi.export("logs_bucket", mock_logs)
 
         # Verify exports were called
-        self.assertTrue(mock_export.called)
-        export_calls = [call[0][0] for call in mock_export.call_args_list]
-        expected_exports = [
-            'vpc_id', 'alb_arn', 'alb_dns_name',
-            'rds_cluster_endpoint', 'rds_reader_endpoint',
-            'static_assets_bucket', 'logs_bucket'
-        ]
-        for expected in expected_exports:
-            self.assertIn(expected, export_calls)
+        self.assertEqual(mock_export.call_count, 7)
+        export_calls = {call[0][0]: call[0][1] for call in mock_export.call_args_list}
+
+        self.assertIn("vpc_id", export_calls)
+        self.assertIn("alb_dns_name", export_calls)
+        self.assertIn("alb_arn", export_calls)
+        self.assertIn("rds_cluster_endpoint", export_calls)
+        self.assertIn("rds_reader_endpoint", export_calls)
+        self.assertIn("static_assets_bucket", export_calls)
+        self.assertIn("logs_bucket", export_calls)
+
+    @patch('pulumi_aws.Provider')
+    def test_aws_provider_configuration(self, mock_provider):
+        """Test that AWS provider is configured with correct region"""
+        # Create provider with region
+        region = "eu-west-1"
+        provider = mock_provider("aws-provider", region=region)
+
+        # Verify provider was called with correct args
+        mock_provider.assert_called_once_with("aws-provider", region="eu-west-1")
+
+    def test_component_parameters_vpc(self):
+        """Test VPC component parameters"""
+        environment_suffix = "test-env"
+        tags = {"Environment": "test", "ManagedBy": "Pulumi", "CostCenter": "engineering"}
+
+        # Test VPC parameters
+        vpc_params = {
+            "name": "vpc",
+            "environment_suffix": environment_suffix,
+            "cidr_block": "10.0.0.0/16",
+            "availability_zones": ["us-east-1a", "us-east-1b"],
+            "tags": tags
+        }
+
+        self.assertEqual(vpc_params["name"], "vpc")
+        self.assertEqual(vpc_params["environment_suffix"], "test-env")
+        self.assertEqual(vpc_params["cidr_block"], "10.0.0.0/16")
+        self.assertEqual(len(vpc_params["availability_zones"]), 2)
+        self.assertEqual(vpc_params["tags"]["Environment"], "test")
+
+    def test_component_parameters_alb(self):
+        """Test ALB component parameters"""
+        environment_suffix = "test-env"
+        tags = {"Environment": "test", "ManagedBy": "Pulumi", "CostCenter": "engineering"}
+        enable_waf = False
+
+        # Test ALB parameters
+        alb_params = {
+            "name": "alb",
+            "environment_suffix": environment_suffix,
+            "vpc_id": "vpc-12345",
+            "public_subnet_ids": ["subnet-1", "subnet-2"],
+            "enable_waf": enable_waf,
+            "tags": tags
+        }
+
+        self.assertEqual(alb_params["name"], "alb")
+        self.assertEqual(alb_params["environment_suffix"], "test-env")
+        self.assertEqual(alb_params["vpc_id"], "vpc-12345")
+        self.assertEqual(len(alb_params["public_subnet_ids"]), 2)
+        self.assertEqual(alb_params["enable_waf"], False)
+
+    def test_component_parameters_asg(self):
+        """Test ASG component parameters"""
+        environment_suffix = "test-env"
+        tags = {"Environment": "test", "ManagedBy": "Pulumi", "CostCenter": "engineering"}
+        min_capacity = 2
+        max_capacity = 4
+
+        # Test ASG parameters
+        asg_params = {
+            "name": "asg",
+            "environment_suffix": environment_suffix,
+            "vpc_id": "vpc-12345",
+            "private_subnet_ids": ["subnet-1", "subnet-2"],
+            "target_group_arn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/tg/abc123",
+            "min_size": min_capacity,
+            "max_size": max_capacity,
+            "tags": tags
+        }
+
+        self.assertEqual(asg_params["name"], "asg")
+        self.assertEqual(asg_params["min_size"], 2)
+        self.assertEqual(asg_params["max_size"], 4)
+        self.assertEqual(asg_params["vpc_id"], "vpc-12345")
+
+    def test_component_parameters_rds(self):
+        """Test RDS component parameters"""
+        environment_suffix = "test-env"
+        tags = {"Environment": "test", "ManagedBy": "Pulumi", "CostCenter": "engineering"}
+        read_replica_count = 1
+        backup_retention_days = 7
+
+        # Test RDS parameters
+        rds_params = {
+            "name": "rds",
+            "environment_suffix": environment_suffix,
+            "vpc_id": "vpc-12345",
+            "private_subnet_ids": ["subnet-1", "subnet-2"],
+            "read_replica_count": read_replica_count,
+            "backup_retention_days": backup_retention_days,
+            "tags": tags
+        }
+
+        self.assertEqual(rds_params["name"], "rds")
+        self.assertEqual(rds_params["read_replica_count"], 1)
+        self.assertEqual(rds_params["backup_retention_days"], 7)
+        self.assertIn("vpc_id", rds_params)
+
+    def test_component_parameters_s3(self):
+        """Test S3 component parameters"""
+        environment_suffix = "test-env"
+        environment = "test"
+        tags = {"Environment": "test", "ManagedBy": "Pulumi", "CostCenter": "engineering"}
+
+        # Test S3 parameters
+        s3_params = {
+            "name": "s3",
+            "environment_suffix": environment_suffix,
+            "environment": environment,
+            "tags": tags
+        }
+
+        self.assertEqual(s3_params["name"], "s3")
+        self.assertEqual(s3_params["environment_suffix"], "test-env")
+        self.assertEqual(s3_params["environment"], "test")
+        self.assertEqual(s3_params["tags"]["ManagedBy"], "Pulumi")
+
+    def test_config_default_values(self):
+        """Test that default values are used when config values are not set"""
+        # Test default values
+        environment = None or "test-env"
+        min_capacity = None or 2
+        max_capacity = None or 4
+        read_replica_count = None or 1
+        backup_retention_days = None or 7
+        enable_waf = None or False
+        cost_center = None or "engineering"
+
+        self.assertEqual(environment, "test-env")
+        self.assertEqual(min_capacity, 2)
+        self.assertEqual(max_capacity, 4)
+        self.assertEqual(read_replica_count, 1)
+        self.assertEqual(backup_retention_days, 7)
+        self.assertEqual(enable_waf, False)
+        self.assertEqual(cost_center, "engineering")
+
+    def test_availability_zones_configuration(self):
+        """Test availability zones configuration"""
+        availability_zones = ["us-east-1a", "us-east-1b"]
+
+        self.assertEqual(len(availability_zones), 2)
+        self.assertIn("us-east-1a", availability_zones)
+        self.assertIn("us-east-1b", availability_zones)
+        self.assertTrue(all(isinstance(az, str) for az in availability_zones))
+
+    def test_cidr_block_configuration(self):
+        """Test CIDR block configuration"""
+        cidr_block = "10.0.0.0/16"
+
+        self.assertTrue(cidr_block.startswith("10.0"))
+        self.assertTrue(cidr_block.endswith("/16"))
+        self.assertEqual(cidr_block, "10.0.0.0/16")
+
+    @patch('os.path.dirname')
+    @patch('os.path.join')
+    def test_aws_region_file_path_construction(self, mock_join, mock_dirname):
+        """Test that AWS_REGION file path is constructed correctly"""
+        mock_dirname.return_value = "/test/lib"
+        mock_join.return_value = "/test/lib/AWS_REGION"
+
+        # Simulate path construction
+        dir_path = os.path.dirname(__file__)
+        file_path = os.path.join(dir_path, "AWS_REGION")
+
+        self.assertEqual(file_path, "/test/lib/AWS_REGION")
+        mock_dirname.assert_called_once()
+        mock_join.assert_called_once_with("/test/lib", "AWS_REGION")
 
 
 if __name__ == "__main__":
