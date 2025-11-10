@@ -82,23 +82,23 @@ describe('Payment Processing Multi-Stack Architecture', () => {
 
       // SQS queue
       template.hasResourceProperties('AWS::SQS::Queue', {
-        QueueName: `payment-processing-queue-${environmentSuffix}`,
+        QueueName: `payment-processing-queue-${environmentSuffix}.fifo`,
       });
     });
 
 
     test('should create Monitoring components with CloudWatch resources', () => {
-      // API Gateway alarms
+      // API Gateway 4xx errors alarm
       template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        AlarmName: `api-gateway-errors-${environmentSuffix}`,
-        MetricName: '5XXError',
+        AlarmName: `payment-api-4xx-errors-${environmentSuffix}`,
+        MetricName: '4XXError',
         Namespace: 'AWS/ApiGateway',
       });
     });
 
     test('should create SNS topics for alerts', () => {
       template.hasResourceProperties('AWS::SNS::Topic', {
-        TopicName: `payment-processing-alerts-${environmentSuffix}`,
+        TopicName: `payment-critical-alerts-${environmentSuffix}`,
       });
     });
 
