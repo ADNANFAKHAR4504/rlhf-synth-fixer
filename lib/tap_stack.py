@@ -139,13 +139,10 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Register outputs
-        self.register_outputs({
-            'vpc_id': self.vpc_stack.vpc_id,
-            'alb_dns_name': self.load_balancer_stack.alb_dns_name,
-            'alb_zone_id': self.load_balancer_stack.alb_zone_id,
-            'rds_endpoint': self.database_stack.db_endpoint,
-            'rds_port': self.database_stack.db_port,
-            'static_assets_bucket': self.storage_stack.static_assets_bucket_name,
-            'sns_topic_arn': self.monitoring_stack.sns_topic_arn,
-        })
+        pulumi.export('vpc_id', self.vpc_stack.vpc_id)
+        pulumi.export('alb_dns_name', self.load_balancer_stack.alb_dns_name)
+        pulumi.export('alb_zone_id', self.load_balancer_stack.alb_zone_id)
+        pulumi.export('rds_endpoint', self.database_stack.db_endpoint)
+        pulumi.export('rds_port', self.database_stack.db_port)
+        pulumi.export('static_assets_bucket', self.storage_stack.static_assets_bucket_name)
+        pulumi.export('sns_topic_arn', self.monitoring_stack.sns_topic_arn)

@@ -7,15 +7,7 @@
   "team": "synth",
   "startedAt": "2025-11-10T07:11:00+00:00",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": [
-    "multi-account",
-    "environment-management",
-    "vpc",
-    "rds",
-    "auto-scaling",
-    "load-balancer",
-    "s3"
-  ],
+  "subject_labels": ["Cloud Environment Setup"],
   "aws_services": [
     "VPC",
     "EC2",
@@ -26,5 +18,7 @@
     "CloudWatch",
     "IAM"
   ],
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing"
 }
