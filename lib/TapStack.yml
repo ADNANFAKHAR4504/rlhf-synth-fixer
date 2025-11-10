@@ -107,17 +107,14 @@ Parameters:
 
   AvailabilityZone1:
     Type: AWS::EC2::AvailabilityZone::Name
-    Default: ''
     Description: First Availability Zone (REQUIRED)
 
   AvailabilityZone2:
     Type: String
-    Default: ''
     Description: Second Availability Zone (REQUIRED for 2+ AZs)
 
   AvailabilityZone3:
     Type: String
-    Default: ''
     Description: Third Availability Zone (REQUIRED for 3 AZs)
 
   NumberOfAvailabilityZones:
@@ -210,9 +207,7 @@ Parameters:
   # Security Parameters
   SSLCertificateArn:
     Type: String
-    Default: ''
     Description: ARN of the SSL certificate in ACM for HTTPS listener (leave empty to disable HTTPS, or provide a valid certificate ARN in the deployment region)
-    AllowedPattern: ^$|^arn:aws:acm:[a-z0-9-]+:[0-9]+:certificate/[a-f0-9-]+$
 
   LogRetentionDays:
     Type: Number
