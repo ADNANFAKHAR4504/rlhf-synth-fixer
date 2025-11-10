@@ -6,7 +6,7 @@
   "team": "synth",
   "startedAt": "2025-11-10T16:10:11+05:30",
   "subtask": "Application Deployment",
-  "subject_labels": [],
+  "subject_labels": ["Web Application Deployment"],
   "po_id": "19d53",
   "aws_services": [
     "S3",
