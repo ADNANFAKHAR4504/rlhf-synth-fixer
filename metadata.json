@@ -26,5 +26,7 @@
     "RDS",
     "VPC"
   ],
-  "training_quality": 9.5
+  "training_quality": 9.5,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342"
 }
