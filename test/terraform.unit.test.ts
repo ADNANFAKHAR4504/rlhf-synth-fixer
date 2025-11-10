@@ -264,8 +264,8 @@ describe('Terraform Infrastructure Unit Tests - ECS Fargate Application', () => 
       expect(terraformCode).toMatch(/engine\s*=\s*"aurora-postgresql"/);
     });
 
-    test('should use Aurora PostgreSQL version 15.4 or higher', () => {
-      expect(terraformCode).toMatch(/engine_version\s*=\s*"15\.\d+"/);
+    test('should allow configurable Aurora PostgreSQL engine version', () => {
+      expect(terraformCode).toMatch(/engine_version\s*=\s*var\.aurora_engine_version\s*==\s*""\s*\?\s*null\s*:\s*var\.aurora_engine_version/);
     });
 
     test('should enable storage encryption', () => {
@@ -310,9 +310,10 @@ describe('Terraform Infrastructure Unit Tests - ECS Fargate Application', () => 
       expect(terraformCode).toMatch(/connection_string/);
     });
 
-    test('should generate random password for RDS', () => {
-      expect(terraformCode).toMatch(/resource\s+"random_password"\s+"rds_password"/);
-      expect(terraformCode).toMatch(/length\s*=\s*32/);
+    test('should generate random password for RDS via Secrets Manager data source', () => {
+      expect(terraformCode).toMatch(/data\s+"aws_secretsmanager_random_password"\s+"rds_password"/);
+      expect(terraformCode).toMatch(/password_length\s*=\s*32/);
+      expect(terraformCode).toContain('exclude_characters  = "/@\\" "');
     });
 
     test('should define app secrets', () => {
