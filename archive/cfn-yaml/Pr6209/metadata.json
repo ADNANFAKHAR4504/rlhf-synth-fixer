@@ -11,19 +11,19 @@
     "Security Configuration as Code"
   ],
   "aws_services": [
-    "VPC",
-    "Subnets",
-    "Route Tables",
-    "VPC Endpoints",
-    "Security Groups",
-    "KMS Key",
-    "KMS Alias",
-    "S3 Bucket",
-    "S3 Bucket Policy",
-    "DynamoDB Table",
-    "Lambda Function",
-    "IAM Role",
-    "IAM Policy",
-    "CloudWatch Log Group"
-  ]
+    "DynamoDB",
+    "EC2",
+    "IAM",
+    "KMS",
+    "Lambda",
+    "Logs",
+    "S3"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
 }
