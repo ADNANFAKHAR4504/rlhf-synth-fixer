@@ -263,7 +263,8 @@ class TestLoadBalancer(TestTapStackLiveIntegration):
         
         try:
             response = self.elbv2_client.describe_target_groups()
-            target_groups = [tg for tg in response['TargetGroups'] if tg['VpcId'] == self.vpc_id]
+            # Filter target groups by VpcId, handle cases where VpcId may not exist
+            target_groups = [tg for tg in response['TargetGroups'] if tg.get('VpcId') == self.vpc_id]
             
             print(f"[OK] Found {len(target_groups)} Target Group(s)")
             
@@ -279,6 +280,7 @@ class TestLoadBalancer(TestTapStackLiveIntegration):
         except ClientError as e:
             print(f"[ERROR] Failed to describe target groups: {e}")
             self.fail(f"Target groups not found: {e}")
+
     
     def test_08_alb_listeners_configured(self):
         """Test that ALB has listeners configured."""
