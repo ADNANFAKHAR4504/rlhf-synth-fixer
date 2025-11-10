@@ -10,12 +10,17 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
+  "training_quality": 9,
   "aws_services": [
-    "S3 Bucket",
-    "CloudFormation",
+    "DynamoDB",
     "Lambda",
+    "SQS",
     "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
+    "API Gateway",
+    "CloudWatch",
+    "IAM",
+    "SNS",
+    "VPC",
+    "CloudFormation"
   ]
 }
