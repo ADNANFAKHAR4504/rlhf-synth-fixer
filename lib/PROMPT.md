@@ -1,115 +1,103 @@
 Hey team,
 
-We need to build a multi-region disaster recovery infrastructure for a payment processing system. A financial services company recently experienced a major outage that caused significant revenue loss, and they need an active-passive DR strategy with automated failover capabilities to maintain payment processing continuity.
+We need to build a highly available infrastructure for a payment processing system in a single region. A financial services company needs a robust, production-ready setup with multi-AZ deployment to maintain payment processing continuity and meet their availability SLAs.
 
-The business has set strict requirements for recovery time and point objectives. They need to be able to recover from a complete regional failure in under 15 minutes with less than 5 minutes of data loss. This is critical for maintaining customer trust and regulatory compliance in the financial services industry.
+The business has set strict requirements for availability and data durability. They need a system that can handle regional availability zone failures while maintaining operations with less than 5 minutes of data loss. This is critical for maintaining customer trust and regulatory compliance in the financial services industry.
 
-I've been asked to create this in Python using AWS CDK. The infrastructure needs to span two regions: us-east-1 as the primary and us-east-2 as the disaster recovery region. The system should automatically detect failures and failover to the DR region without manual intervention.
+I've been asked to create this in Python using AWS CDK. The infrastructure needs to be deployed to us-east-1 with resources distributed across multiple availability zones for high availability.
 
 ## What we need to build
 
-Create a disaster recovery infrastructure using **AWS CDK with Python** for a payment processing system that can automatically failover between regions.
+Create a highly available infrastructure using **AWS CDK with Python** for a payment processing system with multi-AZ deployment in us-east-1.
 
 ### Core Requirements
 
 1. **Database Layer**
-   - Aurora PostgreSQL Global Database with primary cluster in us-east-1 and secondary in us-east-2
-   - Support for automatic replication between regions
-   - Meet RPO of under 5 minutes
+   - Aurora PostgreSQL cluster in us-east-1 with multi-AZ deployment
+   - Support for automatic failover between availability zones
+   - Meet RPO of under 5 minutes with automated backups
 
 2. **Application Layer**
-   - ECS Fargate services in both regions for payment processing
-   - Primary region: auto-scaling from 10-50 tasks
-   - DR region: minimal capacity (2-50 tasks) for cost optimization
-   - Application Load Balancers with target groups in each region
+   - ECS Fargate services in us-east-1 for payment processing
+   - Auto-scaling from 10-50 tasks based on demand
+   - Application Load Balancer with target groups across multiple AZs
 
-3. **DNS and Routing**
-   - Route 53 failover routing policy
-   - Health checks for automatic failover detection
-   - Automatic DNS update when primary region fails
+3. **Serverless Processing**
+   - Lambda functions deployed in us-east-1 for payment validation
+   - Cross-AZ availability
 
-4. **Serverless Processing**
-   - Lambda functions deployed in both regions for payment validation
-   - Cross-region invocation capabilities
-
-5. **Storage and Replication**
+4. **Storage**
    - S3 buckets for transaction logs
-   - Cross-region replication enabled
    - Versioning and lifecycle policies
+   - Server-side encryption enabled
 
-6. **Monitoring and Alerting**
+5. **Monitoring and Alerting**
    - CloudWatch alarms for database replication lag
    - CloudWatch alarms for ALB health status
    - CloudWatch alarms for ECS task counts
-   - SNS topics for failover event notifications
+   - SNS topics for alert notifications
 
-7. **Networking**
-   - VPCs in both regions with private subnets across 3 availability zones
+6. **Networking**
+   - VPC in us-east-1 with private subnets across 3 availability zones
    - NAT gateways for outbound connectivity
    - Proper security groups and network ACLs
 
-8. **Identity and Access Management**
+7. **Identity and Access Management**
    - IAM roles for ECS tasks
    - IAM roles for Lambda functions
-   - Cross-region permission policies
    - Least privilege access controls
 
 ### Technical Requirements
 
 - All infrastructure defined using **AWS CDK with Python**
-- Use **Amazon Aurora Global Database** for PostgreSQL replication across regions
+- Use **Amazon Aurora PostgreSQL** with multi-AZ deployment
 - Use **Amazon ECS Fargate** for containerized payment processing applications
-- Use **Application Load Balancer** for traffic distribution
-- Use **Amazon Route 53** for DNS failover routing with health checks
+- Use **Application Load Balancer** for traffic distribution across AZs
 - Use **AWS Lambda** for payment validation logic
-- Use **Amazon S3** with cross-region replication for transaction logs
+- Use **Amazon S3** with versioning for transaction logs
 - Use **Amazon CloudWatch** for monitoring and alarms
 - Use **Amazon SNS** for alerting and notifications
 - Use **AWS IAM** for access control and permissions
-- Use **Amazon VPC** for network isolation in both regions
+- Use **Amazon VPC** for network isolation with multi-AZ subnets
 - Resource names must include environmentSuffix for uniqueness
 - Follow naming convention: resource-type-environment-suffix
-- Deploy primary region to us-east-1 and DR region to us-east-2
+- Deploy all resources to us-east-1
 - Use AWS CDK 2.x with Python 3.8 or higher
 
 ### Constraints
 
-- RTO (Recovery Time Objective) must be under 15 minutes
 - RPO (Recovery Point Objective) must be under 5 minutes
-- Primary region: us-east-1
-- DR region: us-east-2
-- Route 53 health checks must trigger automatic failover
-- Aurora Global Database handles data replication
-- S3 cross-region replication must be enabled
-- Lambda functions must be deployed to both regions
+- Region: us-east-1
+- Aurora must support multi-AZ automatic failover
+- S3 versioning must be enabled
+- Lambda functions must be deployed with proper IAM roles
 - CloudWatch alarms must trigger SNS notifications
-- DR region should run minimal capacity until failover for cost optimization
 - All resources must be destroyable (no Retain deletion policies)
 - Include proper error handling and logging
 - Use encryption at rest and in transit
 - Follow security best practices with least privilege IAM policies
+- Use 3 availability zones for high availability
 
 ## Success Criteria
 
-- Functionality: Complete multi-region DR infrastructure that supports automatic failover from us-east-1 to us-east-2
-- Performance: RTO under 15 minutes, RPO under 5 minutes
-- Reliability: Automated health checks and failover without manual intervention
+- Functionality: Complete highly available infrastructure in us-east-1 with multi-AZ deployment
+- Performance: RPO under 5 minutes with automated backups
+- Reliability: Automated health checks and multi-AZ failover
 - Security: Encryption enabled, least privilege IAM roles, network isolation
-- Cost Optimization: DR region runs minimal capacity (2 tasks) until failover
 - Resource Naming: All resources include environmentSuffix parameter
 - Code Quality: Python code following best practices, well-structured, documented
+- High Availability: Resources distributed across 3 availability zones
 
 ## What to deliver
 
-- Complete AWS CDK Python implementation spanning two regions
-- Aurora Global Database (PostgreSQL) with primary and secondary clusters
-- ECS Fargate services with auto-scaling in both regions
-- Application Load Balancers in both regions
-- Route 53 failover routing with health checks
-- Lambda functions for payment validation in both regions
-- S3 buckets with cross-region replication
+- Complete AWS CDK Python implementation for us-east-1
+- Aurora PostgreSQL cluster with multi-AZ deployment
+- ECS Fargate services with auto-scaling (10-50 tasks)
+- Application Load Balancer with multi-AZ target groups
+- Lambda functions for payment validation
+- S3 buckets with versioning enabled
 - CloudWatch alarms and SNS topics for monitoring
-- IAM roles and policies for cross-region access
-- VPC infrastructure in both regions
-- Documentation explaining the DR strategy and failover process
-- Deployment instructions for both regions
+- IAM roles and policies with least privilege
+- VPC infrastructure with 3 availability zones
+- Documentation explaining the high availability strategy
+- Deployment instructions for us-east-1

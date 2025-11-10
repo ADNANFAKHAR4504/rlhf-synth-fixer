@@ -32,40 +32,4 @@ primary_stack = DisasterRecoveryStack(
     description=f"Primary region disaster recovery stack for payment processing ({environment_suffix})",
 )
 
-# DR Region Stack (us-east-2)
-dr_stack = DisasterRecoveryStack(
-    app,
-    f"PaymentDRSecondary-{environment_suffix}",
-    environment_suffix=environment_suffix,
-    is_primary=False,
-    primary_region="us-east-1",
-    dr_region="us-east-2",
-    alert_email=alert_email,
-    env=cdk.Environment(
-        account=os.getenv("CDK_DEFAULT_ACCOUNT"),
-        region="us-east-2",
-    ),
-    description=f"DR region disaster recovery stack for payment processing ({environment_suffix})",
-)
-
-# Route53 Failover Stack (global)
-# Note: This would be deployed after obtaining ALB DNS names from primary and DR stacks
-# For the actual deployment, you would retrieve these values from stack outputs
-route53_stack = Route53FailoverStack(
-    app,
-    f"PaymentRoute53-{environment_suffix}",
-    environment_suffix=environment_suffix,
-    primary_alb_dns="primary-alb-dns.us-east-1.elb.amazonaws.com",
-    dr_alb_dns="dr-alb-dns.us-east-2.elb.amazonaws.com",
-    domain_name=domain_name,
-    env=cdk.Environment(
-        account=os.getenv("CDK_DEFAULT_ACCOUNT"),
-        region="us-east-1",  # Route53 is global but stack needs a region
-    ),
-    description=f"Route53 failover configuration for payment processing ({environment_suffix})",
-)
-
-route53_stack.add_dependency(primary_stack)
-route53_stack.add_dependency(dr_stack)
-
 app.synth()
