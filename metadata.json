@@ -7,11 +7,7 @@
   "team": "synth",
   "startedAt": "2025-11-10T07:15:33+00:00",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": [
-    "serverless",
-    "fraud-detection",
-    "real-time-processing"
-  ],
+  "subject_labels": ["Serverless Infrastructure (Functions as Code)"],
   "aws_services": [
     "apigateway",
     "lambda",
@@ -22,5 +18,7 @@
     "cloudwatch",
     "kms"
   ],
-  "training_quality": 8
+  "training_quality": 8,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing"
 }
