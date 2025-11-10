@@ -1,17 +1,16 @@
 import * as cdk from 'aws-cdk-lib';
-import {Construct} from 'constructs';
+import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as sns from 'aws-cdk-lib/aws-sns';
-import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as path from 'path';
 import * as logs from 'aws-cdk-lib/aws-logs';
-import {SqsEventSource} from 'aws-cdk-lib/aws-lambda-event-sources';
+import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 
 export interface TapStackProps extends cdk.StackProps {
   environmentSuffix: string;
@@ -21,7 +20,7 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
 
-    const {environmentSuffix} = props;
+    const { environmentSuffix } = props;
 
     // Apply stack tags
     cdk.Tags.of(this).add('Environment', 'production');
@@ -57,8 +56,8 @@ export class TapStack extends cdk.Stack {
     // DynamoDB Table for valid transactions
     const transactionsTable = new dynamodb.Table(this, 'TransactionsTable', {
       tableName: `transactions-${environmentSuffix}`,
-      partitionKey: {name: 'transaction_id', type: dynamodb.AttributeType.STRING},
-      sortKey: {name: 'timestamp', type: dynamodb.AttributeType.STRING},
+      partitionKey: { name: 'transaction_id', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'timestamp', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
@@ -221,9 +220,9 @@ export class TapStack extends cdk.Stack {
         type: apigateway.JsonSchemaType.OBJECT,
         required: ['amount', 'currency', 'card_token'],
         properties: {
-          amount: {type: apigateway.JsonSchemaType.NUMBER},
-          currency: {type: apigateway.JsonSchemaType.STRING},
-          card_token: {type: apigateway.JsonSchemaType.STRING},
+          amount: { type: apigateway.JsonSchemaType.NUMBER },
+          currency: { type: apigateway.JsonSchemaType.STRING },
+          card_token: { type: apigateway.JsonSchemaType.STRING },
         },
       },
     });

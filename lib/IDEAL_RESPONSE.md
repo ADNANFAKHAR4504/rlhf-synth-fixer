@@ -1,6 +1,6 @@
 # Serverless Payment Processing System - Complete Implementation
 
-This is the ideal implementation using **CDK with TypeScript**.
+This is the ideal implementation using **CDK with ts**.
 
 All requirements met including API Gateway, Lambda functions, DynamoDB, SQS, SNS, CloudWatch monitoring, and proper IAM permissions.
 
