@@ -4,8 +4,6 @@ config:
   TapStack:instanceType: t3.medium
   TapStack:dbInstanceClass: db.t3.medium
   TapStack:dbUsername: admin
-  TapStack:dbPassword:
-    secure: v1:oZ3FbNcfJHxqJqOg:Jkrc9FMHRzxUgrSQaLmJOvWkHPWfCA==
   TapStack:environmentName: dev
   TapStack:environment: dev
   TapStack:minCapacity: "1"

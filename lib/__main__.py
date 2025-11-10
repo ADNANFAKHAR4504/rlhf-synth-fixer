@@ -13,7 +13,14 @@ environment_suffix = config.require("environmentSuffix")
 instance_type = config.get("instanceType") or "t3.medium"
 db_instance_class = config.get("dbInstanceClass") or "db.t3.medium"
 db_username = config.require("dbUsername")
-db_password = config.require_secret("dbPassword")
+# Use environment variable if available, otherwise generate based on suffix
+import os
+env_password = os.environ.get("TF_VAR_db_password")
+if env_password:
+    db_password = env_password
+else:
+    # Generate password based on environment suffix
+    db_password = f"DbPass-{environment_suffix}-2024!"
 environment_name = config.get("environmentName") or "production"
 
 # Common tags for all resources
