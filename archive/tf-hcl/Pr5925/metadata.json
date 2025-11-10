@@ -1,0 +1,36 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-06T11:49:09+05:30",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "po_id": "a70u7",
+  "aws_services": [
+    "rds",
+    "aurora",
+    "s3",
+    "lambda",
+    "apigateway",
+    "route53",
+    "cloudwatch",
+    "sns",
+    "vpc",
+    "ec2",
+    "iam",
+    "secretsmanager",
+    "kms"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
