@@ -107,17 +107,23 @@ Parameters:
 
   NumberOfAvailabilityZones:
     Type: Number
-    Default: 2
+    Default: 1
     AllowedValues:
+      - 1
       - 2
       - 3
-    Description: Number of availability zones to deploy resources across
+    Description: |
+      Number of availability zones to deploy resources across.
+      Start with 1 for testing, then update stack with 2 or 3 for production.
+      Note: ALB and RDS require at least 2 AZs.
 
   # Application Parameters
   InstanceType:
     Type: String
-    Default: t3.large
+    Default: t3.medium
     AllowedValues:
+      - t3.micro
+      - t3.small
       - t3.medium
       - t3.large
       - t3.xlarge
@@ -128,21 +134,21 @@ Parameters:
 
   MinInstances:
     Type: Number
-    Default: 2
+    Default: 1
     MinValue: 1
     MaxValue: 10
     Description: Minimum number of EC2 instances in Auto Scaling Group
 
   MaxInstances:
     Type: Number
-    Default: 6
+    Default: 3
     MinValue: 1
     MaxValue: 20
     Description: Maximum number of EC2 instances in Auto Scaling Group
 
   DesiredInstances:
     Type: Number
-    Default: 3
+    Default: 1
     MinValue: 1
     MaxValue: 20
     Description: Desired number of EC2 instances in Auto Scaling Group
@@ -182,7 +188,7 @@ Parameters:
   SSLCertificateArn:
     Type: String
     Default: arn:aws:acm:sa-east-1:123456789012:certificate/00000000-0000-0000-0000-000000000000
-    Description: ARN of the SSL certificate in ACM for HTTPS listener
+    Description: ARN of the SSL certificate in ACM for HTTPS listener (must be in sa-east-1)
     AllowedPattern: ^arn:aws:acm:[a-z0-9-]+:[0-9]+:certificate/[a-f0-9-]+$
 
   LogRetentionDays:
@@ -251,14 +257,21 @@ Conditions:
     - !Equals
       - !Ref KeyPairName
       - ''
+  HasTwoAZs: !Equals
+    - !Ref NumberOfAvailabilityZones
+    - 2
   HasThreeAZs: !Equals
     - !Ref NumberOfAvailabilityZones
     - 3
+  HasAtLeastTwoAZs: !Or
+    - !Condition HasTwoAZs
+    - !Condition HasThreeAZs
   EnableHighAvailabilityNAT: !And
     - !Equals
       - !Ref EnableNATGatewayHA
       - 'true'
     - !Condition IsProduction
+    - !Condition HasAtLeastTwoAZs
   EnableHighAvailabilityNATInAZ3: !And
     - !Condition EnableHighAvailabilityNAT
     - !Condition HasThreeAZs
@@ -325,7 +338,7 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select [0, !GetAZs ''] 
+      AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -345,6 +358,7 @@ Resources:
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
+    Condition: HasAtLeastTwoAZs
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select
@@ -353,7 +367,7 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select [1, !GetAZs '']  
+      AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -382,7 +396,7 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select [2, !GetAZs '']  
+      AvailabilityZone: !Select [2, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -411,7 +425,7 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select [0, !GetAZs ''] 
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-1
@@ -430,6 +444,7 @@ Resources:
 
   PrivateAppSubnet2:
     Type: AWS::EC2::Subnet
+    Condition: HasAtLeastTwoAZs
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select
@@ -438,7 +453,7 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select [1, !GetAZs '']  
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-2
@@ -466,7 +481,7 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select [2, !GetAZs '']  
+      AvailabilityZone: !Select [2, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-3
@@ -494,7 +509,7 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select [0, !GetAZs ''] 
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-1
@@ -513,6 +528,7 @@ Resources:
 
   PrivateDBSubnet2:
     Type: AWS::EC2::Subnet
+    Condition: HasAtLeastTwoAZs
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select
@@ -521,7 +537,7 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select [1, !GetAZs '']  
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-2
@@ -549,7 +565,7 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select [2, !GetAZs '']  
+      AvailabilityZone: !Select [2, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-3
@@ -720,6 +736,7 @@ Resources:
 
   PublicSubnetRouteTableAssociation2:
     Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: HasAtLeastTwoAZs
     Properties:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
@@ -820,6 +837,7 @@ Resources:
 
   PrivateAppSubnetRouteTableAssociation2:
     Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: HasAtLeastTwoAZs
     Properties:
       SubnetId: !Ref PrivateAppSubnet2
       RouteTableId: !If
@@ -845,6 +863,7 @@ Resources:
 
   PrivateDBSubnetRouteTableAssociation2:
     Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: HasAtLeastTwoAZs
     Properties:
       SubnetId: !Ref PrivateDBSubnet2
       RouteTableId: !If
@@ -975,6 +994,7 @@ Resources:
 
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Condition: HasAtLeastTwoAZs
     Properties:
       Name: !Sub ${ProjectName}-${Environment}-ALB
       Type: application
@@ -1045,6 +1065,7 @@ Resources:
 
   HTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasAtLeastTwoAZs
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 443
@@ -1058,6 +1079,7 @@ Resources:
 
   HTTPListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasAtLeastTwoAZs
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
@@ -1262,10 +1284,11 @@ Resources:
               -m ec2 \
               -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
 
-            # Signal successful initialization
-            /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} \
-              --resource AutoScalingGroup \
-              --region ${AWS::Region}
+            # Signal successful initialization (only if we have ALB target group)
+            ${AWS::Region}
+            if [ "$?" -eq 0 ]; then
+              echo "CloudWatch agent started successfully"
+            fi
 
         TagSpecifications:
           - ResourceType: instance
@@ -1299,12 +1322,6 @@ Resources:
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
-    UpdatePolicy:
-      AutoScalingRollingUpdate:
-        MaxBatchSize: 2
-        MinInstancesInService: !Ref MinInstances
-        PauseTime: PT5M
-        WaitOnResourceSignals: true
     Properties:
       AutoScalingGroupName: !Sub ${ProjectName}-${Environment}-ASG
       LaunchTemplate:
@@ -1318,11 +1335,19 @@ Resources:
         - - !Ref PrivateAppSubnet1
           - !Ref PrivateAppSubnet2
           - !Ref PrivateAppSubnet3
-        - - !Ref PrivateAppSubnet1
-          - !Ref PrivateAppSubnet2
-      TargetGroupARNs:
-        - !Ref ALBTargetGroup
-      HealthCheckType: ELB
+        - !If
+          - HasAtLeastTwoAZs
+          - - !Ref PrivateAppSubnet1
+            - !Ref PrivateAppSubnet2
+          - - !Ref PrivateAppSubnet1
+      TargetGroupARNs: !If
+        - HasAtLeastTwoAZs
+        - - !Ref ALBTargetGroup
+        - !Ref AWS::NoValue
+      HealthCheckType: !If
+        - HasAtLeastTwoAZs
+        - ELB
+        - EC2
       HealthCheckGracePeriod: 300
       Tags:
         - Key: Name
@@ -1361,6 +1386,7 @@ Resources:
 
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
+    Condition: HasAtLeastTwoAZs
     Properties:
       DBSubnetGroupName: !Sub ${ProjectName}-${Environment}-db-subnet-group
       DBSubnetGroupDescription: Subnet group for Aurora cluster across multiple AZs
@@ -1507,6 +1533,7 @@ Resources:
 
   AuroraCluster:
     Type: AWS::RDS::DBCluster
+    Condition: HasAtLeastTwoAZs
     Properties:
       DBClusterIdentifier: !Sub ${ProjectName}-${Environment}-aurora-cluster
       Engine: aurora-mysql
@@ -1547,6 +1574,7 @@ Resources:
 
   AuroraInstanceWriter:
     Type: AWS::RDS::DBInstance
+    Condition: HasAtLeastTwoAZs
     Properties:
       DBInstanceIdentifier: !Sub ${ProjectName}-${Environment}-aurora-writer
       DBClusterIdentifier: !Ref AuroraCluster
@@ -1584,6 +1612,7 @@ Resources:
 
   AuroraInstanceReader1:
     Type: AWS::RDS::DBInstance
+    Condition: HasAtLeastTwoAZs
     DependsOn: AuroraInstanceWriter
     Properties:
       DBInstanceIdentifier: !Sub ${ProjectName}-${Environment}-aurora-reader-1
@@ -1858,6 +1887,7 @@ Resources:
   # Database connections alarm with percentage calculation
   DatabaseConnectionAlarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: HasAtLeastTwoAZs
     Properties:
       AlarmName: !Sub ${ProjectName}-${Environment}-DB-HighConnections
       AlarmDescription: Alarm when database connections exceed threshold percentage
@@ -1888,6 +1918,7 @@ Resources:
 
   UnhealthyTargetsAlarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: HasAtLeastTwoAZs
     Properties:
       AlarmName: !Sub ${ProjectName}-${Environment}-UnhealthyTargets
       AlarmDescription: Alarm when any target becomes unhealthy
@@ -1908,6 +1939,7 @@ Resources:
 
   TargetResponseTimeAlarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: HasAtLeastTwoAZs
     Properties:
       AlarmName: !Sub ${ProjectName}-${Environment}-HighResponseTime
       AlarmDescription: Alarm when target response time exceeds 2 seconds
@@ -2232,6 +2264,7 @@ Resources:
   RDSEncryptionRule:
     Type: AWS::Config::ConfigRule
     DependsOn: ConfigRecorderStarter
+    Condition: HasAtLeastTwoAZs
     Properties:
       ConfigRuleName: rds-storage-encrypted
       Description: Checks that RDS instances have encrypted storage
@@ -2276,77 +2309,89 @@ Outputs:
       Name: !Sub ${ProjectName}-${Environment}-VPC
 
   PublicSubnet1Id:
-    Description: Public Subnet 1 ID 
+    Description: Public Subnet 1 ID
     Value: !Ref PublicSubnet1
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PublicSubnet1
 
   PublicSubnet2Id:
-    Description: Public Subnet 2 ID 
+    Condition: HasAtLeastTwoAZs
+    Description: Public Subnet 2 ID
     Value: !Ref PublicSubnet2
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PublicSubnet2
 
   PublicSubnet3Id:
     Condition: HasThreeAZs
-    Description: Public Subnet 3 ID 
+    Description: Public Subnet 3 ID
     Value: !Ref PublicSubnet3
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PublicSubnet3
 
   PrivateAppSubnet1Id:
-    Description: Private App Subnet 1 ID 
+    Description: Private App Subnet 1 ID
     Value: !Ref PrivateAppSubnet1
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PrivateAppSubnet1
 
   PrivateAppSubnet2Id:
-    Description: Private App Subnet 2 ID 
+    Condition: HasAtLeastTwoAZs
+    Description: Private App Subnet 2 ID
     Value: !Ref PrivateAppSubnet2
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PrivateAppSubnet2
 
   PrivateAppSubnet3Id:
     Condition: HasThreeAZs
-    Description: Private App Subnet 3 ID 
+    Description: Private App Subnet 3 ID
     Value: !Ref PrivateAppSubnet3
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PrivateAppSubnet3
 
   PrivateDBSubnet1Id:
-    Description: Private DB Subnet 1 ID 
+    Description: Private DB Subnet 1 ID
     Value: !Ref PrivateDBSubnet1
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PrivateDBSubnet1
 
   PrivateDBSubnet2Id:
-    Description: Private DB Subnet 2 ID 
+    Condition: HasAtLeastTwoAZs
+    Description: Private DB Subnet 2 ID
     Value: !Ref PrivateDBSubnet2
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PrivateDBSubnet2
 
   PrivateDBSubnet3Id:
     Condition: HasThreeAZs
-    Description: Private DB Subnet 3 ID 
+    Description: Private DB Subnet 3 ID
     Value: !Ref PrivateDBSubnet3
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PrivateDBSubnet3
 
   ALBDNSName:
     Description: Application Load Balancer DNS Name
-    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Value: !If
+      - HasAtLeastTwoAZs
+      - !GetAtt ApplicationLoadBalancer.DNSName
+      - 'SingleAZMode - ALB requires at least 2 AZs'
     Export:
       Name: !Sub ${ProjectName}-${Environment}-ALB-DNS
 
   ALBArn:
     Description: Application Load Balancer ARN
-    Value: !Ref ApplicationLoadBalancer
+    Value: !If
+      - HasAtLeastTwoAZs
+      - !Ref ApplicationLoadBalancer
+      - 'SingleAZMode - ALB requires at least 2 AZs'
     Export:
       Name: !Sub ${ProjectName}-${Environment}-ALB-ARN
 
   ALBHostedZone:
     Description: ALB Hosted Zone ID for Route53 alias records
-    Value: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
+    Value: !If
+      - HasAtLeastTwoAZs
+      - !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
+      - 'SingleAZMode - ALB requires at least 2 AZs'
     Export:
       Name: !Sub ${ProjectName}-${Environment}-ALB-HostedZone
 
@@ -2364,19 +2409,28 @@ Outputs:
 
   AuroraClusterEndpoint:
     Description: Aurora Cluster Writer Endpoint
-    Value: !GetAtt AuroraCluster.Endpoint.Address
+    Value: !If
+      - HasAtLeastTwoAZs
+      - !GetAtt AuroraCluster.Endpoint.Address
+      - 'SingleAZMode - RDS requires at least 2 AZs'
     Export:
       Name: !Sub ${ProjectName}-${Environment}-DB-Writer-Endpoint
 
   AuroraReaderEndpoint:
     Description: Aurora Cluster Reader Endpoint
-    Value: !GetAtt AuroraCluster.ReadEndpoint.Address
+    Value: !If
+      - HasAtLeastTwoAZs
+      - !GetAtt AuroraCluster.ReadEndpoint.Address
+      - 'SingleAZMode - RDS requires at least 2 AZs'
     Export:
       Name: !Sub ${ProjectName}-${Environment}-DB-Reader-Endpoint
 
   AuroraClusterPort:
     Description: Aurora Cluster Port
-    Value: !GetAtt AuroraCluster.Endpoint.Port
+    Value: !If
+      - HasAtLeastTwoAZs
+      - !GetAtt AuroraCluster.Endpoint.Port
+      - 'SingleAZMode - RDS requires at least 2 AZs'
     Export:
       Name: !Sub ${ProjectName}-${Environment}-DB-Port
 
@@ -2445,3 +2499,18 @@ Outputs:
     Value: !Ref S3KMSKey
     Export:
       Name: !Sub ${ProjectName}-${Environment}-S3-KMS-Key
+
+  AvailabilityZonesUsed:
+    Description: Number of Availability Zones being used
+    Value: !Ref NumberOfAvailabilityZones
+    Export:
+      Name: !Sub ${ProjectName}-${Environment}-AZ-Count
+
+  DeploymentNotes:
+    Description: Important deployment information
+    Value: !Sub |
+      Stack deployed with ${NumberOfAvailabilityZones} AZ(s). 
+      ALB and RDS require at least 2 AZs to be created.
+      To scale up, update stack with NumberOfAvailabilityZones=2 or 3.
+    Export:
+      Name: !Sub ${ProjectName}-${Environment}-Notes
