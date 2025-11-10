@@ -107,26 +107,18 @@ Parameters:
 
   AvailabilityZone1:
     Type: AWS::EC2::AvailabilityZone::Name
-    Default: sa-east-1a
-    Description: |
-      First Availability Zone (REQUIRED). 
-      For sa-east-1: use sa-east-1a, sa-east-1b, or sa-east-1c
+    Default: ''
+    Description: First Availability Zone (REQUIRED)
 
   AvailabilityZone2:
     Type: String
-    Default: sa-east-1b
-    Description: |
-      Second Availability Zone (REQUIRED for 2+ AZs). 
-      For sa-east-1: use sa-east-1b or sa-east-1c. 
-      Leave as 'none' if using only 1 AZ.
+    Default: ''
+    Description: Second Availability Zone (REQUIRED for 2+ AZs)
 
   AvailabilityZone3:
     Type: String
-    Default: none
-    Description: |
-      Third Availability Zone (REQUIRED for 3 AZs). 
-      For sa-east-1: use sa-east-1c. 
-      Leave as 'none' if using only 1 or 2 AZs.
+    Default: ''
+    Description: Third Availability Zone (REQUIRED for 3 AZs)
 
   NumberOfAvailabilityZones:
     Type: Number
