@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000338",
+  "team": "1",
+  "startedAt": "2025-11-03T12:08:43.242Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "RDS Aurora",
+    "Route53",
+    "Lambda",
+    "CloudWatch",
+    "SNS",
+    "VPC",
+    "VPC Peering",
+    "EventBridge",
+    "Step Functions",
+    "RDS Proxy",
+    "CloudWatch Dashboards",
+    "CloudWatch Alarms",
+    "IAM"
+  ],
+  "training_quality": "10",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulladumor",
+  "dockerS3Location": ""
+}
