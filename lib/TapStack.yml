@@ -218,8 +218,9 @@ Parameters:
   # Security Parameters
   SSLCertificateArn:
     Type: String
-    Description: ARN of the SSL certificate in ACM for HTTPS listener (REQUIRED - must be a valid certificate ARN in the deployment region)
-    AllowedPattern: ^arn:aws:acm:[a-z0-9-]+:[0-9]+:certificate/[a-f0-9-]+$
+    Default: ''
+    Description: ARN of the SSL certificate in ACM for HTTPS listener (leave empty to disable HTTPS, or provide a valid certificate ARN in the deployment region)
+    AllowedPattern: ^$|^arn:aws:acm:[a-z0-9-]+:[0-9]+:certificate/[a-f0-9-]+$
 
   LogRetentionDays:
     Type: Number
@@ -318,6 +319,13 @@ Conditions:
   EnableHighAvailabilityNATInAZ3: !And
     - !Condition EnableHighAvailabilityNAT
     - !Condition UseAZ3
+  HasValidCertificate: !Not
+    - !Equals
+      - !Ref SSLCertificateArn
+      - ''
+  UseHTTPS: !And
+    - !Condition UseAZ2
+    - !Condition HasValidCertificate
 
 # ============================================================================
 # RESOURCES
@@ -1108,7 +1116,7 @@ Resources:
 
   HTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: UseAZ2
+    Condition: UseHTTPS
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 443
@@ -1127,12 +1135,15 @@ Resources:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
       Protocol: HTTP
-      DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: '443'
-            StatusCode: HTTP_301
+      DefaultActions: !If
+        - HasValidCertificate
+        - - Type: redirect
+            RedirectConfig:
+              Protocol: HTTPS
+              Port: '443'
+              StatusCode: HTTP_301
+        - - Type: forward
+            TargetGroupArn: !Ref ALBTargetGroup
 
   # ==========================================================================
   # EC2 LAUNCH TEMPLATE & AUTO SCALING - Application tier compute resources
