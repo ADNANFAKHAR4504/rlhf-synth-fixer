@@ -30,8 +30,8 @@ describe('TapStack Structure', () => {
         tags: {
           Environment: 'Production',
           Team: 'Trading',
-        },
-        domainName: 'trading-prod.example.com',
+        }
+        // domainName: 'trading-prod.example.com',
       });
     });
 
