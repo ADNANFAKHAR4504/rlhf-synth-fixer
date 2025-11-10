@@ -230,9 +230,9 @@ export class TapStack extends TerraformStack {
 
     // S3 Bucket for VPC Flow Logs
     const flowLogsBucket = new S3Bucket(this, 'flow-logs-bucket', {
-      bucket: `vpc-flow-logs-${environmentSuffix}-${currentAccount.accountId}-ab`,
+      bucket: `vpc-flow-logs-${environmentSuffix}-${currentAccount.accountId}-xy`,
       tags: {
-        Name: `vpc-flow-logs-${environmentSuffix}-ab`,
+        Name: `vpc-flow-logs-${environmentSuffix}-xy`,
         Environment: environmentSuffix,
       },
     });
