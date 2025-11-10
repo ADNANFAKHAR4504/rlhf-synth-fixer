@@ -4,18 +4,14 @@
  * This module defines the TapStack class for deploying a microservices architecture
  * on Kubernetes with Istio service mesh integration.
  *
- * Now includes EKS cluster creation for proper Kubernetes provider configuration.
+ * Creates EKS cluster using native AWS resources (no @pulumi/eks package required).
  */
 
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
-import * as eks from '@pulumi/eks';
 import * as k8s from '@pulumi/kubernetes';
 import { ResourceOptions } from '@pulumi/pulumi';
 
-/**
- * TapStackArgs defines the input arguments for the TapStack Pulumi component.
- */
 export interface TapStackArgs {
   environmentSuffix?: string;
   paymentApiImage?: string;
@@ -24,9 +20,6 @@ export interface TapStackArgs {
   tags?: pulumi.Input<{ [key: string]: string }>;
 }
 
-/**
- * Represents the main Pulumi component resource for deploying microservices on Kubernetes.
- */
 export class TapStack extends pulumi.ComponentResource {
   public readonly namespaceName: pulumi.Output<string>;
   public readonly gatewayUrl: pulumi.Output<string>;
@@ -35,7 +28,7 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly notificationServiceEndpoint: pulumi.Output<string>;
   public readonly hpaStatus: pulumi.Output<any>;
   public readonly clusterName: pulumi.Output<string>;
-  public readonly kubeconfig: pulumi.Output<any>;
+  public readonly kubeconfig: pulumi.Output<string>;
 
   constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
@@ -80,7 +73,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create public subnets in two availability zones for high availability
+    // Create public subnets in two availability zones
     const publicSubnet1 = new aws.ec2.Subnet(
       `eks-public-subnet-1-${environmentSuffix}`,
       {
@@ -91,6 +84,7 @@ export class TapStack extends pulumi.ComponentResource {
         tags: {
           Name: `eks-public-subnet-1-${environmentSuffix}`,
           'kubernetes.io/role/elb': '1',
+          [`kubernetes.io/cluster/eks-cluster-${environmentSuffix}`]: 'shared',
         },
       },
       { parent: this }
@@ -106,6 +100,7 @@ export class TapStack extends pulumi.ComponentResource {
         tags: {
           Name: `eks-public-subnet-2-${environmentSuffix}`,
           'kubernetes.io/role/elb': '1',
+          [`kubernetes.io/cluster/eks-cluster-${environmentSuffix}`]: 'shared',
         },
       },
       { parent: this }
@@ -124,7 +119,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Create route to internet gateway
-    const publicRoute = new aws.ec2.Route(
+    new aws.ec2.Route(
       `eks-public-route-${environmentSuffix}`,
       {
         routeTableId: publicRouteTable.id,
@@ -135,7 +130,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Associate route table with public subnets
-    const rtAssoc1 = new aws.ec2.RouteTableAssociation(
+    new aws.ec2.RouteTableAssociation(
       `eks-rt-assoc-1-${environmentSuffix}`,
       {
         subnetId: publicSubnet1.id,
@@ -144,7 +139,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const rtAssoc2 = new aws.ec2.RouteTableAssociation(
+    new aws.ec2.RouteTableAssociation(
       `eks-rt-assoc-2-${environmentSuffix}`,
       {
         subnetId: publicSubnet2.id,
@@ -153,46 +148,204 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Mark resources as used
-    void publicRoute;
-    void rtAssoc1;
-    void rtAssoc2;
+    // Create IAM role for EKS cluster
+    const eksRole = new aws.iam.Role(
+      `eks-cluster-role-${environmentSuffix}`,
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'eks.amazonaws.com',
+              },
+            },
+          ],
+        }),
+      },
+      { parent: this }
+    );
 
-    // Create EKS Cluster
-    const cluster = new eks.Cluster(
-      `eks-cluster-${environmentSuffix}`,
+    // Attach required policies to EKS cluster role
+    new aws.iam.RolePolicyAttachment(
+      `eks-cluster-policy-${environmentSuffix}`,
+      {
+        role: eksRole.name,
+        policyArn: 'arn:aws:iam::aws:policy/AmazonEKSClusterPolicy',
+      },
+      { parent: this }
+    );
+
+    // Create security group for EKS cluster
+    const clusterSecurityGroup = new aws.ec2.SecurityGroup(
+      `eks-cluster-sg-${environmentSuffix}`,
       {
         vpcId: vpc.id,
-        publicSubnetIds: [publicSubnet1.id, publicSubnet2.id],
-        privateSubnetIds: [],
-        instanceType: 't3.medium',
-        desiredCapacity: 2,
-        minSize: 2,
-        maxSize: 4,
-        version: '1.28',
-        enabledClusterLogTypes: [
-          'api',
-          'audit',
-          'authenticator',
-          'controllerManager',
-          'scheduler',
+        description: 'EKS cluster security group',
+        egress: [
+          {
+            protocol: '-1',
+            fromPort: 0,
+            toPort: 0,
+            cidrBlocks: ['0.0.0.0/0'],
+          },
         ],
         tags: {
-          Name: `eks-cluster-${environmentSuffix}`,
-          Environment: environmentSuffix,
+          Name: `eks-cluster-sg-${environmentSuffix}`,
         },
       },
       { parent: this }
     );
 
-    // Create explicit Kubernetes provider using the cluster's kubeconfig
+    // Create EKS cluster
+    const cluster = new aws.eks.Cluster(
+      `eks-cluster-${environmentSuffix}`,
+      {
+        name: `eks-cluster-${environmentSuffix}`,
+        roleArn: eksRole.arn,
+        vpcConfig: {
+          subnetIds: [publicSubnet1.id, publicSubnet2.id],
+          securityGroupIds: [clusterSecurityGroup.id],
+          endpointPublicAccess: true,
+          endpointPrivateAccess: false,
+        },
+        version: '1.28',
+        tags: {
+          Name: `eks-cluster-${environmentSuffix}`,
+          Environment: environmentSuffix,
+        },
+      },
+      { parent: this, dependsOn: [eksRole] }
+    );
+
+    // Create IAM role for node group
+    const nodeRole = new aws.iam.Role(
+      `eks-node-role-${environmentSuffix}`,
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'ec2.amazonaws.com',
+              },
+            },
+          ],
+        }),
+      },
+      { parent: this }
+    );
+
+    // Attach required policies to node role
+    new aws.iam.RolePolicyAttachment(
+      `eks-worker-node-policy-${environmentSuffix}`,
+      {
+        role: nodeRole.name,
+        policyArn: 'arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy',
+      },
+      { parent: this }
+    );
+
+    new aws.iam.RolePolicyAttachment(
+      `eks-cni-policy-${environmentSuffix}`,
+      {
+        role: nodeRole.name,
+        policyArn: 'arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy',
+      },
+      { parent: this }
+    );
+
+    new aws.iam.RolePolicyAttachment(
+      `eks-container-registry-policy-${environmentSuffix}`,
+      {
+        role: nodeRole.name,
+        policyArn:
+          'arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly',
+      },
+      { parent: this }
+    );
+
+    // Create EKS node group
+    const nodeGroup = new aws.eks.NodeGroup(
+      `eks-node-group-${environmentSuffix}`,
+      {
+        clusterName: cluster.name,
+        nodeGroupName: `eks-node-group-${environmentSuffix}`,
+        nodeRoleArn: nodeRole.arn,
+        subnetIds: [publicSubnet1.id, publicSubnet2.id],
+        scalingConfig: {
+          desiredSize: 2,
+          minSize: 2,
+          maxSize: 4,
+        },
+        instanceTypes: ['t3.medium'],
+        tags: {
+          Name: `eks-node-group-${environmentSuffix}`,
+        },
+      },
+      { parent: this, dependsOn: [cluster, nodeRole] }
+    );
+
+    // Generate kubeconfig
+    const kubeconfig = pulumi
+      .all([cluster.name, cluster.endpoint, cluster.certificateAuthority])
+      .apply(([clusterName, endpoint, certAuth]) =>
+        JSON.stringify({
+          apiVersion: 'v1',
+          kind: 'Config',
+          clusters: [
+            {
+              cluster: {
+                server: endpoint,
+                'certificate-authority-data': certAuth.data,
+              },
+              name: 'kubernetes',
+            },
+          ],
+          contexts: [
+            {
+              context: {
+                cluster: 'kubernetes',
+                user: 'aws',
+              },
+              name: 'aws',
+            },
+          ],
+          'current-context': 'aws',
+          users: [
+            {
+              name: 'aws',
+              user: {
+                exec: {
+                  apiVersion: 'client.authentication.k8s.io/v1beta1',
+                  command: 'aws',
+                  args: [
+                    'eks',
+                    'get-token',
+                    '--cluster-name',
+                    clusterName,
+                    '--region',
+                    'eu-west-2',
+                  ],
+                },
+              },
+            },
+          ],
+        })
+      );
+
+    // Create explicit Kubernetes provider
     const k8sProvider = new k8s.Provider(
       `k8s-provider-${environmentSuffix}`,
       {
-        kubeconfig: cluster.kubeconfig.apply(JSON.stringify),
+        kubeconfig: kubeconfig,
         enableServerSideApply: true,
       },
-      { parent: this }
+      { parent: this, dependsOn: [nodeGroup] }
     );
 
     // Kubernetes namespace
@@ -209,7 +362,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, provider: k8sProvider }
     );
 
-    // ConfigMaps for each service
+    // ConfigMaps
     const paymentApiConfigMap = new k8s.core.v1.ConfigMap(
       'payment-api-config',
       {
@@ -257,7 +410,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, provider: k8sProvider }
     );
 
-    // Secrets for each service - Updated to eu-west-2 region
+    // Secrets - Updated to eu-west-2 region
     const paymentApiSecret = new k8s.core.v1.Secret(
       'payment-api-secret',
       {
@@ -1346,8 +1499,8 @@ export class TapStack extends pulumi.ComponentResource {
     void paymentApiVirtualService;
 
     // Set outputs
-    this.clusterName = cluster.eksCluster.name;
-    this.kubeconfig = cluster.kubeconfig;
+    this.clusterName = cluster.name;
+    this.kubeconfig = kubeconfig;
     this.namespaceName = namespace.metadata.name;
     this.gatewayUrl = pulumi.interpolate`http://${gatewayService.status.loadBalancer.ingress[0].hostname}/api/payment`;
     this.paymentApiEndpoint = pulumi.interpolate`http://${paymentApiService.metadata.name}.${namespace.metadata.name}.svc.cluster.local:8080`;
