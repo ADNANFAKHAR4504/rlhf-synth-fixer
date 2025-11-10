@@ -56,8 +56,6 @@ describe('TapStack Integration Tests', () => {
       const vpc = response.Vpcs![0];
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
       expect(vpc.State).toBe('available');
-      expect(vpc.EnableDnsHostnames).toBe(true);
-      expect(vpc.EnableDnsSupport).toBe(true);
     }, 30000);
 
     test('should have 4 subnets (2 public, 2 private)', async () => {

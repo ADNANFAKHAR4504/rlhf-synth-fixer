@@ -23,7 +23,7 @@ Metadata:
           - DBInstanceClass
           - DBName
           - DBUsername
-          - DBPassword
+          - DBPasswordSecretArn
           - DBBackupRetentionPeriod
       - Label:
           default: 'Compute Configuration'
@@ -101,13 +101,9 @@ Parameters:
     MaxLength: 16
     AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
 
-  DBPassword:
+  DBPasswordSecretArn:
     Type: String
-    NoEcho: true
-    Description: 'Database master password (minimum 8 characters)'
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '^[a-zA-Z0-9]*$'
+    Description: "ARN or name of a Secrets Manager secret that contains the DB password. The secret must contain the password at JSON key 'password' (accessed via SecretString:password)."
 
   DBBackupRetentionPeriod:
     Type: Number
@@ -154,6 +150,8 @@ Mappings:
       AMI: 'ami-0a2d0e8c8c8a8c8c8'
     us-west-2:
       AMI: 'ami-04e914639d0cca79a'
+
+# No Conditions needed: the template requires `DBPasswordSecretArn` and uses a dynamic reference.
 
 Resources:
   # ===========================
@@ -618,7 +616,7 @@ Resources:
       StorageEncrypted: true
       DBName: !Ref DBName
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecretArn}:SecretString:password}}'
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
