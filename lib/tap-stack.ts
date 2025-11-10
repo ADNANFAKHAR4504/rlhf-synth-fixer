@@ -56,7 +56,10 @@ export class TapStack extends cdk.Stack {
     // DynamoDB Table for valid transactions
     const transactionsTable = new dynamodb.Table(this, 'TransactionsTable', {
       tableName: `transactions-${environmentSuffix}`,
-      partitionKey: { name: 'transaction_id', type: dynamodb.AttributeType.STRING },
+      partitionKey: {
+        name: 'transaction_id',
+        type: dynamodb.AttributeType.STRING,
+      },
       sortKey: { name: 'timestamp', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
