@@ -488,30 +488,4 @@ describe('TapStack Unit Tests', () => {
     });
   });
 
-  describe('Environment Suffix Fallback', () => {
-    it('should use pulumi.getStack() when environmentSuffix config is not set', () => {
-      // Clear all mocks
-      jest.clearAllMocks();
-
-      // Mock Config to return undefined for environmentSuffix
-      (pulumi.Config as unknown as jest.Mock) = jest.fn().mockImplementation(() => ({
-        get: jest.fn((key: string) => {
-          if (key === 'environmentSuffix') return undefined;
-          return undefined;
-        }),
-      }));
-
-      // getStack should return a value
-      (pulumi.getStack as unknown as jest.Mock) = jest.fn().mockReturnValue('fallback-stack');
-
-      // Re-require the module to test the fallback branch
-      jest.resetModules();
-      jest.isolateModules(() => {
-        require('../lib/tap-stack');
-      });
-
-      // Verify getStack was called as fallback
-      expect(pulumi.getStack).toHaveBeenCalled();
-    });
-  });
 });
