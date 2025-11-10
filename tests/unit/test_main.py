@@ -63,60 +63,168 @@ pulumi.runtime.set_mocks(MyMocks())
 class TestMainStack(unittest.TestCase):
     """Test cases for main entry point"""
 
+    def setUp(self):
+        """Set up test configuration"""
+        # Mock Pulumi configuration
+        import os
+        os.environ['PULUMI_CONFIG'] = '{}'
+        
     @pulumi.runtime.test
-    def test_stack_creates_vpc_component(self):
+    @patch('pulumi.Config.require')
+    @patch('pulumi.Config.require_int')
+    @patch('pulumi.Config.get_bool')
+    def test_stack_creates_vpc_component(self, mock_get_bool, mock_require_int, mock_require):
         """Test that VPC component is created with correct configuration"""
-        import __main__
+        # Set up mock return values
+        mock_require.side_effect = lambda key: {
+            'environmentSuffix': 'test-123',
+            'environment': 'test',
+            'costCenter': 'test-cc'
+        }.get(key, 'default')
+        mock_require_int.return_value = 1
+        mock_get_bool.return_value = False
+        
+        import sys
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("__main__", "__main__.py")
+        main_module = importlib.util.module_from_spec(spec)
+        sys.modules['__main__'] = main_module
+        spec.loader.exec_module(main_module)
 
         # VPC component should be created
-        self.assertIsNotNone(__main__.vpc)
-        self.assertIsNotNone(__main__.vpc.vpc_id)
+        self.assertIsNotNone(main_module.vpc)
+        self.assertIsNotNone(main_module.vpc.vpc_id)
 
     @pulumi.runtime.test
-    def test_stack_creates_alb_component(self):
+    @patch('pulumi.Config.require')
+    @patch('pulumi.Config.require_int')
+    @patch('pulumi.Config.get_bool')
+    def test_stack_creates_alb_component(self, mock_get_bool, mock_require_int, mock_require):
         """Test that ALB component is created"""
-        import __main__
+        # Set up mock return values
+        mock_require.side_effect = lambda key: {
+            'environmentSuffix': 'test-123',
+            'environment': 'test',
+            'costCenter': 'test-cc'
+        }.get(key, 'default')
+        mock_require_int.return_value = 1
+        mock_get_bool.return_value = False
+        
+        import sys
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("__main__", "__main__.py")
+        main_module = importlib.util.module_from_spec(spec)
+        sys.modules['__main__'] = main_module
+        spec.loader.exec_module(main_module)
 
-        self.assertIsNotNone(__main__.alb)
-        self.assertIsNotNone(__main__.alb.alb_arn)
-        self.assertIsNotNone(__main__.alb.alb_dns_name)
+        self.assertIsNotNone(main_module.alb)
+        self.assertIsNotNone(main_module.alb.alb_arn)
+        self.assertIsNotNone(main_module.alb.alb_dns_name)
 
     @pulumi.runtime.test
-    def test_stack_creates_asg_component(self):
+    @patch('pulumi.Config.require')
+    @patch('pulumi.Config.require_int')
+    @patch('pulumi.Config.get_bool')
+    def test_stack_creates_asg_component(self, mock_get_bool, mock_require_int, mock_require):
         """Test that ASG component is created"""
-        import __main__
+        # Set up mock return values
+        mock_require.side_effect = lambda key: {
+            'environmentSuffix': 'test-123',
+            'environment': 'test',
+            'costCenter': 'test-cc'
+        }.get(key, 'default')
+        mock_require_int.return_value = 1
+        mock_get_bool.return_value = False
+        
+        import sys
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("__main__", "__main__.py")
+        main_module = importlib.util.module_from_spec(spec)
+        sys.modules['__main__'] = main_module
+        spec.loader.exec_module(main_module)
 
-        self.assertIsNotNone(__main__.asg)
-        self.assertIsNotNone(__main__.asg.asg_name)
+        self.assertIsNotNone(main_module.asg)
+        self.assertIsNotNone(main_module.asg.asg_name)
 
     @pulumi.runtime.test
-    def test_stack_creates_rds_component(self):
+    @patch('pulumi.Config.require')
+    @patch('pulumi.Config.require_int')
+    @patch('pulumi.Config.get_bool')
+    def test_stack_creates_rds_component(self, mock_get_bool, mock_require_int, mock_require):
         """Test that RDS component is created"""
-        import __main__
+        # Set up mock return values
+        mock_require.side_effect = lambda key: {
+            'environmentSuffix': 'test-123',
+            'environment': 'test',
+            'costCenter': 'test-cc'
+        }.get(key, 'default')
+        mock_require_int.return_value = 1
+        mock_get_bool.return_value = False
+        
+        import sys
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("__main__", "__main__.py")
+        main_module = importlib.util.module_from_spec(spec)
+        sys.modules['__main__'] = main_module
+        spec.loader.exec_module(main_module)
 
-        self.assertIsNotNone(__main__.rds)
-        self.assertIsNotNone(__main__.rds.cluster_endpoint)
-        self.assertIsNotNone(__main__.rds.reader_endpoint)
+        self.assertIsNotNone(main_module.rds)
+        self.assertIsNotNone(main_module.rds.cluster_endpoint)
+        self.assertIsNotNone(main_module.rds.reader_endpoint)
 
     @pulumi.runtime.test
-    def test_stack_creates_s3_component(self):
+    @patch('pulumi.Config.require')
+    @patch('pulumi.Config.require_int')
+    @patch('pulumi.Config.get_bool')
+    def test_stack_creates_s3_component(self, mock_get_bool, mock_require_int, mock_require):
         """Test that S3 component is created"""
-        import __main__
+        # Set up mock return values
+        mock_require.side_effect = lambda key: {
+            'environmentSuffix': 'test-123',
+            'environment': 'test',
+            'costCenter': 'test-cc'
+        }.get(key, 'default')
+        mock_require_int.return_value = 1
+        mock_get_bool.return_value = False
+        
+        import sys
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("__main__", "__main__.py")
+        main_module = importlib.util.module_from_spec(spec)
+        sys.modules['__main__'] = main_module
+        spec.loader.exec_module(main_module)
 
-        self.assertIsNotNone(__main__.s3)
-        self.assertIsNotNone(__main__.s3.static_assets_bucket)
-        self.assertIsNotNone(__main__.s3.logs_bucket)
+        self.assertIsNotNone(main_module.s3)
+        self.assertIsNotNone(main_module.s3.static_assets_bucket)
+        self.assertIsNotNone(main_module.s3.logs_bucket)
 
     @pulumi.runtime.test
-    def test_stack_exports_outputs(self):
+    @patch('pulumi.Config.require')
+    @patch('pulumi.Config.require_int')
+    @patch('pulumi.Config.get_bool')
+    def test_stack_exports_outputs(self, mock_get_bool, mock_require_int, mock_require):
         """Test that stack exports required outputs"""
-        import __main__
+        # Set up mock return values
+        mock_require.side_effect = lambda key: {
+            'environmentSuffix': 'test-123',
+            'environment': 'test',
+            'costCenter': 'test-cc'
+        }.get(key, 'default')
+        mock_require_int.return_value = 1
+        mock_get_bool.return_value = False
+        
+        import sys
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("__main__", "__main__.py")
+        main_module = importlib.util.module_from_spec(spec)
+        sys.modules['__main__'] = main_module
+        spec.loader.exec_module(main_module)
 
         # Check that main variables are accessible
-        self.assertIsNotNone(__main__.vpc)
-        self.assertIsNotNone(__main__.alb)
-        self.assertIsNotNone(__main__.rds)
-        self.assertIsNotNone(__main__.s3)
+        self.assertIsNotNone(main_module.vpc)
+        self.assertIsNotNone(main_module.alb)
+        self.assertIsNotNone(main_module.rds)
+        self.assertIsNotNone(main_module.s3)
 
 
 if __name__ == "__main__":
