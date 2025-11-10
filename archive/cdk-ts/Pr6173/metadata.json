@@ -10,8 +10,9 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "training_quality": 9,
+  "training_quality": 10,
   "aws_services": [
+    "VPC",
     "DynamoDB",
     "Lambda",
     "SQS",
@@ -20,7 +21,12 @@
     "CloudWatch",
     "IAM",
     "SNS",
-    "VPC",
     "CloudFormation"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
 }
