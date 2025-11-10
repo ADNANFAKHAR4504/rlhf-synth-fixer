@@ -28,8 +28,9 @@ data "aws_ami" "amazon_linux_2023" {
 
 # Secrets Manager for RDS password
 resource "random_password" "rds_password" {
-  length  = 32
-  special = true
+  length           = 32
+  special          = true
+  override_special = "!#$%&()*+,-.:;<=>?[]^{}|~" 
 }
 
 resource "aws_secretsmanager_secret" "rds_password" {
@@ -194,9 +195,9 @@ resource "aws_security_group" "alb" {
   description = "Security group for Application Load Balancer"
 
   ingress {
-    description = "HTTPS from anywhere"
-    from_port   = 443
-    to_port     = 443
+    description = "HTTP from anywhere"
+    from_port   = 80
+    to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -277,23 +278,6 @@ resource "aws_security_group" "rds" {
   }
 }
 
-# Self-signed certificate for ALB (for demo purposes)
-resource "aws_acm_certificate" "main" {
-  domain_name       = "${var.project_name}.example.com"
-  validation_method = "DNS"
-
-  lifecycle {
-    create_before_destroy = true
-  }
-
-  tags = {
-    Name        = "${var.project_name}-cert"
-    Environment = var.environment
-    Project     = var.project_name
-    ManagedBy   = "Terraform"
-  }
-}
-
 # Application Load Balancer
 resource "aws_lb" "main" {
   name               = "${var.project_name}-alb"
@@ -341,19 +325,16 @@ resource "aws_lb_target_group" "main" {
 }
 
 # ALB Listener
-resource "aws_lb_listener" "https" {
+resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
-  port              = "443"
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
-  certificate_arn   = aws_acm_certificate.main.arn
+  port              = "80"
+  protocol          = "HTTP"
 
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.main.arn
   }
-
-  depends_on = [aws_acm_certificate.main]
+  
 }
 
 # IAM Role for EC2 instances
@@ -606,7 +587,7 @@ resource "aws_db_instance" "main" {
   db_name  = "appdb"
   username = "dbadmin"
   password = aws_secretsmanager_secret_version.rds_password.secret_string
-
+  
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
