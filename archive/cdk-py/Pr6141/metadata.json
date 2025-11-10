@@ -11,19 +11,20 @@
     "Cloud Enviroment Setup"
   ],
   "aws_services": [
-    "API Gateway",
     "CloudWatch",
-    "Config",
     "DynamoDB",
     "EventBridge",
     "IAM",
-    "KMS",
     "Lambda",
     "S3",
     "SNS",
-    "Step Functions",
-    "VPC",
-    "X-Ray"
+    "Step Functions"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
 }
