@@ -8,6 +8,7 @@ Tests infrastructure configuration values and helper functions.
 import unittest
 import json
 import os
+from pathlib import Path
 from lib.helpers import (
     validate_transaction,
     detect_fraud,
@@ -207,17 +208,21 @@ class TestNotificationFormatting(unittest.TestCase):
         self.assertIn('FRAUD ALERT', message)
 
 
+ROOT_DIR = Path(__file__).resolve().parents[2]
+LIB_DIR = ROOT_DIR / "lib"
+
+
 class TestInfrastructureCodeStructure(unittest.TestCase):
     """Test cases for infrastructure code file structure."""
 
     def test_tap_stack_file_exists(self):
         """Test tap_stack.py file exists."""
-        file_path = '/var/www/turing/iac-test-automations/worktree/synth-101000879/lib/tap_stack.py'
-        self.assertTrue(os.path.exists(file_path))
+        file_path = LIB_DIR / 'tap_stack.py'
+        self.assertTrue(file_path.exists())
 
     def test_tap_stack_contains_kms_key(self):
         """Test tap_stack.py contains KMS key configuration."""
-        file_path = '/var/www/turing/iac-test-automations/worktree/synth-101000879/lib/tap_stack.py'
+        file_path = LIB_DIR / 'tap_stack.py'
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
@@ -226,7 +231,7 @@ class TestInfrastructureCodeStructure(unittest.TestCase):
 
     def test_tap_stack_contains_dynamodb_table(self):
         """Test tap_stack.py contains DynamoDB table."""
-        file_path = '/var/www/turing/iac-test-automations/worktree/synth-101000879/lib/tap_stack.py'
+        file_path = LIB_DIR / 'tap_stack.py'
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
@@ -235,7 +240,7 @@ class TestInfrastructureCodeStructure(unittest.TestCase):
 
     def test_tap_stack_contains_lambda_functions(self):
         """Test tap_stack.py contains all three Lambda functions."""
-        file_path = '/var/www/turing/iac-test-automations/worktree/synth-101000879/lib/tap_stack.py'
+        file_path = LIB_DIR / 'tap_stack.py'
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
@@ -245,7 +250,7 @@ class TestInfrastructureCodeStructure(unittest.TestCase):
 
     def test_tap_stack_contains_api_gateway(self):
         """Test tap_stack.py contains API Gateway REST API."""
-        file_path = '/var/www/turing/iac-test-automations/worktree/synth-101000879/lib/tap_stack.py'
+        file_path = LIB_DIR / 'tap_stack.py'
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
@@ -254,7 +259,7 @@ class TestInfrastructureCodeStructure(unittest.TestCase):
 
     def test_tap_stack_contains_sqs_queue(self):
         """Test tap_stack.py contains SQS queue."""
-        file_path = '/var/www/turing/iac-test-automations/worktree/synth-101000879/lib/tap_stack.py'
+        file_path = LIB_DIR / 'tap_stack.py'
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
@@ -263,7 +268,7 @@ class TestInfrastructureCodeStructure(unittest.TestCase):
 
     def test_tap_stack_contains_sns_topic(self):
         """Test tap_stack.py contains SNS topic."""
-        file_path = '/var/www/turing/iac-test-automations/worktree/synth-101000879/lib/tap_stack.py'
+        file_path = LIB_DIR / 'tap_stack.py'
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
@@ -272,7 +277,7 @@ class TestInfrastructureCodeStructure(unittest.TestCase):
 
     def test_tap_stack_uses_environment_suffix(self):
         """Test tap_stack.py uses environment_suffix for resource naming."""
-        file_path = '/var/www/turing/iac-test-automations/worktree/synth-101000879/lib/tap_stack.py'
+        file_path = LIB_DIR / 'tap_stack.py'
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
@@ -282,8 +287,8 @@ class TestInfrastructureCodeStructure(unittest.TestCase):
 
     def test_helpers_file_exists(self):
         """Test helpers.py file exists."""
-        file_path = '/var/www/turing/iac-test-automations/worktree/synth-101000879/lib/helpers.py'
-        self.assertTrue(os.path.exists(file_path))
+        file_path = LIB_DIR / 'helpers.py'
+        self.assertTrue(file_path.exists())
 
 
 if __name__ == '__main__':
