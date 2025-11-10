@@ -11,14 +11,21 @@
     "Security Configuration as Code"
   ],
   "aws_services": [
-    "\"KMS\"",
-    "\"IAM\"",
-    "\"S3\"",
-    "\"Secrets Manager\"",
-    "\"CloudTrail\"",
-    "\"CloudWatch\"",
-    "\"EC2\"",
-    "\"VPC\"",
-    "\"Lambda\""
-  ]
+    "KMS",
+    "IAM",
+    "S3",
+    "Secrets Manager",
+    "CloudTrail",
+    "CloudWatch",
+    "EC2",
+    "VPC",
+    "Lambda"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
 }
