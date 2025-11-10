@@ -1,6 +1,50 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Production-ready infrastructure with HA, security, and compliance features for PCI DSS payment processing application",
+    "Mappings": {
+        "RegionAZs": {
+            "us-east-1": {
+                "AZ1": "us-east-1a",
+                "AZ2": "us-east-1b",
+                "AZ3": "us-east-1c"
+            },
+            "us-east-2": {
+                "AZ1": "us-east-2a",
+                "AZ2": "us-east-2b",
+                "AZ3": "us-east-2c"
+            },
+            "us-west-1": {
+                "AZ1": "us-west-1a",
+                "AZ2": "us-west-1b",
+                "AZ3": "us-west-1c"
+            },
+            "us-west-2": {
+                "AZ1": "us-west-2a",
+                "AZ2": "us-west-2b",
+                "AZ3": "us-west-2c"
+            },
+            "eu-west-1": {
+                "AZ1": "eu-west-1a",
+                "AZ2": "eu-west-1b",
+                "AZ3": "eu-west-1c"
+            },
+            "eu-central-1": {
+                "AZ1": "eu-central-1a",
+                "AZ2": "eu-central-1b",
+                "AZ3": "eu-central-1c"
+            },
+            "ap-south-1": {
+                "AZ1": "ap-south-1a",
+                "AZ2": "ap-south-1b",
+                "AZ3": "ap-south-1c"
+            },
+            "ap-east-1": {
+                "AZ1": "ap-east-1a",
+                "AZ2": "ap-east-1b",
+                "AZ3": "ap-east-1c"
+            }
+        }
+    },
     "Metadata": {
         "AWS::CloudFormation::Interface": {
             "ParameterGroups": [
@@ -17,12 +61,16 @@
                 },
                 {
                     "Label": {
-                        "default": "Network Configuration"
+                        "default": "Network Configuration - IMPORTANT"
                     },
                     "Parameters": [
                         "VPCCIDR",
-                        "EnableNATGatewayHA",
-                        "NumberOfAvailabilityZones"
+                        "NumberOfAvailabilityZones",
+                        "UseCustomAZs",
+                        "CustomAZ1",
+                        "CustomAZ2",
+                        "CustomAZ3",
+                        "EnableNATGatewayHA"
                     ]
                 },
                 {
@@ -76,6 +124,21 @@
                 },
                 "VPCCIDR": {
                     "default": "VPC CIDR Block"
+                },
+                "NumberOfAvailabilityZones": {
+                    "default": "Number of Availability Zones"
+                },
+                "UseCustomAZs": {
+                    "default": "Use Custom AZ Names?"
+                },
+                "CustomAZ1": {
+                    "default": "Custom First Availability Zone"
+                },
+                "CustomAZ2": {
+                    "default": "Custom Second Availability Zone"
+                },
+                "CustomAZ3": {
+                    "default": "Custom Third Availability Zone"
                 }
             }
         }
@@ -118,6 +181,40 @@
             "Description": "CIDR block for VPC",
             "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])/16$"
         },
+        "NumberOfAvailabilityZones": {
+            "Type": "Number",
+            "Default": 2,
+            "AllowedValues": [
+                1,
+                2,
+                3
+            ],
+            "Description": "Number of availability zones to deploy resources across. ALB and RDS require at least 2 AZs."
+        },
+        "UseCustomAZs": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Set to true if you want to specify custom AZ names, otherwise uses region defaults"
+        },
+        "CustomAZ1": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Custom first AZ (only used if UseCustomAZs is true)"
+        },
+        "CustomAZ2": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Custom second AZ (only used if UseCustomAZs is true)"
+        },
+        "CustomAZ3": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Custom third AZ (only used if UseCustomAZs is true)"
+        },
         "EnableNATGatewayHA": {
             "Type": "String",
             "Default": "true",
@@ -127,19 +224,12 @@
             ],
             "Description": "Enable NAT Gateway in all AZs for HA (false uses single NAT for dev/staging)"
         },
-        "NumberOfAvailabilityZones": {
-            "Type": "Number",
-            "Default": 2,
-            "AllowedValues": [
-                2,
-                3
-            ],
-            "Description": "Number of availability zones to deploy resources across"
-        },
         "InstanceType": {
             "Type": "String",
-            "Default": "t3.large",
+            "Default": "t3.medium",
             "AllowedValues": [
+                "t3.micro",
+                "t3.small",
                 "t3.medium",
                 "t3.large",
                 "t3.xlarge",
@@ -151,21 +241,21 @@
         },
         "MinInstances": {
             "Type": "Number",
-            "Default": 2,
+            "Default": 1,
             "MinValue": 1,
             "MaxValue": 10,
             "Description": "Minimum number of EC2 instances in Auto Scaling Group"
         },
         "MaxInstances": {
             "Type": "Number",
-            "Default": 6,
+            "Default": 3,
             "MinValue": 1,
             "MaxValue": 20,
             "Description": "Maximum number of EC2 instances in Auto Scaling Group"
         },
         "DesiredInstances": {
             "Type": "Number",
-            "Default": 3,
+            "Default": 1,
             "MinValue": 1,
             "MaxValue": 20,
             "Description": "Desired number of EC2 instances in Auto Scaling Group"
@@ -203,9 +293,9 @@
         },
         "SSLCertificateArn": {
             "Type": "String",
-            "Default": "arn:aws:acm:sa-east-1:123456789012:certificate/00000000-0000-0000-0000-000000000000",
-            "Description": "ARN of the SSL certificate in ACM for HTTPS listener",
-            "AllowedPattern": "^arn:aws:acm:[a-z0-9-]+:[0-9]+:certificate/[a-f0-9-]+$"
+            "Default": "",
+            "Description": "ARN of the SSL certificate in ACM for HTTPS listener (leave empty to disable HTTPS)",
+            "AllowedPattern": "^$|^arn:aws:acm:[a-z0-9-]+:[0-9]+:certificate/[a-f0-9-]+$"
         },
         "LogRetentionDays": {
             "Type": "Number",
@@ -283,6 +373,22 @@
                 }
             ]
         },
+        "UseCustomAZSelection": {
+            "Fn::Equals": [
+                {
+                    "Ref": "UseCustomAZs"
+                },
+                "true"
+            ]
+        },
+        "HasTwoAZs": {
+            "Fn::Equals": [
+                {
+                    "Ref": "NumberOfAvailabilityZones"
+                },
+                2
+            ]
+        },
         "HasThreeAZs": {
             "Fn::Equals": [
                 {
@@ -290,6 +396,22 @@
                 },
                 3
             ]
+        },
+        "HasAtLeastTwoAZs": {
+            "Fn::Or": [
+                {
+                    "Condition": "HasTwoAZs"
+                },
+                {
+                    "Condition": "HasThreeAZs"
+                }
+            ]
+        },
+        "UseAZ2": {
+            "Condition": "HasAtLeastTwoAZs"
+        },
+        "UseAZ3": {
+            "Condition": "HasThreeAZs"
         },
         "EnableHighAvailabilityNAT": {
             "Fn::And": [
@@ -303,6 +425,9 @@
                 },
                 {
                     "Condition": "IsProduction"
+                },
+                {
+                    "Condition": "UseAZ2"
                 }
             ]
         },
@@ -312,7 +437,29 @@
                     "Condition": "EnableHighAvailabilityNAT"
                 },
                 {
-                    "Condition": "HasThreeAZs"
+                    "Condition": "UseAZ3"
+                }
+            ]
+        },
+        "HasValidCertificate": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "SSLCertificateArn"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "UseHTTPS": {
+            "Fn::And": [
+                {
+                    "Condition": "UseAZ2"
+                },
+                {
+                    "Condition": "HasValidCertificate"
                 }
             ]
         }
@@ -437,10 +584,19 @@
                     ]
                 },
                 "AvailabilityZone": {
-                    "Fn::Select": [
-                        0,
+                    "Fn::If": [
+                        "UseCustomAZSelection",
                         {
-                            "Fn::GetAZs": ""
+                            "Ref": "CustomAZ1"
+                        },
+                        {
+                            "Fn::FindInMap": [
+                                "RegionAZs",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                "AZ1"
+                            ]
                         }
                     ]
                 },
@@ -489,6 +645,7 @@
         },
         "PublicSubnet2": {
             "Type": "AWS::EC2::Subnet",
+            "Condition": "UseAZ2",
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
@@ -508,10 +665,19 @@
                     ]
                 },
                 "AvailabilityZone": {
-                    "Fn::Select": [
-                        1,
+                    "Fn::If": [
+                        "UseCustomAZSelection",
                         {
-                            "Fn::GetAZs": ""
+                            "Ref": "CustomAZ2"
+                        },
+                        {
+                            "Fn::FindInMap": [
+                                "RegionAZs",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                "AZ2"
+                            ]
                         }
                     ]
                 },
@@ -560,7 +726,7 @@
         },
         "PublicSubnet3": {
             "Type": "AWS::EC2::Subnet",
-            "Condition": "HasThreeAZs",
+            "Condition": "UseAZ3",
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
@@ -580,10 +746,19 @@
                     ]
                 },
                 "AvailabilityZone": {
-                    "Fn::Select": [
-                        2,
+                    "Fn::If": [
+                        "UseCustomAZSelection",
                         {
-                            "Fn::GetAZs": ""
+                            "Ref": "CustomAZ3"
+                        },
+                        {
+                            "Fn::FindInMap": [
+                                "RegionAZs",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                "AZ3"
+                            ]
                         }
                     ]
                 },
@@ -651,10 +826,19 @@
                     ]
                 },
                 "AvailabilityZone": {
-                    "Fn::Select": [
-                        0,
+                    "Fn::If": [
+                        "UseCustomAZSelection",
                         {
-                            "Fn::GetAZs": ""
+                            "Ref": "CustomAZ1"
+                        },
+                        {
+                            "Fn::FindInMap": [
+                                "RegionAZs",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                "AZ1"
+                            ]
                         }
                     ]
                 },
@@ -702,6 +886,7 @@
         },
         "PrivateAppSubnet2": {
             "Type": "AWS::EC2::Subnet",
+            "Condition": "UseAZ2",
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
@@ -721,10 +906,19 @@
                     ]
                 },
                 "AvailabilityZone": {
-                    "Fn::Select": [
-                        1,
+                    "Fn::If": [
+                        "UseCustomAZSelection",
                         {
-                            "Fn::GetAZs": ""
+                            "Ref": "CustomAZ2"
+                        },
+                        {
+                            "Fn::FindInMap": [
+                                "RegionAZs",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                "AZ2"
+                            ]
                         }
                     ]
                 },
@@ -772,7 +966,7 @@
         },
         "PrivateAppSubnet3": {
             "Type": "AWS::EC2::Subnet",
-            "Condition": "HasThreeAZs",
+            "Condition": "UseAZ3",
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
@@ -792,10 +986,19 @@
                     ]
                 },
                 "AvailabilityZone": {
-                    "Fn::Select": [
-                        2,
+                    "Fn::If": [
+                        "UseCustomAZSelection",
                         {
-                            "Fn::GetAZs": ""
+                            "Ref": "CustomAZ3"
+                        },
+                        {
+                            "Fn::FindInMap": [
+                                "RegionAZs",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                "AZ3"
+                            ]
                         }
                     ]
                 },
@@ -862,10 +1065,19 @@
                     ]
                 },
                 "AvailabilityZone": {
-                    "Fn::Select": [
-                        0,
+                    "Fn::If": [
+                        "UseCustomAZSelection",
                         {
-                            "Fn::GetAZs": ""
+                            "Ref": "CustomAZ1"
+                        },
+                        {
+                            "Fn::FindInMap": [
+                                "RegionAZs",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                "AZ1"
+                            ]
                         }
                     ]
                 },
@@ -913,6 +1125,7 @@
         },
         "PrivateDBSubnet2": {
             "Type": "AWS::EC2::Subnet",
+            "Condition": "UseAZ2",
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
@@ -932,10 +1145,19 @@
                     ]
                 },
                 "AvailabilityZone": {
-                    "Fn::Select": [
-                        1,
+                    "Fn::If": [
+                        "UseCustomAZSelection",
                         {
-                            "Fn::GetAZs": ""
+                            "Ref": "CustomAZ2"
+                        },
+                        {
+                            "Fn::FindInMap": [
+                                "RegionAZs",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                "AZ2"
+                            ]
                         }
                     ]
                 },
@@ -983,7 +1205,7 @@
         },
         "PrivateDBSubnet3": {
             "Type": "AWS::EC2::Subnet",
-            "Condition": "HasThreeAZs",
+            "Condition": "UseAZ3",
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
@@ -1003,10 +1225,19 @@
                     ]
                 },
                 "AvailabilityZone": {
-                    "Fn::Select": [
-                        2,
+                    "Fn::If": [
+                        "UseCustomAZSelection",
                         {
-                            "Fn::GetAZs": ""
+                            "Ref": "CustomAZ3"
+                        },
+                        {
+                            "Fn::FindInMap": [
+                                "RegionAZs",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                "AZ3"
+                            ]
                         }
                     ]
                 },
@@ -1405,6 +1636,7 @@
         },
         "PublicSubnetRouteTableAssociation2": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "UseAZ2",
             "Properties": {
                 "SubnetId": {
                     "Ref": "PublicSubnet2"
@@ -1416,7 +1648,7 @@
         },
         "PublicSubnetRouteTableAssociation3": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Condition": "HasThreeAZs",
+            "Condition": "UseAZ3",
             "Properties": {
                 "SubnetId": {
                     "Ref": "PublicSubnet3"
@@ -1611,6 +1843,7 @@
         },
         "PrivateAppSubnetRouteTableAssociation2": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "UseAZ2",
             "Properties": {
                 "SubnetId": {
                     "Ref": "PrivateAppSubnet2"
@@ -1630,7 +1863,7 @@
         },
         "PrivateAppSubnetRouteTableAssociation3": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Condition": "HasThreeAZs",
+            "Condition": "UseAZ3",
             "Properties": {
                 "SubnetId": {
                     "Ref": "PrivateAppSubnet3"
@@ -1661,6 +1894,7 @@
         },
         "PrivateDBSubnetRouteTableAssociation2": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "UseAZ2",
             "Properties": {
                 "SubnetId": {
                     "Ref": "PrivateDBSubnet2"
@@ -1680,7 +1914,7 @@
         },
         "PrivateDBSubnetRouteTableAssociation3": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Condition": "HasThreeAZs",
+            "Condition": "UseAZ3",
             "Properties": {
                 "SubnetId": {
                     "Ref": "PrivateDBSubnet3"
@@ -1914,6 +2148,7 @@
         },
         "ApplicationLoadBalancer": {
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Condition": "UseAZ2",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "${ProjectName}-${Environment}-ALB"
@@ -1927,7 +2162,7 @@
                 ],
                 "Subnets": {
                     "Fn::If": [
-                        "HasThreeAZs",
+                        "UseAZ3",
                         [
                             {
                                 "Ref": "PublicSubnet1"
@@ -2067,6 +2302,7 @@
         },
         "HTTPSListener": {
             "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Condition": "UseHTTPS",
             "Properties": {
                 "LoadBalancerArn": {
                     "Ref": "ApplicationLoadBalancer"
@@ -2093,22 +2329,36 @@
         },
         "HTTPListener": {
             "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Condition": "UseAZ2",
             "Properties": {
                 "LoadBalancerArn": {
                     "Ref": "ApplicationLoadBalancer"
                 },
                 "Port": 80,
                 "Protocol": "HTTP",
-                "DefaultActions": [
-                    {
-                        "Type": "redirect",
-                        "RedirectConfig": {
-                            "Protocol": "HTTPS",
-                            "Port": "443",
-                            "StatusCode": "HTTP_301"
-                        }
-                    }
-                ]
+                "DefaultActions": {
+                    "Fn::If": [
+                        "HasValidCertificate",
+                        [
+                            {
+                                "Type": "redirect",
+                                "RedirectConfig": {
+                                    "Protocol": "HTTPS",
+                                    "Port": "443",
+                                    "StatusCode": "HTTP_301"
+                                }
+                            }
+                        ],
+                        [
+                            {
+                                "Type": "forward",
+                                "TargetGroupArn": {
+                                    "Ref": "ALBTargetGroup"
+                                }
+                            }
+                        ]
+                    ]
+                }
             }
         },
         "EC2Role": {
@@ -2288,7 +2538,7 @@
                     ],
                     "UserData": {
                         "Fn::Base64": {
-                            "Fn::Sub": "#!/bin/bash\n# Update system and install dependencies\nyum update -y\nyum install -y amazon-cloudwatch-agent aws-cli jq\n\n# Install payment processing application dependencies (example)\nyum install -y httpd mod_ssl python3 python3-pip\npip3 install boto3 cryptography pymysql\n\n# Start and enable services\nsystemctl start httpd\nsystemctl enable httpd\n\n# Create health check endpoint for ALB\necho \"OK\" > /var/www/html/health\n\n# Setup payment processing application (placeholder)\ncat > /var/www/html/index.html <<EOF\n<!DOCTYPE html>\n<html>\n<head><title>${ProjectName} Payment Gateway</title></head>\n<body>\n<h1>${Environment} Payment Processing System</h1>\n<p>Instance ID: $(ec2-metadata --instance-id | cut -d \" \" -f 2)</p>\n<p>Availability Zone: $(ec2-metadata --availability-zone | cut -d \" \" -f 2)</p>\n</body>\n</html>\nEOF\n\n# Configure CloudWatch agent for comprehensive monitoring\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF\n{\n  \"metrics\": {\n    \"namespace\": \"${ProjectName}/${Environment}\",\n    \"metrics_collected\": {\n      \"cpu\": {\n        \"measurement\": [\n          {\"name\": \"cpu_usage_idle\", \"rename\": \"CPU_IDLE\", \"unit\": \"Percent\"},\n          {\"name\": \"cpu_usage_iowait\", \"rename\": \"CPU_IOWAIT\", \"unit\": \"Percent\"},\n          {\"name\": \"cpu_usage_system\", \"rename\": \"CPU_SYSTEM\", \"unit\": \"Percent\"}\n        ],\n        \"totalcpu\": false,\n        \"metrics_collection_interval\": 60\n      },\n      \"disk\": {\n        \"measurement\": [\n          {\"name\": \"used_percent\", \"rename\": \"DISK_USED\", \"unit\": \"Percent\"},\n          {\"name\": \"inodes_free\", \"rename\": \"INODES_FREE\", \"unit\": \"Count\"}\n        ],\n        \"metrics_collection_interval\": 60,\n        \"resources\": [\"/\", \"/var/log\"]\n      },\n      \"mem\": {\n        \"measurement\": [\n          {\"name\": \"mem_used_percent\", \"rename\": \"MEM_USED\", \"unit\": \"Percent\"},\n          {\"name\": \"mem_available\", \"rename\": \"MEM_AVAILABLE\", \"unit\": \"Bytes\"}\n        ],\n        \"metrics_collection_interval\": 60\n      },\n      \"netstat\": {\n        \"measurement\": [\n          {\"name\": \"tcp_established\", \"rename\": \"TCP_ESTABLISHED\", \"unit\": \"Count\"},\n          {\"name\": \"tcp_time_wait\", \"rename\": \"TCP_TIME_WAIT\", \"unit\": \"Count\"}\n        ],\n        \"metrics_collection_interval\": 60\n      }\n    }\n  },\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/httpd/access_log\",\n            \"log_group_name\": \"/aws/${ProjectName}/${Environment}/application\",\n            \"log_stream_name\": \"{instance_id}/httpd-access\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/var/log/httpd/error_log\",\n            \"log_group_name\": \"/aws/${ProjectName}/${Environment}/application\",\n            \"log_stream_name\": \"{instance_id}/httpd-error\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/var/log/messages\",\n            \"log_group_name\": \"/aws/${ProjectName}/${Environment}/application\",\n            \"log_stream_name\": \"{instance_id}/system-messages\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          }\n        ]\n      }\n    }\n  }\n}\nEOF\n\n# Start CloudWatch agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a fetch-config \\\n  -m ec2 \\\n  -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json\n\n# Signal successful initialization\n/opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} \\\n  --resource AutoScalingGroup \\\n  --region ${AWS::Region}\n"
+                            "Fn::Sub": "#!/bin/bash\n# Update system and install dependencies\nyum update -y\nyum install -y amazon-cloudwatch-agent aws-cli jq\n\n# Install payment processing application dependencies (example)\nyum install -y httpd mod_ssl python3 python3-pip\npip3 install boto3 cryptography pymysql\n\n# Start and enable services\nsystemctl start httpd\nsystemctl enable httpd\n\n# Create health check endpoint for ALB\necho \"OK\" > /var/www/html/health\n\n# Setup payment processing application (placeholder)\ncat > /var/www/html/index.html <<EOF\n<!DOCTYPE html>\n<html>\n<head><title>${ProjectName} Payment Gateway</title></head>\n<body>\n<h1>${Environment} Payment Processing System</h1>\n<p>Instance ID: $(ec2-metadata --instance-id | cut -d \" \" -f 2)</p>\n<p>Availability Zone: $(ec2-metadata --availability-zone | cut -d \" \" -f 2)</p>\n</body>\n</html>\nEOF\n\n# Configure CloudWatch agent for comprehensive monitoring\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF\n{\n  \"metrics\": {\n    \"namespace\": \"${ProjectName}/${Environment}\",\n    \"metrics_collected\": {\n      \"cpu\": {\n        \"measurement\": [\n          {\"name\": \"cpu_usage_idle\", \"rename\": \"CPU_IDLE\", \"unit\": \"Percent\"},\n          {\"name\": \"cpu_usage_iowait\", \"rename\": \"CPU_IOWAIT\", \"unit\": \"Percent\"},\n          {\"name\": \"cpu_usage_system\", \"rename\": \"CPU_SYSTEM\", \"unit\": \"Percent\"}\n        ],\n        \"totalcpu\": false,\n        \"metrics_collection_interval\": 60\n      },\n      \"disk\": {\n        \"measurement\": [\n          {\"name\": \"used_percent\", \"rename\": \"DISK_USED\", \"unit\": \"Percent\"},\n          {\"name\": \"inodes_free\", \"rename\": \"INODES_FREE\", \"unit\": \"Count\"}\n        ],\n        \"metrics_collection_interval\": 60,\n        \"resources\": [\"/\", \"/var/log\"]\n      },\n      \"mem\": {\n        \"measurement\": [\n          {\"name\": \"mem_used_percent\", \"rename\": \"MEM_USED\", \"unit\": \"Percent\"},\n          {\"name\": \"mem_available\", \"rename\": \"MEM_AVAILABLE\", \"unit\": \"Bytes\"}\n        ],\n        \"metrics_collection_interval\": 60\n      },\n      \"netstat\": {\n        \"measurement\": [\n          {\"name\": \"tcp_established\", \"rename\": \"TCP_ESTABLISHED\", \"unit\": \"Count\"},\n          {\"name\": \"tcp_time_wait\", \"rename\": \"TCP_TIME_WAIT\", \"unit\": \"Count\"}\n        ],\n        \"metrics_collection_interval\": 60\n      }\n    }\n  },\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/httpd/access_log\",\n            \"log_group_name\": \"/aws/${ProjectName}/${Environment}/application\",\n            \"log_stream_name\": \"{instance_id}/httpd-access\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/var/log/httpd/error_log\",\n            \"log_group_name\": \"/aws/${ProjectName}/${Environment}/application\",\n            \"log_stream_name\": \"{instance_id}/httpd-error\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          },\n          {\n            \"file_path\": \"/var/log/messages\",\n            \"log_group_name\": \"/aws/${ProjectName}/${Environment}/application\",\n            \"log_stream_name\": \"{instance_id}/system-messages\",\n            \"timestamp_format\": \"%b %d %H:%M:%S\"\n          }\n        ]\n      }\n    }\n  }\n}\nEOF\n\n# Start CloudWatch agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a fetch-config \\\n  -m ec2 \\\n  -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json\n\necho \"CloudWatch agent started successfully\"\n"
                         }
                     },
                     "TagSpecifications": [
@@ -2376,16 +2626,6 @@
         },
         "AutoScalingGroup": {
             "Type": "AWS::AutoScaling::AutoScalingGroup",
-            "UpdatePolicy": {
-                "AutoScalingRollingUpdate": {
-                    "MaxBatchSize": 2,
-                    "MinInstancesInService": {
-                        "Ref": "MinInstances"
-                    },
-                    "PauseTime": "PT5M",
-                    "WaitOnResourceSignals": true
-                }
-            },
             "Properties": {
                 "AutoScalingGroupName": {
                     "Fn::Sub": "${ProjectName}-${Environment}-ASG"
@@ -2412,7 +2652,7 @@
                 },
                 "VPCZoneIdentifier": {
                     "Fn::If": [
-                        "HasThreeAZs",
+                        "UseAZ3",
                         [
                             {
                                 "Ref": "PrivateAppSubnet1"
@@ -2424,22 +2664,46 @@
                                 "Ref": "PrivateAppSubnet3"
                             }
                         ],
-                        [
-                            {
-                                "Ref": "PrivateAppSubnet1"
-                            },
-                            {
-                                "Ref": "PrivateAppSubnet2"
-                            }
-                        ]
+                        {
+                            "Fn::If": [
+                                "UseAZ2",
+                                [
+                                    {
+                                        "Ref": "PrivateAppSubnet1"
+                                    },
+                                    {
+                                        "Ref": "PrivateAppSubnet2"
+                                    }
+                                ],
+                                [
+                                    {
+                                        "Ref": "PrivateAppSubnet1"
+                                    }
+                                ]
+                            ]
+                        }
                     ]
                 },
-                "TargetGroupARNs": [
-                    {
-                        "Ref": "ALBTargetGroup"
-                    }
-                ],
-                "HealthCheckType": "ELB",
+                "TargetGroupARNs": {
+                    "Fn::If": [
+                        "UseAZ2",
+                        [
+                            {
+                                "Ref": "ALBTargetGroup"
+                            }
+                        ],
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "HealthCheckType": {
+                    "Fn::If": [
+                        "UseAZ2",
+                        "ELB",
+                        "EC2"
+                    ]
+                },
                 "HealthCheckGracePeriod": 300,
                 "Tags": [
                     {
@@ -2504,6 +2768,7 @@
         },
         "DBSubnetGroup": {
             "Type": "AWS::RDS::DBSubnetGroup",
+            "Condition": "UseAZ2",
             "Properties": {
                 "DBSubnetGroupName": {
                     "Fn::Sub": "${ProjectName}-${Environment}-db-subnet-group"
@@ -2511,7 +2776,7 @@
                 "DBSubnetGroupDescription": "Subnet group for Aurora cluster across multiple AZs",
                 "SubnetIds": {
                     "Fn::If": [
-                        "HasThreeAZs",
+                        "UseAZ3",
                         [
                             {
                                 "Ref": "PrivateDBSubnet1"
@@ -2811,6 +3076,7 @@
         },
         "AuroraCluster": {
             "Type": "AWS::RDS::DBCluster",
+            "Condition": "UseAZ2",
             "Properties": {
                 "DBClusterIdentifier": {
                     "Fn::Sub": "${ProjectName}-${Environment}-aurora-cluster"
@@ -2893,6 +3159,7 @@
         },
         "AuroraInstanceWriter": {
             "Type": "AWS::RDS::DBInstance",
+            "Condition": "UseAZ2",
             "Properties": {
                 "DBInstanceIdentifier": {
                     "Fn::Sub": "${ProjectName}-${Environment}-aurora-writer"
@@ -2980,6 +3247,7 @@
         },
         "AuroraInstanceReader1": {
             "Type": "AWS::RDS::DBInstance",
+            "Condition": "UseAZ2",
             "DependsOn": "AuroraInstanceWriter",
             "Properties": {
                 "DBInstanceIdentifier": {
@@ -3068,7 +3336,7 @@
         },
         "AuroraInstanceReader2": {
             "Type": "AWS::RDS::DBInstance",
-            "Condition": "HasThreeAZs",
+            "Condition": "UseAZ3",
             "DependsOn": "AuroraInstanceReader1",
             "Properties": {
                 "DBInstanceIdentifier": {
@@ -3545,6 +3813,7 @@
         },
         "DatabaseConnectionAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
+            "Condition": "UseAZ2",
             "Properties": {
                 "AlarmName": {
                     "Fn::Sub": "${ProjectName}-${Environment}-DB-HighConnections"
@@ -3597,6 +3866,7 @@
         },
         "UnhealthyTargetsAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
+            "Condition": "UseAZ2",
             "Properties": {
                 "AlarmName": {
                     "Fn::Sub": "${ProjectName}-${Environment}-UnhealthyTargets"
@@ -3638,6 +3908,7 @@
         },
         "TargetResponseTimeAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
+            "Condition": "UseAZ2",
             "Properties": {
                 "AlarmName": {
                     "Fn::Sub": "${ProjectName}-${Environment}-HighResponseTime"
@@ -4043,6 +4314,7 @@
         "RDSEncryptionRule": {
             "Type": "AWS::Config::ConfigRule",
             "DependsOn": "ConfigRecorderStarter",
+            "Condition": "UseAZ2",
             "Properties": {
                 "ConfigRuleName": "rds-storage-encrypted",
                 "Description": "Checks that RDS instances have encrypted storage",
@@ -4102,6 +4374,7 @@
             }
         },
         "PublicSubnet2Id": {
+            "Condition": "UseAZ2",
             "Description": "Public Subnet 2 ID",
             "Value": {
                 "Ref": "PublicSubnet2"
@@ -4113,7 +4386,7 @@
             }
         },
         "PublicSubnet3Id": {
-            "Condition": "HasThreeAZs",
+            "Condition": "UseAZ3",
             "Description": "Public Subnet 3 ID",
             "Value": {
                 "Ref": "PublicSubnet3"
@@ -4136,6 +4409,7 @@
             }
         },
         "PrivateAppSubnet2Id": {
+            "Condition": "UseAZ2",
             "Description": "Private App Subnet 2 ID",
             "Value": {
                 "Ref": "PrivateAppSubnet2"
@@ -4147,7 +4421,7 @@
             }
         },
         "PrivateAppSubnet3Id": {
-            "Condition": "HasThreeAZs",
+            "Condition": "UseAZ3",
             "Description": "Private App Subnet 3 ID",
             "Value": {
                 "Ref": "PrivateAppSubnet3"
@@ -4170,6 +4444,7 @@
             }
         },
         "PrivateDBSubnet2Id": {
+            "Condition": "UseAZ2",
             "Description": "Private DB Subnet 2 ID",
             "Value": {
                 "Ref": "PrivateDBSubnet2"
@@ -4181,7 +4456,7 @@
             }
         },
         "PrivateDBSubnet3Id": {
-            "Condition": "HasThreeAZs",
+            "Condition": "UseAZ3",
             "Description": "Private DB Subnet 3 ID",
             "Value": {
                 "Ref": "PrivateDBSubnet3"
@@ -4193,6 +4468,7 @@
             }
         },
         "ALBDNSName": {
+            "Condition": "UseAZ2",
             "Description": "Application Load Balancer DNS Name",
             "Value": {
                 "Fn::GetAtt": [
@@ -4207,6 +4483,7 @@
             }
         },
         "ALBArn": {
+            "Condition": "UseAZ2",
             "Description": "Application Load Balancer ARN",
             "Value": {
                 "Ref": "ApplicationLoadBalancer"
@@ -4218,6 +4495,7 @@
             }
         },
         "ALBHostedZone": {
+            "Condition": "UseAZ2",
             "Description": "ALB Hosted Zone ID for Route53 alias records",
             "Value": {
                 "Fn::GetAtt": [
@@ -4254,6 +4532,7 @@
             }
         },
         "AuroraClusterEndpoint": {
+            "Condition": "UseAZ2",
             "Description": "Aurora Cluster Writer Endpoint",
             "Value": {
                 "Fn::GetAtt": [
@@ -4268,6 +4547,7 @@
             }
         },
         "AuroraReaderEndpoint": {
+            "Condition": "UseAZ2",
             "Description": "Aurora Cluster Reader Endpoint",
             "Value": {
                 "Fn::GetAtt": [
@@ -4282,6 +4562,7 @@
             }
         },
         "AuroraClusterPort": {
+            "Condition": "UseAZ2",
             "Description": "Aurora Cluster Port",
             "Value": {
                 "Fn::GetAtt": [
@@ -4419,6 +4700,17 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${ProjectName}-${Environment}-S3-KMS-Key"
+                }
+            }
+        },
+        "DeploymentNotes": {
+            "Description": "Important deployment information",
+            "Value": {
+                "Fn::Sub": "Stack deployed with ${NumberOfAvailabilityZones} AZ(s)\n${ProjectName} ${Environment} Infrastructure Deployment\n"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-Notes"
                 }
             }
         }

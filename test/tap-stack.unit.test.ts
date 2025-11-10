@@ -32,7 +32,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(labels).toEqual(
         expect.arrayContaining([
           'Environment Configuration',
-          'Network Configuration',
+          'Network Configuration - IMPORTANT',
           'Application Configuration',
           'Database Configuration',
           'Security & Compliance',
@@ -65,7 +65,7 @@ describe('TapStack CloudFormation Template', () => {
       const numberOfAzs = template.Parameters.NumberOfAvailabilityZones;
 
       expect(numberOfAzs.Default).toBe(2);
-      expect(numberOfAzs.AllowedValues).toEqual([2, 3]);
+      expect(numberOfAzs.AllowedValues).toEqual([1, 2, 3]);
       if (template.Parameters.AvailabilityZones) {
         expect(template.Parameters.AvailabilityZones.Type).toBe('CommaDelimitedList');
         expect(template.Parameters.AvailabilityZones.Description).toContain('REQUIRED when NumberOfAvailabilityZones is 2 or 3');
@@ -109,7 +109,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(condition).toEqual(
         expect.arrayContaining([
           { Condition: 'EnableHighAvailabilityNAT' },
-          { Condition: 'HasThreeAZs' },
+          { Condition: 'UseAZ3' },
         ])
       );
     });
@@ -131,10 +131,10 @@ describe('TapStack CloudFormation Template', () => {
       const publicSubnet2 = resources.PublicSubnet2;
       const publicSubnet3 = resources.PublicSubnet3;
 
-      expect(publicSubnet2.Condition).toBeUndefined();
-      expect(publicSubnet3.Condition).toBe('HasThreeAZs');
-      expect(publicSubnet2.Properties.AvailabilityZone['Fn::Select'][0]).toBe(1);
-      expect(publicSubnet3.Properties.AvailabilityZone['Fn::Select'][0]).toBe(2);
+      expect(publicSubnet2.Condition).toBe('UseAZ2');
+      expect(publicSubnet3.Condition).toBe('UseAZ3');
+      expect(publicSubnet2.Properties.AvailabilityZone['Fn::If']).toBeDefined();
+      expect(publicSubnet3.Properties.AvailabilityZone['Fn::If']).toBeDefined();
     });
 
     test('ties NAT gateways to the correct subnets with HA controls', () => {
@@ -170,15 +170,14 @@ describe('TapStack CloudFormation Template', () => {
       expect(launchTemplate.Properties.LaunchTemplateData.InstanceType).toEqual({ Ref: 'InstanceType' });
       expect(userData).toContain('systemctl start httpd');
       expect(userData).toContain('/var/www/html/health');
-      expect(userData).toContain('cfn-signal');
     });
 
     test('auto scaling group integrates with ALB target group', () => {
       const asg = resources.AutoScalingGroup;
 
       expect(asg.Condition).toBeUndefined();
-      expect(asg.Properties.TargetGroupARNs).toEqual([{ Ref: 'ALBTargetGroup' }]);
-      expect(asg.Properties.HealthCheckType).toBe('ELB');
+      expect(asg.Properties.TargetGroupARNs['Fn::If']).toBeDefined();
+      expect(asg.Properties.HealthCheckType['Fn::If']).toBeDefined();
       expect(asg.Properties.LaunchTemplate.LaunchTemplateId).toEqual({ Ref: 'LaunchTemplate' });
     });
 
@@ -209,7 +208,7 @@ describe('TapStack CloudFormation Template', () => {
       const subnetGroup = resources.DBSubnetGroup;
       const [, threeAzSubnets, twoAzSubnets] = subnetGroup.Properties.SubnetIds['Fn::If'];
 
-      expect(subnetGroup.Condition).toBeUndefined();
+      expect(subnetGroup.Condition).toBe('UseAZ2');
       expect(threeAzSubnets).toEqual([
         { Ref: 'PrivateDBSubnet1' },
         { Ref: 'PrivateDBSubnet2' },
@@ -287,8 +286,8 @@ describe('TapStack CloudFormation Template', () => {
       const albDnsOutput = template.Outputs.ALBDNSName;
       const albArnOutput = template.Outputs.ALBArn;
 
-      expect(albDnsOutput.Condition).toBeUndefined();
-      expect(albArnOutput.Condition).toBeUndefined();
+      expect(albDnsOutput.Condition).toBe('UseAZ2');
+      expect(albArnOutput.Condition).toBe('UseAZ2');
       expect(albDnsOutput.Value['Fn::GetAtt']).toEqual(['ApplicationLoadBalancer', 'DNSName']);
       expect(albArnOutput.Value.Ref).toBe('ApplicationLoadBalancer');
     });

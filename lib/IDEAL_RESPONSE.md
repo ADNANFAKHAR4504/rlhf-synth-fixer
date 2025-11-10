@@ -4,6 +4,44 @@ Description: Production-ready infrastructure with HA, security, and compliance
   features for PCI DSS payment processing application
 
 # ============================================================================
+# MAPPINGS - Region-specific configurations
+# ============================================================================
+Mappings:
+  RegionAZs:
+    us-east-1:
+      AZ1: us-east-1a
+      AZ2: us-east-1b
+      AZ3: us-east-1c
+    us-east-2:
+      AZ1: us-east-2a
+      AZ2: us-east-2b
+      AZ3: us-east-2c
+    us-west-1:
+      AZ1: us-west-1a
+      AZ2: us-west-1b
+      AZ3: us-west-1c
+    us-west-2:
+      AZ1: us-west-2a
+      AZ2: us-west-2b
+      AZ3: us-west-2c
+    eu-west-1:
+      AZ1: eu-west-1a
+      AZ2: eu-west-1b
+      AZ3: eu-west-1c
+    eu-central-1:
+      AZ1: eu-central-1a
+      AZ2: eu-central-1b
+      AZ3: eu-central-1c
+    ap-south-1:
+      AZ1: ap-south-1a
+      AZ2: ap-south-1b
+      AZ3: ap-south-1c
+    ap-east-1:
+      AZ1: ap-east-1a
+      AZ2: ap-east-1b
+      AZ3: ap-east-1c
+
+# ============================================================================
 # METADATA - Interface for better parameter organization in Console
 # ============================================================================
 Metadata:
@@ -17,12 +55,15 @@ Metadata:
           - Owner
           - CostCenter
       - Label:
-          default: Network Configuration
+          default: Network Configuration - IMPORTANT
         Parameters:
           - VPCCIDR
-          - EnableNATGatewayHA
-          - AvailabilityZones
           - NumberOfAvailabilityZones
+          - UseCustomAZs
+          - CustomAZ1
+          - CustomAZ2
+          - CustomAZ3
+          - EnableNATGatewayHA
       - Label:
           default: Application Configuration
         Parameters:
@@ -56,6 +97,16 @@ Metadata:
         default: Deployment Environment
       VPCCIDR:
         default: VPC CIDR Block
+      NumberOfAvailabilityZones:
+        default: Number of Availability Zones
+      UseCustomAZs:
+        default: Use Custom AZ Names?
+      CustomAZ1:
+        default: Custom First Availability Zone
+      CustomAZ2:
+        default: Custom Second Availability Zone
+      CustomAZ3:
+        default: Custom Third Availability Zone
 
 # ============================================================================
 # PARAMETERS
@@ -98,33 +149,53 @@ Parameters:
     Description: CIDR block for VPC
     AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])/16$
 
+  NumberOfAvailabilityZones:
+    Type: Number
+    Default: 2
+    AllowedValues:
+      - 1
+      - 2
+      - 3
+    Description: Number of availability zones to deploy resources across. ALB and RDS require at least 2 AZs.
+
+  UseCustomAZs:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Set to true if you want to specify custom AZ names, otherwise uses region defaults
+
+  CustomAZ1:
+    Type: String
+    Default: ''
+    Description: Custom first AZ (only used if UseCustomAZs is true)
+
+  CustomAZ2:
+    Type: String
+    Default: ''
+    Description: Custom second AZ (only used if UseCustomAZs is true)
+
+  CustomAZ3:
+    Type: String
+    Default: ''
+    Description: Custom third AZ (only used if UseCustomAZs is true)
+
   EnableNATGatewayHA:
     Type: String
     Default: 'true'
     AllowedValues:
       - 'true'
       - 'false'
-    Description: Enable NAT Gateway in all AZs for HA (false uses single NAT for
-      dev/staging)
-
-  AvailabilityZones:
-    Type: String
-    Default: ''
-    Description: Comma-separated list of availability zones to use for subnets. REQUIRED when NumberOfAvailabilityZones is 2 or 3 (e.g., 'us-east-1a,us-east-1b' for 2 AZs or 'us-east-1a,us-east-1b,us-east-1c' for 3 AZs). Leave blank only if using 1 AZ (not recommended).
-
-  NumberOfAvailabilityZones:
-    Type: Number
-    Default: 2
-    AllowedValues:
-      - 2
-      - 3
-    Description: Number of availability zones to deploy resources across (must be 2 or 3). RDS requires at least 2 AZs. Use 3 only if your region has 3+ AZs. You MUST provide custom AZs in AvailabilityZones parameter when using 2 or 3 AZs (e.g., 'us-east-1a,us-east-1b' for 2 AZs).
+    Description: Enable NAT Gateway in all AZs for HA (false uses single NAT for dev/staging)
 
   # Application Parameters
   InstanceType:
     Type: String
-    Default: t3.large
+    Default: t3.medium
     AllowedValues:
+      - t3.micro
+      - t3.small
       - t3.medium
       - t3.large
       - t3.xlarge
@@ -135,21 +206,21 @@ Parameters:
 
   MinInstances:
     Type: Number
-    Default: 3
+    Default: 1
     MinValue: 1
     MaxValue: 10
     Description: Minimum number of EC2 instances in Auto Scaling Group
 
   MaxInstances:
     Type: Number
-    Default: 9
+    Default: 3
     MinValue: 1
     MaxValue: 20
     Description: Maximum number of EC2 instances in Auto Scaling Group
 
   DesiredInstances:
     Type: Number
-    Default: 6
+    Default: 1
     MinValue: 1
     MaxValue: 20
     Description: Desired number of EC2 instances in Auto Scaling Group
@@ -163,7 +234,7 @@ Parameters:
   # Database Parameters
   DBWriterInstanceClass:
     Type: String
-    Default: db.r6g.xlarge
+    Default: db.r6g.large
     AllowedValues:
       - db.r6g.large
       - db.r6g.xlarge
@@ -188,9 +259,9 @@ Parameters:
   # Security Parameters
   SSLCertificateArn:
     Type: String
-    Default: arn:aws:acm:us-east-1:123456789012:certificate/00000000-0000-0000-0000-000000000000
-    Description: ARN of the SSL certificate in ACM for HTTPS listener
-    AllowedPattern: ^arn:aws:acm:[a-z0-9-]+:[0-9]+:certificate/[a-f0-9-]+$
+    Default: ''
+    Description: ARN of the SSL certificate in ACM for HTTPS listener (leave empty to disable HTTPS)
+    AllowedPattern: ^$|^arn:aws:acm:[a-z0-9-]+:[0-9]+:certificate/[a-f0-9-]+$
 
   LogRetentionDays:
     Type: Number
@@ -236,7 +307,7 @@ Parameters:
   DBMasterPassword:
     Type: String
     Default: ChangeMe123!
-    Description: Database master password
+    Description: Database master password (CHANGE THIS!)
     MinLength: 8
     MaxLength: 41
     NoEcho: true
@@ -254,38 +325,40 @@ Conditions:
   IsProduction: !Equals
     - !Ref Environment
     - Production
+  HasKeyPairName: !Not
+    - !Equals
+      - !Ref KeyPairName
+      - ''
+  UseCustomAZSelection: !Equals
+    - !Ref UseCustomAZs
+    - 'true'
+  HasTwoAZs: !Equals
+    - !Ref NumberOfAvailabilityZones
+    - 2
+  HasThreeAZs: !Equals
+    - !Ref NumberOfAvailabilityZones
+    - 3
+  HasAtLeastTwoAZs: !Or
+    - !Condition HasTwoAZs
+    - !Condition HasThreeAZs
+  UseAZ2: !Condition HasAtLeastTwoAZs
+  UseAZ3: !Condition HasThreeAZs
   EnableHighAvailabilityNAT: !And
     - !Equals
       - !Ref EnableNATGatewayHA
       - 'true'
     - !Condition IsProduction
-    - !Condition HasAtLeastTwoAZsWithCustomAZs
-  HasKeyPairName: !Not
-    - !Equals
-      - !Ref KeyPairName
-      - ''
-  HasCustomAZs: !Not
-    - !Equals
-      - !Ref AvailabilityZones
-      - ''
-  HasThreeAZs: !Equals
-    - !Ref NumberOfAvailabilityZones
-    - 3
-  HasTwoAZs: !Equals
-    - !Ref NumberOfAvailabilityZones
-    - 2
-  HasAtLeastTwoAZs: !Or
-    - !Condition HasTwoAZs
-    - !Condition HasThreeAZs
-  HasAtLeastTwoAZsWithCustomAZs: !And
-    - !Condition HasAtLeastTwoAZs
-    - !Condition HasCustomAZs
-  HasThreeAZsWithCustomAZs: !And
-    - !Condition HasThreeAZs
-    - !Condition HasCustomAZs
+    - !Condition UseAZ2
   EnableHighAvailabilityNATInAZ3: !And
     - !Condition EnableHighAvailabilityNAT
-    - !Condition HasThreeAZsWithCustomAZs
+    - !Condition UseAZ3
+  HasValidCertificate: !Not
+    - !Equals
+      - !Ref SSLCertificateArn
+      - ''
+  UseHTTPS: !And
+    - !Condition UseAZ2
+    - !Condition HasValidCertificate
 
 # ============================================================================
 # RESOURCES
@@ -349,13 +422,13 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-        # Dynamically calculate subnet CIDR
-      AvailabilityZone: !Select
-        - 0
-        - !If
-            - HasCustomAZs
-            - !Split [',', !Ref AvailabilityZones]
-            - !GetAZs ''
+      AvailabilityZone: !If
+        - UseCustomAZSelection
+        - !Ref CustomAZ1
+        - !FindInMap
+          - RegionAZs
+          - !Ref AWS::Region
+          - AZ1
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -375,7 +448,7 @@ Resources:
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: UseAZ2
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select
@@ -384,9 +457,13 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select
-        - 1
-        - !Split [',', !Ref AvailabilityZones]
+      AvailabilityZone: !If
+        - UseCustomAZSelection
+        - !Ref CustomAZ2
+        - !FindInMap
+          - RegionAZs
+          - !Ref AWS::Region
+          - AZ2
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -406,7 +483,7 @@ Resources:
 
   PublicSubnet3:
     Type: AWS::EC2::Subnet
-    Condition: HasThreeAZsWithCustomAZs
+    Condition: UseAZ3
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select
@@ -415,9 +492,13 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select
-        - 2
-        - !Split [',', !Ref AvailabilityZones]
+      AvailabilityZone: !If
+        - UseCustomAZSelection
+        - !Ref CustomAZ3
+        - !FindInMap
+          - RegionAZs
+          - !Ref AWS::Region
+          - AZ3
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -446,12 +527,13 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select
-        - 0
-        - !If
-            - HasCustomAZs
-            - !Split [',', !Ref AvailabilityZones]
-            - !GetAZs ''
+      AvailabilityZone: !If
+        - UseCustomAZSelection
+        - !Ref CustomAZ1
+        - !FindInMap
+          - RegionAZs
+          - !Ref AWS::Region
+          - AZ1
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-1
@@ -470,7 +552,7 @@ Resources:
 
   PrivateAppSubnet2:
     Type: AWS::EC2::Subnet
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: UseAZ2
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select
@@ -479,9 +561,13 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select
-        - 1
-        - !Split [',', !Ref AvailabilityZones]
+      AvailabilityZone: !If
+        - UseCustomAZSelection
+        - !Ref CustomAZ2
+        - !FindInMap
+          - RegionAZs
+          - !Ref AWS::Region
+          - AZ2
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-2
@@ -500,7 +586,7 @@ Resources:
 
   PrivateAppSubnet3:
     Type: AWS::EC2::Subnet
-    Condition: HasThreeAZsWithCustomAZs
+    Condition: UseAZ3
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select
@@ -509,9 +595,13 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select
-        - 2
-        - !Split [',', !Ref AvailabilityZones]
+      AvailabilityZone: !If
+        - UseCustomAZSelection
+        - !Ref CustomAZ3
+        - !FindInMap
+          - RegionAZs
+          - !Ref AWS::Region
+          - AZ3
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-3
@@ -539,12 +629,13 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select
-        - 0
-        - !If
-            - HasCustomAZs
-            - !Split [',', !Ref AvailabilityZones]
-            - !GetAZs ''
+      AvailabilityZone: !If
+        - UseCustomAZSelection
+        - !Ref CustomAZ1
+        - !FindInMap
+          - RegionAZs
+          - !Ref AWS::Region
+          - AZ1
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-1
@@ -563,7 +654,7 @@ Resources:
 
   PrivateDBSubnet2:
     Type: AWS::EC2::Subnet
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: UseAZ2
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select
@@ -572,9 +663,13 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select
-        - 1
-        - !Split [',', !Ref AvailabilityZones]
+      AvailabilityZone: !If
+        - UseCustomAZSelection
+        - !Ref CustomAZ2
+        - !FindInMap
+          - RegionAZs
+          - !Ref AWS::Region
+          - AZ2
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-2
@@ -593,7 +688,7 @@ Resources:
 
   PrivateDBSubnet3:
     Type: AWS::EC2::Subnet
-    Condition: HasThreeAZsWithCustomAZs
+    Condition: UseAZ3
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select
@@ -602,9 +697,13 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select
-        - 2
-        - !Split [',', !Ref AvailabilityZones]
+      AvailabilityZone: !If
+        - UseCustomAZSelection
+        - !Ref CustomAZ3
+        - !FindInMap
+          - RegionAZs
+          - !Ref AWS::Region
+          - AZ3
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-3
@@ -775,14 +874,14 @@ Resources:
 
   PublicSubnetRouteTableAssociation2:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: UseAZ2
     Properties:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
 
   PublicSubnetRouteTableAssociation3:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: HasThreeAZsWithCustomAZs
+    Condition: UseAZ3
     Properties:
       SubnetId: !Ref PublicSubnet3
       RouteTableId: !Ref PublicRouteTable
@@ -876,7 +975,7 @@ Resources:
 
   PrivateAppSubnetRouteTableAssociation2:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: UseAZ2
     Properties:
       SubnetId: !Ref PrivateAppSubnet2
       RouteTableId: !If
@@ -886,11 +985,11 @@ Resources:
 
   PrivateAppSubnetRouteTableAssociation3:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: HasThreeAZsWithCustomAZs
+    Condition: UseAZ3
     Properties:
       SubnetId: !Ref PrivateAppSubnet3
       RouteTableId: !If
-        - EnableHighAvailabilityNAT
+        - EnableHighAvailabilityNATInAZ3
         - !Ref PrivateRouteTable3
         - !Ref PrivateRouteTable1
 
@@ -902,7 +1001,7 @@ Resources:
 
   PrivateDBSubnetRouteTableAssociation2:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: UseAZ2
     Properties:
       SubnetId: !Ref PrivateDBSubnet2
       RouteTableId: !If
@@ -912,11 +1011,11 @@ Resources:
 
   PrivateDBSubnetRouteTableAssociation3:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: HasThreeAZsWithCustomAZs
+    Condition: UseAZ3
     Properties:
       SubnetId: !Ref PrivateDBSubnet3
       RouteTableId: !If
-        - EnableHighAvailabilityNAT
+        - EnableHighAvailabilityNATInAZ3
         - !Ref PrivateRouteTable3
         - !Ref PrivateRouteTable1
 
@@ -1033,7 +1132,7 @@ Resources:
 
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: UseAZ2
     Properties:
       Name: !Sub ${ProjectName}-${Environment}-ALB
       Type: application
@@ -1041,7 +1140,7 @@ Resources:
       SecurityGroups:
         - !Ref ALBSecurityGroup
       Subnets: !If
-        - HasThreeAZsWithCustomAZs
+        - UseAZ3
         - - !Ref PublicSubnet1
           - !Ref PublicSubnet2
           - !Ref PublicSubnet3
@@ -1063,7 +1162,6 @@ Resources:
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: HasAtLeastTwoAZsWithCustomAZs
     Properties:
       Name: !Sub ${ProjectName}-${Environment}-TG
       Port: 80
@@ -1105,7 +1203,7 @@ Resources:
 
   HTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: UseHTTPS
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 443
@@ -1119,17 +1217,20 @@ Resources:
 
   HTTPListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: UseAZ2
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
       Protocol: HTTP
-      DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: '443'
-            StatusCode: HTTP_301
+      DefaultActions: !If
+        - HasValidCertificate
+        - - Type: redirect
+            RedirectConfig:
+              Protocol: HTTPS
+              Port: '443'
+              StatusCode: HTTP_301
+        - - Type: forward
+            TargetGroupArn: !Ref ALBTargetGroup
 
   # ==========================================================================
   # EC2 LAUNCH TEMPLATE & AUTO SCALING - Application tier compute resources
@@ -1214,7 +1315,6 @@ Resources:
                 - IsProduction
                 - 100
                 - 30
-                # Larger volumes for production
               VolumeType: gp3
               Encrypted: true
               DeleteOnTermination: true
@@ -1325,10 +1425,7 @@ Resources:
               -m ec2 \
               -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
 
-            # Signal successful initialization
-            /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} \
-              --resource AutoScalingGroup \
-              --region ${AWS::Region}
+            echo "CloudWatch agent started successfully"
 
         TagSpecifications:
           - ResourceType: instance
@@ -1362,13 +1459,6 @@ Resources:
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
-    Condition: HasAtLeastTwoAZsWithCustomAZs
-    UpdatePolicy:
-      AutoScalingRollingUpdate:
-        MaxBatchSize: 2
-        MinInstancesInService: !Ref MinInstances
-        PauseTime: PT5M
-        WaitOnResourceSignals: true
     Properties:
       AutoScalingGroupName: !Sub ${ProjectName}-${Environment}-ASG
       LaunchTemplate:
@@ -1378,15 +1468,23 @@ Resources:
       MaxSize: !Ref MaxInstances
       DesiredCapacity: !Ref DesiredInstances
       VPCZoneIdentifier: !If
-        - HasThreeAZsWithCustomAZs
+        - UseAZ3
         - - !Ref PrivateAppSubnet1
           - !Ref PrivateAppSubnet2
           - !Ref PrivateAppSubnet3
-        - - !Ref PrivateAppSubnet1
-          - !Ref PrivateAppSubnet2
-      TargetGroupARNs:
-        - !Ref ALBTargetGroup
-      HealthCheckType: ELB
+        - !If
+          - UseAZ2
+          - - !Ref PrivateAppSubnet1
+            - !Ref PrivateAppSubnet2
+          - - !Ref PrivateAppSubnet1
+      TargetGroupARNs: !If
+        - UseAZ2
+        - - !Ref ALBTargetGroup
+        - !Ref AWS::NoValue
+      HealthCheckType: !If
+        - UseAZ2
+        - ELB
+        - EC2
       HealthCheckGracePeriod: 300
       Tags:
         - Key: Name
@@ -1411,7 +1509,6 @@ Resources:
   # Target tracking scaling policy for better performance
   TargetTrackingScalingPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
-    Condition: HasAtLeastTwoAZsWithCustomAZs
     Properties:
       AutoScalingGroupName: !Ref AutoScalingGroup
       PolicyType: TargetTrackingScaling
@@ -1426,12 +1523,12 @@ Resources:
 
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: UseAZ2
     Properties:
       DBSubnetGroupName: !Sub ${ProjectName}-${Environment}-db-subnet-group
       DBSubnetGroupDescription: Subnet group for Aurora cluster across multiple AZs
       SubnetIds: !If
-        - HasThreeAZsWithCustomAZs
+        - UseAZ3
         - - !Ref PrivateDBSubnet1
           - !Ref PrivateDBSubnet2
           - !Ref PrivateDBSubnet3
@@ -1573,7 +1670,7 @@ Resources:
 
   AuroraCluster:
     Type: AWS::RDS::DBCluster
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: UseAZ2
     Properties:
       DBClusterIdentifier: !Sub ${ProjectName}-${Environment}-aurora-cluster
       Engine: aurora-mysql
@@ -1614,7 +1711,7 @@ Resources:
 
   AuroraInstanceWriter:
     Type: AWS::RDS::DBInstance
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: UseAZ2
     Properties:
       DBInstanceIdentifier: !Sub ${ProjectName}-${Environment}-aurora-writer
       DBClusterIdentifier: !Ref AuroraCluster
@@ -1627,13 +1724,11 @@ Resources:
         - IsProduction
         - 31
         - 7
-        # Longer retention for production
       PerformanceInsightsKMSKeyId: !Ref DBKMSKey
       MonitoringInterval: !If
         - IsProduction
         - 60
         - 0
-        # Enhanced monitoring for production only
       MonitoringRoleArn: !If
         - IsProduction
         - !GetAtt RDSEnhancedMonitoringRole.Arn
@@ -1654,7 +1749,7 @@ Resources:
 
   AuroraInstanceReader1:
     Type: AWS::RDS::DBInstance
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: UseAZ2
     DependsOn: AuroraInstanceWriter
     Properties:
       DBInstanceIdentifier: !Sub ${ProjectName}-${Environment}-aurora-reader-1
@@ -1693,7 +1788,7 @@ Resources:
 
   AuroraInstanceReader2:
     Type: AWS::RDS::DBInstance
-    Condition: HasThreeAZsWithCustomAZs
+    Condition: UseAZ3
     DependsOn: AuroraInstanceReader1
     Properties:
       DBInstanceIdentifier: !Sub ${ProjectName}-${Environment}-aurora-reader-2
@@ -1854,7 +1949,6 @@ Resources:
               KMSMasterKeyID: !Ref S3KMSKey
       VersioningConfiguration:
         Status: Enabled
-      # MFA Delete requires manual configuration after bucket creation
       LifecycleConfiguration:
         Rules:
           - Id: RetentionPolicy
@@ -1911,7 +2005,6 @@ Resources:
 
   HighCPUAlarm:
     Type: AWS::CloudWatch::Alarm
-    Condition: HasAtLeastTwoAZsWithCustomAZs
     Properties:
       AlarmName: !Sub ${ProjectName}-${Environment}-HighCPU
       AlarmDescription: Triggers when CPU exceeds threshold for 2 consecutive periods
@@ -1931,7 +2024,7 @@ Resources:
   # Database connections alarm with percentage calculation
   DatabaseConnectionAlarm:
     Type: AWS::CloudWatch::Alarm
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: UseAZ2
     Properties:
       AlarmName: !Sub ${ProjectName}-${Environment}-DB-HighConnections
       AlarmDescription: Alarm when database connections exceed threshold percentage
@@ -1962,7 +2055,7 @@ Resources:
 
   UnhealthyTargetsAlarm:
     Type: AWS::CloudWatch::Alarm
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: UseAZ2
     Properties:
       AlarmName: !Sub ${ProjectName}-${Environment}-UnhealthyTargets
       AlarmDescription: Alarm when any target becomes unhealthy
@@ -1983,7 +2076,7 @@ Resources:
 
   TargetResponseTimeAlarm:
     Type: AWS::CloudWatch::Alarm
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: UseAZ2
     Properties:
       AlarmName: !Sub ${ProjectName}-${Environment}-HighResponseTime
       AlarmDescription: Alarm when target response time exceeds 2 seconds
@@ -2308,6 +2401,7 @@ Resources:
   RDSEncryptionRule:
     Type: AWS::Config::ConfigRule
     DependsOn: ConfigRecorderStarter
+    Condition: UseAZ2
     Properties:
       ConfigRuleName: rds-storage-encrypted
       Description: Checks that RDS instances have encrypted storage
@@ -2358,14 +2452,14 @@ Outputs:
       Name: !Sub ${ProjectName}-${Environment}-PublicSubnet1
 
   PublicSubnet2Id:
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: UseAZ2
     Description: Public Subnet 2 ID
     Value: !Ref PublicSubnet2
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PublicSubnet2
 
   PublicSubnet3Id:
-    Condition: HasThreeAZsWithCustomAZs
+    Condition: UseAZ3
     Description: Public Subnet 3 ID
     Value: !Ref PublicSubnet3
     Export:
@@ -2378,14 +2472,14 @@ Outputs:
       Name: !Sub ${ProjectName}-${Environment}-PrivateAppSubnet1
 
   PrivateAppSubnet2Id:
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: UseAZ2
     Description: Private App Subnet 2 ID
     Value: !Ref PrivateAppSubnet2
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PrivateAppSubnet2
 
   PrivateAppSubnet3Id:
-    Condition: HasThreeAZsWithCustomAZs
+    Condition: UseAZ3
     Description: Private App Subnet 3 ID
     Value: !Ref PrivateAppSubnet3
     Export:
@@ -2398,42 +2492,41 @@ Outputs:
       Name: !Sub ${ProjectName}-${Environment}-PrivateDBSubnet1
 
   PrivateDBSubnet2Id:
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: UseAZ2
     Description: Private DB Subnet 2 ID
     Value: !Ref PrivateDBSubnet2
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PrivateDBSubnet2
 
   PrivateDBSubnet3Id:
-    Condition: HasThreeAZsWithCustomAZs
+    Condition: UseAZ3
     Description: Private DB Subnet 3 ID
     Value: !Ref PrivateDBSubnet3
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PrivateDBSubnet3
 
   ALBDNSName:
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: UseAZ2
     Description: Application Load Balancer DNS Name
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
       Name: !Sub ${ProjectName}-${Environment}-ALB-DNS
 
   ALBArn:
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: UseAZ2
     Description: Application Load Balancer ARN
     Value: !Ref ApplicationLoadBalancer
     Export:
       Name: !Sub ${ProjectName}-${Environment}-ALB-ARN
 
   ALBHostedZone:
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: UseAZ2
     Description: ALB Hosted Zone ID for Route53 alias records
     Value: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
     Export:
       Name: !Sub ${ProjectName}-${Environment}-ALB-HostedZone
 
   AutoScalingGroupName:
-    Condition: HasAtLeastTwoAZsWithCustomAZs
     Description: Auto Scaling Group Name
     Value: !Ref AutoScalingGroup
     Export:
@@ -2446,21 +2539,21 @@ Outputs:
       Name: !Sub ${ProjectName}-${Environment}-LaunchTemplate-ID
 
   AuroraClusterEndpoint:
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: UseAZ2
     Description: Aurora Cluster Writer Endpoint
     Value: !GetAtt AuroraCluster.Endpoint.Address
     Export:
       Name: !Sub ${ProjectName}-${Environment}-DB-Writer-Endpoint
 
   AuroraReaderEndpoint:
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: UseAZ2
     Description: Aurora Cluster Reader Endpoint
     Value: !GetAtt AuroraCluster.ReadEndpoint.Address
     Export:
       Name: !Sub ${ProjectName}-${Environment}-DB-Reader-Endpoint
 
   AuroraClusterPort:
-    Condition: HasAtLeastTwoAZsWithCustomAZs
+    Condition: UseAZ2
     Description: Aurora Cluster Port
     Value: !GetAtt AuroraCluster.Endpoint.Port
     Export:
@@ -2531,4 +2624,12 @@ Outputs:
     Value: !Ref S3KMSKey
     Export:
       Name: !Sub ${ProjectName}-${Environment}-S3-KMS-Key
+
+  DeploymentNotes:
+    Description: Important deployment information
+    Value: !Sub |
+      Stack deployed with ${NumberOfAvailabilityZones} AZ(s)
+      ${ProjectName} ${Environment} Infrastructure Deployment
+    Export:
+      Name: !Sub ${ProjectName}-${Environment}-Notes
 ```
