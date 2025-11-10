@@ -1,5 +1,7 @@
 import { Construct } from 'constructs';
-import { TerraformStack, S3Backend, Fn, TerraformOutput } from 'cdktf';
+import { TerraformStack, Fn, TerraformOutput } from 'cdktf';
+// S3Backend is commented out but keeping import for future use
+// import { S3Backend } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
@@ -32,8 +34,7 @@ import { AlbListener } from '@cdktf/provider-aws/lib/alb-listener';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { VpcEndpoint } from '@cdktf/provider-aws/lib/vpc-endpoint';
 import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
-import { DataAwsSecretsmanagerSecret } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret';
-import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
+// Removed unused imports: DataAwsSecretsmanagerSecret and DataAwsSecretsmanagerSecretVersion
 import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
 import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
