@@ -6,7 +6,29 @@ Tests validate actual deployed resources using stack outputs
 import json
 import os
 import unittest
+from pathlib import Path
 import boto3
+
+OUTPUT_CANDIDATES = []
+
+env_override = os.environ.get('CFN_OUTPUTS_FILE')
+if env_override:
+    OUTPUT_CANDIDATES.append(Path(env_override))
+
+OUTPUT_CANDIDATES.extend([
+    Path(__file__).resolve().parents[2] / 'cfn-outputs' / 'flat-outputs-simple.json',
+    Path(__file__).resolve().parents[2] / 'cfn-outputs' / 'flat-outputs.json',
+])
+
+
+def _resolve_outputs_path() -> Path:
+    for candidate in OUTPUT_CANDIDATES:
+        if candidate.exists():
+            return candidate
+    raise FileNotFoundError(
+        "Stack outputs not found. Looked in: "
+        + ", ".join(str(p) for p in OUTPUT_CANDIDATES)
+    )
 
 
 class TestDeployedInfrastructure(unittest.TestCase):
@@ -15,12 +37,9 @@ class TestDeployedInfrastructure(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Load stack outputs and initialize AWS clients"""
-        outputs_path = os.path.join(os.path.dirname(__file__), '../../cfn-outputs/flat-outputs-simple.json')
+        outputs_path = _resolve_outputs_path()
 
-        if not os.path.exists(outputs_path):
-            raise FileNotFoundError(f"Stack outputs not found at {outputs_path}")
-
-        with open(outputs_path, 'r') as f:
+        with outputs_path.open('r') as f:
             cls.outputs = json.load(f)
 
         # Initialize AWS clients
