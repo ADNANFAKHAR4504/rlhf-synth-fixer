@@ -1,6 +1,5 @@
 terraform {
   required_version = ">= 1.5"
-
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -21,33 +20,49 @@ terraform {
 }
 
 provider "aws" {
-  region = "us-east-1"
+  region = var.aws_region
 
   default_tags {
     tags = {
-      Environment = "production"
-      Project     = "monitoring"
-      ManagedBy   = "Terraform"
-      Owner       = "DevOps"
+      DataClassification = "Sensitive"
+      Environment        = var.environment
+      Owner              = "SecurityTeam"
+      ManagedBy          = "Terraform"
+      Project            = "PCICompliance"
     }
   }
 }
 
+provider "random" {}
+provider "archive" {}
+
 # Variables
+variable "aws_region" {
+  description = "AWS region for deployment"
+  type        = string
+  default     = "us-east-1"
+}
+
 variable "environment" {
   description = "Environment name"
   type        = string
-  default     = "production"
+  default     = "uat"
 }
 
-variable "alert_email" {
-  description = "Email address for CloudWatch alerts"
+variable "vpc_cidr" {
+  description = "CIDR block for VPC"
   type        = string
-  default     = "kanakatla.k@turing.com"
+  default     = "10.0.0.0/16"
 }
 
-variable "db_username" {
-  description = "Database master username"
-  type        = string
-  default     = "adminuser"
+variable "log_retention_days" {
+  description = "CloudWatch log retention in days"
+  type        = number
+  default     = 90
+}
+
+variable "kms_deletion_window" {
+  description = "KMS key deletion window in days"
+  type        = number
+  default     = 7
 }
