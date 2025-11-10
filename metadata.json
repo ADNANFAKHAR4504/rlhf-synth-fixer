@@ -21,14 +21,5 @@
     "IAM",
     "NAT Gateway",
     "Lambda"
-  ],
-  "subject_labels": [
-    "three-tier-architecture",
-    "web-application",
-    "blue-green-deployment",
-    "container-orchestration",
-    "cdn-distribution"
-  ],
-  "region": "us-east-1",
-  "training_quality": 8
+  ]
 }

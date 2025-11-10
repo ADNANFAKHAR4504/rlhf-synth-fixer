@@ -180,6 +180,11 @@ export class TapStack extends cdk.Stack {
         image: ecs.ContainerImage.fromRegistry(
           'public.ecr.aws/docker/library/node:18-alpine'
         ),
+        command: [
+          'sh',
+          '-c',
+          "node -e \"require('http').createServer((req,res)=>{res.writeHead(200);res.end('OK')}).listen(3000,()=>console.log('Server running on port 3000'))\"",
+        ],
         logging: ecs.LogDrivers.awsLogs({
           streamPrefix: 'api',
           logGroup: logGroup,
