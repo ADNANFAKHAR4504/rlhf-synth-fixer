@@ -27,13 +27,15 @@ describe("Financial Services VPC Integration Tests", () => {
     });
 
     test("VPC ID output is present", () => {
-      expect(outputs).toHaveProperty("vpc_id");
-      expect(outputs.vpc_id).toMatch(/^vpc-/);
+      expect(outputs).toHaveProperty("tap-stack");
+      expect(outputs["tap-stack"]).toHaveProperty("vpc_id");
+      expect(outputs["tap-stack"].vpc_id).toMatch(/^vpc-/);
     });
 
     test("Public subnet IDs output is present and valid", () => {
-      expect(outputs).toHaveProperty("public_subnet_ids");
-      const subnetIds = JSON.parse(outputs.public_subnet_ids);
+      expect(outputs).toHaveProperty("tap-stack");
+      expect(outputs["tap-stack"]).toHaveProperty("public_subnet_ids");
+      const subnetIds = JSON.parse(outputs["tap-stack"].public_subnet_ids);
       expect(Array.isArray(subnetIds)).toBe(true);
       expect(subnetIds.length).toBe(3);
       subnetIds.forEach((id: string) => {
@@ -42,8 +44,9 @@ describe("Financial Services VPC Integration Tests", () => {
     });
 
     test("Private subnet IDs output is present and valid", () => {
-      expect(outputs).toHaveProperty("private_subnet_ids");
-      const subnetIds = JSON.parse(outputs.private_subnet_ids);
+      expect(outputs).toHaveProperty("tap-stack");
+      expect(outputs["tap-stack"]).toHaveProperty("private_subnet_ids");
+      const subnetIds = JSON.parse(outputs["tap-stack"].private_subnet_ids);
       expect(Array.isArray(subnetIds)).toBe(true);
       expect(subnetIds.length).toBe(3);
       subnetIds.forEach((id: string) => {
@@ -52,8 +55,9 @@ describe("Financial Services VPC Integration Tests", () => {
     });
 
     test("NAT Gateway IDs output is present and valid", () => {
-      expect(outputs).toHaveProperty("nat_gateway_ids");
-      const natIds = JSON.parse(outputs.nat_gateway_ids);
+      expect(outputs).toHaveProperty("tap-stack");
+      expect(outputs["tap-stack"]).toHaveProperty("nat_gateway_ids");
+      const natIds = JSON.parse(outputs["tap-stack"].nat_gateway_ids);
       expect(Array.isArray(natIds)).toBe(true);
       expect(natIds.length).toBe(3);
       natIds.forEach((id: string) => {
@@ -62,13 +66,15 @@ describe("Financial Services VPC Integration Tests", () => {
     });
 
     test("Internet Gateway ID output is present", () => {
-      expect(outputs).toHaveProperty("internet_gateway_id");
-      expect(outputs.internet_gateway_id).toMatch(/^igw-/);
+      expect(outputs).toHaveProperty("tap-stack");
+      expect(outputs["tap-stack"]).toHaveProperty("internet_gateway_id");
+      expect(outputs["tap-stack"].internet_gateway_id).toMatch(/^igw-/);
     });
 
     test("Flow logs bucket output is present", () => {
-      expect(outputs).toHaveProperty("flow_logs_bucket");
-      expect(outputs.flow_logs_bucket).toContain("vpc-flow-logs");
+      expect(outputs).toHaveProperty("tap-stack");
+      expect(outputs["tap-stack"]).toHaveProperty("flow_logs_bucket");
+      expect(outputs["tap-stack"].flow_logs_bucket).toContain("vpc-flow-logs");
     });
   });
 
@@ -76,9 +82,10 @@ describe("Financial Services VPC Integration Tests", () => {
     test("Resources include environment suffix in names", () => {
       const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || "dev";
 
-      if (outputs.flow_logs_bucket) {
-        expect(outputs.flow_logs_bucket).toContain(environmentSuffix);
+      if (outputs && outputs["tap-stack"] && outputs["tap-stack"].flow_logs_bucket) {
+        expect(outputs["tap-stack"].flow_logs_bucket).toContain(environmentSuffix);
       }
     });
   });
 });
+
