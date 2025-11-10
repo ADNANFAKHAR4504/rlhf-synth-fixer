@@ -1,0 +1,35 @@
+{
+  "platform": "cloudformation",
+  "language": "json",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-07T08:19:33+00:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "VPC",
+    "ALB",
+    "Auto Scaling",
+    "RDS",
+    "Security Groups",
+    "NAT Gateway",
+    "Secrets Manager"
+  ],
+  "po_id": "101000864",
+  "aws_services": [
+    "Application Load Balancer",
+    "Auto Scaling",
+    "EC2",
+    "IAM",
+    "RDS",
+    "Secrets Manager"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
