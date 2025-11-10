@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101911971",
+  "team": "4",
+  "startedAt": "2025-11-09T06:35:44.3NZ",
+  "subtask": "Cloud Enviroment Setup",
+  "subject_labels": [
+    "Cloud Enviroment Setup"
+  ],
+  "aws_services": [
+    "CloudWatch",
+    "DynamoDB",
+    "EventBridge",
+    "IAM",
+    "Lambda",
+    "S3",
+    "SNS",
+    "Step Functions"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
+}
