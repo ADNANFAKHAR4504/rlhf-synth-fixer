@@ -14,12 +14,19 @@
     "API Gateway",
     "CloudWatch",
     "DynamoDB",
+    "IAM",
     "Lambda",
+    "CloudWatch Logs",
     "S3",
     "SNS",
-    "Step Functions",
     "Systems Manager",
-    "CloudWatch Logs"
+    "Step Functions"
   ],
-  "training_quality": 9
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
 }
