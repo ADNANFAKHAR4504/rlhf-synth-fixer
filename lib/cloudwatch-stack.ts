@@ -1,0 +1,146 @@
+import { Construct } from 'constructs';
+import { CloudwatchDashboard } from '@cdktf/provider-aws/lib/cloudwatch-dashboard';
+import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
+
+export interface CloudwatchStackProps {
+  environmentSuffix: string;
+  transactionProcessorName: string;
+  statusCheckerName: string;
+  dynamodbTableName: string;
+  snsTopicArn: string;
+}
+
+export class CloudwatchStack extends Construct {
+  constructor(scope: Construct, id: string, props: CloudwatchStackProps) {
+    super(scope, id);
+
+    const {
+      environmentSuffix,
+      transactionProcessorName,
+      statusCheckerName,
+      dynamodbTableName,
+      snsTopicArn,
+    } = props;
+
+    // Create CloudWatch Dashboard
+    new CloudwatchDashboard(this, 'payment_dashboard', {
+      dashboardName: `payment-dashboard-${environmentSuffix}`,
+      dashboardBody: JSON.stringify({
+        widgets: [
+          {
+            type: 'metric',
+            properties: {
+              metrics: [
+                [
+                  'AWS/Lambda',
+                  'Invocations',
+                  { stat: 'Sum', label: 'Transaction Processor Invocations' },
+                  { FunctionName: transactionProcessorName },
+                ],
+                [
+                  '.',
+                  '.',
+                  { stat: 'Sum', label: 'Status Checker Invocations' },
+                  { FunctionName: statusCheckerName },
+                ],
+              ],
+              period: 300,
+              stat: 'Sum',
+              region: 'us-east-1',
+              title: 'Lambda Invocations',
+            },
+          },
+          {
+            type: 'metric',
+            properties: {
+              metrics: [
+                [
+                  'AWS/Lambda',
+                  'Errors',
+                  { stat: 'Sum', label: 'Transaction Processor Errors' },
+                  { FunctionName: transactionProcessorName },
+                ],
+                [
+                  '.',
+                  '.',
+                  { stat: 'Sum', label: 'Status Checker Errors' },
+                  { FunctionName: statusCheckerName },
+                ],
+              ],
+              period: 300,
+              stat: 'Sum',
+              region: 'us-east-1',
+              title: 'Lambda Errors',
+            },
+          },
+          {
+            type: 'metric',
+            properties: {
+              metrics: [
+                [
+                  'AWS/DynamoDB',
+                  'ConsumedReadCapacityUnits',
+                  { stat: 'Sum' },
+                  { TableName: dynamodbTableName },
+                ],
+                [
+                  '.',
+                  'ConsumedWriteCapacityUnits',
+                  { stat: 'Sum' },
+                  { TableName: dynamodbTableName },
+                ],
+              ],
+              period: 300,
+              stat: 'Sum',
+              region: 'us-east-1',
+              title: 'DynamoDB Capacity',
+            },
+          },
+        ],
+      }),
+    });
+
+    // CloudWatch Alarm for transaction processor errors
+    new CloudwatchMetricAlarm(this, 'transaction_processor_error_alarm', {
+      alarmName: `transaction-processor-errors-${environmentSuffix}`,
+      comparisonOperator: 'GreaterThanThreshold',
+      evaluationPeriods: 2,
+      metricName: 'Errors',
+      namespace: 'AWS/Lambda',
+      period: 300,
+      statistic: 'Sum',
+      threshold: 1, // 1% of invocations
+      treatMissingData: 'notBreaching',
+      dimensions: {
+        FunctionName: transactionProcessorName,
+      },
+      alarmDescription:
+        'Alert when transaction processor error rate exceeds 1%',
+      alarmActions: [snsTopicArn],
+      tags: {
+        Name: `transaction-processor-alarm-${environmentSuffix}`,
+      },
+    });
+
+    // CloudWatch Alarm for status checker errors
+    new CloudwatchMetricAlarm(this, 'status_checker_error_alarm', {
+      alarmName: `status-checker-errors-${environmentSuffix}`,
+      comparisonOperator: 'GreaterThanThreshold',
+      evaluationPeriods: 2,
+      metricName: 'Errors',
+      namespace: 'AWS/Lambda',
+      period: 300,
+      statistic: 'Sum',
+      threshold: 1,
+      treatMissingData: 'notBreaching',
+      dimensions: {
+        FunctionName: statusCheckerName,
+      },
+      alarmDescription: 'Alert when status checker error rate exceeds 1%',
+      alarmActions: [snsTopicArn],
+      tags: {
+        Name: `status-checker-alarm-${environmentSuffix}`,
+      },
+    });
+  }
+}
