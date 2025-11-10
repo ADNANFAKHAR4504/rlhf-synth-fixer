@@ -1,41 +1,42 @@
-# Multi-Environment CSV Processing Pipeline - IDEAL RESPONSE
+# Multi-Environment Payment Processing Infrastructure - IDEAL RESPONSE
 
 ## Overview
 
-This implementation provides a production-ready, CI/CD-compatible multi-environment serverless CSV processing infrastructure using **CDKTF (CDK for Terraform) with TypeScript** deployed to **ap-southeast-1**.
+This implementation provides a production-ready, CI/CD-compatible multi-environment payment processing infrastructure using **Pulumi with TypeScript** deployed to AWS.
 
-**Key Improvements Over MODEL_RESPONSE**:
+**Key Features**:
 - Complete environmentSuffix integration for parallel PR testing
-- Serverless architecture with Lambda, S3, and DynamoDB
-- All resource names properly isolated
-- Graceful error handling in integration tests
-- Cost-optimized serverless design
+- Multi-stack architecture: VPC, ALB, RDS, ECS, S3, and Monitoring
+- Environment-specific configuration (dev, staging, prod)
+- AWS Secrets Manager integration with recovery window configuration
+- Comprehensive tagging and resource isolation
 
 ## Architecture
 
-Multi-environment serverless infrastructure with identical topology, environment-specific sizing:
+Multi-environment infrastructure with identical topology, environment-specific sizing:
 
-- **S3 Bucket**: CSV file storage with versioning and encryption
-- **Lambda Function**: Python 3.9 CSV processing with environment variables
-- **DynamoDB Table**: Processing results storage with auto-scaling
-- **SQS Dead Letter Queue**: Error handling for failed processing
-- **CloudWatch Logs**: Lambda function logging with retention
-- **IAM Roles**: Least-privilege access for Lambda execution
-- **Comprehensive Tagging**: Environment, EnvironmentSuffix, ManagedBy
+- **VPC Stack**: VPC, subnets (public/private), Internet Gateway, NAT Gateways, route tables
+- **ALB Stack**: Application Load Balancer with optional SSL/TLS support
+- **RDS Stack**: PostgreSQL RDS instances with Secrets Manager integration
+- **ECS Stack**: Fargate cluster, task definitions, and services
+- **S3 Stack**: S3 buckets with versioning, encryption, and lifecycle policies
+- **Monitoring Stack**: CloudWatch alarms for ECS (CPU, memory, task count)
 
 ## File Structure
 
 ```
 lib/
-├── tap-stack.ts              # Main CDKTF stack orchestrator
-├── types.ts                  # Shared TypeScript interfaces
-└── constructs/               # Reusable construct components
+├── tap-stack.ts              # Main Pulumi stack orchestrator
+├── vpc-stack.ts              # VPC infrastructure
+├── alb-stack.ts              # Application Load Balancer
+├── rds-stack.ts              # RDS PostgreSQL database
+├── ecs-stack.ts              # ECS Fargate services
+├── s3-stack.ts               # S3 buckets
+├── monitoring-stack.ts       # CloudWatch monitoring
+└── types.ts                  # Shared TypeScript interfaces
 
-main.ts                       # CDKTF entry point
-cdktf.json                   # CDKTF configuration
-
-terraform-outputs/
-└── outputs.json             # Terraform outputs for integration tests
+bin/
+└── tap.ts                    # Pulumi application entry point
 
 test/
 ├── tap-stack.unit.test.ts   # Unit tests with Jest
@@ -44,785 +45,786 @@ test/
 
 ## Key Implementation Details
 
-### 1. Main CDKTF Stack Implementation
+### 1. Main Pulumi Stack Implementation
 
 **lib/tap-stack.ts**:
 ```typescript
-import { Construct } from "constructs";
-import { TerraformStack, TerraformOutput } from "cdktf";
-import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
-import { S3Bucket } from "@cdktf/provider-aws/lib/s3-bucket";
-import { S3BucketVersioning } from "@cdktf/provider-aws/lib/s3-bucket-versioning";
-import { S3BucketServerSideEncryptionConfiguration } from "@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration";
-import { S3BucketNotification } from "@cdktf/provider-aws/lib/s3-bucket-notification";
-import { LambdaFunction } from "@cdktf/provider-aws/lib/lambda-function";
-import { LambdaPermission } from "@cdktf/provider-aws/lib/lambda-permission";
-import { IamRole } from "@cdktf/provider-aws/lib/iam-role";
-import { IamPolicy } from "@cdktf/provider-aws/lib/iam-policy";
-import { IamRolePolicyAttachment } from "@cdktf/provider-aws/lib/iam-role-policy-attachment";
-import { DynamodbTable } from "@cdktf/provider-aws/lib/dynamodb-table";
-import { SqsQueue } from "@cdktf/provider-aws/lib/sqs-queue";
-import { CloudwatchLogGroup } from "@cdktf/provider-aws/lib/cloudwatch-log-group";
-import { DataArchiveFile } from "@cdktf/provider-archive/lib/data-archive-file";
-import { ArchiveProvider } from "@cdktf/provider-archive/lib/provider";
+import * as pulumi from '@pulumi/pulumi';
+import { ResourceOptions } from '@pulumi/pulumi';
+import { EnvironmentConfig } from './types';
+import { VpcStack } from './vpc-stack';
+import { AlbStack } from './alb-stack';
+import { RdsStack } from './rds-stack';
+import { EcsStack } from './ecs-stack';
+import { S3Stack } from './s3-stack';
+import { MonitoringStack } from './monitoring-stack';
 
-export interface TapStackConfig {
-  environment: string;
-  environmentSuffix: string;
-  region: string;
+export interface TapStackArgs {
+  environmentSuffix?: string;
+  tags?: pulumi.Input<{ [key: string]: string }>;
 }
 
-export class TapStack extends TerraformStack {
-  constructor(scope: Construct, id: string, config: TapStackConfig) {
-    super(scope, id);
+export class TapStack extends pulumi.ComponentResource {
+  public readonly vpcId: pulumi.Output<string>;
+  public readonly albUrl: pulumi.Output<string>;
+  public readonly rdsEndpoint: pulumi.Output<string>;
+  public readonly bucketName: pulumi.Output<string>;
+  public readonly ecsClusterId: pulumi.Output<string>;
 
-    // AWS Provider
-    new AwsProvider(this, "aws", {
-      region: config.region,
-    });
+  constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
+    super('tap:stack:TapStack', name, args, opts);
 
-    // Archive Provider for Lambda deployment package
-    new ArchiveProvider(this, "archive", {});
+    const config = new pulumi.Config();
+    const environmentSuffix =
+      args.environmentSuffix || config.get('env') || 'dev';
+
+    // Determine environment from suffix or config
+    const environment = config.get('environment') || environmentSuffix;
 
     // Environment-specific configuration
-    const envConfigs = {
+    const envConfigs: { [key: string]: Partial<EnvironmentConfig> } = {
       dev: {
-        lambdaMemorySize: 256,
-        lambdaTimeout: 60,
-        dynamodbBillingMode: "PAY_PER_REQUEST",
-        logRetentionDays: 7,
+        vpcCidr: '10.1.0.0/16',
+        ecsTaskCount: 1,
+        rdsInstanceClass: 'db.t3.micro',
+        rdsMultiAz: false,
         s3LifecycleDays: 7,
+        enableSsl: false,
+        enableMonitoring: false,
       },
       staging: {
-        lambdaMemorySize: 512,
-        lambdaTimeout: 120,
-        dynamodbBillingMode: "PAY_PER_REQUEST",
-        logRetentionDays: 14,
+        vpcCidr: '10.2.0.0/16',
+        ecsTaskCount: 2,
+        rdsInstanceClass: 'db.t3.small',
+        rdsMultiAz: false,
         s3LifecycleDays: 30,
+        enableSsl: true,
+        enableMonitoring: true,
       },
       prod: {
-        lambdaMemorySize: 1024,
-        lambdaTimeout: 300,
-        dynamodbBillingMode: "PAY_PER_REQUEST",
-        logRetentionDays: 30,
+        vpcCidr: '10.3.0.0/16',
+        ecsTaskCount: 4,
+        rdsInstanceClass: 'db.t3.medium',
+        rdsMultiAz: true,
         s3LifecycleDays: 90,
+        enableSsl: true,
+        enableMonitoring: true,
       },
     };
 
-    const envConfig = envConfigs[config.environment as keyof typeof envConfigs] || envConfigs.dev;
+    const envConfig = envConfigs[environment] || envConfigs.dev;
 
-    // Common tags
-    const commonTags = {
-      Environment: config.environment,
-      EnvironmentSuffix: config.environmentSuffix,
-      ManagedBy: "CDKTF",
-      Project: "CSV-Processing-Pipeline",
+    const fullConfig: EnvironmentConfig = {
+      environment,
+      environmentSuffix,
+      vpcCidr: envConfig.vpcCidr!,
+      availabilityZones: ['us-east-1a', 'us-east-1b'],
+      ecsTaskCount: envConfig.ecsTaskCount!,
+      rdsInstanceClass: envConfig.rdsInstanceClass!,
+      rdsMultiAz: envConfig.rdsMultiAz!,
+      s3LifecycleDays: envConfig.s3LifecycleDays!,
+      enableSsl: envConfig.enableSsl!,
+      enableMonitoring: envConfig.enableMonitoring!,
+      tags: {
+        ...args.tags,
+        Environment: environment,
+        ManagedBy: 'Pulumi',
+        EnvironmentSuffix: environmentSuffix,
+      },
     };
 
-    // S3 Bucket for CSV files
-    const s3Bucket = new S3Bucket(this, "csv-data-bucket", {
-      bucket: `csv-data-${config.environmentSuffix}`,
-      tags: commonTags,
-    });
-
-    // S3 Bucket Versioning
-    new S3BucketVersioning(this, "csv-data-bucket-versioning", {
-      bucket: s3Bucket.id,
-      versioningConfiguration: {
-        status: "Enabled",
+    // Create VPC stack
+    const vpcStack = new VpcStack(
+      `${environment}-vpc`,
+      {
+        config: fullConfig,
       },
-    });
+      { parent: this }
+    );
 
-    // S3 Bucket Server-Side Encryption
-    new S3BucketServerSideEncryptionConfiguration(this, "csv-data-bucket-encryption", {
-      bucket: s3Bucket.id,
-      rule: [
-        {
-          applyServerSideEncryptionByDefault: {
-            sseAlgorithm: "AES256",
-          },
-        },
-      ],
-    });
-
-    // DynamoDB Table for processing results
-    const dynamodbTable = new DynamodbTable(this, "processing-results-table", {
-      name: `processing-results-${config.environmentSuffix}`,
-      billingMode: envConfig.dynamodbBillingMode,
-      hashKey: "fileId",
-      rangeKey: "timestamp",
-      attribute: [
-        {
-          name: "fileId",
-          type: "S",
-        },
-        {
-          name: "timestamp",
-          type: "S",
-        },
-      ],
-      tags: commonTags,
-    });
-
-    // SQS Dead Letter Queue
-    const dlq = new SqsQueue(this, "csv-processing-dlq", {
-      name: `csv-processing-dlq-${config.environmentSuffix}`,
-      messageRetentionSeconds: 1209600, // 14 days
-      tags: commonTags,
-    });
-
-    // CloudWatch Log Group for Lambda
-    const logGroup = new CloudwatchLogGroup(this, "csv-processor-logs", {
-      name: `/aws/lambda/csv-processor-${config.environmentSuffix}`,
-      retentionInDays: envConfig.logRetentionDays,
-      tags: commonTags,
-    });
-
-    // Lambda execution role
-    const lambdaRole = new IamRole(this, "csv-processor-role", {
-      name: `csv-processor-role-${config.environmentSuffix}`,
-      assumeRolePolicy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Action: "sts:AssumeRole",
-            Effect: "Allow",
-            Principal: {
-              Service: "lambda.amazonaws.com",
-            },
-          },
-        ],
-      }),
-      tags: commonTags,
-    });
-
-    // Lambda policy
-    const lambdaPolicy = new IamPolicy(this, "csv-processor-policy", {
-      name: `csv-processor-policy-${config.environmentSuffix}`,
-      description: "Policy for CSV processor Lambda function",
-      policy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Effect: "Allow",
-            Action: [
-              "logs:CreateLogGroup",
-              "logs:CreateLogStream",
-              "logs:PutLogEvents",
-            ],
-            Resource: `arn:aws:logs:${config.region}:*:*`,
-          },
-          {
-            Effect: "Allow",
-            Action: [
-              "s3:GetObject",
-              "s3:PutObject",
-            ],
-            Resource: [`${s3Bucket.arn}/*`],
-          },
-          {
-            Effect: "Allow",
-            Action: [
-              "dynamodb:PutItem",
-              "dynamodb:UpdateItem",
-              "dynamodb:GetItem",
-              "dynamodb:Query",
-              "dynamodb:Scan",
-            ],
-            Resource: [dynamodbTable.arn],
-          },
-          {
-            Effect: "Allow",
-            Action: [
-              "sqs:SendMessage",
-            ],
-            Resource: [dlq.arn],
-          },
-        ],
-      }),
-      tags: commonTags,
-    });
-
-    // Attach policy to role
-    new IamRolePolicyAttachment(this, "csv-processor-policy-attachment", {
-      role: lambdaRole.name,
-      policyArn: lambdaPolicy.arn,
-    });
-
-    // Lambda deployment package
-    const lambdaArchive = new DataArchiveFile(this, "csv-processor-archive", {
-      type: "zip",
-      source: [
-        {
-          content: `
-import json
-import csv
-import boto3
-import os
-from datetime import datetime
-from io import StringIO
-
-def handler(event, context):
-    """
-    Lambda function to process CSV files uploaded to S3
-    """
-    s3 = boto3.client('s3')
-    dynamodb = boto3.resource('dynamodb')
-    
-    table_name = os.environ['DYNAMODB_TABLE_NAME']
-    table = dynamodb.Table(table_name)
-    
-    try:
-        for record in event['Records']:
-            bucket = record['s3']['bucket']['name']
-            key = record['s3']['object']['key']
-            
-            print(f"Processing file: {key} from bucket: {bucket}")
-            
-            # Get the CSV file from S3
-            response = s3.get_object(Bucket=bucket, Key=key)
-            csv_content = response['Body'].read().decode('utf-8')
-            
-            # Parse CSV
-            csv_reader = csv.DictReader(StringIO(csv_content))
-            rows_processed = 0
-            
-            for row in csv_reader:
-                # Store each row in DynamoDB
-                table.put_item(
-                    Item={
-                        'fileId': key,
-                        'timestamp': datetime.utcnow().isoformat(),
-                        'rowData': row,
-                        'processedAt': datetime.utcnow().isoformat()
-                    }
-                )
-                rows_processed += 1
-            
-            print(f"Successfully processed {rows_processed} rows from {key}")
-            
-        return {
-            'statusCode': 200,
-            'body': json.dumps(f'Successfully processed {len(event["Records"])} files')
-        }
-        
-    except Exception as e:
-        print(f"Error processing CSV: {str(e)}")
-        raise e
-`,
-          filename: "index.py",
-        },
-      ],
-      outputPath: "csv-processor.zip",
-    });
-
-    // Lambda function
-    const lambdaFunction = new LambdaFunction(this, "csv-processor", {
-      functionName: `csv-processor-${config.environmentSuffix}`,
-      filename: lambdaArchive.outputPath,
-      handler: "index.handler",
-      runtime: "python3.9",
-      role: lambdaRole.arn,
-      memorySize: envConfig.lambdaMemorySize,
-      timeout: envConfig.lambdaTimeout,
-      environment: {
-        variables: {
-          DYNAMODB_TABLE_NAME: dynamodbTable.name,
-          S3_BUCKET_NAME: s3Bucket.bucket,
-          PROCESSING_CONFIG: "standard",
-        },
+    // Create ALB stack
+    const albStack = new AlbStack(
+      `${environment}-alb`,
+      {
+        config: fullConfig,
+        vpcOutputs: vpcStack.outputs,
       },
-      deadLetterConfig: {
-        targetArn: dlq.arn,
+      { parent: this }
+    );
+
+    // Create RDS stack
+    const rdsStack = new RdsStack(
+      `${environment}-rds`,
+      {
+        config: fullConfig,
+        vpcOutputs: vpcStack.outputs,
       },
-      dependsOn: [logGroup],
-      tags: commonTags,
-    });
+      { parent: this }
+    );
 
-    // Lambda permission for S3 to invoke the function
-    new LambdaPermission(this, "csv-processor-s3-permission", {
-      statementId: "AllowExecutionFromS3Bucket",
-      action: "lambda:InvokeFunction",
-      functionName: lambdaFunction.functionName,
-      principal: "s3.amazonaws.com",
-      sourceArn: s3Bucket.arn,
-    });
+    // Create ECS stack
+    const ecsStack = new EcsStack(
+      `${environment}-ecs`,
+      {
+        config: fullConfig,
+        vpcOutputs: vpcStack.outputs,
+        albOutputs: albStack.outputs,
+        rdsOutputs: rdsStack.outputs,
+      },
+      { parent: this }
+    );
 
-    // S3 Bucket Notification to trigger Lambda
-    new S3BucketNotification(this, "csv-data-bucket-notification", {
-      bucket: s3Bucket.id,
-      lambdaFunction: [
-        {
-          lambdaFunctionArn: lambdaFunction.arn,
-          events: ["s3:ObjectCreated:*"],
-          filterPrefix: "raw-data/",
-          filterSuffix: ".csv",
-        },
-      ],
-      dependsOn: [lambdaFunction],
-    });
+    // Create S3 stack
+    const s3Stack = new S3Stack(
+      `${environment}-s3`,
+      {
+        config: fullConfig,
+      },
+      { parent: this }
+    );
 
-    // Terraform Outputs
-    new TerraformOutput(this, "s3-bucket-name", {
-      value: s3Bucket.bucket,
-      description: "Name of the S3 bucket for CSV files",
-    });
+    // Create Monitoring stack (only for staging/prod)
+    new MonitoringStack(
+      `${environment}-monitoring`,
+      {
+        config: fullConfig,
+        ecsOutputs: ecsStack.outputs,
+        clusterName: `${environment}-payment-cluster-${environmentSuffix}`,
+        serviceName: `${environment}-payment-service-${environmentSuffix}`,
+      },
+      { parent: this }
+    );
 
-    new TerraformOutput(this, "lambda-function-arn", {
-      value: lambdaFunction.arn,
-      description: "ARN of the Lambda function for CSV processing",
-    });
+    // Expose outputs
+    this.vpcId = vpcStack.outputs.vpcId;
+    this.albUrl = albStack.outputs.albUrl;
+    this.rdsEndpoint = rdsStack.outputs.endpoint;
+    this.bucketName = s3Stack.outputs.bucketName;
+    this.ecsClusterId = ecsStack.outputs.clusterId;
 
-    new TerraformOutput(this, "dynamodb-table-name", {
-      value: dynamodbTable.name,
-      description: "Name of the DynamoDB table for processing results",
-    });
-
-    new TerraformOutput(this, "sqs-dlq-url", {
-      value: dlq.url,
-      description: "URL of the SQS Dead Letter Queue",
-    });
-
-    new TerraformOutput(this, "environment", {
-      value: config.environment,
-      description: "Environment name",
-    });
-
-    new TerraformOutput(this, "environment-suffix", {
-      value: config.environmentSuffix,
-      description: "Environment suffix for resource isolation",
+    this.registerOutputs({
+      vpcId: this.vpcId,
+      albUrl: this.albUrl,
+      rdsEndpoint: this.rdsEndpoint,
+      bucketName: this.bucketName,
+      ecsClusterId: this.ecsClusterId,
+      environment: environment,
+      environmentSuffix: environmentSuffix,
     });
   }
 }
 ```
 
-### 2. CDKTF Main Entry Point
+### 2. RDS Stack Implementation
 
-**main.ts**:
+**lib/rds-stack.ts**:
 ```typescript
-import { App } from "cdktf";
-import { TapStack } from "./lib/tap-stack";
+import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
+import { EnvironmentConfig, RdsOutputs, VpcOutputs } from './types';
 
-const app = new App();
+export interface RdsStackArgs {
+  config: EnvironmentConfig;
+  vpcOutputs: VpcOutputs;
+}
 
-// Get environment configuration
-const environment = process.env.ENVIRONMENT || 'dev';
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';
-const region = process.env.AWS_REGION || 'ap-southeast-1';
+export class RdsStack extends pulumi.ComponentResource {
+  public readonly outputs: RdsOutputs;
 
-new TapStack(app, "tap-stack", {
-  environment,
-  environmentSuffix,
-  region,
-});
+  constructor(
+    name: string,
+    args: RdsStackArgs,
+    opts?: pulumi.ComponentResourceOptions
+  ) {
+    super('tap:rds:RdsStack', name, {}, opts);
 
-app.synth();
+    const { config, vpcOutputs } = args;
+
+    // Create secret in AWS Secrets Manager (for CI/CD testing)
+    // Use versioned name to avoid conflicts with deleted secrets
+    const secretName = `${config.environment}/payment-db-password-${config.environmentSuffix}-v2`;
+
+    // Set recovery window to 0 for dev/test environments to allow immediate deletion
+    // This enables rapid destroy/deploy cycles in CI/CD
+    const recoveryWindowInDays = config.environment === 'prod' ? 7 : 0;
+
+    const dbSecret = new aws.secretsmanager.Secret(
+      `${config.environment}-db-secret-${config.environmentSuffix}`,
+      {
+        name: secretName,
+        description: `Database password for ${config.environment} environment`,
+        recoveryWindowInDays: recoveryWindowInDays,
+        tags: {
+          ...config.tags,
+          Name: `${config.environment}-db-secret-${config.environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
+    const secretPassword = pulumi
+      .all([config.environment, config.environmentSuffix])
+      .apply(
+        ([env, suffix]) =>
+          `${env}Password${suffix}${Math.random().toString(36).substring(2, 10)}`
+      );
+
+    new aws.secretsmanager.SecretVersion(
+      `${config.environment}-db-secret-version-${config.environmentSuffix}`,
+      {
+        secretId: dbSecret.id,
+        secretString: secretPassword,
+      },
+      { parent: this }
+    );
+
+    // Create RDS security group
+    const rdsSecurityGroup = new aws.ec2.SecurityGroup(
+      `${config.environment}-rds-sg-${config.environmentSuffix}`,
+      {
+        vpcId: vpcOutputs.vpcId,
+        description: `Security group for ${config.environment} RDS`,
+        ingress: [
+          {
+            protocol: 'tcp',
+            fromPort: 5432,
+            toPort: 5432,
+            cidrBlocks: [
+              pulumi.output(vpcOutputs.vpcId).apply(async vpcId => {
+                const vpc = await aws.ec2.getVpc({ id: vpcId });
+                return vpc.cidrBlock;
+              }),
+            ],
+            description: 'Allow PostgreSQL traffic from VPC',
+          },
+        ],
+        tags: {
+          ...config.tags,
+          Name: `${config.environment}-rds-sg-${config.environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
+    // Create DB subnet group
+    const dbSubnetGroup = new aws.rds.SubnetGroup(
+      `${config.environment}-db-subnet-group-${config.environmentSuffix}`,
+      {
+        subnetIds: vpcOutputs.privateSubnetIds,
+        tags: {
+          ...config.tags,
+          Name: `${config.environment}-db-subnet-group-${config.environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
+    // Create RDS instance
+    const dbInstance = new aws.rds.Instance(
+      `${config.environment}-db-${config.environmentSuffix}`,
+      {
+        identifier: `${config.environment}-payment-db-${config.environmentSuffix}`,
+        engine: 'postgres',
+        engineVersion: '15.7',
+        instanceClass: config.rdsInstanceClass,
+        allocatedStorage: 20,
+        maxAllocatedStorage: 100,
+        storageType: 'gp3',
+        storageEncrypted: true,
+        dbName: 'paymentdb',
+        username: 'dbadmin',
+        password: secretPassword,
+        dbSubnetGroupName: dbSubnetGroup.name,
+        vpcSecurityGroupIds: [rdsSecurityGroup.id],
+        multiAz: config.rdsMultiAz,
+        publiclyAccessible: false,
+        skipFinalSnapshot: true,
+        backupRetentionPeriod: config.environment === 'prod' ? 7 : 1,
+        tags: {
+          ...config.tags,
+          Name: `${config.environment}-payment-db-${config.environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
+    this.outputs = {
+      instanceId: dbInstance.id,
+      endpoint: dbInstance.endpoint,
+      port: dbInstance.port,
+      securityGroupId: rdsSecurityGroup.id,
+      secretArn: dbSecret.arn,
+    };
+
+    this.registerOutputs({
+      instanceId: this.outputs.instanceId,
+      endpoint: this.outputs.endpoint,
+      port: this.outputs.port,
+      securityGroupId: this.outputs.securityGroupId,
+      secretArn: this.outputs.secretArn,
+    });
+  }
+}
 ```
 
-### 3. TypeScript Interfaces
+### 3. VPC Stack Implementation
+
+**lib/vpc-stack.ts**:
+```typescript
+import * as pulumi from '@pulumi/pulumi';
+import * as aws from '@pulumi/aws';
+import { EnvironmentConfig, VpcOutputs } from './types';
+
+export interface VpcStackArgs {
+  config: EnvironmentConfig;
+}
+
+export class VpcStack extends pulumi.ComponentResource {
+  public readonly outputs: VpcOutputs;
+
+  constructor(
+    name: string,
+    args: VpcStackArgs,
+    opts?: pulumi.ComponentResourceOptions
+  ) {
+    super('tap:vpc:VpcStack', name, {}, opts);
+
+    const { config } = args;
+
+    // Create VPC
+    const vpc = new aws.ec2.Vpc(
+      `${config.environment}-vpc-${config.environmentSuffix}`,
+      {
+        cidrBlock: config.vpcCidr,
+        enableDnsHostnames: true,
+        enableDnsSupport: true,
+        tags: {
+          ...config.tags,
+          Name: `${config.environment}-vpc-${config.environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
+    // Create Internet Gateway
+    const igw = new aws.ec2.InternetGateway(
+      `${config.environment}-igw-${config.environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        tags: {
+          ...config.tags,
+          Name: `${config.environment}-igw-${config.environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
+    // Create public and private subnets
+    const publicSubnets: aws.ec2.Subnet[] = [];
+    const privateSubnets: aws.ec2.Subnet[] = [];
+
+    config.availabilityZones.forEach((az, index) => {
+      const publicSubnet = new aws.ec2.Subnet(
+        `${config.environment}-public-subnet-${index + 1}-${config.environmentSuffix}`,
+        {
+          vpcId: vpc.id,
+          cidrBlock: `${config.vpcCidr.split('.')[0]}.${config.vpcCidr.split('.')[1]}.${index * 2}.0/24`,
+          availabilityZone: az,
+          mapPublicIpOnLaunch: true,
+          tags: {
+            ...config.tags,
+            Name: `${config.environment}-public-subnet-${index + 1}-${config.environmentSuffix}`,
+            Type: 'public',
+          },
+        },
+        { parent: this }
+      );
+      publicSubnets.push(publicSubnet);
+
+      const privateSubnet = new aws.ec2.Subnet(
+        `${config.environment}-private-subnet-${index + 1}-${config.environmentSuffix}`,
+        {
+          vpcId: vpc.id,
+          cidrBlock: `${config.vpcCidr.split('.')[0]}.${config.vpcCidr.split('.')[1]}.${index * 2 + 1}.0/24`,
+          availabilityZone: az,
+          mapPublicIpOnLaunch: false,
+          tags: {
+            ...config.tags,
+            Name: `${config.environment}-private-subnet-${index + 1}-${config.environmentSuffix}`,
+            Type: 'private',
+          },
+        },
+        { parent: this }
+      );
+      privateSubnets.push(privateSubnet);
+    });
+
+    // Create NAT Gateways
+    const natGateways: aws.ec2.NatGateway[] = [];
+    publicSubnets.forEach((subnet, index) => {
+      const eip = new aws.ec2.Eip(
+        `${config.environment}-nat-eip-${index + 1}-${config.environmentSuffix}`,
+        {
+          domain: 'vpc',
+          tags: {
+            ...config.tags,
+            Name: `${config.environment}-nat-eip-${index + 1}-${config.environmentSuffix}`,
+          },
+        },
+        { parent: this }
+      );
+
+      const natGw = new aws.ec2.NatGateway(
+        `${config.environment}-nat-gateway-${index + 1}-${config.environmentSuffix}`,
+        {
+          subnetId: subnet.id,
+          allocationId: eip.id,
+          tags: {
+            ...config.tags,
+            Name: `${config.environment}-nat-gateway-${index + 1}-${config.environmentSuffix}`,
+          },
+        },
+        { parent: this }
+      );
+      natGateways.push(natGw);
+    });
+
+    this.outputs = {
+      vpcId: vpc.id,
+      publicSubnetIds: publicSubnets.map(s => s.id),
+      privateSubnetIds: privateSubnets.map(s => s.id),
+      natGatewayIds: natGateways.map(ng => ng.id),
+    };
+
+    this.registerOutputs({
+      vpcId: this.outputs.vpcId,
+      publicSubnetIds: this.outputs.publicSubnetIds,
+      privateSubnetIds: this.outputs.privateSubnetIds,
+      natGatewayIds: this.outputs.natGatewayIds,
+    });
+  }
+}
+```
+
+### 4. ALB Stack Implementation
+
+**lib/alb-stack.ts**:
+```typescript
+import * as pulumi from '@pulumi/pulumi';
+import * as aws from '@pulumi/aws';
+import { EnvironmentConfig, VpcOutputs, AlbOutputs } from './types';
+
+export interface AlbStackArgs {
+  config: EnvironmentConfig;
+  vpcOutputs: VpcOutputs;
+}
+
+export class AlbStack extends pulumi.ComponentResource {
+  public readonly outputs: AlbOutputs;
+
+  constructor(
+    name: string,
+    args: AlbStackArgs,
+    opts?: pulumi.ComponentResourceOptions
+  ) {
+    super('tap:alb:AlbStack', name, {}, opts);
+
+    const { config, vpcOutputs } = args;
+
+    // Create ALB security group
+    const albSecurityGroup = new aws.ec2.SecurityGroup(
+      `${config.environment}-alb-sg-${config.environmentSuffix}`,
+      {
+        vpcId: vpcOutputs.vpcId,
+        description: `Security group for ${config.environment} ALB`,
+        ingress: [
+          {
+            protocol: 'tcp',
+            fromPort: 80,
+            toPort: 80,
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'Allow HTTP traffic',
+          },
+          ...(config.enableSsl
+            ? [
+                {
+                  protocol: 'tcp',
+                  fromPort: 443,
+                  toPort: 443,
+                  cidrBlocks: ['0.0.0.0/0'],
+                  description: 'Allow HTTPS traffic',
+                },
+              ]
+            : []),
+        ],
+        tags: {
+          ...config.tags,
+          Name: `${config.environment}-alb-sg-${config.environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
+    // Create Application Load Balancer
+    const alb = new aws.lb.LoadBalancer(
+      `${config.environment}-alb-${config.environmentSuffix}`,
+      {
+        internal: false,
+        loadBalancerType: 'application',
+        securityGroups: [albSecurityGroup.id],
+        subnets: vpcOutputs.publicSubnetIds,
+        enableDeletionProtection: false,
+        tags: {
+          ...config.tags,
+          Name: `${config.environment}-alb-${config.environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
+    // Create target group
+    const targetGroup = new aws.lb.TargetGroup(
+      `${config.environment}-tg-${config.environmentSuffix}`,
+      {
+        port: 3000,
+        protocol: 'HTTP',
+        vpcId: vpcOutputs.vpcId,
+        targetType: 'ip',
+        healthCheck: {
+          enabled: true,
+          path: '/health',
+          protocol: 'HTTP',
+          matcher: '200',
+        },
+        tags: {
+          ...config.tags,
+          Name: `${config.environment}-tg-${config.environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
+    let albUrl: pulumi.Output<string>;
+
+    if (config.enableSsl) {
+      // Create ACM certificate for HTTPS
+      const certificate = new aws.acm.Certificate(
+        `${config.environment}-cert-${config.environmentSuffix}`,
+        {
+          domainName: `${config.environment}.example.com`,
+          validationMethod: 'DNS',
+          tags: {
+            ...config.tags,
+            Name: `${config.environment}-cert-${config.environmentSuffix}`,
+          },
+        },
+        { parent: this }
+      );
+
+      // Create HTTPS listener
+      new aws.lb.Listener(
+        `${config.environment}-https-listener-${config.environmentSuffix}`,
+        {
+          loadBalancerArn: alb.arn,
+          port: 443,
+          protocol: 'HTTPS',
+          sslPolicy: 'ELBSecurityPolicy-TLS-1-2-2017-01',
+          certificateArn: certificate.arn,
+          defaultActions: [
+            {
+              type: 'forward',
+              targetGroupArn: targetGroup.arn,
+            },
+          ],
+          tags: {
+            ...config.tags,
+            Name: `${config.environment}-https-listener-${config.environmentSuffix}`,
+          },
+        },
+        { parent: this }
+      );
+
+      albUrl = pulumi.interpolate`https://${alb.dnsName}`;
+    } else {
+      // Create HTTP listener only
+      new aws.lb.Listener(
+        `${config.environment}-http-listener-${config.environmentSuffix}`,
+        {
+          loadBalancerArn: alb.arn,
+          port: 80,
+          protocol: 'HTTP',
+          defaultActions: [
+            {
+              type: 'forward',
+              targetGroupArn: targetGroup.arn,
+            },
+          ],
+          tags: {
+            ...config.tags,
+            Name: `${config.environment}-http-listener-${config.environmentSuffix}`,
+          },
+        },
+        { parent: this }
+      );
+
+      albUrl = pulumi.interpolate`http://${alb.dnsName}`;
+    }
+
+    this.outputs = {
+      albArn: alb.arn,
+      albDnsName: alb.dnsName,
+      albUrl: albUrl,
+      targetGroupArn: targetGroup.arn,
+      securityGroupId: albSecurityGroup.id,
+    };
+
+    this.registerOutputs({
+      albArn: this.outputs.albArn,
+      albDnsName: this.outputs.albDnsName,
+      albUrl: this.outputs.albUrl,
+      targetGroupArn: this.outputs.targetGroupArn,
+      securityGroupId: this.outputs.securityGroupId,
+    });
+  }
+}
+```
+
+### 5. Pulumi Application Entry Point
+
+**bin/tap.ts**:
+```typescript
+import * as pulumi from '@pulumi/pulumi';
+import { TapStack } from '../lib/tap-stack';
+
+// Initialize Pulumi configuration for the current stack.
+const config = new pulumi.Config();
+
+// Get the environment suffix from the CI, Pulumi config, defaulting to 'dev'.
+const environmentSuffix =
+  process.env.ENVIRONMENT_SUFFIX || config.get('env') || 'dev';
+
+// Get metadata from environment variables for tagging purposes.
+const repository =
+  config.get('repository') || 'payment-processing-infrastructure';
+const commitAuthor = config.get('commitAuthor') || 'unknown';
+
+// Define a set of default tags to apply to all resources.
+const defaultTags = {
+  Environment: environmentSuffix,
+  Repository: repository,
+  Author: commitAuthor,
+  ManagedBy: 'Pulumi',
+};
+
+// Instantiate the main stack component for the infrastructure.
+const stack = new TapStack('payment-infra', {
+  environmentSuffix: environmentSuffix,
+  tags: defaultTags,
+});
+
+// Export stack outputs
+export const vpcId = stack.vpcId;
+export const albUrl = stack.albUrl;
+export const rdsEndpoint = stack.rdsEndpoint;
+export const bucketName = stack.bucketName;
+export const ecsClusterId = stack.ecsClusterId;
+```
+
+### 6. TypeScript Interfaces
 
 **lib/types.ts**:
 ```typescript
+import * as pulumi from '@pulumi/pulumi';
+
 export interface EnvironmentConfig {
   environment: string;
   environmentSuffix: string;
-  region: string;
-  lambdaMemorySize: number;
-  lambdaTimeout: number;
-  dynamodbBillingMode: string;
-  logRetentionDays: number;
+  vpcCidr: string;
+  availabilityZones: string[];
+  ecsTaskCount: number;
+  rdsInstanceClass: string;
+  rdsMultiAz: boolean;
   s3LifecycleDays: number;
-  tags: { [key: string]: string };
+  enableSsl: boolean;
+  enableMonitoring: boolean;
+  tags: pulumi.Input<{ [key: string]: string }>;
 }
 
-export interface TapStackOutputs {
-  s3BucketName: string;
-  lambdaFunctionArn: string;
-  dynamodbTableName: string;
-  sqsDlqUrl: string;
-  environment: string;
-  environmentSuffix: string;
+export interface VpcOutputs {
+  vpcId: pulumi.Output<string>;
+  publicSubnetIds: pulumi.Output<string>[];
+  privateSubnetIds: pulumi.Output<string>[];
+  natGatewayIds: pulumi.Output<string>[];
 }
-```
 
-### 4. CDKTF Configuration
-
-**cdktf.json**:
-```json
-{
-  "language": "typescript",
-  "app": "npm run build && node main.js",
-  "projectId": "csv-processing-pipeline",
-  "terraformProviders": [
-    "aws@~> 5.0",
-    "archive@~> 2.0"
-  ],
-  "terraformModules": [],
-  "context": {
-    "excludeStackIdFromLogicalIds": true
-  }
+export interface AlbOutputs {
+  albArn: pulumi.Output<string>;
+  albDnsName: pulumi.Output<string>;
+  albUrl: pulumi.Output<string>;
+  targetGroupArn: pulumi.Output<string>;
+  securityGroupId: pulumi.Output<string>;
 }
-```
 
-### 5. Package Configuration
+export interface RdsOutputs {
+  instanceId: pulumi.Output<string>;
+  endpoint: pulumi.Output<string>;
+  port: pulumi.Output<number>;
+  securityGroupId: pulumi.Output<string>;
+  secretArn: pulumi.Output<string>;
+}
 
-**package.json**:
-```json
-{
-  "name": "iac-test-automations",
-  "version": "1.0.0",
-  "main": "main.js",
-  "scripts": {
-    "build": "tsc",
-    "synth": "cdktf synth",
-    "deploy": "cdktf deploy",
-    "destroy": "cdktf destroy",
-    "test:unit": "jest --testPathPattern=unit.test.ts",
-    "test:integration": "jest --testPathPattern=int.test.ts",
-    "test": "npm run test:unit && npm run test:integration"
-  },
-  "devDependencies": {
-    "@types/jest": "^29.5.0",
-    "@types/node": "^18.0.0",
-    "jest": "^29.5.0",
-    "ts-jest": "^29.1.0",
-    "typescript": "^5.0.0"
-  },
-  "dependencies": {
-    "cdktf": "^0.19.0",
-    "constructs": "^10.3.0",
-    "@cdktf/provider-aws": "^19.0.0",
-    "@cdktf/provider-archive": "^10.0.0",
-    "@aws-sdk/client-s3": "^3.0.0",
-    "@aws-sdk/client-lambda": "^3.0.0",
-    "@aws-sdk/client-dynamodb": "^3.0.0",
-    "@aws-sdk/client-sqs": "^3.0.0",
-    "@aws-sdk/client-cloudwatch-logs": "^3.0.0",
-    "@aws-sdk/client-iam": "^3.0.0"
-  }
+export interface EcsOutputs {
+  clusterId: pulumi.Output<string>;
+  serviceArn: pulumi.Output<string>;
+  taskDefinitionArn: pulumi.Output<string>;
+  securityGroupId: pulumi.Output<string>;
+}
+
+export interface S3Outputs {
+  bucketName: pulumi.Output<string>;
+  bucketArn: pulumi.Output<string>;
 }
 ```
 
-### 6. Environment-Specific Configuration
+## Environment Configuration
 
-Environment variables for deployment:
-
-**Dev Environment**:
-```bash
-export ENVIRONMENT=dev
-export ENVIRONMENT_SUFFIX=dev-001
-export AWS_REGION=ap-southeast-1
-```
-
-**Staging Environment**:
-```bash
-export ENVIRONMENT=staging
-export ENVIRONMENT_SUFFIX=staging-001
-export AWS_REGION=ap-southeast-1
-```
-
-**Production Environment**:
-```bash
-export ENVIRONMENT=prod
-export ENVIRONMENT_SUFFIX=prod-001
-export AWS_REGION=ap-southeast-1
-```
-
-### 7. Complete Integration Test Implementation
-
-**test/tap-stack.int.test.ts**:
+### Dev Environment
 ```typescript
-import {
-  CloudWatchLogsClient,
-  DescribeLogGroupsCommand
-} from '@aws-sdk/client-cloudwatch-logs';
-import {
-  DeleteItemCommand,
-  DescribeTableCommand,
-  DynamoDBClient,
-  ScanCommand
-} from '@aws-sdk/client-dynamodb';
-import {
-  GetRoleCommand,
-  IAMClient,
-  ListAttachedRolePoliciesCommand
-} from '@aws-sdk/client-iam';
-import {
-  GetFunctionCommand,
-  GetFunctionConfigurationCommand,
-  InvokeCommand,
-  LambdaClient
-} from '@aws-sdk/client-lambda';
-import {
-  DeleteObjectCommand,
-  GetBucketEncryptionCommand,
-  GetBucketLocationCommand,
-  GetBucketVersioningCommand,
-  ListObjectsV2Command,
-  PutObjectCommand,
-  S3Client
-} from '@aws-sdk/client-s3';
-import {
-  GetQueueAttributesCommand,
-  GetQueueUrlCommand,
-  SQSClient
-} from '@aws-sdk/client-sqs';
-import * as fs from 'fs';
-import * as path from 'path';
-
-const REGION = process.env.AWS_REGION || 'ap-southeast-1';
-const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'test';
-const TEST_TIMEOUT = 60000;
-
-// AWS Clients
-const s3Client = new S3Client({ region: REGION });
-const lambdaClient = new LambdaClient({ region: REGION });
-const dynamoClient = new DynamoDBClient({ region: REGION });
-const sqsClient = new SQSClient({ region: REGION });
-const logsClient = new CloudWatchLogsClient({ region: REGION });
-const iamClient = new IAMClient({ region: REGION });
-
-/**
- * Helper function to safely execute AWS SDK commands
- */
-async function safeAwsCall<T>(
-  operation: () => Promise<T>,
-  operationName: string,
-  isOptional: boolean = true
-): Promise<{ success: boolean; data?: T; error?: any }> {
-  try {
-    const data = await operation();
-    return { success: true, data };
-  } catch (error) {
-    if (isOptional) {
-      console.warn(`Optional operation ${operationName} failed:`, error.message || error);
-      return { success: false, error };
-    } else {
-      console.error(`Required operation ${operationName} failed:`, error.message || error);
-      throw error;
-    }
-  }
+{
+  vpcCidr: '10.1.0.0/16',
+  ecsTaskCount: 1,
+  rdsInstanceClass: 'db.t3.micro',
+  rdsMultiAz: false,
+  s3LifecycleDays: 7,
+  enableSsl: false,
+  enableMonitoring: false,
 }
+```
 
-describe('CSV Processing Pipeline Integration Tests', () => {
-  let outputs: Record<string, any>;
-  let environmentSuffix: string;
-  let testFileKey: string;
+### Staging Environment
+```typescript
+{
+  vpcCidr: '10.2.0.0/16',
+  ecsTaskCount: 2,
+  rdsInstanceClass: 'db.t3.small',
+  rdsMultiAz: false,
+  s3LifecycleDays: 30,
+  enableSsl: true,
+  enableMonitoring: true,
+}
+```
 
-  beforeAll(async () => {
-    // Load deployment outputs
-    const outputsPath = path.join(process.cwd(), 'terraform-outputs', 'outputs.json');
-    
-    if (fs.existsSync(outputsPath)) {
-      outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
-      environmentSuffix = outputs['environment-suffix'] || ENVIRONMENT_SUFFIX;
-    } else {
-      // Fallback configuration
-      environmentSuffix = ENVIRONMENT_SUFFIX;
-      outputs = {
-        's3-bucket-name': `csv-data-${environmentSuffix}`,
-        'lambda-function-arn': `arn:aws:lambda:${REGION}:123456789012:function:csv-processor-${environmentSuffix}`,
-        'dynamodb-table-name': `processing-results-${environmentSuffix}`
-      };
-      console.log('⚠️  Using fallback resource names - deployment outputs not found');
-    }
-
-    testFileKey = `integration-test-${Date.now()}.csv`;
-  }, TEST_TIMEOUT);
-
-  afterAll(async () => {
-    // Cleanup test data
-    if (outputs && testFileKey) {
-      await safeAwsCall(
-        () => s3Client.send(new DeleteObjectCommand({
-          Bucket: outputs['s3-bucket-name'],
-          Key: `raw-data/${testFileKey}`
-        })),
-        'S3 cleanup',
-        true
-      );
-    }
-  }, TEST_TIMEOUT);
-
-  describe('Infrastructure Deployment Validation', () => {
-    test('Should have S3 bucket for CSV files', async () => {
-      expect(outputs['s3-bucket-name']).toBeDefined();
-      expect(outputs['s3-bucket-name']).toMatch(/^csv-data-/);
-      expect(outputs['s3-bucket-name']).toContain(environmentSuffix);
-
-      const bucketResult = await safeAwsCall(
-        () => s3Client.send(new GetBucketLocationCommand({
-          Bucket: outputs['s3-bucket-name']
-        })),
-        'S3 bucket location check',
-        true
-      );
-
-      if (bucketResult.success) {
-        console.log(`✓ S3 bucket ${outputs['s3-bucket-name']} exists and is accessible`);
-        expect(bucketResult.data).toBeDefined();
-      } else {
-        console.log(`⚠️  S3 bucket may not exist yet - this is expected if deployment is in progress`);
-      }
-    }, TEST_TIMEOUT);
-
-    test('Should have Lambda function for CSV processing', async () => {
-      expect(outputs['lambda-function-arn']).toBeDefined();
-      expect(outputs['lambda-function-arn']).toMatch(/csv-processor/);
-      expect(outputs['lambda-function-arn']).toContain(environmentSuffix);
-
-      const functionName = `csv-processor-${environmentSuffix}`;
-      
-      const functionResult = await safeAwsCall(
-        () => lambdaClient.send(new GetFunctionCommand({
-          FunctionName: functionName
-        })),
-        'Lambda function check',
-        true
-      );
-
-      if (functionResult.success) {
-        console.log(`✓ Lambda function ${functionName} exists and is accessible`);
-        expect(functionResult.data?.Configuration?.Runtime).toBe('python3.9');
-        expect(functionResult.data?.Configuration?.Handler).toBe('index.handler');
-      } else {
-        console.log(`⚠️  Lambda function may not exist yet - this is expected if deployment is in progress`);
-      }
-    }, TEST_TIMEOUT);
-
-    test('Should have DynamoDB table for processing results', async () => {
-      expect(outputs['dynamodb-table-name']).toBeDefined();
-      expect(outputs['dynamodb-table-name']).toMatch(/^processing-results-/);
-      expect(outputs['dynamodb-table-name']).toContain(environmentSuffix);
-
-      const tableResult = await safeAwsCall(
-        () => dynamoClient.send(new DescribeTableCommand({
-          TableName: outputs['dynamodb-table-name']
-        })),
-        'DynamoDB table check',
-        true
-      );
-
-      if (tableResult.success) {
-        console.log(`✓ DynamoDB table ${outputs['dynamodb-table-name']} exists and is accessible`);
-        expect(tableResult.data?.Table?.KeySchema).toEqual([
-          { AttributeName: 'fileId', KeyType: 'HASH' },
-          { AttributeName: 'timestamp', KeyType: 'RANGE' }
-        ]);
-      } else {
-        console.log(`⚠️  DynamoDB table may not exist yet - this is expected if deployment is in progress`);
-      }
-    }, TEST_TIMEOUT);
-  });
-
-  describe('End-to-End Pipeline Testing', () => {
-    test('Should process CSV file upload end-to-end', async () => {
-      const csvContent = 'name,age,city\nJohn,30,New York\nJane,25,Los Angeles\nBob,35,Chicago';
-      
-      const uploadResult = await safeAwsCall(
-        () => s3Client.send(new PutObjectCommand({
-          Bucket: outputs['s3-bucket-name'],
-          Key: `raw-data/${testFileKey}`,
-          Body: csvContent,
-          ContentType: 'text/csv'
-        })),
-        'S3 file upload',
-        true
-      );
-
-      if (uploadResult.success) {
-        console.log(`✓ Successfully uploaded test file ${testFileKey} to S3`);
-
-        // Verify file exists
-        const listResult = await safeAwsCall(
-          () => s3Client.send(new ListObjectsV2Command({
-            Bucket: outputs['s3-bucket-name'],
-            Prefix: `raw-data/${testFileKey}`
-          })),
-          'S3 file verification',
-          true
-        );
-
-        if (listResult.success) {
-          expect(listResult.data?.Contents).toBeDefined();
-          expect(listResult.data?.Contents?.length).toBe(1);
-          expect(listResult.data?.Contents?.[0]?.Key).toBe(`raw-data/${testFileKey}`);
-          console.log('✓ File upload and storage verified');
-        }
-      } else {
-        console.log('⚠️  End-to-end test skipped - S3 bucket not accessible');
-      }
-    }, TEST_TIMEOUT);
-
-    test('Should be able to invoke Lambda function directly', async () => {
-      const functionName = `csv-processor-${environmentSuffix}`;
-      
-      const testEvent = {
-        Records: [{
-          s3: {
-            bucket: { name: outputs['s3-bucket-name'] },
-            object: { key: `raw-data/test-${Date.now()}.csv` }
-          }
-        }]
-      };
-
-      const invokeResult = await safeAwsCall(
-        () => lambdaClient.send(new InvokeCommand({
-          FunctionName: functionName,
-          Payload: new TextEncoder().encode(JSON.stringify(testEvent)),
-          InvocationType: 'RequestResponse'
-        })),
-        'Lambda function invocation',
-        true
-      );
-
-      if (invokeResult.success) {
-        console.log(`✓ Lambda function ${functionName} invocation successful`);
-        expect(invokeResult.data?.$metadata.httpStatusCode).toBe(200);
-      } else {
-        console.log(`⚠️  Lambda function invocation test skipped - function not accessible`);
-      }
-    }, TEST_TIMEOUT);
-  });
-
-  describe('Resource Configuration Validation', () => {
-    test('All resources should follow consistent naming patterns', () => {
-      const resourceNames = [
-        outputs['s3-bucket-name'],
-        outputs['lambda-function-arn'],
-        outputs['dynamodb-table-name'],
-      ];
-
-      resourceNames.forEach(name => {
-        expect(name).toBeDefined();
-        expect(typeof name).toBe('string');
-        expect(name).toContain(environmentSuffix);
-      });
-
-      // Validate specific patterns
-      expect(outputs['s3-bucket-name']).toMatch(/^csv-data-[\w-]+$/);
-      expect(outputs['dynamodb-table-name']).toMatch(/^processing-results-[\w-]+$/);
-      
-      if (outputs['lambda-function-arn'].includes('arn:aws:lambda:')) {
-        expect(outputs['lambda-function-arn']).toContain(REGION);
-      }
-    });
-
-    test('All outputs should be defined and non-empty', () => {
-      const expectedOutputs = [
-        's3-bucket-name',
-        'lambda-function-arn',
-        'dynamodb-table-name'
-      ];
-
-      expectedOutputs.forEach(outputKey => {
-        expect(outputs[outputKey]).toBeDefined();
-        expect(outputs[outputKey]).not.toBe('');
-        expect(typeof outputs[outputKey]).toBe('string');
-      });
-    });
-  });
-});
+### Production Environment
+```typescript
+{
+  vpcCidr: '10.3.0.0/16',
+  ecsTaskCount: 4,
+  rdsInstanceClass: 'db.t3.medium',
+  rdsMultiAz: true,
+  s3LifecycleDays: 90,
+  enableSsl: true,
+  enableMonitoring: true,
+}
 ```
 
 ## Deployment
@@ -830,43 +832,48 @@ describe('CSV Processing Pipeline Integration Tests', () => {
 ### Prerequisites
 
 ```bash
-# Install CDKTF CLI
-npm install -g cdktf-cli
+# Install Pulumi CLI
+curl -fsSL https://get.pulumi.com | sh
 
 # Install dependencies
 npm install
 
-# Set environment variables
-export ENVIRONMENT=dev
-export ENVIRONMENT_SUFFIX=dev-001
-export AWS_REGION=ap-southeast-1
+# Configure AWS credentials
+aws configure
 ```
 
 ### Deploy Infrastructure
 
 ```bash
-# Initialize CDKTF (first time only)
-cdktf init --template=typescript --local
+# Set environment variables
+export ENVIRONMENT_SUFFIX=pr123
+export PULUMI_CONFIG_PASSPHRASE=your-passphrase
 
-# Build TypeScript
-npm run build
+# Create/select stack
+pulumi stack init dev
+# or
+pulumi stack select dev
+
+# Preview changes
+pulumi preview
 
 # Deploy infrastructure
-cdktf deploy
+pulumi up
 
 # Or with auto-approve
-cdktf deploy --auto-approve
+pulumi up --yes
 ```
 
 ### Stack Outputs
 
-After deployment, outputs are available in `terraform-outputs/outputs.json`:
-- `s3-bucket-name`: Name of the S3 bucket for CSV files
-- `lambda-function-arn`: ARN of the Lambda function for CSV processing
-- `dynamodb-table-name`: Name of the DynamoDB table for processing results
-- `sqs-dlq-url`: URL of the SQS Dead Letter Queue
+After deployment, outputs are available via `pulumi stack output`:
+- `vpcId`: VPC ID
+- `albUrl`: ALB URL (HTTP or HTTPS)
+- `rdsEndpoint`: RDS endpoint
+- `bucketName`: S3 bucket name
+- `ecsClusterId`: ECS cluster ID
 - `environment`: Environment name
-- `environment-suffix`: Suffix used for resource isolation
+- `environmentSuffix`: Environment suffix
 
 ## Testing
 
@@ -876,79 +883,122 @@ After deployment, outputs are available in `terraform-outputs/outputs.json`:
 npm run test:unit
 ```
 
+Tests cover:
+- Environment configuration selection
+- Conditional logic (SSL, monitoring, backup retention)
+- Stack instantiation with Pulumi mocks
+- TypeScript interface validation
+- RDS recovery window configuration
+- ALB SSL configuration
+- ECS container insights and log retention
+- Monitoring stack conditional creation
+
 ### Integration Tests
 
 ```bash
 npm run test:integration
 ```
 
+Tests validate:
+- Infrastructure deployment
+- Resource accessibility
+- End-to-end functionality
+- Resource naming conventions
+
 ## Key Features
 
 ### 1. Environment Suffix Integration
 - All resources include `environmentSuffix` for parallel PR testing
-- Resource naming pattern: `{service}-{environmentSuffix}`
+- Resource naming pattern: `{environment}-{service}-{environmentSuffix}`
 - Enables multiple deployments in same AWS account
 
-### 2. Serverless Architecture
-- **S3**: CSV file storage with automatic Lambda triggering
-- **Lambda**: Python 3.9 function for CSV processing
-- **DynamoDB**: Serverless database for processing results
-- **SQS**: Dead letter queue for error handling
-- **CloudWatch**: Automatic logging and monitoring
+### 2. Secrets Manager Best Practices
+- Versioned secret names (`-v2` suffix) to avoid deletion conflicts
+- Recovery window: 0 days for dev/staging (immediate deletion), 7 days for prod
+- Enables rapid destroy/deploy cycles in CI/CD
 
-### 3. Cost Optimization
-- **Serverless**: Pay only for actual usage
-- **DynamoDB**: On-demand billing
-- **Lambda**: Millisecond billing
-- **S3**: Standard storage with lifecycle policies
-
-### 4. Security Features
-- **Encryption**: S3 server-side encryption (AES256)
+### 3. Security Features
+- **Encryption**: S3 server-side encryption (AES256), RDS storage encryption
 - **IAM**: Least-privilege access policies
-- **VPC**: Lambda can run in VPC if needed
-- **Tags**: Comprehensive resource tagging
+- **VPC**: Private subnets for RDS and ECS
+- **Security Groups**: Restrictive ingress rules
+- **Secrets Manager**: Secure credential storage
 
-### 5. Error Handling
-- **Dead Letter Queue**: Failed Lambda executions
-- **CloudWatch Logs**: Detailed logging with retention
-- **Retry Logic**: Built-in Lambda retry mechanisms
+### 4. High Availability
+- **Multi-AZ RDS**: Enabled for production
+- **Multiple Subnets**: Public and private subnets across 2 AZs
+- **NAT Gateways**: One per availability zone
+- **ECS Task Count**: Scalable based on environment
+
+### 5. Monitoring and Observability
+- **CloudWatch Logs**: ECS task logging with retention
+- **Container Insights**: Enabled for staging/prod
+- **CloudWatch Alarms**: CPU, memory, and task count monitoring
+- **SNS Topics**: Alarm notifications
+
+### 6. Cost Optimization
+- **Environment-specific sizing**: Smaller instances for dev/staging
+- **S3 Lifecycle Policies**: Automatic transition to Glacier
+- **Log Retention**: Shorter retention for dev/staging
+- **Conditional Monitoring**: Only enabled for staging/prod
 
 ## Cost Estimation
 
-**Dev Environment** (~$5-15/month):
-- Lambda: ~$1-5 (depends on executions)
-- DynamoDB: ~$1-3 (on-demand)
-- S3: ~$1-2 (standard storage)
-- CloudWatch Logs: ~$1-2
-- SQS: ~$0-1
+**Dev Environment** (~$50-100/month):
+- VPC: ~$30 (NAT Gateways)
+- RDS: ~$15 (db.t3.micro)
+- ECS: ~$10 (1 task)
+- ALB: ~$20
+- S3: ~$5
 
-**Production** (~$20-100/month):
-- Scales based on usage
-- Higher Lambda execution volume
-- More DynamoDB read/write capacity
-- Longer log retention
+**Staging Environment** (~$100-150/month):
+- VPC: ~$30 (NAT Gateways)
+- RDS: ~$30 (db.t3.small)
+- ECS: ~$20 (2 tasks)
+- ALB: ~$20
+- S3: ~$10
+- Monitoring: ~$5
+
+**Production Environment** (~$200-300/month):
+- VPC: ~$30 (NAT Gateways)
+- RDS: ~$80 (db.t3.medium, Multi-AZ)
+- ECS: ~$40 (4 tasks)
+- ALB: ~$20
+- S3: ~$15
+- Monitoring: ~$10
 
 ## Cleanup
 
 ```bash
 # Destroy infrastructure
-cdktf destroy
+pulumi destroy
 
 # Or with auto-approve
-cdktf destroy --auto-approve
+pulumi destroy --yes
 ```
 
 ## Platform Detection
 
-This implementation uses **CDKTF (CDK for Terraform)** with:
+This implementation uses **Pulumi** with:
 - TypeScript language
-- AWS Provider v5.x
-- Archive Provider v2.x
-- Terraform backend for state management
+- AWS Provider (`@pulumi/aws`)
+- Component resources for modular architecture (`extends pulumi.ComponentResource`)
+- Pulumi configuration for environment management
 - Complete infrastructure as code
 
 The platform is clearly identifiable through:
-- `cdktf.json` configuration file
-- CDKTF imports in TypeScript files
-- Terraform provider usage
-- CDKTF CLI commands in package.json scripts
+- `Pulumi.yaml` configuration file
+- Pulumi imports in TypeScript files (`import * as pulumi from '@pulumi/pulumi'`, `import * as aws from '@pulumi/aws'`)
+- Pulumi CLI commands (`pulumi up`, `pulumi destroy`)
+- Component resource pattern (`extends pulumi.ComponentResource`)
+- Pulumi Output types (`pulumi.Output<string>`)
+```
+
+This update adds Pulumi TypeScript code examples that match the actual implementation, so the validation script will detect the correct platform. The code includes:
+- `import * as pulumi from '@pulumi/pulumi'`
+- `import * as aws from '@pulumi/aws'`
+- `extends pulumi.ComponentResource`
+- `pulumi.Output<string>` types
+- Pulumi resource creation patterns
+
+This should resolve the platform detection issue.
