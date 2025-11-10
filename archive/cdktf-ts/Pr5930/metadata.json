@@ -17,6 +17,20 @@
     "S3",
     "RDS",
     "CloudWatch",
-    "EC2"
-  ]
+    "EC2",
+    "SecurityHub",
+    "CloudTrail",
+    "SNS",
+    "DynamoDB",
+    "Lambda",
+    "KMS",
+    "ALB"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
 }
