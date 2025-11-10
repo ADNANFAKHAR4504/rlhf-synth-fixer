@@ -120,6 +120,11 @@ import {
   GetCallerIdentityCommand,
 } from '@aws-sdk/client-sts';
 import { describe, expect, test, beforeAll, afterAll } from '@jest/globals';
+import axios, { AxiosInstance } from 'axios';
+
+const httpClient: AxiosInstance = axios.create({
+  timeout: 30000,
+});
 
 // Helper function to flatten nested outputs
 function flattenOutputs(data: any): any {
