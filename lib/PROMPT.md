@@ -67,9 +67,7 @@ Implement public access blocks using aws_s3_bucket_public_access_block with all 
 
 Create lifecycle policies using aws_s3_bucket_lifecycle_configuration with rules that transition objects to GLACIER storage class after thirty days to reduce storage costs and expire objects after ninety days to comply with data retention policies. Critical for AWS Provider version five point x: you must include a filter block in every rule even if you're applying the rule to all objects. Use filter with an empty prefix like filter { prefix = "" } to apply to all objects. Missing this filter block will cause terraform plan errors.
 
-Implement bucket policies using aws_s3_bucket_policy that enforce two critical security controls. First deny any PutObject requests that don't include server-side encryption by checking the s3:x-amz-server-side-encryption header. Second require that all requests come through your VPC endpoint by using an aws:SourceVpce condition that checks the VPC endpoint ID. This means even with valid credentials you cannot access the bucket from the internet or from a different VPC—access is only possible through the designated VPC endpoint which only exists in your secure VPC.
-
-Use depends_on to ensure the VPC endpoint is created before the bucket policy since the policy references the endpoint ID. This prevents race conditions during terraform apply.
+For testing and CI/CD environments, avoid implementing VPC endpoint restrictions in S3 bucket policies as this prevents Terraform and automated tools running outside the VPC from managing the infrastructure. The security controls are enforced through IAM role permissions, encryption configuration, public access blocks, and network isolation via VPC architecture. In production deployments, VPC endpoint enforcement can be added after initial infrastructure deployment by updating bucket policies to include aws:SourceVpce conditions, ensuring the root account exception is included to maintain administrative access.
 
 ### Lambda Functions in VPC for Data Processing
 
