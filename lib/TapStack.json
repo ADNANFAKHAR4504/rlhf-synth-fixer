@@ -22,6 +22,7 @@
                     "Parameters": [
                         "VPCCIDR",
                         "EnableNATGatewayHA",
+                        "AvailabilityZones",
                         "NumberOfAvailabilityZones"
                     ]
                 },
@@ -127,6 +128,11 @@
             ],
             "Description": "Enable NAT Gateway in all AZs for HA (false uses single NAT for dev/staging)"
         },
+        "AvailabilityZones": {
+            "Type": "CommaDelimitedList",
+            "Default": "",
+            "Description": "Comma-separated list of availability zones to use for subnets (e.g., 'sa-east-1a,sa-east-1b' for 2 AZs).\n**REQUIRED when NumberOfAvailabilityZones is 2 or 3** - You must provide explicit AZ names.\nIf left empty, only 1 AZ will be used (not recommended for production).\nTo find available AZs: aws ec2 describe-availability-zones --region sa-east-1\n"
+        },
         "NumberOfAvailabilityZones": {
             "Type": "Number",
             "Default": 2,
@@ -134,7 +140,7 @@
                 2,
                 3
             ],
-            "Description": "Number of availability zones to deploy resources across (must be 2 or 3). RDS requires at least 2 AZs. Use 3 only if your region has 3+ AZs. The template will automatically use the first 2 or 3 AZs from your region."
+            "Description": "Number of availability zones to deploy resources across (must be 2 or 3). RDS requires at least 2 AZs. You MUST provide AvailabilityZones parameter when using 2 or 3 AZs."
         },
         "InstanceType": {
             "Type": "String",
@@ -327,11 +333,42 @@
                 }
             ]
         },
+        "HasCustomAZs": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Fn::Join": [
+                                ",",
+                                {
+                                    "Ref": "AvailabilityZones"
+                                }
+                            ]
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
         "HasAtLeastTwoAZsWithCustomAZs": {
-            "Condition": "HasAtLeastTwoAZs"
+            "Fn::And": [
+                {
+                    "Condition": "HasAtLeastTwoAZs"
+                },
+                {
+                    "Condition": "HasCustomAZs"
+                }
+            ]
         },
         "HasThreeAZsWithCustomAZs": {
-            "Condition": "HasThreeAZs"
+            "Fn::And": [
+                {
+                    "Condition": "HasThreeAZs"
+                },
+                {
+                    "Condition": "HasCustomAZs"
+                }
+            ]
         },
         "EnableHighAvailabilityNATInAZ3": {
             "Fn::And": [
@@ -467,7 +504,15 @@
                     "Fn::Select": [
                         0,
                         {
-                            "Fn::GetAZs": ""
+                            "Fn::If": [
+                                "HasCustomAZs",
+                                {
+                                    "Ref": "AvailabilityZones"
+                                },
+                                {
+                                    "Fn::GetAZs": ""
+                                }
+                            ]
                         }
                     ]
                 },
@@ -539,7 +584,7 @@
                     "Fn::Select": [
                         1,
                         {
-                            "Fn::GetAZs": ""
+                            "Ref": "AvailabilityZones"
                         }
                     ]
                 },
@@ -611,7 +656,7 @@
                     "Fn::Select": [
                         2,
                         {
-                            "Fn::GetAZs": ""
+                            "Ref": "AvailabilityZones"
                         }
                     ]
                 },
@@ -753,7 +798,7 @@
                     "Fn::Select": [
                         1,
                         {
-                            "Fn::GetAZs": ""
+                            "Ref": "AvailabilityZones"
                         }
                     ]
                 },
@@ -824,7 +869,7 @@
                     "Fn::Select": [
                         2,
                         {
-                            "Fn::GetAZs": ""
+                            "Ref": "AvailabilityZones"
                         }
                     ]
                 },
@@ -965,7 +1010,7 @@
                     "Fn::Select": [
                         1,
                         {
-                            "Fn::GetAZs": ""
+                            "Ref": "AvailabilityZones"
                         }
                     ]
                 },
@@ -1036,7 +1081,7 @@
                     "Fn::Select": [
                         2,
                         {
-                            "Fn::GetAZs": ""
+                            "Ref": "AvailabilityZones"
                         }
                     ]
                 },
