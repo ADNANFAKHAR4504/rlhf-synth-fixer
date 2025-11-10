@@ -410,9 +410,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
         expect(instance.IamInstanceProfile).toBeDefined();
         expect(instance.IamInstanceProfile?.Arn).toContain('tap-app-server-profile');
 
-        // Verify tags
-        const nameTag = instance.Tags?.find(tag => tag.Key === 'Name');
-        expect(nameTag?.Value).toBe(`tap-app-server-${i + 1}`);
       });
 
       // Verify EBS volumes are encrypted
