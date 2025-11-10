@@ -463,7 +463,6 @@ resource "aws_api_gateway_deployment" "api_deployment" {
   ]
 
   rest_api_id = aws_api_gateway_rest_api.fraud_detection_api.id
-  stage_name  = "prod"
 
   lifecycle {
     create_before_destroy = true
@@ -476,6 +475,13 @@ resource "aws_api_gateway_deployment" "api_deployment" {
       aws_api_gateway_integration.lambda_integration.id,
     ]))
   }
+}
+
+# API Gateway stage
+resource "aws_api_gateway_stage" "prod" {
+  deployment_id = aws_api_gateway_deployment.api_deployment.id
+  rest_api_id   = aws_api_gateway_rest_api.fraud_detection_api.id
+  stage_name    = "prod"
 }
 
 # CloudWatch alarms for Lambda error monitoring
@@ -520,7 +526,7 @@ resource "aws_cloudwatch_metric_alarm" "fraud_detector_errors" {
 # Outputs
 output "api_gateway_url" {
   description = "API Gateway invoke URL for transaction submissions"
-  value       = "${aws_api_gateway_deployment.api_deployment.invoke_url}/transactions"
+  value       = "${aws_api_gateway_stage.prod.invoke_url}/transactions"
 }
 
 output "sqs_queue_url" {
