@@ -11,11 +11,19 @@
     "Environment Migration"
   ],
   "aws_services": [
-    "S3 Bucket",
-    "CloudFormation",
+    "VPC",
+    "EC2",
+    "ALB",
+    "Auto Scaling",
+    "RDS Aurora",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "KMS",
     "Lambda",
-    "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
-  ]
+    "Config",
+    "SNS",
+    "Secrets Manager"
+  ],
+  "training_quality": 10
 }
