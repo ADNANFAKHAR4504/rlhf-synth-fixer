@@ -12,12 +12,12 @@ on:
   workflow_dispatch:
     inputs:
       environment_suffix:
-        description: "Environment suffix for resource naming (e.g., pr123, dev, test)"
+        description: 'Environment suffix for resource naming (e.g., pr123, dev, test)'
         required: false
-        default: "manual"
+        default: 'manual'
         type: string
       skip_cleanup:
-        description: "Skip cleanup/destroy step after deployment"
+        description: 'Skip cleanup/destroy step after deployment'
         required: false
         default: false
         type: boolean
@@ -26,29 +26,29 @@ permissions:
   contents: read
 
 env:
-  NODE_VERSION: "22.17.0"
-  GO_VERSION: "1.23.12"
+  NODE_VERSION: '22.17.0'
+  GO_VERSION: '1.23.12'
   # Use PR number for resource isolation, manual input, or fallback to 'dev' for main branch
   # Prefix with 'pr' to ensure AWS resource names start with a letter
   ENVIRONMENT_SUFFIX: ${{ github.event.inputs.environment_suffix || (github.event.number && format('pr{0}', github.event.number)) || 'dev' }}
-  S3_RELEASE_BUCKET_NAME: "iac-rlhf-aws-release-342597974367-us-east-1"
-  TERRAFORM_STATE_BUCKET: "iac-rlhf-tf-states-342597974367"
-  TERRAFORM_STATE_BUCKET_REGION: "us-east-1"
+  S3_RELEASE_BUCKET_NAME: 'iac-rlhf-aws-release-342597974367-us-east-1'
+  TERRAFORM_STATE_BUCKET: 'iac-rlhf-tf-states-342597974367'
+  TERRAFORM_STATE_BUCKET_REGION: 'us-east-1'
   TERRAFORM_STATE_BUCKET_KEY: ${{ github.event.pull_request.number }}
-  PULUMI_STATE_BUCKET: "iac-rlhf-pulumi-states-342597974367"
-  PULUMI_BUCKET_REGION: "us-east-1"
+  PULUMI_STATE_BUCKET: 'iac-rlhf-pulumi-states-342597974367'
+  PULUMI_BUCKET_REGION: 'us-east-1'
   PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
-  PULUMI_ORG: "organization"
+  PULUMI_ORG: 'organization'
   AWS_REGION: ${{ vars.AWS_REGION }}
   CDK_DEFAULT_REGION: ${{ vars.CDK_DEFAULT_REGION || vars.AWS_REGION || 'us-east-1' }}
   CURRENT_ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  MODEL_S3_URI: "s3://social-platform-sagemaker-342597974367-dev/model.tar.gz"
+  MODEL_S3_URI: 's3://social-platform-sagemaker-342597974367-dev/model.tar.gz'
   # Go caching optimization
   GOCACHE: ${{ github.workspace }}/.cache/go-build
   GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
-  IAC_ANALYSIS_SUBJECT_LABEL: "Infrastructure Analysis/Monitoring"
+  IAC_ANALYSIS_SUBJECT_LABEL: 'Infrastructure Analysis/Monitoring'
 
 jobs:
   detect-metadata:
@@ -92,7 +92,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "false"
+          download-artifacts: 'false'
 
       - name: Validate commit message
         run: npx commitlint --last
@@ -112,8 +112,8 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "false"
-          upload-artifacts: "true"
+          download-artifacts: 'false'
+          upload-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
@@ -141,7 +141,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "true"
+          download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
@@ -281,8 +281,8 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "false"
-          is-analysis: "true"
+          download-artifacts: 'false'
+          is-analysis: 'true'
 
       - name: Run analysis
         run: ./scripts/analysis.sh
@@ -311,7 +311,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "true"
+          download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
@@ -378,7 +378,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "true"
+          download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
@@ -402,7 +402,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "true"
+          download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
@@ -458,7 +458,7 @@ jobs:
 
   claude-task-analyze:
     runs-on: ubuntu-24.04
-    name: "Claude Task Analysis"
+    name: 'Claude Task Analysis'
     needs: [detect-metadata, unit-tests]
     if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization'}}
     permissions:
@@ -478,15 +478,15 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "false"
+          download-artifacts: 'false'
 
       - name: Run Claude Task Analysis
         uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          allowed_tools: "Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite"
-          trigger_phrase: ""
+          allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
+          trigger_phrase: ''
           custom_instructions: |
             Analyze the IAC task files in the lib/ folder and generate a report showing which resources have deletion protection enabled.
             This helps identify resources that will REMAIN after stack deletion.
@@ -576,7 +576,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "true"
+          download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
 
       - name: Download Deployment Outputs
@@ -599,14 +599,14 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ env.AWS_REGION || 'us-east-1' }}
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
-          CI: "1" # Set CI for the entire step
+          CI: '1' # Set CI for the entire step
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
   claude-code-action:
     runs-on: ubuntu-24.04
-    name: "Claude Review"
+    name: 'Claude Review'
     needs: [integration-tests-live, analysis]
     if: always() && !cancelled() && (needs.analysis.result == 'success' || needs.analysis.result == 'skipped') && needs.integration-tests-live.result == 'success'
     permissions:
@@ -658,8 +658,8 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          allowed_tools: "Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite"
-          trigger_phrase: ""
+          allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
+          trigger_phrase: ''
           custom_instructions: |
             CRITICAL: you MUST validate the latest PROMPT file format, and add a github comment if it appears to be AI-generated rather than human-written:
             1. Identify all the PROMPT file (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) - always use the highest numbered one
@@ -727,16 +727,19 @@ jobs:
             | jq -r '.comments[].body' > all_comments.txt
 
           echo "🍀 Searching for quality score pattern..."
-          # Match any of these:
-          # - "**Final Score: 9.5/10**"
-          # - "Training Quality: 9/10"
-          # - "SCORE:10"
-          # Handles decimals, optional markdown, emojis, and spaces
-          SCORE=$(grep -Eo '(\*\*)?(Final|Training)[[:space:]]*Quality:?[[:space:]]*[0-9]+(\.[0-9]+)?/10(\*\*)?|SCORE:[[:space:]]*[0-9]+(\.[0-9]+)?' all_comments.txt \
+          SCORE=$(grep -Eo '(\*\*)?((Final|Training)[[:space:]]*Quality[[:space:]]*(Score)?)[[:space:]]*:?[[:space:]]*(\*\*)?\**[[:space:]]*[0-9]+(\.[0-9]+)?(\*\*)?[[:space:]]*/[[:space:]]*10(\*\*)?|SCORE:[[:space:]]*[0-9]+(\.[0-9]+)?|training_quality[[:space:]]*:[[:space:]]*[0-9]+(\.[0-9]+)?' all_comments.txt \
             | tail -1 | grep -Eo '[0-9]+(\.[0-9]+)?' | head -1)
 
           if [ -z "$SCORE" ]; then
-            echo "⚠️ Could not find any quality score in PR comments. Defaulting to 0."
+            echo "⚠️ Could not find quality score in PR comments. Checking metadata.json..."
+            
+            # Fallback: Try to extract from metadata.json if it exists in comments
+            SCORE=$(grep -Eo '"training_quality"[[:space:]]*:[[:space:]]*[0-9]+(\.[0-9]+)?' all_comments.txt \
+              | grep -Eo '[0-9]+(\.[0-9]+)?' | head -1)
+          fi
+
+          if [ -z "$SCORE" ]; then
+            echo "⚠️ Could not find any quality score. Defaulting to 0."
             SCORE=0
           fi
 
@@ -778,7 +781,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "false"
+          download-artifacts: 'false'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
@@ -1100,7 +1103,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "false"
+          download-artifacts: 'false'
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
@@ -1141,7 +1144,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "false"
+          download-artifacts: 'false'
 
       - name: Run semantic-release
         run: npm run release
