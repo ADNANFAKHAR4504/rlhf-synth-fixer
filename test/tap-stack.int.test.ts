@@ -52,13 +52,29 @@ describe('EKS Infrastructure Integration Tests', () => {
       );
     }
 
-    outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+    const rawOutputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+
+    // Handle nested CDKTF output structure (TapStack{suffix}.output-name)
+    // Find the first key that starts with "TapStack" and extract its outputs
+    const stackKey = Object.keys(rawOutputs).find(key => key.startsWith('TapStack'));
+
+    if (!stackKey) {
+      throw new Error(
+        'No TapStack outputs found in flat-outputs.json. Expected structure: { "TapStack{suffix}": { "cluster-name": "...", ... } }'
+      );
+    }
+
+    outputs = rawOutputs[stackKey];
     region = outputs.region || 'us-east-2';
     clusterName = outputs['cluster-name'];
     vpcId = outputs['vpc-id'];
 
     // Extract environment suffix from cluster name
-    environmentSuffix = clusterName.replace('eks-cluster-', '');
+    if (clusterName) {
+      environmentSuffix = clusterName.replace('eks-cluster-', '');
+    } else {
+      throw new Error('cluster-name not found in outputs');
+    }
 
     expect(clusterName).toBeDefined();
     expect(vpcId).toBeDefined();
