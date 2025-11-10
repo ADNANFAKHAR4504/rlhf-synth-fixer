@@ -582,7 +582,7 @@ describe("TapStack Unit Tests", () => {
         expect.anything(),
         'api-keys',
         expect.objectContaining({
-          name: 'tap-api-keys',
+          name: 'tap-api-keys-new-ts',
           description: 'API keys for external services',
           kmsKeyId: 'alias/aws/secretsmanager'
         })

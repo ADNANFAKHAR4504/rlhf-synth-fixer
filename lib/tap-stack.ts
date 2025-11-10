@@ -232,7 +232,7 @@ systemctl enable nginx
       this,
       'api-keys',
       {
-        name: 'tap-api-keys',
+        name: 'tap-api-keys-new-ts',
         description: 'API keys for external services',
         kmsKeyId: 'alias/aws/secretsmanager',
         tags: commonTags,
