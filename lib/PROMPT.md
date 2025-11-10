@@ -23,7 +23,7 @@ Create a highly available infrastructure using **AWS CDK with Python** for a pay
    - Application Load Balancer with target groups across multiple AZs
 
 3. **Serverless Processing**
-   - Lambda functions deployed in us-east-1 for payment validation
+   - Lambda functions deployed in region us-east-1 for payment validation
    - Cross-AZ availability
 
 4. **Storage**
