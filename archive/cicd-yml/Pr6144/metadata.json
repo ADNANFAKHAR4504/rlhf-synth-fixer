@@ -7,6 +7,15 @@
   "team": "stf",
   "startedAt": "2025-11-10T00:00:00.000Z",
   "subtask": "GitLab CI/CD Pipeline",
-  "subject_labels": ["CI/CD Pipeline"],
-  "traing_quality": "10"
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "traing_quality": "10",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "okorie-turing",
+  "dockerS3Location": ""
 }
