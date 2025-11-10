@@ -530,7 +530,7 @@ Resources:
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
       Policies:
-        - PolicyName: SecretsManagerAccess
+        - PolicyName: SecretsManagerAccessV2
           PolicyDocument:
             Version: '2012-10-17'
             Statement:

@@ -75,6 +75,20 @@
         }
     },
     "Resources": {
+        "AuroraDBPassword": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-aurora-password"
+                },
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 16,
+                    "ExcludeCharacters": "\"@/\\"
+                }
+            }
+        },
         "VPC": {
             "Type": "AWS::EC2::VPC",
             "Properties": {
@@ -713,8 +727,8 @@
                 "SecurityGroupIngress": [
                     {
                         "IpProtocol": "tcp",
-                        "FromPort": 8080,
-                        "ToPort": 8080,
+                        "FromPort": 80,
+                        "ToPort": 80,
                         "SourceSecurityGroupId": {
                             "Ref": "ALBSecurityGroup"
                         }
@@ -801,13 +815,13 @@
                 "Name": {
                     "Fn::Sub": "tg-${EnvironmentSuffix}"
                 },
-                "Port": 8080,
+                "Port": 80,
                 "Protocol": "HTTP",
                 "TargetType": "ip",
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "HealthCheckPath": "/health",
+                "HealthCheckPath": "/",
                 "HealthCheckProtocol": "HTTP",
                 "HealthCheckIntervalSeconds": 30,
                 "HealthyThresholdCount": 2,
@@ -872,7 +886,9 @@
                 "EngineVersion": "14.6",
                 "DatabaseName": "payments",
                 "MasterUsername": "dbadmin",
-                "MasterUserPassword": "TempPassword123!",
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${AWS::StackName}-aurora-password:SecretString}}"
+                },
                 "DBSubnetGroupName": {
                     "Ref": "DBSubnetGroup"
                 },
@@ -1074,7 +1090,7 @@
                 ],
                 "Policies": [
                     {
-                        "PolicyName": "SecretsManagerAccess",
+                        "PolicyName": "SecretsManagerAccessV2",
                         "PolicyDocument": {
                             "Version": "2012-10-17",
                             "Statement": [
@@ -1230,7 +1246,7 @@
                         "Image": "nginx:latest",
                         "PortMappings": [
                             {
-                                "ContainerPort": 8080,
+                                "ContainerPort": 80,
                                 "Protocol": "tcp"
                             }
                         ],
@@ -1318,7 +1334,7 @@
                 "LoadBalancers": [
                     {
                         "ContainerName": "payment-service",
-                        "ContainerPort": 8080,
+                        "ContainerPort": 80,
                         "TargetGroupArn": {
                             "Ref": "ALBTargetGroup"
                         }
