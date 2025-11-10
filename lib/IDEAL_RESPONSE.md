@@ -78,8 +78,12 @@ Parameters:
   EnvironmentSuffix:
     Type: String
     Default: prod
-    AllowedValues: [dev, staging, prod]
-    Description: Environment suffix to avoid name clashes.
+    Description: >
+      Lowercase environment suffix used in all resource names
+      (e.g., dev, qa, uat, stage, staging, prod, production, sandbox).
+      Must be lowercase letters, digits, or dashes only.
+    AllowedPattern: '^[a-z0-9-]{2,32}$'
+    ConstraintDescription: 'Use lowercase letters, digits, or dashes only (no spaces).'
   AlertEmail:
     Type: String
     Default: compliance@company.com
