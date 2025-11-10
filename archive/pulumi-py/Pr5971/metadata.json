@@ -1,0 +1,32 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "101000852",
+  "team": "synth",
+  "startedAt": "2025-11-06T13:48:20",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "networking",
+    "vpc",
+    "security",
+    "compliance",
+    "infrastructure"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "CloudWatch",
+    "IAM"
+  ],
+  "region": "eu-west-3",
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

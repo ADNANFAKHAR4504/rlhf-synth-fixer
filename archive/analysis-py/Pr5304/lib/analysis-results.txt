@@ -1,0 +1,19 @@
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:33: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  self.timestamp = datetime.utcnow().isoformat()
+2025-11-04 09:36:43,848 - INFO - Found credentials in environment variables.
+2025-11-04 09:36:43,961 - INFO - Starting AWS resource audit...
+2025-11-04 09:36:43,962 - INFO - Scanning for zombie volumes...
+2025-11-04 09:36:43,982 - INFO - Found 3 zombie volumes
+2025-11-04 09:36:43,982 - INFO - Scanning for wide-open security groups...
+2025-11-04 09:36:43,992 - INFO - Found 3 wide-open security groups
+2025-11-04 09:36:43,992 - INFO - Calculating log costs for pattern: /aws/lambda/production-app-*
+2025-11-04 09:36:44,011 - INFO - Analyzed 3 log groups with 8 streams
+2025-11-04 09:36:44,012 - INFO - Audit complete!
+2025-11-04 09:36:44,012 - INFO - Saving JSON report to report.json
+2025-11-04 09:36:44,012 - INFO - Saving CSV report to report.csv
+2025-11-04 09:36:44,012 - INFO - Reports saved successfully!
+
+Audit Summary:
+- Found 3 zombie volumes costing $31.0/month
+- Found 3 security groups with 4 risky rules
+- CloudWatch logs using 0.00 GB costing $0.0/month

@@ -1,0 +1,38 @@
+{
+  "platform": "terraform",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000191",
+  "team": "4",
+  "startedAt": "2025-11-03T12:15:49.014Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "ELB",
+    "RDS",
+    "ECR",
+    "IAM",
+    "Secrets Manager",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "Route53",
+    "Certificate Manager",
+    "Application Auto Scaling",
+    "X-Ray",
+    "NAT Gateway",
+    "Internet Gateway"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "jpoola-turing",
+  "dockerS3Location": ""
+}

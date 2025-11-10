@@ -1,5 +1,6 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { IoTClient, ListThingsCommand } from '@aws-sdk/client-iot';
+// @ts-ignore - Optional dependency resolved at deploy time
 import { GetThingShadowCommand, IoTDataPlaneClient } from '@aws-sdk/client-iot-data-plane';
 import { ListObjectsV2Command, S3Client } from '@aws-sdk/client-s3';
 import { BatchWriteCommand, DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
