@@ -49,7 +49,7 @@ export class DatabaseMigrationStack extends Construct {
     const prodVpc = new ec2.Vpc(this, `ProductionVpc-${environmentSuffix}`, {
       vpcName: `prod-vpc-${environmentSuffix}`,
       cidr: '10.0.0.0/16', // explicitly set CIDR block
-      maxAzs: 3,
+      maxAzs: 1,
       natGateways: 1,
       subnetConfiguration: [
         {
@@ -68,7 +68,7 @@ export class DatabaseMigrationStack extends Construct {
     const devVpc = new ec2.Vpc(this, `DevelopmentVpc-${environmentSuffix}`, {
       vpcName: `dev-vpc-${environmentSuffix}`,
       cidr: '10.1.0.0/16', // different CIDR block to avoid overlap
-      maxAzs: 3,
+      maxAzs: 1,
       natGateways: 1,
       subnetConfiguration: [
         {
@@ -202,21 +202,17 @@ export class DatabaseMigrationStack extends Construct {
     );
 
     // Create target database secret for production Aurora
-    const targetDbSecret = new secretsmanager.Secret(
-      this,
-      `TargetDbSecret-${environmentSuffix}`,
-      {
-        secretName: `prod/aurora/mysql/credentials-${environmentSuffix}`,
-        description: 'Aurora MySQL cluster master credentials',
-        generateSecretString: {
-          secretStringTemplate: JSON.stringify({ username: 'admin' }),
-          generateStringKey: 'password',
-          excludeCharacters: '"@/\\',
-          passwordLength: 32,
-        },
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-      }
-    );
+    const targetDbSecret = new secretsmanager.Secret(this, 'TrdbSc', {
+      secretName: `prod/aurora/mysql/credentials-${environmentSuffix}`,
+      description: 'Aurora MySQL cluster master credentials',
+      generateSecretString: {
+        secretStringTemplate: JSON.stringify({ username: 'admin' }),
+        generateStringKey: 'password',
+        excludeCharacters: '"@/\\',
+        passwordLength: 32,
+      },
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
 
     // ==============================
     // 5. Aurora MySQL Parameter Group
