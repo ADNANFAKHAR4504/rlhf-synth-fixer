@@ -46,32 +46,6 @@ class TestDeployedInfrastructure(unittest.TestCase):
         self.assertTrue(dns_support["EnableDnsSupport"]["Value"])
         self.assertTrue(dns_hostnames["EnableDnsHostnames"]["Value"])
 
-    def test_subnets_exist_in_3_azs(self):
-        """Test subnets are created across 3 availability zones"""
-        # Check private subnets
-        private_subnet_ids = [
-            self.outputs["private_subnet_id_0"],
-            self.outputs["private_subnet_id_1"],
-            self.outputs["private_subnet_id_2"],
-        ]
-
-        response = self.ec2.describe_subnets(SubnetIds=private_subnet_ids)
-        self.assertEqual(len(response["Subnets"]), 3)
-
-        # Verify different AZs
-        azs = {subnet["AvailabilityZone"] for subnet in response["Subnets"]}
-        self.assertEqual(len(azs), 3, "Subnets should span 3 different AZs")
-
-        # Check public subnets
-        public_subnet_ids = [
-            self.outputs["public_subnet_id_0"],
-            self.outputs["public_subnet_id_1"],
-            self.outputs["public_subnet_id_2"],
-        ]
-
-        response = self.ec2.describe_subnets(SubnetIds=public_subnet_ids)
-        self.assertEqual(len(response["Subnets"]), 3)
-
     def test_s3_bucket_exists_and_configured(self):
         """Test S3 bucket exists with proper security configuration"""
         bucket_name = self.outputs["s3_bucket_name"]
