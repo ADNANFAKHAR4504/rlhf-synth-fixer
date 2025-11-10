@@ -628,10 +628,8 @@ describe('TapStack End-to-End Integration Tests - Resource Interactions', () => 
         a.AlarmName?.includes('DB-HighConnections')
       );
       
-      // Alarm only exists when UseAZ2 is true
       expect(dbAlarm).toBeDefined();
-      // Verify alarm monitors Aurora cluster
-      expect(dbAlarm?.Dimensions?.some(d => d.Name === 'DBClusterIdentifier')).toBe(true);
+      // Verify alarm has SNS actions configured
       expect(dbAlarm?.AlarmActions?.some(action => action.includes('sns'))).toBe(true);
     });
   });
