@@ -250,7 +250,12 @@ class DisasterRecoveryStack(Stack):
         # Container
         container = task_definition.add_container(
             f"payment-container-{environment_suffix}",
-            image=ecs.ContainerImage.from_registry("amazon/amazon-ecs-sample"),
+            image=ecs.ContainerImage.from_registry("public.ecr.aws/docker/library/node:18-alpine"),
+            command=[
+                "sh",
+                "-c",
+                "node -e \"require('http').createServer((req,res)=>{res.writeHead(200);res.end('OK')}).listen(8080,()=>console.log('Server running on port 8080'))\"",
+            ],
             logging=ecs.LogDrivers.aws_logs(
                 stream_prefix=f"payment-{environment_suffix}",
                 log_retention=logs.RetentionDays.ONE_WEEK,

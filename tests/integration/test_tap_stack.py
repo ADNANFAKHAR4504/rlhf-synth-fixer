@@ -173,8 +173,8 @@ class TestDisasterRecoveryStackIntegration(unittest.TestCase):
 
         # Verify encryption
         encryption = s3_client.get_bucket_encryption(Bucket=bucket_name)
-        self.assertIn('Rules', encryption)
-        self.assertGreater(len(encryption['Rules']), 0)
+        self.assertIn('ServerSideEncryptionConfiguration', encryption)
+        self.assertGreater(len(encryption['ServerSideEncryptionConfiguration']['Rules']), 0)
 
     @mark.it("validates SNS topic exists and can be subscribed to")
     def test_sns_topic_exists(self):
