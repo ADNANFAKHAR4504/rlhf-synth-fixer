@@ -1,5 +1,5 @@
-import * as pulumi from "@pulumi/pulumi";
-import * as aws from "@pulumi/aws";
+import * as pulumi from '@pulumi/pulumi';
+import * as aws from '@pulumi/aws';
 
 export interface SecureApiStackProps {
   environmentSuffix: string;
@@ -12,8 +12,12 @@ export class SecureApiStack extends pulumi.ComponentResource {
   public readonly kmsKeyId: pulumi.Output<string>;
   public readonly logGroupName: pulumi.Output<string>;
 
-  constructor(name: string, props: SecureApiStackProps, opts?: pulumi.ComponentResourceOptions) {
-    super("custom:secure-api:SecureApiStack", name, {}, opts);
+  constructor(
+    name: string,
+    props: SecureApiStackProps,
+    opts?: pulumi.ComponentResourceOptions
+  ) {
+    super('custom:secure-api:SecureApiStack', name, {}, opts);
 
     const { environmentSuffix, region } = props;
 
@@ -29,35 +33,35 @@ export class SecureApiStack extends pulumi.ComponentResource {
         enableKeyRotation: true,
         policy: pulumi.all([current]).apply(([identity]) =>
           JSON.stringify({
-            Version: "2012-10-17",
+            Version: '2012-10-17',
             Statement: [
               {
-                Sid: "Enable IAM User Permissions",
-                Effect: "Allow",
+                Sid: 'Enable IAM User Permissions',
+                Effect: 'Allow',
                 Principal: {
                   AWS: `arn:aws:iam::${identity.accountId}:root`,
                 },
-                Action: "kms:*",
-                Resource: "*",
+                Action: 'kms:*',
+                Resource: '*',
               },
               {
-                Sid: "Allow CloudWatch Logs",
-                Effect: "Allow",
+                Sid: 'Allow CloudWatch Logs',
+                Effect: 'Allow',
                 Principal: {
                   Service: `logs.${region}.amazonaws.com`,
                 },
                 Action: [
-                  "kms:Encrypt",
-                  "kms:Decrypt",
-                  "kms:ReEncrypt*",
-                  "kms:GenerateDataKey*",
-                  "kms:CreateGrant",
-                  "kms:DescribeKey",
+                  'kms:Encrypt',
+                  'kms:Decrypt',
+                  'kms:ReEncrypt*',
+                  'kms:GenerateDataKey*',
+                  'kms:CreateGrant',
+                  'kms:DescribeKey',
                 ],
-                Resource: "*",
+                Resource: '*',
                 Condition: {
                   ArnLike: {
-                    "kms:EncryptionContext:aws:logs:arn": `arn:aws:logs:${region}:${identity.accountId}:log-group:/aws/lambda/*`,
+                    'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${region}:${identity.accountId}:log-group:/aws/lambda/*`,
                   },
                 },
               },
@@ -72,6 +76,8 @@ export class SecureApiStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // Create KMS key alias for easier reference
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const kmsKeyAlias = new aws.kms.Alias(
       `cloudwatch-logs-key-alias-${environmentSuffix}`,
       {
@@ -86,13 +92,13 @@ export class SecureApiStack extends pulumi.ComponentResource {
       `lambda-role-${environmentSuffix}`,
       {
         assumeRolePolicy: JSON.stringify({
-          Version: "2012-10-17",
+          Version: '2012-10-17',
           Statement: [
             {
-              Action: "sts:AssumeRole",
-              Effect: "Allow",
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
               Principal: {
-                Service: "lambda.amazonaws.com",
+                Service: 'lambda.amazonaws.com',
               },
             },
           ],
@@ -110,7 +116,8 @@ export class SecureApiStack extends pulumi.ComponentResource {
       `lambda-basic-execution-${environmentSuffix}`,
       {
         role: lambdaRole.name,
-        policyArn: "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+        policyArn:
+          'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
       },
       { parent: this }
     );
@@ -158,16 +165,16 @@ exports.handler = async (event) => {
     const lambdaFunction = new aws.lambda.Function(
       `api-handler-${environmentSuffix}`,
       {
-        runtime: "nodejs18.x",
+        runtime: 'nodejs18.x',
         role: lambdaRole.arn,
-        handler: "index.handler",
+        handler: 'index.handler',
         code: new pulumi.asset.AssetArchive({
-          "index.js": new pulumi.asset.StringAsset(lambdaCode),
+          'index.js': new pulumi.asset.StringAsset(lambdaCode),
         }),
         environment: {
           variables: {
             ENVIRONMENT_SUFFIX: environmentSuffix,
-            LOG_LEVEL: "INFO",
+            LOG_LEVEL: 'INFO',
           },
         },
         timeout: 30,
@@ -185,7 +192,7 @@ exports.handler = async (event) => {
     const logGroup = new aws.cloudwatch.LogGroup(
       `lambda-log-group-${environmentSuffix}`,
       {
-        name: lambdaFunction.name.apply((name) => `/aws/lambda/${name}`),
+        name: lambdaFunction.name.apply(name => `/aws/lambda/${name}`),
         kmsKeyId: kmsKey.arn,
         retentionInDays: 7,
         tags: {
@@ -203,7 +210,7 @@ exports.handler = async (event) => {
         name: `secure-api-${environmentSuffix}`,
         description: `Secure REST API with KMS-encrypted logs (${environmentSuffix})`,
         endpointConfiguration: {
-          types: "REGIONAL",
+          types: 'REGIONAL',
         },
         tags: {
           Name: `secure-api-${environmentSuffix}`,
@@ -219,7 +226,7 @@ exports.handler = async (event) => {
       {
         restApi: api.id,
         parentId: api.rootResourceId,
-        pathPart: "{proxy+}",
+        pathPart: '{proxy+}',
       },
       { parent: this }
     );
@@ -230,8 +237,8 @@ exports.handler = async (event) => {
       {
         restApi: api.id,
         resourceId: apiResource.id,
-        httpMethod: "ANY",
-        authorization: "NONE",
+        httpMethod: 'ANY',
+        authorization: 'NONE',
       },
       { parent: this }
     );
@@ -243,8 +250,8 @@ exports.handler = async (event) => {
         restApi: api.id,
         resourceId: apiResource.id,
         httpMethod: apiMethod.httpMethod,
-        integrationHttpMethod: "POST",
-        type: "AWS_PROXY",
+        integrationHttpMethod: 'POST',
+        type: 'AWS_PROXY',
         uri: lambdaFunction.invokeArn,
       },
       { parent: this }
@@ -256,8 +263,8 @@ exports.handler = async (event) => {
       {
         restApi: api.id,
         resourceId: api.rootResourceId,
-        httpMethod: "GET",
-        authorization: "NONE",
+        httpMethod: 'GET',
+        authorization: 'NONE',
       },
       { parent: this }
     );
@@ -269,8 +276,8 @@ exports.handler = async (event) => {
         restApi: api.id,
         resourceId: api.rootResourceId,
         httpMethod: rootMethod.httpMethod,
-        integrationHttpMethod: "POST",
-        type: "AWS_PROXY",
+        integrationHttpMethod: 'POST',
+        type: 'AWS_PROXY',
         uri: lambdaFunction.invokeArn,
       },
       { parent: this }
@@ -282,7 +289,14 @@ exports.handler = async (event) => {
       {
         restApi: api.id,
         triggers: {
-          redeployment: pulumi.all([apiMethod.id, apiIntegration.id, rootMethod.id, rootIntegration.id]).apply(() => Date.now().toString()),
+          redeployment: pulumi
+            .all([
+              apiMethod.id,
+              apiIntegration.id,
+              rootMethod.id,
+              rootIntegration.id,
+            ])
+            .apply(() => Date.now().toString()),
         },
       },
       { parent: this, dependsOn: [apiIntegration, rootIntegration] }
@@ -294,7 +308,7 @@ exports.handler = async (event) => {
       {
         restApi: api.id,
         deployment: apiDeployment.id,
-        stageName: "prod",
+        stageName: 'prod',
         tags: {
           Name: `api-stage-${environmentSuffix}`,
           Environment: environmentSuffix,
@@ -304,12 +318,13 @@ exports.handler = async (event) => {
     );
 
     // Grant API Gateway permission to invoke Lambda
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const lambdaPermission = new aws.lambda.Permission(
       `lambda-permission-${environmentSuffix}`,
       {
-        action: "lambda:InvokeFunction",
+        action: 'lambda:InvokeFunction',
         function: lambdaFunction.name,
-        principal: "apigateway.amazonaws.com",
+        principal: 'apigateway.amazonaws.com',
         sourceArn: pulumi.interpolate`${api.executionArn}/*/*`,
       },
       { parent: this }

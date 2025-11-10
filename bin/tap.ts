@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-import * as pulumi from "@pulumi/pulumi";
-import { SecureApiStack } from "../lib";
+import * as pulumi from '@pulumi/pulumi';
+import { SecureApiStack } from '../lib';
 
 const config = new pulumi.Config();
-const environmentSuffix = config.require("environmentSuffix");
+const environmentSuffix = config.require('environmentSuffix');
 
-const stack = new SecureApiStack("secure-api-stack", {
+const stack = new SecureApiStack('secure-api-stack', {
   environmentSuffix,
-  region: "ap-southeast-1",
+  region: 'ap-southeast-1',
 });
 
 export const apiUrl = stack.apiUrl;
