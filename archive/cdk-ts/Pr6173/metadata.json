@@ -1,0 +1,32 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912310",
+  "team": "3",
+  "startedAt": "2025-11-10T10:18:21.700Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "training_quality": 10,
+  "aws_services": [
+    "VPC",
+    "DynamoDB",
+    "Lambda",
+    "SQS",
+    "EventBridge",
+    "API Gateway",
+    "CloudWatch",
+    "IAM",
+    "SNS",
+    "CloudFormation"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
+}
