@@ -274,7 +274,7 @@ resource "aws_security_group" "rds" {
 
 # Application Load Balancer
 resource "aws_lb" "main" {
-  name               = "${var.project_name}-alb"
+  name               = "${var.project_name}-alb1"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]

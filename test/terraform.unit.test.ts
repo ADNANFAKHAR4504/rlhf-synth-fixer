@@ -192,7 +192,7 @@ describe('WebApp Infrastructure Terraform Tests', () => {
   describe('Application Load Balancer Configuration', () => {
     it('should create Application Load Balancer', () => {
       expect(has(/resource\s+"aws_lb"\s+"main"\s*{/)).toBe(true);
-      expect(has(/name\s*=\s*"\$\{var\.project_name\}-alb"/)).toBe(true);
+      expect(has(/name\s*=\s*"\$\{var\.project_name\}-alb1"/)).toBe(true);
       expect(has(/internal\s*=\s*false/)).toBe(true);
       expect(has(/load_balancer_type\s*=\s*"application"/)).toBe(true);
     });
