@@ -47,6 +47,11 @@
     "SNS Subscription",
     "CloudWatch Alarm",
     "CloudTrail Trail"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
 }
-
