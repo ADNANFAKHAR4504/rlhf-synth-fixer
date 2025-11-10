@@ -4,7 +4,7 @@
 > 
 > Platform: **pulumi**
 > Language: **ts**
-> Region: **us-east-1**
+> Region: **eu-west-2**
 >
 > **Do not substitute or change the platform or language.** All infrastructure code must be written using the specified platform and language combination.
 
@@ -30,7 +30,7 @@ A fintech startup needs to deploy their microservices architecture on Kubernetes
 - Export the Istio ingress gateway URL and service endpoints as stack outputs
 
 ### Environment Setup
-Kubernetes cluster (EKS 1.28) deployed in us-east-1 with Istio 1.19 service mesh pre-installed. The cluster spans 3 availability zones with managed node groups using t3.medium instances. Requires Pulumi CLI 3.x with TypeScript, kubectl configured, and istioctl available. VPC already configured with private subnets for pods and public subnets for load balancers. Container images are stored in private ECR repositories in the same region.
+Kubernetes cluster (EKS 1.28) deployed in eu-west-2 with Istio 1.19 service mesh pre-installed. The cluster spans 3 availability zones with managed node groups using t3.medium instances. Requires Pulumi CLI 3.x with TypeScript, kubectl configured, and istioctl available. VPC already configured with private subnets for pods and public subnets for load balancers. Container images are stored in private ECR repositories in the same region.
 
 ## Project-Specific Conventions
 
@@ -54,4 +54,4 @@ Kubernetes cluster (EKS 1.28) deployed in us-east-1 with Istio 1.19 service mesh
 - Enable appropriate logging and monitoring
 
 ## Target Region
-All resources should be deployed to: **us-east-1**
+All resources should be deployed to: **eu-west-2**

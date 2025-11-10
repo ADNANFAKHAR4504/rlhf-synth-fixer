@@ -8,6 +8,7 @@
  * The stack created by this module uses environment suffixes to distinguish between
  * different deployment environments (development, staging, production, etc.).
  */
+
 import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
 
@@ -18,16 +19,16 @@ const config = new pulumi.Config();
 const environmentSuffix =
   process.env.ENVIRONMENT_SUFFIX || config.get('environmentSuffix') || 'dev';
 
-// Get container image URIs from config
+// Get container image URIs from config - Updated to eu-west-2 (London)
 const paymentApiImage =
   config.get('paymentApiImage') ||
-  '123456789012.dkr.ecr.us-east-1.amazonaws.com/payment-api:latest';
+  '123456789012.dkr.ecr.eu-west-2.amazonaws.com/payment-api:latest';
 const fraudDetectorImage =
   config.get('fraudDetectorImage') ||
-  '123456789012.dkr.ecr.us-east-1.amazonaws.com/fraud-detector:latest';
+  '123456789012.dkr.ecr.eu-west-2.amazonaws.com/fraud-detector:latest';
 const notificationServiceImage =
   config.get('notificationServiceImage') ||
-  '123456789012.dkr.ecr.us-east-1.amazonaws.com/notification-service:latest';
+  '123456789012.dkr.ecr.eu-west-2.amazonaws.com/notification-service:latest';
 
 // Get metadata from environment variables for tagging purposes.
 // These are often injected by CI/CD systems.

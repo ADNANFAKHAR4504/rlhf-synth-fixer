@@ -70,7 +70,7 @@ const paymentApiSecret = new k8s.core.v1.Secret("payment-api-secret", {
     },
     type: "Opaque",
     stringData: {
-        DB_CONNECTION_STRING: "postgresql://user:pass@payment-db.cluster.us-east-1.rds.amazonaws.com:5432/payments",
+        DB_CONNECTION_STRING: "postgresql://user:pass@payment-db.cluster.eu-west-2.rds.amazonaws.com:5432/payments",
         STRIPE_API_KEY: "sk_test_placeholder",
     },
 });
@@ -82,7 +82,7 @@ const fraudDetectorSecret = new k8s.core.v1.Secret("fraud-detector-secret", {
     },
     type: "Opaque",
     stringData: {
-        DB_CONNECTION_STRING: "postgresql://user:pass@fraud-db.cluster.us-east-1.rds.amazonaws.com:5432/fraud",
+        DB_CONNECTION_STRING: "postgresql://user:pass@fraud-db.cluster.eu-west-2.rds.amazonaws.com:5432/fraud",
         ML_API_KEY: "ml_api_placeholder",
     },
 });
@@ -94,7 +94,7 @@ const notificationServiceSecret = new k8s.core.v1.Secret("notification-service-s
     },
     type: "Opaque",
     stringData: {
-        DB_CONNECTION_STRING: "postgresql://user:pass@notification-db.cluster.us-east-1.rds.amazonaws.com:5432/notifications",
+        DB_CONNECTION_STRING: "postgresql://user:pass@notification-db.cluster.eu-west-2.rds.amazonaws.com:5432/notifications",
         TWILIO_API_KEY: "twilio_placeholder",
         SENDGRID_API_KEY: "sendgrid_placeholder",
     },
@@ -990,13 +990,13 @@ config:
     default: dev
   paymentApiImage:
     description: ECR image URI for payment-api
-    default: 123456789012.dkr.ecr.us-east-1.amazonaws.com/payment-api:latest
+    default: 123456789012.dkr.ecr.eu-west-2.amazonaws.com/payment-api:latest
   fraudDetectorImage:
     description: ECR image URI for fraud-detector
-    default: 123456789012.dkr.ecr.us-east-1.amazonaws.com/fraud-detector:latest
+    default: 123456789012.dkr.ecr.eu-west-2.amazonaws.com/fraud-detector:latest
   notificationServiceImage:
     description: ECR image URI for notification-service
-    default: 123456789012.dkr.ecr.us-east-1.amazonaws.com/notification-service:latest
+    default: 123456789012.dkr.ecr.eu-west-2.amazonaws.com/notification-service:latest
 ```
 
 ## File: .eslintrc.json

@@ -13,6 +13,7 @@
  * - Istio service mesh configuration with strict mTLS
  * - Istio Gateway for external access to payment-api
  */
+
 import * as pulumi from '@pulumi/pulumi';
 import * as k8s from '@pulumi/kubernetes';
 import { ResourceOptions } from '@pulumi/pulumi';
@@ -73,15 +74,17 @@ export class TapStack extends pulumi.ComponentResource {
     super('tap:stack:TapStack', name, args, opts);
 
     const environmentSuffix = args.environmentSuffix || 'dev';
+
+    // Updated to eu-west-2 (London) region
     const paymentApiImage =
       args.paymentApiImage ||
-      '123456789012.dkr.ecr.us-east-1.amazonaws.com/payment-api:latest';
+      '123456789012.dkr.ecr.eu-west-2.amazonaws.com/payment-api:latest';
     const fraudDetectorImage =
       args.fraudDetectorImage ||
-      '123456789012.dkr.ecr.us-east-1.amazonaws.com/fraud-detector:latest';
+      '123456789012.dkr.ecr.eu-west-2.amazonaws.com/fraud-detector:latest';
     const notificationServiceImage =
       args.notificationServiceImage ||
-      '123456789012.dkr.ecr.us-east-1.amazonaws.com/notification-service:latest';
+      '123456789012.dkr.ecr.eu-west-2.amazonaws.com/notification-service:latest';
 
     // Kubernetes namespace
     const namespace = new k8s.core.v1.Namespace(
@@ -145,7 +148,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Secrets for each service
+    // Secrets for each service - Updated to eu-west-2 region
     const paymentApiSecret = new k8s.core.v1.Secret(
       'payment-api-secret',
       {
@@ -156,7 +159,7 @@ export class TapStack extends pulumi.ComponentResource {
         type: 'Opaque',
         stringData: {
           DB_CONNECTION_STRING:
-            'postgresql://user:pass@payment-db.cluster.us-east-1.rds.amazonaws.com:5432/payments',
+            'postgresql://user:pass@payment-db.cluster.eu-west-2.rds.amazonaws.com:5432/payments',
           STRIPE_API_KEY: 'sk_test_placeholder',
         },
       },
@@ -173,7 +176,7 @@ export class TapStack extends pulumi.ComponentResource {
         type: 'Opaque',
         stringData: {
           DB_CONNECTION_STRING:
-            'postgresql://user:pass@fraud-db.cluster.us-east-1.rds.amazonaws.com:5432/fraud',
+            'postgresql://user:pass@fraud-db.cluster.eu-west-2.rds.amazonaws.com:5432/fraud',
           ML_API_KEY: 'ml_api_placeholder',
         },
       },
@@ -190,7 +193,7 @@ export class TapStack extends pulumi.ComponentResource {
         type: 'Opaque',
         stringData: {
           DB_CONNECTION_STRING:
-            'postgresql://user:pass@notification-db.cluster.us-east-1.rds.amazonaws.com:5432/notifications',
+            'postgresql://user:pass@notification-db.cluster.eu-west-2.rds.amazonaws.com:5432/notifications',
           TWILIO_API_KEY: 'twilio_placeholder',
           SENDGRID_API_KEY: 'sendgrid_placeholder',
         },
@@ -1194,10 +1197,33 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Get Istio ingress gateway service to export the URL
-    const istioIngressService = k8s.core.v1.Service.get(
-      'istio-ingress',
-      'istio-system/istio-ingressgateway'
+    // Create a LoadBalancer service for the gateway instead of referencing external service
+    const gatewayService = new k8s.core.v1.Service(
+      'gateway-loadbalancer',
+      {
+        metadata: {
+          name: `gateway-lb-${environmentSuffix}`,
+          namespace: namespace.metadata.name,
+          labels: {
+            istio: 'ingressgateway',
+          },
+        },
+        spec: {
+          type: 'LoadBalancer',
+          selector: {
+            istio: 'ingressgateway',
+          },
+          ports: [
+            {
+              port: 80,
+              targetPort: 8080,
+              name: 'http',
+              protocol: 'TCP',
+            },
+          ],
+        },
+      },
+      { parent: this }
     );
 
     // Mark resources as used to satisfy linter
@@ -1210,9 +1236,9 @@ export class TapStack extends pulumi.ComponentResource {
     void notificationServiceDestinationRule;
     void paymentApiVirtualService;
 
-    // Set outputs
+    // Set outputs - Updated to use new gateway service
     this.namespaceName = namespace.metadata.name;
-    this.gatewayUrl = pulumi.interpolate`http://${istioIngressService.status.loadBalancer.ingress[0].hostname}/api/payment`;
+    this.gatewayUrl = pulumi.interpolate`http://${gatewayService.status.loadBalancer.ingress[0].hostname}/api/payment`;
     this.paymentApiEndpoint = pulumi.interpolate`http://${paymentApiService.metadata.name}.${namespace.metadata.name}.svc.cluster.local:8080`;
     this.fraudDetectorEndpoint = pulumi.interpolate`http://${fraudDetectorService.metadata.name}.${namespace.metadata.name}.svc.cluster.local:8080`;
     this.notificationServiceEndpoint = pulumi.interpolate`http://${notificationService.metadata.name}.${namespace.metadata.name}.svc.cluster.local:8080`;
