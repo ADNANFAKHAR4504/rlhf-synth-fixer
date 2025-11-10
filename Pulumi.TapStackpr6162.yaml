@@ -1,0 +1,16 @@
+config:
+  aws:region: us-east-1
+  TapStack:environmentSuffix: pr6162
+  TapStack:instanceType: t3.medium
+  TapStack:dbInstanceClass: db.t3.medium
+  TapStack:dbUsername: admin
+  TapStack:dbPassword:
+    secure: v1:oZ3FbNcfJHxqJqOg:Jkrc9FMHRzxUgrSQaLmJOvWkHPWfCA==
+  TapStack:environmentName: dev
+  TapStack:environment: dev
+  TapStack:minCapacity: "1"
+  TapStack:maxCapacity: "2"
+  TapStack:readReplicaCount: "0"
+  TapStack:backupRetentionDays: "1"
+  TapStack:enableWaf: "false"
+  TapStack:costCenter: dev-team
