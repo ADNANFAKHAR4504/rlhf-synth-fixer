@@ -2000,7 +2000,7 @@ Resources:
           Value: !GetAtt ApplicationLoadBalancer.LoadBalancerFullName
 
   # ==========================================================================
-  # AWS CONFIG - Compliance monitoring and governance
+  # AWS CONFIG - FIXED: Proper dependency order for Config resources
   # ==========================================================================
 
   ConfigBucket:
@@ -2112,23 +2112,11 @@ Resources:
         - Key: iac-rlhf-amazon
           Value: 'true'
 
-  # Create DeliveryChannel FIRST (ConfigRecorder needs it to exist before starting)
-  DeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    DependsOn:
-      - ConfigBucketPolicy
-    Properties:
-      Name: !Sub ${ProjectName}-${Environment}-DeliveryChannel
-      S3BucketName: !Ref ConfigBucket
-      SnsTopicARN: !Ref SNSTopic
-      ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: TwentyFour_Hours
-
-  # Create ConfigRecorder AFTER DeliveryChannel
+  # Create ConfigRecorder FIRST (without starting it)
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
     DependsOn:
-      - DeliveryChannel
+      - ConfigBucketPolicy
     Properties:
       Name: !Sub ${ProjectName}-${Environment}-Recorder
       RoleARN: !GetAtt ConfigRole.Arn
@@ -2136,7 +2124,19 @@ Resources:
         AllSupported: true
         IncludeGlobalResourceTypes: true
 
-  # Lambda function to start the Config Recorder
+  # Create DeliveryChannel AFTER ConfigRecorder
+  DeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    DependsOn:
+      - ConfigRecorder
+    Properties:
+      Name: !Sub ${ProjectName}-${Environment}-DeliveryChannel
+      S3BucketName: !Ref ConfigBucket
+      SnsTopicARN: !Ref SNSTopic
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: TwentyFour_Hours
+
+  # Lambda function to START the Config Recorder after both resources exist
   ConfigRecorderStarterRole:
     Type: AWS::IAM::Role
     Properties:
@@ -2159,6 +2159,8 @@ Resources:
                   - config:StartConfigurationRecorder
                   - config:StopConfigurationRecorder
                   - config:DescribeConfigurationRecorderStatus
+                  - config:DescribeDeliveryChannels
+                  - config:DescribeConfigurationRecorders
                 Resource: '*'
 
   ConfigRecorderStarterFunction:
@@ -2174,6 +2176,7 @@ Resources:
           import boto3
           import json
           import urllib.request
+          import time
 
           def send_response(event, context, response_status, response_data):
               response_body = json.dumps({
@@ -2198,6 +2201,14 @@ Resources:
                   recorder_name = event['ResourceProperties']['ConfigRecorderName']
                   
                   if request_type == 'Create' or request_type == 'Update':
+                      # Wait a moment to ensure resources are fully created
+                      time.sleep(5)
+                      
+                      # Verify delivery channel exists
+                      delivery_channels = config_client.describe_delivery_channels()
+                      if not delivery_channels.get('DeliveryChannels'):
+                          raise Exception("No delivery channel found")
+                      
                       # Start the configuration recorder
                       config_client.start_configuration_recorder(
                           ConfigurationRecorderName=recorder_name
@@ -2222,7 +2233,7 @@ Resources:
                       'Error': str(e)
                   })
 
-  # Custom Resource to START the Config Recorder after both resources are created
+  # Custom Resource to START the Config Recorder after both resources exist
   ConfigRecorderStarter:
     Type: AWS::CloudFormation::CustomResource
     DependsOn:
@@ -2231,7 +2242,7 @@ Resources:
       ServiceToken: !GetAtt ConfigRecorderStarterFunction.Arn
       ConfigRecorderName: !Ref ConfigRecorder
 
-  # Config Rules for compliance
+  # Config Rules for compliance (only create after recorder is started)
   S3BucketEncryptionRule:
     Type: AWS::Config::ConfigRule
     DependsOn: ConfigRecorderStarter
