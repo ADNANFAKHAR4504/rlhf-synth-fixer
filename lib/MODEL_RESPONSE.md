@@ -109,8 +109,8 @@ class TapStack:
             tags={**self.common_tags, "Name": f"igw-{self.env_suffix}"},
         )
 
-        # Get availability zones (us-east-1 has 3 AZs: us-east-2a, us-east-2b, us-east-2c)
-        self.availability_zones = ["us-east-2a", "us-east-2b", "us-east-2c"]
+        # Get availability zones (us-east-1 has 3 AZs: us-east-1a, us-east-1b, us-east-1c)
+        self.availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
 
         # Create public and private subnets
         self.public_subnets = []
