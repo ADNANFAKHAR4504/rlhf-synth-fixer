@@ -405,6 +405,7 @@ class TestTapStackComponent(unittest.TestCase):
             self.assertIsNotNone(values["queue_url"])
             self.assertIsNotNone(values["sns_topic"])
             self.assertIsNotNone(values["kms_key"])
+            return values
 
         return check([]).apply(assertions)
 
