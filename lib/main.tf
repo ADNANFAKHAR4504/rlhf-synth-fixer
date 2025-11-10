@@ -303,7 +303,7 @@ resource "aws_lb" "main" {
   subnets            = aws_subnet.public[*].id
 
   enable_deletion_protection = false
-  enable_http2              = true
+  enable_http2               = true
 
   tags = {
     Name        = "${var.project_name}-alb"
@@ -459,7 +459,7 @@ resource "aws_launch_template" "main" {
     });
 
     server.listen(port, () => {
-      console.log(`Server running on port ${port}`);
+      console.log(`Server running on port $${port}`);
     });
     EOA
     
@@ -507,14 +507,14 @@ resource "aws_launch_template" "main" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name_prefix         = "${var.project_name}-asg-"
-  vpc_zone_identifier = aws_subnet.private[*].id
-  target_group_arns   = [aws_lb_target_group.main.arn]
-  health_check_type   = "ELB"
+  name_prefix               = "${var.project_name}-asg-"
+  vpc_zone_identifier       = aws_subnet.private[*].id
+  target_group_arns         = [aws_lb_target_group.main.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
-  min_size            = 2
-  max_size            = 10
-  desired_capacity    = 2
+  min_size                  = 2
+  max_size                  = 10
+  desired_capacity          = 2
 
   launch_template {
     id      = aws_launch_template.main.id
@@ -551,7 +551,7 @@ resource "aws_autoscaling_policy" "cpu" {
   name                   = "${var.project_name}-cpu-scaling"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
-  cooldown              = 300
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
 
@@ -560,13 +560,13 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   alarm_name          = "${var.project_name}-cpu-high"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
-  metric_name        = "CPUUtilization"
-  namespace          = "AWS/EC2"
-  period             = "120"
-  statistic          = "Average"
-  threshold          = "70"
-  alarm_description  = "This metric monitors ec2 cpu utilization"
-  alarm_actions      = [aws_autoscaling_policy.cpu.arn]
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "120"
+  statistic           = "Average"
+  threshold           = "70"
+  alarm_description   = "This metric monitors ec2 cpu utilization"
+  alarm_actions       = [aws_autoscaling_policy.cpu.arn]
 
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.main.name
@@ -598,29 +598,29 @@ resource "aws_db_instance" "main" {
   engine            = "postgres"
   engine_version    = "15"
   instance_class    = "db.t3.micro"
-  
-  allocated_storage     = 20
-  storage_type         = "gp3"
-  storage_encrypted    = true
-  
+
+  allocated_storage = 20
+  storage_type      = "gp3"
+  storage_encrypted = true
+
   db_name  = "appdb"
   username = "dbadmin"
   password = aws_secretsmanager_secret_version.rds_password.secret_string
-  
+
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
-  
-  multi_az               = true
-  publicly_accessible    = false
+
+  multi_az                = true
+  publicly_accessible     = false
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
-  
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
+
   skip_final_snapshot = true
   deletion_protection = false
-  
+
   enabled_cloudwatch_logs_exports = ["postgresql"]
-  
+
   tags = {
     Name        = "${var.project_name}-rds"
     Environment = var.environment
