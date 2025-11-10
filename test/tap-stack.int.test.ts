@@ -34,6 +34,7 @@ import {
   SNSClient,
 } from '@aws-sdk/client-sns';
 import {
+  DescribeInstanceInformationCommand,
   GetCommandInvocationCommand,
   SSMClient,
   SendCommandCommand,
@@ -43,10 +44,8 @@ import * as path from 'path';
 
 // Load deployment outputs - these are environment-specific
 const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
-if (!fs.existsSync(outputsPath)) {
-  throw new Error(`Deployment outputs not found at ${outputsPath}. Please deploy the stack first.`);
-}
-const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+const stackDeployed = fs.existsSync(outputsPath);
+const outputs = stackDeployed ? JSON.parse(fs.readFileSync(outputsPath, 'utf8')) : {};
 
 // AWS SDK clients
 const region = process.env.AWS_REGION || 'us-east-1';
@@ -83,16 +82,26 @@ async function executeSSMCommand(
   const commandId = response.Command!.CommandId!;
   const startTime = Date.now();
 
-  while (Date.now() - startTime < timeoutMs) {
-    const invocation = await ssmClient.send(
-      new GetCommandInvocationCommand({
-        CommandId: commandId,
-        InstanceId: instanceId,
-      })
-    );
+  // Wait a bit for SSM to create the invocation record
+  await new Promise(resolve => setTimeout(resolve, 2000));
 
-    if (['Success', 'Failed', 'Cancelled', 'TimedOut'].includes(invocation.Status!)) {
-      return invocation as any;
+  while (Date.now() - startTime < timeoutMs) {
+    try {
+      const invocation = await ssmClient.send(
+        new GetCommandInvocationCommand({
+          CommandId: commandId,
+          InstanceId: instanceId,
+        })
+      );
+
+      if (['Success', 'Failed', 'Cancelled', 'TimedOut'].includes(invocation.Status!)) {
+        return invocation as any;
+      }
+    } catch (error: any) {
+      // InvocationDoesNotExist means SSM hasn't created the invocation yet
+      if (error.name !== 'InvocationDoesNotExist') {
+        throw error;
+      }
     }
 
     await new Promise(resolve => setTimeout(resolve, 5000));
@@ -139,9 +148,60 @@ describe('TapStack End-to-End Integration Tests', () => {
   let instanceId: string;
 
   beforeAll(async () => {
-    // Get a healthy instance for testing
-    instanceId = await getHealthyInstanceId();
-    console.log(`Using EC2 instance: ${instanceId} for integration tests`);
+    // Check if stack outputs exist
+    if (!stackDeployed) {
+      throw new Error(
+        'CloudFormation stack outputs not found. ' +
+        'Please deploy the stack and extract outputs before running integration tests. ' +
+        'Run: ./scripts/deploy.sh && ./scripts/extract-outputs.sh'
+      );
+    }
+
+    // Verify infrastructure is available
+    try {
+      // Check if ASG exists and has healthy instances
+      const asgResponse = await asgClient.send(
+        new DescribeAutoScalingGroupsCommand({
+          AutoScalingGroupNames: [outputs.AutoScalingGroupName],
+        })
+      );
+      const asg = asgResponse.AutoScalingGroups?.[0];
+
+      if (!asg || !asg.Instances || asg.Instances.length === 0) {
+        throw new Error(
+          `Auto Scaling Group '${outputs.AutoScalingGroupName}' not found or has no instances. ` +
+          'Please deploy the stack before running integration tests.'
+        );
+      }
+
+      // Get a healthy instance for testing
+      instanceId = await getHealthyInstanceId();
+
+      // Verify SSM connectivity
+      const ssmResponse = await ssmClient.send(
+        new DescribeInstanceInformationCommand({
+          Filters: [
+            {
+              Key: 'InstanceIds',
+              Values: [instanceId],
+            },
+          ],
+        })
+      );
+
+      const ssmInstance = ssmResponse.InstanceInformationList?.[0];
+      if (!ssmInstance || ssmInstance.PingStatus !== 'Online') {
+        throw new Error(
+          `SSM agent on instance ${instanceId} is not online (status: ${ssmInstance?.PingStatus || 'Unknown'}). ` +
+          'Please ensure SSM agent is running and the instance has proper IAM role for SSM.'
+        );
+      }
+
+      console.log(`[INFO] Using EC2 instance: ${instanceId} for integration tests (SSM status: Online)`);
+    } catch (error: any) {
+      console.error('\n[ERROR] Infrastructure check failed:', error.message);
+      throw error;
+    }
   }, TEST_TIMEOUT);
 
   describe('Resource Existence Validation', () => {
@@ -299,14 +359,27 @@ describe('TapStack End-to-End Integration Tests', () => {
 
     test('EC2 instance has internet connectivity via NAT Gateway', async () => {
       const commands = [
-        `curl -s --connect-timeout 10 https://httpbin.org/ip`,
-        `echo "INTERNET_EXIT_CODE=$?"`,
+        `# Try AWS checkip service first (more reliable)`,
+        `curl -s --connect-timeout 10 https://checkip.amazonaws.com > /tmp/ip.txt 2>&1 && AWS_OK=0 || AWS_OK=1`,
+        `# If AWS service fails, try httpbin as fallback`,
+        `if [ $AWS_OK -ne 0 ]; then`,
+        `  curl -s --connect-timeout 10 https://httpbin.org/ip > /tmp/ip.txt 2>&1 && HTTPBIN_OK=0 || HTTPBIN_OK=1`,
+        `  INTERNET_EXIT=$HTTPBIN_OK`,
+        `else`,
+        `  INTERNET_EXIT=0`,
+        `fi`,
+        `# Output result`,
+        `if [ $INTERNET_EXIT -eq 0 ]; then`,
+        `  cat /tmp/ip.txt`,
+        `  echo "INTERNET_CONNECTIVITY=OK"`,
+        `fi`,
+        `echo "INTERNET_EXIT_CODE=$INTERNET_EXIT"`,
       ];
 
       const result = await executeSSMCommand(instanceId, commands);
 
       expect(result.Status).toBe('Success');
-      expect(result.StandardOutputContent).toContain('"origin"');
+      expect(result.StandardOutputContent).toContain('INTERNET_CONNECTIVITY=OK');
       expect(result.StandardOutputContent).toContain('INTERNET_EXIT_CODE=0');
     });
 
