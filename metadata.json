@@ -1,0 +1,24 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-10T20:55:15+05:30",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "po_id": "xqewx",
+  "aws_services": [
+    "kms",
+    "iam",
+    "s3",
+    "cloudwatch",
+    "sns",
+    "config",
+    "organizations"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 9
+}
