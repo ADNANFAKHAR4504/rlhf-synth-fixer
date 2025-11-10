@@ -12,14 +12,20 @@
   ],
   "training_quality": 10,
   "aws_services": [
-    "S3 Bucket",
-    "CloudFormation",
-    "Lambda",
-    "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC",
+    "S3",
     "CloudFront",
+    "Lambda",
+    "CloudWatch",
     "WAF",
-    "IAM"
-  ]
+    "IAM",
+    "VPC",
+    "EventBridge",
+    "CloudFormation"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
 }
