@@ -1,0 +1,38 @@
+{
+  "platform": "cloudformation",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "101000803",
+  "team": "synth",
+  "startedAt": "2025-11-02T11:40:56+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Migration",
+    "Database",
+    "Networking"
+  ],
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "DMS",
+    "ALB",
+    "ELB",
+    "EC2",
+    "Auto Scaling",
+    "KMS",
+    "Secrets Manager",
+    "CloudWatch",
+    "NAT Gateway",
+    "Security Groups",
+    "IAM",
+    "SNS"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

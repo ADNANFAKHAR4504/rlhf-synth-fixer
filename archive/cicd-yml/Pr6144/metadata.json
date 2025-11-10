@@ -1,0 +1,21 @@
+{
+  "platform": "cicd",
+  "language": "yml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "783921",
+  "team": "stf",
+  "startedAt": "2025-11-10T00:00:00.000Z",
+  "subtask": "GitLab CI/CD Pipeline",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "traing_quality": "10",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "okorie-turing",
+  "dockerS3Location": ""
+}

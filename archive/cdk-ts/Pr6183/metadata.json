@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "n4trg",
+  "team": "synth",
+  "startedAt": "2025-11-10T16:13:00Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "EKS",
+    "VPC",
+    "EC2",
+    "IAM",
+    "Fargate",
+    "CloudWatch",
+    "Systems Manager",
+    "Lambda"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
