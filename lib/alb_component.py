@@ -122,14 +122,14 @@ class AlbComponent(ComponentResource):
                         ),
                         visibility_config=aws.wafv2.WebAclRuleVisibilityConfigArgs(
                             sampled_requests_enabled=True,
-                            cloud_watch_metrics_enabled=True,
+                            cloudwatch_metrics_enabled=True,
                             metric_name="RateLimitRule",
                         ),
                     )
                 ],
                 visibility_config=aws.wafv2.WebAclVisibilityConfigArgs(
                     sampled_requests_enabled=True,
-                    cloud_watch_metrics_enabled=True,
+                    cloudwatch_metrics_enabled=True,
                     metric_name=f"waf-{environment_suffix}",
                 ),
                 tags={**tags, "Name": f"waf-{environment_suffix}"},
