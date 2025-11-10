@@ -2411,30 +2411,38 @@ Outputs:
       Name: !Sub ${ProjectName}-${Environment}-PrivateDBSubnet3
 
   ALBDNSName:
-    Condition: HasAtLeastTwoAZsWithCustomAZs
     Description: Application Load Balancer DNS Name
-    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Value: !If
+      - HasAtLeastTwoAZsWithCustomAZs
+      - !GetAtt ApplicationLoadBalancer.DNSName
+      - ''
     Export:
       Name: !Sub ${ProjectName}-${Environment}-ALB-DNS
 
   ALBArn:
-    Condition: HasAtLeastTwoAZsWithCustomAZs
     Description: Application Load Balancer ARN
-    Value: !Ref ApplicationLoadBalancer
+    Value: !If
+      - HasAtLeastTwoAZsWithCustomAZs
+      - !Ref ApplicationLoadBalancer
+      - ''
     Export:
       Name: !Sub ${ProjectName}-${Environment}-ALB-ARN
 
   ALBHostedZone:
-    Condition: HasAtLeastTwoAZsWithCustomAZs
     Description: ALB Hosted Zone ID for Route53 alias records
-    Value: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
+    Value: !If
+      - HasAtLeastTwoAZsWithCustomAZs
+      - !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
+      - ''
     Export:
       Name: !Sub ${ProjectName}-${Environment}-ALB-HostedZone
 
   AutoScalingGroupName:
-    Condition: HasAtLeastTwoAZsWithCustomAZs
     Description: Auto Scaling Group Name
-    Value: !Ref AutoScalingGroup
+    Value: !If
+      - HasAtLeastTwoAZsWithCustomAZs
+      - !Ref AutoScalingGroup
+      - ''
     Export:
       Name: !Sub ${ProjectName}-${Environment}-ASG-Name
 
@@ -2445,23 +2453,29 @@ Outputs:
       Name: !Sub ${ProjectName}-${Environment}-LaunchTemplate-ID
 
   AuroraClusterEndpoint:
-    Condition: HasAtLeastTwoAZsWithCustomAZs
     Description: Aurora Cluster Writer Endpoint
-    Value: !GetAtt AuroraCluster.Endpoint.Address
+    Value: !If
+      - HasAtLeastTwoAZsWithCustomAZs
+      - !GetAtt AuroraCluster.Endpoint.Address
+      - ''
     Export:
       Name: !Sub ${ProjectName}-${Environment}-DB-Writer-Endpoint
 
   AuroraReaderEndpoint:
-    Condition: HasAtLeastTwoAZsWithCustomAZs
     Description: Aurora Cluster Reader Endpoint
-    Value: !GetAtt AuroraCluster.ReadEndpoint.Address
+    Value: !If
+      - HasAtLeastTwoAZsWithCustomAZs
+      - !GetAtt AuroraCluster.ReadEndpoint.Address
+      - ''
     Export:
       Name: !Sub ${ProjectName}-${Environment}-DB-Reader-Endpoint
 
   AuroraClusterPort:
-    Condition: HasAtLeastTwoAZsWithCustomAZs
     Description: Aurora Cluster Port
-    Value: !GetAtt AuroraCluster.Endpoint.Port
+    Value: !If
+      - HasAtLeastTwoAZsWithCustomAZs
+      - !GetAtt AuroraCluster.Endpoint.Port
+      - ''
     Export:
       Name: !Sub ${ProjectName}-${Environment}-DB-Port
 
