@@ -30,7 +30,7 @@ data "aws_ami" "amazon_linux_2023" {
 resource "random_password" "rds_password" {
   length           = 32
   special          = true
-  override_special = "!#$%&()*+,-.:;<=>?[]^{}|~" 
+  override_special = "!#$%&()*+,-.:;<=>?[]^{}|~"
 }
 
 resource "aws_secretsmanager_secret" "rds_password" {
@@ -334,7 +334,7 @@ resource "aws_lb_listener" "http" {
     type             = "forward"
     target_group_arn = aws_lb_target_group.main.arn
   }
-  
+
 }
 
 # IAM Role for EC2 instances
@@ -587,7 +587,7 @@ resource "aws_db_instance" "main" {
   db_name  = "appdb"
   username = "dbadmin"
   password = aws_secretsmanager_secret_version.rds_password.secret_string
-  
+
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
