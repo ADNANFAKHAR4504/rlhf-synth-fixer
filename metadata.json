@@ -5,11 +5,9 @@
   "turn_type": "single",
   "team": "synth",
   "startedAt": "2025-11-08T00:10:44+05:30",
-  "subtask": "Security, Compliance, and Governance",
+  "subtask": "Security, Compliance and Governance",
   "subject_labels": [
-    "Security",
-    "Compliance",
-    "and Governance"
+    "Security Configuration as code"
   ],
   "po_id": "aiyy6",
   "aws_services": [
