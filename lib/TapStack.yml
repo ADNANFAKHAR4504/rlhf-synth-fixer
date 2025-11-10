@@ -2112,29 +2112,29 @@ Resources:
         - Key: iac-rlhf-amazon
           Value: 'true'
 
-  # Create DeliveryChannel FIRST (ConfigRecorder needs it to exist before it can start)
-  DeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    DependsOn:
-      - ConfigBucketPolicy
-    Properties:
-      Name: !Sub ${ProjectName}-${Environment}-DeliveryChannel
-      S3BucketName: !Ref ConfigBucket
-      SnsTopicARN: !Ref SNSTopic
-      ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: TwentyFour_Hours
-
-  # Create ConfigRecorder AFTER DeliveryChannel (can be created but won't auto-start)
+  # Create ConfigRecorder first (it will remain stopped until the custom resource starts it)
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
     DependsOn:
-      - DeliveryChannel
+      - ConfigBucketPolicy
     Properties:
       Name: !Sub ${ProjectName}-${Environment}-Recorder
       RoleARN: !GetAtt ConfigRole.Arn
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
+
+  # Create DeliveryChannel after ConfigRecorder so the recorder can start successfully
+  DeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    DependsOn:
+      - ConfigRecorder
+    Properties:
+      Name: !Sub ${ProjectName}-${Environment}-DeliveryChannel
+      S3BucketName: !Ref ConfigBucket
+      SnsTopicARN: !Ref SNSTopic
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: TwentyFour_Hours
 
   # Lambda function to START the Config Recorder after both resources exist
   ConfigRecorderStarterRole:
