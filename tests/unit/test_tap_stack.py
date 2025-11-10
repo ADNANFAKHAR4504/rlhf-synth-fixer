@@ -14,7 +14,6 @@ from pulumi.runtime import (
     Mocks,
     MockCallArgs,
     MockResourceArgs,
-    MockResourceResult,
     set_mocks,
 )
 
@@ -30,7 +29,7 @@ from lib.tap_stack import TapStack, TapStackArgs
 class MinimalMocks(Mocks):
     """Return inputs as outputs with minimal augmentation."""
 
-    def new_resource(self, args: MockResourceArgs) -> MockResourceResult:
+    def new_resource(self, args: MockResourceArgs):
         outputs = dict(args.inputs)
         outputs.setdefault("id", f"{args.name}-id")
         outputs.setdefault("arn", f"arn:aws:mock::{args.name}")
@@ -53,7 +52,7 @@ class MinimalMocks(Mocks):
         if args.type_.endswith(":RestApi"):
             outputs.setdefault("id", f"{args.name}-id")
 
-        return MockResourceResult(f"{args.name}_id", outputs)
+        return f"{args.name}_id", outputs
 
     def call(self, args: MockCallArgs) -> dict:
         if args.token == "aws:index/getRegion:getRegion":
