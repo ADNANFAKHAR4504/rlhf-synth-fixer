@@ -28,7 +28,7 @@ export class TapStack extends cdk.Stack {
     const vpc = new ec2.Vpc(this, 'FraudDetectionVpc', {
       vpcName: `fraud-vpc-${environmentSuffix}`,
       maxAzs: 3,
-      natGateways: 3,
+      natGateways: 1,
       subnetConfiguration: [
         {
           cidrMask: 24,
