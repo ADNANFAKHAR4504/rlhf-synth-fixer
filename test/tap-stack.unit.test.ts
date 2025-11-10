@@ -67,17 +67,25 @@ describe('TapStack', () => {
 
       expect(tableIds.length).toBeGreaterThan(0);
       tableIds.forEach((tableId) => {
-        expect(resources[tableId].DeletionPolicy).toBeUndefined();
+        expect(resources[tableId].DeletionPolicy).toBe('Delete');
         expect(resources[tableId].UpdateReplacePolicy).toBe('Delete');
       });
     });
 
     test('DynamoDB tables should have proper tags', () => {
-      template.hasResourceProperties('AWS::DynamoDB::Table', {
-        Tags: Match.arrayWith([
-          { Key: 'Environment', Value: 'production' },
-          { Key: 'Application', Value: 'transaction-processor' },
-        ]),
+      const resources = template.findResources('AWS::DynamoDB::Table');
+      const tableIds = Object.keys(resources);
+
+      expect(tableIds.length).toBeGreaterThan(0);
+      tableIds.forEach((tableId) => {
+        const tags = resources[tableId].Properties.Tags;
+        expect(tags).toBeDefined();
+        expect(tags).toEqual(
+          expect.arrayContaining([
+            { Key: 'Environment', Value: 'production' },
+            { Key: 'Application', Value: 'transaction-processor' },
+          ])
+        );
       });
     });
   });
@@ -152,11 +160,19 @@ describe('TapStack', () => {
     });
 
     test('Lambda functions should have proper tags', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        Tags: Match.arrayWith([
-          { Key: 'Environment', Value: 'production' },
-          { Key: 'Application', Value: 'transaction-processor' },
-        ]),
+      const resources = template.findResources('AWS::Lambda::Function');
+      const lambdaIds = Object.keys(resources);
+
+      expect(lambdaIds.length).toBeGreaterThan(0);
+      lambdaIds.forEach((lambdaId) => {
+        const tags = resources[lambdaId].Properties.Tags;
+        expect(tags).toBeDefined();
+        expect(tags).toEqual(
+          expect.arrayContaining([
+            { Key: 'Environment', Value: 'production' },
+            { Key: 'Application', Value: 'transaction-processor' },
+          ])
+        );
       });
     });
   });
@@ -231,11 +247,19 @@ describe('TapStack', () => {
     });
 
     test('Log Group should have proper tags', () => {
-      template.hasResourceProperties('AWS::Logs::LogGroup', {
-        Tags: Match.arrayWith([
-          { Key: 'Environment', Value: 'production' },
-          { Key: 'Application', Value: 'transaction-processor' },
-        ]),
+      const resources = template.findResources('AWS::Logs::LogGroup');
+      const logGroupIds = Object.keys(resources);
+
+      expect(logGroupIds.length).toBeGreaterThan(0);
+      logGroupIds.forEach((logGroupId) => {
+        const tags = resources[logGroupId].Properties.Tags;
+        expect(tags).toBeDefined();
+        expect(tags).toEqual(
+          expect.arrayContaining([
+            { Key: 'Environment', Value: 'production' },
+            { Key: 'Application', Value: 'transaction-processor' },
+          ])
+        );
       });
     });
   });
@@ -255,11 +279,21 @@ describe('TapStack', () => {
     });
 
     test('State Machine should have proper tags', () => {
-      template.hasResourceProperties('AWS::StepFunctions::StateMachine', {
-        Tags: Match.arrayWith([
-          { Key: 'Environment', Value: 'production' },
-          { Key: 'Application', Value: 'transaction-processor' },
-        ]),
+      const resources = template.findResources(
+        'AWS::StepFunctions::StateMachine'
+      );
+      const stateMachineIds = Object.keys(resources);
+
+      expect(stateMachineIds.length).toBeGreaterThan(0);
+      stateMachineIds.forEach((stateMachineId) => {
+        const tags = resources[stateMachineId].Properties.Tags;
+        expect(tags).toBeDefined();
+        expect(tags).toEqual(
+          expect.arrayContaining([
+            { Key: 'Environment', Value: 'production' },
+            { Key: 'Application', Value: 'transaction-processor' },
+          ])
+        );
       });
     });
 
@@ -438,7 +472,8 @@ describe('TapStack', () => {
   describe('Edge Cases and Error Handling', () => {
     test('Should handle custom environmentSuffix', () => {
       const customSuffix = 'custom-test-123';
-      const customStack = new TapStack(app, 'CustomStack', {
+      const customApp = new cdk.App();
+      const customStack = new TapStack(customApp, 'CustomStack', {
         environmentSuffix: customSuffix,
       });
       const customTemplate = Template.fromStack(customStack);
@@ -449,11 +484,13 @@ describe('TapStack', () => {
     });
 
     test('Should use default environmentSuffix when not provided', () => {
-      const defaultStack = new TapStack(app, 'DefaultStack', {});
+      const defaultApp = new cdk.App();
+      const defaultStack = new TapStack(defaultApp, 'DefaultStack', {});
       const defaultTemplate = Template.fromStack(defaultStack);
 
+      // Default is 'dev' as per tap-stack.ts line 22
       defaultTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: Match.stringLikeRegexp('transactions-raw-'),
+        TableName: 'transactions-raw-dev',
       });
     });
   });
