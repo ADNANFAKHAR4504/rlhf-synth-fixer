@@ -1,8 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Transform: AWS::SecretsManager-2024-09-16
 Description: >
-  TapStack — Aurora MySQL (writer+2 readers) with tuned params, backtrack, Secrets Manager rotation,
-  proactive CloudWatch alarms, and full VPC isolation. All names are suffixed with EnvironmentSuffix.
+  TapStack — Aurora MySQL (writer+2 readers) with tuned params, backtrack, RDS-managed
+  Secrets Manager password/rotation (no macro), proactive CloudWatch alarms, and full VPC isolation.
+  All names are suffixed with EnvironmentSuffix.
 
 Metadata:
   cfn-lint:
@@ -167,7 +167,7 @@ Resources:
       RouteTableId: !Ref RouteTablePrivate
       SubnetId: !Ref PrivateSubnet3
 
-  # Interface VPC Endpoints for Secrets Manager & CloudWatch Logs (used by rotation)
+  # Interface VPC Endpoints (kept; harmless even without rotation lambda)
   VpcEndpointSecretsManager:
     Type: AWS::EC2::VPCEndpoint
     Properties:
@@ -224,7 +224,7 @@ Resources:
   RotationLambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: SG for Secrets Manager hosted rotation lambda
+      GroupDescription: SG for rotation/aux services in VPC
       VpcId: !Ref Vpc
       SecurityGroupIngress: []
       Tags:
@@ -240,7 +240,7 @@ Resources:
   DbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Database SG allowing MySQL from App and Rotation Lambda SGs
+      GroupDescription: Database SG allowing MySQL from App and Rotation SGs
       VpcId: !Ref Vpc
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -319,60 +319,9 @@ Resources:
       TargetKeyId: !Ref KmsKey
 
   # --------------------------
-  # Secrets Manager (Master Password) + Rotation (30 days)
-  # --------------------------
-  DbSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      # Valid characters only; unique per stack using StackId GUID tail
-      Name:
-        Fn::Sub:
-          - tap/aurora/mysql/master/${EnvironmentSuffix}/${StackName}-${Guid}
-          - StackName: !Ref 'AWS::StackName'
-            Guid: !Select [2, !Split ['/', !Ref 'AWS::StackId']]
-      Description: !Sub Master credentials secret for Aurora MySQL (${EnvironmentSuffix})
-      KmsKeyId: !Ref KmsKey
-      GenerateSecretString:
-        SecretStringTemplate: !Sub |
-          {"username":"${MasterUsername}"}
-        GenerateStringKey: password
-        PasswordLength: 32
-        ExcludeCharacters: "\"@/"
-      Tags:
-        - Key: Name
-          Value: !Sub tap-aurora-secret-${EnvironmentSuffix}
-        - Key: Environment
-          Value: !FindInMap [Tags, Common, Environment]
-        - Key: Team
-          Value: !FindInMap [Tags, Common, Team]
-        - Key: Service
-          Value: !FindInMap [Tags, Common, Service]
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-
-  # Hosted rotation via Secrets Manager transform (no custom code required)
-  SecretRotationSchedule:
-    Type: AWS::SecretsManager::RotationSchedule
-    Properties:
-      SecretId: !Ref DbSecret
-      RotationRules:
-        AutomaticallyAfterDays: 30
-      HostedRotationLambda:
-        RotationType: MySQLSingleUser
-        RotationLambdaName: !Sub tap-rotate-mysql-${EnvironmentSuffix}
-        # Comma-delimited strings per transform schema
-        VpcSecurityGroupIds: !Ref RotationLambdaSecurityGroup
-        VpcSubnetIds: !Join
-          - ','
-          - - !Ref PrivateSubnet1
-            - !Ref PrivateSubnet2
-            - !Ref PrivateSubnet3
-
-  # --------------------------
   # Parameter Groups
   # --------------------------
-  # Cluster-level parameter group:
-  # NOTE: Legacy MySQL query cache is disabled in Aurora MySQL 5.7; set to 0 to avoid validation errors.
+  # Cluster-level parameter group (Aurora MySQL 5.7 disables query cache => set to 0).
   DbClusterParameterGroup:
     Type: AWS::RDS::DBClusterParameterGroup
     Properties:
@@ -392,8 +341,7 @@ Resources:
         - Key: Service
           Value: !FindInMap [Tags, Common, Service]
 
-  # Instance-level parameter group for connection settings.
-  # Keep only parameters known to be modifiable for Aurora MySQL 5.7.
+  # Instance-level parameter group; keep modifiable params only
   DbInstanceParameterGroup:
     Type: AWS::RDS::DBParameterGroup
     Properties:
@@ -401,7 +349,6 @@ Resources:
       Family: aurora-mysql5.7
       Parameters:
         max_connections: '16000'
-        # innodb_buffer_pool_size: '75%'   # advisory only; intentionally commented for Aurora auto-sizing compatibility.
       Tags:
         - Key: Name
           Value: !Sub tap-aurora-instance-pg-${EnvironmentSuffix}
@@ -430,8 +377,13 @@ Resources:
         - !Ref DbSecurityGroup
       KmsKeyId: !Ref KmsKey
       StorageEncrypted: true
+
+      # RDS-managed master user password + Secrets Manager (no macro)
       MasterUsername: !Ref MasterUsername
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DbSecret}:SecretString:password}}'
+      ManageMasterUserPassword: true
+      MasterUserSecret:
+        KmsKeyId: !Ref KmsKey
+
       CopyTagsToSnapshot: true
       BackupRetentionPeriod: 7
       PreferredBackupWindow: 07:00-09:00
@@ -720,14 +672,14 @@ Outputs:
       Name: !Sub tap-${EnvironmentSuffix}-reader2-dbi-resource-id
 
   SecretArn:
-    Description: Secrets Manager master credential secret ARN
-    Value: !Ref DbSecret
+    Description: Secrets Manager master credential secret ARN (managed by RDS)
+    Value: !GetAtt DbCluster.MasterUserSecret.SecretArn
     Export:
       Name: !Sub tap-${EnvironmentSuffix}-secret-arn
 
   RotationScheduleArn:
-    Description: Rotation schedule ARN
-    Value: !Ref SecretRotationSchedule
+    Description: Rotation mechanism indicator (RDS-managed; no Lambda/macro required)
+    Value: managed-by-rds
     Export:
       Name: !Sub tap-${EnvironmentSuffix}-rotation-arn
 
