@@ -407,7 +407,12 @@ describe('EKS Infrastructure Integration Tests', () => {
 
       expect(response.Role).toBeDefined();
       expect(response.Role?.RoleName).toBe(roleName);
-      expect(response.Role?.AssumeRolePolicyDocument).toContain('sts:AssumeRoleWithWebIdentity');
+
+      // Decode URL-encoded policy document
+      const policyDoc = decodeURIComponent(
+        response.Role?.AssumeRolePolicyDocument || ''
+      );
+      expect(policyDoc).toContain('sts:AssumeRoleWithWebIdentity');
     });
 
     test('S3 access policy exists with correct permissions', async () => {
