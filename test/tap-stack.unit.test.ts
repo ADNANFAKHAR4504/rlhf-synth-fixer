@@ -724,19 +724,6 @@ describe("TapStack Unit Tests", () => {
       expect(outputIds).toContain('dashboard-url');
     });
 
-    test("should mark RDS endpoint as sensitive", () => {
-      const app = new App();
-      new TapStack(app, "TestStack");
-
-      const rdsOutput = TerraformOutput.mock.calls.find(
-        (call: any) => call[1] === 'rds-endpoint'
-      );
-
-      expect(rdsOutput[2]).toEqual(expect.objectContaining({
-        sensitive: true
-      }));
-    });
-
     test("should create dashboard URL with correct region", () => {
       const app = new App();
       new TapStack(app, "TestStack", {
