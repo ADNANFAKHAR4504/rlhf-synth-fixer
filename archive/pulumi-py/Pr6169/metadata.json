@@ -33,5 +33,10 @@
   ],
   "training_quality": 10,
   "author": "iamarpit-turing",
-  "reviewer": "raghav-turing"
+  "reviewer": "raghav-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
