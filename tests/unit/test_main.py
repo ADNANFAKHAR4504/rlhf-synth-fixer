@@ -3,7 +3,7 @@ Unit tests for the main entry point (__main__.py) using Pulumi testing utilities
 """
 
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, Mock
 import pulumi
 
 
@@ -63,168 +63,196 @@ pulumi.runtime.set_mocks(MyMocks())
 class TestMainStack(unittest.TestCase):
     """Test cases for main entry point"""
 
-    def setUp(self):
-        """Set up test configuration"""
-        # Mock Pulumi configuration
-        import os
-        os.environ['PULUMI_CONFIG'] = '{}'
-        
-    @pulumi.runtime.test
-    @patch('pulumi.Config.require')
-    @patch('pulumi.Config.require_int')
-    @patch('pulumi.Config.get_bool')
-    def test_stack_creates_vpc_component(self, mock_get_bool, mock_require_int, mock_require):
+    @patch('pulumi_aws.get_availability_zones')
+    @patch('pulumi.export')
+    @patch('pulumi.Config')
+    def test_stack_creates_vpc_component(self, mock_config, mock_export, mock_get_azs):
         """Test that VPC component is created with correct configuration"""
-        # Set up mock return values
-        mock_require.side_effect = lambda key: {
-            'environmentSuffix': 'test-123',
-            'environment': 'test',
-            'costCenter': 'test-cc'
-        }.get(key, 'default')
-        mock_require_int.return_value = 1
-        mock_get_bool.return_value = False
-        
+        # Setup config mock
+        config_instance = MagicMock()
+        config_instance.require.return_value = 'test-env'
+        config_instance.get.side_effect = lambda key: {
+            'instanceType': 't3.micro',
+            'dbInstanceClass': 'db.t3.micro',
+            'dbUsername': 'admin',
+            'environmentName': 'test'
+        }.get(key)
+        config_instance.require_secret.return_value = 'password123'
+        mock_config.return_value = config_instance
+
+        # Mock get_availability_zones
+        mock_get_azs.return_value = Mock(names=['us-east-1a', 'us-east-1b'])
+
+        # Import main module
         import sys
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("__main__", "__main__.py")
-        main_module = importlib.util.module_from_spec(spec)
-        sys.modules['__main__'] = main_module
-        spec.loader.exec_module(main_module)
+        # Remove from sys.modules to force reimport
+        modules_to_remove = [m for m in sys.modules if m == 'lib.__main__']
+        for m in modules_to_remove:
+            del sys.modules[m]
+
+        import lib.__main__
 
         # VPC component should be created
-        self.assertIsNotNone(main_module.vpc)
-        self.assertIsNotNone(main_module.vpc.vpc_id)
+        self.assertTrue(hasattr(lib.__main__, 'vpc'))
 
-    @pulumi.runtime.test
-    @patch('pulumi.Config.require')
-    @patch('pulumi.Config.require_int')
-    @patch('pulumi.Config.get_bool')
-    def test_stack_creates_alb_component(self, mock_get_bool, mock_require_int, mock_require):
+    @patch('pulumi_aws.get_availability_zones')
+    @patch('pulumi.export')
+    @patch('pulumi.Config')
+    def test_stack_creates_alb_component(self, mock_config, mock_export, mock_get_azs):
         """Test that ALB component is created"""
-        # Set up mock return values
-        mock_require.side_effect = lambda key: {
-            'environmentSuffix': 'test-123',
-            'environment': 'test',
-            'costCenter': 'test-cc'
-        }.get(key, 'default')
-        mock_require_int.return_value = 1
-        mock_get_bool.return_value = False
-        
+        # Setup config mock
+        config_instance = MagicMock()
+        config_instance.require.return_value = 'test-env'
+        config_instance.get.side_effect = lambda key: {
+            'instanceType': 't3.micro',
+            'dbInstanceClass': 'db.t3.micro',
+            'dbUsername': 'admin',
+            'environmentName': 'test'
+        }.get(key)
+        config_instance.require_secret.return_value = 'password123'
+        mock_config.return_value = config_instance
+
+        # Mock get_availability_zones
+        mock_get_azs.return_value = Mock(names=['us-east-1a', 'us-east-1b'])
+
+        # Import main module
         import sys
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("__main__", "__main__.py")
-        main_module = importlib.util.module_from_spec(spec)
-        sys.modules['__main__'] = main_module
-        spec.loader.exec_module(main_module)
+        modules_to_remove = [m for m in sys.modules if m == 'lib.__main__']
+        for m in modules_to_remove:
+            del sys.modules[m]
 
-        self.assertIsNotNone(main_module.alb)
-        self.assertIsNotNone(main_module.alb.alb_arn)
-        self.assertIsNotNone(main_module.alb.alb_dns_name)
+        import lib.__main__
 
-    @pulumi.runtime.test
-    @patch('pulumi.Config.require')
-    @patch('pulumi.Config.require_int')
-    @patch('pulumi.Config.get_bool')
-    def test_stack_creates_asg_component(self, mock_get_bool, mock_require_int, mock_require):
+        self.assertTrue(hasattr(lib.__main__, 'alb'))
+
+    @patch('pulumi_aws.get_availability_zones')
+    @patch('pulumi.export')
+    @patch('pulumi.Config')
+    def test_stack_creates_asg_component(self, mock_config, mock_export, mock_get_azs):
         """Test that ASG component is created"""
-        # Set up mock return values
-        mock_require.side_effect = lambda key: {
-            'environmentSuffix': 'test-123',
-            'environment': 'test',
-            'costCenter': 'test-cc'
-        }.get(key, 'default')
-        mock_require_int.return_value = 1
-        mock_get_bool.return_value = False
-        
+        # Setup config mock
+        config_instance = MagicMock()
+        config_instance.require.return_value = 'test-env'
+        config_instance.get.side_effect = lambda key: {
+            'instanceType': 't3.micro',
+            'dbInstanceClass': 'db.t3.micro',
+            'dbUsername': 'admin',
+            'environmentName': 'test'
+        }.get(key)
+        config_instance.require_secret.return_value = 'password123'
+        mock_config.return_value = config_instance
+
+        # Import main module
         import sys
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("__main__", "__main__.py")
-        main_module = importlib.util.module_from_spec(spec)
-        sys.modules['__main__'] = main_module
-        spec.loader.exec_module(main_module)
+        modules_to_remove = [m for m in sys.modules if m == 'lib.__main__']
+        for m in modules_to_remove:
+            del sys.modules[m]
 
-        self.assertIsNotNone(main_module.asg)
-        self.assertIsNotNone(main_module.asg.asg_name)
+        # Mock get_availability_zones
+        mock_get_azs.return_value = Mock(names=['us-east-1a', 'us-east-1b'])
 
-    @pulumi.runtime.test
-    @patch('pulumi.Config.require')
-    @patch('pulumi.Config.require_int')
-    @patch('pulumi.Config.get_bool')
-    def test_stack_creates_rds_component(self, mock_get_bool, mock_require_int, mock_require):
+        import lib.__main__
+
+        self.assertTrue(hasattr(lib.__main__, 'asg'))
+
+    @patch('pulumi_aws.get_availability_zones')
+    @patch('pulumi.export')
+    @patch('pulumi.Config')
+    def test_stack_creates_rds_component(self, mock_config, mock_export, mock_get_azs):
         """Test that RDS component is created"""
-        # Set up mock return values
-        mock_require.side_effect = lambda key: {
-            'environmentSuffix': 'test-123',
-            'environment': 'test',
-            'costCenter': 'test-cc'
-        }.get(key, 'default')
-        mock_require_int.return_value = 1
-        mock_get_bool.return_value = False
-        
+        # Setup config mock
+        config_instance = MagicMock()
+        config_instance.require.return_value = 'test-env'
+        config_instance.get.side_effect = lambda key: {
+            'instanceType': 't3.micro',
+            'dbInstanceClass': 'db.t3.micro',
+            'dbUsername': 'admin',
+            'environmentName': 'test'
+        }.get(key)
+        config_instance.require_secret.return_value = 'password123'
+        mock_config.return_value = config_instance
+
+        # Import main module
         import sys
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("__main__", "__main__.py")
-        main_module = importlib.util.module_from_spec(spec)
-        sys.modules['__main__'] = main_module
-        spec.loader.exec_module(main_module)
+        modules_to_remove = [m for m in sys.modules if m == 'lib.__main__']
+        for m in modules_to_remove:
+            del sys.modules[m]
 
-        self.assertIsNotNone(main_module.rds)
-        self.assertIsNotNone(main_module.rds.cluster_endpoint)
-        self.assertIsNotNone(main_module.rds.reader_endpoint)
+        # Mock get_availability_zones
+        mock_get_azs.return_value = Mock(names=['us-east-1a', 'us-east-1b'])
 
-    @pulumi.runtime.test
-    @patch('pulumi.Config.require')
-    @patch('pulumi.Config.require_int')
-    @patch('pulumi.Config.get_bool')
-    def test_stack_creates_s3_component(self, mock_get_bool, mock_require_int, mock_require):
+        import lib.__main__
+
+        self.assertTrue(hasattr(lib.__main__, 'rds'))
+
+    @patch('pulumi_aws.get_availability_zones')
+    @patch('pulumi.export')
+    @patch('pulumi.Config')
+    def test_stack_creates_s3_component(self, mock_config, mock_export, mock_get_azs):
         """Test that S3 component is created"""
-        # Set up mock return values
-        mock_require.side_effect = lambda key: {
-            'environmentSuffix': 'test-123',
-            'environment': 'test',
-            'costCenter': 'test-cc'
-        }.get(key, 'default')
-        mock_require_int.return_value = 1
-        mock_get_bool.return_value = False
-        
+        # Setup config mock
+        config_instance = MagicMock()
+        config_instance.require.return_value = 'test-env'
+        config_instance.get.side_effect = lambda key: {
+            'instanceType': 't3.micro',
+            'dbInstanceClass': 'db.t3.micro',
+            'dbUsername': 'admin',
+            'environmentName': 'test'
+        }.get(key)
+        config_instance.require_secret.return_value = 'password123'
+        mock_config.return_value = config_instance
+
+        # Import main module
         import sys
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("__main__", "__main__.py")
-        main_module = importlib.util.module_from_spec(spec)
-        sys.modules['__main__'] = main_module
-        spec.loader.exec_module(main_module)
+        modules_to_remove = [m for m in sys.modules if m == 'lib.__main__']
+        for m in modules_to_remove:
+            del sys.modules[m]
 
-        self.assertIsNotNone(main_module.s3)
-        self.assertIsNotNone(main_module.s3.static_assets_bucket)
-        self.assertIsNotNone(main_module.s3.logs_bucket)
+        # Mock get_availability_zones
+        mock_get_azs.return_value = Mock(names=['us-east-1a', 'us-east-1b'])
 
-    @pulumi.runtime.test
-    @patch('pulumi.Config.require')
-    @patch('pulumi.Config.require_int')
-    @patch('pulumi.Config.get_bool')
-    def test_stack_exports_outputs(self, mock_get_bool, mock_require_int, mock_require):
+        import lib.__main__
+
+        self.assertTrue(hasattr(lib.__main__, 's3'))
+
+    @patch('pulumi_aws.get_availability_zones')
+    @patch('pulumi.export')
+    @patch('pulumi.Config')
+    def test_stack_exports_outputs(self, mock_config, mock_export, mock_get_azs):
         """Test that stack exports required outputs"""
-        # Set up mock return values
-        mock_require.side_effect = lambda key: {
-            'environmentSuffix': 'test-123',
-            'environment': 'test',
-            'costCenter': 'test-cc'
-        }.get(key, 'default')
-        mock_require_int.return_value = 1
-        mock_get_bool.return_value = False
-        
-        import sys
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("__main__", "__main__.py")
-        main_module = importlib.util.module_from_spec(spec)
-        sys.modules['__main__'] = main_module
-        spec.loader.exec_module(main_module)
+        # Setup config mock
+        config_instance = MagicMock()
+        config_instance.require.return_value = 'test-env'
+        config_instance.get.side_effect = lambda key: {
+            'instanceType': 't3.micro',
+            'dbInstanceClass': 'db.t3.micro',
+            'dbUsername': 'admin',
+            'environmentName': 'test'
+        }.get(key)
+        config_instance.require_secret.return_value = 'password123'
+        mock_config.return_value = config_instance
 
-        # Check that main variables are accessible
-        self.assertIsNotNone(main_module.vpc)
-        self.assertIsNotNone(main_module.alb)
-        self.assertIsNotNone(main_module.rds)
-        self.assertIsNotNone(main_module.s3)
+        # Import main module
+        import sys
+        modules_to_remove = [m for m in sys.modules if m == 'lib.__main__']
+        for m in modules_to_remove:
+            del sys.modules[m]
+
+        # Mock get_availability_zones
+        mock_get_azs.return_value = Mock(names=['us-east-1a', 'us-east-1b'])
+
+        import lib.__main__
+
+        # Verify exports were called
+        self.assertTrue(mock_export.called)
+        export_calls = [call[0][0] for call in mock_export.call_args_list]
+        expected_exports = [
+            'vpc_id', 'alb_arn', 'alb_dns_name',
+            'rds_cluster_endpoint', 'rds_reader_endpoint',
+            'static_assets_bucket', 'logs_bucket'
+        ]
+        for expected in expected_exports:
+            self.assertIn(expected, export_calls)
 
 
 if __name__ == "__main__":

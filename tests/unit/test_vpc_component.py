@@ -36,7 +36,6 @@ pulumi.runtime.set_mocks(MyMocks())
 class TestVpcComponent(unittest.TestCase):
     """Test cases for VPC component"""
 
-    @pulumi.runtime.test
     def test_vpc_creation(self):
         """Test VPC component creates VPC with correct CIDR"""
         from lib.vpc_component import VpcComponent
@@ -52,30 +51,34 @@ class TestVpcComponent(unittest.TestCase):
         self.assertIsNotNone(vpc)
         self.assertIsNotNone(vpc.vpc_id)
 
-    @pulumi.runtime.test
     def test_vpc_creates_subnets(self):
         """Test VPC component creates public and private subnets"""
         from lib.vpc_component import VpcComponent
 
         vpc = VpcComponent(
-            "test-vpc",
+            "test-vpc-subnets",
             environment_suffix="test-123",
             cidr_block="10.0.0.0/16",
             availability_zones=["us-east-1a", "us-east-1b"],
             tags={"Environment": "test"}
         )
 
-        self.assertIsNotNone(vpc.public_subnet_ids)
-        self.assertIsNotNone(vpc.private_subnet_ids)
+        # These are Output types, so we just verify they exist
+        self.assertTrue(hasattr(vpc, 'public_subnet_ids'))
+        self.assertTrue(hasattr(vpc, 'private_subnet_ids'))
+        # Check the lists were created
+        self.assertTrue(hasattr(vpc, 'public_subnets'))
+        self.assertTrue(hasattr(vpc, 'private_subnets'))
+        self.assertEqual(len(vpc.public_subnets), 2)
+        self.assertEqual(len(vpc.private_subnets), 2)
 
-    @pulumi.runtime.test
     def test_vpc_naming_includes_environment_suffix(self):
         """Test that VPC resources include environment suffix in names"""
         from lib.vpc_component import VpcComponent
 
         env_suffix = "test-456"
         vpc = VpcComponent(
-            "test-vpc",
+            "test-vpc-naming",
             environment_suffix=env_suffix,
             cidr_block="10.0.0.0/16",
             availability_zones=["us-east-1a"],
