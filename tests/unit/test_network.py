@@ -1,5 +1,5 @@
 """Unit tests for network.py"""
-import unittest.mock as mock
+from unittest import mock
 
 import pulumi
 import pulumi_aws as aws

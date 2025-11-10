@@ -137,3 +137,4 @@ def test_storage_stack_with_opts():
     assert storage.dynamodb_table is not None
     assert storage.rds_instance is not None
     assert storage.audit_bucket is not None
+    

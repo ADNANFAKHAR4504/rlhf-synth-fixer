@@ -14,7 +14,7 @@ def mock_pulumi():
             # Create a mock resource ID
             resource_id = f"mock-{resource_type}-{name}"
             # Create output properties
-            outputs = {k: v for k, v in props.items()}
+            outputs = dict(props.items())
             outputs["id"] = resource_id
             # Return the resource ID, state, and dependencies
             return (resource_id, outputs, deps or [])
@@ -28,6 +28,7 @@ def mock_pulumi():
 
     class MockProviderResource(pulumi.ProviderResource, MockResourceTransformations):
         def __init__(self, name, provider_type, opts=None):
+            super().__init__(provider_type, name, {}, opts)
             self.name = name
             self.provider_type = provider_type
             self.opts = opts
