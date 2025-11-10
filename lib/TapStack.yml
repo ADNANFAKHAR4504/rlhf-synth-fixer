@@ -289,27 +289,10 @@ Conditions:
   HasAtLeastTwoAZs: !Or
     - !Condition HasTwoAZs
     - !Condition HasThreeAZs
-  UseAZ2: !And
-    - !Condition HasAtLeastTwoAZs
-    - !Not
-      - !Or
-        - !Equals
-          - !Ref AvailabilityZone2
-          - 'none'
-        - !Equals
-          - !Ref AvailabilityZone2
-          - ''
+  UseAZ2: !Condition HasAtLeastTwoAZs
   UseAZ3: !And
     - !Condition HasThreeAZs
     - !Condition UseAZ2
-    - !Not
-      - !Or
-        - !Equals
-          - !Ref AvailabilityZone3
-          - 'none'
-        - !Equals
-          - !Ref AvailabilityZone3
-          - ''
   EnableHighAvailabilityNAT: !And
     - !Equals
       - !Ref EnableNATGatewayHA
