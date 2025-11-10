@@ -1,210 +1,305 @@
 import fs from 'fs';
 import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
 describe('TapStack CloudFormation Template', () => {
   let template: any;
+  let resources: Record<string, any>;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
+    resources = template.Resources;
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
-  });
+  describe('Template metadata', () => {
+    test('exposes format version and production description', () => {
+      const formatVersion = template.AWSTemplateFormatVersion;
+      const description = template.Description;
 
-  describe('Template Structure', () => {
-    test('should have valid CloudFormation format version', () => {
-      expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
-    });
-
-    test('should have a description', () => {
-      expect(template.Description).toBeDefined();
-      expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+      expect(formatVersion).toBe('2010-09-09');
+      expect(description).toBe(
+        'Production-ready infrastructure with HA, security, and compliance features for PCI DSS payment processing application'
       );
     });
 
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+    test('groups parameters for console usability', () => {
+      const interfaceMetadata = template.Metadata['AWS::CloudFormation::Interface'];
+      const labels = interfaceMetadata.ParameterGroups.map(
+        (group: any) => group.Label.default
+      );
+
+      expect(labels).toEqual(
+        expect.arrayContaining([
+          'Environment Configuration',
+          'Network Configuration',
+          'Application Configuration',
+          'Database Configuration',
+          'Security & Compliance',
+          'Monitoring & Alerts',
+        ])
+      );
     });
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    test('enforces environment selection boundaries', () => {
+      const environmentParam = template.Parameters.Environment;
+      const allowed = environmentParam.AllowedValues;
+
+      expect(allowed).toContain('Development');
+      expect(allowed).toContain('Staging');
+      expect(allowed).toContain('Production');
+      expect(environmentParam.Default).toBe('Production');
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    test('validates VPC CIDR pattern using allowed regex', () => {
+      const vpcParam = template.Parameters.VPCCIDR;
+      const regex = new RegExp(vpcParam.AllowedPattern);
+
+      expect(regex.test('10.0.0.0/16')).toBe(true);
+      expect(regex.test('10.0.0.0/24')).toBe(false);
+    });
+
+    test('enforces multi-az configuration defaults and documentation', () => {
+      const numberOfAzs = template.Parameters.NumberOfAvailabilityZones;
+      const availabilityZones = template.Parameters.AvailabilityZones;
+
+      expect(numberOfAzs.Default).toBe(2);
+      expect(numberOfAzs.AllowedValues).toEqual([2, 3]);
+      expect(availabilityZones.Description).toContain('REQUIRED when NumberOfAvailabilityZones is 2 or 3');
+    });
+
+    test('secures certificate and credential parameters', () => {
+      const certificateParam = template.Parameters.SSLCertificateArn;
+      const passwordParam = template.Parameters.DBMasterPassword;
+      const certificateRegex = new RegExp(certificateParam.AllowedPattern);
+
+      expect(certificateRegex.test('arn:aws:acm:us-east-1:123456789012:certificate/00000000-0000-0000-0000-000000000000')).toBe(true);
+      expect(certificateRegex.test('invalid-arn')).toBe(false);
+      expect(passwordParam.NoEcho).toBe(true);
+      expect(passwordParam.MinLength).toBe(8);
+    });
+
+    test('keeps alerting contact information validated', () => {
+      const notificationEmail = template.Parameters.NotificationEmail;
+      const regex = new RegExp(notificationEmail.AllowedPattern);
+
+      expect(notificationEmail.Default).toBe('admin@example.com');
+      expect(regex.test('ops@example.com')).toBe(true);
+      expect(regex.test('invalid-email')).toBe(false);
+    });
+  });
+
+  describe('Conditions', () => {
+    test('requires custom AZ input when enabling multi-az features', () => {
+      const condition = template.Conditions.HasAtLeastTwoAZsWithCustomAZs['Fn::And'];
+
+      expect(condition).toEqual(
+        expect.arrayContaining([
+          { Condition: 'HasAtLeastTwoAZs' },
+          { Condition: 'HasCustomAZs' },
+        ])
       );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
+    });
+
+    test('enables third AZ NAT only when HA and AZ3 are available', () => {
+      const condition = template.Conditions.EnableHighAvailabilityNATInAZ3['Fn::And'];
+
+      expect(condition).toEqual(
+        expect.arrayContaining([
+          { Condition: 'EnableHighAvailabilityNAT' },
+          { Condition: 'HasThreeAZsWithCustomAZs' },
+        ])
       );
     });
   });
 
-  describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+  describe('Networking resources', () => {
+    test('creates VPC with DNS support and owner tagging', () => {
+      const vpc = resources.VPC;
+      const tags = vpc.Properties.Tags;
+      const ownerTag = tags.find((tag: any) => tag.Key === 'Owner');
+
+      expect(vpc.Properties.CidrBlock).toEqual({ Ref: 'VPCCIDR' });
+      expect(vpc.Properties.EnableDnsHostnames).toBe(true);
+      expect(vpc.Properties.EnableDnsSupport).toBe(true);
+      expect(ownerTag.Value).toEqual({ Ref: 'Owner' });
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
+    test('applies conditional creation to optional public subnets', () => {
+      const publicSubnet2 = resources.PublicSubnet2;
+      const publicSubnet3 = resources.PublicSubnet3;
+
+      expect(publicSubnet2.Condition).toBe('HasAtLeastTwoAZsWithCustomAZs');
+      expect(publicSubnet3.Condition).toBe('HasThreeAZsWithCustomAZs');
+      expect(publicSubnet2.Properties.AvailabilityZone['Fn::Select'][0]).toBe(1);
+      expect(publicSubnet3.Properties.AvailabilityZone['Fn::Select'][0]).toBe(2);
     });
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
+    test('ties NAT gateways to the correct subnets with HA controls', () => {
+      const nat1 = resources.NATGateway1;
+      const nat2 = resources.NATGateway2;
+      const nat3 = resources.NATGateway3;
+
+      expect(nat1.Properties.SubnetId).toEqual({ Ref: 'PublicSubnet1' });
+      expect(nat2.Condition).toBe('EnableHighAvailabilityNAT');
+      expect(nat2.Properties.SubnetId).toEqual({ Ref: 'PublicSubnet2' });
+      expect(nat3.Condition).toBe('EnableHighAvailabilityNATInAZ3');
+      expect(nat3.Properties.SubnetId).toEqual({ Ref: 'PublicSubnet3' });
     });
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
+    test('secures load balancer ingress to HTTPS and HTTP', () => {
+      const albSecurityGroup = resources.ALBSecurityGroup;
+      const ingressPorts = albSecurityGroup.Properties.SecurityGroupIngress.map(
+        (rule: any) => rule.FromPort
+      );
 
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+      expect(ingressPorts).toEqual(expect.arrayContaining([80, 443]));
+      albSecurityGroup.Properties.SecurityGroupIngress.forEach((rule: any) => {
+        expect(rule.CidrIp).toBe('0.0.0.0/0');
       });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
+    });
+  });
+
+  describe('Compute and scaling', () => {
+    test('launch template installs application stack and health endpoint', () => {
+      const launchTemplate = resources.LaunchTemplate;
+      const userData = launchTemplate.Properties.LaunchTemplateData.UserData['Fn::Base64']['Fn::Sub'];
+
+      expect(launchTemplate.Properties.LaunchTemplateData.InstanceType).toEqual({ Ref: 'InstanceType' });
+      expect(userData).toContain('systemctl start httpd');
+      expect(userData).toContain('/var/www/html/health');
+      expect(userData).toContain('cfn-signal');
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
+    test('auto scaling group integrates with ALB target group', () => {
+      const asg = resources.AutoScalingGroup;
 
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+      expect(asg.Condition).toBe('HasAtLeastTwoAZsWithCustomAZs');
+      expect(asg.Properties.TargetGroupARNs).toEqual([{ Ref: 'ALBTargetGroup' }]);
+      expect(asg.Properties.HealthCheckType).toBe('ELB');
+      expect(asg.Properties.LaunchTemplate.LaunchTemplateId).toEqual({ Ref: 'LaunchTemplate' });
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+    test('target tracking policy references CPU alarm threshold parameter', () => {
+      const policy = resources.TargetTrackingScalingPolicy;
+      const targetValue = policy.Properties.TargetTrackingConfiguration.TargetValue;
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+      expect(targetValue).toEqual({ Ref: 'CPUAlarmThreshold' });
+    });
+  });
+
+  describe('Data services', () => {
+    test('aurora cluster uses secrets manager and encryption', () => {
+      const cluster = resources.AuroraCluster;
+      const username = cluster.Properties.MasterUsername;
+      const password = cluster.Properties.MasterUserPassword;
+
+      expect(cluster.Properties.Engine).toBe('aurora-mysql');
+      expect(cluster.Properties.EngineVersion).toBe('8.0.mysql_aurora.3.10.0');
+      expect(username['Fn::Sub']).toContain('resolve:secretsmanager');
+      expect(password['Fn::Sub']).toContain('resolve:secretsmanager');
+      expect(cluster.Properties.StorageEncrypted).toBe(true);
+      expect(cluster.Properties.KmsKeyId).toEqual({ Ref: 'DBKMSKey' });
+      expect(cluster.Properties.EnableIAMDatabaseAuthentication).toBe(true);
+    });
+
+    test('database subnet group spans conditional private subnets', () => {
+      const subnetGroup = resources.DBSubnetGroup;
+      const [, threeAzSubnets, twoAzSubnets] = subnetGroup.Properties.SubnetIds['Fn::If'];
+
+      expect(subnetGroup.Condition).toBe('HasAtLeastTwoAZsWithCustomAZs');
+      expect(threeAzSubnets).toEqual([
+        { Ref: 'PrivateDBSubnet1' },
+        { Ref: 'PrivateDBSubnet2' },
+        { Ref: 'PrivateDBSubnet3' },
+      ]);
+      expect(twoAzSubnets).toEqual([{ Ref: 'PrivateDBSubnet1' }, { Ref: 'PrivateDBSubnet2' }]);
+    });
+  });
+
+  describe('Storage and logging', () => {
+    test('application logs bucket enforces encryption and glacier retention', () => {
+      const bucket = resources.ApplicationLogsBucket;
+      const encryption = bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault;
+      const lifecycleRules = bucket.Properties.LifecycleConfiguration.Rules;
+
+      expect(encryption.SSEAlgorithm).toBe('AES256');
+      const glacierRule = lifecycleRules.find((rule: any) => rule.Id === 'TransitionToGlacier');
+      expect(glacierRule.Transitions[0].StorageClass).toBe('GLACIER');
+      expect(bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
+    });
+
+    test('database backup bucket uses KMS and deep archive transitions', () => {
+      const bucket = resources.DatabaseBackupBucket;
+      const encryption = bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault;
+      const transitions = bucket.Properties.LifecycleConfiguration.Rules[0].Transitions.map(
+        (transition: any) => transition.StorageClass
+      );
+
+      expect(encryption.SSEAlgorithm).toBe('aws:kms');
+      expect(encryption.KMSMasterKeyID).toEqual({ Ref: 'S3KMSKey' });
+      expect(transitions).toEqual(expect.arrayContaining(['STANDARD_IA', 'GLACIER', 'DEEP_ARCHIVE']));
+    });
+  });
+
+  describe('Observability and governance', () => {
+    test('cloudwatch alarms fan out to SNS topic', () => {
+      const cpuAlarm = resources.HighCPUAlarm;
+
+      expect(cpuAlarm.Condition).toBe('HasAtLeastTwoAZsWithCustomAZs');
+      expect(cpuAlarm.Properties.AlarmActions).toEqual([{ Ref: 'SNSTopic' }]);
+      expect(cpuAlarm.Properties.Threshold).toEqual({ Ref: 'CPUAlarmThreshold' });
+    });
+
+    test('config starter lambda is permitted to pass config role', () => {
+      const role = resources.ConfigRecorderStarterRole;
+      const statements = role.Properties.Policies[0].PolicyDocument.Statement;
+      const passRoleStatement = statements.find(
+        (statement: any) =>
+          Array.isArray(statement.Action)
+            ? statement.Action.includes('iam:PassRole')
+            : statement.Action === 'iam:PassRole'
+      );
+
+      expect(passRoleStatement.Resource).toEqual({
+        'Fn::GetAtt': ['ConfigRole', 'Arn'],
+      });
+    });
+
+    test('config custom resource waits on bucket policy and injects dependencies', () => {
+      const customResource = resources.ConfigRecorderStarter;
+      const dependsOn = Array.isArray(customResource.DependsOn)
+        ? customResource.DependsOn
+        : [customResource.DependsOn];
+
+      expect(dependsOn).toEqual(['ConfigBucketPolicy']);
+      expect(customResource.Properties.ConfigBucketName).toEqual({ Ref: 'ConfigBucket' });
+      expect(customResource.Properties.ConfigRoleArn).toEqual({
+        'Fn::GetAtt': ['ConfigRole', 'Arn'],
+      });
     });
   });
 
   describe('Outputs', () => {
-    test('should have all required outputs', () => {
-      const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
-      ];
+    test('exposes conditional ALB outputs only when multi-az is enabled', () => {
+      const albDnsOutput = template.Outputs.ALBDNSName;
+      const albArnOutput = template.Outputs.ALBArn;
 
-      expectedOutputs.forEach(outputName => {
-        expect(template.Outputs[outputName]).toBeDefined();
-      });
+      expect(albDnsOutput.Condition).toBe('HasAtLeastTwoAZsWithCustomAZs');
+      expect(albArnOutput.Condition).toBe('HasAtLeastTwoAZsWithCustomAZs');
+      expect(albDnsOutput.Value['Fn::GetAtt']).toEqual(['ApplicationLoadBalancer', 'DNSName']);
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
-    });
+    test('exports bucket identifiers for downstream stacks', () => {
+      const appLogsBucket = template.Outputs.ApplicationLogsBucketName;
+      const dbBackupBucket = template.Outputs.DatabaseBackupBucketName;
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
-    });
-
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
-    });
-
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
-      });
-    });
-  });
-
-  describe('Template Validation', () => {
-    test('should have valid JSON structure', () => {
-      expect(template).toBeDefined();
-      expect(typeof template).toBe('object');
-    });
-
-    test('should not have any undefined or null required sections', () => {
-      expect(template.AWSTemplateFormatVersion).not.toBeNull();
-      expect(template.Description).not.toBeNull();
-      expect(template.Parameters).not.toBeNull();
-      expect(template.Resources).not.toBeNull();
-      expect(template.Outputs).not.toBeNull();
-    });
-
-    test('should have exactly one resource', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
-    });
-
-    test('should have exactly one parameter', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
-    });
-
-    test('should have exactly four outputs', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
-    });
-  });
-
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
-
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-    });
-
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
-      });
+      expect(appLogsBucket.Value).toEqual({ Ref: 'ApplicationLogsBucket' });
+      expect(dbBackupBucket.Value).toEqual({ Ref: 'DatabaseBackupBucket' });
+      expect(appLogsBucket.Export.Name['Fn::Sub']).toContain('-AppLogs-Bucket');
+      expect(dbBackupBucket.Export.Name['Fn::Sub']).toContain('-DBBackup-Bucket');
     });
   });
 });
