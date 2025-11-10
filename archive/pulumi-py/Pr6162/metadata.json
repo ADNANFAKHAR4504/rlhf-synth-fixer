@@ -1,6 +1,6 @@
 {
   "platform": "pulumi",
-  "language": "py",
+  "language": "python",
   "complexity": "medium",
   "team": "synth",
   "author": "iamarpit-turing",
@@ -33,5 +33,10 @@
     "Security Groups",
     "IAM"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
