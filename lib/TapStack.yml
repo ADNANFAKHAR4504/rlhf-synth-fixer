@@ -35,6 +35,10 @@ Mappings:
       AZ1: ap-south-1a
       AZ2: ap-south-1b
       AZ3: ap-south-1c
+    ap-east-1:
+      AZ1: ap-east-1a
+      AZ2: ap-east-1b
+      AZ3: ap-east-1c
 
 # ============================================================================
 # METADATA - Interface for better parameter organization in Console
