@@ -340,11 +340,11 @@ class TestInfrastructureCodeStructure(unittest.TestCase):
 class TestTapStackComponent(unittest.TestCase):
     """Pulumi component tests for TapStack using runtime mocks."""
 
-    def _instantiate_stack(self, environment_suffix: str = "dev", tags: dict | None = None):
+    def _instantiate_stack(self, environment_suffix: str | None = "dev", tags: dict | None = None):
         exports = {}
 
-        with patch("lib.tap_stack.Config") as mock_config, patch(
-            "lib.tap_stack.pulumi.export",
+        with patch("pulumi.Config") as mock_config, patch(
+            "pulumi.export",
             side_effect=lambda key, value: exports.__setitem__(key, value),
         ):
             mock_config.return_value.get.return_value = None
