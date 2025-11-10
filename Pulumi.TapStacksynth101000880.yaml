@@ -1,0 +1,5 @@
+encryptionsalt: v1:jBCSHuitukg=:v1:hmCAqNiMfqfoNjtn:J4OXOA2XeJgLs2KVe0Stw/TRs8sMLg==
+config:
+  aws:region: us-east-1
+  pulumi-infra:dbPassword:
+    secure: v1:LpNOBDnzBG1fdlKi:X/h3pxLT0Qd+eWhRPoKSZHRrgzagsECxd3p37QY/WMw=

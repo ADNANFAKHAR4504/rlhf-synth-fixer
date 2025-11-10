@@ -1,0 +1,30 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "101000880",
+  "team": "synth",
+  "startedAt": "2025-11-10T07:11:00+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "multi-account",
+    "environment-management",
+    "vpc",
+    "rds",
+    "auto-scaling",
+    "load-balancer",
+    "s3"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Elastic Load Balancing",
+    "RDS",
+    "S3",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 9
+}
