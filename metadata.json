@@ -5,6 +5,8 @@
   "language": "py",
   "complexity": "hard",
   "team": "synth",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
   "turn_type": "single",
   "startedAt": "2025-11-10T04:05:00.690646",
   "subtask": "Provisioning of Infrastructure Environments",
@@ -26,15 +28,5 @@
     "Secrets Manager",
     "IAM"
   ],
-  "training_quality": 10,
-  "qa_completed": true,
-  "deployment_attempts": 4,
-  "deployment_success": true,
-  "unit_test_coverage": 94.93,
-  "integration_tests_passed": 11,
-  "integration_tests_total": 11,
-  "critical_failures": 1,
-  "high_failures": 1,
-  "medium_failures": 1,
-  "completedAt": "2025-11-10T05:00:00.000000"
+  "training_quality": 10
 }
