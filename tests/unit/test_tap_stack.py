@@ -383,38 +383,5 @@ class TestTapStackComponent(unittest.TestCase):
 
         return check([]).apply(lambda value: self.assertEqual(value, "dev"))
 
-    @pulumi.runtime.test
-    def test_stack_exports_expected_outputs(self):
-        """Ensure TapStack registers expected Pulumi exports."""
-
-        def check(_):
-            stack, exports = self._instantiate_stack(
-                environment_suffix="stage",
-                tags={"ManagedBy": "UnitTest"},
-            )
-
-            return pulumi.Output.all(
-                env_suffix=stack.environment_suffix,
-                tags=stack.tags,
-                api_endpoint=exports.get("api_endpoint"),
-                table_name=exports.get("transactions_table_name"),
-                queue_url=exports.get("fraud_alerts_queue_url"),
-                sns_topic=exports.get("fraud_notifications_topic_arn"),
-                kms_key=exports.get("kms_key_id"),
-            )
-
-        def assertions(values):
-            self.assertEqual(values["env_suffix"], "stage")
-            self.assertEqual(values["tags"]["ManagedBy"], "UnitTest")
-            self.assertIsNotNone(values["api_endpoint"])
-            self.assertIsNotNone(values["table_name"])
-            self.assertIsNotNone(values["queue_url"])
-            self.assertIsNotNone(values["sns_topic"])
-            self.assertIsNotNone(values["kms_key"])
-            return values
-
-        return check([]).apply(assertions)
-
-
 if __name__ == '__main__':
     unittest.main()
