@@ -112,7 +112,7 @@ export class RdsStack extends pulumi.ComponentResource {
       {
         identifier: `${config.environment}-payment-db-${config.environmentSuffix}`,
         engine: 'postgres',
-        engineVersion: '15.4',
+        engineVersion: '15.7',
         instanceClass: config.rdsInstanceClass,
         allocatedStorage: 20,
         maxAllocatedStorage: 100,
