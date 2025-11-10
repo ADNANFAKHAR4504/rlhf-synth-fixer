@@ -1,0 +1,12 @@
+config:
+  aws:region: us-east-1
+  payment-processing:awsRegion: us-east-1
+  payment-processing:environmentSuffix: synth101000875
+  payment-processing:vpcCidr: 10.0.0.0/16
+  payment-processing:costCenter: engineering
+  payment-processing:enableMultiAz: "false"
+  payment-processing:dbInstanceClass: db.t3.micro
+  payment-processing:dynamodbReadCapacity: "5"
+  payment-processing:dynamodbWriteCapacity: "5"
+  payment-processing:logRetentionDays: "7"
+encryptionsalt: v1:r9asYz5Prlw=:v1:IDcWOcqzVKuO6IXH:D/v/XJhrsIIx/BHQKu5hvIOdWNav7g==

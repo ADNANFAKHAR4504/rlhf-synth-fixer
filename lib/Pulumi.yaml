@@ -1,0 +1,3 @@
+name: payment-processing
+runtime: python
+description: Multi-environment payment processing infrastructure

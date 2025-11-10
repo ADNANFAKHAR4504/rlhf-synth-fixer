@@ -1,0 +1,11 @@
+config:
+  aws:region: eu-west-1
+  payment-processing:awsRegion: eu-west-1
+  payment-processing:environmentSuffix: prd001
+  payment-processing:vpcCidr: 10.2.0.0/16
+  payment-processing:costCenter: production
+  payment-processing:enableMultiAz: true
+  payment-processing:dbInstanceClass: db.t3.medium
+  payment-processing:dynamodbReadCapacity: 20
+  payment-processing:dynamodbWriteCapacity: 20
+  payment-processing:logRetentionDays: 90
