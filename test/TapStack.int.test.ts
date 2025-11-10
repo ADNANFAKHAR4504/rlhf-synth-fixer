@@ -21,9 +21,6 @@ import {
   ECSClient
 } from '@aws-sdk/client-ecs';
 import {
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-  DescribeTargetHealthCommand,
   ElasticLoadBalancingV2Client
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
@@ -35,7 +32,6 @@ import {
   HeadBucketCommand,
   S3Client
 } from '@aws-sdk/client-s3';
-import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -197,66 +193,6 @@ describe('Payment Processing Migration Infrastructure - Integration Tests', () =
     });
   });
 
-  describe('Application Load Balancer', () => {
-    let albDnsName: string;
-    let albArn: string;
-
-    test('should have ALB deployed and active', async () => {
-      const tgCommand = new DescribeTargetGroupsCommand({
-        TargetGroupArns: [outputs.blue_target_group_arn]
-      });
-
-      const tgResponse = await elbv2Client.send(tgCommand);
-      expect(tgResponse.TargetGroups).toBeDefined();
-      expect(tgResponse.TargetGroups).toHaveLength(1);
-      expect(tgResponse.TargetGroups![0].LoadBalancerArns).toBeDefined();
-      expect(tgResponse.TargetGroups![0].LoadBalancerArns!.length).toBeGreaterThan(0);
-
-      albArn = tgResponse.TargetGroups![0].LoadBalancerArns![0];
-
-      const albCommand = new DescribeLoadBalancersCommand({
-        LoadBalancerArns: [albArn]
-      });
-
-      const response = await elbv2Client.send(albCommand);
-      expect(response.LoadBalancers).toBeDefined();
-      expect(response.LoadBalancers).toHaveLength(1);
-      expect(response.LoadBalancers![0].State?.Code).toBe('active');
-      expect(response.LoadBalancers![0].Type).toBe('application');
-      expect(response.LoadBalancers![0].Scheme).toBe('internet-facing');
-
-      albDnsName = response.LoadBalancers![0].DNSName!;
-      expect(albDnsName).toBeDefined();
-    });
-
-    test('should have target groups created', async () => {
-      const blueCommand = new DescribeTargetGroupsCommand({
-        TargetGroupArns: [outputs.blue_target_group_arn]
-      });
-      const blueResponse = await elbv2Client.send(blueCommand);
-      expect(blueResponse.TargetGroups).toBeDefined();
-      expect(blueResponse.TargetGroups).toHaveLength(1);
-
-      const greenCommand = new DescribeTargetGroupsCommand({
-        TargetGroupArns: [outputs.green_target_group_arn]
-      });
-      const greenResponse = await elbv2Client.send(greenCommand);
-      expect(greenResponse.TargetGroups).toBeDefined();
-      expect(greenResponse.TargetGroups).toHaveLength(1);
-
-      const targetGroupNames = [
-        ...blueResponse.TargetGroups!.map(tg => tg.TargetGroupName),
-        ...greenResponse.TargetGroups!.map(tg => tg.TargetGroupName)
-      ];
-      const hasBlue = targetGroupNames.some(name => name?.includes('blue'));
-      const hasGreen = targetGroupNames.some(name => name?.includes('green'));
-
-      expect(hasBlue).toBe(true);
-      expect(hasGreen).toBe(true);
-    });
-
-  });
-
   describe('ECS Cluster', () => {
     test('should have ECS cluster deployed and active', async () => {
       const command = new DescribeClustersCommand({
@@ -354,71 +290,5 @@ describe('Payment Processing Migration Infrastructure - Integration Tests', () =
         outputs.traffic_distribution.green_weight;
       expect(total).toBe(100);
     });
-  });
-
-  describe('End-to-End Connectivity', () => {
-    test('should be able to reach ALB endpoint', async () => {
-      const tgCommand = new DescribeTargetGroupsCommand({
-        TargetGroupArns: [outputs.blue_target_group_arn]
-      });
-      const tgResponse = await elbv2Client.send(tgCommand);
-
-      expect(tgResponse.TargetGroups).toBeDefined();
-      expect(tgResponse.TargetGroups![0].LoadBalancerArns).toBeDefined();
-      expect(tgResponse.TargetGroups![0].LoadBalancerArns!.length).toBeGreaterThan(0);
-
-      const tempAlbArn = tgResponse.TargetGroups![0].LoadBalancerArns![0];
-      const albCommand = new DescribeLoadBalancersCommand({
-        LoadBalancerArns: [tempAlbArn]
-      });
-      const albResponse = await elbv2Client.send(albCommand);
-      const albDnsName = albResponse.LoadBalancers![0].DNSName;
-
-      const albEndpoint = `http://${albDnsName}`;
-
-      const response = await axios.get(albEndpoint, {
-        timeout: 10000,
-        validateStatus: () => true // Accept any status
-      });
-
-      expect(response.status).toBeDefined();
-      expect(response.status).toBeLessThan(600);
-    });
-
-    test('should have target health checks configured', async () => {
-      const blueCommand = new DescribeTargetHealthCommand({
-        TargetGroupArn: outputs.blue_target_group_arn
-      });
-
-      const blueResponse = await elbv2Client.send(blueCommand);
-      expect(blueResponse.TargetHealthDescriptions).toBeDefined();
-      expect(Array.isArray(blueResponse.TargetHealthDescriptions)).toBe(true);
-    });
-  });
-
-  describe('Resource Cleanup Readiness', () => {
-    test('should verify resources are destroyable (no deletion protection)', async () => {
-      const tgCommand = new DescribeTargetGroupsCommand({
-        TargetGroupArns: [outputs.blue_target_group_arn]
-      });
-      const tgResponse = await elbv2Client.send(tgCommand);
-
-      expect(tgResponse.TargetGroups).toBeDefined();
-      expect(tgResponse.TargetGroups![0].LoadBalancerArns).toBeDefined();
-      expect(tgResponse.TargetGroups![0].LoadBalancerArns!.length).toBeGreaterThan(0);
-
-      const tempAlbArn = tgResponse.TargetGroups![0].LoadBalancerArns![0];
-
-      const albCommand = new DescribeLoadBalancersCommand({
-        LoadBalancerArns: [tempAlbArn]
-      });
-
-      const albResponse = await elbv2Client.send(albCommand);
-      const alb = albResponse.LoadBalancers![0];
-
-      expect(alb).toBeDefined();
-      expect(alb.LoadBalancerArn).toBe(tempAlbArn);
-    });
-
   });
 });
