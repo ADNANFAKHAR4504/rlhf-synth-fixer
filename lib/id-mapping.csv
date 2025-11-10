@@ -1,0 +1,23 @@
+resource,address,old_id,new_id,notes
+vpc,aws_vpc.main,vpc-0a1b2c3d4e5f6g7h8,vpc-9i8h7g6f5e4d3c2b1,Main VPC migrated from us-west-1 to us-west-2
+subnet,aws_subnet.public[0],subnet-0a1b2c3d,subnet-9i8h7g6f,Public subnet 1 in AZ a
+subnet,aws_subnet.public[1],subnet-4e5f6g7h,subnet-5e4d3c2b,Public subnet 2 in AZ b
+subnet,aws_subnet.private[0],subnet-0x1y2z3a,subnet-9x8y7z6a,Private subnet 1 in AZ a
+subnet,aws_subnet.private[1],subnet-4b5c6d7e,subnet-5b4c3d2e,Private subnet 2 in AZ b
+internet_gateway,aws_internet_gateway.main,igw-0a1b2c3d,igw-9i8h7g6f,Internet gateway for VPC
+nat_gateway,aws_nat_gateway.main[0],nat-0a1b2c3d4e5f6g7h,nat-9i8h7g6f5e4d3c2b,NAT gateway in public subnet (if enabled)
+route_table,aws_route_table.public,rtb-0a1b2c3d,rtb-9i8h7g6f,Public route table
+route_table,aws_route_table.private,rtb-4e5f6g7h,rtb-5e4d3c2b,Private route table
+security_group,aws_security_group.web,sg-0a1b2c3d4e5f6g7h,sg-9i8h7g6f5e4d3c2b,Web tier security group
+security_group,aws_security_group.app,sg-0x1y2z3a4b5c6d7e,sg-9x8y7z6a5b4c3d2e,Application tier security group
+security_group,aws_security_group.database,sg-0p1q2r3s4t5u6v7w,sg-9p8q7r6s5t4u3v2w,Database tier security group
+ec2_instance,aws_instance.web[0],i-0a1b2c3d4e5f6g7h,i-9i8h7g6f5e4d3c2b,Web server instance 1
+ec2_instance,aws_instance.web[1],i-0x1y2z3a4b5c6d7e,i-9x8y7z6a5b4c3d2e,Web server instance 2
+ec2_instance,aws_instance.app[0],i-0p1q2r3s4t5u6v7w,i-9p8q7r6s5t4u3v2w,Application server instance 1
+ec2_instance,aws_instance.app[1],i-0m1n2o3p4q5r6s7t,i-9m8n7o6p5q4r3s2t,Application server instance 2
+rds_instance,aws_db_instance.main,db-instance-usw1,db-instance-usw2,PostgreSQL RDS instance
+db_subnet_group,aws_db_subnet_group.main,db-subnet-group-usw1,db-subnet-group-usw2,RDS subnet group
+s3_bucket,aws_s3_bucket.app_data,app-data-prod-usw1-a1b2c3d4,app-data-prod-usw2-e5f6g7h8,Application data bucket
+iam_role,aws_iam_role.ec2_role,ec2-role-prod-usw1,ec2-role-prod-usw2,IAM role for EC2 instances
+iam_instance_profile,aws_iam_instance_profile.ec2_profile,ec2-profile-prod-usw1,ec2-profile-prod-usw2,Instance profile for EC2
+eip,aws_eip.nat[0],eipalloc-0a1b2c3d4e5f6g7h,eipalloc-9i8h7g6f5e4d3c2b,Elastic IP for NAT gateway (if enabled)
