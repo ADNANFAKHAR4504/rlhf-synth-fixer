@@ -10,8 +10,9 @@ Parameters:
   EnvironmentSuffix:
     Type: String
     Default: 'prod'
-    Description: 'Environment suffix for resource naming'
-    AllowedValues: ['dev','staging','prod']
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod, pr6124)'
+    AllowedPattern: '^[a-z0-9-]{2,20}$'
+    ConstraintDescription: 'Use 2-20 chars: lowercase letters, digits, and hyphens'
 
   VpcCidr:
     Type: String
