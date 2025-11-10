@@ -861,7 +861,7 @@ Resources:
           Input: !Sub
             - |
               {
-                "TargetStacks": ${StacksList}
+                "TargetStacks": "${StacksList}"
               }
             - StacksList: !Join
                 - ','
