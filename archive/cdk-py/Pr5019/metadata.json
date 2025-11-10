@@ -10,5 +10,12 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "\"lambda\",    \"s3\",    \"cloudwatch\",    \"apigateway\",    \"iam\""
+  "aws_services": "\"lambda\",    \"s3\",    \"cloudwatch\",    \"apigateway\",    \"iam\"",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
 }
