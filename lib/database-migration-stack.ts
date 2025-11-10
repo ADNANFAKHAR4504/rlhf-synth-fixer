@@ -49,7 +49,7 @@ export class DatabaseMigrationStack extends Construct {
     const prodVpc = new ec2.Vpc(this, `ProductionVpc-${environmentSuffix}`, {
       vpcName: `prod-vpc-${environmentSuffix}`,
       cidr: '10.0.0.0/16', // explicitly set CIDR block
-      maxAzs: 1,
+      maxAzs: 2,
       natGateways: 1,
       subnetConfiguration: [
         {
@@ -68,7 +68,7 @@ export class DatabaseMigrationStack extends Construct {
     const devVpc = new ec2.Vpc(this, `DevelopmentVpc-${environmentSuffix}`, {
       vpcName: `dev-vpc-${environmentSuffix}`,
       cidr: '10.1.0.0/16', // different CIDR block to avoid overlap
-      maxAzs: 1,
+      maxAzs: 2,
       natGateways: 1,
       subnetConfiguration: [
         {
