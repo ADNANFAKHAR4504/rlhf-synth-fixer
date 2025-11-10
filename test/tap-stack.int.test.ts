@@ -203,7 +203,8 @@ describe('Turn Around Prompt API Integration Tests', () => {
 
         expect(getResponse.Item).toBeDefined();
         expect(getResponse.Item!.transactionId.S).toBe(testTransactionId);
-        expect(getResponse.Item!.amount.N).toBe('100.50');
+        // DynamoDB normalizes numbers by removing trailing zeros
+        expect(getResponse.Item!.amount.N).toBe('100.5');
       },
       TEST_TIMEOUT
     );
