@@ -63,11 +63,10 @@ describe('TapStack CloudFormation Template', () => {
 
     test('enforces multi-az configuration defaults and documentation', () => {
       const numberOfAzs = template.Parameters.NumberOfAvailabilityZones;
-      const availabilityZones = template.Parameters.AvailabilityZones;
 
       expect(numberOfAzs.Default).toBe(2);
       expect(numberOfAzs.AllowedValues).toEqual([2, 3]);
-      expect(availabilityZones.Description).toContain('REQUIRED when NumberOfAvailabilityZones is 2 or 3');
+      expect(numberOfAzs.Description).toContain('automatically use the first 2 or 3 AZs from your region');
     });
 
     test('secures certificate and credential parameters', () => {
@@ -92,15 +91,15 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Conditions', () => {
-    test('requires custom AZ input when enabling multi-az features', () => {
-      const condition = template.Conditions.HasAtLeastTwoAZsWithCustomAZs['Fn::And'];
-
-      expect(condition).toEqual(
-        expect.arrayContaining([
-          { Condition: 'HasAtLeastTwoAZs' },
-          { Condition: 'HasCustomAZs' },
-        ])
-      );
+    test('requires multi-az configuration for resource creation', () => {
+      // HasAtLeastTwoAZsWithCustomAZs is now just an alias for HasAtLeastTwoAZs
+      // since we removed the AvailabilityZones parameter
+      expect(template.Conditions.HasAtLeastTwoAZsWithCustomAZs).toEqual({
+        Condition: 'HasAtLeastTwoAZs'
+      });
+      expect(template.Conditions.HasThreeAZsWithCustomAZs).toEqual({
+        Condition: 'HasThreeAZs'
+      });
     });
 
     test('enables third AZ NAT only when HA and AZ3 are available', () => {

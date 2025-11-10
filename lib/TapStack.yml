@@ -20,7 +20,6 @@ Metadata:
         Parameters:
           - VPCCIDR
           - EnableNATGatewayHA
-          - AvailabilityZones
           - NumberOfAvailabilityZones
       - Label:
           default: Application Configuration
@@ -106,18 +105,13 @@ Parameters:
     Description: Enable NAT Gateway in all AZs for HA (false uses single NAT for
       dev/staging)
 
-  AvailabilityZones:
-    Type: String
-    Default: ''
-    Description: Comma-separated list of availability zones to use for subnets. REQUIRED when NumberOfAvailabilityZones is 2 or 3 (e.g., 'us-east-1a,us-east-1b' for 2 AZs or 'us-east-1a,us-east-1b,us-east-1c' for 3 AZs). Leave blank only if using 1 AZ (not recommended).
-
   NumberOfAvailabilityZones:
     Type: Number
     Default: 2
     AllowedValues:
       - 2
       - 3
-    Description: Number of availability zones to deploy resources across (must be 2 or 3). RDS requires at least 2 AZs. Use 3 only if your region has 3+ AZs. You MUST provide custom AZs in AvailabilityZones parameter when using 2 or 3 AZs (e.g., 'us-east-1a,us-east-1b' for 2 AZs).
+    Description: Number of availability zones to deploy resources across (must be 2 or 3). RDS requires at least 2 AZs. Use 3 only if your region has 3+ AZs. The template will automatically use the first 2 or 3 AZs from your region.
 
   # Application Parameters
   InstanceType:
@@ -263,10 +257,6 @@ Conditions:
     - !Equals
       - !Ref KeyPairName
       - ''
-  HasCustomAZs: !Not
-    - !Equals
-      - !Ref AvailabilityZones
-      - ''
   HasThreeAZs: !Equals
     - !Ref NumberOfAvailabilityZones
     - 3
@@ -276,12 +266,8 @@ Conditions:
   HasAtLeastTwoAZs: !Or
     - !Condition HasTwoAZs
     - !Condition HasThreeAZs
-  HasAtLeastTwoAZsWithCustomAZs: !And
-    - !Condition HasAtLeastTwoAZs
-    - !Condition HasCustomAZs
-  HasThreeAZsWithCustomAZs: !And
-    - !Condition HasThreeAZs
-    - !Condition HasCustomAZs
+  HasAtLeastTwoAZsWithCustomAZs: !Condition HasAtLeastTwoAZs
+  HasThreeAZsWithCustomAZs: !Condition HasThreeAZs
   EnableHighAvailabilityNATInAZ3: !And
     - !Condition EnableHighAvailabilityNAT
     - !Condition HasThreeAZsWithCustomAZs
@@ -351,10 +337,7 @@ Resources:
         # Dynamically calculate subnet CIDR
       AvailabilityZone: !Select
         - 0
-        - !If
-            - HasCustomAZs
-            - !Split [',', !Ref AvailabilityZones]
-            - !GetAZs ''
+        - !GetAZs ''
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -385,7 +368,7 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 1
-        - !Split [',', !Ref AvailabilityZones]
+        - !GetAZs ''
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -416,7 +399,7 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 2
-        - !Split [',', !Ref AvailabilityZones]
+        - !GetAZs ''
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -447,10 +430,7 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 0
-        - !If
-            - HasCustomAZs
-            - !Split [',', !Ref AvailabilityZones]
-            - !GetAZs ''
+        - !GetAZs ''
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-1
@@ -480,7 +460,7 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 1
-        - !Split [',', !Ref AvailabilityZones]
+        - !GetAZs ''
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-2
@@ -510,7 +490,7 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 2
-        - !Split [',', !Ref AvailabilityZones]
+        - !GetAZs ''
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-3
@@ -540,10 +520,7 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 0
-        - !If
-            - HasCustomAZs
-            - !Split [',', !Ref AvailabilityZones]
-            - !GetAZs ''
+        - !GetAZs ''
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-1
@@ -573,7 +550,7 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 1
-        - !Split [',', !Ref AvailabilityZones]
+        - !GetAZs ''
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-2
@@ -603,7 +580,7 @@ Resources:
           - 8
       AvailabilityZone: !Select
         - 2
-        - !Split [',', !Ref AvailabilityZones]
+        - !GetAZs ''
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-3
