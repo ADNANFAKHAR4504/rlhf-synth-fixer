@@ -2142,6 +2142,10 @@ Resources:
                   - config:DescribeDeliveryChannels
                   - config:DescribeConfigurationRecorders
                 Resource: '*'
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: !GetAtt ConfigRole.Arn
 
   ConfigRecorderStarterFunction:
     Type: AWS::Lambda::Function
