@@ -1,9 +1,9 @@
 /**
  * RDS Stack - Creates RDS PostgreSQL instances with AWS Secrets Manager integration
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
-import { EnvironmentConfig, VpcOutputs, RdsOutputs } from './types';
+import * as pulumi from '@pulumi/pulumi';
+import { EnvironmentConfig, RdsOutputs, VpcOutputs } from './types';
 
 export interface RdsStackArgs {
   config: EnvironmentConfig;
@@ -45,7 +45,7 @@ export class RdsStack extends pulumi.ComponentResource {
           `${env}Password${suffix}${Math.random().toString(36).substring(2, 10)}`
       );
 
-    const dbSecretVersion = new aws.secretsmanager.SecretVersion(
+    new aws.secretsmanager.SecretVersion(
       `${config.environment}-db-secret-version-${config.environmentSuffix}`,
       {
         secretId: dbSecret.id,
@@ -55,7 +55,6 @@ export class RdsStack extends pulumi.ComponentResource {
     );
 
     const secret = dbSecret;
-    const secretVersion = dbSecretVersion;
 
     // Create RDS security group
     const rdsSecurityGroup = new aws.ec2.SecurityGroup(
