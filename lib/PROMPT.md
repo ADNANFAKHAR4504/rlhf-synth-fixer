@@ -6,7 +6,7 @@ We've been asked to build an automated failover system for our critical trading 
 
 I've been tasked with implementing this using **Pulumi with TypeScript**. The core challenge here is building a multi-region architecture that can automatically detect failures in our primary region and seamlessly redirect traffic to a standby region without manual intervention. We need real-time health monitoring, automated DNS failover, and synchronized data across regions.
 
-The architecture needs to span two AWS regions - us-east-1 as our primary and us-east-2 as our standby. Under normal conditions, all traffic should flow to the primary region, but if health checks detect issues, Route 53 should automatically reroute everything to the standby region. We also need to maintain session state across regions using DynamoDB global tables so users don't lose their trading sessions during a failover event.
+The architecture needs to span two AWS regions - eu-south-1 as our primary and eu-central-1 as our standby. Under normal conditions, all traffic should flow to the primary region, but if health checks detect issues, Route 53 should automatically reroute everything to the standby region. We also need to maintain session state across regions using DynamoDB global tables so users don't lose their trading sessions during a failover event.
 
 ## What we need to build
 
@@ -15,7 +15,7 @@ Create a multi-region failover infrastructure using **Pulumi with TypeScript** t
 ### Core Requirements
 
 1. **Multi-Region Networking**
-   - VPCs in both us-east-1 and us-east-2 regions
+   - VPCs in both eu-south-1 and eu-central-1 regions
    - Each VPC needs 2 public subnets and 2 private subnets spanning different availability zones
    - Proper routing and internet gateway configuration for public subnets
 
@@ -40,7 +40,7 @@ Create a multi-region failover infrastructure using **Pulumi with TypeScript** t
 5. **Global Data Replication**
    - Create DynamoDB global table named 'trading-sessions'
    - Use 'sessionId' as the partition key
-   - Enable cross-region replication between us-east-1 and us-east-2
+   - Enable cross-region replication between eu-south-1 and eu-central-1
 
 6. **Monitoring and Alerting**
    - Deploy SNS topics in both regions for failover event notifications
@@ -64,7 +64,7 @@ Create a multi-region failover infrastructure using **Pulumi with TypeScript** t
 - Use SNS for notification delivery
 - Resource names must include **environmentSuffix** for uniqueness
 - Follow naming convention: resource-type-environmentSuffix
-- Deploy to **us-east-1** (primary) and **us-east-2** (standby) regions
+- Deploy to **eu-south-1** (primary) and **eu-central-1** (standby) regions
 
 ### Constraints
 
@@ -92,7 +92,7 @@ Create a multi-region failover infrastructure using **Pulumi with TypeScript** t
 ## What to deliver
 
 - Complete Pulumi TypeScript implementation with all required AWS resources
-- VPC networking infrastructure in both us-east-1 and us-east-2
+- VPC networking infrastructure in both eu-south-1 and eu-central-1
 - Application Load Balancers with target groups in both regions
 - Auto Scaling Groups with Launch Templates and scaling policies
 - Route 53 hosted zone with health checks and weighted routing records
