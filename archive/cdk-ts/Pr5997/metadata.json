@@ -1,0 +1,39 @@
+{
+  "task_id": "7r0v8",
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000325",
+  "team": "synth",
+  "startedAt": "2025-11-06T21:50:00Z",
+  "subtask": "Application Deployment",
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "ECS",
+    "ALB",
+    "S3",
+    "CloudFront",
+    "Secrets Manager",
+    "Parameter Store",
+    "CloudWatch",
+    "IAM",
+    "Lambda",
+    "NAT Gateway"
+  ],
+  "subject_labels": [
+    "three-tier-architecture",
+    "web-application",
+    "blue-green-deployment",
+    "container-orchestration",
+    "cdn-distribution"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

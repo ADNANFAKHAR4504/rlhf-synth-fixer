@@ -1,0 +1,33 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "iteration",
+  "po_id": "synth-f0oir",
+  "team": "iac-training",
+  "startedAt": "2025-11-06T19:45:00Z",
+  "subtask": "Iteration 1: Add monitoring and observability features",
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "SQS",
+    "CloudWatch",
+    "X-Ray",
+    "SNS",
+    "IAM"
+  ],
+  "subject_labels": [
+    "serverless",
+    "webhook-processing",
+    "monitoring",
+    "observability",
+    "alarms"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

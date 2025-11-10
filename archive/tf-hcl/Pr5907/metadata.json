@@ -1,0 +1,38 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-06T11:29:51+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
+  ],
+  "po_id": "9d4wp",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "DMS",
+    "ELB",
+    "WAF",
+    "Secrets Manager",
+    "Systems Manager",
+    "CloudWatch",
+    "IAM",
+    "KMS",
+    "Lambda",
+    "ACM"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

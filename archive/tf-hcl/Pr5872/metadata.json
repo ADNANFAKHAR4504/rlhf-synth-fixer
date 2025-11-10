@@ -1,0 +1,40 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350190",
+  "team": "4",
+  "startedAt": "2025-11-05T15:14:51.517Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "ALB",
+    "WAF",
+    "CloudWatch",
+    "SNS",
+    "AWS Backup",
+    "IAM",
+    "Secrets Manager",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Groups",
+    "Elastic IP",
+    "Route Tables",
+    "Subnets"
+  ],
+  "training_quality": 10,
+  "background": "Production-ready secure AWS infrastructure deployment using Terraform in us-west-1. Implements comprehensive security controls with AWS Secrets Manager for RDS credential management using auto-generated 32-character passwords, SSE-KMS encryption on all storage (S3, RDS, EC2 volumes), least privilege IAM roles and security groups, WAF protection with 4 managed rule sets for common exploits, 2 NAT Gateways for high availability across 2 AZs, CloudWatch monitoring with SNS email notifications, AWS Backup with daily backups and 30-day retention, IAM password policy enforcement, and complete network isolation with public/private subnet architecture. Single-file Terraform implementation (tap_stack.tf) with 991 lines of infrastructure code including Secrets Manager integration, 162 passing unit tests, and 55 passing integration tests. Follows AWS Well-Architected Framework for security, reliability, and operational excellence with comprehensive tagging strategy (Environment=Production, Team=DevOps) for governance and cost tracking.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}
