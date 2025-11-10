@@ -5,150 +5,439 @@ This document defines the review criteria and scoring system specifically for th
 ## Context
 
 When reviewing CI/CD Pipeline implementations (subject_label: "CI/CD Pipeline"):
-- The task involves optimizing/creating GitHub Actions workflows
 - `lib/ci-cd.yml` contains the pipeline configuration being reviewed
 - `lib/PROMPT.md` contains the requirements
 - `lib/IDEAL_RESPONSE.md` describes the expected implementation
+- **Multi-Platform Support**: Pipelines can be for GitHub Actions, GitLab CI, CircleCI, Google Cloud Build, ArgoCD, Azure DevOps, or Jenkins
+- Automated validation runs via `scripts/validate-cicd-platform.sh` before this review
 
 ## Review Criteria (Quality Assessment)
 
-### 1. Security Best Practices (Critical - 3 points)
+### 1. Documentation Quality (4 points - CRITICAL)
 
-#### 1.1 Secrets Management (2 points)
-- **NO hardcoded secrets** in workflow files
-  - ✅ Pass: All secrets use `${{ secrets.SECRET_NAME }}`
-  - ❌ Fail: Any hardcoded API keys, tokens, passwords, or credentials
+**All 4 documentation files MUST be present, correct, and well-formatted. Missing or incorrect files = lose all 4 points.**
 
-- **NO hardcoded sensitive values**
-  - ✅ Pass: AWS account IDs, regions use `${{ vars.VAR_NAME }}` or `${{ secrets.SECRET_NAME }}`
-  - ❌ Fail: Hardcoded account IDs, regions, bucket names with sensitive info
+#### 1.1 PROMPT.md (1 point)
+**Requirements:**
+- ✅ File exists and is NOT empty
+- ✅ **HUMAN-WRITTEN** (not AI-generated)
+- ✅ No emojis, no tables, no LLM-flavored text
+- ✅ Natural, human tone describing the task requirements
 
-- **Environment variables properly defined**
-  - ✅ Pass: Common values defined in `env:` block at workflow or job level
-  - ❌ Fail: Repeated hardcoded values across multiple steps
+**AI-Generated Signs (AUTO-FAIL if detected):**
+- ❌ Emojis or special symbols (🎯, ✨, etc.)
+- ❌ Perfect table formatting
+- ❌ Phrases like "Here is a comprehensive prompt..." or "Let's build..."
+- ❌ Overly formal/template-like structure
+
+**Scoring:**
+- ✅ 1 point: Human-written, clear requirements
+- ❌ 0 points: Empty, AI-generated, or missing
+
+#### 1.2 MODEL_RESPONSE.md (1 point)
+**Requirements:**
+- ✅ File exists and is NOT empty
+- ✅ Contains the **raw model output** (what the model initially generated)
+- ✅ May contain errors/issues (that's expected - this is BEFORE fixes)
+- ✅ Should match what was actually generated, not idealized version
+
+**Scoring:**
+- ✅ 1 point: Present with actual model output
+- ❌ 0 points: Empty, missing, or fabricated content
+
+#### 1.3 IDEAL_RESPONSE.md (1 point)
+**Requirements:**
+- ✅ File exists and is NOT empty
+- ✅ Contains the **final corrected code** from `lib/ci-cd.yml`
+- ✅ Must use proper code blocks: \`\`\`yml (not \`\`\`yaml or plain text)
+- ✅ All code must be in code blocks (no loose code outside blocks)
+- ✅ Should represent the polished, working implementation
+
+**Example format:**
+````markdown
+# Final CI/CD Pipeline Implementation
+
+```yml
+name: Production Pipeline
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./scripts/build.sh
+```
+````
+
+**Scoring:**
+- ✅ 1 point: Properly formatted with \`\`\`yml code blocks, contains final code
+- ❌ 0 points: Empty, wrong format, missing code blocks, or code outside blocks
+
+#### 1.4 MODEL_FAILURES.md (1 point)
+**Requirements:**
+- ✅ File exists and is NOT empty
+- ✅ **Compares** MODEL_RESPONSE.md vs IDEAL_RESPONSE.md
+- ✅ Documents what was **wrong** in model output
+- ✅ Documents what was **corrected** in final version
+- ✅ Past tense (these are fixes that WERE made, not current issues)
+
+**Example content:**
+```markdown
+# Model Failures and Corrections
+
+## Issue 1: Hardcoded AWS Account ID
+- **Problem**: Model generated hardcoded account ID in MODEL_RESPONSE
+- **Fixed**: Changed to use ${{ secrets.AWS_ACCOUNT_ID }}
+- **Location**: Line 15 in deploy job
+
+## Issue 2: Inline Script >5 Lines
+- **Problem**: Model put 8-line script inline in run: block
+- **Fixed**: Moved to ./scripts/deploy.sh
+- **Location**: Deploy stage
+```
+
+**Scoring:**
+- ✅ 1 point: Properly documents what was wrong and what was fixed
+- ❌ 0 points: Empty, missing, or doesn't compare the two files
+
+---
+
+**CRITICAL**: If ANY of the 4 documentation files fail validation, **deduct all 4 points** (not partial).
+
+---
+
+### 2. Security Best Practices (Critical - 2 points)
+
+#### 1.1 Hardcoded Secrets Detection (2 points - AUTO-FAIL)
+**CRITICAL**: Any hardcoded secrets = **AUTOMATIC SCORE OF 0 for entire review**
+
+Check for:
+- AWS Access Keys: `AKIA[0-9A-Z]{16}`
+- Hardcoded passwords: `password: "mypassword123"`
+- API keys in plain text: `api_key: "sk_live_..."`
+- Database credentials in connection strings
+- Private SSH/TLS keys
+- Tokens, bearer tokens, OAuth secrets
 
 **Scoring**:
-- 2 points: No hardcoded secrets, all sensitive data properly referenced
-- 1 point: Minor issues (1-2 hardcoded non-critical values)
-- 0 points: Hardcoded secrets or credentials found (CRITICAL FAIL)
+- ✅ 2 points: No hardcoded secrets detected
+- ❌ 0 points: ANY hardcoded secret found (ENTIRE TASK FAILS)
 
-#### 1.2 IAM and Authentication (1 point)
-- **Proper AWS authentication**
-  - ✅ Pass: Uses OIDC (aws-actions/configure-aws-credentials with role-to-assume) OR GitHub Secrets
-  - ❌ Fail: Hardcoded credentials, long-lived keys without secrets manager
+#### 1.2 Secrets Management Syntax (1 point)
+**Platform-specific secret syntax must be correct:**
 
-- **Cross-account role assumptions**
-  - ✅ Pass: Uses proper role assumption with role ARNs when required
-  - ❌ Fail: Missing cross-account deployment patterns when required
+**GitHub Actions:**
+```yaml
+env:
+  AWS_KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  DATABASE_URL: ${{ vars.DATABASE_URL }}
+```
 
-**Scoring**:
-- 1 point: Proper authentication methods (OIDC or secrets-based)
-- 0.5 point: Uses secrets but not following all best practices
-- 0 points: Insecure authentication or missing
+**GitLab CI:**
+```yaml
+variables:
+  DATABASE_URL: $DATABASE_URL
+script:
+  - echo $CI_REGISTRY_PASSWORD | docker login
+```
 
-### 2. Pipeline Architecture (3 points)
+**CircleCI:**
+```yaml
+environment:
+  API_KEY: ${API_KEY}
+```
 
-#### 2.1 Multi-Stage Deployment (2 points)
-- **Proper stage progression**
-  - ✅ Pass: Dev → Staging → Production flow with dependencies
-  - ❌ Fail: Missing stages or improper sequencing
-
-- **Manual approval gates**
-  - ✅ Pass: GitHub environments with protection rules for staging/prod
-  - ❌ Fail: No approval gates or missing for critical environments
-
-**Scoring**:
-- 2 points: Complete multi-stage with proper approvals
-- 1 point: Multi-stage but missing some approval gates
-- 0.5 points: Basic staging without proper gates
-- 0 points: No proper staging
-
-#### 2.2 Job Dependencies & Artifacts (1 point)
-- **Correct needs: relationships**
-  - ✅ Pass: Jobs have proper dependencies, no race conditions
-  - ❌ Fail: Missing dependencies, potential parallel execution issues
-
-- **Artifact management**
-  - ✅ Pass: Build artifacts uploaded and downloaded between jobs
-  - ❌ Fail: Missing artifact management, rebuilding unnecessarily
-
-**Scoring**:
-- 1 point: Perfect job dependencies and artifact management
-- 0.5 points: Minor issues in job sequencing or artifacts
-- 0 points: Broken or missing dependencies
-
-### 3. Configuration Management (2 points)
-
-#### 3.1 Environment Variables & Parameterization (2 points)
-- **Environment variables**
-  - ✅ Pass: Reusable env vars at workflow/job level
-  - ❌ Fail: Repeated values, inconsistent configuration
-
-- **Parameterization**
-  - ✅ Pass: Uses workflow_dispatch inputs, variables
-  - ❌ Fail: Everything hardcoded, no flexibility
-
-**Scoring**:
-- 2 points: Excellent use of env vars and parameters
-- 1 point: Good but some repetition
-- 0.5 points: Minimal configuration management
-- 0 points: Everything hardcoded
-
-### 4. Requirements Compliance (2 points)
-
-#### 4.1 Compliance with lib/ci-cd.yml Patterns (1.5 points)
-- **Matches specification**
-  - ✅ Pass: Implementation follows the patterns and requirements in lib/ci-cd.yml
-  - ❌ Fail: Deviates significantly from specification
-
-**Validation**:
-```bash
-# Compare key aspects:
-# - Source integration method (OIDC, webhooks)
-# - Build commands and tools
-# - Deploy strategy (change sets, approval gates)
-# - Security scanning (cdk-nag, checkov, etc.)
+**Google Cloud Build:**
+```yaml
+secretEnv: ['DB_PASSWORD']
+availableSecrets:
+  secretManager:
+    - versionName: projects/$PROJECT_ID/secrets/db-password/versions/latest
 ```
 
 **Scoring**:
-- 1.5 points: Fully compliant with lib/ci-cd.yml patterns
-- 1 point: Mostly compliant, minor deviations
-- 0.5 points: Some compliance issues
-- 0 points: Does not follow specification
+- ✅ 1 point: Correct platform-specific syntax throughout
+- ⚠️ 0.5 points: Mixed/incorrect syntax
+- ❌ 0 points: No secret management or wrong platform syntax
 
-#### 4.2 PROMPT Requirements Met (0.5 points)
-- **Requirements coverage**
-  - ✅ Pass: All requirements from lib/PROMPT.md implemented
-  - ❌ Fail: Missing required features
+#### 1.3 Container Security (1 point)
+
+**If container images are used:**
+- Private registry REQUIRED (ECR, GCR, ACR, GitLab Registry, GHCR)
+- ❌ Public DockerHub = FAIL
+
+**If containers are built:**
+- Vulnerability scanning REQUIRED (Trivy, Grype, Snyk, Anchore)
 
 **Scoring**:
-- 0.5 points: All requirements met
-- 0.25 points: Most requirements met
-- 0 points: Major requirements missing
+- ✅ 1 point: Private registry + scanning (if building containers)
+- ⚠️ 0.5 points: Private registry but missing scanning when building
+- ❌ 0 points: Public DockerHub OR building without scanning
+
+### 3. Script Organization (1 point - ENFORCED)
+
+#### 3.1 Script Length Rule (1 point)
+**RULE**: Inline scripts MUST be ≤5 lines. Longer scripts MUST be in `scripts/` directory.
+
+❌ **FAILS** (6+ lines inline):
+```yaml
+run: |
+  npm install
+  npm run build
+  npm run test
+  docker build -t app .
+  docker push app
+  npm run deploy
+```
+
+✅ **PASSES** (external script):
+```yaml
+run: ./scripts/deploy.sh
+```
+
+**Scoring**:
+- ✅ 1 point: All scripts ≤5 lines OR in scripts/ directory
+- ❌ 0 points: Any violations (3+ violations)
+
+---
+
+### 4. Pipeline Architecture (2 points)
+
+#### 4.1 Environment Declaration (1 point)
+Pipelines should use environment protection for deployments.
+
+**GitHub Actions:**
+```yaml
+jobs:
+  deploy-prod:
+    environment: production
+```
+
+**GitLab CI:**
+```yaml
+deploy-production:
+  environment:
+    name: production
+```
+
+**Scoring**:
+- ✅ 1 point: Environments declared for deployments
+- ⚠️ 0.5 points: Partial environment usage
+- ❌ 0 points: No environments
+
+#### 4.2 Multi-Stage OR Job Dependencies (1 point)
+Look for proper orchestration.
+
+**Multi-stage pattern**: Dev → Staging → Prod
+**OR Job dependencies**: Proper `needs:`, `depends_on:`, artifact passing
+
+**Scoring**:
+- ✅ 1 point: Multi-stage (3+ envs) OR proper dependencies + artifacts
+- ⚠️ 0.5 points: 2 stages OR partial dependencies
+- ❌ 0 points: Neither
+
+### 5. Platform Compliance (1 point)
+
+#### 5.1 Platform Detection & Syntax (1 point)
+Must use correct syntax for the detected platform.
+
+**Platform markers:**
+- GitHub Actions: `name:`, `on:`, `jobs:`, `runs-on:`
+- GitLab CI: `image:`, `stages:`, `script:`
+- CircleCI: `version: 2.1`, `workflows:`
+- Google Cloud Build: `steps:` with `gcr.io`
+- ArgoCD: `apiVersion: argoproj.io`
+- Azure DevOps: `vmImage:`, `pool:`
+- Jenkins: `pipeline {`, `agent`
+
+**Scoring**:
+- ✅ 1 point: Correct platform syntax throughout
+- ⚠️ 0.5 points: Minor syntax issues
+- ❌ 0 points: Wrong platform or major errors
+
+
+---
+
+## Bonus Points (Optional - Max total score still 10)
+
+### Infrastructure & Advanced Features (+0.5 each, max +1 total)
+These are OPTIONAL but reward excellence:
+
+- ✅ Infrastructure cost estimation (Infracost, Pulumi preview): **+0.5**
+- ✅ OIDC authentication (no long-lived keys): **+0.5**
+- ✅ Infrastructure security scanning (cdk-nag, checkov, tfsec): **+0.5**
+- ✅ Performance optimization (caching, parallelization): **+0.5**
+- ✅ Comprehensive testing/notifications: **+0.5**
+
+**Note**: Total score cannot exceed 10 points.
+
+---
+
+## Unvalidated Features - IMPORTANT
+
+### What if trainers implement features NOT in the validation checklist?
+
+**Answer: Additional features are ALLOWED and ENCOURAGED if they don't violate core rules.**
+
+#### ✅ ALLOWED Unvalidated Features (Should NOT penalize):
+- Kubernetes RBAC configurations
+- Service mesh (Istio, Linkerd)
+- GitOps patterns (Flux, ArgoCD configs)
+- Monitoring/observability (Prometheus, Grafana)
+- Database migrations
+- Blue-green/canary deployments
+- Feature flags, custom tools
+- Advanced caching strategies
+- Compliance scanning (HIPAA, PCI-DSS, SOC2)
+- Cost optimization tools
+- Chaos engineering, load testing
+- Documentation generation, backup automation
+
+**Review Approach:**
+1. **Don't penalize** extra features not in checklist
+2. **Do reward** if well-implemented (bonus points)
+3. **Still enforce** core rules (no hardcoded secrets, script length, etc.)
+
+#### Example Scenarios:
+
+**Scenario 1: K8s RBAC + Network Policies**
+```yaml
+- name: Apply RBAC
+  run: kubectl apply -f k8s/rbac/
+- name: Apply Network Policies
+  run: kubectl apply -f k8s/network-policies/
+```
+
+**Review Decision:**
+- ✅ NOT in validation checklist, but shows advanced knowledge
+- ✅ No hardcoded secrets, uses external scripts (follows rules)
+- ✅ Award **full base points** + consider **bonus**
+
+**Scenario 2: Custom Compliance Tool**
+```yaml
+- name: HIPAA Compliance Check
+  run: ./scripts/hipaa-scan.sh
+```
+
+**Review Decision:**
+- ✅ Follows script organization rule
+- ✅ Shows real-world understanding
+- ✅ Award points + potential bonus
+
+#### ❌ Still FAILS Even With Advanced Features:
+
+```yaml
+# Advanced K8s setup but hardcoded secret
+apiVersion: v1
+kind: Secret
+data:
+  password: bXlwYXNzd29yZDEyMw==  # ❌ FAILS - hardcoded
+```
+
+```yaml
+# Great setup but 10-line inline script
+- name: Deploy Everything
+  run: |
+    line 1
+    line 2
+    ...
+    line 10  # ❌ FAILS - >5 lines inline
+```
+
+**Bottom line**: Validate ONLY the core requirements. Don't penalize innovation.
 
 ## Scoring System
 
-**Total Points: 10**
+**Total Points: 10** (Minimum passing: **8/10**)
 
-### Direct 10-point scale - sum all category scores
+### Score Breakdown (Updated):
+
+1. **Documentation Quality** (4 points) - LOSE ALL 4 IF ANY FILE FAILS
+   - PROMPT.md (human-written, not AI): 1 pt
+   - MODEL_RESPONSE.md (raw model output): 1 pt
+   - IDEAL_RESPONSE.md (final code with \`\`\`yml blocks): 1 pt
+   - MODEL_FAILURES.md (what was wrong/fixed): 1 pt
+
+2. **Security** (2 points)
+   - Hardcoded Secrets: 1 pt (AUTO-FAIL if any found → score = 0)
+   - Container Security: 1 pt
+
+3. **Script Organization** (1 point)
+   - Script Length Rule: 1 pt
+
+4. **Architecture** (2 points)
+   - Environment Declaration: 1 pt
+   - Multi-stage OR Dependencies: 1 pt
+
+5. **Platform Compliance** (1 point)
+   - Platform Syntax: 1 pt
+
+**Base Total: 10 points**
+
+### Bonus (Optional, max +1):
+- Cost estimation, OIDC, security scanning, etc.
 
 ### Quality Thresholds:
-- **9-10**: Excellent - Production-ready with best practices
-- **8**: Good - Meets all critical requirements, ready for PR
-- **6-7**: Fair - Missing some best practices, needs improvement
-- **4-5**: Poor - Significant issues, major rework needed
-- **0-3**: Critical failures - Hardcoded secrets or security issues
+- **9-10**: Excellent - Production-ready
+- **8**: Good - Meets all requirements, PASSES ✅
+- **6-7**: Fair - Needs improvement
+- **4-5**: Poor - Major rework needed
+- **0-3**: Critical failures - FAILS ❌
 
-### Minimum Passing Score: 8/10
+### Critical Auto-Fail Conditions:
+- ANY hardcoded secrets → **Score = 0**
+- Any documentation file missing/wrong → **Lose all 4 documentation points**
+- Build container without scanning → Likely fail
+- Public DockerHub for deployment → Likely fail
 
-**If score < 8, the review MUST fail with specific improvements needed.**
+### Documentation Validation Examples:
 
-### Score Breakdown:
-- Security Best Practices: 3 points
-- Pipeline Architecture: 3 points
-- Configuration Management: 2 points
-- Requirements Compliance: 2 points
-**Total: 10 points**
+#### ✅ GOOD PROMPT.md:
+```markdown
+Create a multi-stage CI/CD pipeline that deploys to dev, staging, and production.
+The pipeline should use OIDC for AWS authentication and include manual approval
+gates before production deployment. Add security scanning with cdk-nag and ensure
+artifacts are encrypted with KMS.
+```
+
+#### ❌ BAD PROMPT.md (AI-Generated):
+```markdown
+# 🎯 Comprehensive CI/CD Pipeline Implementation
+
+Let's build an enterprise-grade pipeline! ✨
+
+| Feature | Requirement |
+|---------|-------------|
+| Auth | OIDC |
+| Stages | 3 |
+
+Here is a **comprehensive and high-level prompt** for your infrastructure...
+```
+
+#### ✅ GOOD IDEAL_RESPONSE.md:
+````markdown
+# Final Pipeline Implementation
+
+```yml
+name: Production Pipeline
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./scripts/build.sh
+```
+````
+
+#### ❌ BAD IDEAL_RESPONSE.md:
+```markdown
+# Final Implementation
+
+name: Production Pipeline  ← No code block!
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+```
 
 ## Review Process
 
