@@ -1,0 +1,10 @@
+config:
+  aws:region: us-east-1
+  TapStack:environmentSuffix: pr6148
+  TapStack:environment: dev
+  TapStack:minCapacity: "1"
+  TapStack:maxCapacity: "2"
+  TapStack:readReplicaCount: "1"
+  TapStack:backupRetentionDays: "1"
+  TapStack:enableWaf: "false"
+  TapStack:costCenter: dev-team
