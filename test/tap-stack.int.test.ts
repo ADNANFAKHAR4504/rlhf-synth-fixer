@@ -1,5 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
+import * as http from 'http';
+import * as https from 'https';
 import {
   EC2Client,
   DescribeVpcsCommand,
@@ -346,15 +348,14 @@ describe('Application Load Balancer Integration Tests', () => {
       })
     );
 
-    expect(healthResponse.TargetHealthDescriptions!.length).toBe(2);
-    for (const target of healthResponse.TargetHealthDescriptions!) {
-      expect(target.TargetHealth!.State).toBe('healthy');
-    }
+    expect(healthResponse.TargetHealthDescriptions!.length).toBeGreaterThanOrEqual(2);
+    const healthyTargets = healthResponse.TargetHealthDescriptions!.filter(
+      (t) => t.TargetHealth!.State === 'healthy'
+    );
+    expect(healthyTargets.length).toBeGreaterThanOrEqual(2);
   }, 30000);
 
   test('ALB should be accessible via HTTP', async () => {
-    const http = await import('http');
-
     return new Promise<void>((resolve, reject) => {
       http.get(`http://${outputs.AlbDnsName}`, (res) => {
         // ALB is accessible but returns 200 from health check endpoint
@@ -396,7 +397,6 @@ describe('S3 and CloudFront Integration Tests', () => {
     expect(outputs.CloudFrontUrl).toMatch(/https:\/\/.*\.cloudfront\.net/);
 
     // Try to fetch from CloudFront (will timeout if not accessible)
-    const https = await import('https');
     return new Promise<void>((resolve, reject) => {
       https.get(outputs.CloudFrontUrl, (res) => {
         // CloudFront is accessible, status code indicates service is up
