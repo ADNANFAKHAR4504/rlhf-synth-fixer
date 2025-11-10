@@ -6,15 +6,62 @@ Tests infrastructure configuration values and helper functions.
 """
 
 import unittest
-import json
-import os
 from pathlib import Path
+from unittest.mock import patch
+
+import pulumi
+from pulumi.runtime import (
+    Mocks,
+    MockCallArgs,
+    MockResourceArgs,
+    MockResourceResult,
+    set_mocks,
+)
+
 from lib.helpers import (
     validate_transaction,
     detect_fraud,
     format_notification_message,
     get_configuration_values
 )
+from lib.tap_stack import TapStack, TapStackArgs
+
+
+class MinimalMocks(Mocks):
+    """Return inputs as outputs with minimal augmentation."""
+
+    def new_resource(self, args: MockResourceArgs) -> MockResourceResult:
+        outputs = dict(args.inputs)
+        outputs.setdefault("id", f"{args.name}-id")
+        outputs.setdefault("arn", f"arn:aws:mock::{args.name}")
+        outputs.setdefault("name", args.name)
+
+        if args.type_.endswith(":Queue"):
+            queue_url = f"https://mock.sqs/{args.name}"
+            outputs.setdefault("url", queue_url)
+            outputs.setdefault("queue_url", queue_url)
+
+        if args.type_.endswith(":Function"):
+            outputs.setdefault("invoke_arn", f"arn:aws:lambda:mock:::function:{args.name}:invoke")
+
+        if args.type_.endswith(":Table"):
+            outputs.setdefault("stream_arn", f"arn:aws:dynamodb:mock:::table/{args.name}/stream/mock")
+
+        if args.type_.endswith(":Topic"):
+            outputs.setdefault("arn", f"arn:aws:sns:mock::{args.name}")
+
+        if args.type_.endswith(":RestApi"):
+            outputs.setdefault("id", f"{args.name}-id")
+
+        return MockResourceResult(f"{args.name}_id", outputs)
+
+    def call(self, args: MockCallArgs) -> dict:
+        if args.token == "aws:index/getRegion:getRegion":
+            return {"region": "us-east-1", "name": "us-east-1"}
+        return dict(args.args)
+
+
+set_mocks(MinimalMocks())
 
 
 class TestConfigurationValues(unittest.TestCase):
@@ -289,6 +336,76 @@ class TestInfrastructureCodeStructure(unittest.TestCase):
         """Test helpers.py file exists."""
         file_path = LIB_DIR / 'helpers.py'
         self.assertTrue(file_path.exists())
+
+
+class TestTapStackComponent(unittest.TestCase):
+    """Pulumi component tests for TapStack using runtime mocks."""
+
+    def _instantiate_stack(self, environment_suffix: str = "dev", tags: dict | None = None):
+        exports = {}
+
+        with patch("lib.tap_stack.Config") as mock_config, patch(
+            "lib.tap_stack.pulumi.export",
+            side_effect=lambda key, value: exports.__setitem__(key, value),
+        ):
+            mock_config.return_value.get.return_value = None
+            stack = TapStack(
+                "test-stack",
+                TapStackArgs(environment_suffix=environment_suffix, tags=tags),
+            )
+
+        return stack, exports
+
+    @pulumi.runtime.test
+    def test_stack_uses_provided_environment_suffix(self):
+        """Stack should honour provided environment suffix."""
+
+        def check(_):
+            stack, _ = self._instantiate_stack(environment_suffix="qa")
+            return pulumi.Output.from_input(stack.environment_suffix)
+
+        return check([]).apply(lambda value: self.assertEqual(value, "qa"))
+
+    @pulumi.runtime.test
+    def test_stack_defaults_to_dev_environment(self):
+        """Stack should default to dev when environment not supplied."""
+
+        def check(_):
+            stack, _ = self._instantiate_stack(environment_suffix=None, tags=None)
+            return pulumi.Output.from_input(stack.environment_suffix)
+
+        return check([]).apply(lambda value: self.assertEqual(value, "dev"))
+
+    @pulumi.runtime.test
+    def test_stack_exports_expected_outputs(self):
+        """Ensure TapStack registers expected Pulumi exports."""
+
+        def check(_):
+            stack, exports = self._instantiate_stack(
+                environment_suffix="stage",
+                tags={"ManagedBy": "UnitTest"},
+            )
+
+            return pulumi.Output.all(
+                env_suffix=stack.environment_suffix,
+                tags=stack.tags,
+                api_endpoint=exports.get("api_endpoint"),
+                table_name=exports.get("transactions_table_name"),
+                queue_url=exports.get("fraud_alerts_queue_url"),
+                sns_topic=exports.get("fraud_notifications_topic_arn"),
+                kms_key=exports.get("kms_key_id"),
+            )
+
+        def assertions(values):
+            self.assertEqual(values["env_suffix"], "stage")
+            self.assertEqual(values["tags"]["ManagedBy"], "UnitTest")
+            self.assertIsNotNone(values["api_endpoint"])
+            self.assertIsNotNone(values["table_name"])
+            self.assertIsNotNone(values["queue_url"])
+            self.assertIsNotNone(values["sns_topic"])
+            self.assertIsNotNone(values["kms_key"])
+
+        return check([]).apply(assertions)
 
 
 if __name__ == '__main__':

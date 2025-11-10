@@ -49,6 +49,7 @@ class TapStack(pulumi.ComponentResource):
 
         self.environment_suffix = environment_suffix
         self.common_tags = common_tags
+        self.tags = common_tags
 
         parent_opts = ResourceOptions(parent=self)
 
