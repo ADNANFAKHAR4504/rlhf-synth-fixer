@@ -1,154 +1,62 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-describe('TapStack Integration Tests', () => {
-  const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
-  let outputs: any;
-  let stackOutputs: any;
-  let skipSuite = false;
-  let skipReason = '';
+describe('TapStack Integration Outputs', () => {
+  const outputsPath = path.resolve(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
+  let outputs: Record<string, unknown>;
 
   beforeAll(() => {
-    // Check if outputs file exists
     if (!fs.existsSync(outputsPath)) {
-      skipSuite = true;
-      skipReason = `Outputs file not found at ${outputsPath}`;
-      return;
+      throw new Error(`Expected outputs file at ${outputsPath}`);
     }
 
-    // Load outputs
     const outputsContent = fs.readFileSync(outputsPath, 'utf8');
     outputs = JSON.parse(outputsContent);
-
-    // Get environment suffix from env var or default
-    const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr6171';
-    const stackKey = `TapStack${envSuffix}`;
-    stackOutputs = outputs[stackKey];
-
-    if (!stackOutputs) {
-      skipSuite = true;
-      const availableKeys = Object.keys(outputs).join(', ') || 'none';
-      skipReason = `Stack key "${stackKey}" not found in flat-outputs.json. Available keys: ${availableKeys}`;
-    }
   });
 
-  describe('Stack Outputs File', () => {
-    it('should have flat-outputs.json file', () => {
-      if (skipSuite) {
-        console.warn(`⚠️  Skipping integration assertions: ${skipReason}`);
-        return;
-      }
-      expect(fs.existsSync(outputsPath)).toBe(true);
-    });
-
-    it('should contain valid JSON', () => {
-      if (skipSuite) {
-        console.warn(`⚠️  Skipping integration assertions: ${skipReason}`);
-        return;
-      }
-      expect(outputs).toBeDefined();
-      expect(typeof outputs).toBe('object');
-    });
-
-    it('should contain stack key with environment suffix', () => {
-      if (skipSuite) {
-        console.warn(`⚠️  Skipping integration assertions: ${skipReason}`);
-        return;
-      }
-      const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr6171';
-      const stackKey = `TapStack${envSuffix}`;
-      expect(outputs).toHaveProperty(stackKey);
-    });
+  it('contains VpcId and VpcCidr outputs', () => {
+    expect(outputs).toHaveProperty('VpcId');
+    expect(outputs).toHaveProperty('VpcCidr');
+    expect(typeof outputs.VpcId).toBe('string');
+    expect(typeof outputs.VpcCidr).toBe('string');
   });
 
-  describe('Stack Outputs Structure', () => {
-    it('should have api_url output', () => {
-      if (skipSuite) {
-        console.warn(`⚠️  Skipping integration assertions: ${skipReason}`);
-        return;
-      }
-
-      expect(stackOutputs).toHaveProperty('api_url');
-      expect(stackOutputs.api_url).toBeDefined();
-      expect(typeof stackOutputs.api_url).toBe('string');
-      expect(stackOutputs.api_url).toMatch(/^https:\/\/.+/);
-    });
-
-    it('should have dynamodb_table_name output', () => {
-      if (skipSuite) {
-        console.warn(`⚠️  Skipping integration assertions: ${skipReason}`);
-        return;
-      }
-
-      expect(stackOutputs).toHaveProperty('dynamodb_table_name');
-      expect(stackOutputs.dynamodb_table_name).toBeDefined();
-      expect(typeof stackOutputs.dynamodb_table_name).toBe('string');
-      
-      const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr6171';
-      expect(stackOutputs.dynamodb_table_name).toContain(envSuffix);
-    });
-
-    it('should have sns_topic_arn output', () => {
-      if (skipSuite) {
-        console.warn(`⚠️  Skipping integration assertions: ${skipReason}`);
-        return;
-      }
-
-      expect(stackOutputs).toHaveProperty('sns_topic_arn');
-      expect(stackOutputs.sns_topic_arn).toBeDefined();
-      expect(typeof stackOutputs.sns_topic_arn).toBe('string');
-      expect(stackOutputs.sns_topic_arn).toMatch(/^arn:aws:sns:.+/);
-      
-      const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr6171';
-      expect(stackOutputs.sns_topic_arn).toContain(envSuffix);
-    });
-
-    it('should have sqs_queue_url output', () => {
-      if (skipSuite) {
-        console.warn(`⚠️  Skipping integration assertions: ${skipReason}`);
-        return;
-      }
-
-      expect(stackOutputs).toHaveProperty('sqs_queue_url');
-      expect(stackOutputs.sqs_queue_url).toBeDefined();
-      expect(typeof stackOutputs.sqs_queue_url).toBe('string');
-      expect(stackOutputs.sqs_queue_url).toMatch(/^https:\/\/sqs\..+/);
-      
-      const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr6171';
-      expect(stackOutputs.sqs_queue_url).toContain(envSuffix);
-    });
+  it('VpcId matches AWS format', () => {
+    const vpcId = outputs.VpcId as string;
+    expect(vpcId).toMatch(/^vpc-[0-9a-f]{8,}$/);
   });
 
-  describe('Output Values Validation', () => {
-    it('should have valid API URL format', () => {
-      if (skipSuite) {
-        console.warn(`⚠️  Skipping integration assertions: ${skipReason}`);
-        return;
-      }
+  it('VpcCidr is a valid CIDR block', () => {
+    const cidr = outputs.VpcCidr as string;
+    const cidrParts = cidr.split('/');
+    expect(cidrParts).toHaveLength(2);
 
-      // Should match pattern: https://{api-id}.execute-api.{region}.amazonaws.com/{stage}
-      expect(stackOutputs.api_url).toMatch(
-        /^https:\/\/[a-z0-9]+\.execute-api\.[a-z0-9-]+\.amazonaws\.com\/.+/,
-      );
+    const [ip, prefixStr] = cidrParts;
+    const octets = ip.split('.').map((octet) => Number(octet));
+    expect(octets).toHaveLength(4);
+    octets.forEach((octet) => {
+      expect(Number.isInteger(octet)).toBe(true);
+      expect(octet).toBeGreaterThanOrEqual(0);
+      expect(octet).toBeLessThanOrEqual(255);
     });
 
-    it('should have all required outputs present', () => {
-      if (skipSuite) {
-        console.warn(`⚠️  Skipping integration assertions: ${skipReason}`);
-        return;
-      }
+    const prefix = Number(prefixStr);
+    expect(Number.isInteger(prefix)).toBe(true);
+    expect(prefix).toBeGreaterThanOrEqual(8);
+    expect(prefix).toBeLessThanOrEqual(28);
+  });
 
-      const requiredOutputs = [
-        'api_url',
-        'dynamodb_table_name',
-        'sns_topic_arn',
-        'sqs_queue_url',
-      ];
+  it('VpcCidr resides within the 10.0.0.0/8 private range', () => {
+    const cidr = outputs.VpcCidr as string;
+    const [ip] = cidr.split('/');
+    const firstOctet = Number(ip.split('.')[0]);
+    expect(firstOctet).toBe(10);
+  });
 
-      requiredOutputs.forEach((output) => {
-        expect(stackOutputs).toHaveProperty(output);
-        expect(stackOutputs[output]).toBeTruthy();
-      });
-    });
+  it('VpcCidr offers at least 65,536 IP addresses', () => {
+    const cidr = outputs.VpcCidr as string;
+    const prefix = Number(cidr.split('/')[1]);
+    const availableAddresses = Math.pow(2, 32 - prefix);
+    expect(availableAddresses).toBeGreaterThanOrEqual(65_536);
   });
 });
