@@ -48,6 +48,7 @@ export class DatabaseMigrationStack extends Construct {
     // Create production VPC for Aurora and DMS (in real scenario, would reference existing VPC)
     const prodVpc = new ec2.Vpc(this, `ProductionVpc-${environmentSuffix}`, {
       vpcName: `prod-vpc-${environmentSuffix}`,
+      cidr: '10.0.0.0/16', // explicitly set CIDR block
       maxAzs: 3,
       natGateways: 1,
       subnetConfiguration: [
@@ -64,9 +65,9 @@ export class DatabaseMigrationStack extends Construct {
       ],
     });
 
-    // Create development VPC for source RDS (in real scenario, would reference existing VPC)
     const devVpc = new ec2.Vpc(this, `DevelopmentVpc-${environmentSuffix}`, {
       vpcName: `dev-vpc-${environmentSuffix}`,
+      cidr: '10.1.0.0/16', // different CIDR block to avoid overlap
       maxAzs: 3,
       natGateways: 1,
       subnetConfiguration: [
