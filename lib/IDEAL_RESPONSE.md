@@ -39,8 +39,7 @@ A clean, deployable CloudFormation solution for us-east-1 that reliably enables 
 
 The stack deploys cleanly in us-east-1, and AWS Config starts recording without `NoAvailableDeliveryChannelException` or S3 name/ACL issues. The approach is robust against eventual consistency and safe across reruns and updates.
 
-```yaml
-
+```yml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'TapStack - Secure and compliant AWS infrastructure with complete foundational components (us-east-1 only)'
 
