@@ -7,7 +7,9 @@
   "team": "synth",
   "startedAt": "2025-11-10T07:11:00+00:00",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": ["Cloud Environment Setup"],
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
   "aws_services": [
     "VPC",
     "EC2",
@@ -20,5 +22,10 @@
   ],
   "training_quality": 9,
   "author": "iamarpit-turing",
-  "reviewer": "emmanuel-turing"
+  "reviewer": "emmanuel-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
