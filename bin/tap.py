@@ -19,7 +19,7 @@ domain_name = app.node.try_get_context("domainName") or "example.com"
 # Primary Region Stack (us-east-1)
 primary_stack = DisasterRecoveryStack(
     app,
-    f"PaymentDRPrimary-{environment_suffix}",
+    f"TapStack{environment_suffix}",
     environment_suffix=environment_suffix,
     is_primary=True,
     primary_region="us-east-1",
