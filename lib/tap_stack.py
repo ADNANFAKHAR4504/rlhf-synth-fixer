@@ -1,23 +1,22 @@
 """
 Main Pulumi stack for loan processing application infrastructure.
 """
+
 import json
 import pulumi
 import pulumi_aws as aws
 from typing import Optional
 from dataclasses import dataclass
 
-
 @dataclass
 class TapStackArgs:
     """Arguments for TapStack."""
     environment_suffix: str
 
-
 class TapStack:
     """
     Main infrastructure stack for loan processing application migration.
-
+    
     Creates a complete multi-tier architecture including:
     - VPC with public/private subnets across 3 AZs
     - ECS Fargate cluster with task definitions and services
@@ -29,13 +28,13 @@ class TapStack:
     - S3 bucket for ALB logs
     - Parameter Store for configuration
     """
-
+    
     def __init__(self, name: str, args: TapStackArgs):
         """Initialize the TapStack with all infrastructure components."""
         self.name = name
         self.args = args
         self.env_suffix = args.environment_suffix
-
+        
         # Common tags for all resources
         self.common_tags = {
             "Environment": self.env_suffix,
@@ -43,7 +42,7 @@ class TapStack:
             "CostCenter": "FinancialServices",
             "ManagedBy": "Pulumi",
         }
-
+        
         # Create all infrastructure components
         self._create_kms_key()
         self._create_vpc()
@@ -59,7 +58,7 @@ class TapStack:
         self._create_alb()
         self._create_ecs_task_and_service()
         self._export_outputs()
-
+    
     def _create_kms_key(self):
         """Create KMS key for RDS encryption."""
         self.kms_key = aws.kms.Key(
@@ -69,13 +68,13 @@ class TapStack:
             enable_key_rotation=True,
             tags={**self.common_tags, "Name": f"rds-kms-key-{self.env_suffix}"},
         )
-
+        
         self.kms_key_alias = aws.kms.Alias(
             f"rds-kms-alias-{self.env_suffix}",
             name=f"alias/rds-{self.env_suffix}",
             target_key_id=self.kms_key.key_id,
         )
-
+    
     def _create_vpc(self):
         """Create VPC with public and private subnets across 3 AZs."""
         # VPC
@@ -86,23 +85,23 @@ class TapStack:
             enable_dns_support=True,
             tags={**self.common_tags, "Name": f"vpc-{self.env_suffix}"},
         )
-
+        
         # Internet Gateway
         self.igw = aws.ec2.InternetGateway(
             f"igw-{self.env_suffix}",
             vpc_id=self.vpc.id,
             tags={**self.common_tags, "Name": f"igw-{self.env_suffix}"},
         )
-
-        # Get availability zones (us-east-2 has 3 AZs: us-east-2a, us-east-2b, us-east-2c)
-        self.availability_zones = ["us-east-2a", "us-east-2b", "us-east-2c"]
-
+        
+        # Get availability zones - FIXED: Changed from us-east-2 to us-east-1
+        self.availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
+        
         # Create public and private subnets
         self.public_subnets = []
         self.private_subnets = []
         self.nat_gateways = []
         self.eips = []
-
+        
         for i, az in enumerate(self.availability_zones):
             # Public subnet
             public_subnet = aws.ec2.Subnet(
@@ -114,7 +113,7 @@ class TapStack:
                 tags={**self.common_tags, "Name": f"public-subnet-{i+1}-{self.env_suffix}"},
             )
             self.public_subnets.append(public_subnet)
-
+            
             # Private subnet
             private_subnet = aws.ec2.Subnet(
                 f"private-subnet-{i+1}-{self.env_suffix}",
@@ -124,7 +123,7 @@ class TapStack:
                 tags={**self.common_tags, "Name": f"private-subnet-{i+1}-{self.env_suffix}"},
             )
             self.private_subnets.append(private_subnet)
-
+            
             # Elastic IP for NAT Gateway
             eip = aws.ec2.Eip(
                 f"nat-eip-{i+1}-{self.env_suffix}",
@@ -132,7 +131,7 @@ class TapStack:
                 tags={**self.common_tags, "Name": f"nat-eip-{i+1}-{self.env_suffix}"},
             )
             self.eips.append(eip)
-
+            
             # NAT Gateway
             nat_gateway = aws.ec2.NatGateway(
                 f"nat-gateway-{i+1}-{self.env_suffix}",
@@ -141,14 +140,14 @@ class TapStack:
                 tags={**self.common_tags, "Name": f"nat-gateway-{i+1}-{self.env_suffix}"},
             )
             self.nat_gateways.append(nat_gateway)
-
+        
         # Public route table
         self.public_route_table = aws.ec2.RouteTable(
             f"public-rt-{self.env_suffix}",
             vpc_id=self.vpc.id,
             tags={**self.common_tags, "Name": f"public-rt-{self.env_suffix}"},
         )
-
+        
         # Public route to Internet Gateway
         aws.ec2.Route(
             f"public-route-{self.env_suffix}",
@@ -156,7 +155,7 @@ class TapStack:
             destination_cidr_block="0.0.0.0/0",
             gateway_id=self.igw.id,
         )
-
+        
         # Associate public subnets with public route table
         for i, subnet in enumerate(self.public_subnets):
             aws.ec2.RouteTableAssociation(
@@ -164,7 +163,7 @@ class TapStack:
                 subnet_id=subnet.id,
                 route_table_id=self.public_route_table.id,
             )
-
+        
         # Private route tables (one per AZ)
         self.private_route_tables = []
         for i, nat_gateway in enumerate(self.nat_gateways):
@@ -174,7 +173,7 @@ class TapStack:
                 tags={**self.common_tags, "Name": f"private-rt-{i+1}-{self.env_suffix}"},
             )
             self.private_route_tables.append(private_rt)
-
+            
             # Route to NAT Gateway
             aws.ec2.Route(
                 f"private-route-{i+1}-{self.env_suffix}",
@@ -182,18 +181,18 @@ class TapStack:
                 destination_cidr_block="0.0.0.0/0",
                 nat_gateway_id=nat_gateway.id,
             )
-
+            
             # Associate private subnet with private route table
             aws.ec2.RouteTableAssociation(
                 f"private-rta-{i+1}-{self.env_suffix}",
                 subnet_id=self.private_subnets[i].id,
                 route_table_id=private_rt.id,
             )
-
+    
     def _create_security_groups(self):
         """Create security groups for ALB, ECS, and RDS."""
         # ALB Security Group
-        self.alb_sg = aws.ec2.SecurityGroup(
+        self.alb_security_group = aws.ec2.SecurityGroup(
             f"alb-sg-{self.env_suffix}",
             vpc_id=self.vpc.id,
             description="Security group for Application Load Balancer",
@@ -220,25 +219,16 @@ class TapStack:
                     to_port=0,
                     cidr_blocks=["0.0.0.0/0"],
                     description="Allow all outbound traffic",
-                ),
+                )
             ],
             tags={**self.common_tags, "Name": f"alb-sg-{self.env_suffix}"},
         )
-
-        # ECS Tasks Security Group
-        self.ecs_sg = aws.ec2.SecurityGroup(
+        
+        # ECS Security Group
+        self.ecs_security_group = aws.ec2.SecurityGroup(
             f"ecs-sg-{self.env_suffix}",
             vpc_id=self.vpc.id,
             description="Security group for ECS tasks",
-            ingress=[
-                aws.ec2.SecurityGroupIngressArgs(
-                    protocol="tcp",
-                    from_port=8080,
-                    to_port=8080,
-                    security_groups=[self.alb_sg.id],
-                    description="Allow traffic from ALB",
-                ),
-            ],
             egress=[
                 aws.ec2.SecurityGroupEgressArgs(
                     protocol="-1",
@@ -246,25 +236,28 @@ class TapStack:
                     to_port=0,
                     cidr_blocks=["0.0.0.0/0"],
                     description="Allow all outbound traffic",
-                ),
+                )
             ],
             tags={**self.common_tags, "Name": f"ecs-sg-{self.env_suffix}"},
         )
-
+        
+        # Add ingress rule for ECS from ALB
+        aws.ec2.SecurityGroupRule(
+            f"ecs-ingress-from-alb-{self.env_suffix}",
+            type="ingress",
+            from_port=8000,
+            to_port=8000,
+            protocol="tcp",
+            source_security_group_id=self.alb_security_group.id,
+            security_group_id=self.ecs_security_group.id,
+            description="Allow traffic from ALB",
+        )
+        
         # RDS Security Group
-        self.rds_sg = aws.ec2.SecurityGroup(
+        self.rds_security_group = aws.ec2.SecurityGroup(
             f"rds-sg-{self.env_suffix}",
             vpc_id=self.vpc.id,
             description="Security group for RDS PostgreSQL",
-            ingress=[
-                aws.ec2.SecurityGroupIngressArgs(
-                    protocol="tcp",
-                    from_port=5432,
-                    to_port=5432,
-                    security_groups=[self.ecs_sg.id],
-                    description="Allow PostgreSQL from ECS tasks",
-                ),
-            ],
             egress=[
                 aws.ec2.SecurityGroupEgressArgs(
                     protocol="-1",
@@ -272,56 +265,32 @@ class TapStack:
                     to_port=0,
                     cidr_blocks=["0.0.0.0/0"],
                     description="Allow all outbound traffic",
-                ),
+                )
             ],
             tags={**self.common_tags, "Name": f"rds-sg-{self.env_suffix}"},
         )
-
+        
+        # Add ingress rule for RDS from ECS
+        aws.ec2.SecurityGroupRule(
+            f"rds-ingress-from-ecs-{self.env_suffix}",
+            type="ingress",
+            from_port=5432,
+            to_port=5432,
+            protocol="tcp",
+            source_security_group_id=self.ecs_security_group.id,
+            security_group_id=self.rds_security_group.id,
+            description="Allow PostgreSQL from ECS",
+        )
+    
     def _create_s3_alb_logs_bucket(self):
         """Create S3 bucket for ALB access logs."""
         self.alb_logs_bucket = aws.s3.Bucket(
             f"alb-logs-{self.env_suffix}",
-            bucket=f"alb-logs-{self.env_suffix}",
+            bucket=f"loan-processing-alb-logs-{self.env_suffix}",
+            force_destroy=True,
             tags={**self.common_tags, "Name": f"alb-logs-{self.env_suffix}"},
         )
-
-        # Enable versioning
-        aws.s3.BucketVersioningV2(
-            f"alb-logs-versioning-{self.env_suffix}",
-            bucket=self.alb_logs_bucket.id,
-            versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
-                status="Enabled",
-            ),
-        )
-
-        # Server-side encryption
-        aws.s3.BucketServerSideEncryptionConfigurationV2(
-            f"alb-logs-encryption-{self.env_suffix}",
-            bucket=self.alb_logs_bucket.id,
-            rules=[
-                aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
-                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
-                        sse_algorithm="AES256",
-                    ),
-                ),
-            ],
-        )
-
-        # Lifecycle policy - 90-day retention
-        aws.s3.BucketLifecycleConfigurationV2(
-            f"alb-logs-lifecycle-{self.env_suffix}",
-            bucket=self.alb_logs_bucket.id,
-            rules=[
-                aws.s3.BucketLifecycleConfigurationV2RuleArgs(
-                    id="delete-old-logs",
-                    status="Enabled",
-                    expiration=aws.s3.BucketLifecycleConfigurationV2RuleExpirationArgs(
-                        days=90,
-                    ),
-                ),
-            ],
-        )
-
+        
         # Block public access
         aws.s3.BucketPublicAccessBlock(
             f"alb-logs-public-access-block-{self.env_suffix}",
@@ -331,118 +300,102 @@ class TapStack:
             ignore_public_acls=True,
             restrict_public_buckets=True,
         )
-
-        # Bucket policy for ALB access logs (us-east-2 ELB account: 033677994240)
-        alb_logs_policy = self.alb_logs_bucket.arn.apply(
-            lambda arn: json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Sid": "AWSLogDeliveryWrite",
-                        "Effect": "Allow",
-                        "Principal": {
-                            "AWS": "arn:aws:iam::033677994240:root"
-                        },
-                        "Action": "s3:PutObject",
-                        "Resource": f"{arn}/*"
-                    },
-                    {
-                        "Sid": "AWSLogDeliveryAclCheck",
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "elasticloadbalancing.amazonaws.com"
-                        },
-                        "Action": "s3:GetBucketAcl",
-                        "Resource": arn
-                    }
-                ]
-            })
-        )
-
-        aws.s3.BucketPolicy(
-            f"alb-logs-policy-{self.env_suffix}",
+        
+        # Bucket policy for ALB logs - FIXED: Changed ELB account ID for us-east-1
+        alb_logs_bucket_policy = aws.s3.BucketPolicy(
+            f"alb-logs-bucket-policy-{self.env_suffix}",
             bucket=self.alb_logs_bucket.id,
-            policy=alb_logs_policy,
+            policy=self.alb_logs_bucket.arn.apply(
+                lambda arn: json.dumps({
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": "arn:aws:iam::127311923021:root"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": f"{arn}/*"
+                        }
+                    ]
+                })
+            ),
         )
-
+    
     def _create_ecr_repository(self):
-        """Create ECR repository with image scanning and lifecycle policies."""
-        self.ecr_repo = aws.ecr.Repository(
-            f"loan-app-{self.env_suffix}",
-            name=f"loan-app-{self.env_suffix}",
+        """Create ECR repository for Docker images."""
+        self.ecr_repository = aws.ecr.Repository(
+            f"loan-app-repo-{self.env_suffix}",
+            name=f"loan-processing-app-{self.env_suffix}",
             image_tag_mutability="MUTABLE",
             image_scanning_configuration=aws.ecr.RepositoryImageScanningConfigurationArgs(
                 scan_on_push=True,
             ),
-            tags={**self.common_tags, "Name": f"loan-app-{self.env_suffix}"},
+            tags={**self.common_tags, "Name": f"loan-app-repo-{self.env_suffix}"},
         )
-
-        # Lifecycle policy - keep last 10 images
+        
+        # Lifecycle policy to keep only last 10 images
         aws.ecr.LifecyclePolicy(
-            f"ecr-lifecycle-{self.env_suffix}",
-            repository=self.ecr_repo.name,
+            f"ecr-lifecycle-policy-{self.env_suffix}",
+            repository=self.ecr_repository.name,
             policy=json.dumps({
-                "rules": [
-                    {
-                        "rulePriority": 1,
-                        "description": "Keep last 10 images",
-                        "selection": {
-                            "tagStatus": "any",
-                            "countType": "imageCountMoreThan",
-                            "countNumber": 10
-                        },
-                        "action": {
-                            "type": "expire"
-                        }
+                "rules": [{
+                    "rulePriority": 1,
+                    "description": "Keep last 10 images",
+                    "selection": {
+                        "tagStatus": "any",
+                        "countType": "imageCountMoreThan",
+                        "countNumber": 10
+                    },
+                    "action": {
+                        "type": "expire"
                     }
-                ]
+                }]
             }),
         )
-
+    
     def _create_ecs_cluster(self):
-        """Create ECS cluster with Container Insights."""
+        """Create ECS cluster."""
         self.ecs_cluster = aws.ecs.Cluster(
-            f"loan-cluster-{self.env_suffix}",
-            name=f"loan-cluster-{self.env_suffix}",
+            f"loan-app-cluster-{self.env_suffix}",
+            name=f"loan-processing-cluster-{self.env_suffix}",
             settings=[
                 aws.ecs.ClusterSettingArgs(
                     name="containerInsights",
                     value="enabled",
-                ),
+                )
             ],
-            tags={**self.common_tags, "Name": f"loan-cluster-{self.env_suffix}"},
+            tags={**self.common_tags, "Name": f"loan-app-cluster-{self.env_suffix}"},
         )
-
+    
     def _create_iam_roles(self):
-        """Create IAM roles for ECS tasks and rotation Lambda."""
+        """Create IAM roles for ECS task execution and task."""
         # ECS Task Execution Role
         self.ecs_task_execution_role = aws.iam.Role(
             f"ecs-task-execution-role-{self.env_suffix}",
             name=f"ecs-task-execution-role-{self.env_suffix}",
             assume_role_policy=json.dumps({
                 "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "ecs-tasks.amazonaws.com"
-                        },
-                        "Action": "sts:AssumeRole"
+                "Statement": [{
+                    "Action": "sts:AssumeRole",
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": "ecs-tasks.amazonaws.com"
                     }
-                ]
+                }]
             }),
-            tags={**self.common_tags, "Name": f"ecs-task-execution-role-{self.env_suffix}"},
+            tags=self.common_tags,
         )
-
-        # Attach AWS managed policy
+        
+        # Attach AWS managed policy for ECS task execution
         aws.iam.RolePolicyAttachment(
-            f"ecs-task-execution-policy-{self.env_suffix}",
+            f"ecs-task-execution-policy-attachment-{self.env_suffix}",
             role=self.ecs_task_execution_role.name,
             policy_arn="arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
         )
-
-        # Additional policy for Secrets Manager and SSM
-        aws.iam.RolePolicy(
+        
+        # Additional policy for Secrets Manager and Parameter Store
+        execution_role_policy = aws.iam.RolePolicy(
             f"ecs-task-execution-custom-policy-{self.env_suffix}",
             role=self.ecs_task_execution_role.id,
             policy=json.dumps({
@@ -452,36 +405,35 @@ class TapStack:
                         "Effect": "Allow",
                         "Action": [
                             "secretsmanager:GetSecretValue",
-                            "ssm:GetParameters"
+                            "ssm:GetParameters",
+                            "kms:Decrypt"
                         ],
                         "Resource": "*"
                     }
                 ]
             }),
         )
-
-        # ECS Task Role (for application code)
+        
+        # ECS Task Role (for application permissions)
         self.ecs_task_role = aws.iam.Role(
             f"ecs-task-role-{self.env_suffix}",
             name=f"ecs-task-role-{self.env_suffix}",
             assume_role_policy=json.dumps({
                 "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "ecs-tasks.amazonaws.com"
-                        },
-                        "Action": "sts:AssumeRole"
+                "Statement": [{
+                    "Action": "sts:AssumeRole",
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": "ecs-tasks.amazonaws.com"
                     }
-                ]
+                }]
             }),
-            tags={**self.common_tags, "Name": f"ecs-task-role-{self.env_suffix}"},
+            tags=self.common_tags,
         )
-
-        # Task role policy for application
-        aws.iam.RolePolicy(
-            f"ecs-task-policy-{self.env_suffix}",
+        
+        # Task role policy for application needs (S3, etc.)
+        task_role_policy = aws.iam.RolePolicy(
+            f"ecs-task-custom-policy-{self.env_suffix}",
             role=self.ecs_task_role.id,
             policy=json.dumps({
                 "Version": "2012-10-17",
@@ -489,109 +441,41 @@ class TapStack:
                     {
                         "Effect": "Allow",
                         "Action": [
-                            "logs:CreateLogGroup",
-                            "logs:CreateLogStream",
-                            "logs:PutLogEvents"
+                            "s3:GetObject",
+                            "s3:PutObject",
+                            "s3:ListBucket"
                         ],
                         "Resource": "*"
                     }
                 ]
             }),
         )
-
-        # Lambda execution role for Secrets Manager rotation
-        self.rotation_lambda_role = aws.iam.Role(
-            f"rotation-lambda-role-{self.env_suffix}",
-            name=f"rotation-lambda-role-{self.env_suffix}",
-            assume_role_policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "lambda.amazonaws.com"
-                        },
-                        "Action": "sts:AssumeRole"
-                    }
-                ]
-            }),
-            tags={**self.common_tags, "Name": f"rotation-lambda-role-{self.env_suffix}"},
-        )
-
-        # Lambda basic execution
-        aws.iam.RolePolicyAttachment(
-            f"rotation-lambda-basic-{self.env_suffix}",
-            role=self.rotation_lambda_role.name,
-            policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
-        )
-
-        # Lambda VPC execution
-        aws.iam.RolePolicyAttachment(
-            f"rotation-lambda-vpc-{self.env_suffix}",
-            role=self.rotation_lambda_role.name,
-            policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
-        )
-
-        # Lambda policy for Secrets Manager rotation
-        aws.iam.RolePolicy(
-            f"rotation-lambda-policy-{self.env_suffix}",
-            role=self.rotation_lambda_role.id,
-            policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "secretsmanager:DescribeSecret",
-                            "secretsmanager:GetSecretValue",
-                            "secretsmanager:PutSecretValue",
-                            "secretsmanager:UpdateSecretVersionStage"
-                        ],
-                        "Resource": "*"
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "secretsmanager:GetRandomPassword"
-                        ],
-                        "Resource": "*"
-                    }
-                ]
-            }),
-        )
-
+    
     def _create_cloudwatch_logs(self):
-        """Create CloudWatch Log Groups."""
+        """Create CloudWatch log group for ECS."""
         self.ecs_log_group = aws.cloudwatch.LogGroup(
-            f"ecs-logs-{self.env_suffix}",
-            name=f"/ecs/loan-app-{self.env_suffix}",
-            retention_in_days=30,
-            tags={**self.common_tags, "Name": f"ecs-logs-{self.env_suffix}"},
+            f"ecs-log-group-{self.env_suffix}",
+            name=f"/ecs/loan-processing-{self.env_suffix}",
+            retention_in_days=7,
+            tags=self.common_tags,
         )
-
-        self.rotation_lambda_log_group = aws.cloudwatch.LogGroup(
-            f"rotation-lambda-logs-{self.env_suffix}",
-            name=f"/aws/lambda/db-rotation-{self.env_suffix}",
-            retention_in_days=30,
-            tags={**self.common_tags, "Name": f"rotation-lambda-logs-{self.env_suffix}"},
-        )
-
+    
     def _create_rds_database(self):
-        """Create RDS PostgreSQL database with encryption and backups."""
+        """Create RDS PostgreSQL database with KMS encryption."""
         # DB Subnet Group
         self.db_subnet_group = aws.rds.SubnetGroup(
             f"db-subnet-group-{self.env_suffix}",
-            name=f"db-subnet-group-{self.env_suffix}",
+            name=f"loan-db-subnet-group-{self.env_suffix}",
             subnet_ids=[subnet.id for subnet in self.private_subnets],
             tags={**self.common_tags, "Name": f"db-subnet-group-{self.env_suffix}"},
         )
-
-        # RDS PostgreSQL instance
+        
+        # RDS Instance
         self.rds_instance = aws.rds.Instance(
             f"loan-db-{self.env_suffix}",
-            identifier=f"loan-db-{self.env_suffix}",
+            identifier=f"loan-processing-db-{self.env_suffix}",
             engine="postgres",
-            engine_version="14.15",
+            engine_version="15.4",
             instance_class="db.t3.micro",
             allocated_storage=20,
             storage_type="gp3",
@@ -599,251 +483,101 @@ class TapStack:
             kms_key_id=self.kms_key.arn,
             db_name="loandb",
             username="dbadmin",
-            password="TemporaryPassword123!",  # Will be rotated by Secrets Manager
-            multi_az=True,
+            password=pulumi.Config().require_secret("db_password"),
             db_subnet_group_name=self.db_subnet_group.name,
-            vpc_security_group_ids=[self.rds_sg.id],
+            vpc_security_group_ids=[self.rds_security_group.id],
+            publicly_accessible=False,
+            skip_final_snapshot=True,
             backup_retention_period=7,
             backup_window="03:00-04:00",
-            maintenance_window="mon:04:00-mon:05:00",
-            skip_final_snapshot=True,
-            publicly_accessible=False,
-            deletion_protection=False,
+            maintenance_window="Mon:04:00-Mon:05:00",
             enabled_cloudwatch_logs_exports=["postgresql", "upgrade"],
             tags={**self.common_tags, "Name": f"loan-db-{self.env_suffix}"},
         )
-
+    
     def _create_secrets_manager(self):
-        """Create Secrets Manager secret for database credentials with rotation."""
-        # Create secret
+        """Create Secrets Manager secret for database credentials."""
         db_credentials = pulumi.Output.all(
             self.rds_instance.endpoint,
             self.rds_instance.username,
-            self.rds_instance.password,
-            self.rds_instance.db_name,
+            pulumi.Config().require_secret("db_password")
         ).apply(lambda args: json.dumps({
-            "engine": "postgres",
             "host": args[0].split(":")[0],
+            "port": 5432,
             "username": args[1],
             "password": args[2],
-            "dbname": args[3],
-            "port": 5432
+            "dbname": "loandb"
         }))
-
+        
         self.db_secret = aws.secretsmanager.Secret(
-            f"db-credentials-{self.env_suffix}",
-            name=f"db-credentials-{self.env_suffix}",
+            f"db-credentials-secret-{self.env_suffix}",
+            name=f"loan-processing/db-credentials-{self.env_suffix}",
             description="Database credentials for loan processing application",
-            tags={**self.common_tags, "Name": f"db-credentials-{self.env_suffix}"},
+            tags=self.common_tags,
         )
-
-        # Store initial credentials
+        
         self.db_secret_version = aws.secretsmanager.SecretVersion(
-            f"db-credentials-version-{self.env_suffix}",
+            f"db-credentials-secret-version-{self.env_suffix}",
             secret_id=self.db_secret.id,
             secret_string=db_credentials,
         )
-
-        # Create Lambda function for rotation
-        rotation_lambda_code = """
-import json
-import boto3
-import os
-
-secrets_client = boto3.client('secretsmanager')
-rds_client = boto3.client('rds')
-
-def lambda_handler(event, context):
-    '''
-    Lambda function to rotate RDS credentials in Secrets Manager.
-    '''
-    arn = event['SecretId']
-    token = event['ClientRequestToken']
-    step = event['Step']
-
-    metadata = secrets_client.describe_secret(SecretId=arn)
-    if not metadata['RotationEnabled']:
-        raise ValueError(f"Secret {arn} is not enabled for rotation")
-
-    versions = metadata.get('VersionIdsToStages', {})
-    if token not in versions:
-        raise ValueError(f"Secret version {token} has no stage for rotation")
-
-    if "AWSCURRENT" in versions[token]:
-        return
-    elif "AWSPENDING" not in versions[token]:
-        raise ValueError(f"Secret version {token} not in AWSPENDING stage")
-
-    if step == "createSecret":
-        create_secret(secrets_client, arn, token)
-    elif step == "setSecret":
-        set_secret(secrets_client, rds_client, arn, token)
-    elif step == "testSecret":
-        test_secret(secrets_client, arn, token)
-    elif step == "finishSecret":
-        finish_secret(secrets_client, arn, token)
-    else:
-        raise ValueError(f"Invalid step: {step}")
-
-def create_secret(service_client, arn, token):
-    current_dict = json.loads(service_client.get_secret_value(SecretId=arn, VersionStage="AWSCURRENT")['SecretString'])
-
-    try:
-        service_client.get_secret_value(SecretId=arn, VersionId=token, VersionStage="AWSPENDING")
-    except service_client.exceptions.ResourceNotFoundException:
-        new_password = service_client.get_random_password(
-            ExcludeCharacters='/@"\\'',
-            PasswordLength=32
-        )['RandomPassword']
-
-        current_dict['password'] = new_password
-        service_client.put_secret_value(
-            SecretId=arn,
-            ClientRequestToken=token,
-            SecretString=json.dumps(current_dict),
-            VersionStages=['AWSPENDING']
-        )
-
-def set_secret(service_client, rds_client, arn, token):
-    pending_dict = json.loads(service_client.get_secret_value(SecretId=arn, VersionId=token, VersionStage="AWSPENDING")['SecretString'])
-    # Note: In production, use RDS ModifyDBInstance API to update password
-    # For this demo, we're just creating the new password in Secrets Manager
-
-def test_secret(service_client, arn, token):
-    # Note: In production, test database connection with new credentials
-    pass
-
-def finish_secret(service_client, arn, token):
-    metadata = service_client.describe_secret(SecretId=arn)
-    current_version = None
-    for version in metadata["VersionIdsToStages"]:
-        if "AWSCURRENT" in metadata["VersionIdsToStages"][version]:
-            if version == token:
-                return
-            current_version = version
-            break
-
-    service_client.update_secret_version_stage(
-        SecretId=arn,
-        VersionStage="AWSCURRENT",
-        MoveToVersionId=token,
-        RemoveFromVersionId=current_version
-    )
-"""
-
-        self.rotation_lambda = aws.lambda_.Function(
-            f"db-rotation-lambda-{self.env_suffix}",
-            name=f"db-rotation-{self.env_suffix}",
-            role=self.rotation_lambda_role.arn,
-            runtime="python3.11",
-            handler="index.lambda_handler",
-            code=pulumi.AssetArchive({
-                "index.py": pulumi.StringAsset(rotation_lambda_code),
-            }),
-            timeout=300,
-            vpc_config=aws.lambda_.FunctionVpcConfigArgs(
-                subnet_ids=[subnet.id for subnet in self.private_subnets],
-                security_group_ids=[self.rds_sg.id],
-            ),
-            environment=aws.lambda_.FunctionEnvironmentArgs(
-                variables={
-                    "ENVIRONMENT": self.env_suffix,
-                },
-            ),
-            tags={**self.common_tags, "Name": f"db-rotation-lambda-{self.env_suffix}"},
-        )
-
-        # Permission for Secrets Manager to invoke Lambda
-        aws.lambda_.Permission(
-            f"rotation-lambda-permission-{self.env_suffix}",
-            action="lambda:InvokeFunction",
-            function=self.rotation_lambda.name,
-            principal="secretsmanager.amazonaws.com",
-        )
-
-        # Configure rotation
-        self.secret_rotation = aws.secretsmanager.SecretRotation(
-            f"db-secret-rotation-{self.env_suffix}",
-            secret_id=self.db_secret.id,
-            rotation_lambda_arn=self.rotation_lambda.arn,
-            rotation_rules=aws.secretsmanager.SecretRotationRotationRulesArgs(
-                automatically_after_days=30,
-            ),
-            opts=pulumi.ResourceOptions(depends_on=[self.db_secret_version]),
-        )
-
+    
     def _create_parameter_store(self):
-        """Create Parameter Store entries for application configuration."""
-        self.app_param = aws.ssm.Parameter(
-            f"app-config-{self.env_suffix}",
-            name=f"/loan-app/{self.env_suffix}/app-config",
+        """Create Parameter Store parameters for configuration."""
+        self.app_config_param = aws.ssm.Parameter(
+            f"app-config-param-{self.env_suffix}",
+            name=f"/loan-processing/{self.env_suffix}/app-config",
             type="String",
             value=json.dumps({
-                "app_name": "loan-processing",
-                "environment": self.env_suffix,
                 "log_level": "INFO",
-                "max_connections": 100,
+                "max_loan_amount": 1000000,
+                "interest_rate": 5.5
             }),
-            tags={**self.common_tags, "Name": f"app-config-{self.env_suffix}"},
+            tags=self.common_tags,
         )
-
-        self.feature_flags_param = aws.ssm.Parameter(
-            f"feature-flags-{self.env_suffix}",
-            name=f"/loan-app/{self.env_suffix}/feature-flags",
-            type="String",
-            value=json.dumps({
-                "enable_new_ui": False,
-                "enable_analytics": True,
-                "enable_notifications": True,
-            }),
-            tags={**self.common_tags, "Name": f"feature-flags-{self.env_suffix}"},
-        )
-
+    
     def _create_alb(self):
-        """Create Application Load Balancer and target group."""
-        # ALB
+        """Create Application Load Balancer."""
         self.alb = aws.lb.LoadBalancer(
-            f"loan-alb-{self.env_suffix}",
-            name=f"loan-alb-{self.env_suffix}",
+            f"loan-app-alb-{self.env_suffix}",
+            name=f"loan-app-alb-{self.env_suffix}",
             internal=False,
             load_balancer_type="application",
-            security_groups=[self.alb_sg.id],
+            security_groups=[self.alb_security_group.id],
             subnets=[subnet.id for subnet in self.public_subnets],
             enable_deletion_protection=False,
-            enable_http2=True,
             access_logs=aws.lb.LoadBalancerAccessLogsArgs(
-                bucket=self.alb_logs_bucket.id,
+                bucket=self.alb_logs_bucket.bucket,
                 enabled=True,
             ),
-            tags={**self.common_tags, "Name": f"loan-alb-{self.env_suffix}"},
+            tags={**self.common_tags, "Name": f"loan-app-alb-{self.env_suffix}"},
         )
-
+        
         # Target Group
         self.target_group = aws.lb.TargetGroup(
-            f"loan-tg-{self.env_suffix}",
-            name=f"loan-tg-{self.env_suffix}",
-            port=8080,
+            f"loan-app-tg-{self.env_suffix}",
+            name=f"loan-app-tg-{self.env_suffix}",
+            port=8000,
             protocol="HTTP",
             vpc_id=self.vpc.id,
             target_type="ip",
-            deregistration_delay=30,
             health_check=aws.lb.TargetGroupHealthCheckArgs(
                 enabled=True,
-                path="/health",
-                port="8080",
-                protocol="HTTP",
                 healthy_threshold=2,
-                unhealthy_threshold=3,
-                timeout=5,
                 interval=30,
                 matcher="200",
+                path="/health",
+                port="traffic-port",
+                protocol="HTTP",
+                timeout=5,
+                unhealthy_threshold=2,
             ),
-            tags={**self.common_tags, "Name": f"loan-tg-{self.env_suffix}"},
+            tags={**self.common_tags, "Name": f"loan-app-tg-{self.env_suffix}"},
         )
-
-        # Listener
+        
+        # ALB Listener
         self.alb_listener = aws.lb.Listener(
-            f"alb-listener-{self.env_suffix}",
+            f"loan-app-listener-{self.env_suffix}",
             load_balancer_arn=self.alb.arn,
             port=80,
             protocol="HTTP",
@@ -851,64 +585,62 @@ def finish_secret(service_client, arn, token):
                 aws.lb.ListenerDefaultActionArgs(
                     type="forward",
                     target_group_arn=self.target_group.arn,
-                ),
+                )
             ],
         )
-
+    
     def _create_ecs_task_and_service(self):
         """Create ECS task definition and service."""
-        # Task Definition
+        # Container definitions - FIXED: Changed region to us-east-1
         container_definitions = pulumi.Output.all(
-            self.ecs_log_group.name,
+            self.ecr_repository.repository_url,
             self.db_secret.arn,
-            self.app_param.arn,
-        ).apply(lambda args: json.dumps([
-            {
-                "name": "loan-app",
-                "image": "nginx:latest",  # Placeholder - replace with actual app image
-                "cpu": 256,
-                "memory": 512,
-                "essential": True,
-                "portMappings": [
-                    {
-                        "containerPort": 8080,
-                        "protocol": "tcp"
-                    }
-                ],
-                "environment": [
-                    {
-                        "name": "ENVIRONMENT",
-                        "value": self.env_suffix
-                    },
-                    {
-                        "name": "AWS_REGION",
-                        "value": "us-east-2"
-                    }
-                ],
-                "secrets": [
-                    {
-                        "name": "DB_CREDENTIALS",
-                        "valueFrom": args[1]
-                    },
-                    {
-                        "name": "APP_CONFIG",
-                        "valueFrom": args[2]
-                    }
-                ],
-                "logConfiguration": {
-                    "logDriver": "awslogs",
-                    "options": {
-                        "awslogs-group": args[0],
-                        "awslogs-region": "us-east-2",
-                        "awslogs-stream-prefix": "ecs"
-                    }
+            self.app_config_param.arn,
+            self.ecs_log_group.name
+        ).apply(lambda args: json.dumps([{
+            "name": "loan-app",
+            "image": f"{args[0]}:latest",
+            "cpu": 256,
+            "memory": 512,
+            "essential": True,
+            "portMappings": [{
+                "containerPort": 8000,
+                "protocol": "tcp"
+            }],
+            "environment": [
+                {
+                    "name": "ENVIRONMENT",
+                    "value": self.env_suffix
+                },
+                {
+                    "name": "AWS_REGION",
+                    "value": "us-east-1"
+                }
+            ],
+            "secrets": [
+                {
+                    "name": "DB_CREDENTIALS",
+                    "valueFrom": args[1]
+                },
+                {
+                    "name": "APP_CONFIG",
+                    "valueFrom": args[2]
+                }
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": args[3],
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "ecs"
                 }
             }
-        ]))
-
+        }]))
+        
+        # Task Definition
         self.task_definition = aws.ecs.TaskDefinition(
-            f"loan-task-{self.env_suffix}",
-            family=f"loan-task-{self.env_suffix}",
+            f"loan-app-task-{self.env_suffix}",
+            family=f"loan-processing-task-{self.env_suffix}",
             cpu="256",
             memory="512",
             network_mode="awsvpc",
@@ -916,45 +648,37 @@ def finish_secret(service_client, arn, token):
             execution_role_arn=self.ecs_task_execution_role.arn,
             task_role_arn=self.ecs_task_role.arn,
             container_definitions=container_definitions,
-            tags={**self.common_tags, "Name": f"loan-task-{self.env_suffix}"},
+            tags=self.common_tags,
         )
-
+        
         # ECS Service
         self.ecs_service = aws.ecs.Service(
-            f"loan-service-{self.env_suffix}",
-            name=f"loan-service-{self.env_suffix}",
+            f"loan-app-service-{self.env_suffix}",
+            name=f"loan-processing-service-{self.env_suffix}",
             cluster=self.ecs_cluster.arn,
             task_definition=self.task_definition.arn,
             desired_count=2,
             launch_type="FARGATE",
-            platform_version="LATEST",
             network_configuration=aws.ecs.ServiceNetworkConfigurationArgs(
-                subnets=[subnet.id for subnet in self.private_subnets],
-                security_groups=[self.ecs_sg.id],
                 assign_public_ip=False,
+                subnets=[subnet.id for subnet in self.private_subnets],
+                security_groups=[self.ecs_security_group.id],
             ),
             load_balancers=[
                 aws.ecs.ServiceLoadBalancerArgs(
                     target_group_arn=self.target_group.arn,
                     container_name="loan-app",
-                    container_port=8080,
-                ),
+                    container_port=8000,
+                )
             ],
-            health_check_grace_period_seconds=60,
-            tags={**self.common_tags, "Name": f"loan-service-{self.env_suffix}"},
-            opts=pulumi.ResourceOptions(depends_on=[self.alb_listener]),
+            tags=self.common_tags,
         )
-
+    
     def _export_outputs(self):
-        """Export important resource identifiers."""
+        """Export important outputs."""
         pulumi.export("vpc_id", self.vpc.id)
-        pulumi.export("ecs_cluster_name", self.ecs_cluster.name)
-        pulumi.export("ecs_cluster_arn", self.ecs_cluster.arn)
         pulumi.export("alb_dns_name", self.alb.dns_name)
-        pulumi.export("alb_arn", self.alb.arn)
+        pulumi.export("ecr_repository_url", self.ecr_repository.repository_url)
+        pulumi.export("ecs_cluster_name", self.ecs_cluster.name)
         pulumi.export("rds_endpoint", self.rds_instance.endpoint)
-        pulumi.export("rds_database_name", self.rds_instance.db_name)
-        pulumi.export("ecr_repository_url", self.ecr_repo.repository_url)
         pulumi.export("db_secret_arn", self.db_secret.arn)
-        pulumi.export("alb_logs_bucket_name", self.alb_logs_bucket.id)
-        pulumi.export("app_config_parameter", self.app_param.name)
