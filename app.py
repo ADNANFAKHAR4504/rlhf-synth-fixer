@@ -3,6 +3,7 @@ import os
 import aws_cdk as cdk
 from lib.tap_stack import TapStack
 from lib.route53_stack import Route53Stack
+from lib.dms_prereq_stack import DmsPrerequisitesStack
 
 # Environment configuration
 env = cdk.Environment(
@@ -14,6 +15,14 @@ app = cdk.App()
 
 # Get environment suffix from context or use default
 environment_suffix = app.node.try_get_context("environmentSuffix") or "dev-001"
+
+# Create DMS prerequisites stack (must be deployed first)
+dms_prereq_stack = DmsPrerequisitesStack(
+    app,
+    f"PaymentMigrationDmsPrereqStack-{environment_suffix}",
+    env=env,
+    description="DMS prerequisite IAM roles for payment processing migration",
+)
 
 # Create source stack
 source_stack = TapStack(
@@ -45,6 +54,8 @@ route53_stack = Route53Stack(
 )
 
 # Add dependencies
+source_stack.add_dependency(dms_prereq_stack)
+target_stack.add_dependency(dms_prereq_stack)
 route53_stack.add_dependency(source_stack)
 route53_stack.add_dependency(target_stack)
 
