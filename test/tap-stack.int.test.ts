@@ -556,9 +556,7 @@ describe('TAP Stack CDKTF Integration Tests', () => {
         // Note: Getting WAF details requires the WebACL ID which isn't in outputs
         // This validates the WAF exists via the ALB association
         expect(albArn).toBeDefined();
-        console.log('WAF is properly associated with ALB');
       } catch (error) {
-        console.log('WAF validation completed');
       }
     }, 30000);
 
@@ -683,7 +681,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
         }));
 
       } catch (error: any) {
-        console.log('RDS modification test completed:', error.message);
       }
     }, 30000);
   });
@@ -968,10 +965,8 @@ describe('TAP Stack CDKTF Integration Tests', () => {
           }));
 
           // Events would be captured by CloudWatch Events rules
-          console.log('Security Hub finding update triggered');
         }
       } catch (error: any) {
-        console.log('SecurityHub-CloudWatch Events integration test completed:', error.message);
       }
     }, 30000);
   });
@@ -988,13 +983,11 @@ describe('TAP Stack CDKTF Integration Tests', () => {
       }
 
       try {
-        // Step 1: Verify IAM password policy is enforced
         const passwordPolicy = await iamClient.send(new GetAccountPasswordPolicyCommand({}));
         expect(passwordPolicy.PasswordPolicy?.MinimumPasswordLength).toBe(14);
         expect(passwordPolicy.PasswordPolicy?.RequireSymbols).toBe(true);
         expect(passwordPolicy.PasswordPolicy?.RequireNumbers).toBe(true);
 
-        // Step 2: Invoke Lambda security function
         const functionName = outputs['lambda-function-arn'].split(':').pop()!;
         const invokeResponse = await lambdaClient.send(new InvokeCommand({
           FunctionName: functionName,
@@ -1007,7 +1000,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
 
         expect(invokeResponse.StatusCode).toBe(200);
 
-        // Step 3: Verify CloudTrail is capturing the Lambda invocation
         await new Promise(resolve => setTimeout(resolve, 10000)); // Wait for CloudTrail
 
         const eventsResponse = await cloudTrailClient.send(new LookupEventsCommand({
@@ -1025,7 +1017,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
         
         expect(lambdaInvokeEvent).toBeDefined();
 
-        // Step 4: Verify SNS topic for alerts exists and has subscriptions
         const snsResponse = await snsClient.send(new GetTopicAttributesCommand({
           TopicArn: outputs['sns-topic-arn']
         }));
@@ -1045,7 +1036,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
       }
 
       try {
-        // Step 1: Publish custom metric from "EC2 application"
         const testNamespace = 'TAP/Application';
         const metricData = {
           MetricName: 'RequestCount',
@@ -1063,13 +1053,11 @@ describe('TAP Stack CDKTF Integration Tests', () => {
           MetricData: [metricData]
         }));
 
-        // Step 2: Verify CloudWatch Dashboard exists
         const dashboardUrl = outputs['dashboard-url'];
         const dashboardName = dashboardUrl.split('name=')[1];
         
         expect(dashboardName).toBe('security-monitoring-dashboard-production');
 
-        // Step 3: Query metrics to verify they're being collected
         const metricsResponse = await cloudWatchClient.send(new GetMetricStatisticsCommand({
           Namespace: 'AWS/EC2',
           MetricName: 'CPUUtilization',
@@ -1084,7 +1072,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
 
         expect(metricsResponse.Datapoints).toBeDefined();
 
-        // Step 4: Verify SNS topic can receive and distribute alerts
         const testMessage = {
           AlarmName: 'IntegrationTestAlarm',
           NewStateValue: 'ALARM',
@@ -1098,10 +1085,8 @@ describe('TAP Stack CDKTF Integration Tests', () => {
           Subject: 'Integration Test Alert'
         }));
 
-        console.log('✅ E2E monitoring pipeline validation completed');
 
       } catch (error: any) {
-        console.log('E2E monitoring pipeline test completed:', error.message);
       }
     }, 60000);
   });
@@ -1114,7 +1099,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
       }
 
       try {
-        // Step 1: Verify CloudTrail is logging to S3
         const trailName = outputs['cloudtrail-arn'].split('/').pop()!;
         const trailResponse = await cloudTrailClient.send(new DescribeTrailsCommand({
           trailNameList: [trailName]
@@ -1123,10 +1107,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
         const s3BucketName = trailResponse.trailList![0].S3BucketName!;
         expect(s3BucketName).toBeDefined();
 
-        // Step 2: Verify S3 bucket has versioning enabled
-        // (This would require additional S3 API calls in real implementation)
-
-        // Step 3: Trigger Lambda function for backup verification
         const functionName = outputs['lambda-function-arn'].split(':').pop()!;
         const backupCheckResponse = await lambdaClient.send(new InvokeCommand({
           FunctionName: functionName,
@@ -1139,7 +1119,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
 
         expect(backupCheckResponse.StatusCode).toBe(200);
 
-        // Step 4: Verify RDS automated backups are configured
         const dbResponse = await rdsClient.send(new DescribeDBInstancesCommand({
           DBInstanceIdentifier: 'tap-database'
         }));
@@ -1147,10 +1126,8 @@ describe('TAP Stack CDKTF Integration Tests', () => {
         const backupRetention = dbResponse.DBInstances![0].BackupRetentionPeriod;
         expect(backupRetention).toBe(7);
 
-        console.log('✅ E2E disaster recovery validation completed');
 
       } catch (error: any) {
-        console.log('E2E disaster recovery test completed:', error.message);
       }
     }, 90000);
   });
@@ -1163,13 +1140,11 @@ describe('TAP Stack CDKTF Integration Tests', () => {
         }
   
         try {
-          // Step 1: Verify IAM password policy is enforced
           const passwordPolicy = await iamClient.send(new GetAccountPasswordPolicyCommand({}));
           expect(passwordPolicy.PasswordPolicy?.MinimumPasswordLength).toBe(14);
           expect(passwordPolicy.PasswordPolicy?.RequireSymbols).toBe(true);
           expect(passwordPolicy.PasswordPolicy?.RequireNumbers).toBe(true);
   
-          // Step 2: Invoke Lambda security function
           const functionName = outputs['lambda-function-arn'].split(':').pop()!;
           const invokeResponse = await lambdaClient.send(new InvokeCommand({
             FunctionName: functionName,
@@ -1182,7 +1157,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
   
           expect(invokeResponse.StatusCode).toBe(200);
   
-          // Step 3: Verify CloudTrail is capturing the Lambda invocation
           await new Promise(resolve => setTimeout(resolve, 10000)); // Wait for CloudTrail
   
           const eventsResponse = await cloudTrailClient.send(new LookupEventsCommand({
@@ -1200,7 +1174,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
           
           expect(lambdaInvokeEvent).toBeDefined();
   
-          // Step 4: Verify SNS topic for alerts exists and has subscriptions
           const snsResponse = await snsClient.send(new GetTopicAttributesCommand({
             TopicArn: outputs['sns-topic-arn']
           }));
@@ -1213,9 +1186,6 @@ describe('TAP Stack CDKTF Integration Tests', () => {
     });
 });
 
-// Cleanup helper for any test resources that might be left behind
 afterAll(async () => {
   console.log('Integration tests completed');
 });
-
-
