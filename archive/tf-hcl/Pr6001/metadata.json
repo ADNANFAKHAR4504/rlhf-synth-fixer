@@ -7,12 +7,25 @@
   "po_id": "101",
   "team": "synth",
   "aws_services": [
-    "eks",
-    "vpc",
-    "ec2",
-    "iam",
+    "acm",
+    "appmesh",
+    "athena",
+    "backup",
     "cloudwatch",
-    "kms"
+    "cur",
+    "ec2",
+    "eks",
+    "glue",
+    "guardduty",
+    "iam",
+    "kms",
+    "lambda",
+    "s3",
+    "securityhub",
+    "service-discovery",
+    "sns",
+    "sqs",
+    "vpc"
   ],
   "subject_labels": [
     "kubernetes",
@@ -24,5 +37,11 @@
   ],
   "startedAt": "2025-11-06T22:32:00Z",
   "subtask": "Provisioning of Infrastructure Environments",
-  "training_quality": 10
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
