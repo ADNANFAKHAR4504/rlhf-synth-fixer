@@ -1,0 +1,29 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000228",
+  "team": "4",
+  "startedAt": "2025-11-05T09:58:39.378Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "AutoScaling",
+    "CloudFormation",
+    "CloudWatch",
+    "EC2",
+    "ElasticLoadBalancingV2",
+    "IAM"
+  ],
+  "background": "A financial services company operates a trading platform that requires high availability, scalability, and cost-effectiveness. The current CloudFormation infrastructure template has accumulated technical debt with hardcoded AMI IDs, redundant security groups, circular dependencies between the Auto Scaling Group and Application Load Balancer Target Group, and lacks proper monitoring. The platform runs in production (us-east-1) with an existing VPC across two availability zones. The infrastructure needs to be refactored to use modern CloudFormation best practices including SSM Parameter Store for AMI lookups, consolidated security groups with least-privilege access, proper dependency management, Auto Scaling based on CPU utilization, comprehensive CloudWatch monitoring, and production-grade resource protection policies. The solution must maintain all functional capabilities while improving deployment speed, reducing costs, and ensuring compliance with internal security standards.",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulpatil118",
+  "dockerS3Location": ""
+}

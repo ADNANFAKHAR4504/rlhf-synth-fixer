@@ -1,0 +1,36 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349291",
+  "team": "6",
+  "startedAt": "2025-11-05T11:17:57.733Z",
+  "subtask": "Application Deployment",
+  "background": "This task requires knowledge of AWS serverless services and how to automate infrastructure deployment using programming languages, in this instance, Python with Pulumi and python for multi-region applications.",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "S3",
+    "KMS",
+    "SQS",
+    "VPC",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "CodeBuild",
+    "X-Ray",
+    "App Autoscaling"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}

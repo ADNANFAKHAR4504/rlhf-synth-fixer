@@ -1,0 +1,36 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "y2vid",
+  "team": "synth",
+  "startedAt": "2025-11-04T05:18:52+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "InternetGateway",
+    "RouteTable",
+    "SecurityGroup",
+    "ECS",
+    "ApplicationLoadBalancer",
+    "RDS",
+    "CloudFront",
+    "SecretsManager",
+    "CloudWatch",
+    "IAM",
+    "S3",
+    "AutoScaling"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

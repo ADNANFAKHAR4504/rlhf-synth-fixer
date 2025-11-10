@@ -1,0 +1,36 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000168",
+  "team": "4",
+  "startedAt": "2025-11-05T14:03:34.988Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "ECS",
+    "ELB",
+    "Route53",
+    "CloudWatch",
+    "IAM",
+    "KMS",
+    "S3",
+    "SSM",
+    "SNS",
+    "WAF",
+    "Auto Scaling"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "jpoola-turing",
+  "dockerS3Location": ""
+}
