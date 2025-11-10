@@ -1,0 +1,29 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912229",
+  "team": "4",
+  "startedAt": "2025-11-10T14:36:02.208Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnets",
+    "Route Tables",
+    "VPC Endpoints",
+    "Security Groups",
+    "KMS Key",
+    "KMS Alias",
+    "S3 Bucket",
+    "S3 Bucket Policy",
+    "DynamoDB Table",
+    "Lambda Function",
+    "IAM Role",
+    "IAM Policy",
+    "CloudWatch Log Group"
+  ]
+}
