@@ -1,0 +1,13 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-10T20:47:43+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": ["Environment Migration", "Cloud Environment Setup", "Multi-Environment Consistency and Replication"],
+  "po_id": "ju7ms",
+  "aws_services": [],
+  "region": "ap-southeast-1"
+}
