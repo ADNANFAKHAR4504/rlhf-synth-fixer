@@ -220,7 +220,6 @@ export class TapStack extends pulumi.ComponentResource {
           },
         },
         timeout: 30,
-        reservedConcurrentExecutions: 1000,
         tracingConfig: {
           mode: 'Active',
         },
@@ -266,7 +265,6 @@ export class TapStack extends pulumi.ComponentResource {
           },
         },
         timeout: 60,
-        reservedConcurrentExecutions: 1000,
         tracingConfig: {
           mode: 'Active',
         },
