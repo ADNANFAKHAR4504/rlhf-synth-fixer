@@ -1,11 +1,3 @@
-"""
-Pulumi program entry point for TapStack infrastructure.
-
-This module serves as the main entry point for Pulumi deployments.
-It reads configuration values and instantiates the TapStack component
-with the appropriate environment suffix and configuration.
-"""
-
 import pulumi
 import pulumi_aws as aws
 from vpc_component import VpcComponent
@@ -14,38 +6,30 @@ from asg_component import AsgComponent
 from rds_component import RdsComponent
 from s3_component import S3Component
 
-# Get configuration
-config = pulumi.Config("TapStack")
-
-# Read environment suffix from config
+# Load configuration
+config = pulumi.Config()
 environment_suffix = config.require("environmentSuffix")
+environment = config.get("environment") or environment_suffix
+min_capacity = config.get_int("minCapacity") or 2
+max_capacity = config.get_int("maxCapacity") or 4
+read_replica_count = config.get_int("readReplicaCount") or 1
+backup_retention_days = config.get_int("backupRetentionDays") or 7
+enable_waf = config.get_bool("enableWaf") or False
+cost_center = config.get("costCenter") or "engineering"
 
-# Read other configuration values
-instance_type = config.get("instanceType") or "t3.medium"
-db_instance_class = config.get("dbInstanceClass") or "db.t3.medium"
-db_username = config.get("dbUsername") or "admin"
-db_password = config.require_secret("dbPassword")
-environment_name = config.get("environmentName") or "dev"
-
-# Define tags based on environment
+# Common tags
 tags = {
-    "Environment": environment_name,
-    "EnvironmentSuffix": environment_suffix,
+    "Environment": environment,
     "ManagedBy": "Pulumi",
-    "Project": "TapStack",
-    "CostCenter": "engineering",
+    "CostCenter": cost_center,
 }
-
-# Get availability zones
-azs = aws.get_availability_zones(state="available")
-availability_zones = azs.names[:2]  # Use first 2 AZs
 
 # Deploy VPC
 vpc = VpcComponent(
     "vpc",
     environment_suffix=environment_suffix,
     cidr_block="10.0.0.0/16",
-    availability_zones=availability_zones,
+    availability_zones=["us-east-1a", "us-east-1b"],
     tags=tags,
 )
 
@@ -55,7 +39,7 @@ alb = AlbComponent(
     environment_suffix=environment_suffix,
     vpc_id=vpc.vpc_id,
     public_subnet_ids=vpc.public_subnet_ids,
-    enable_waf=False,
+    enable_waf=enable_waf,
     tags=tags,
 )
 
@@ -66,8 +50,8 @@ asg = AsgComponent(
     vpc_id=vpc.vpc_id,
     private_subnet_ids=vpc.private_subnet_ids,
     target_group_arn=alb.target_group_arn,
-    min_size=1,
-    max_size=3,
+    min_size=min_capacity,
+    max_size=max_capacity,
     tags=tags,
 )
 
@@ -77,8 +61,8 @@ rds = RdsComponent(
     environment_suffix=environment_suffix,
     vpc_id=vpc.vpc_id,
     private_subnet_ids=vpc.private_subnet_ids,
-    read_replica_count=1,
-    backup_retention_days=7,
+    read_replica_count=read_replica_count,
+    backup_retention_days=backup_retention_days,
     tags=tags,
 )
 
@@ -86,14 +70,14 @@ rds = RdsComponent(
 s3 = S3Component(
     "s3",
     environment_suffix=environment_suffix,
-    environment=environment_name,
+    environment=environment,
     tags=tags,
 )
 
-# Export outputs required by integration tests
+# Export outputs
 pulumi.export("vpc_id", vpc.vpc_id)
-pulumi.export("alb_arn", alb.alb_arn)
 pulumi.export("alb_dns_name", alb.alb_dns_name)
+pulumi.export("alb_arn", alb.alb_arn)
 pulumi.export("rds_cluster_endpoint", rds.cluster_endpoint)
 pulumi.export("rds_reader_endpoint", rds.reader_endpoint)
 pulumi.export("static_assets_bucket", s3.static_assets_bucket)
