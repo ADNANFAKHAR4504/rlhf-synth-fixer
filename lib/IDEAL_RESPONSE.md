@@ -1,3 +1,23 @@
+# Three-Tier VPC Architecture Implementation
+
+This implementation creates a secure, production-ready three-tier VPC architecture for a payment processing platform using AWS CDK in Go.
+
+## Architecture Overview
+
+The infrastructure provisions:
+- VPC with 10.0.0.0/16 CIDR across 3 availability zones
+- Three subnet tiers: Public (web), Private (application), and Isolated (database)
+- Layered security with Security Groups and Network ACLs
+- Application Load Balancer for traffic distribution
+- VPC Flow Logs for compliance monitoring
+- VPC Endpoints for S3 and DynamoDB cost optimization
+- High availability with one NAT Gateway per availability zone
+
+## Implementation
+
+### lib/tap_stack.go
+
+```go
 package lib
 
 import (
@@ -107,7 +127,7 @@ func (ts *TapStack) createVPC() {
 		},
 		EnableDnsHostnames: jsii.Bool(true),
 		EnableDnsSupport:   jsii.Bool(true),
-		NatGateways:        jsii.Number(1), // Single NAT Gateway for cost optimization
+		NatGateways:        jsii.Number(3), // One NAT Gateway per availability zone for high availability
 	})
 
 	// Store subnet references for later use
@@ -482,3 +502,4 @@ func (ts *TapStack) createOutputs() {
 		ExportName:  jsii.String(fmt.Sprintf("PaymentVPC-ALB-DNS-%s", *ts.EnvironmentSuffix)),
 	})
 }
+```
