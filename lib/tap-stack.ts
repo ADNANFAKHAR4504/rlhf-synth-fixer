@@ -4,17 +4,12 @@
  * This module defines the TapStack class for deploying a microservices architecture
  * on Kubernetes with Istio service mesh integration.
  *
- * It includes:
- * - 3 microservices: payment-api, fraud-detector, and notification-service
- * - Kubernetes Services (ClusterIP) for each microservice
- * - ConfigMaps and Secrets for configuration management
- * - HorizontalPodAutoscalers for automatic scaling based on CPU utilization
- * - NetworkPolicies for secure service-to-service communication
- * - Istio service mesh configuration with strict mTLS
- * - Istio Gateway for external access to payment-api
+ * Now includes EKS cluster creation for proper Kubernetes provider configuration.
  */
 
 import * as pulumi from '@pulumi/pulumi';
+import * as aws from '@pulumi/aws';
+import * as eks from '@pulumi/eks';
 import * as k8s from '@pulumi/kubernetes';
 import { ResourceOptions } from '@pulumi/pulumi';
 
@@ -22,38 +17,15 @@ import { ResourceOptions } from '@pulumi/pulumi';
  * TapStackArgs defines the input arguments for the TapStack Pulumi component.
  */
 export interface TapStackArgs {
-  /**
-   * An optional suffix for identifying the deployment environment (e.g., 'dev', 'prod').
-   * Defaults to 'dev' if not provided.
-   */
   environmentSuffix?: string;
-
-  /**
-   * ECR image URI for payment-api service
-   */
   paymentApiImage?: string;
-
-  /**
-   * ECR image URI for fraud-detector service
-   */
   fraudDetectorImage?: string;
-
-  /**
-   * ECR image URI for notification-service
-   */
   notificationServiceImage?: string;
-
-  /**
-   * Optional default tags to apply to resources.
-   */
   tags?: pulumi.Input<{ [key: string]: string }>;
 }
 
 /**
  * Represents the main Pulumi component resource for deploying microservices on Kubernetes.
- *
- * This component orchestrates the deployment of payment processing microservices
- * with Istio service mesh, network policies, and horizontal pod autoscaling.
  */
 export class TapStack extends pulumi.ComponentResource {
   public readonly namespaceName: pulumi.Output<string>;
@@ -61,15 +33,10 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly paymentApiEndpoint: pulumi.Output<string>;
   public readonly fraudDetectorEndpoint: pulumi.Output<string>;
   public readonly notificationServiceEndpoint: pulumi.Output<string>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public readonly hpaStatus: pulumi.Output<any>;
+  public readonly clusterName: pulumi.Output<string>;
+  public readonly kubeconfig: pulumi.Output<any>;
 
-  /**
-   * Creates a new TapStack component.
-   * @param name The logical name of this Pulumi component.
-   * @param args Configuration arguments including environment suffix and container images.
-   * @param opts Pulumi options.
-   */
   constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
 
@@ -86,6 +53,148 @@ export class TapStack extends pulumi.ComponentResource {
       args.notificationServiceImage ||
       '123456789012.dkr.ecr.eu-west-2.amazonaws.com/notification-service:latest';
 
+    // Create VPC for EKS cluster
+    const vpc = new aws.ec2.Vpc(
+      `eks-vpc-${environmentSuffix}`,
+      {
+        cidrBlock: '10.0.0.0/16',
+        enableDnsHostnames: true,
+        enableDnsSupport: true,
+        tags: {
+          Name: `eks-vpc-${environmentSuffix}`,
+          Environment: environmentSuffix,
+        },
+      },
+      { parent: this }
+    );
+
+    // Create Internet Gateway
+    const igw = new aws.ec2.InternetGateway(
+      `eks-igw-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        tags: {
+          Name: `eks-igw-${environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
+    // Create public subnets in two availability zones for high availability
+    const publicSubnet1 = new aws.ec2.Subnet(
+      `eks-public-subnet-1-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        cidrBlock: '10.0.1.0/24',
+        availabilityZone: 'eu-west-2a',
+        mapPublicIpOnLaunch: true,
+        tags: {
+          Name: `eks-public-subnet-1-${environmentSuffix}`,
+          'kubernetes.io/role/elb': '1',
+        },
+      },
+      { parent: this }
+    );
+
+    const publicSubnet2 = new aws.ec2.Subnet(
+      `eks-public-subnet-2-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        cidrBlock: '10.0.2.0/24',
+        availabilityZone: 'eu-west-2b',
+        mapPublicIpOnLaunch: true,
+        tags: {
+          Name: `eks-public-subnet-2-${environmentSuffix}`,
+          'kubernetes.io/role/elb': '1',
+        },
+      },
+      { parent: this }
+    );
+
+    // Create route table for public subnets
+    const publicRouteTable = new aws.ec2.RouteTable(
+      `eks-public-rt-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        tags: {
+          Name: `eks-public-rt-${environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
+    // Create route to internet gateway
+    const publicRoute = new aws.ec2.Route(
+      `eks-public-route-${environmentSuffix}`,
+      {
+        routeTableId: publicRouteTable.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        gatewayId: igw.id,
+      },
+      { parent: this }
+    );
+
+    // Associate route table with public subnets
+    const rtAssoc1 = new aws.ec2.RouteTableAssociation(
+      `eks-rt-assoc-1-${environmentSuffix}`,
+      {
+        subnetId: publicSubnet1.id,
+        routeTableId: publicRouteTable.id,
+      },
+      { parent: this }
+    );
+
+    const rtAssoc2 = new aws.ec2.RouteTableAssociation(
+      `eks-rt-assoc-2-${environmentSuffix}`,
+      {
+        subnetId: publicSubnet2.id,
+        routeTableId: publicRouteTable.id,
+      },
+      { parent: this }
+    );
+
+    // Mark resources as used
+    void publicRoute;
+    void rtAssoc1;
+    void rtAssoc2;
+
+    // Create EKS Cluster
+    const cluster = new eks.Cluster(
+      `eks-cluster-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        publicSubnetIds: [publicSubnet1.id, publicSubnet2.id],
+        privateSubnetIds: [],
+        instanceType: 't3.medium',
+        desiredCapacity: 2,
+        minSize: 2,
+        maxSize: 4,
+        version: '1.28',
+        enabledClusterLogTypes: [
+          'api',
+          'audit',
+          'authenticator',
+          'controllerManager',
+          'scheduler',
+        ],
+        tags: {
+          Name: `eks-cluster-${environmentSuffix}`,
+          Environment: environmentSuffix,
+        },
+      },
+      { parent: this }
+    );
+
+    // Create explicit Kubernetes provider using the cluster's kubeconfig
+    const k8sProvider = new k8s.Provider(
+      `k8s-provider-${environmentSuffix}`,
+      {
+        kubeconfig: cluster.kubeconfig.apply(JSON.stringify),
+        enableServerSideApply: true,
+      },
+      { parent: this }
+    );
+
     // Kubernetes namespace
     const namespace = new k8s.core.v1.Namespace(
       'microservices-ns',
@@ -97,7 +206,7 @@ export class TapStack extends pulumi.ComponentResource {
           },
         },
       },
-      { parent: this }
+      { parent: this, provider: k8sProvider }
     );
 
     // ConfigMaps for each service
@@ -114,7 +223,7 @@ export class TapStack extends pulumi.ComponentResource {
           FEATURE_FLAG_ENABLE_LOGGING: 'true',
         },
       },
-      { parent: this }
+      { parent: this, provider: k8sProvider }
     );
 
     const fraudDetectorConfigMap = new k8s.core.v1.ConfigMap(
@@ -130,7 +239,7 @@ export class TapStack extends pulumi.ComponentResource {
           FEATURE_FLAG_REALTIME_ALERTS: 'true',
         },
       },
-      { parent: this }
+      { parent: this, provider: k8sProvider }
     );
 
     const notificationServiceConfigMap = new k8s.core.v1.ConfigMap(
@@ -145,7 +254,7 @@ export class TapStack extends pulumi.ComponentResource {
           FEATURE_FLAG_SMS_ENABLED: 'true',
         },
       },
-      { parent: this }
+      { parent: this, provider: k8sProvider }
     );
 
     // Secrets for each service - Updated to eu-west-2 region
@@ -163,7 +272,7 @@ export class TapStack extends pulumi.ComponentResource {
           STRIPE_API_KEY: 'sk_test_placeholder',
         },
       },
-      { parent: this }
+      { parent: this, provider: k8sProvider }
     );
 
     const fraudDetectorSecret = new k8s.core.v1.Secret(
@@ -180,7 +289,7 @@ export class TapStack extends pulumi.ComponentResource {
           ML_API_KEY: 'ml_api_placeholder',
         },
       },
-      { parent: this }
+      { parent: this, provider: k8sProvider }
     );
 
     const notificationServiceSecret = new k8s.core.v1.Secret(
@@ -198,7 +307,7 @@ export class TapStack extends pulumi.ComponentResource {
           SENDGRID_API_KEY: 'sendgrid_placeholder',
         },
       },
-      { parent: this }
+      { parent: this, provider: k8sProvider }
     );
 
     // Payment API Deployment
@@ -292,7 +401,7 @@ export class TapStack extends pulumi.ComponentResource {
           },
         },
       },
-      { parent: this }
+      { parent: this, provider: k8sProvider }
     );
 
     // Fraud Detector Deployment
@@ -386,7 +495,7 @@ export class TapStack extends pulumi.ComponentResource {
           },
         },
       },
-      { parent: this }
+      { parent: this, provider: k8sProvider }
     );
 
     // Notification Service Deployment
@@ -480,7 +589,7 @@ export class TapStack extends pulumi.ComponentResource {
           },
         },
       },
-      { parent: this }
+      { parent: this, provider: k8sProvider }
     );
 
     // Kubernetes Services
@@ -509,7 +618,7 @@ export class TapStack extends pulumi.ComponentResource {
           ],
         },
       },
-      { parent: this }
+      { parent: this, provider: k8sProvider }
     );
 
     const fraudDetectorService = new k8s.core.v1.Service(
@@ -537,7 +646,7 @@ export class TapStack extends pulumi.ComponentResource {
           ],
         },
       },
-      { parent: this }
+      { parent: this, provider: k8sProvider }
     );
 
     const notificationService = new k8s.core.v1.Service(
@@ -565,7 +674,7 @@ export class TapStack extends pulumi.ComponentResource {
           ],
         },
       },
-      { parent: this }
+      { parent: this, provider: k8sProvider }
     );
 
     // HorizontalPodAutoscalers
@@ -626,7 +735,7 @@ export class TapStack extends pulumi.ComponentResource {
           },
         },
       },
-      { parent: this }
+      { parent: this, provider: k8sProvider }
     );
 
     const fraudDetectorHpa = new k8s.autoscaling.v2.HorizontalPodAutoscaler(
@@ -686,7 +795,7 @@ export class TapStack extends pulumi.ComponentResource {
           },
         },
       },
-      { parent: this }
+      { parent: this, provider: k8sProvider }
     );
 
     const notificationServiceHpa =
@@ -747,7 +856,7 @@ export class TapStack extends pulumi.ComponentResource {
             },
           },
         },
-        { parent: this }
+        { parent: this, provider: k8sProvider }
       );
 
     // Network Policies
@@ -839,7 +948,7 @@ export class TapStack extends pulumi.ComponentResource {
           ],
         },
       },
-      { parent: this }
+      { parent: this, provider: k8sProvider }
     );
 
     const fraudDetectorNetworkPolicy = new k8s.networking.v1.NetworkPolicy(
@@ -930,7 +1039,7 @@ export class TapStack extends pulumi.ComponentResource {
           ],
         },
       },
-      { parent: this }
+      { parent: this, provider: k8sProvider }
     );
 
     const notificationServiceNetworkPolicy =
@@ -1005,7 +1114,7 @@ export class TapStack extends pulumi.ComponentResource {
             ],
           },
         },
-        { parent: this }
+        { parent: this, provider: k8sProvider }
       );
 
     // Istio PeerAuthentication for mTLS
@@ -1024,7 +1133,7 @@ export class TapStack extends pulumi.ComponentResource {
           },
         },
       },
-      { parent: this }
+      { parent: this, provider: k8sProvider }
     );
 
     // Istio DestinationRules
@@ -1056,7 +1165,7 @@ export class TapStack extends pulumi.ComponentResource {
           },
         },
       },
-      { parent: this }
+      { parent: this, provider: k8sProvider }
     );
 
     const fraudDetectorDestinationRule = new k8s.apiextensions.CustomResource(
@@ -1087,7 +1196,7 @@ export class TapStack extends pulumi.ComponentResource {
           },
         },
       },
-      { parent: this }
+      { parent: this, provider: k8sProvider }
     );
 
     const notificationServiceDestinationRule =
@@ -1119,7 +1228,7 @@ export class TapStack extends pulumi.ComponentResource {
             },
           },
         },
-        { parent: this }
+        { parent: this, provider: k8sProvider }
       );
 
     // Istio Gateway
@@ -1148,7 +1257,7 @@ export class TapStack extends pulumi.ComponentResource {
           ],
         },
       },
-      { parent: this }
+      { parent: this, provider: k8sProvider }
     );
 
     // Istio VirtualService for external access
@@ -1194,10 +1303,10 @@ export class TapStack extends pulumi.ComponentResource {
           ],
         },
       },
-      { parent: this }
+      { parent: this, provider: k8sProvider }
     );
 
-    // Create a LoadBalancer service for the gateway instead of referencing external service
+    // Create a LoadBalancer service for the gateway
     const gatewayService = new k8s.core.v1.Service(
       'gateway-loadbalancer',
       {
@@ -1223,7 +1332,7 @@ export class TapStack extends pulumi.ComponentResource {
           ],
         },
       },
-      { parent: this }
+      { parent: this, provider: k8sProvider }
     );
 
     // Mark resources as used to satisfy linter
@@ -1236,7 +1345,9 @@ export class TapStack extends pulumi.ComponentResource {
     void notificationServiceDestinationRule;
     void paymentApiVirtualService;
 
-    // Set outputs - Updated to use new gateway service
+    // Set outputs
+    this.clusterName = cluster.eksCluster.name;
+    this.kubeconfig = cluster.kubeconfig;
     this.namespaceName = namespace.metadata.name;
     this.gatewayUrl = pulumi.interpolate`http://${gatewayService.status.loadBalancer.ingress[0].hostname}/api/payment`;
     this.paymentApiEndpoint = pulumi.interpolate`http://${paymentApiService.metadata.name}.${namespace.metadata.name}.svc.cluster.local:8080`;
@@ -1256,6 +1367,8 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Register the outputs of this component.
     this.registerOutputs({
+      clusterName: this.clusterName,
+      kubeconfig: this.kubeconfig,
       namespaceName: this.namespaceName,
       gatewayUrl: this.gatewayUrl,
       paymentApiEndpoint: this.paymentApiEndpoint,
