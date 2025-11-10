@@ -289,10 +289,27 @@ Conditions:
   HasAtLeastTwoAZs: !Or
     - !Condition HasTwoAZs
     - !Condition HasThreeAZs
-  UseAZ2: !Condition HasAtLeastTwoAZs
+  UseAZ2: !And
+    - !Condition HasAtLeastTwoAZs
+    - !Not
+      - !Or
+        - !Equals
+          - !Ref AvailabilityZone2
+          - ''
+        - !Equals
+          - !Ref AvailabilityZone2
+          - 'none'
   UseAZ3: !And
     - !Condition HasThreeAZs
     - !Condition UseAZ2
+    - !Not
+      - !Or
+        - !Equals
+          - !Ref AvailabilityZone3
+          - ''
+        - !Equals
+          - !Ref AvailabilityZone3
+          - 'none'
   EnableHighAvailabilityNAT: !And
     - !Equals
       - !Ref EnableNATGatewayHA
@@ -2402,29 +2419,23 @@ Outputs:
       Name: !Sub ${ProjectName}-${Environment}-PrivateDBSubnet3
 
   ALBDNSName:
+    Condition: UseAZ2
     Description: Application Load Balancer DNS Name
-    Value: !If
-      - UseAZ2
-      - !GetAtt ApplicationLoadBalancer.DNSName
-      - 'SingleAZMode - ALB requires at least 2 AZs'
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
       Name: !Sub ${ProjectName}-${Environment}-ALB-DNS
 
   ALBArn:
+    Condition: UseAZ2
     Description: Application Load Balancer ARN
-    Value: !If
-      - UseAZ2
-      - !Ref ApplicationLoadBalancer
-      - 'SingleAZMode - ALB requires at least 2 AZs'
+    Value: !Ref ApplicationLoadBalancer
     Export:
       Name: !Sub ${ProjectName}-${Environment}-ALB-ARN
 
   ALBHostedZone:
+    Condition: UseAZ2
     Description: ALB Hosted Zone ID for Route53 alias records
-    Value: !If
-      - UseAZ2
-      - !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
-      - 'SingleAZMode - ALB requires at least 2 AZs'
+    Value: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
     Export:
       Name: !Sub ${ProjectName}-${Environment}-ALB-HostedZone
 
@@ -2441,29 +2452,23 @@ Outputs:
       Name: !Sub ${ProjectName}-${Environment}-LaunchTemplate-ID
 
   AuroraClusterEndpoint:
+    Condition: UseAZ2
     Description: Aurora Cluster Writer Endpoint
-    Value: !If
-      - UseAZ2
-      - !GetAtt AuroraCluster.Endpoint.Address
-      - 'SingleAZMode - RDS requires at least 2 AZs'
+    Value: !GetAtt AuroraCluster.Endpoint.Address
     Export:
       Name: !Sub ${ProjectName}-${Environment}-DB-Writer-Endpoint
 
   AuroraReaderEndpoint:
+    Condition: UseAZ2
     Description: Aurora Cluster Reader Endpoint
-    Value: !If
-      - UseAZ2
-      - !GetAtt AuroraCluster.ReadEndpoint.Address
-      - 'SingleAZMode - RDS requires at least 2 AZs'
+    Value: !GetAtt AuroraCluster.ReadEndpoint.Address
     Export:
       Name: !Sub ${ProjectName}-${Environment}-DB-Reader-Endpoint
 
   AuroraClusterPort:
+    Condition: UseAZ2
     Description: Aurora Cluster Port
-    Value: !If
-      - UseAZ2
-      - !GetAtt AuroraCluster.Endpoint.Port
-      - 'SingleAZMode - RDS requires at least 2 AZs'
+    Value: !GetAtt AuroraCluster.Endpoint.Port
     Export:
       Name: !Sub ${ProjectName}-${Environment}-DB-Port
 
