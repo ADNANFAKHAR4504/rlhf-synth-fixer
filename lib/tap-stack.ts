@@ -1,56 +1,49 @@
 /**
- * tap-stack.ts
- *
- * This module defines the TapStack class for a multi-region trading application
- * failover system with automated cross-region disaster recovery capabilities.
- *
- * Architecture:
- * - Primary region: us-east-1 with 2 instances
- * - Standby region: us-east-2 with 1 instance
- * - Route 53 health-based routing with automatic failover
- * - DynamoDB global table for session replication
- * - CloudWatch alarms and SNS notifications
- *
- * Note: Many resources are assigned to variables but not directly referenced.
- * This is intentional - Pulumi needs to track these resources for the infrastructure
- * graph, even if they're not used in subsequent code.
- */
+* tap-stack.ts
+*
+* This module defines the TapStack class for a multi-region trading application
+* failover system with automated cross-region disaster recovery capabilities.
+*
+* Architecture:
+* - Primary region: eu-south-1 (Milan) with 2 instances
+* - Standby region: eu-central-1 (Frankfurt) with 1 instance
+* - Direct ALB DNS routing (no custom domain)
+* - DynamoDB global table for session replication
+* - CloudWatch alarms and SNS notifications
+*
+* Note: Many resources are assigned to variables but not directly referenced.
+* This is intentional - Pulumi needs to track these resources for the infrastructure
+* graph, even if they're not used in subsequent code.
+*/
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';
 
 /**
- * TapStackArgs defines the input arguments for the TapStack Pulumi component.
- */
+* TapStackArgs defines the input arguments for the TapStack Pulumi component.
+*/
 export interface TapStackArgs {
   /**
-   * An optional suffix for identifying the deployment environment (e.g., 'dev', 'prod').
-   * Defaults to 'dev' if not provided.
-   */
+  * An optional suffix for identifying the deployment environment (e.g., 'dev', 'prod').
+  * Defaults to 'dev' if not provided.
+  */
   environmentSuffix?: string;
-
   /**
-   * Optional default tags to apply to resources.
-   */
+  * Optional default tags to apply to resources.
+  */
   tags?: pulumi.Input<{ [key: string]: string }>;
-
-  /**
-   * Domain name for the Route 53 hosted zone (e.g., 'trading.example.com')
-   */
-  domainName?: string;
 }
 
 /**
- * Represents the main Pulumi component resource for the multi-region failover infrastructure.
- *
- * This component creates a complete cross-region disaster recovery setup including:
- * - VPCs with public and private subnets in us-east-1 and us-east-2
- * - Application Load Balancers with Auto Scaling Groups
- * - Route 53 with health checks and weighted routing
- * - DynamoDB global table for session replication
- * - CloudWatch alarms and SNS notifications
- */
+* Represents the main Pulumi component resource for the multi-region failover infrastructure.
+*
+* This component creates a complete cross-region disaster recovery setup including:
+* - VPCs with public and private subnets in eu-south-1 and eu-central-1
+* - Application Load Balancers with Auto Scaling Groups
+* - DynamoDB global table for session replication
+* - CloudWatch alarms and SNS notifications
+*/
 export class TapStack extends pulumi.ComponentResource {
   public readonly primaryVpcId: pulumi.Output<string>;
   public readonly standbyVpcId: pulumi.Output<string>;
@@ -59,28 +52,26 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly primaryAsgName: pulumi.Output<string>;
   public readonly standbyAsgName: pulumi.Output<string>;
   public readonly dynamoTableName: pulumi.Output<string>;
-  public readonly hostedZoneId: pulumi.Output<string>;
-  public readonly hostedZoneNameServers: pulumi.Output<string[]>;
   public readonly primarySnsTopicArn: pulumi.Output<string>;
   public readonly standbySnsTopicArn: pulumi.Output<string>;
   public readonly primaryHealthCheckId: pulumi.Output<string>;
   public readonly applicationUrl: pulumi.Output<string>;
 
   /**
-   * Creates a new TapStack component with multi-region failover infrastructure.
-   * @param name The logical name of this Pulumi component.
-   * @param args Configuration arguments including environment suffix, tags, and domain name.
-   * @param opts Pulumi options.
-   */
+  * Creates a new TapStack component with multi-region failover infrastructure.
+  * @param name The logical name of this Pulumi component.
+  * @param args Configuration arguments including environment suffix and tags.
+  * @param opts Pulumi options.
+  */
   constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
 
     const environmentSuffix = args.environmentSuffix || 'dev';
     const tags = args.tags || {};
-    const domainName =
-      args.domainName || `trading-${environmentSuffix}.example.com`;
-    const primaryRegion = 'us-east-1';
-    const standbyRegion = 'us-east-2';
+
+    // Changed regions to Milan and Frankfurt
+    const primaryRegion = 'eu-south-1';
+    const standbyRegion = 'eu-central-1';
 
     // Create primary region provider
     const primaryProvider = new aws.Provider(
@@ -452,7 +443,7 @@ yum update -y
 yum install -y httpd
 systemctl start httpd
 systemctl enable httpd
-echo "<h1>Primary Region - Trading Application</h1>" > /var/www/html/index.html
+echo "Primary Region (Milan) - Trading Application" > /var/www/html/index.html
 `
           )
           .apply(str => Buffer.from(str).toString('base64')),
@@ -840,7 +831,7 @@ yum update -y
 yum install -y httpd
 systemctl start httpd
 systemctl enable httpd
-echo "<h1>Standby Region - Trading Application</h1>" > /var/www/html/index.html
+echo "Standby Region (Frankfurt) - Trading Application" > /var/www/html/index.html
 `
           )
           .apply(str => Buffer.from(str).toString('base64')),
@@ -1038,24 +1029,10 @@ echo "<h1>Standby Region - Trading Application</h1>" > /var/www/html/index.html
     );
 
     // ============================================
-    // ROUTE 53 CONFIGURATION
+    // HEALTH MONITORING
     // ============================================
 
-    // Create Route 53 hosted zone
-    const hostedZone = new aws.route53.Zone(
-      `hosted-zone-${environmentSuffix}`,
-      {
-        name: domainName,
-        tags: {
-          Name: `hosted-zone-${environmentSuffix}`,
-          Environment: 'Production',
-          ...tags,
-        },
-      },
-      { parent: this }
-    );
-
-    // Create health check for primary ALB
+    // Create Route 53 health check for primary ALB
     const primaryHealthCheck = new aws.route53.HealthCheck(
       `primary-health-check-${environmentSuffix}`,
       {
@@ -1074,59 +1051,6 @@ echo "<h1>Standby Region - Trading Application</h1>" > /var/www/html/index.html
       },
       { parent: this }
     );
-
-    // Create weighted routing record for primary region
-    const _primaryRecord = new aws.route53.Record(
-      `primary-record-${environmentSuffix}`,
-      {
-        zoneId: hostedZone.zoneId,
-        name: domainName,
-        type: 'A',
-        aliases: [
-          {
-            name: primaryAlb.dnsName,
-            zoneId: primaryAlb.zoneId,
-            evaluateTargetHealth: true,
-          },
-        ],
-        setIdentifier: 'primary',
-        weightedRoutingPolicies: [
-          {
-            weight: 100,
-          },
-        ],
-        healthCheckId: primaryHealthCheck.id,
-      },
-      { parent: this }
-    );
-
-    // Create weighted routing record for standby region
-    const _standbyRecord = new aws.route53.Record(
-      `standby-record-${environmentSuffix}`,
-      {
-        zoneId: hostedZone.zoneId,
-        name: domainName,
-        type: 'A',
-        aliases: [
-          {
-            name: standbyAlb.dnsName,
-            zoneId: standbyAlb.zoneId,
-            evaluateTargetHealth: true,
-          },
-        ],
-        setIdentifier: 'standby',
-        weightedRoutingPolicies: [
-          {
-            weight: 0,
-          },
-        ],
-      },
-      { parent: this }
-    );
-
-    // ============================================
-    // CLOUDWATCH ALARMS
-    // ============================================
 
     // Create CloudWatch alarm for primary health check
     const _primaryHealthCheckAlarm = new aws.cloudwatch.MetricAlarm(
@@ -1163,12 +1087,10 @@ echo "<h1>Standby Region - Trading Application</h1>" > /var/www/html/index.html
     this.primaryAsgName = primaryAsg.name;
     this.standbyAsgName = standbyAsg.name;
     this.dynamoTableName = primaryDynamoTable.name;
-    this.hostedZoneId = hostedZone.zoneId;
-    this.hostedZoneNameServers = hostedZone.nameServers;
     this.primarySnsTopicArn = primarySnsTopic.arn;
     this.standbySnsTopicArn = standbySnsTopic.arn;
     this.primaryHealthCheckId = primaryHealthCheck.id;
-    this.applicationUrl = pulumi.interpolate`http://${domainName}`;
+    this.applicationUrl = pulumi.interpolate`http://${primaryAlb.dnsName}`;
 
     // Register outputs
     this.registerOutputs({
@@ -1179,8 +1101,6 @@ echo "<h1>Standby Region - Trading Application</h1>" > /var/www/html/index.html
       primaryAsgName: this.primaryAsgName,
       standbyAsgName: this.standbyAsgName,
       dynamoTableName: this.dynamoTableName,
-      hostedZoneId: this.hostedZoneId,
-      hostedZoneNameServers: this.hostedZoneNameServers,
       primarySnsTopicArn: this.primarySnsTopicArn,
       standbySnsTopicArn: this.standbySnsTopicArn,
       primaryHealthCheckId: this.primaryHealthCheckId,
