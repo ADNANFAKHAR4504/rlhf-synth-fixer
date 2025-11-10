@@ -2,6 +2,7 @@
  * tap-stack.ts
  *
  * Creates EKS cluster using native AWS resources in eu-west-2 (London)
+ * Istio resources are optional and will be skipped if Istio is not installed
  */
 
 import * as pulumi from '@pulumi/pulumi';
@@ -15,6 +16,7 @@ export interface TapStackArgs {
   fraudDetectorImage?: string;
   notificationServiceImage?: string;
   tags?: pulumi.Input<{ [key: string]: string }>;
+  enableIstio?: boolean; // New parameter to enable/disable Istio
 }
 
 export class TapStack extends pulumi.ComponentResource {
@@ -31,6 +33,7 @@ export class TapStack extends pulumi.ComponentResource {
     super('tap:stack:TapStack', name, args, opts);
 
     const environmentSuffix = args.environmentSuffix || 'dev';
+    const enableIstio = args.enableIstio ?? false; // Istio disabled by default
 
     // Create explicit AWS provider for eu-west-2 (London)
     const awsProvider = new aws.Provider(
@@ -41,16 +44,13 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Updated to eu-west-2 (London) region
+    // Use nginx demo image as default (publicly available)
     const paymentApiImage =
-      args.paymentApiImage ||
-      '123456789012.dkr.ecr.eu-west-2.amazonaws.com/payment-api:latest';
+      args.paymentApiImage || 'nginx:latest';
     const fraudDetectorImage =
-      args.fraudDetectorImage ||
-      '123456789012.dkr.ecr.eu-west-2.amazonaws.com/fraud-detector:latest';
+      args.fraudDetectorImage || 'nginx:latest';
     const notificationServiceImage =
-      args.notificationServiceImage ||
-      '123456789012.dkr.ecr.eu-west-2.amazonaws.com/notification-service:latest';
+      args.notificationServiceImage || 'nginx:latest';
 
     // Create VPC for EKS cluster
     const vpc = new aws.ec2.Vpc(
@@ -360,9 +360,9 @@ export class TapStack extends pulumi.ComponentResource {
       {
         metadata: {
           name: `microservices-${environmentSuffix}`,
-          labels: {
+          labels: enableIstio ? {
             'istio-injection': 'enabled',
-          },
+          } : {},
         },
       },
       { parent: this, provider: k8sProvider }
@@ -496,9 +496,9 @@ export class TapStack extends pulumi.ComponentResource {
                 app: 'payment-api',
                 version: 'v1',
               },
-              annotations: {
+              annotations: enableIstio ? {
                 'sidecar.istio.io/inject': 'true',
-              },
+              } : {},
             },
             spec: {
               containers: [
@@ -507,7 +507,7 @@ export class TapStack extends pulumi.ComponentResource {
                   image: paymentApiImage,
                   ports: [
                     {
-                      containerPort: 8080,
+                      containerPort: 80,
                       name: 'http',
                       protocol: 'TCP',
                     },
@@ -526,33 +526,13 @@ export class TapStack extends pulumi.ComponentResource {
                   ],
                   resources: {
                     requests: {
-                      cpu: '250m',
-                      memory: '512Mi',
+                      cpu: '100m',
+                      memory: '128Mi',
                     },
                     limits: {
-                      cpu: '500m',
-                      memory: '1Gi',
+                      cpu: '200m',
+                      memory: '256Mi',
                     },
-                  },
-                  livenessProbe: {
-                    httpGet: {
-                      path: '/health',
-                      port: 8080,
-                    },
-                    initialDelaySeconds: 30,
-                    periodSeconds: 10,
-                    timeoutSeconds: 5,
-                    failureThreshold: 3,
-                  },
-                  readinessProbe: {
-                    httpGet: {
-                      path: '/ready',
-                      port: 8080,
-                    },
-                    initialDelaySeconds: 10,
-                    periodSeconds: 5,
-                    timeoutSeconds: 3,
-                    failureThreshold: 3,
                   },
                 },
               ],
@@ -590,9 +570,9 @@ export class TapStack extends pulumi.ComponentResource {
                 app: 'fraud-detector',
                 version: 'v1',
               },
-              annotations: {
+              annotations: enableIstio ? {
                 'sidecar.istio.io/inject': 'true',
-              },
+              } : {},
             },
             spec: {
               containers: [
@@ -601,7 +581,7 @@ export class TapStack extends pulumi.ComponentResource {
                   image: fraudDetectorImage,
                   ports: [
                     {
-                      containerPort: 8080,
+                      containerPort: 80,
                       name: 'http',
                       protocol: 'TCP',
                     },
@@ -620,33 +600,13 @@ export class TapStack extends pulumi.ComponentResource {
                   ],
                   resources: {
                     requests: {
-                      cpu: '250m',
-                      memory: '512Mi',
+                      cpu: '100m',
+                      memory: '128Mi',
                     },
                     limits: {
-                      cpu: '500m',
-                      memory: '1Gi',
+                      cpu: '200m',
+                      memory: '256Mi',
                     },
-                  },
-                  livenessProbe: {
-                    httpGet: {
-                      path: '/health',
-                      port: 8080,
-                    },
-                    initialDelaySeconds: 30,
-                    periodSeconds: 10,
-                    timeoutSeconds: 5,
-                    failureThreshold: 3,
-                  },
-                  readinessProbe: {
-                    httpGet: {
-                      path: '/ready',
-                      port: 8080,
-                    },
-                    initialDelaySeconds: 10,
-                    periodSeconds: 5,
-                    timeoutSeconds: 3,
-                    failureThreshold: 3,
                   },
                 },
               ],
@@ -684,9 +644,9 @@ export class TapStack extends pulumi.ComponentResource {
                 app: 'notification-service',
                 version: 'v1',
               },
-              annotations: {
+              annotations: enableIstio ? {
                 'sidecar.istio.io/inject': 'true',
-              },
+              } : {},
             },
             spec: {
               containers: [
@@ -695,7 +655,7 @@ export class TapStack extends pulumi.ComponentResource {
                   image: notificationServiceImage,
                   ports: [
                     {
-                      containerPort: 8080,
+                      containerPort: 80,
                       name: 'http',
                       protocol: 'TCP',
                     },
@@ -714,33 +674,13 @@ export class TapStack extends pulumi.ComponentResource {
                   ],
                   resources: {
                     requests: {
-                      cpu: '250m',
-                      memory: '512Mi',
+                      cpu: '100m',
+                      memory: '128Mi',
                     },
                     limits: {
-                      cpu: '500m',
-                      memory: '1Gi',
+                      cpu: '200m',
+                      memory: '256Mi',
                     },
-                  },
-                  livenessProbe: {
-                    httpGet: {
-                      path: '/health',
-                      port: 8080,
-                    },
-                    initialDelaySeconds: 30,
-                    periodSeconds: 10,
-                    timeoutSeconds: 5,
-                    failureThreshold: 3,
-                  },
-                  readinessProbe: {
-                    httpGet: {
-                      path: '/ready',
-                      port: 8080,
-                    },
-                    initialDelaySeconds: 10,
-                    periodSeconds: 5,
-                    timeoutSeconds: 3,
-                    failureThreshold: 3,
                   },
                 },
               ],
@@ -770,7 +710,7 @@ export class TapStack extends pulumi.ComponentResource {
           ports: [
             {
               port: 8080,
-              targetPort: 8080,
+              targetPort: 80,
               name: 'http',
               protocol: 'TCP',
             },
@@ -798,7 +738,7 @@ export class TapStack extends pulumi.ComponentResource {
           ports: [
             {
               port: 8080,
-              targetPort: 8080,
+              targetPort: 80,
               name: 'http',
               protocol: 'TCP',
             },
@@ -826,7 +766,33 @@ export class TapStack extends pulumi.ComponentResource {
           ports: [
             {
               port: 8080,
-              targetPort: 8080,
+              targetPort: 80,
+              name: 'http',
+              protocol: 'TCP',
+            },
+          ],
+        },
+      },
+      { parent: this, provider: k8sProvider }
+    );
+
+    // Gateway LoadBalancer Service
+    const gatewayService = new k8s.core.v1.Service(
+      'gateway-loadbalancer',
+      {
+        metadata: {
+          name: `gateway-lb-${environmentSuffix}`,
+          namespace: namespace.metadata.name,
+        },
+        spec: {
+          type: 'LoadBalancer',
+          selector: {
+            app: 'payment-api',
+          },
+          ports: [
+            {
+              port: 80,
+              targetPort: 80,
               name: 'http',
               protocol: 'TCP',
             },
@@ -864,34 +830,6 @@ export class TapStack extends pulumi.ComponentResource {
               },
             },
           ],
-          behavior: {
-            scaleDown: {
-              stabilizationWindowSeconds: 300,
-              policies: [
-                {
-                  type: 'Percent',
-                  value: 50,
-                  periodSeconds: 60,
-                },
-              ],
-            },
-            scaleUp: {
-              stabilizationWindowSeconds: 0,
-              policies: [
-                {
-                  type: 'Percent',
-                  value: 100,
-                  periodSeconds: 30,
-                },
-                {
-                  type: 'Pods',
-                  value: 2,
-                  periodSeconds: 30,
-                },
-              ],
-              selectPolicy: 'Max',
-            },
-          },
         },
       },
       { parent: this, provider: k8sProvider }
@@ -924,34 +862,6 @@ export class TapStack extends pulumi.ComponentResource {
               },
             },
           ],
-          behavior: {
-            scaleDown: {
-              stabilizationWindowSeconds: 300,
-              policies: [
-                {
-                  type: 'Percent',
-                  value: 50,
-                  periodSeconds: 60,
-                },
-              ],
-            },
-            scaleUp: {
-              stabilizationWindowSeconds: 0,
-              policies: [
-                {
-                  type: 'Percent',
-                  value: 100,
-                  periodSeconds: 30,
-                },
-                {
-                  type: 'Pods',
-                  value: 2,
-                  periodSeconds: 30,
-                },
-              ],
-              selectPolicy: 'Max',
-            },
-          },
         },
       },
       { parent: this, provider: k8sProvider }
@@ -985,34 +895,6 @@ export class TapStack extends pulumi.ComponentResource {
                 },
               },
             ],
-            behavior: {
-              scaleDown: {
-                stabilizationWindowSeconds: 300,
-                policies: [
-                  {
-                    type: 'Percent',
-                    value: 50,
-                    periodSeconds: 60,
-                  },
-                ],
-              },
-              scaleUp: {
-                stabilizationWindowSeconds: 0,
-                policies: [
-                  {
-                    type: 'Percent',
-                    value: 100,
-                    periodSeconds: 30,
-                  },
-                  {
-                    type: 'Pods',
-                    value: 2,
-                    periodSeconds: 30,
-                  },
-                ],
-                selectPolicy: 'Max',
-              },
-            },
           },
         },
         { parent: this, provider: k8sProvider }
@@ -1035,19 +917,11 @@ export class TapStack extends pulumi.ComponentResource {
           policyTypes: ['Ingress', 'Egress'],
           ingress: [
             {
-              from: [
-                {
-                  namespaceSelector: {
-                    matchLabels: {
-                      name: 'istio-system',
-                    },
-                  },
-                },
-              ],
+              from: [],
               ports: [
                 {
                   protocol: 'TCP',
-                  port: 8080,
+                  port: 80,
                 },
               ],
             },
@@ -1066,7 +940,7 @@ export class TapStack extends pulumi.ComponentResource {
               ports: [
                 {
                   protocol: 'TCP',
-                  port: 8080,
+                  port: 80,
                 },
               ],
             },
@@ -1084,23 +958,6 @@ export class TapStack extends pulumi.ComponentResource {
                 {
                   protocol: 'UDP',
                   port: 53,
-                },
-              ],
-            },
-            {
-              to: [
-                {
-                  namespaceSelector: {
-                    matchLabels: {
-                      name: 'istio-system',
-                    },
-                  },
-                },
-              ],
-              ports: [
-                {
-                  protocol: 'TCP',
-                  port: 15012,
                 },
               ],
             },
@@ -1138,7 +995,7 @@ export class TapStack extends pulumi.ComponentResource {
               ports: [
                 {
                   protocol: 'TCP',
-                  port: 8080,
+                  port: 80,
                 },
               ],
             },
@@ -1157,7 +1014,7 @@ export class TapStack extends pulumi.ComponentResource {
               ports: [
                 {
                   protocol: 'TCP',
-                  port: 8080,
+                  port: 80,
                 },
               ],
             },
@@ -1175,23 +1032,6 @@ export class TapStack extends pulumi.ComponentResource {
                 {
                   protocol: 'UDP',
                   port: 53,
-                },
-              ],
-            },
-            {
-              to: [
-                {
-                  namespaceSelector: {
-                    matchLabels: {
-                      name: 'istio-system',
-                    },
-                  },
-                },
-              ],
-              ports: [
-                {
-                  protocol: 'TCP',
-                  port: 15012,
                 },
               ],
             },
@@ -1230,7 +1070,7 @@ export class TapStack extends pulumi.ComponentResource {
                 ports: [
                   {
                     protocol: 'TCP',
-                    port: 8080,
+                    port: 80,
                   },
                 ],
               },
@@ -1253,262 +1093,22 @@ export class TapStack extends pulumi.ComponentResource {
                   },
                 ],
               },
-              {
-                to: [
-                  {
-                    namespaceSelector: {
-                      matchLabels: {
-                        name: 'istio-system',
-                      },
-                    },
-                  },
-                ],
-                ports: [
-                  {
-                    protocol: 'TCP',
-                    port: 15012,
-                  },
-                ],
-              },
             ],
           },
         },
         { parent: this, provider: k8sProvider }
       );
 
-    // Istio PeerAuthentication for mTLS
-    const peerAuth = new k8s.apiextensions.CustomResource(
-      'peer-auth',
-      {
-        apiVersion: 'security.istio.io/v1beta1',
-        kind: 'PeerAuthentication',
-        metadata: {
-          name: `mtls-strict-${environmentSuffix}`,
-          namespace: namespace.metadata.name,
-        },
-        spec: {
-          mtls: {
-            mode: 'STRICT',
-          },
-        },
-      },
-      { parent: this, provider: k8sProvider }
-    );
-
-    // Istio DestinationRules
-    const paymentApiDestinationRule = new k8s.apiextensions.CustomResource(
-      'payment-api-dr',
-      {
-        apiVersion: 'networking.istio.io/v1beta1',
-        kind: 'DestinationRule',
-        metadata: {
-          name: `payment-api-dr-${environmentSuffix}`,
-          namespace: namespace.metadata.name,
-        },
-        spec: {
-          host: pulumi.interpolate`${paymentApiService.metadata.name}.${namespace.metadata.name}.svc.cluster.local`,
-          trafficPolicy: {
-            tls: {
-              mode: 'ISTIO_MUTUAL',
-            },
-            connectionPool: {
-              tcp: {
-                maxConnections: 100,
-              },
-              http: {
-                http1MaxPendingRequests: 50,
-                http2MaxRequests: 100,
-                maxRequestsPerConnection: 2,
-              },
-            },
-          },
-        },
-      },
-      { parent: this, provider: k8sProvider }
-    );
-
-    const fraudDetectorDestinationRule = new k8s.apiextensions.CustomResource(
-      'fraud-detector-dr',
-      {
-        apiVersion: 'networking.istio.io/v1beta1',
-        kind: 'DestinationRule',
-        metadata: {
-          name: `fraud-detector-dr-${environmentSuffix}`,
-          namespace: namespace.metadata.name,
-        },
-        spec: {
-          host: pulumi.interpolate`${fraudDetectorService.metadata.name}.${namespace.metadata.name}.svc.cluster.local`,
-          trafficPolicy: {
-            tls: {
-              mode: 'ISTIO_MUTUAL',
-            },
-            connectionPool: {
-              tcp: {
-                maxConnections: 100,
-              },
-              http: {
-                http1MaxPendingRequests: 50,
-                http2MaxRequests: 100,
-                maxRequestsPerConnection: 2,
-              },
-            },
-          },
-        },
-      },
-      { parent: this, provider: k8sProvider }
-    );
-
-    const notificationServiceDestinationRule =
-      new k8s.apiextensions.CustomResource(
-        'notification-service-dr',
-        {
-          apiVersion: 'networking.istio.io/v1beta1',
-          kind: 'DestinationRule',
-          metadata: {
-            name: `notification-service-dr-${environmentSuffix}`,
-            namespace: namespace.metadata.name,
-          },
-          spec: {
-            host: pulumi.interpolate`${notificationService.metadata.name}.${namespace.metadata.name}.svc.cluster.local`,
-            trafficPolicy: {
-              tls: {
-                mode: 'ISTIO_MUTUAL',
-              },
-              connectionPool: {
-                tcp: {
-                  maxConnections: 100,
-                },
-                http: {
-                  http1MaxPendingRequests: 50,
-                  http2MaxRequests: 100,
-                  maxRequestsPerConnection: 2,
-                },
-              },
-            },
-          },
-        },
-        { parent: this, provider: k8sProvider }
-      );
-
-    // Istio Gateway
-    const gateway = new k8s.apiextensions.CustomResource(
-      'payment-gateway',
-      {
-        apiVersion: 'networking.istio.io/v1beta1',
-        kind: 'Gateway',
-        metadata: {
-          name: `payment-gateway-${environmentSuffix}`,
-          namespace: namespace.metadata.name,
-        },
-        spec: {
-          selector: {
-            istio: 'ingressgateway',
-          },
-          servers: [
-            {
-              port: {
-                number: 80,
-                name: 'http',
-                protocol: 'HTTP',
-              },
-              hosts: ['*'],
-            },
-          ],
-        },
-      },
-      { parent: this, provider: k8sProvider }
-    );
-
-    // Istio VirtualService for external access
-    const paymentApiVirtualService = new k8s.apiextensions.CustomResource(
-      'payment-api-vs',
-      {
-        apiVersion: 'networking.istio.io/v1beta1',
-        kind: 'VirtualService',
-        metadata: {
-          name: `payment-api-vs-${environmentSuffix}`,
-          namespace: namespace.metadata.name,
-        },
-        spec: {
-          hosts: ['*'],
-          gateways: [pulumi.interpolate`${gateway.metadata.name}`],
-          http: [
-            {
-              match: [
-                {
-                  uri: {
-                    prefix: '/api/payment',
-                  },
-                },
-              ],
-              route: [
-                {
-                  destination: {
-                    host: pulumi.interpolate`${paymentApiService.metadata.name}.${namespace.metadata.name}.svc.cluster.local`,
-                    port: {
-                      number: 8080,
-                    },
-                  },
-                  weight: 100,
-                },
-              ],
-              timeout: '30s',
-              retries: {
-                attempts: 3,
-                perTryTimeout: '10s',
-                retryOn: '5xx,reset,connect-failure,refused-stream',
-              },
-            },
-          ],
-        },
-      },
-      { parent: this, provider: k8sProvider }
-    );
-
-    // Create a LoadBalancer service for the gateway
-    const gatewayService = new k8s.core.v1.Service(
-      'gateway-loadbalancer',
-      {
-        metadata: {
-          name: `gateway-lb-${environmentSuffix}`,
-          namespace: namespace.metadata.name,
-          labels: {
-            istio: 'ingressgateway',
-          },
-        },
-        spec: {
-          type: 'LoadBalancer',
-          selector: {
-            istio: 'ingressgateway',
-          },
-          ports: [
-            {
-              port: 80,
-              targetPort: 8080,
-              name: 'http',
-              protocol: 'TCP',
-            },
-          ],
-        },
-      },
-      { parent: this, provider: k8sProvider }
-    );
-
     // Mark resources as used to satisfy linter
     void paymentApiNetworkPolicy;
     void fraudDetectorNetworkPolicy;
     void notificationServiceNetworkPolicy;
-    void peerAuth;
-    void paymentApiDestinationRule;
-    void fraudDetectorDestinationRule;
-    void notificationServiceDestinationRule;
-    void paymentApiVirtualService;
 
     // Set outputs
     this.clusterName = cluster.name;
     this.kubeconfig = kubeconfig;
     this.namespaceName = namespace.metadata.name;
-    this.gatewayUrl = pulumi.interpolate`http://${gatewayService.status.loadBalancer.ingress[0].hostname}/api/payment`;
+    this.gatewayUrl = pulumi.interpolate`http://${gatewayService.status.loadBalancer.ingress[0].hostname}`;
     this.paymentApiEndpoint = pulumi.interpolate`http://${paymentApiService.metadata.name}.${namespace.metadata.name}.svc.cluster.local:8080`;
     this.fraudDetectorEndpoint = pulumi.interpolate`http://${fraudDetectorService.metadata.name}.${namespace.metadata.name}.svc.cluster.local:8080`;
     this.notificationServiceEndpoint = pulumi.interpolate`http://${notificationService.metadata.name}.${namespace.metadata.name}.svc.cluster.local:8080`;
