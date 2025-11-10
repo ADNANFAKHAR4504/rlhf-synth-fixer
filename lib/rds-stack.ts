@@ -21,7 +21,8 @@ export class RdsStack extends pulumi.ComponentResource {
 
     // Create secret in AWS Secrets Manager (for CI/CD testing)
     // In production, this would be pre-created and fetched using getSecret
-    const secretName = `${config.environment}/payment-db-password-${config.environmentSuffix}`;
+    // Use versioned name to avoid conflicts with deleted secrets
+    const secretName = `${config.environment}/payment-db-password-${config.environmentSuffix}-v2`;
 
     // Set recovery window to 0 for dev/test environments to allow immediate deletion
     // This enables rapid destroy/deploy cycles in CI/CD
@@ -30,7 +31,7 @@ export class RdsStack extends pulumi.ComponentResource {
     const dbSecret = new aws.secretsmanager.Secret(
       `${config.environment}-db-secret-${config.environmentSuffix}`,
       {
-        name: secretName,
+        name: secretName, // ✅ Versioned name avoids conflict with deleted secrets
         description: `Database password for ${config.environment} environment`,
         recoveryWindowInDays: recoveryWindowInDays, // ✅ Allow immediate deletion for non-prod
         tags: {
