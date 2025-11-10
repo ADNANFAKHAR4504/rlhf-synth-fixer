@@ -306,6 +306,47 @@ multi_az=False,  # Changed to False for faster deployment testing
 
 ---
 
+### 5. ECS Tasks Use Placeholder ECR Image (BLOCKER)
+
+**Severity**: High - Deployment Blocker  
+**Category**: A (Critical) - Incorrect runtime configuration
+
+**What the model did wrong**:
+
+The generated stack definition references the hard-coded image URI `123456789012.dkr.ecr.ap-southeast-1.amazonaws.com/api:latest` for the API task definition (visible in the ECS console screenshot for `api-service-pr6154`). That placeholder account (`123456789012`) does not exist in our AWS tenant and no image named `api:latest` has been pushed to it.
+
+**Why it was wrong**:
+- ECS attempts to pull the non-existent image and immediately hits `CannotPullContainerError: failed to resolve ref 123456789012.dkr.ecr.ap-southeast-1.amazonaws.com/api:latest`
+- Tasks remain in `PROVISIONING/STOPPED`, so the service never reaches steady state
+- No documentation was provided instructing the operator to build and push a real image or to override the placeholder URI
+- The real ECR repository that exists in this account is `342597974367.dkr.ecr.ap-southeast-1.amazonaws.com/api-synth101000876`, so the default URI is guaranteed to fail
+
+**What was corrected**:
+1. Built the application image locally and tagged it with the actual repository URI:
+   ```bash
+   docker build -t api-synth101000876 .
+   docker tag api-synth101000876:latest 342597974367.dkr.ecr.ap-southeast-1.amazonaws.com/api-synth101000876:pr6148
+   docker push 342597974367.dkr.ecr.ap-southeast-1.amazonaws.com/api-synth101000876:pr6148
+   ```
+2. Updated the stack configuration so the ECS task definition uses the pushed image:
+   ```bash
+   pulumi config set containerImage \
+     342597974367.dkr.ecr.ap-southeast-1.amazonaws.com/api-synth101000876:pr6148
+   pulumi up
+   ```
+
+**Why the fix works**:
+- Tasks now pull an image that actually exists inside the account’s ECR registry
+- `CannotPullContainerError` disappears and the service reaches a steady desired count
+- Documented override steps make it obvious how to update the image for future releases
+
+**Learning opportunity for model**:
+- Never leave placeholder AWS account IDs (`123456789012`) in production-facing IaC
+- When referencing private images, either build/push them as part of the workflow or clearly document how to update the URI
+- Prefer deriving the account ID dynamically (e.g., from `pulumi.get_aws_account_id()`), so task definitions automatically target the correct registry
+
+---
+
 ## Deployment Outcome
 
 **Final Status**: Successful deployment with 38/40 resources
