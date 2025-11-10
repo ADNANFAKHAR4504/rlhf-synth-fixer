@@ -1,11 +1,13 @@
 """Main ComponentResource for payment processing infrastructure."""
-from typing import Optional
 import datetime
+from typing import Optional
+
 import pulumi
 from pulumi import ComponentResource, ResourceOptions
-from network import NetworkStack
-from compute import ComputeStack
-from storage import StorageStack
+
+from lib.compute import ComputeStack
+from lib.network import NetworkStack
+from lib.storage import StorageStack
 
 
 class PaymentProcessingStack(ComponentResource):

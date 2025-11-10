@@ -1,8 +1,10 @@
 """Storage infrastructure components including DynamoDB, RDS, and S3."""
 from typing import Dict, List, Optional
+
 import pulumi
 import pulumi_aws as aws
-from pulumi import ComponentResource, ResourceOptions, Output
+import pulumi_random as random
+from pulumi import ComponentResource, Output, ResourceOptions
 
 
 class StorageStack(ComponentResource):
@@ -48,9 +50,6 @@ class StorageStack(ComponentResource):
             tags={**tags, "Name": f"transactions-{environment}"},
             opts=ResourceOptions(parent=self),
         )
-
-        # Generate secure random password for database
-        import pulumi_random as random
         self.db_password = random.RandomPassword(
             f"db-password-{environment}-{environment_suffix}",
             length=16,
