@@ -3,6 +3,8 @@
   "language": "py",
   "complexity": "medium",
   "team": "synth",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
   "turn_type": "single",
   "startedAt": "2025-11-10T07:10:45Z",
   "subtask": "Provisioning of Infrastructure Environments",
