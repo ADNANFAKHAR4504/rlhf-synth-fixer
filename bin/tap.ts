@@ -1,13 +1,13 @@
 /**
- * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
- *
- * This module defines the core Pulumi stack and instantiates the TapStack with appropriate
- * configuration based on the deployment environment. It handles environment-specific settings,
- * tagging, and deployment configuration for AWS resources.
- *
- * The stack created by this module uses environment suffixes to distinguish between
- * different deployment environments (development, staging, production, etc.).
- */
+* Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
+*
+* This module defines the core Pulumi stack and instantiates the TapStack with appropriate
+* configuration based on the deployment environment. It handles environment-specific settings,
+* tagging, and deployment configuration for AWS resources.
+*
+* The stack created by this module uses environment suffixes to distinguish between
+* different deployment environments (development, staging, production, etc.)
+*/
 import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
 
@@ -33,15 +33,11 @@ const defaultTags = {
   Author: commitAuthor,
 };
 
-// Get optional domain name from config (for Route 53 hosted zone)
-const domainName = config.get('domainName');
-
 // Instantiate the main stack component for the infrastructure.
 // This encapsulates all the resources for the platform.
 const stack = new TapStack('pulumi-infra', {
   environmentSuffix: environmentSuffix,
   tags: defaultTags,
-  domainName: domainName,
 });
 
 // Export stack outputs for multi-region failover infrastructure
@@ -52,8 +48,6 @@ export const standbyAlbDns = stack.standbyAlbDns;
 export const primaryAsgName = stack.primaryAsgName;
 export const standbyAsgName = stack.standbyAsgName;
 export const dynamoTableName = stack.dynamoTableName;
-export const hostedZoneId = stack.hostedZoneId;
-export const hostedZoneNameServers = stack.hostedZoneNameServers;
 export const primarySnsTopicArn = stack.primarySnsTopicArn;
 export const standbySnsTopicArn = stack.standbySnsTopicArn;
 export const primaryHealthCheckId = stack.primaryHealthCheckId;
