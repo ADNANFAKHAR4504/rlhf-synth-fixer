@@ -1279,3 +1279,21 @@ Outputs:
     Value: !Ref ApplicationLoadBalancer
     Export:
       Name: !Sub '${AWS::StackName}-ALB-ARN'
+
+  CloudTrailName:
+    Description: Name of the CloudTrail Trail
+    Value: !Ref CloudTrail
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrail-Name'
+
+  WebACLId:
+    Description: ID of the WAF Web ACL
+    Value: !GetAtt WebACL.Id
+    Export:
+      Name: !Sub '${AWS::StackName}-WebACL-ID'
+
+  ApplicationS3BucketArn:
+    Description: ARN of the Application S3 Bucket
+    Value: !GetAtt ApplicationS3Bucket.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-S3-Bucket-ARN'
