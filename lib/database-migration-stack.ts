@@ -402,6 +402,16 @@ export class DatabaseMigrationStack extends Construct {
 
     // DMS VPC Management Role (required for DMS VPC management)
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    //const dmsVpcRole = new iam.Role(this, `DmsVpcRole-${environmentSuffix}`, {
+    //  assumedBy: new iam.ServicePrincipal('dms.amazonaws.com'),
+    //  managedPolicies: [
+    //    iam.ManagedPolicy.fromAwsManagedPolicyName(
+    //      'service-role/AmazonDMSVPCManagementRole'
+    //    ),
+    //  ],
+    //  roleName: `dms-vpc-role-${environmentSuffix}`,
+    //});
+
     const dmsVpcRole = new iam.Role(this, `DmsVpcRole-${environmentSuffix}`, {
       assumedBy: new iam.ServicePrincipal('dms.amazonaws.com'),
       managedPolicies: [
@@ -409,7 +419,8 @@ export class DatabaseMigrationStack extends Construct {
           'service-role/AmazonDMSVPCManagementRole'
         ),
       ],
-      roleName: `dms-vpc-role-${environmentSuffix}`,
+      // Remove explicit roleName to avoid naming collisions and propagation delays
+      // roleName: `dms-vpc-role-${environmentSuffix}`,
     });
 
     // DMS CloudWatch Logs Role (required for DMS logging)
@@ -432,6 +443,16 @@ export class DatabaseMigrationStack extends Construct {
     // 8. DMS Subnet Group
     // ==============================
 
+    //const dmsSubnetGroup = new dms.CfnReplicationSubnetGroup(
+    //  this,
+    //  `DmsSubnetGroup-${environmentSuffix}`,
+    //  {
+    //    replicationSubnetGroupIdentifier: `dms-subnet-group-${environmentSuffix}`,
+    //    replicationSubnetGroupDescription:
+    //      'Subnet group for DMS replication instance',
+    //    subnetIds: prodPrivateSubnets.map(subnet => subnet.subnetId),
+    //  }
+    //);
     const dmsSubnetGroup = new dms.CfnReplicationSubnetGroup(
       this,
       `DmsSubnetGroup-${environmentSuffix}`,
@@ -442,7 +463,7 @@ export class DatabaseMigrationStack extends Construct {
         subnetIds: prodPrivateSubnets.map(subnet => subnet.subnetId),
       }
     );
-
+    dmsSubnetGroup.node.addDependency(dmsVpcRole);
     // ==============================
     // 9. DMS Replication Instance
     // ==============================
