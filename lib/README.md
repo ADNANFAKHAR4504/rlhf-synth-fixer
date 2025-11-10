@@ -1,6 +1,6 @@
 # Serverless Payment Processing System
 
-A complete serverless payment processing system built with AWS CDK and TypeScript.
+A complete serverless payment processing system built with AWS CDK and ts.
 
 ## Architecture
 
