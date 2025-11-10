@@ -134,7 +134,7 @@
                 2,
                 3
             ],
-            "Description": "Number of availability zones to deploy resources across (must be 2 or 3). RDS requires at least 2 AZs."
+            "Description": "Number of availability zones to deploy resources across"
         },
         "InstanceType": {
             "Type": "String",
@@ -151,21 +151,21 @@
         },
         "MinInstances": {
             "Type": "Number",
-            "Default": 3,
+            "Default": 2,
             "MinValue": 1,
             "MaxValue": 10,
             "Description": "Minimum number of EC2 instances in Auto Scaling Group"
         },
         "MaxInstances": {
             "Type": "Number",
-            "Default": 9,
+            "Default": 6,
             "MinValue": 1,
             "MaxValue": 20,
             "Description": "Maximum number of EC2 instances in Auto Scaling Group"
         },
         "DesiredInstances": {
             "Type": "Number",
-            "Default": 6,
+            "Default": 3,
             "MinValue": 1,
             "MaxValue": 20,
             "Description": "Desired number of EC2 instances in Auto Scaling Group"
@@ -177,7 +177,7 @@
         },
         "DBWriterInstanceClass": {
             "Type": "String",
-            "Default": "db.r6g.xlarge",
+            "Default": "db.r6g.large",
             "AllowedValues": [
                 "db.r6g.large",
                 "db.r6g.xlarge",
@@ -204,7 +204,7 @@
         "SSLCertificateArn": {
             "Type": "String",
             "Default": "arn:aws:acm:sa-east-1:123456789012:certificate/00000000-0000-0000-0000-000000000000",
-            "Description": "ARN of the SSL certificate in ACM for HTTPS listener (must be in same region)",
+            "Description": "ARN of the SSL certificate in ACM for HTTPS listener",
             "AllowedPattern": "^arn:aws:acm:[a-z0-9-]+:[0-9]+:certificate/[a-f0-9-]+$"
         },
         "LogRetentionDays": {
@@ -250,7 +250,7 @@
         "DBMasterPassword": {
             "Type": "String",
             "Default": "ChangeMe123!",
-            "Description": "Database master password",
+            "Description": "Database master password (CHANGE THIS!)",
             "MinLength": 8,
             "MaxLength": 41,
             "NoEcho": true
@@ -271,21 +271,6 @@
                 "Production"
             ]
         },
-        "EnableHighAvailabilityNAT": {
-            "Fn::And": [
-                {
-                    "Fn::Equals": [
-                        {
-                            "Ref": "EnableNATGatewayHA"
-                        },
-                        "true"
-                    ]
-                },
-                {
-                    "Condition": "IsProduction"
-                }
-            ]
-        },
         "HasKeyPairName": {
             "Fn::Not": [
                 {
@@ -304,6 +289,21 @@
                     "Ref": "NumberOfAvailabilityZones"
                 },
                 3
+            ]
+        },
+        "EnableHighAvailabilityNAT": {
+            "Fn::And": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "EnableNATGatewayHA"
+                        },
+                        "true"
+                    ]
+                },
+                {
+                    "Condition": "IsProduction"
+                }
             ]
         },
         "EnableHighAvailabilityNATInAZ3": {

@@ -111,7 +111,7 @@ Parameters:
     AllowedValues:
       - 2
       - 3
-    Description: Number of availability zones to deploy resources across (must be 2 or 3). RDS requires at least 2 AZs.
+    Description: Number of availability zones to deploy resources across
 
   # Application Parameters
   InstanceType:
@@ -128,21 +128,21 @@ Parameters:
 
   MinInstances:
     Type: Number
-    Default: 3
+    Default: 2
     MinValue: 1
     MaxValue: 10
     Description: Minimum number of EC2 instances in Auto Scaling Group
 
   MaxInstances:
     Type: Number
-    Default: 9
+    Default: 6
     MinValue: 1
     MaxValue: 20
     Description: Maximum number of EC2 instances in Auto Scaling Group
 
   DesiredInstances:
     Type: Number
-    Default: 6
+    Default: 3
     MinValue: 1
     MaxValue: 20
     Description: Desired number of EC2 instances in Auto Scaling Group
@@ -156,7 +156,7 @@ Parameters:
   # Database Parameters
   DBWriterInstanceClass:
     Type: String
-    Default: db.r6g.xlarge
+    Default: db.r6g.large
     AllowedValues:
       - db.r6g.large
       - db.r6g.xlarge
@@ -182,7 +182,7 @@ Parameters:
   SSLCertificateArn:
     Type: String
     Default: arn:aws:acm:sa-east-1:123456789012:certificate/00000000-0000-0000-0000-000000000000
-    Description: ARN of the SSL certificate in ACM for HTTPS listener (must be in same region)
+    Description: ARN of the SSL certificate in ACM for HTTPS listener
     AllowedPattern: ^arn:aws:acm:[a-z0-9-]+:[0-9]+:certificate/[a-f0-9-]+$
 
   LogRetentionDays:
@@ -229,7 +229,7 @@ Parameters:
   DBMasterPassword:
     Type: String
     Default: ChangeMe123!
-    Description: Database master password
+    Description: Database master password (CHANGE THIS!)
     MinLength: 8
     MaxLength: 41
     NoEcho: true
@@ -247,11 +247,6 @@ Conditions:
   IsProduction: !Equals
     - !Ref Environment
     - Production
-  EnableHighAvailabilityNAT: !And
-    - !Equals
-      - !Ref EnableNATGatewayHA
-      - 'true'
-    - !Condition IsProduction
   HasKeyPairName: !Not
     - !Equals
       - !Ref KeyPairName
@@ -259,6 +254,11 @@ Conditions:
   HasThreeAZs: !Equals
     - !Ref NumberOfAvailabilityZones
     - 3
+  EnableHighAvailabilityNAT: !And
+    - !Equals
+      - !Ref EnableNATGatewayHA
+      - 'true'
+    - !Condition IsProduction
   EnableHighAvailabilityNATInAZ3: !And
     - !Condition EnableHighAvailabilityNAT
     - !Condition HasThreeAZs
@@ -325,9 +325,7 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select
-        - 0
-        - !GetAZs ''
+      AvailabilityZone: !Select [0, !GetAZs ''] 
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -355,9 +353,7 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select
-        - 1
-        - !GetAZs ''
+      AvailabilityZone: !Select [1, !GetAZs '']  
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -386,9 +382,7 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select
-        - 2
-        - !GetAZs ''
+      AvailabilityZone: !Select [2, !GetAZs '']  
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -417,9 +411,7 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select
-        - 0
-        - !GetAZs ''
+      AvailabilityZone: !Select [0, !GetAZs ''] 
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-1
@@ -446,9 +438,7 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select
-        - 1
-        - !GetAZs ''
+      AvailabilityZone: !Select [1, !GetAZs '']  
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-2
@@ -476,9 +466,7 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select
-        - 2
-        - !GetAZs ''
+      AvailabilityZone: !Select [2, !GetAZs '']  
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-3
@@ -506,9 +494,7 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select
-        - 0
-        - !GetAZs ''
+      AvailabilityZone: !Select [0, !GetAZs ''] 
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-1
@@ -535,9 +521,7 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select
-        - 1
-        - !GetAZs ''
+      AvailabilityZone: !Select [1, !GetAZs '']  
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-2
@@ -565,9 +549,7 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Select
-        - 2
-        - !GetAZs ''
+      AvailabilityZone: !Select [2, !GetAZs '']  
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-3
@@ -2294,58 +2276,58 @@ Outputs:
       Name: !Sub ${ProjectName}-${Environment}-VPC
 
   PublicSubnet1Id:
-    Description: Public Subnet 1 ID
+    Description: Public Subnet 1 ID 
     Value: !Ref PublicSubnet1
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PublicSubnet1
 
   PublicSubnet2Id:
-    Description: Public Subnet 2 ID
+    Description: Public Subnet 2 ID 
     Value: !Ref PublicSubnet2
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PublicSubnet2
 
   PublicSubnet3Id:
     Condition: HasThreeAZs
-    Description: Public Subnet 3 ID
+    Description: Public Subnet 3 ID 
     Value: !Ref PublicSubnet3
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PublicSubnet3
 
   PrivateAppSubnet1Id:
-    Description: Private App Subnet 1 ID
+    Description: Private App Subnet 1 ID 
     Value: !Ref PrivateAppSubnet1
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PrivateAppSubnet1
 
   PrivateAppSubnet2Id:
-    Description: Private App Subnet 2 ID
+    Description: Private App Subnet 2 ID 
     Value: !Ref PrivateAppSubnet2
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PrivateAppSubnet2
 
   PrivateAppSubnet3Id:
     Condition: HasThreeAZs
-    Description: Private App Subnet 3 ID
+    Description: Private App Subnet 3 ID 
     Value: !Ref PrivateAppSubnet3
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PrivateAppSubnet3
 
   PrivateDBSubnet1Id:
-    Description: Private DB Subnet 1 ID
+    Description: Private DB Subnet 1 ID 
     Value: !Ref PrivateDBSubnet1
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PrivateDBSubnet1
 
   PrivateDBSubnet2Id:
-    Description: Private DB Subnet 2 ID
+    Description: Private DB Subnet 2 ID 
     Value: !Ref PrivateDBSubnet2
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PrivateDBSubnet2
 
   PrivateDBSubnet3Id:
     Condition: HasThreeAZs
-    Description: Private DB Subnet 3 ID
+    Description: Private DB Subnet 3 ID 
     Value: !Ref PrivateDBSubnet3
     Export:
       Name: !Sub ${ProjectName}-${Environment}-PrivateDBSubnet3
