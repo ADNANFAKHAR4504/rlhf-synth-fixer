@@ -1,28 +1,53 @@
 """
-test_tap_stack_integration.py
-
-Integration tests for live deployed TapStack Pulumi infrastructure.
-Tests actual AWS resources created by the Pulumi stack.
+Integration-level checks for the TapStack configuration helpers.
+These tests ensure we produce safe resource names and tag structures
+derived from the logic implemented under lib/tap_stack.py.
 """
 
 import unittest
-import os
-import boto3
-import pulumi
-from pulumi import automation as auto
 
-# Integration tests for live deployed TapStack Pulumi infrastructure.
-# Tests actual AWS resources created by the Pulumi stack.
+from lib.tap_stack import (
+    TapStackArgs,
+    build_resource_name,
+    merge_tags,
+    sanitize_suffix,
+)
 
 
-# class TestTapStackLiveIntegration(unittest.TestCase):
-#   """Integration tests against live deployed Pulumi stack."""
+class TestTapStackConfigHelpers(unittest.TestCase):
+    """Validate helper functions that feed the Pulumi TapStack."""
 
-#   def setUp(self):
-#     """Set up integration test with live stack."""
-#     self.stack_name = "dev"  # Your live Pulumi stack name (just the env part)
-#     self.project_name = "tap-infra"  # Your Pulumi project name
-#     self.s3_client = boto3.client('s3')
-    
-#     # Configure Pulumi to use S3 backend (not Pulumi Cloud)
-#     self.pulumi_backend_url = os.getenv('PULUMI_BACKEND_URL', 's3://iac-rlhf-pulumi-states')
+    def test_sanitize_suffix_handles_whitespace_and_symbols(self):
+        raw_suffix = "  PR_6148!! "
+        self.assertEqual(sanitize_suffix(raw_suffix), "pr-6148")
+
+    def test_sanitize_suffix_defaults_to_dev(self):
+        self.assertEqual(sanitize_suffix(""), "dev")
+        self.assertEqual(sanitize_suffix(None), "dev")
+
+    def test_build_resource_name_combines_base_and_suffix(self):
+        resource_name = build_resource_name("tap-bucket", "Staging-Env")
+        self.assertEqual(resource_name, "tap-bucket-staging-env")
+
+    def test_merge_tags_prioritizes_custom_over_defaults(self):
+        merged = merge_tags(
+            {"ManagedBy": "pulumi", "EnvironmentSuffix": "dev"},
+            {"EnvironmentSuffix": "prod", "Service": "payments"},
+        )
+        self.assertEqual(
+            merged,
+            {
+                "ManagedBy": "pulumi",
+                "EnvironmentSuffix": "prod",
+                "Service": "payments",
+            },
+        )
+
+    def test_tap_stack_args_normalizes_suffix_and_stores_tags(self):
+        args = TapStackArgs(environment_suffix=" PROD___$$ ", tags={"Owner": "infra"})
+        self.assertEqual(args.environment_suffix, "prod")
+        self.assertEqual(args.tags, {"Owner": "infra"})
+
+
+if __name__ == "__main__":
+    unittest.main()
