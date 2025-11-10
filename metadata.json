@@ -1,0 +1,40 @@
+{
+  "task_id": "101000870",
+  "po_id": "101000870",
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-10T04:05:00.690646",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency & Replication"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ELB",
+    "ALB",
+    "Auto Scaling",
+    "WAF",
+    "RDS",
+    "S3",
+    "NAT Gateway",
+    "Security Groups",
+    "CloudWatch",
+    "Secrets Manager",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "qa_completed": true,
+  "deployment_attempts": 4,
+  "deployment_success": true,
+  "unit_test_coverage": 94.93,
+  "integration_tests_passed": 11,
+  "integration_tests_total": 11,
+  "critical_failures": 1,
+  "high_failures": 1,
+  "medium_failures": 1,
+  "completedAt": "2025-11-10T05:00:00.000000"
+}
