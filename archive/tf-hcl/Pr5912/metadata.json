@@ -1,0 +1,37 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000203",
+  "team": "1",
+  "startedAt": "2025-11-06T07:08:51.183Z",
+  "subtask": "IaC-Multi-Environment-Management",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "VPC",
+    "Lambda",
+    "DynamoDB",
+    "Kinesis",
+    "ElastiCache",
+    "Aurora",
+    "API Gateway",
+    "Step Functions",
+    "EventBridge",
+    "CloudWatch",
+    "Secrets Manager",
+    "IAM"
+  ],
+  "task_config": {
+    "deploy_env": "prod.tfvars"
+  },
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
+}
