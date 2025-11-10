@@ -26,5 +26,12 @@
     "\"Internet Gateway\"",
     "\"Elastic IP\"",
     "\"Security Groups\""
-  ]
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
 }
